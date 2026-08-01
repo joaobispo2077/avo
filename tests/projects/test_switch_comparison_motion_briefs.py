@@ -12,10 +12,7 @@ except ImportError:
 
 
 ROOT = Path(__file__).resolve().parents[2]
-SCHEMA = json.loads(
-    (ROOT / "specs/003-switch-comparison-video/contracts/motion-brief.schema.json")
-    .read_text(encoding="utf-8")
-)
+SCHEMA_PATH = ROOT / "specs/003-switch-comparison-video/contracts/motion-brief.schema.json"
 CATEGORIES = [
     "price",
     "value",
@@ -73,39 +70,49 @@ def brief(category: str) -> dict:
 
 
 class SwitchComparisonMotionBriefTests(unittest.TestCase):
+    schema: dict
+
+    @classmethod
+    def setUpClass(cls) -> None:
+        if not SCHEMA_PATH.is_file():
+            raise unittest.SkipTest(
+                f"missing local project spec (not in public repo): {SCHEMA_PATH}"
+            )
+        cls.schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
+
     def test_supported_context_categories_validate(self) -> None:
-        validator = Draft202012Validator(SCHEMA)
+        validator = Draft202012Validator(self.schema)
         for category in CATEGORIES:
             self.assertEqual([], list(validator.iter_errors(brief(category))), category)
 
     def test_visual_subtitles_are_rejected(self) -> None:
         item = brief("price")
         item["visual_subtitles"] = True
-        errors = list(Draft202012Validator(SCHEMA).iter_errors(item))
+        errors = list(Draft202012Validator(self.schema).iter_errors(item))
         self.assertTrue(errors)
 
     def test_v004_revision_strategy_is_required(self) -> None:
         item = deepcopy(brief("value"))
         del item["revision_strategy"]
-        errors = list(Draft202012Validator(SCHEMA).iter_errors(item))
+        errors = list(Draft202012Validator(self.schema).iter_errors(item))
         self.assertTrue(errors)
 
     def test_text_qc_is_required_and_strict(self) -> None:
         item = deepcopy(brief("summary"))
         item["text_qc"]["no_timing_readout"] = False
-        errors = list(Draft202012Validator(SCHEMA).iter_errors(item))
+        errors = list(Draft202012Validator(self.schema).iter_errors(item))
         self.assertTrue(errors)
 
     def test_preview_evidence_is_required(self) -> None:
         item = deepcopy(brief("recommendation"))
         del item["preview_evidence"]
-        errors = list(Draft202012Validator(SCHEMA).iter_errors(item))
+        errors = list(Draft202012Validator(self.schema).iter_errors(item))
         self.assertTrue(errors)
 
     def test_source_basis_is_required(self) -> None:
         item = deepcopy(brief("value"))
         del item["source_basis"]
-        errors = list(Draft202012Validator(SCHEMA).iter_errors(item))
+        errors = list(Draft202012Validator(self.schema).iter_errors(item))
         self.assertTrue(errors)
 
 

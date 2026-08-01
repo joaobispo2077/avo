@@ -12,7 +12,9 @@ orchestrator quality gate.
 | `test_bluray_ps5_edl_contract.py` | `005-bluray-ps5-gamevlog` |
 | `test_bluray_ps5_render_schema.py` | `005-bluray-ps5-gamevlog` |
 
-**Default CI / PR:** `bash scripts/ci/run-unit-tests.sh` runs `pytest -m "not project"`.
+**Default CI / PR:** `bash scripts/ci/run-unit-tests.sh` runs
+`pytest --ignore=tests/projects -m "not project"` so project modules are never
+imported during collection (some specs live only in local `specs/` trees).
 
 **Run project tests locally:**
 

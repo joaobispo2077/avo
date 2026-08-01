@@ -6,7 +6,9 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT"
 if [[ $# -eq 0 ]]; then
-  exec pytest -m "not project" "$@"
+  # Ignore tests/projects so pytest never imports footage-project modules
+  # (specs/ is gitignored; some project tests read spec files at import time).
+  exec pytest --ignore=tests/projects -m "not project" "$@"
 else
   exec pytest "$@"
 fi

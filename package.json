@@ -13,7 +13,7 @@
     "check-update": "node scripts/run-native.mjs check-update",
     "validate:prerequisites": "node scripts/run-native.mjs validate-prerequisites",
     "validate:usability": "node scripts/run-native.mjs validate-usability",
-    "test:unit": "pytest -m \"not project\"",
+    "test:unit": "pytest --ignore=tests/projects -m \"not project\"",
     "test:projects": "pytest tests/projects",
     "hf": "hyperframes",
     "hf:doctor": "hyperframes doctor",
