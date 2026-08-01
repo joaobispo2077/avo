@@ -94,6 +94,7 @@ Equivalent to `/avo.pipeline` on Cursor. Mapping table:
 | Captions + overlays | `avo-pipeline` + embedded-captions / talking-head-recut | `/avo.motion` |
 | Format diagnosis | `avo-pipeline` | `/avo.guidelines --youtube` |
 | After master | `avo-pipeline` | `/avo.learndown` then `/avo.cleanup` |
+| Usage totals | `avo-pipeline` | `/avo.stats` |
 
 Extended prompts: [README use cases](../README.md#use-cases).
 

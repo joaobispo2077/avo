@@ -97,6 +97,19 @@ class Telemetry:
         per_phase = elapsed / index
         return per_phase * (total - index)
 
+    def _append_session_phase(self, session_id: str, record: dict[str, Any]) -> None:
+        """Append phase line to ``.avo/sessions/<id>/phases.jsonl`` (local-only)."""
+        phase_path = avo_state.sessions_dir() / session_id / "phases.jsonl"
+        phase_path.parent.mkdir(parents=True, exist_ok=True)
+        line = {
+            "phase": record.get("phase"),
+            "ts": record.get("ts"),
+            "createdBytes": record.get("createdBytes"),
+            "index": record.get("index"),
+        }
+        with phase_path.open("a", encoding="utf-8") as handle:
+            handle.write(json.dumps(line, ensure_ascii=False) + "\n")
+
     def report(
         self,
         phase: str,
@@ -107,6 +120,7 @@ class Telemetry:
         total: int | None = None,
         volume: Path | None = None,
         active_models: dict[str, str] | None = None,
+        session_id: str | None = None,
         emit: bool = True,
     ) -> dict[str, Any]:
         self._phase_count += 1
@@ -150,6 +164,9 @@ class Telemetry:
                 active_models = {}
         if active_models:
             record["activeModels"] = active_models
+
+        if session_id:
+            self._append_session_phase(session_id, record)
 
         if emit:
             phase_label = f"[{idx}/{tot}]" if tot else f"[{idx}]"
@@ -214,6 +231,41 @@ class Telemetry:
 
         return record
 
+    def cleanup(
+        self,
+        *,
+        freed_bytes: int,
+        preserved_bytes: int | None = None,
+        note: str = "",
+        emit: bool = True,
+    ) -> dict[str, Any]:
+        record = {
+            "event": "cleanup",
+            "freedBytes": int(freed_bytes),
+            "preservedBytes": int(preserved_bytes) if preserved_bytes is not None else None,
+            "ts": avo_state.now_iso(),
+        }
+
+        state = avo_state.load_state()
+        stats = state.get("stats") or {}
+        stats["lastCleanup"] = record
+        state["stats"] = stats
+        avo_state.save_state(state)
+
+        if emit:
+            preserved = (
+                f" | preserved {human_bytes(preserved_bytes)}"
+                if preserved_bytes is not None
+                else ""
+            )
+            print(
+                f"cleanup | freed {human_bytes(freed_bytes)}{preserved}"
+                + (f" | {note}" if note else "")
+            )
+            print("AVO_JSON " + json.dumps(record, ensure_ascii=False), file=sys.stderr)
+
+        return record
+
 
 # ---- module-level convenience ----------------------------------------------
 
@@ -223,6 +275,10 @@ def report(phase: str, **kwargs: Any) -> dict[str, Any]:
 
 def learndown(**kwargs: Any) -> dict[str, Any]:
     return Telemetry().learndown(**kwargs)
+
+
+def cleanup(**kwargs: Any) -> dict[str, Any]:
+    return Telemetry().cleanup(**kwargs)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -238,6 +294,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_rep.add_argument("--total", type=int, default=None)
     p_rep.add_argument("--volume", default="")
     p_rep.add_argument("--note", default="")
+    p_rep.add_argument("--session-id", default="", help="Optional session id for phases.jsonl log.")
 
     p_ld = sub.add_parser("learndown", help="Report post-render space used vs freed.")
     p_ld.add_argument("--used", type=int, default=0)
@@ -246,6 +303,13 @@ def build_parser() -> argparse.ArgumentParser:
     p_ld.add_argument("--preserved-path", default="",
                       help="Measure preserved bytes as the size of this path.")
     p_ld.add_argument("--note", default="")
+
+    p_cl = sub.add_parser("cleanup", help="Report post-cleanup freed/preserved bytes.")
+    p_cl.add_argument("--freed", type=int, default=0)
+    p_cl.add_argument("--preserved", type=int, default=None)
+    p_cl.add_argument("--preserved-path", default="",
+                      help="Measure preserved bytes as the size of this path.")
+    p_cl.add_argument("--note", default="")
     return parser
 
 
@@ -264,6 +328,7 @@ def main(argv: list[str] | None = None) -> int:
             index=args.index,
             total=args.total,
             volume=Path(args.volume) if args.volume else None,
+            session_id=args.session_id or None,
         )
         return 0
 
@@ -273,6 +338,17 @@ def main(argv: list[str] | None = None) -> int:
             preserved = dir_size(Path(args.preserved_path))
         tel.learndown(
             used_bytes=args.used,
+            freed_bytes=args.freed,
+            preserved_bytes=preserved,
+            note=args.note,
+        )
+        return 0
+
+    if args.cmd == "cleanup":
+        preserved = args.preserved
+        if args.preserved_path:
+            preserved = dir_size(Path(args.preserved_path))
+        tel.cleanup(
             freed_bytes=args.freed,
             preserved_bytes=preserved,
             note=args.note,

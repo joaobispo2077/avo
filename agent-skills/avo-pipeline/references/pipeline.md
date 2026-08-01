@@ -7,13 +7,14 @@ Load [`arguments.md`](arguments.md) first.
 | # | Stage | Tool |
 | - | ----- | ---- |
 | 0 | Plan | Spec Kit (optional) |
+| 0b | Session start | `session.py start` → `pre.json` |
 | 1 | Transcribe | faster-whisper |
 | 2 | Edit | video-use + render helpers |
 | 3 | Verify | watch-skill |
 | 4 | Motion | HyperFrames |
 | 5 | Render | local render |
 | 6 | Deliver | master + final transcript |
-| 7 | Cleanup | rimraf + learndown |
+| 7 | Learndown + cleanup | draft wrap → rimraf → final wrap → `stats record` |
 
 ## Asset manifest
 

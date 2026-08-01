@@ -6,7 +6,7 @@
 
 **Edit less. Create more.** [Quickstart now](#quickstart)
 
-Talk to your AI agent. Drop raw footage in a folder. Get a finished, YouTube-ready
+Talk to your AI agent. Drop raw footage in a folder. Get a finished, ready-to-publish
 video back, **local-first**, scoped to your channel, repeatable at scale.
 
 AVO started as a fork of [video-use](https://github.com/browser-use/video-use) and
@@ -28,7 +28,8 @@ the bundled editing engine and upstream [video-use](https://github.com/browser-u
 - **Create more, edit less.** Plan, transcribe, cut, caption, animate, and deliver
   by talking to your agent, not by clicking through every stage yourself.
 - **Local first.** Transcription and most of the pipeline run on your machine. No
-  account required for the core path.
+  account required for the core path. Usage stats (`/avo.stats`) and telemetry stay
+  on disk — see [Privacy — stats & telemetry](#privacy--stats--telemetry) (end of this page).
 - **Proves ideas cheaply.** Low-resolution previews first; full-quality render only
   when the cut is confident, saving time and disk.
 - **Checks its own work.** After each render, AVO watches the result, fixes problems,
@@ -352,6 +353,7 @@ Same goals in one line — load skill **`avo-pipeline`** (or **`avo-provider`** 
 | Ready for approval | `/avo.watch` |
 | Logo spin / glass card | `/avo.motion` |
 | Disk / progress report | `/avo.telemetry` |
+| Local usage stats | `/avo.stats` (local disk only — [`SECURITY.md#privacy--telemetry`](SECURITY.md#privacy--telemetry)) |
 | Create provider | `/avo.provider` |
 | After master approved | `/avo.learndown` then `/avo.cleanup` |
 | Open topic docs | `/avo.docs` |
@@ -550,7 +552,10 @@ Full setup details and troubleshooting live in [`install.md`](install.md).
 
 - [`docs/avo-workflow.md`](docs/avo-workflow.md): the AVO workflow, in precise,
   agent-facing detail (confidence gate, the LOOP, **human approval gates**,
-  telemetry, hardware advisory, learndown + cleanup, provider learning).
+  telemetry, hardware advisory, learndown + cleanup, wrap reports, `/avo.stats`,
+  provider learning).
+- [`SECURITY.md`](SECURITY.md#privacy--telemetry): privacy for telemetry and stats
+  (no phone home; local disk only).
 - [`docs/providers.md`](docs/providers.md): what an AVO **provider** is, multi-provider
   patterns (long-form vs Shorts), manifest fields, and setup workflow.
 - [`docs/agent-skills.md`](docs/agent-skills.md): install **`avo`**, **`avo-pipeline`**,
@@ -605,6 +610,16 @@ you'd like to move it up the queue. [Full roadmap → specs/backlog/README.md](s
 - **BL-005** [Multi-audio delivery manifest](specs/backlog/multi-audio-deliver.md): delivery folder with per-locale tracks and manifest.
 
 See [Sponsor](#sponsor) to fund priority items.
+
+---
+
+## Privacy: stats & telemetry
+
+**No phone home.** `/avo.stats` and phase telemetry read **local files only**
+(`.avo/state.json`, optional `avo.wrap.*` on your footage folders). No analytics
+backend, no accounts, no usage upload. Install-time network (git, models, agent
+registries) is separate — full detail in
+[`SECURITY.md#privacy--telemetry`](SECURITY.md#privacy--telemetry).
 
 ---
 
