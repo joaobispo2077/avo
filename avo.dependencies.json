@@ -1,0 +1,83 @@
+{
+  "$comment": "Orchestrator dependency manifest for Gate 1 (prerequisites). Aligns with avo.config.json jobs. CI uses contract checks only — no Whisper model download.",
+  "version": 1,
+  "tools": {
+    "speckit": {
+      "required": true,
+      "job": "plan",
+      "description": "GitHub Spec Kit (https://github.com/github/spec-kit) — .specify marker",
+      "kind": "in-repo-paths",
+      "paths": [".specify"],
+      "check": "any-exists"
+    },
+    "avo-engine": {
+      "required": true,
+      "job": "transcribe",
+      "aliases": ["video-use-engine"],
+      "description": "Bundled AVO Python engine (pyproject.toml + transcription helpers)",
+      "kind": "python-project",
+      "manifest": "pyproject.toml",
+      "helpers": [
+        "helpers/transcribe.py",
+        "helpers/prepare_transcription.py",
+        "helpers/avo_state.py"
+      ]
+    },
+    "ffmpeg": {
+      "required": true,
+      "description": "ffmpeg/ffprobe on PATH (Node static binaries are CI fallback)",
+      "kind": "system-binary",
+      "binaries": ["ffmpeg", "ffprobe"],
+      "ciPolicy": "warn"
+    },
+    "watch-skill": {
+      "required": true,
+      "job": "understand",
+      "description": "THE LOOP — local-first video understand/verify",
+      "kind": "git-clone",
+      "repo": "https://github.com/oxbshw/watch-skill",
+      "path": "tools/watch-skill",
+      "ciPolicy": "shallow-clone-if-missing"
+    },
+    "hyperframes": {
+      "required": true,
+      "job": "motion",
+      "description": "Default motion engine (npm package + doctor)",
+      "kind": "npm-package",
+      "package": "hyperframes",
+      "packageJson": "package.json"
+    },
+    "remotion": {
+      "required": false,
+      "job": "motion",
+      "description": "Alternate motion engine — installed per-project when justified",
+      "kind": "documentation-only",
+      "doc": "docs/remotion-decision-guide.md"
+    },
+    "ai-memory": {
+      "required": false,
+      "job": "memory",
+      "description": "Optional cross-session memory",
+      "kind": "git-clone",
+      "repo": "https://github.com/akitaonrails/ai-memory",
+      "path": "tools/ai-memory"
+    },
+    "ai-jail": {
+      "required": false,
+      "job": "sandbox",
+      "description": "Optional agent sandbox (WSL-only on Windows)",
+      "kind": "external-binary-or-clone",
+      "binary": "ai-jail",
+      "repo": "https://github.com/akitaonrails/ai-jail",
+      "path": "tools/ai-jail"
+    },
+    "logo-generator-skill": {
+      "required": false,
+      "job": "logo",
+      "description": "Optional brand asset generation skill",
+      "kind": "git-clone",
+      "repo": "https://github.com/op7418/logo-generator-skill",
+      "path": "tools/logo-generator-skill"
+    }
+  }
+}

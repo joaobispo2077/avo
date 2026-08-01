@@ -1,0 +1,37 @@
+name: Upstream engine diff
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 6 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  diff:
+    name: Diff bundled engine vs video-use upstream
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    continue-on-error: true
+    steps:
+      - name: Checkout AVO
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Sync upstream reference
+        run: bash scripts/upstream/sync-video-use-upstream.sh
+
+      - name: Generate diff artifacts
+        run: python scripts/upstream/diff-engine-helpers.py
+
+      - name: Upload diff artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: upstream-engine-diff
+          path: specs/upstream-diffs/video-use/
+          if-no-files-found: warn

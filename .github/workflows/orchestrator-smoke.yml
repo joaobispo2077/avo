@@ -1,0 +1,53 @@
+name: Orchestrator smoke (manual)
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 6 * * 1'
+
+permissions:
+  contents: read
+
+env:
+  PYTHON_VERSION: '3.12'
+  NODE_VERSION: '20'
+
+jobs:
+  full-stack:
+    name: Full orchestrator stack
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      - name: Install Python + Node deps
+        run: |
+          pip install -e ".[dev]"
+          npm ci
+
+      - name: Gate 1 (with optional tools)
+        run: bash scripts/validate-prerequisites.sh --ci --include-optional
+
+      - name: Prepare Whisper model (small)
+        run: python helpers/prepare_transcription.py --model tiny
+
+      - name: Gate 2
+        run: bash scripts/validate-usability.sh --ci
+
+      - name: Unit tests
+        run: bash scripts/ci/run-unit-tests.sh

@@ -1,19 +1,23 @@
 [project]
-name = "video-use"
+name = "avo"
 version = "0.1.0"
-description = "Conversation-driven video editor skill for Claude Code"
+description = "Local-first Python helpers for AVO — transcription, captions, grading, render, and telemetry on your machine."
 license = { file = "LICENSE" }
 requires-python = ">=3.10"
 dependencies = [
-    "requests",
+    "faster-whisper>=1.2,<2",
     "librosa",
     "matplotlib",
     "pillow",
     "numpy",
+    "jsonschema>=4.23,<5",
 ]
 
 [project.optional-dependencies]
-animations = ["manim"]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=5.0",
+]
 
 [build-system]
 requires = ["setuptools>=61.0"]
@@ -21,3 +25,15 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
 py-modules = []
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*", "*Tests", "*TestCase"]
+python_functions = ["test_*"]
+addopts = "-ra"
+markers = [
+    "slow: downloads models or heavy IO (orchestrator-smoke only)",
+    "integration: crosses script/subprocess boundaries",
+    "project: footage-project or spec-scoped edit tests (excluded from default CI)",
+]

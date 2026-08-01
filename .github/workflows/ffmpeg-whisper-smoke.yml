@@ -1,0 +1,31 @@
+# Optional maintainer check: ffmpeg + faster-whisper import (not run on PRs by default).
+name: ffmpeg-whisper smoke (optional)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  tooling:
+    name: ffmpeg + faster-whisper
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      - name: ffmpeg -version
+        run: ffmpeg -hide_banner -version
+
+      - name: Install AVO Python deps
+        run: pip install -e .
+
+      - name: faster-whisper import smoke
+        run: python -c "import faster_whisper; print('faster-whisper ok')"

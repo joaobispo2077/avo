@@ -1,0 +1,98 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/joaobispo2077/avo/providers/avo.provider.schema.json",
+  "title": "AVO Provider Manifest",
+  "description": "Manifest for an AVO provider workspace (providers/<name>/avo.provider.json). A provider is a publishing destination/identity (YouTube channel, TikTok account, Instagram profile, ...). Provider identity, design, logo and brand live in-repo; ALL media stays EXTERNAL — the manifest stores paths only, never media.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["name", "kind", "media"],
+  "properties": {
+    "$schema": {
+      "type": "string",
+      "description": "Optional path/URL to this schema for editor validation."
+    },
+    "name": {
+      "type": "string",
+      "description": "Provider slug. Lowercase kebab-case; must match the providers/<name>/ directory name.",
+      "pattern": "^[a-z0-9][a-z0-9-]*$"
+    },
+    "displayName": {
+      "type": "string",
+      "description": "Human-friendly provider name (e.g. 'Bishop')."
+    },
+    "kind": {
+      "type": "string",
+      "description": "Publishing destination type.",
+      "enum": ["youtube", "tiktok", "instagram", "x", "podcast", "shorts", "generic"]
+    },
+    "description": {
+      "type": "string",
+      "description": "Short description of the channel/account and its content."
+    },
+    "scope": {
+      "type": "string",
+      "description": "What this provider is scoped to within a brand or channel (e.g. '16:9 long-form tutorials', '9:16 Shorts clips'). Defines ai-memory learning boundaries and format expectations."
+    },
+    "platformUrl": {
+      "type": "string",
+      "description": "Optional canonical URL for the channel or account (YouTube, TikTok, etc.)."
+    },
+    "media": {
+      "type": "object",
+      "description": "EXTERNAL media roots. These are filesystem paths ONLY — no media is ever committed. Paths are gitignored at their source location.",
+      "additionalProperties": false,
+      "required": ["rawRoot"],
+      "properties": {
+        "rawRoot": {
+          "type": "string",
+          "description": "External folder that holds this provider's raw footage projects. Absolute path (may be OS-specific). Never inside this repo."
+        },
+        "editRoot": {
+          "type": "string",
+          "description": "Optional external folder for edit/working output. Defaults to <rawRoot>/edit when omitted."
+        }
+      }
+    },
+    "assets": {
+      "type": "object",
+      "description": "Optional default asset locations for this provider. sfx/music/inserts/graphics are EXTERNAL paths. logos MAY reference the in-repo providers/<name>/logo directory.",
+      "additionalProperties": false,
+      "properties": {
+        "sfx": { "type": "string", "description": "External path to sound-effects library." },
+        "music": { "type": "string", "description": "External path to music library." },
+        "inserts": { "type": "string", "description": "External path to insert/b-roll clips." },
+        "graphics": { "type": "string", "description": "External path to graphics/overlays." },
+        "logos": { "type": "string", "description": "Logo location. Usually the in-repo path 'providers/<name>/logo'." }
+      }
+    },
+    "transcription": {
+      "type": "object",
+      "description": "Provider default transcription settings. Overrides avo.config.json transcription.language for this provider.",
+      "additionalProperties": false,
+      "properties": {
+        "language": {
+          "type": "string",
+          "description": "faster-whisper language code (e.g. 'pt', 'en', 'es'). Chosen at setup; not fixed."
+        },
+        "model": {
+          "type": "string",
+          "description": "Optional preferred Whisper model size (e.g. 'small', 'large-v3')."
+        }
+      }
+    },
+    "brand": {
+      "type": "object",
+      "description": "Pointers to this provider's in-repo brand material.",
+      "additionalProperties": false,
+      "properties": {
+        "design": { "type": "string", "description": "Path to the provider DESIGN.md (relative to repo root)." },
+        "palette": { "type": "string", "description": "Path to a palette.json under brand/ (relative to repo root)." }
+      }
+    },
+    "routingOverrides": {
+      "type": "object",
+      "description": "Per-provider overrides that patch the shared avo.config.json routing (jobs, confidence, transcription). Same shape as avo.config.json; only the keys to override need to be present.",
+      "additionalProperties": true
+    }
+  }
+}

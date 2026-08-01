@@ -265,8 +265,8 @@ def auto_grade_for_clip(
     if verbose:
         print(f"  auto-grade stats:")
         print(f"    y_mean={y_mean:.3f}  y_range={y_range:.3f}  sat_mean={sat_mean:.3f}")
-        print(f"    → contrast={contrast_adj:.3f}  gamma={gamma_adj:.3f}  sat={sat_adj:.3f}")
-        print(f"    → filter: {filter_string or '(empty)'}")
+        print(f"    -> contrast={contrast_adj:.3f}  gamma={gamma_adj:.3f}  sat={sat_adj:.3f}")
+        print(f"    -> filter: {filter_string or '(empty)'}")
 
     return filter_string, stats
 
@@ -361,7 +361,7 @@ def main() -> None:
         # Auto mode (default)
         filter_string, _ = auto_grade_for_clip(args.input, verbose=True)
 
-    print(f"grading {args.input.name} → {args.output.name}")
+    print(f"grading {args.input.name} -> {args.output.name}")
     if filter_string:
         print(f"  filter: {filter_string[:120]}{'...' if len(filter_string) > 120 else ''}")
     else:

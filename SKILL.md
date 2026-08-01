@@ -1,9 +1,16 @@
 ---
-name: video-use
-description: Edit any video by conversation. Transcribe, cut, color grade, generate overlay animations, burn subtitles — for talking heads, montages, tutorials, travel, interviews. No presets, no menus. Ask questions, confirm the plan, execute, iterate, persist. Production-correctness rules are hard; everything else is artistic freedom.
+name: avo
+description: AVO — AI Video Orchestrator. Agent contract for conversation-driven video production — transcribe, cut, grade, motion slots, subtitles, verify, deliver. Hard Rules are non-negotiable; follow install.md and docs/avo-workflow.md for setup and pipeline.
 ---
 
-# Video Use
+# AVO (AI Video Orchestrator)
+
+Canonical rules live in [`AGENTS.md`](AGENTS.md). Pipeline mechanics:
+[`docs/avo-workflow.md`](docs/avo-workflow.md). First-time setup:
+[`install.md`](install.md). **Slash commands:** [`docs/avo-commands.md`](docs/avo-commands.md) (`/avo.help`, `/avo.guidelines`, `/avo.pipeline`, `/avo.trim`, `/avo.transcribe`, `/avo.sound`, `/avo.audit`, `/avo.watch`, `/avo.motion`, `/avo.telemetry`, `/avo.learndown`, `/avo.cleanup`, `/avo.provider`, `/avo.docs`). All agents: see [`docs/agent-skills.md`](docs/agent-skills.md).
+
+Transcription uses prepared local faster-whisper model files; there is no hosted
+transcription fallback or credential path.
 
 ## Principle
 
@@ -24,55 +31,68 @@ These are the things where deviation produces silent failures or broken output. 
 3. **30ms audio fades at every segment boundary** (`afade=t=in:st=0:d=0.03,afade=t=out:st={dur-0.03}:d=0.03`). Otherwise audible pops at every cut.
 4. **Overlays use `setpts=PTS-STARTPTS+T/TB`** to shift the overlay's frame 0 to its window start. Otherwise you see the middle of the animation during the overlay window.
 5. **Master SRT uses output-timeline offsets**: `output_time = word.start - segment_start + segment_offset`. Otherwise captions misalign after segment concat.
-6. **Never cut inside a word.** Snap every cut edge to a word boundary from the Scribe transcript.
-7. **Pad every cut edge.** Working window: 30–200ms. Scribe timestamps drift 50–100ms — padding absorbs the drift. Tighter for fast-paced, looser for cinematic.
+6. **Never cut inside a word.** Snap every cut edge to a word boundary from the local transcript.
+7. **Pad every cut edge.** Working window: 30–200ms. ASR timestamps can drift — padding absorbs the drift. Tighter for fast-paced, looser for cinematic.
 8. **Word-level verbatim ASR only.** Never SRT/phrase mode (loses sub-second gap data). Never normalized fillers (loses editorial signal).
 9. **Cache transcripts per source.** Never re-transcribe unless the source file itself changed.
 10. **Parallel sub-agents for multiple animations.** Never sequential. Spawn N at once via the `Agent` tool; total wall time ≈ slowest one.
 11. **Strategy confirmation before execution.** Never touch the cut until the user has approved the plain-English plan.
-12. **All session outputs in `<videos_dir>/edit/`.** Never write inside the `video-use/` project directory.
+12. **Human approval after each proof stage.** After watch-skill LOOP + transcription analysis, stop and wait for explicit user approval of `edit/preview/` and `edit/review/` artifacts before promoting resolution or advancing. See [`docs/avo-workflow.md`](docs/avo-workflow.md) §4b.
+13. **All session outputs in `<rawDir>/edit/`.** Never write inside the AVO repo
+    (orchestration lives here; footage and session artifacts stay external).
 
 Everything else in this document is a worked example. Deviate whenever the material calls for it.
 
 ## Directory layout
 
-The skill lives in `video-use/`. User footage lives wherever they put it. All session outputs go into `<videos_dir>/edit/`.
+The skill lives in the AVO repo. Footage lives in the declared `rawDir`. All
+session outputs go into `<rawDir>/edit/`.
 
 ```
-<videos_dir>/
+<rawDir>/
 ├── <source files, untouched>
 └── edit/
     ├── project.md               ← memory; appended every session
     ├── takes_packed.md          ← phrase-level transcripts, the LLM's primary reading view
     ├── edl.json                 ← cut decisions
-    ├── transcripts/<name>.json  ← cached raw Scribe JSON
+    ├── transcripts/<name>.json  ← cached local word-timed JSON
     ├── animations/slot_<id>/    ← per-animation source + render + reasoning
     ├── clips_graded/            ← per-segment extracts with grade + fades
     ├── master.srt               ← output-timeline subtitles
     ├── downloads/               ← yt-dlp outputs
     ├── verify/                  ← debug frames / timeline PNGs
-    ├── preview.mp4
+    ├── preview/                 ← proof MP4s (edit-proof, motion-proof, pre-master)
+    ├── review/                  ← human approval packages (approval-gate.md per checkpoint)
+    ├── preview.mp4              ← legacy single preview (prefer preview/ folder)
     └── final.mp4
 ```
 
 ## Setup
 
-First-time install lives in `install.md` (clone, deps, ffmpeg, skill registration, API key). Don't re-run it every session; on cold start just verify:
+First-time install: [`install.md`](install.md) (clone, dependencies, ffmpeg,
+skill registration, local model). On cold start verify:
 
-- `ELEVENLABS_API_KEY` resolves — either in the environment or in `.env` at the video-use repo root. If missing, ask the user to paste one and write it to `.env` (never to the user's `<videos_dir>`).
+- The multilingual model directory resolves and contains config.json, model.bin, and tokenizer.json. If missing, run `prepare_transcription.py --model small`.
 - `ffmpeg` + `ffprobe` on PATH.
 - Python deps installed (`uv sync` or `pip install -e .` inside the repo).
 - Node.js + npm available if the session needs HyperFrames or Remotion slots. HyperFrames currently requires Node.js 22+.
 - `yt-dlp`, HyperFrames, Remotion, Manim installed only on first use.
-- First-use animation setup happens inside the slot directory, never at the video-use repo root. HyperFrames can be invoked with `npx --yes hyperframes ...`; Remotion can be scaffolded with `npx create-video@latest` or installed as a project-local dependency before using its `remotion render` command.
-- This skill vendors `skills/manim-video/`. Read its SKILL.md when building a Manim slot.
+- First-use animation setup happens inside the slot directory, never at the AVO
+  repo root. HyperFrames can be invoked with `npx --yes hyperframes ...`; Remotion
+  can be scaffolded with `npx create-video@latest` or installed as a project-local
+  dependency before using its `remotion render` command.
+- This skill vendors `skills/manim-video/`. Read its SKILL.md when building a Manim
+  slot.
 
-Helpers (`helpers/transcribe.py`, `helpers/render.py`, etc.) live alongside this SKILL.md. Resolve their paths relative to the directory containing this file — the skill is typically symlinked at `~/.claude/skills/video-use/` or `~/.codex/skills/video-use/`.
+Helpers (`helpers/transcribe.py`, `helpers/render.py`, etc.) live in the AVO repo.
+Resolve paths relative to the repository root — the skill is typically symlinked at
+`~/.claude/skills/avo/` or registered as the `avo` skill.
 
 ## Helpers
 
-- **`transcribe.py <video>`** — single-file Scribe call. `--num-speakers N` optional. Cached.
-- **`transcribe_batch.py <videos_dir>`** — 4-worker parallel transcription. Use for multi-take.
+- **`prepare_transcription.py --model small`** — explicit model download for setup.
+- **`transcribe.py <video>`** — offline single-file PT-BR transcription. Cached by source fingerprint.
+- **`transcribe_batch.py <videos_dir>`** — shared-runtime batch transcription; one worker by default.
 - **`pack_transcripts.py --edit-dir <dir>`** — `transcripts/*.json` → `takes_packed.md` (phrase-level, break on silence ≥ 0.5s).
 - **`timeline_view.py <video> <start> <end>`** — filmstrip + waveform PNG. On-demand visual drill-down. **Not a scan tool** — use it at decision points, not constantly.
 - **`render.py <edl.json> -o <out>`** — per-segment extract → concat → overlays (PTS-shifted) → subtitles LAST. `--preview` for 720p fast. `--build-subtitles` to generate master.srt inline.
@@ -87,8 +107,8 @@ For animations, create `<edit>/animations/slot_<id>/` with `Bash` and spawn a su
 3. **Converse.** Describe what you see in plain English. Ask questions *shaped by the material*. Collect: content type, target length/aspect, aesthetic/brand direction, pacing feel, must-preserve moments, must-cut moments, animation and grade preferences, subtitle needs. Do not use a fixed checklist — the right questions are different every time.
 4. **Propose strategy.** 4–8 sentences: shape, take choices, cut direction, animation plan, grade direction, subtitle style, length estimate. **Wait for confirmation.**
 5. **Execute.** Produce `edl.json` via the editor sub-agent brief. Drill into `timeline_view` at ambiguous moments. Build animations in parallel sub-agents. Apply grade per-segment. Compose via `render.py`.
-6. **Preview.** `render.py --preview`.
-7. **Self-eval (before showing the user).** Run `timeline_view` on the **rendered output** (not the sources) at every cut boundary (±1.5s window). Check each image for:
+6. **Preview.** `render.py --preview` → write to `edit/preview/edit-proof.mp4` when possible.
+7. **Self-eval (before the approval gate).** Run `timeline_view` on the **rendered output** (not the sources) at every cut boundary (±1.5s window). Check each image for:
    - Visual discontinuity / flash / jump at the cut
    - Waveform spike at the boundary (audio pop that slipped past the 30ms fade)
    - Subtitle hidden behind an overlay (Rule 1 violation)
@@ -96,8 +116,9 @@ For animations, create `<edit>/animations/slot_<id>/` with `Bash` and spawn a su
 
    Also sample: first 2s, last 2s, and 2–3 mid-points — check grade consistency, subtitle readability, overall coherence. Run `ffprobe` on the output to verify duration matches the EDL expectation.
 
-   If anything fails: fix → re-render → re-eval. **Cap at 3 self-eval passes** — if issues remain after 3, flag them to the user rather than looping forever. Only present the preview once the self-eval passes.
-8. **Iterate + persist.** Natural-language feedback, re-plan, re-render. Never re-transcribe. Final render on confirmation. Append to `project.md`.
+   If anything fails: fix → re-render → re-eval. **Cap at 3 self-eval passes** — if issues remain after 3, flag them to the user rather than looping forever.
+8. **Human approval gate.** After self-eval and watch-skill + transcription analysis, write `edit/review/<checkpoint>/approval-gate.md`, list paths under `preview/` and `review/`, and **wait for explicit user approval** before promoting or continuing. Do not present the preview as final until the gate passes.
+9. **Iterate + persist.** Natural-language feedback, re-plan, re-render. Never re-transcribe. Final render on confirmation. Append to `project.md`.
 
 ## Cut craft (techniques)
 
@@ -196,18 +217,21 @@ Invent a third style if neither fits. Hard rules: subtitles LAST (Rule 1), outpu
 
 ## Animations (when requested)
 
-Animations match the content and the brand. **Get the palette, font, and visual language from the conversation** — never assume a default. If the user hasn't told you, propose a palette in the strategy phase and wait for confirmation before building anything.
+Animations match the content and the brand. Resolve palette, font, and visual
+language from `providers/<provider>/DESIGN.md` (see `avo.project.json` and
+`AGENTS.md`). If the user has not declared a provider or design doc, propose a
+palette in the strategy phase and wait for confirmation before building.
 
 **Tool options:**
 
-Pick the engine per animation slot. Do not default to Remotion just because the animation is web-adjacent.
+HyperFrames is the preferred default for agent-authored animation. Use Remotion only when React/data-driven reuse, an existing Remotion stack, a required Remotion capability, or explicit user request creates a documented advantage. Do not default to Remotion just because the animation is web-adjacent.
 
-- **HyperFrames** — Browser-native HTML/CSS/GSAP video compositions: product UI motion, website-to-video or mockup-to-video captures, kinetic typography, landing-page/storyboard promos, data-driven UI states, transparent WebM overlays, and clips that need deterministic frame capture plus HyperFrames lint/validate/render checks. Best when the animation should be authored and verified like a web composition instead of a React component tree.
+- **HyperFrames** — Browser-native HTML/CSS/GSAP video compositions: product UI motion, website-to-video or mockup-to-video captures, kinetic typography, landing-page/storyboard promos, data-driven UI states, transparent WebM overlays, and clips that need deterministic frame capture plus HyperFrames lint/check/snapshot/render checks. Best when the animation should be authored and verified like a web composition instead of a React component tree.
 - **Remotion** — React/CSS compositions with component state, reusable React primitives, or an existing Remotion brand system. Best when the user specifically asks for React/Remotion or when React composition is the simpler authoring model.
 - **Manim** — formal diagrams, state machines, equation derivations, graph morphs. Read `skills/manim-video/SKILL.md` and its references for depth.
 - **PIL + PNG sequence + ffmpeg** — simple overlay cards: counters, typewriter text, single bar reveals, progressive draws. Fast to iterate, any aesthetic you want. The launch video used this.
 
-For HyperFrames slots, scaffold the slot inside `edit/animations/slot_<id>/` with `npx --yes hyperframes init . --example blank --non-interactive --skip-skills`, build the HTML composition there, run the HyperFrames checks that fit the slot (`lint`, `validate`, and a draft render when practical), then produce the final overlay video with `npx --yes hyperframes render . -o render.mp4` or `--format webm -o render.webm` when alpha is required. Point the EDL overlay `file` at the actual rendered path.
+For HyperFrames slots, scaffold the slot inside `edit/animations/slot_<id>/` using the current documented HyperFrames workflow, build the HTML composition there, run the HyperFrames checks that fit the slot (`lint`, `check`, snapshots, and a draft render when practical), then produce the final overlay video with the current `hyperframes render` command. Use WebM when alpha is required. Point the EDL overlay `file` at the actual rendered path.
 
 For Remotion slots, keep the Remotion project isolated inside the same slot directory, scaffold with `npx create-video@latest` or install Remotion locally there, render the composition to `render.mp4` with the project-local `remotion render` command, and verify duration and dimensions with `ffprobe`.
 
@@ -223,7 +247,7 @@ None is mandatory. Invent hybrids if useful (e.g., PIL background with a HyperFr
 
 **Animation payoff timing (rule for sync-to-narration):** get the payoff word's timestamp. Start the overlay `reveal_duration` seconds earlier so the landing frame coincides with the spoken payoff word. Without this sync the animation feels disconnected.
 
-**Easing** (universal — never `linear`, it looks robotic):
+**Easing** (universal — avoid default linear motion except for genuine constant processes such as progress, scanning, rotation, or data movement):
 
 ```python
 def ease_out_cubic(t):    return 1 - (1 - t) ** 3
@@ -310,7 +334,7 @@ Things that consistently fail regardless of style:
 - **Hierarchical pre-computed codec formats** with USABILITY / tone tags / shot layers. Over-engineering. Derive from the transcript at decision time.
 - **Hand-tuned moment-scoring functions.** The LLM picks better than any heuristic you'll write.
 - **Whisper SRT / phrase-level output.** Loses sub-second gap data. Always word-level verbatim.
-- **Running Whisper locally on CPU.** Slow and it normalizes fillers. Use hosted Scribe.
+- **Implicit model downloads during transcription.** Prepare the model first so daily transcription remains offline and failures are predictable.
 - **Burning subtitles into base before compositing overlays.** Overlays hide them. (Hard Rule 1.)
 - **Single-pass filtergraph when you have overlays.** Double re-encodes. Use per-segment extract → concat.
 - **Linear animation easing.** Looks robotic. Always cubic.

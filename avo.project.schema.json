@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/joaobispo2077/avo/avo.project.schema.json",
+  "title": "AVO Per-Video Project",
+  "description": "Per-video project declaration. This file lives EXTERNALLY, next to the raw footage (in rawDir), NOT in this repo. It declares the inputs AVO works from: the raw-files folder and the optional SFX/music/inserts/graphics/logos locations, plus the provider whose brand and defaults apply. Empty asset fields fall back to the provider manifest (providers/<provider>/avo.provider.json).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["provider", "rawDir"],
+  "properties": {
+    "$schema": { "type": "string", "description": "Optional path/URL to this schema for editor validation." },
+    "provider": {
+      "type": "string",
+      "description": "Provider slug. Resolves against providers/<provider>/avo.provider.json in the AVO repo for brand + routing + defaults.",
+      "pattern": "^[a-z0-9][a-z0-9-]*$"
+    },
+    "rawDir": {
+      "type": "string",
+      "description": "EXTERNAL folder holding this video's raw source files. The workflow runs here; edit/ output is created under it. Never inside the AVO repo."
+    },
+    "title": {
+      "type": "string",
+      "description": "Optional working title for this video project."
+    },
+    "assets": {
+      "type": "object",
+      "description": "Optional per-project asset locations (EXTERNAL paths). Any field left empty inherits the provider manifest's assets value.",
+      "additionalProperties": false,
+      "properties": {
+        "sfx": { "type": "string", "description": "External path to SFX for this video." },
+        "music": { "type": "string", "description": "External path to music for this video." },
+        "inserts": { "type": "string", "description": "External path to inserts/b-roll for this video." },
+        "graphics": { "type": "string", "description": "External path to graphics/overlays for this video." },
+        "logos": { "type": "string", "description": "Logo location (usually inherits providers/<provider>/logo)." }
+      }
+    },
+    "transcription": {
+      "type": "object",
+      "description": "Optional per-project transcription override. Falls back to provider, then avo.config.json.",
+      "additionalProperties": false,
+      "properties": {
+        "language": { "type": "string", "description": "faster-whisper language code override for this video." },
+        "model": { "type": "string", "description": "Whisper model size override for this video (catalog id: base, small, medium, large-v3)." }
+      }
+    },
+    "models": {
+      "type": "object",
+      "description": "Optional per-project model overrides (catalog option ids). Falls back to avo.config.json and .avo/state.json.",
+      "additionalProperties": false,
+      "properties": {
+        "understand": { "type": "string", "description": "Qwen tier for watch-skill / THE LOOP (e.g. qwen2.5-7b)." },
+        "plan": { "type": "string", "description": "Qwen tier for planning agent." }
+      }
+    },
+    "approvalGates": {
+      "type": "object",
+      "description": "Human approval gates after watch-skill LOOP + transcription analysis. Default: require sign-off at all checkpoints.",
+      "additionalProperties": false,
+      "properties": {
+        "requireHumanSignOff": {
+          "type": "boolean",
+          "default": true,
+          "description": "When true, agent must wait for explicit user approval before promoting resolution or advancing stages."
+        },
+        "checkpoints": {
+          "type": "array",
+          "description": "Checkpoints that open a human approval gate.",
+          "items": {
+            "type": "string",
+            "enum": ["edit-proof", "motion-proof", "pre-master"]
+          },
+          "default": ["edit-proof", "motion-proof", "pre-master"]
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,44 @@
+{
+  "name": "avo",
+  "version": "0.1.0",
+  "description": "Edit less, create more — local-first AI video orchestrator. Talk to your agent, drop in footage, mass-produce YouTube-ready videos per channel.",
+  "private": true,
+  "type": "module",
+  "packageManager": "npm@11.3.0",
+  "scripts": {
+    "setup": "cross-env AVO_SETUP=1 node scripts/run-native.mjs setup",
+    "install:agents": "node bin/install.cjs",
+    "new-provider": "node scripts/run-native.mjs new-provider",
+    "init-project": "node scripts/run-native.mjs init-project",
+    "check-update": "node scripts/run-native.mjs check-update",
+    "validate:prerequisites": "node scripts/run-native.mjs validate-prerequisites",
+    "validate:usability": "node scripts/run-native.mjs validate-usability",
+    "test:unit": "pytest -m \"not project\"",
+    "test:projects": "pytest tests/projects",
+    "hf": "hyperframes",
+    "hf:doctor": "hyperframes doctor",
+    "hf:skills": "hyperframes skills",
+    "hf:skills:update": "hyperframes skills update",
+    "hf:init": "hyperframes init",
+    "hf:capture": "hyperframes capture",
+    "hf:lint": "hyperframes lint",
+    "hf:check": "hyperframes check",
+    "hf:snapshot": "hyperframes snapshot",
+    "hf:preview": "hyperframes preview",
+    "hf:render": "hyperframes render"
+  },
+  "devDependencies": {
+    "cross-env": "^7.0.3",
+    "ffmpeg-static": "^5.3.0",
+    "ffprobe-static": "^3.1.0",
+    "hyperframes": "^0.7.69",
+    "rimraf": "^6.0.0",
+    "shx": "^0.3.4"
+  },
+  "dependencies": {
+    "sharp": "^0.35.3"
+  },
+  "bin": {
+    "avo-install": "bin/install.cjs"
+  }
+}

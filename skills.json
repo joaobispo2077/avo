@@ -1,0 +1,19 @@
+{
+  "name": "avo",
+  "description": "AVO — AI Video Orchestrator. Local-first agent-driven video pipeline.",
+  "repository": "joaobispo2077/avo",
+  "skills": [
+    {
+      "name": "avo",
+      "path": "agent-skills/avo/SKILL.md"
+    },
+    {
+      "name": "avo-pipeline",
+      "path": "agent-skills/avo-pipeline/SKILL.md"
+    },
+    {
+      "name": "avo-provider",
+      "path": "agent-skills/avo-provider/SKILL.md"
+    }
+  ]
+}

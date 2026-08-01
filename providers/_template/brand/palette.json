@@ -1,0 +1,13 @@
+{
+  "$comment": "Machine-readable provider palette. Replace with real brand tokens. Hex values, grouped by role.",
+  "primary": "#000000",
+  "secondary": "#333333",
+  "accent": "#00A3FF",
+  "background": "#FFFFFF",
+  "text": "#111111",
+  "roles": {
+    "$comment": "Optional: named semantic tokens used by captions, lower-thirds, callouts.",
+    "captionFill": "#FFFFFF",
+    "captionStroke": "#000000"
+  }
+}

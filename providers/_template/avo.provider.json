@@ -1,0 +1,27 @@
+{
+  "$schema": "../avo.provider.schema.json",
+  "name": "replace-with-provider-slug",
+  "displayName": "REPLACE with human name",
+  "kind": "youtube",
+  "description": "REPLACE with a short description of the channel/account.",
+  "scope": "REPLACE with format scope (e.g. 16:9 long-form YouTube, 9:16 Shorts).",
+  "platformUrl": "",
+  "media": {
+    "rawRoot": "REPLACE/with/EXTERNAL/absolute/path/to/raw-footage"
+  },
+  "assets": {
+    "sfx": "",
+    "music": "",
+    "inserts": "",
+    "graphics": "",
+    "logos": "providers/replace-with-provider-slug/logo"
+  },
+  "transcription": {
+    "language": "en"
+  },
+  "brand": {
+    "design": "providers/replace-with-provider-slug/DESIGN.md",
+    "palette": "providers/replace-with-provider-slug/brand/palette.json"
+  },
+  "routingOverrides": {}
+}

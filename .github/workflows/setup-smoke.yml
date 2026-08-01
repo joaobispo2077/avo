@@ -1,0 +1,80 @@
+name: Setup smoke (manual)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  PYTHON_VERSION: '3.12'
+  NODE_VERSION: '20'
+
+jobs:
+  setup-linux:
+    name: Setup smoke (Linux)
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      - name: Run setup smoke
+        run: bash scripts/ci/setup-smoke.sh
+
+      - name: Upload setup log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: setup-smoke-linux-${{ github.run_id }}
+          path: |
+            **/*.log
+          if-no-files-found: ignore
+          retention-days: 7
+
+  setup-windows:
+    name: Setup smoke (Windows)
+    runs-on: windows-latest
+    timeout-minutes: 120
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Run setup smoke
+        shell: pwsh
+        run: ./scripts/ci/setup-smoke.ps1
+
+      - name: Upload setup log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: setup-smoke-windows-${{ github.run_id }}
+          path: |
+            **/*.log
+          if-no-files-found: ignore
+          retention-days: 7

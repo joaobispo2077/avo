@@ -1,117 +1,179 @@
-"""Batch-transcribe every video in a directory with 4 parallel workers.
-
-Walks <videos_dir> for common video extensions, runs ElevenLabs Scribe on
-each, writes transcripts to <videos_dir>/edit/transcripts/<name>.json.
-
-Cached per-file: any source that already has a transcript is skipped.
-
-Usage:
-    python helpers/transcribe_batch.py <videos_dir>
-    python helpers/transcribe_batch.py <videos_dir> --workers 4
-    python helpers/transcribe_batch.py <videos_dir> --num-speakers 2
-    python helpers/transcribe_batch.py <videos_dir> --edit-dir /custom/edit
-"""
+"""Batch-transcribe a source directory with one shared local PT-BR runtime."""
 
 from __future__ import annotations
 
 import argparse
-import sys
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Callable
 
-from transcribe import load_api_key, transcribe_one
+from transcribe import (
+    DEFAULT_MODEL,
+    LocalTranscriber,
+    PTBRArgumentParser,
+    inspect_cache,
+    source_fingerprint,
+    transcript_path,
+    transcribe_one,
+    validate_model_name,
+)
 
 
 VIDEO_EXTS = {".mp4", ".MP4", ".mov", ".MOV", ".mkv", ".MKV", ".avi", ".AVI", ".m4v"}
+RuntimeFactory = Callable[..., LocalTranscriber]
+
+
+@dataclass
+class BatchResult:
+    found: int
+    cached: int
+    transcribed: int
+    failures: list[tuple[Path, str]]
 
 
 def find_videos(videos_dir: Path) -> list[Path]:
-    videos = sorted(
-        p for p in videos_dir.iterdir()
-        if p.is_file() and p.suffix in VIDEO_EXTS
+    return sorted(
+        path
+        for path in videos_dir.iterdir()
+        if path.is_file() and path.suffix in VIDEO_EXTS
     )
-    return videos
 
 
-def main() -> None:
-    ap = argparse.ArgumentParser(description="Parallel batch transcription of a videos directory")
-    ap.add_argument("videos_dir", type=Path, help="Directory containing source videos")
-    ap.add_argument(
-        "--edit-dir",
-        type=Path,
-        default=None,
-        help="Edit output directory (default: <videos_dir>/edit)",
-    )
-    ap.add_argument("--workers", type=int, default=4, help="Parallel workers (default: 4)")
-    ap.add_argument(
-        "--language",
-        type=str,
-        default=None,
-        help="Optional ISO language code. Omit to auto-detect per file.",
-    )
-    ap.add_argument(
-        "--num-speakers",
-        type=int,
-        default=None,
-        help="Optional number of speakers. Improves diarization when known.",
-    )
-    args = ap.parse_args()
-
-    videos_dir = args.videos_dir.resolve()
+def transcribe_directory(
+    videos_dir: Path,
+    edit_dir: Path | None = None,
+    workers: int = 1,
+    model: str = DEFAULT_MODEL,
+    model_dir: Path | None = None,
+    device: str = "auto",
+    compute_type: str = "auto",
+    force: bool = False,
+    runtime_factory: RuntimeFactory = LocalTranscriber,
+    verbose: bool = True,
+) -> BatchResult:
+    if workers < 1:
+        raise ValueError("worker count must be at least 1")
+    videos_dir = videos_dir.resolve()
     if not videos_dir.is_dir():
-        sys.exit(f"not a directory: {videos_dir}")
-
-    edit_dir = (args.edit_dir or (videos_dir / "edit")).resolve()
-    (edit_dir / "transcripts").mkdir(parents=True, exist_ok=True)
-
+        raise ValueError(f"not a directory: {videos_dir}")
+    model = validate_model_name(model)
+    edit_dir = (edit_dir or (videos_dir / "edit")).resolve()
     videos = find_videos(videos_dir)
     if not videos:
-        sys.exit(f"no videos found in {videos_dir}")
+        return BatchResult(0, 0, 0, [])
 
-    already_cached = [v for v in videos if (edit_dir / "transcripts" / f"{v.stem}.json").exists()]
-    pending = [v for v in videos if v not in already_cached]
+    fingerprints = {video: source_fingerprint(video) for video in videos}
+    cached = []
+    pending = []
+    for video in videos:
+        state = inspect_cache(
+            transcript_path(video, edit_dir), fingerprints[video], model
+        )
+        if state == "valid" and not force:
+            cached.append(video)
+        else:
+            pending.append(video)
 
-    print(f"found {len(videos)} videos ({len(already_cached)} cached, {len(pending)} to transcribe)")
+    if verbose:
+        print(
+            f"found {len(videos)} videos "
+            f"({len(cached)} cached, {len(pending)} to transcribe)"
+        )
     if not pending:
-        print("nothing to do")
-        return
+        if verbose:
+            print("nothing to do")
+        return BatchResult(len(videos), len(cached), 0, [])
 
-    api_key = load_api_key()
+    runtime = runtime_factory(
+        model=model,
+        model_dir=model_dir,
+        device=device,
+        compute_type=compute_type,
+        num_workers=workers,
+    )
+    failures: list[tuple[Path, str]] = []
+    completed = 0
+    started = time.monotonic()
 
-    print(f"transcribing {len(pending)} files with {args.workers} parallel workers")
-    t0 = time.time()
+    def run_one(video: Path) -> Path:
+        return transcribe_one(
+            video,
+            edit_dir,
+            runtime=runtime,
+            model=model,
+            force=force,
+            verbose=False,
+            fingerprint=fingerprints[video],
+        )
 
-    errors: list[tuple[Path, str]] = []
-    with ThreadPoolExecutor(max_workers=args.workers) as pool:
-        futures = {
-            pool.submit(
-                transcribe_one,
-                video=v,
-                edit_dir=edit_dir,
-                api_key=api_key,
-                language=args.language,
-                num_speakers=args.num_speakers,
-                verbose=False,
-            ): v
-            for v in pending
-        }
-        for fut in as_completed(futures):
-            v = futures[fut]
+    if workers == 1:
+        for video in pending:
             try:
-                out = fut.result()
-                print(f"  + {v.stem}  →  {out.name}")
-            except Exception as e:
-                errors.append((v, str(e)))
-                print(f"  x {v.stem}  FAILED: {e}")
+                out = run_one(video)
+                completed += 1
+                if verbose:
+                    print(f"  + {video.stem} -> {out.name}")
+            except Exception as exc:
+                failures.append((video, str(exc)))
+                if verbose:
+                    print(f"  x {video.stem} FAILED: {exc}")
+    else:
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            futures = {pool.submit(run_one, video): video for video in pending}
+            for future in as_completed(futures):
+                video = futures[future]
+                try:
+                    out = future.result()
+                    completed += 1
+                    if verbose:
+                        print(f"  + {video.stem} -> {out.name}")
+                except Exception as exc:
+                    failures.append((video, str(exc)))
+                    if verbose:
+                        print(f"  x {video.stem} FAILED: {exc}")
 
-    dt = time.time() - t0
-    print(f"\ndone in {dt:.1f}s")
-    if errors:
-        print(f"{len(errors)} failures:")
-        for v, msg in errors:
-            print(f"  {v.name}: {msg}")
-        sys.exit(1)
+    if verbose:
+        print(f"done in {time.monotonic() - started:.1f}s")
+    return BatchResult(len(videos), len(cached), completed, failures)
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = PTBRArgumentParser(
+        description="Batch-transcribe a directory locally in PT-BR"
+    )
+    parser.add_argument("videos_dir", type=Path)
+    parser.add_argument("--edit-dir", type=Path, default=None)
+    parser.add_argument("--workers", type=int, default=1)
+    parser.add_argument("--model", default=DEFAULT_MODEL)
+    parser.add_argument("--model-dir", type=Path, default=None)
+    parser.add_argument("--device", default="auto")
+    parser.add_argument("--compute-type", default="auto")
+    parser.add_argument("--force", action="store_true")
+    return parser
+
+
+def main(argv: list[str] | None = None) -> None:
+    args = build_parser().parse_args(argv)
+    try:
+        result = transcribe_directory(
+            args.videos_dir,
+            args.edit_dir,
+            workers=args.workers,
+            model=args.model,
+            model_dir=args.model_dir,
+            device=args.device,
+            compute_type=args.compute_type,
+            force=args.force,
+        )
+    except (RuntimeError, ValueError) as exc:
+        raise SystemExit(str(exc)) from exc
+    if result.found == 0:
+        raise SystemExit(f"no videos found in {args.videos_dir.resolve()}")
+    if result.failures:
+        summary = "\n".join(f"  {video.name}: {error}" for video, error in result.failures)
+        raise SystemExit(f"{len(result.failures)} transcription failures:\n{summary}")
 
 
 if __name__ == "__main__":

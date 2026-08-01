@@ -1,0 +1,101 @@
+{
+  "$comment": "AVO routing config — the single source of truth for which tool owns which job (Local vs Paid), the confidence-gated resolution ladder, and the setup-chosen transcription language. Read-only for now; wired to the runtime in a later feature. Labels are only 'local'/'paid' — Paid may be better but is never labelled that way.",
+  "version": 1,
+  "labels": ["local", "paid"],
+  "jobs": {
+    "plan": {
+      "local": "speckit",
+      "description": "Plan & spec via GitHub Spec Kit (/speckit.* commands)."
+    },
+    "transcribe": {
+      "local": "video-use+faster-whisper",
+      "paid": "elevenlabs",
+      "description": "Edit / transcribe / caption. faster-whisper language chosen at setup."
+    },
+    "understand": {
+      "local": "watch-skill",
+      "description": "Understand / self-verify — THE LOOP (inspect/fix/verify). Local-first."
+    },
+    "motion": {
+      "local": ["hyperframes", "remotion"],
+      "description": "Motion / animation. HyperFrames default, Remotion when justified."
+    },
+    "render": {
+      "local": "local-render",
+      "paid": "gemini-flow",
+      "description": "Render / encode."
+    },
+    "memory": {
+      "local": "ai-memory",
+      "optional": true,
+      "description": "Cross-session memory. Optional; AVO runs without it."
+    },
+    "sandbox": {
+      "local": "ai-jail",
+      "optional": true,
+      "description": "Agent sandbox. Optional; WSL-only on Windows."
+    },
+    "logo": {
+      "local": "logo-generator-skill",
+      "description": "Logo / brand asset generation."
+    },
+    "cleanup": {
+      "local": "rimraf+ai-memory-learndown",
+      "description": "Post-render cleanup + learndown (reports space used vs freed)."
+    },
+    "translate": {
+      "local": "agent+llm+glossary",
+      "paid": "elevenlabs-dubbing",
+      "backlog": true,
+      "description": "Translate transcript/metadata for target locales (BL-004). Not wired yet."
+    },
+    "voice": {
+      "local": "coqui-xtts",
+      "paid": "elevenlabs",
+      "backlog": true,
+      "description": "Provider voice profile from approved masters (BL-003). Consent required. Not wired yet."
+    },
+    "localize-deliver": {
+      "local": "deliver-folder-manifest",
+      "backlog": true,
+      "description": "Multi-locale delivery pack with optional multi-audio (BL-005). Not wired yet."
+    }
+  },
+  "confidence": {
+    "low": {
+      "editProof": 360,
+      "motionProof": 720
+    },
+    "high": 1080
+  },
+  "resolution": {
+    "policy": "inferred-from-source",
+    "aboveSourceSupported": false,
+    "note": "Final resolution is inferred from the raw files. Output above source resolution is not yet supported (backlog + sponsor CTA)."
+  },
+  "transcription": {
+    "language": "<set-at-setup>"
+  },
+  "models": {
+    "transcribe": {
+      "default": "small",
+      "description": "faster-whisper size; override via setup --model or avo.project transcription.model"
+    },
+    "understand": {
+      "default": "qwen2.5-7b",
+      "description": "watch-skill / THE LOOP LLM tier (advisory; agent configures watch-skill)"
+    },
+    "plan": {
+      "default": "qwen2.5-7b",
+      "description": "Planning / agent LLM tier"
+    },
+    "transcribe_paid": {
+      "default": "elevenlabs-scribe",
+      "description": "Paid transcribe when label=paid"
+    }
+  },
+  "migration": {
+    "legacyRoutingIds": true,
+    "legacyGate1Ids": ["video-use-engine"]
+  }
+}

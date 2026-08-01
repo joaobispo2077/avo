@@ -1,0 +1,20 @@
+{
+  "$schema": "../../avo.project.schema.json",
+  "provider": "my-channel",
+  "rawDir": "/absolute/path/to/footage/my-video",
+  "title": "Working title",
+  "assets": {
+    "sfx": "",
+    "music": "",
+    "inserts": "",
+    "graphics": "",
+    "logos": "providers/my-channel/logo"
+  },
+  "transcription": {
+    "language": "en"
+  },
+  "approvalGates": {
+    "requireHumanSignOff": true,
+    "checkpoints": ["edit-proof", "motion-proof", "pre-master"]
+  }
+}

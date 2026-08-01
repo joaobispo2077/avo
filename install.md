@@ -1,162 +1,264 @@
+# AVO install
+
+Two tiers: **Tier 1** installs agent skills + slash commands in ~30 seconds. **Tier 2** prepares the full local toolchain (ffmpeg, whisper, watch-skill, HyperFrames). User-facing summary: [README § Install](../README.md#install).
+
 ---
-name: video-use-install
-description: Install video-use into the current agent (Claude Code, Codex, Hermes, Openclaw, etc.) and wire up ffmpeg + the ElevenLabs API key so the user can start editing immediately.
+
+## Tier 1 — Fast agent install
+
+### One command (every agent)
+
+**macOS · Linux · WSL · Git Bash**
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/joaobispo2077/avo/main/install.sh | bash
+```
+
+**Windows · PowerShell 5.1+**
+
+```powershell
+irm https://raw.githubusercontent.com/joaobispo2077/avo/main/install.ps1 | iex
+```
+
+~30 seconds. Needs **Node ≥18**. Detects agents on your machine. Skips agents you do not have. Safe to re-run.
+
+#### What tier 1 installs
+
+- **Skills (all agents):** `avo`, `avo-pipeline`, `avo-provider` via [`skills.json`](skills.json) / the skills registry
+- **Cursor only:** slash commands `commands/avo/` → `.cursor/commands/avo/`
+
+Details: [`docs/agent-skills.md`](docs/agent-skills.md).
+
+#### Full toolchain (tier 2)
+
+Re-run with `--full` after cloning, or jump to [Tier 2 — Full toolchain setup](#tier-2--full-toolchain-setup):
+
+```bash
+bash install.sh --full --lang en
+pwsh install.ps1 -Full -Lang en
+```
+
+### One agent only
+
+```bash
+npx skills add joaobispo2077/avo -a cursor
+npx skills add joaobispo2077/avo -a claude
+npx skills add joaobispo2077/avo -a codex
+npx skills add joaobispo2077/avo -a windsurf
+npx skills add joaobispo2077/avo -a cline
+npx skills add joaobispo2077/avo -a gemini
+npx skills add joaobispo2077/avo -a opencode
+```
+
+Copy slash commands manually (Cursor):
+
+```bash
+mkdir -p .cursor/commands
+cp -r commands/avo .cursor/commands/
+```
+
+Windows:
+
+```powershell
+New-Item -ItemType Directory -Force -Path .cursor/commands/avo | Out-Null
+Copy-Item -Recurse commands/avo/* .cursor/commands/avo/
+```
+
+### Supported agents
+
+| ID | Agent | Detect | Install |
+| -- | ----- | ------ | ------- |
+| `cursor` | Cursor | `cursor` CLI, Cursor.app, `~/.cursor` | 3 skills + `/avo.*` commands |
+| `claude` | Claude Code | `claude` CLI, `~/.claude` | 3 skills (+ fallback copy from clone) |
+| `codex` | Codex CLI | `codex` on PATH | 3 skills |
+| `windsurf` | Windsurf | `windsurf` CLI | 3 skills |
+| `cline` | Cline | VS Code / Cursor Cline extension | 3 skills |
+| `gemini` | Gemini CLI | `gemini` on PATH | 3 skills |
+| `opencode` | OpenCode | `opencode` on PATH | 3 skills |
+
+When `npx skills add` fails, a local clone can copy all entries from `skills.json`
+into the agent skills directory (see [`docs/agent-skills.md`](docs/agent-skills.md)).
+
+List IDs: `node bin/install.cjs --list`
+
+### Tier 1 flags
+
+| Flag | Meaning |
+| ---- | ------- |
+| `--dry-run` | Print actions only |
+| `--full` | Also run toolchain setup |
+| `--lang CODE` | Transcription language for `--full` (`en`, `pt`, …) |
+| `--only AGENT` | Install for one agent |
+| `--list` | Print supported agent IDs |
+| `--yes` / `-y` | Non-interactive |
+| `--uninstall` | Best-effort remove (skills CLI) |
+| `-h` / `--help` | Help |
+
+From a clone:
+
+```bash
+node bin/install.cjs --dry-run
+npm run install:agents -- --only cursor
+```
+
+### Environment
+
+| Variable | Default | Purpose |
+| -------- | ------- | ------- |
+| `AVO_INSTALL_REPO` | `joaobispo2077/avo` | GitHub slug for npx / raw URLs |
+| `AVO_INSTALL_REF` | `main` | Git ref for pinned fetch |
+
+### Uninstall
+
+Best-effort per agent (skills CLI varies by version):
+
+```bash
+npx skills remove joaobispo2077/avo -a cursor
+```
+
+Remove Cursor commands:
+
+```bash
+rm -rf .cursor/commands/avo
+rm -rf ~/.cursor/commands/avo
+```
+
+### Troubleshooting
+
+**Node too old:** Upgrade to Node ≥18 from [nodejs.org](https://nodejs.org).
+
+**No agents detected:** Install Cursor (or your agent) first, or use `--only cursor`.
+
+**curl pipe fails:** Clone the repo and run `bash install.sh` locally.
+
+**Need ffmpeg / whisper:** Tier 1 is agent brain only. Run `bash install.sh --full --lang en` from a clone.
+
+**Install broke?** Open your agent in the AVO repo and say: *"Read install.md and install AVO for me."*
+
+### Local clone (developers)
+
+```bash
+git clone https://github.com/joaobispo2077/avo.git
+cd avo
+bash install.sh --dry-run
+bash install.sh --only cursor
+bash install.sh --full --lang en
+```
+
 ---
 
-# video-use install
+## Tier 2 — Full toolchain setup
 
-Use this file only for first-time install or reconnect. For daily editing, read `SKILL.md`. Always read `helpers/` — that's where the scripts live.
+AVO orchestrates independent local tools. This section is the **toolchain setup contract**
+(full ffmpeg, whisper, watch-skill, HyperFrames).
 
-## What you're doing
+`AGENTS.md` is canonical; do not contradict it. Pipeline detail: [`docs/avo-workflow.md`](docs/avo-workflow.md).
 
-You're setting up a conversation-driven video editor for the user. After install, the user drops raw footage into any folder, runs their agent (`claude`, `codex`, etc.) there, and says "edit these into a launch video." You do the rest by reading `SKILL.md`.
+> Historical context: AVO started as a fork of `browser-use/video-use` and grew
+> into an orchestrator over video-use, watch-skill, HyperFrames, Remotion, GitHub Spec Kit,
+> ai-memory, and ai-jail. Setup prepares that toolchain — it does not replace any
+> one engine.
 
-Three things must exist on this machine:
+### Required end state
 
-1. The `video-use` repo cloned somewhere stable.
-2. `ffmpeg` on `$PATH` (plus optional `yt-dlp` for online sources).
-3. An ElevenLabs API key in `.env` at the repo root (for Scribe transcription).
+1. The repository is cloned at a stable path (`git clone https://github.com/joaobispo2077/avo.git`).
+2. Python 3.10+ dependencies are installed (video-use engine).
+3. `ffmpeg` and `ffprobe` are on `PATH` (Node `ffmpeg-static`/`ffprobe-static`
+   are a fallback).
+4. A **multilingual** faster-whisper model is prepared locally; the transcription
+   **language is chosen at setup** (`--lang`), not fixed to any locale.
+5. Node.js ≥ 18 with the motion toolchain (HyperFrames) installed.
+6. [GitHub Spec Kit](https://github.com/github/spec-kit) present (`.specify` marker).
+7. Optional: watch-skill, ai-memory, ai-jail, logo-generator-skill.
 
-And one thing must be true about the current agent:
+No transcription account or credential is part of local setup. Optional hosted
+alternatives are opt-in and configured separately (see the README tool-routing
+table).
 
-4. It can discover `SKILL.md` — either via a global skills directory (`~/.claude/skills/`, `~/.codex/skills/`) or via a `CLAUDE.md` / system-prompt import.
+### One command per OS
 
-## Install prompt contract
+The native scripts are the **primary** entrypoint. Both accept identical
+`--flag value` options.
 
-- Do everything yourself. Only ask the user for things you cannot generate — the ElevenLabs API key, and confirmation before `brew install`.
-- Prefer a stable clone path like `~/Developer/video-use` (not `/tmp`, not `~/Downloads`).
-- The skill references helpers by bare name (`transcribe.py`, `render.py`). That works because SKILL.md and `helpers/` ship together — keep them as siblings when you register the skill.
-- After install, verify by running one real command against one real file. Don't declare success on file-existence checks alone.
-
-## Steps
-
-### 1. Clone to a stable path
-
-```bash
-test -d ~/Developer/video-use || git clone https://github.com/browser-use/video-use ~/Developer/video-use
-cd ~/Developer/video-use
+```powershell
+# Windows / WSL-from-PowerShell
+pwsh scripts/setup.ps1 --lang pt [--with-memory] [--with-jail] [--with-logo] [--skip TOOL]
+# No pwsh? Windows PowerShell 5.1 works too (scripts are 5.1-safe):
+powershell -ExecutionPolicy Bypass -File scripts/setup.ps1 --lang pt
 ```
 
-If the repo is already there, `git pull --ff-only` and continue.
-
-### 2. Install Python deps
-
 ```bash
-# Prefer uv if available; fall back to pip.
-command -v uv >/dev/null && uv sync || pip install -e .
+# macOS / Linux / WSL
+bash scripts/setup.sh --lang pt [--with-memory] [--with-jail] [--with-logo] [--skip TOOL]
 ```
 
-`pyproject.toml` lists `requests`, `librosa`, `matplotlib`, `pillow`, `numpy`. No console scripts — helpers are invoked directly as `python helpers/<name>.py`.
-
-### 3. Install ffmpeg (+ optional yt-dlp)
-
-`ffmpeg` and `ffprobe` are hard requirements. `yt-dlp` is only needed if the user wants to pull sources from URLs. Animation engines such as HyperFrames, Remotion, and Manim are installed lazily the first time a project actually needs them.
-
 ```bash
-# macOS
-command -v ffmpeg >/dev/null || brew install ffmpeg
-command -v yt-dlp >/dev/null || brew install yt-dlp     # optional
-
-# Debian / Ubuntu
-# sudo apt-get update && sudo apt-get install -y ffmpeg
-# pip install yt-dlp
-
-# Arch
-# sudo pacman -S ffmpeg yt-dlp
+# Cross-platform wrapper (dispatches to the native script via cross-env)
+npm run setup -- --lang pt --with-memory
 ```
 
-If `brew` / `apt` / `pacman` requires a sudo prompt, tell the user the exact command and wait. Do not invent a password.
+#### Setup flags
 
-### 4. Register the skill with the current agent
+| Flag | Meaning |
+| --- | --- |
+| `--lang CODE` | faster-whisper transcription language (e.g. `pt`, `en`, `es`). Prompted if omitted. |
+| `--model SIZE` | Whisper model size to prepare (default `small`). |
+| `--with-memory` | Install [ai-memory](https://github.com/akitaonrails/ai-memory) (optional; zero-LLM by default). |
+| `--with-jail` | Install [ai-jail](https://github.com/akitaonrails/ai-jail) (optional agent sandbox; **WSL-only on Windows**). |
+| `--with-logo` | Install [logo-generator-skill](https://github.com/op7418/logo-generator-skill) (optional). |
+| `--skip TOOL` | Skip a step: `speckit`, `engine`, `watch`, `hyperframes`, `remotion` (repeatable). |
+| `--yes` / `-y` | Non-interactive; accept defaults. |
+| `--dry-run` | Print every action without executing (safe to inspect first). |
 
-Figure out which agent you are running under, and register once. A symlink of the whole repo directory is the right shape — helpers/ needs to sit next to SKILL.md.
+### What setup prepares (in order)
 
-- **Claude Code** (`~/.claude/` present):
+1. **Preflight** — detects OS/WSL, checks `python`, `node`, `npm`, `git`.
+2. **GitHub Spec Kit** — verifies the `.specify` directory is present (installed via `specify init` or bundled with AVO).
+3. **video-use engine** — `uv sync` (or `pip install -e .`), verifies
+   `ffmpeg`/`ffprobe`, records the chosen language in `.avo/state.json`, and
+   prepares the Whisper model via `helpers/prepare_transcription.py`.
+4. **watch-skill** — clones/updates `oxbshw/watch-skill` into `tools/`.
+5. **HyperFrames** — `npm install` + `hyperframes doctor`.
+6. **Remotion** — installed per-project when justified (see
+   `docs/remotion-decision-guide.md`).
+7. **ai-memory** *(with `--with-memory`)* — clones `akitaonrails/ai-memory`.
+8. **ai-jail** *(with `--with-jail`)* — installs via `brew`/`cargo`/`mise`/`nix`
+   (Linux/macOS) or inside **WSL** on Windows.
+9. **logo-generator-skill** *(with `--with-logo`)*.
 
-    ```bash
-    mkdir -p ~/.claude/skills
-    ln -sfn ~/Developer/video-use ~/.claude/skills/video-use
-    ```
+Each step prints a pass/fail row. Required steps (`python`, `engine`) fail the
+run; optional tools only `WARN`. The script is **idempotent** — re-running skips
+satisfied steps.
 
-- **Codex** (`$CODEX_HOME` set, or `~/.codex/` present):
+### Language / model notes
 
-    ```bash
-    mkdir -p "${CODEX_HOME:-$HOME/.codex}/skills"
-    ln -sfn ~/Developer/video-use "${CODEX_HOME:-$HOME/.codex}/skills/video-use"
-    ```
+- The engine requires a **multilingual** model. English-only `.en` variants are
+  rejected; pick a multilingual size (`small`, `medium`, `large-v3`, …).
+- The default model directory is `~/.cache/video-use/models/<size>`. Set
+  `VIDEO_USE_MODEL_DIR` to relocate the shared model root, or pass
+  `--model-dir` to `helpers/prepare_transcription.py`.
 
-- **Hermes / Openclaw / another agent with a skills directory**: symlink `~/Developer/video-use` into that agent's skills directory under the name `video-use`. If the agent has no skills directory, add a line to its system prompt / config pointing at `~/Developer/video-use/SKILL.md` (e.g. an `@~/Developer/video-use/SKILL.md` import in a `CLAUDE.md`-equivalent).
-
-If you can't tell which agent you're in, ask the user once: "which agent am I running under — Claude Code, Codex, or something else?" Then pick the right target.
-
-### 5. ElevenLabs API key
-
-Scribe (ElevenLabs) does all transcription. Without a key, nothing transcribes.
-
-1. Check existing state in this order and stop at the first hit:
-
-    ```bash
-    # a) env var already exported
-    [ -n "$ELEVENLABS_API_KEY" ] && echo "env"
-    # b) .env at repo root already has it
-    grep -q '^ELEVENLABS_API_KEY=..' ~/Developer/video-use/.env 2>/dev/null && echo "dotenv"
-    ```
-
-2. If neither is set, ask the user exactly once:
-
-    > I need an ElevenLabs API key for transcription (word-level timestamps, speaker diarization, filler tagging). Grab one at https://elevenlabs.io/app/settings/api-keys and paste it here — I'll write it to `~/Developer/video-use/.env`. Or if you already have it exported as `ELEVENLABS_API_KEY`, say "use env" and I'll skip.
-
-    When the user pastes a key, write it to `~/Developer/video-use/.env`:
-
-    ```bash
-    printf 'ELEVENLABS_API_KEY=%s\n' "$KEY" > ~/Developer/video-use/.env
-    chmod 600 ~/Developer/video-use/.env
-    ```
-
-    Never echo the key back in tool output. Never commit `.env`.
-
-3. Sanity check with a cheap, quota-free call:
-
-    ```bash
-    curl -s -o /dev/null -w '%{http_code}\n' \
-      -H "xi-api-key: $(sed -n 's/^ELEVENLABS_API_KEY=//p' ~/Developer/video-use/.env)" \
-      https://api.elevenlabs.io/v1/user
-    ```
-
-    `200` means the key works. `401` means the user pasted a wrong/expired key — ask once more and stop. Anything else (network, 5xx), move on and verify during first real transcription.
-
-### 6. Verify end-to-end
-
-Run one real thing. Prefer the lightest verification that still proves the pipeline is wired up:
+### Verify
 
 ```bash
-python ~/Developer/video-use/helpers/timeline_view.py --help >/dev/null && echo "helpers OK"
-ffprobe -version | head -1
+# Gate 1 — orchestrator prerequisites (video-use, watch-skill, HyperFrames, …)
+npm run validate:prerequisites -- --ci
+
+# Gate 2 — project usability (run after Gate 1 passes)
+npm run validate:usability -- --ci
+
+After your first video project starts, expect **approval gates**: when watch-skill and
+transcription analysis finish a stage, review files in `edit/preview/` and
+`edit/review/` before the agent promotes resolution. See [`docs/avo-workflow.md`](docs/avo-workflow.md) §4b.
+
+python helpers/prepare_transcription.py --help
+python helpers/transcribe.py --help
+ffprobe -version
+pytest
 ```
 
-Full transcription test is optional at install time — it burns Scribe credits. Better to wait until the user hands you their first clip.
+Agent-facing CI detail: [`docs/ci.md`](docs/ci.md).
 
-### 7. Hand off
-
-Tell the user, in one short message:
-
-- Where the skill is installed (`~/Developer/video-use`).
-- That they should `cd` into their footage folder and start their agent there (e.g. `claude`).
-- That a good first message is: *"edit these into a launch video"* or *"inventory these takes and propose a strategy."*
-- That all outputs land in `<videos_dir>/edit/` — the repo stays clean.
-
-## Keeping the skill current
-
-- `cd ~/Developer/video-use && git pull --ff-only` pulls the latest code. The symlink auto-picks it up on the next run.
-- If `pyproject.toml` changed deps, re-run `uv sync` / `pip install -e .` after pulling.
-
-## Cold-start reminders
-
-- Symlink the **whole directory**, not just `SKILL.md`. The helpers need to sit next to it.
-- If `.env` exists but the key is empty, treat it the same as missing — don't assume existence means validity.
-- `ffmpeg` from static builds works fine. Any modern (≥ 4.x) build is enough.
-- `yt-dlp` is optional. Don't block install on it; install lazily the first time a user asks to pull from a URL.
-- Node.js/npm are only needed for HyperFrames or Remotion slots. HyperFrames currently requires Node.js 22+.
-- HyperFrames, Remotion, and Manim are optional animation engines. Don't install or prefer one globally during setup; pick the engine per animation slot in `SKILL.md`. HyperFrames can run through `npx --yes hyperframes ...` in the slot directory. Remotion can be scaffolded with `npx create-video@latest` or installed inside the slot before rendering.
-- Never run transcription as part of install verification unless the user explicitly asks — Scribe costs real money.
-- If the user is on Linux without a package manager Claude recognizes, print the manual `ffmpeg` install URL and wait rather than guessing.
+To confirm the offline/no-download behavior, point `--model-dir` at an empty
+directory: transcription must fail fast with the preparation command and must
+not download.

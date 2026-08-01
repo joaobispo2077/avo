@@ -1,0 +1,175 @@
+{
+  "$comment": "Model catalog for AVO transparency — options per job with resource/quality labels. Resolved via helpers/models.py.",
+  "version": 1,
+  "jobs": {
+    "transcribe": {
+      "adapter": "faster-whisper",
+      "default": "small",
+      "options": [
+        {
+          "id": "base",
+          "label": "faster-whisper/base",
+          "vramMB": 1024,
+          "ramMB": 4096,
+          "diskMB": 150,
+          "speed": "fastest",
+          "quality": "low",
+          "notes": "Lightest local transcribe; OK for drafts."
+        },
+        {
+          "id": "small",
+          "label": "faster-whisper/small",
+          "vramMB": 2048,
+          "ramMB": 8192,
+          "diskMB": 500,
+          "speed": "balanced",
+          "quality": "good",
+          "notes": "AVO setup default; good balance for most CPUs/GPUs."
+        },
+        {
+          "id": "medium",
+          "label": "faster-whisper/medium",
+          "vramMB": 5120,
+          "ramMB": 16384,
+          "diskMB": 1500,
+          "speed": "slow",
+          "quality": "high",
+          "notes": "Needs ~5GB VRAM or patient CPU run."
+        },
+        {
+          "id": "large-v3",
+          "label": "faster-whisper/large-v3",
+          "vramMB": 10240,
+          "ramMB": 32768,
+          "diskMB": 3100,
+          "speed": "slowest",
+          "quality": "best",
+          "notes": "Best local quality; heavy VRAM/disk."
+        }
+      ]
+    },
+    "understand": {
+      "adapter": "watch-skill",
+      "backend": "qwen2.5",
+      "default": "qwen2.5-7b",
+      "options": [
+        {
+          "id": "qwen2.5-1.5b",
+          "label": "Qwen 2.5 1.5B",
+          "vramMB": 4096,
+          "ramMB": 8192,
+          "diskMB": 3000,
+          "speed": "fast",
+          "quality": "fair",
+          "notes": "Lightest THE LOOP vision+LLM tier."
+        },
+        {
+          "id": "qwen2.5-3b",
+          "label": "Qwen 2.5 3B",
+          "vramMB": 6144,
+          "ramMB": 16384,
+          "diskMB": 6000,
+          "speed": "balanced",
+          "quality": "good"
+        },
+        {
+          "id": "qwen2.5-7b",
+          "label": "Qwen 2.5 7B",
+          "vramMB": 10240,
+          "ramMB": 16384,
+          "diskMB": 15000,
+          "speed": "balanced",
+          "quality": "high",
+          "notes": "Default advisory tier for mid-range GPUs."
+        },
+        {
+          "id": "qwen2.5-14b",
+          "label": "Qwen 2.5 14B",
+          "vramMB": 16384,
+          "ramMB": 32768,
+          "diskMB": 28000,
+          "speed": "slow",
+          "quality": "high"
+        },
+        {
+          "id": "qwen2.5-32b",
+          "label": "Qwen 2.5 32B",
+          "vramMB": 24576,
+          "ramMB": 65536,
+          "diskMB": 64000,
+          "speed": "slowest",
+          "quality": "best",
+          "notes": "Workstation-class; watch-skill agent must configure."
+        }
+      ]
+    },
+    "plan": {
+      "adapter": "agent+llm",
+      "backend": "qwen2.5",
+      "default": "qwen2.5-7b",
+      "options": [
+        {
+          "id": "qwen2.5-1.5b",
+          "label": "Qwen 2.5 1.5B",
+          "vramMB": 4096,
+          "ramMB": 8192,
+          "diskMB": 3000,
+          "speed": "fast",
+          "quality": "fair"
+        },
+        {
+          "id": "qwen2.5-3b",
+          "label": "Qwen 2.5 3B",
+          "vramMB": 6144,
+          "ramMB": 16384,
+          "diskMB": 6000,
+          "speed": "balanced",
+          "quality": "good"
+        },
+        {
+          "id": "qwen2.5-7b",
+          "label": "Qwen 2.5 7B",
+          "vramMB": 10240,
+          "ramMB": 16384,
+          "diskMB": 15000,
+          "speed": "balanced",
+          "quality": "high"
+        },
+        {
+          "id": "qwen2.5-14b",
+          "label": "Qwen 2.5 14B",
+          "vramMB": 16384,
+          "ramMB": 32768,
+          "diskMB": 28000,
+          "speed": "slow",
+          "quality": "high"
+        },
+        {
+          "id": "qwen2.5-32b",
+          "label": "Qwen 2.5 32B",
+          "vramMB": 24576,
+          "ramMB": 65536,
+          "diskMB": 64000,
+          "speed": "slowest",
+          "quality": "best"
+        }
+      ]
+    },
+    "transcribe_paid": {
+      "adapter": "elevenlabs",
+      "default": "elevenlabs-scribe",
+      "options": [
+        {
+          "id": "elevenlabs-scribe",
+          "label": "ElevenLabs Scribe (cloud)",
+          "vramMB": 0,
+          "ramMB": 0,
+          "diskMB": 0,
+          "speed": "fast",
+          "quality": "high",
+          "notes": "Paid API; requires ELEVENLABS_API_KEY. Adapter stub in v0.1."
+        }
+      ]
+    }
+  }
+}

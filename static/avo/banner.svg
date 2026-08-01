@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 400" width="1280" height="400" role="img" aria-label="AVO - AI Video Orchestrator">
+  <title>AVO - AI Video Orchestrator</title>
+  <defs>
+    <linearGradient id="avoFlow" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#7C5CFC"/>
+      <stop offset="0.55" stop-color="#4F7CF7"/>
+      <stop offset="1" stop-color="#22D3EE"/>
+    </linearGradient>
+    <linearGradient id="avoSheen" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.16"/>
+      <stop offset="0.5" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="avoText" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#A79BFF"/>
+      <stop offset="1" stop-color="#6FE7F6"/>
+    </linearGradient>
+    <radialGradient id="avoGlow" cx="0.28" cy="0.4" r="0.75">
+      <stop offset="0" stop-color="#4F7CF7" stop-opacity="0.35"/>
+      <stop offset="1" stop-color="#4F7CF7" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+
+  <!-- backdrop -->
+  <rect x="0" y="0" width="1280" height="400" fill="#0B1020"/>
+  <rect x="0" y="0" width="1280" height="400" fill="url(#avoGlow)"/>
+
+  <!-- ambient orchestration lanes -->
+  <g stroke="#2A3358" stroke-linecap="round" fill="none">
+    <line x1="360" y1="70" x2="1180" y2="70" stroke-width="4" opacity="0.6"/>
+    <line x1="470" y1="345" x2="1200" y2="345" stroke-width="4" opacity="0.5"/>
+    <line x1="820" y1="120" x2="1150" y2="120" stroke-width="4" opacity="0.4"/>
+  </g>
+
+  <!-- icon mark -->
+  <g transform="translate(80,100) scale(0.78125)">
+    <rect x="8" y="8" width="240" height="240" rx="56" fill="url(#avoFlow)"/>
+    <rect x="8" y="8" width="240" height="240" rx="56" fill="url(#avoSheen)"/>
+    <g stroke="#ffffff" stroke-linecap="round" fill="none">
+      <line x1="52" y1="102" x2="112" y2="102" stroke-width="12" opacity="0.55"/>
+      <line x1="36" y1="128" x2="112" y2="128" stroke-width="14" opacity="0.92"/>
+      <line x1="60" y1="154" x2="112" y2="154" stroke-width="12" opacity="0.55"/>
+    </g>
+    <g fill="#ffffff">
+      <circle cx="52" cy="102" r="9" opacity="0.85"/>
+      <circle cx="36" cy="128" r="10"/>
+      <circle cx="60" cy="154" r="9" opacity="0.85"/>
+    </g>
+    <polygon points="114,86 114,170 186,128" fill="#ffffff" stroke="#ffffff" stroke-width="18" stroke-linejoin="round"/>
+  </g>
+
+  <!-- AVO wordmark (geometric letterforms) -->
+  <g stroke="#ffffff" stroke-width="26" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <!-- A — outer-left cap edge at x=360 (tagline A matches at x=359 SVG anchor) -->
+    <path d="M373 262 L418 118 L463 262"/>
+    <line x1="392" y1="205" x2="444" y2="205"/>
+    <!-- V -->
+    <path d="M513 118 L553 262 L593 118"/>
+  </g>
+  <!-- O (accent ring) -->
+  <ellipse cx="693" cy="190" rx="55" ry="72" fill="none" stroke="url(#avoText)" stroke-width="26"/>
+
+  <!-- tagline — x=359 aligns first A with wordmark A outer-left (pixel 360) -->
+  <text x="359" y="322" text-anchor="start" font-family="Segoe UI, Arial, Helvetica, sans-serif" font-size="34" font-weight="600" letter-spacing="9" fill="url(#avoText)">AI VIDEO ORCHESTRATOR</text>
+</svg>

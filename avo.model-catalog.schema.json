@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/joaobispo2077/avo/avo.model-catalog.schema.json",
+  "title": "AVO Model Catalog",
+  "description": "Registry of model options per job with resource/quality labels for transparency and swap UX.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["version", "jobs"],
+  "properties": {
+    "version": { "type": "integer", "minimum": 1 },
+    "jobs": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["adapter", "default", "options"],
+        "properties": {
+          "adapter": { "type": "string" },
+          "backend": { "type": "string" },
+          "default": { "type": "string" },
+          "options": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["id", "label", "speed", "quality"],
+              "properties": {
+                "id": { "type": "string" },
+                "label": { "type": "string" },
+                "vramMB": { "type": "integer", "minimum": 0 },
+                "ramMB": { "type": "integer", "minimum": 0 },
+                "diskMB": { "type": "integer", "minimum": 0 },
+                "speed": { "type": "string", "enum": ["fastest", "fast", "balanced", "slow", "slowest"] },
+                "quality": { "type": "string", "enum": ["low", "fair", "good", "high", "best"] },
+                "notes": { "type": "string" }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "version": "0.13.0",
+  "integration_state_schema": 1,
+  "installed_integrations": [
+    "opencode",
+    "codex",
+    "generic"
+  ],
+  "integration_settings": {
+    "opencode": {
+      "script": "ps",
+      "invoke_separator": "."
+    },
+    "codex": {
+      "script": "ps",
+      "invoke_separator": "-"
+    },
+    "generic": {
+      "script": "ps",
+      "raw_options": "--commands-dir .chatgpt/commands",
+      "parsed_options": {
+        "commands_dir": ".chatgpt/commands"
+      },
+      "invoke_separator": "."
+    }
+  },
+  "integration": "opencode",
+  "default_integration": "opencode"
+}
