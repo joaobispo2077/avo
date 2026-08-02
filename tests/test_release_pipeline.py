@@ -12,11 +12,16 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class ReleasePipelineTests(unittest.TestCase):
-    def test_release_config_declares_dev_alpha_and_main(self) -> None:
+    def test_release_config_declares_develop_alpha_and_main(self) -> None:
         text = (ROOT / "release.config.mjs").read_text(encoding="utf-8")
         self.assertIn("'main'", text)
-        self.assertIn("name: 'dev'", text)
+        self.assertIn("name: 'develop'", text)
         self.assertIn("prerelease: 'alpha'", text)
+        self.assertIn("firstParent: false", text)
+
+    def test_determine_next_release_script_exists(self) -> None:
+        script = ROOT / "scripts/ci/determine-next-release-version.sh"
+        self.assertTrue(script.is_file())
 
     def test_sync_pyproject_version_script(self) -> None:
         script = ROOT / "scripts/ci/sync-pyproject-version.mjs"

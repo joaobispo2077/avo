@@ -2,7 +2,7 @@
 
 Emit phase-boundary telemetry for the current project.
 
-**Skill:** [`docs/avo-pipeline/references/telemetry.md`](../../docs/avo-pipeline/references/telemetry.md)
+**Skill:** [`agent-skills/avo-pipeline/references/telemetry.md`](../../agent-skills/avo-pipeline/references/telemetry.md)
 
 ---
 

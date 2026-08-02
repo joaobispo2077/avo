@@ -6,7 +6,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 COMMANDS = ROOT / "commands" / "avo"
-REFS = ROOT / "docs" / "avo-pipeline" / "references"
+REFS = ROOT / "agent-skills" / "avo-pipeline" / "references"
+DOCS_PIPELINE = ROOT / "docs" / "avo-pipeline"
 
 EXPECTED_COMMANDS = {
     "help.md",
@@ -19,6 +20,10 @@ EXPECTED_COMMANDS = {
     "audit.md",
     "watch.md",
     "motion.md",
+    "captions.md",
+    "deliver.md",
+    "shorts.md",
+    "reframe.md",
     "telemetry.md",
     "learndown.md",
     "cleanup.md",
@@ -38,6 +43,10 @@ EXPECTED_UTILITY_REFS = {
     "learndown.md",
     "cleanup.md",
     "stats.md",
+    "captions.md",
+    "deliver.md",
+    "shorts.md",
+    "reframe.md",
 }
 
 
@@ -50,11 +59,18 @@ class AvoCommandParityTests(unittest.TestCase):
         for name in EXPECTED_UTILITY_REFS:
             self.assertTrue((REFS / name).is_file(), name)
 
+    def test_docs_avo_pipeline_removed(self) -> None:
+        self.assertFalse(DOCS_PIPELINE.exists(), "docs/avo-pipeline/ must be removed")
+
     def test_command_map_lists_help(self) -> None:
         text = (REFS / "command-map.md").read_text(encoding="utf-8")
         self.assertIn("/avo.help", text)
         self.assertIn("/avo.guidelines", text)
         self.assertIn("/avo.transcribe", text)
+        self.assertIn("/avo.captions", text)
+        self.assertIn("/avo.deliver", text)
+        self.assertIn("/avo.shorts", text)
+        self.assertIn("/avo.reframe", text)
 
 
 if __name__ == "__main__":

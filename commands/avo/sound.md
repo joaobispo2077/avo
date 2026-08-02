@@ -2,9 +2,9 @@
 
 Audio post: noise reduction, dialogue cleanup, SFX/music mix hierarchy.
 
-**Skill:** [`docs/avo-pipeline/references/sound.md`](../../docs/avo-pipeline/references/sound.md)
+**Skill:** [`agent-skills/avo-pipeline/references/sound.md`](../../agent-skills/avo-pipeline/references/sound.md)
 
-For creative SFX generation, use **`/avo.sound create`** mode (see [`sound-create.md`](../../docs/avo-pipeline/references/sound-create.md)).
+For creative SFX generation, use **`/avo.sound create`** mode (see [`sound-create.md`](../../agent-skills/avo-pipeline/references/sound-create.md)).
 
 ---
 

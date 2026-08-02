@@ -15,7 +15,7 @@ Topic router for AVO documentation. Read-only.
 | `delivery` | [`docs/delivery-specifications.md`](../../delivery-specifications.md) |
 | `use-cases` | [README § Use cases](../../../README.md#use-cases) |
 | `rights` | [`AGENTS.md`](../../../AGENTS.md) (Rights section) |
-| `backlog` | [`specs/backlog/README.md`](../../../specs/backlog/README.md) |
+| `backlog` | [`docs/ROADMAP.md`](../../ROADMAP.md) |
 
 ## Usage
 

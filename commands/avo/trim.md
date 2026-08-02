@@ -2,7 +2,7 @@
 
 Transcribe and cut only. Skip motion unless the user asks to continue.
 
-**Skill:** [`docs/avo-pipeline/references/trim.md`](../../docs/avo-pipeline/references/trim.md)
+**Skill:** [`agent-skills/avo-pipeline/references/trim.md`](../../agent-skills/avo-pipeline/references/trim.md)
 
 ---
 

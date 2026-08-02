@@ -76,8 +76,8 @@ by the watch-skill LOOP (§4), not by wall-clock or iteration count.
   immediately (do not accumulate dead proof renders).
 - **Final resolution is inferred from the raw files.** 1080p above is the common
   case; if the source is lower, the target is the source resolution.
-  **Above-source output is NOT supported** — see
-  [`../specs/backlog/higher-than-source-res.md`](../specs/backlog/higher-than-source-res.md).
+  **Above-source output is NOT supported.** See
+  [BL-002 in docs/ROADMAP.md](ROADMAP.md#backlog-sponsor-friendly).
 
 ```
    edit intent
