@@ -19,6 +19,7 @@ Spoken alias: **`/avo --help`**. Cursor file: `commands/avo/help.md` → `/avo.h
 | `/avo.guidelines --eq` | Audio EQ, restoration, loudness |
 | `/avo.guidelines --tiktok` | TikTok vertical short-form |
 | `/avo.guidelines --shorts` | YouTube Shorts |
+| `/avo.format` | Per-project format diagnosis (before edit) |
 
 ### Pipeline stages
 
@@ -32,6 +33,16 @@ Spoken alias: **`/avo --help`**. Cursor file: `commands/avo/help.md` → `/avo.h
 | `/avo.motion` | HyperFrames overlays |
 | `/avo.captions` | Embedded captions (after overlays) |
 | `/avo.watch` | watch-skill LOOP |
+
+### Motion & composition
+
+| Command | When to use |
+| ------- | ----------- |
+| `/avo.framework` | HyperFrames vs Remotion intake before motion |
+| `/avo.motion-graphics` | Short design-led motion graphic |
+| `/avo.general` | Custom HyperFrames composition |
+| `/avo.remotion-port` | Remotion → HyperFrames port |
+| `/avo.screencast` | Tutorial screencast + oversized cursor |
 
 ### Format orchestrators
 
@@ -58,6 +69,7 @@ Spoken alias: **`/avo --help`**. Cursor file: `commands/avo/help.md` → `/avo.h
 | `/avo.rights` | SOURCE-LOG, disclosure, reused-content audit |
 | `/avo.audio-qc` | Master loudness / true peak delivery QC |
 | `/avo.color` | Color / evidence integrity QC |
+| `/avo.grade` | Creative grade pass (`grade.py`) during edit |
 | `/avo.retention` | Pre-publish retention diagnosis (no render) |
 | `/avo.animation-qc` | Motion render QC before composite |
 | `/avo.audit` | Scoped QC window |

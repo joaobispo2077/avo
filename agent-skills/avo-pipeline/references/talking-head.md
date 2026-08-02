@@ -36,5 +36,5 @@
 
 ## Related
 
-- Motion graphics one-off: `.agents/skills/motion-graphics/`
+- Motion graphics one-off: [`motion-graphics.md`](motion-graphics.md)
 - Args: [`arguments.md`](arguments.md)

@@ -1,6 +1,6 @@
 ---
 name: avo-pipeline
-description: Gateway for AVO slash commands (/avo.help, /avo.guidelines, /avo.pipeline, /avo.trim, /avo.transcribe, /avo.sound, /avo.sync, /avo.audit, /avo.watch, /avo.motion, /avo.captions, /avo.talking-head, /avo.rights, /avo.audio-qc, /avo.color, /avo.chapters, /avo.thumbnail, /avo.end-screen, /avo.deliver, /avo.shorts, /avo.reframe, /avo.podcast-clip, /avo.trailer, /avo.pr-video, /avo.changelog-video, /avo.explainer, /avo.slideshow, /avo.launch, /avo.music-video, /avo.figma, /avo.media, /avo.retention, /avo.animation-qc, /avo.telemetry, /avo.learndown, /avo.cleanup, /avo.stats, /avo.docs). Load when the user invokes any /avo.* command or declares Footage/rawDir asset paths.
+description: Gateway for AVO slash commands (/avo.help, /avo.guidelines, /avo.pipeline, /avo.trim, /avo.transcribe, /avo.sound, /avo.sync, /avo.audit, /avo.watch, /avo.motion, /avo.captions, /avo.talking-head, /avo.rights, /avo.audio-qc, /avo.color, /avo.grade, /avo.format, /avo.framework, /avo.chapters, /avo.thumbnail, /avo.end-screen, /avo.deliver, /avo.shorts, /avo.reframe, /avo.podcast-clip, /avo.trailer, /avo.pr-video, /avo.changelog-video, /avo.explainer, /avo.slideshow, /avo.launch, /avo.music-video, /avo.figma, /avo.media, /avo.motion-graphics, /avo.general, /avo.remotion-port, /avo.screencast, /avo.retention, /avo.animation-qc, /avo.telemetry, /avo.learndown, /avo.cleanup, /avo.stats, /avo.docs). Load when the user invokes any /avo.* command or declares Footage/rawDir asset paths.
 ---
 
 # AVO pipeline commands (gateway)
@@ -48,6 +48,13 @@ Entry skill for **`/avo.*`** slash commands. Canonical rules: [`AGENTS.md`](../.
 | `/avo.music-video` | [`references/music-video.md`](references/music-video.md) |
 | `/avo.figma` | [`references/figma.md`](references/figma.md) |
 | `/avo.media` | [`references/media.md`](references/media.md) |
+| `/avo.motion-graphics` | [`references/motion-graphics.md`](references/motion-graphics.md) |
+| `/avo.general` | [`references/general.md`](references/general.md) |
+| `/avo.remotion-port` | [`references/remotion-port.md`](references/remotion-port.md) |
+| `/avo.screencast` | [`references/screencast.md`](references/screencast.md) |
+| `/avo.format` | [`references/format.md`](references/format.md) |
+| `/avo.framework` | [`references/framework.md`](references/framework.md) |
+| `/avo.grade` | [`references/grade.md`](references/grade.md) |
 | `/avo.retention` | [`references/retention.md`](references/retention.md) |
 | `/avo.animation-qc` | [`references/animation-qc.md`](references/animation-qc.md) |
 | `/avo.telemetry` | [`references/telemetry.md`](references/telemetry.md) |
