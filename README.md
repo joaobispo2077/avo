@@ -127,6 +127,7 @@ first, then overlay, or run HyperFrames directly on a clean MP4.
 | Dealer walkthrough with per-car lower-thirds | [Car dealer](#three-cars-in-one-take-fix-mistakes-lower-thirds-facebook-captions) |
 | Game review with verdict card | [Game review](#package-my-game-review-cut-the-ums-glitchy-captions-when-im-hyped-scoreboard-card-for-the-verdict) |
 | Tech / gadget first impression | [Tech first look](#first-impression-on-this-gadget-tight-cold-open-terminal-captions-on-specs-one-glass-verdict-card) |
+| Live pipeline demo + deep motion direction | [Pipeline demo motion](#live-pipeline-demo-four-beat-liquid-glass-cards-synced-to-the-second) |
 | Health / education comparison | [Physio demo](#i-demo-two-back-exercises-clean-both-takes-label-exercise-a-and-b-calm-documentary-captions-dont-hype) |
 | English master → other languages (coming soon) | [Going global](#going-global-coming-soon) |
 
@@ -305,6 +306,69 @@ One talking-head-recut glass overlay at the verdict. Stay on 360p/720p until I a
 **Motion:** HyperFrames: `terminal` / `keynote` captions + glass overlay layout.
 Remotion only if first-impression templates already live in a React app with
 SKU-specific props.
+
+---
+
+#### "Live pipeline demo: four beat liquid-glass cards synced to the second."
+
+**You get:** A talking-head demo where timed overlay beats explain the AVO workflow —
+karaoke title, mistakes card, pipeline story, and a HyperFrames alt palette — each
+popping in on the exact spoken phrase. Full beat-level spec:
+[`docs/deep-animation-direction-exemplar.md`](docs/deep-animation-direction-exemplar.md).
+
+**Skills:** `avo` + `avo-pipeline` · **Provider:** `tech-first-look` (example)
+
+**Cursor:**
+
+```text
+/avo.pipeline
+Provider: tech-first-look
+The footage is in this folder.
+Follow specs/active/avo-pipeline-demo-motion/animation-direction.md
+```
+
+**Say to your agent** (deep animation direction — copy and adapt):
+
+```text
+Load avo-pipeline + talking-head-recut + motion-doctrine.
+Provider: tech-first-look. The footage is in this folder.
+
+Four beats — sync each to the spoken phrase (±100 ms):
+
+1. OPENING — when I say "This is the example video that we're editing live together":
+   left-half liquid glass card; karaoke-style word pop-in (title treatment).
+
+2. MISTAKES — when I say "I might make a few mistakes and that's okay":
+   bottom card: "Mistakes will be cut."; right-half trim/edit motion graphic.
+
+3. PIPELINE — when I describe dropping in a raw file and getting edits + motion:
+   center liquid glass card; story: raw file → transcript → cuts → motion layers → export.
+   Label illustrative if simplified. Density Level 4 inside the card only.
+
+4. HYPERFRAMES ALT — when I say "Using HyperFrames instead":
+   left + right cards simultaneously; different palette (teal/violet vs warm glass);
+   slide-in grammar instead of pop-in.
+
+Build four parallel slots under edit/animations/slot_*.
+Prove at 720p; run watch-skill LOOP per slot before composite.
+Stop at motion-proof approval gate.
+```
+
+**Beat map (reference timestamps from exemplar transcript):**
+
+| Beat | Trigger | In (s) | Visual |
+| --- | --- | --- | --- |
+| A | "…editing live together" | 0.84 | Left glass + karaoke title |
+| B | "…mistakes…okay" | 9.06 | Bottom card + right trim viz |
+| C | pipeline / raw file | 18.4 | Center pipeline story (5 sub-beats) |
+| D | "HyperFrames instead" | 38.92 | Left + right alt-palette cards |
+
+**AVO runs:** transcribe → edit → watch-skill → **you approve** → four parallel
+motion slots → parallel 720p LOOP → composite sync QC → **you approve** → deliver.
+
+**Motion:** HyperFrames `talking-head-recut` (beats A, B, D) + `general-video` (beat C).
+See [`animation-direction.md`](specs/active/avo-pipeline-demo-motion/animation-direction.md)
+for layout zones, motion tokens, and acceptance tests.
 
 ---
 
@@ -574,7 +638,7 @@ Full setup details and troubleshooting live in [`install.md`](install.md).
   the default motion framework.
 - [`docs/remotion-decision-guide.md`](docs/remotion-decision-guide.md): when to
   choose Remotion instead.
-- [Use cases](#use-cases) — all conversation prompts (product, promo, dealer, game, tech, health, going global, slash commands).
+- [Use cases](#use-cases) — all conversation prompts (product, promo, dealer, game, tech, pipeline demo motion, health, going global, slash commands).
 - [`docs/repo-layout.md`](docs/repo-layout.md): what ships in git vs install-time.
 - [`docs/launch.md`](docs/launch.md): pre-push GitHub checklist.
 - [`docs/delivery-specifications.md`](docs/delivery-specifications.md),
