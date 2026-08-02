@@ -89,4 +89,4 @@ npm run validate:usability -- --ci
 1. Add job to `avo.config.json` if new stage.
 2. Add tool entry to `avo.dependencies.json` (repo URL, clone path, `required`).
 3. Extend `src/avo/validate_dependencies.py` if new `kind` is needed.
-4. Update `install.md` setup order if setup.sh prepares it.
+4. Update `docs/install/README.md` setup order if setup.sh prepares it.

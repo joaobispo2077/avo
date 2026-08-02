@@ -4,7 +4,7 @@ What belongs **in git** vs **install-time** vs **never in this repo**.
 
 AVO is an **orchestrator**. GitHub ships the contract — scripts, engine package, docs,
 manifests, CI, and Spec Kit marker. Heavy tools and skills are installed by
-[`../install.md`](../install.md) / `scripts/setup.sh`.
+[`install/README.md`](install/README.md) / `scripts/setup.sh`.
 
 ---
 
@@ -12,8 +12,10 @@ manifests, CI, and Spec Kit marker. Heavy tools and skills are installed by
 
 | Path | Purpose |
 | ---- | ------- |
-| `README.md`, `LICENSE`, `install.md`, `INSTALL.md` | User-facing entry |
-| `install.sh`, `install.ps1`, `bin/install.cjs` | One-command agent install |
+| `README.md`, `LICENSE` | User-facing entry |
+| `docs/install/` | Install guide |
+| `scripts/install/` | One-command agent install (`install.sh`, `install.ps1`) |
+| `bin/install.cjs` | Unified installer implementation |
 | `agent-skills/`, `skills.json` | Skills registry package (`npx skills add`) |
 | `commands/avo/` | Shipped Cursor slash commands (`/avo.*`) |
 | `docs/avo-pipeline/` | Gateway skill + command reference slices |
@@ -23,7 +25,7 @@ manifests, CI, and Spec Kit marker. Heavy tools and skills are installed by
 | `schemas/` | Public JSON Schema contracts (`avo.project.schema.json`, `edl.schema.json`) |
 | `src/avo/` | Python engine package (transcribe, grade, render, validation) |
 | `helpers/` | Temporary import shims → `avo.*` (removed in v0.2.0) |
-| `scripts/` | Cross-platform setup and native runners |
+| `scripts/` | Cross-platform setup (`setup.sh`), agent install (`install/`), CI helpers |
 | `docs/` | Workflow, delivery specs, templates, use cases, [engine-vs-orchestrator.md](engine-vs-orchestrator.md), [software-foundation.md](software-foundation.md), [versioning.md](versioning.md), [branching.md](branching.md) |
 | `CHANGELOG.md` | Orchestrator SemVer history |
 | `tests/` | Unit and contract tests |

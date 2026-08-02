@@ -46,7 +46,6 @@ GLOBS = [
     "docs/**/*.md",
     "AGENTS.md",
     "SKILL.md",
-    "install.md",
     "SECURITY.md",
     ".github/instructions/*.md",
 ]

@@ -16,11 +16,11 @@ Pre-push verification for publishing the orchestrator repo at **`joaobispo2077/a
 
 - [ ] `helpers/`, `scripts/`, `docs/`, `tests/`, `providers/`, `static/avo*`, `.github/`, `.specify/`
 - [ ] `avo.config.json`, `avo.dependencies.json`, manifests
-- [ ] `README.md`, `install.md`, `AGENTS.md`, `LICENSE`
+- [ ] `README.md`, `docs/install/README.md`, `AGENTS.md`, `LICENSE`
 
 ## Install slug QA
 
-- [ ] Default install slug is **`joaobispo2077/avo`** in `bin/install.cjs`, `install.sh`, `install.ps1`, `skills.json`, `install.md` (Tier 1), README install block
+- [ ] Default install slug is **`joaobispo2077/avo`** in `bin/install.cjs`, `scripts/install/*`, `skills.json`, `docs/install/README.md` (Tier 1), README install block
 - [ ] **`browser-use/video-use`** appears only where crediting the upstream editing engine (README fork line, routing table, Built on)
 - [ ] `pytest tests/test_install_scripts.py -v` passes (includes default REPO assertion)
 
@@ -96,7 +96,7 @@ git push -u origin main
 After push, verify raw install URLs resolve:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/joaobispo2077/avo/main/install.sh | head
+curl -fsSL https://raw.githubusercontent.com/joaobispo2077/avo/main/scripts/install/install.sh | head
 ```
 
 ## Human sign-off

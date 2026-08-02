@@ -1,13 +1,13 @@
 ---
 name: avo
-description: AVO — AI Video Orchestrator. Agent contract for conversation-driven video production — transcribe, cut, grade, motion slots, subtitles, verify, deliver. Hard Rules are non-negotiable; follow install.md and docs/avo-workflow.md for setup and pipeline.
+description: AVO — AI Video Orchestrator. Agent contract for conversation-driven video production — transcribe, cut, grade, motion slots, subtitles, verify, deliver. Hard Rules are non-negotiable; follow docs/install/README.md and docs/avo-workflow.md for setup and pipeline.
 ---
 
 # AVO (AI Video Orchestrator)
 
 Canonical rules live in [`AGENTS.md`](AGENTS.md). Pipeline mechanics:
 [`docs/avo-workflow.md`](docs/avo-workflow.md). First-time setup:
-[`install.md`](install.md). **Slash commands:** [`docs/avo-commands.md`](docs/avo-commands.md) (`/avo.help`, `/avo.guidelines`, `/avo.pipeline`, `/avo.trim`, `/avo.transcribe`, `/avo.sound`, `/avo.audit`, `/avo.watch`, `/avo.motion`, `/avo.telemetry`, `/avo.learndown`, `/avo.cleanup`, `/avo.stats`, `/avo.provider`, `/avo.docs`). All agents: see [`docs/agent-skills.md`](docs/agent-skills.md).
+[`docs/install/README.md`](docs/install/README.md). **Slash commands:** [`docs/avo-commands.md`](docs/avo-commands.md) (`/avo.help`, `/avo.guidelines`, `/avo.pipeline`, `/avo.trim`, `/avo.transcribe`, `/avo.sound`, `/avo.audit`, `/avo.watch`, `/avo.motion`, `/avo.telemetry`, `/avo.learndown`, `/avo.cleanup`, `/avo.stats`, `/avo.provider`, `/avo.docs`). All agents: see [`docs/agent-skills.md`](docs/agent-skills.md).
 
 Transcription uses prepared local faster-whisper model files; there is no hosted
 transcription fallback or credential path.
@@ -69,7 +69,7 @@ session outputs go into `<rawDir>/edit/`.
 
 ## Setup
 
-First-time install: [`install.md`](install.md) (clone, dependencies, ffmpeg,
+First-time install: [`docs/install/README.md`](docs/install/README.md) (clone, dependencies, ffmpeg,
 skill registration, local model). On cold start verify:
 
 - The multilingual model directory resolves and contains config.json, model.bin, and tokenizer.json. If missing, run `prepare_transcription.py --model small`.

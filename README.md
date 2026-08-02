@@ -83,7 +83,7 @@ channel starts smarter, while each project stays separate.
 ## Use cases
 
 After [Quickstart](#quickstart), install **AVO skills** for your agent
-(`bash install.sh` or [`docs/agent-skills.md`](docs/agent-skills.md)). Open your
+(`bash scripts/install/install.sh` or [`docs/agent-skills.md`](docs/agent-skills.md)). Open your
 **footage folder** in the agent (or paste its path). Tell it your **provider**
 (channel/brand) and **where the clips live** — plain English is fine; the agent
 maps that to `rawDir` internally. Then use a **slash command** (Cursor) or ask in
@@ -443,7 +443,7 @@ Power-user prompts, one routing cell at a time. Full table: [Tool routing](#tool
 - **Prove cheaply first:** 360p edit proof, then 720p motion; full res only after approval.
 - **gemini-flow for this export:** swap **Paid** on render only.
 
-More mechanics: [`docs/avo-workflow.md`](docs/avo-workflow.md). Setup: [`install.md`](install.md).
+More mechanics: [`docs/avo-workflow.md`](docs/avo-workflow.md). Setup: [`docs/install/README.md`](docs/install/README.md).
 
 ---
 
@@ -506,12 +506,12 @@ table, not the whole pipeline.
 
 ```bash
 # macOS · Linux · WSL · Git Bash
-curl -fsSL https://raw.githubusercontent.com/joaobispo2077/avo/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/joaobispo2077/avo/main/scripts/install/install.sh | bash
 ```
 
 ```powershell
 # Windows · PowerShell 5.1+
-irm https://raw.githubusercontent.com/joaobispo2077/avo/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/joaobispo2077/avo/main/scripts/install/install.ps1 | iex
 ```
 
 ~30 seconds. Needs Node ≥18. Skips agents you do not have. Safe to re-run.
@@ -521,20 +521,20 @@ irm https://raw.githubusercontent.com/joaobispo2077/avo/main/install.ps1 | iex
 
 <br>
 
-Every agent has its own path (plugin, extension, rule file, or `npx skills add`). The full per-agent matrix, all flags, dry-run, and uninstall live in **[install.md § Tier 1](./install.md#tier-1--fast-agent-install)**. A few common ones:
+Every agent has its own path (plugin, extension, rule file, or `npx skills add`). The full per-agent matrix, all flags, dry-run, and uninstall live in **[docs/install/README.md § Tier 1](./docs/install/README.md#tier-1--fast-agent-install)**. A few common ones:
 
 ```bash
 # Cursor / Windsurf / Cline / Codex / 30+ more, via the skills registry
 npx skills add joaobispo2077/avo -a cursor
 
 # From a clone (local dev)
-bash install.sh --only cursor
+bash scripts/install/install.sh --only cursor
 node bin/install.cjs --dry-run
 ```
 
-**Need ffmpeg + whisper + watch-skill?** Re-run with `--full` or follow [Quickstart](#quickstart) / [install.md](install.md).
+**Need ffmpeg + whisper + watch-skill?** Re-run with `--full` or follow [Quickstart](#quickstart) / [docs/install/README.md](docs/install/README.md).
 
-**Install broke?** Open your agent in this repo and say: *"Read install.md and install AVO for me."*
+**Install broke?** Open your agent in this repo and say: *"Read docs/install/README.md and install AVO for me."*
 
 </details>
 
@@ -546,17 +546,17 @@ AVO installs into the agents it finds on your machine (or the one you pick with 
 
 | ID | Agent | Tier 1 (skills + commands) | Full toolchain |
 | -- | ----- | --------------------------- | -------------- |
-| `cursor` | [Cursor](https://cursor.com) | 3 skills + `/avo.*` slash commands | `bash install.sh --full` |
-| `claude` | Claude Code | 3 skills (`avo`, `avo-pipeline`, `avo-provider`) | `bash install.sh --full` |
-| `codex` | Codex CLI | 3 skills | `bash install.sh --full` |
-| `windsurf` | Windsurf | 3 skills | `bash install.sh --full` |
-| `cline` | Cline | 3 skills | `bash install.sh --full` |
-| `gemini` | Gemini CLI | 3 skills | `bash install.sh --full` |
-| `opencode` | OpenCode | 3 skills | `bash install.sh --full` |
+| `cursor` | [Cursor](https://cursor.com) | 3 skills + `/avo.*` slash commands | `bash scripts/install/install.sh --full` |
+| `claude` | Claude Code | 3 skills (`avo`, `avo-pipeline`, `avo-provider`) | `bash scripts/install/install.sh --full` |
+| `codex` | Codex CLI | 3 skills | `bash scripts/install/install.sh --full` |
+| `windsurf` | Windsurf | 3 skills | `bash scripts/install/install.sh --full` |
+| `cline` | Cline | 3 skills | `bash scripts/install/install.sh --full` |
+| `gemini` | Gemini CLI | 3 skills | `bash scripts/install/install.sh --full` |
+| `opencode` | OpenCode | 3 skills | `bash scripts/install/install.sh --full` |
 
 Skill details and non-Cursor prompts: **[docs/agent-skills.md](docs/agent-skills.md)**.
 
-Per-agent detect paths, flags, dry-run, and uninstall: **[install.md § Tier 1](./install.md#tier-1--fast-agent-install)**. List IDs from a clone: `node bin/install.cjs --list`.
+Per-agent detect paths, flags, dry-run, and uninstall: **[docs/install/README.md § Tier 1](./docs/install/README.md#tier-1--fast-agent-install)**. List IDs from a clone: `node bin/install.cjs --list`.
 
 ---
 
@@ -608,7 +608,7 @@ Tell it which **provider** the video is for and **where your clips live** (path 
 with the same lines. All generated output lives inside that footage folder; your
 source files are never touched.
 
-Full setup details and troubleshooting live in [`install.md`](install.md).
+Full setup details and troubleshooting live in [`docs/install/README.md`](docs/install/README.md).
 
 ---
 

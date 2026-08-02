@@ -20,7 +20,7 @@
 
 **Install-time network is separate**
 
-Setup may use network for things you explicitly run: `git clone`, `git pull`, model downloads, npm/pip installs, agent skill registries. That is **not** runtime stats telemetry. See [`install.md`](install.md) and [`docs/repo-layout.md`](docs/repo-layout.md).
+Setup may use network for things you explicitly run: `git clone`, `git pull`, model downloads, npm/pip installs, agent skill registries. That is **not** runtime stats telemetry. See [`docs/install/README.md`](docs/install/README.md) and [`docs/repo-layout.md`](docs/repo-layout.md).
 
 **Path metadata**
 

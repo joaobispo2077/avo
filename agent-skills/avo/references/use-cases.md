@@ -56,4 +56,4 @@ These are separate from the AVO package but pair with `/avo.motion`:
 | Spec readout | `terminal` |
 | Glass cards | talking-head-recut + HyperFrames |
 
-Install full toolchain for motion: `bash install.sh --full --lang en`.
+Install full toolchain for motion: `bash scripts/install/install.sh --full --lang en`.

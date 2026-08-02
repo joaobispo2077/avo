@@ -1,6 +1,6 @@
 # AVO install
 
-Two tiers: **Tier 1** installs agent skills + slash commands in ~30 seconds. **Tier 2** prepares the full local toolchain (ffmpeg, whisper, watch-skill, HyperFrames). User-facing summary: [README § Install](../README.md#install).
+Two tiers: **Tier 1** installs agent skills + slash commands in ~30 seconds. **Tier 2** prepares the full local toolchain (ffmpeg, whisper, watch-skill, HyperFrames). User-facing summary: [README § Install](../../README.md#install).
 
 ---
 
@@ -11,31 +11,31 @@ Two tiers: **Tier 1** installs agent skills + slash commands in ~30 seconds. **T
 **macOS · Linux · WSL · Git Bash**
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/joaobispo2077/avo/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/joaobispo2077/avo/main/scripts/install/install.sh | bash
 ```
 
 **Windows · PowerShell 5.1+**
 
 ```powershell
-irm https://raw.githubusercontent.com/joaobispo2077/avo/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/joaobispo2077/avo/main/scripts/install/install.ps1 | iex
 ```
 
 ~30 seconds. Needs **Node ≥18**. Detects agents on your machine. Skips agents you do not have. Safe to re-run.
 
 #### What tier 1 installs
 
-- **Skills (all agents):** `avo`, `avo-pipeline`, `avo-provider` via [`skills.json`](skills.json) / the skills registry
+- **Skills (all agents):** `avo`, `avo-pipeline`, `avo-provider` via [`skills.json`](../../skills.json) / the skills registry
 - **Cursor only:** slash commands `commands/avo/` → `.cursor/commands/avo/`
 
-Details: [`docs/agent-skills.md`](docs/agent-skills.md).
+Details: [`docs/agent-skills.md`](../agent-skills.md).
 
 #### Full toolchain (tier 2)
 
 Re-run with `--full` after cloning, or jump to [Tier 2 — Full toolchain setup](#tier-2--full-toolchain-setup):
 
 ```bash
-bash install.sh --full --lang en
-pwsh install.ps1 -Full -Lang en
+bash scripts/install/install.sh --full --lang en
+pwsh scripts/install/install.ps1 -Full -Lang en
 ```
 
 ### One agent only
@@ -77,7 +77,7 @@ Copy-Item -Recurse commands/avo/* .cursor/commands/avo/
 | `opencode` | OpenCode | `opencode` on PATH | 3 skills |
 
 When `npx skills add` fails, a local clone can copy all entries from `skills.json`
-into the agent skills directory (see [`docs/agent-skills.md`](docs/agent-skills.md)).
+into the agent skills directory (see [`docs/agent-skills.md`](../agent-skills.md)).
 
 List IDs: `node bin/install.cjs --list`
 
@@ -129,21 +129,23 @@ rm -rf ~/.cursor/commands/avo
 
 **No agents detected:** Install Cursor (or your agent) first, or use `--only cursor`.
 
-**curl pipe fails:** Clone the repo and run `bash install.sh` locally.
+**curl pipe fails:** Clone the repo and run `bash scripts/install/install.sh` locally.
 
-**Need ffmpeg / whisper:** Tier 1 is agent brain only. Run `bash install.sh --full --lang en` from a clone.
+**Need ffmpeg / whisper:** Tier 1 is agent brain only. Run `bash scripts/install/install.sh --full --lang en` from a clone.
 
-**Install broke?** Open your agent in the AVO repo and say: *"Read install.md and install AVO for me."*
+**Install broke?** Open your agent in the AVO repo and say: *"Read docs/install/README.md and install AVO for me."*
 
 ### Local clone (developers)
 
 ```bash
 git clone https://github.com/joaobispo2077/avo.git
 cd avo
-bash install.sh --dry-run
-bash install.sh --only cursor
-bash install.sh --full --lang en
+bash scripts/install/install.sh --dry-run
+bash scripts/install/install.sh --only cursor
+bash scripts/install/install.sh --full --lang en
 ```
+
+Installer scripts live in [`scripts/install/`](../../scripts/install/).
 
 ---
 
@@ -152,7 +154,7 @@ bash install.sh --full --lang en
 AVO orchestrates independent local tools. This section is the **toolchain setup contract**
 (full ffmpeg, whisper, watch-skill, HyperFrames).
 
-`AGENTS.md` is canonical; do not contradict it. Pipeline detail: [`docs/avo-workflow.md`](docs/avo-workflow.md).
+`AGENTS.md` is canonical; do not contradict it. Pipeline detail: [`docs/avo-workflow.md`](../avo-workflow.md).
 
 > Historical context: AVO started as a fork of `browser-use/video-use` and grew
 > into an orchestrator over video-use, watch-skill, HyperFrames, Remotion, GitHub Spec Kit,
@@ -249,7 +251,7 @@ npm run validate:usability -- --ci
 
 After your first video project starts, expect **approval gates**: when watch-skill and
 transcription analysis finish a stage, review files in `edit/preview/` and
-`edit/review/` before the agent promotes resolution. See [`docs/avo-workflow.md`](docs/avo-workflow.md) §4b.
+`edit/review/` before the agent promotes resolution. See [`docs/avo-workflow.md`](../avo-workflow.md) §4b.
 
 python -m avo.prepare_transcription --help
 python -m avo.transcribe --help
@@ -257,7 +259,7 @@ ffprobe -version
 pytest
 ```
 
-Agent-facing CI detail: [`docs/ci.md`](docs/ci.md).
+Agent-facing CI detail: [`docs/ci.md`](../ci.md).
 
 To confirm the offline/no-download behavior, point `--model-dir` at an empty
 directory: transcription must fail fast with the preparation command and must

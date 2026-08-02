@@ -8,7 +8,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 # AVO keeps *runtime* transcription local: the Python helpers must not call a
 # hosted transcription service or embed provider credentials. Product docs
-# (README, install.md) may legitimately name Paid alternatives such as
+# (README, docs/install/README.md) may legitimately name Paid alternatives such as
 # ElevenLabs in the tool-routing table — those are documentation, not runtime
 # code, so they are intentionally out of scope for this guarantee.
 RUNTIME_FILES = [

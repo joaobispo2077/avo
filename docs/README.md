@@ -10,7 +10,7 @@ Write for the **correct audience by file** — not by mixing tones in one file.
 | Audience | Paths | Voice |
 | --- | --- | --- |
 | Human visitor | [`../README.md`](../README.md), `package.json` / `pyproject.toml` descriptions | Benefit-first UX: short sentences, scannable headings, concrete verbs. No agent checklists. |
-| Driving agent | Everything under `docs/`, [`../AGENTS.md`](../AGENTS.md), [`../SKILL.md`](../SKILL.md), [`../install.md`](../install.md), `.cursor/rules/`, provider manifests | Dense, precise, checklist-friendly. No marketing fluff. |
+| Driving agent | Everything under `docs/`, [`../AGENTS.md`](../AGENTS.md), [`../SKILL.md`](../SKILL.md), [`install/README.md`](install/README.md), `.cursor/rules/`, provider manifests | Dense, precise, checklist-friendly. No marketing fluff. |
 | Provider brand | `providers/<name>/` only | Provider-scoped; never repo root. |
 | Session logs | External `<footage>/edit/` | Copy from [`templates/logs/`](templates/logs/); do not commit personal entries to the AVO repo. |
 

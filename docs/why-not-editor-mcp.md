@@ -78,5 +78,5 @@ stages map to which helpers.
 
 - [`avo-workflow.md`](avo-workflow.md) — full pipeline, telemetry, LOOP, cleanup
 - [`../AGENTS.md`](../AGENTS.md) — canonical rules including AVO Orchestrator section
-- [`../install.md`](../install.md) — setup contract
+- [`install/README.md`](install/README.md) — setup contract
 - [`../providers/_template/`](../providers/_template/) — provider scaffold
