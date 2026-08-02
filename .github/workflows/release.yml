@@ -10,7 +10,9 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: release-${{ github.event.workflow_run.head_branch || github.ref_name }}
+  # Include triggering CI event so pull_request completions do not cancel an
+  # in-progress push release (and vice versa) on the same branch.
+  group: release-${{ github.event.workflow_run.head_branch || github.ref_name }}-${{ github.event.workflow_run.event || github.event_name }}
   cancel-in-progress: true
 
 permissions:

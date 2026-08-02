@@ -27,6 +27,7 @@ class QualityMatrixTests(unittest.TestCase):
         self.assertIn("ref: ${{ steps.meta.outputs.branch }}", release)
         self.assertIn("branches:", release)
         self.assertIn("cancel-in-progress: true", release)
+        self.assertIn("workflow_run.event || github.event_name", release)
         self.assertIn("workflow_run.event == 'push'", release)
         self.assertIn("fetch-tags: true", release)
         self.assertIn("branches:", config)
