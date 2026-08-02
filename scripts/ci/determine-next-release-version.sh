@@ -33,17 +33,12 @@ if printf '%s\n' "$OUTPUT" | grep -qiE "won.t be published"; then
 fi
 
 NEXT=""
-while IFS= read -r line; do
-  case "$line" in
-    *"The next release version is "*)
-      REST="${line##*The next release version is }"
-      NEXT="${REST%% *}"
-      NEXT="${NEXT%%(*}"
-      NEXT="${NEXT%%)}"
-      break
-      ;;
-  esac
-done <<< "$OUTPUT"
+MATCH="$(printf '%s\n' "$OUTPUT" | grep -im1 -Eo 'the next release version is [^[:space:]]+' || true)"
+if [ -n "$MATCH" ]; then
+  NEXT="${MATCH##* is }"
+  NEXT="${NEXT%%(*}"
+  NEXT="${NEXT%%)}"
+fi
 
 if [ -z "$NEXT" ]; then
   echo "No releasable version found in semantic-release dry-run; release job will be skipped."

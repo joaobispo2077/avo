@@ -35,6 +35,13 @@
 | `/avo.color` | `commands/avo/color.md` | `references/color.md` |
 | `/avo.sync` | `commands/avo/sync.md` | `references/sync.md` |
 | `/avo.media` | `commands/avo/media.md` | `references/media.md` |
+| `/avo.motion-graphics` | `commands/avo/motion-graphics.md` | `references/motion-graphics.md` |
+| `/avo.general` | `commands/avo/general.md` | `references/general.md` |
+| `/avo.remotion-port` | `commands/avo/remotion-port.md` | `references/remotion-port.md` |
+| `/avo.screencast` | `commands/avo/screencast.md` | `references/screencast.md` |
+| `/avo.format` | `commands/avo/format.md` | `references/format.md` |
+| `/avo.framework` | `commands/avo/framework.md` | `references/framework.md` |
+| `/avo.grade` | `commands/avo/grade.md` | `references/grade.md` |
 | `/avo.retention` | `commands/avo/retention.md` | `references/retention.md` |
 | `/avo.animation-qc` | `commands/avo/animation-qc.md` | `references/animation-qc.md` |
 | `/avo.telemetry` | `commands/avo/telemetry.md` | `references/telemetry.md` |
