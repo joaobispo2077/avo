@@ -2,7 +2,7 @@
 
 Load editorial guidelines for a platform or discipline before editing.
 
-**Skill:** [`docs/avo-pipeline/references/guidelines.md`](../../docs/avo-pipeline/references/guidelines.md)
+**Skill:** [`agent-skills/avo-pipeline/references/guidelines.md`](../../agent-skills/avo-pipeline/references/guidelines.md)
 
 ---
 

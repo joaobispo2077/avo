@@ -6,7 +6,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 COMMANDS = ROOT / "commands" / "avo"
-REFS = ROOT / "docs" / "avo-pipeline" / "references"
+REFS = ROOT / "agent-skills" / "avo-pipeline" / "references"
+DOCS_PIPELINE = ROOT / "docs" / "avo-pipeline"
 
 EXPECTED_COMMANDS = {
     "help.md",
@@ -49,6 +50,9 @@ class AvoCommandParityTests(unittest.TestCase):
     def test_utility_references_exist(self) -> None:
         for name in EXPECTED_UTILITY_REFS:
             self.assertTrue((REFS / name).is_file(), name)
+
+    def test_docs_avo_pipeline_removed(self) -> None:
+        self.assertFalse(DOCS_PIPELINE.exists(), "docs/avo-pipeline/ must be removed")
 
     def test_command_map_lists_help(self) -> None:
         text = (REFS / "command-map.md").read_text(encoding="utf-8")

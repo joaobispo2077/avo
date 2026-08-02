@@ -2,7 +2,7 @@
 
 Transcribe only. No cut, no motion, no deliver.
 
-**Skill:** [`docs/avo-pipeline/references/transcribe.md`](../../docs/avo-pipeline/references/transcribe.md)
+**Skill:** [`agent-skills/avo-pipeline/references/transcribe.md`](../../agent-skills/avo-pipeline/references/transcribe.md)
 
 ---
 

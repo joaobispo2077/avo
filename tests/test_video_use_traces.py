@@ -12,7 +12,6 @@ ALLOWLIST_GLOBS = [
     "README.md",
     "docs/install/README.md",
     "docs/avo-workflow.md",
-    "docs/avo-pipeline/**",
     "docs/ci.md",
     "docs/launch.md",
     "docs/repo-layout.md",
