@@ -31,15 +31,22 @@ Spoken alias: **`/avo --help`**. Cursor file: `commands/avo/help.md` → `/avo.h
 | `/avo.motion` | HyperFrames overlays |
 | `/avo.captions` | Embedded captions (after overlays) |
 | `/avo.watch` | watch-skill LOOP |
-| `/avo.audit` | Scoped QC window |
-| `/avo.deliver` | Full master QC + delivery manifest |
 
-### Shorts
+### Format orchestrators
 
 | Command | When to use |
 | ------- | ----------- |
 | `/avo.shorts` | Orchestrated vertical Short workflow |
 | `/avo.reframe` | Extract 9:16 clip from long-form master |
+
+### QC & deliver
+
+| Command | When to use |
+| ------- | ----------- |
+| `/avo.rights` | SOURCE-LOG, disclosure, reused-content audit |
+| `/avo.audio-qc` | Master loudness / true peak delivery QC |
+| `/avo.audit` | Scoped QC window |
+| `/avo.deliver` | Full master QC + delivery manifest |
 
 ### Post-master ops
 

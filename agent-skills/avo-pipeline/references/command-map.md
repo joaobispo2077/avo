@@ -14,6 +14,8 @@
 | `/avo.watch` | `commands/avo/watch.md` | `references/watch.md` |
 | `/avo.motion` | `commands/avo/motion.md` | `references/motion.md` |
 | `/avo.captions` | `commands/avo/captions.md` | `references/captions.md` |
+| `/avo.rights` | `commands/avo/rights.md` | `references/rights.md` |
+| `/avo.audio-qc` | `commands/avo/audio-qc.md` | `references/audio-qc.md` |
 | `/avo.deliver` | `commands/avo/deliver.md` | `references/deliver.md` |
 | `/avo.shorts` | `commands/avo/shorts.md` | `references/shorts.md` |
 | `/avo.reframe` | `commands/avo/reframe.md` | `references/reframe.md` |

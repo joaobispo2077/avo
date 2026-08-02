@@ -55,6 +55,8 @@ Spoken alias: **`/avo --help`** → `/avo.help`
 | `/avo.watch` | Full watch-skill LOOP ([source](../commands/avo/watch.md)) |
 | `/avo.motion` | HyperFrames motion ([source](../commands/avo/motion.md)) |
 | `/avo.captions` | Embedded captions after overlays ([source](../commands/avo/captions.md)) |
+| `/avo.rights` | Rights and SOURCE-LOG audit before deliver ([source](../commands/avo/rights.md)) |
+| `/avo.audio-qc` | Master loudness / true peak QC ([source](../commands/avo/audio-qc.md)) |
 | `/avo.deliver` | Full master QC + delivery manifest ([source](../commands/avo/deliver.md)) |
 | `/avo.shorts` | Orchestrated YouTube Shorts workflow ([source](../commands/avo/shorts.md)) |
 | `/avo.reframe` | Vertical clip from long-form master ([source](../commands/avo/reframe.md)) |
@@ -76,7 +78,7 @@ Spoken alias: **`/avo --help`** → `/avo.help`
 
 Skill: [`avo-provider`](../agent-skills/avo-provider/SKILL.md) · Concept: [`docs/providers.md`](providers.md)
 
-Shipped command files: [`../commands/avo/`](../commands/avo/) (20 commands)
+Shipped command files: [`../commands/avo/`](../commands/avo/) (22 commands)
 
 ---
 
@@ -170,6 +172,15 @@ identity: anchor
 **Deliver before upload:**
 
 ```text
+/avo.rights
+Provider: my-channel
+The footage is at C:/Videos/review
+
+/avo.audio-qc
+Provider: my-channel
+The footage is at C:/Videos/review
+Footage: edit/masters/20260801-review-master-v001.mp4
+
 /avo.deliver
 Provider: my-channel
 The footage is at C:/Videos/review
