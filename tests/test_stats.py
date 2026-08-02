@@ -1,4 +1,4 @@
-"""Tests for helpers/stats.py — record, totals, rotation, display."""
+"""Tests for src/avo/stats.py — record, totals, rotation, display."""
 
 from __future__ import annotations
 
@@ -10,14 +10,14 @@ from pathlib import Path
 from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
-HELPERS = ROOT / "helpers"
+SRC = ROOT / "src"
 FIXTURE = ROOT / "tests" / "fixtures" / "stats-project"
 MASTER = "20260801-demo-master-v001"
 
-sys.path.insert(0, str(HELPERS))
+sys.path.insert(0, str(SRC))
 
-import avo_state  # noqa: E402
-import stats  # noqa: E402
+from avo import avo_state  # noqa: E402
+from avo import stats  # noqa: E402
 
 
 def _sample_session(session_id: str = "sess-1", *, freed: int = 1000) -> dict:

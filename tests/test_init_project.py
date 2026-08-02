@@ -1,16 +1,16 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-HELPERS = ROOT / "helpers"
-sys.path.insert(0, str(HELPERS))
+SRC = ROOT / "src"
 
-import init_project  # noqa: E402
+from avo import init_project  # noqa: E402
 
 
 class InitProjectTests(unittest.TestCase):
@@ -41,8 +41,9 @@ class InitProjectTests(unittest.TestCase):
 
     def test_help_exits_zero(self) -> None:
         proc = subprocess.run(
-            [sys.executable, str(HELPERS / "init_project.py"), "--help"],
+            [sys.executable, "-m", "avo.init_project", "--help"],
             cwd=ROOT,
+            env={**os.environ, "PYTHONPATH": str(SRC)},
             capture_output=True,
             text=True,
         )

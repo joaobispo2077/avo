@@ -1,4 +1,4 @@
-"""Tests for helpers/wrap.py — payload build, markdown render, truncation."""
+"""Tests for src/avo/wrap.py — payload build, markdown render, truncation."""
 
 from __future__ import annotations
 
@@ -8,14 +8,14 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-HELPERS = ROOT / "helpers"
+SRC = ROOT / "src"
 FIXTURE = ROOT / "tests" / "fixtures" / "stats-project"
 MASTER = "20260801-demo-master-v001"
 
-sys.path.insert(0, str(HELPERS))
+sys.path.insert(0, str(SRC))
 
-import project_inventory  # noqa: E402
-import wrap  # noqa: E402
+from avo import project_inventory  # noqa: E402
+from avo import wrap  # noqa: E402
 
 
 class WrapTests(unittest.TestCase):

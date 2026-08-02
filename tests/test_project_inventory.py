@@ -1,4 +1,4 @@
-"""Unit tests for helpers/project_inventory.py preserved-set safety.
+"""Unit tests for src/avo/project_inventory.py preserved-set safety.
 
 Fixture layout: ``tests/fixtures/stats-project/`` mirrors the external-project
 ``edit/`` subtree (transcripts, masters, preview, deletable scratch).
@@ -7,6 +7,7 @@ Fixture layout: ``tests/fixtures/stats-project/`` mirrors the external-project
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 import unittest
@@ -14,13 +15,13 @@ from pathlib import Path
 from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
-HELPERS = ROOT / "helpers"
+SRC = ROOT / "src"
 FIXTURE = ROOT / "tests" / "fixtures" / "stats-project"
 MASTER_BASENAME = "20260801-demo-master-v001"
 
-sys.path.insert(0, str(HELPERS))
+sys.path.insert(0, str(SRC))
 
-import project_inventory  # noqa: E402
+from avo import project_inventory  # noqa: E402
 
 
 class ProjectInventoryTests(unittest.TestCase):
@@ -120,7 +121,8 @@ class ProjectInventoryTests(unittest.TestCase):
         proc = subprocess.run(
             [
                 sys.executable,
-                str(HELPERS / "project_inventory.py"),
+                "-m",
+                "avo.project_inventory",
                 "delete-list",
                 "--raw-dir",
                 str(self.raw_dir),
@@ -129,6 +131,7 @@ class ProjectInventoryTests(unittest.TestCase):
                 "--json",
             ],
             cwd=ROOT,
+            env={**os.environ, "PYTHONPATH": str(SRC)},
             capture_output=True,
             text=True,
         )
@@ -141,7 +144,8 @@ class ProjectInventoryTests(unittest.TestCase):
         proc = subprocess.run(
             [
                 sys.executable,
-                str(HELPERS / "project_inventory.py"),
+                "-m",
+                "avo.project_inventory",
                 "cleanup",
                 "--raw-dir",
                 str(self.raw_dir),
@@ -150,6 +154,7 @@ class ProjectInventoryTests(unittest.TestCase):
                 "--dry-run",
             ],
             cwd=ROOT,
+            env={**os.environ, "PYTHONPATH": str(SRC)},
             capture_output=True,
             text=True,
         )

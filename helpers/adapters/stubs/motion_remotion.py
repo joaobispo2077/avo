@@ -1,18 +1,9 @@
-"""Remotion motion job stub."""
+"""Compatibility shim — remove in v0.2.0. Use `avo.adapters.stubs.motion_remotion`."""
+import warnings
 
-from __future__ import annotations
-
-from helpers.adapters.base import JobRequest, JobResult
-
-
-class RemotionStubAdapter:
-    routing_id = "remotion"
-
-    def run(self, request: JobRequest) -> JobResult:
-        doc = request.root / "docs" / "remotion-decision-guide.md"
-        if not doc.is_file():
-            return JobResult(exit_code=2, stderr=f"missing {doc}")
-        return JobResult(
-            exit_code=2,
-            stderr="remotion stub: per-project install documented in remotion-decision-guide.md",
-        )
+warnings.warn(
+    "helpers.adapters/stubs/motion_remotion.py is deprecated; use avo.adapters.stubs.motion_remotion",
+    DeprecationWarning,
+    stacklevel=2,
+)
+from avo.adapters.stubs.motion_remotion import *  # noqa: F403

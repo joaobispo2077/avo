@@ -1,4 +1,4 @@
-"""Tests for helpers/session.py — path normalization, scan, diff, start/finalize."""
+"""Tests for src/avo/session.py — path normalization, scan, diff, start/finalize."""
 from __future__ import annotations
 
 import json
@@ -11,10 +11,11 @@ from pathlib import Path
 from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
-HELPERS = ROOT / "helpers"
-sys.path.insert(0, str(HELPERS))
+SRC = ROOT / "src"
 
-import session  # noqa: E402
+sys.path.insert(0, str(SRC))
+
+from avo import session  # noqa: E402
 
 
 SHA256_HEX = re.compile(r"^[0-9a-f]{64}$")
@@ -26,7 +27,7 @@ class SessionHelperTests(unittest.TestCase):
         self.tmp_path = Path(self._temp_dir)
 
     def _patch_sessions(self) -> mock._patch:
-        import avo_state
+        from avo import avo_state
 
         return mock.patch.object(avo_state, "repo_root", return_value=self.tmp_path)
 
@@ -90,7 +91,7 @@ class SessionHelperTests(unittest.TestCase):
         self.assertEqual(diff.unchanged[0].size, 10)
 
     def test_start_session_writes_meta_and_pre(self) -> None:
-        import avo_state
+        from avo import avo_state
 
         raw = self.tmp_path / "footage"
         (raw / "edit").mkdir(parents=True)
@@ -117,7 +118,7 @@ class SessionHelperTests(unittest.TestCase):
         self.assertEqual(pre["files"], {"edit/scratch.txt": 4})
 
     def test_finalize_session_updates_master_and_id(self) -> None:
-        import avo_state
+        from avo import avo_state
 
         raw = self.tmp_path / "footage"
         raw.mkdir()
@@ -142,7 +143,7 @@ class SessionHelperTests(unittest.TestCase):
         self.assertTrue((final_dir / "pre.json").is_file())
 
     def test_cli_start_emits_json(self) -> None:
-        import avo_state
+        from avo import avo_state
 
         raw = self.tmp_path / "footage"
         raw.mkdir()

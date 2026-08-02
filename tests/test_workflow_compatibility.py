@@ -7,10 +7,9 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "helpers"))
 
-import pack_transcripts
-import render
+from avo import pack_transcripts
+from avo import render
 
 
 class WorkflowCompatibilityTests(unittest.TestCase):

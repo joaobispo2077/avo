@@ -12,14 +12,14 @@ ROOT = Path(__file__).resolve().parents[1]
 # ElevenLabs in the tool-routing table — those are documentation, not runtime
 # code, so they are intentionally out of scope for this guarantee.
 RUNTIME_FILES = [
-    ROOT / "helpers/transcribe.py",
-    ROOT / "helpers/transcribe_batch.py",
-    ROOT / "helpers/prepare_transcription.py",
-    ROOT / "helpers/build_captions.py",
-    ROOT / "helpers/generate_sfx.py",
-    ROOT / "helpers/final_transcript_artifacts.py",
-    ROOT / "helpers/render.py",
-    ROOT / "helpers/validate_edl.py",
+    ROOT / "src/avo/transcribe.py",
+    ROOT / "src/avo/transcribe_batch.py",
+    ROOT / "src/avo/prepare_transcription.py",
+    ROOT / "src/avo/build_captions.py",
+    ROOT / "src/avo/generate_sfx.py",
+    ROOT / "src/avo/final_transcript_artifacts.py",
+    ROOT / "src/avo/render.py",
+    ROOT / "src/avo/validate_edl.py",
 ]
 
 # Tokens that would indicate a hosted transcription call or a leaked credential

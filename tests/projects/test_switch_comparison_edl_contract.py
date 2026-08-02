@@ -8,9 +8,8 @@ from copy import deepcopy
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / "helpers"))
 
-import validate_edl
+from avo import validate_edl
 
 
 SCHEMA = ROOT / "specs/003-switch-comparison-video/contracts/edl.schema.json"
