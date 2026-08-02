@@ -220,21 +220,20 @@ def output_sample_rate(edl: dict) -> int:
     return int((edl.get("audio") or {}).get("sample_rate_hz") or 48000)
 
 
-def audio_repair_filter_for(edl: dict, source_name: str) -> str:
-    """Return conservative main-camera speech cleanup and mild YouTube EQ."""
-    audio = edl.get("audio") or {}
-    if audio.get("noise_reduction_policy") != "conservative_speech_first":
-        return ""
-    if not str(source_name).startswith("main"):
-        return ""
-    return ",".join(
-        [
-            "highpass=f=90:p=2",
-            "equalizer=f=250:t=q:w=1.2:g=-1.5",
-            "equalizer=f=3400:t=q:w=1.0:g=1.2",
-            "afftdn=nr=8:nf=-35",
-            "lowpass=f=16000",
-        ]
+def audio_repair_filter_for(
+    edl: dict,
+    source_name: str,
+    source_start: float | None = None,
+    source_end: float | None = None,
+) -> str:
+    """Return main-camera speech cleanup chain with percent-based denoise."""
+    from avo import audio_restoration
+
+    return audio_restoration.audio_repair_filter_for(
+        edl,
+        source_name,
+        source_start=source_start,
+        source_end=source_end,
     )
 
 
@@ -458,7 +457,7 @@ def extract_all_segments(
             youtube_4k=youtube_4k,
             youtube_4k_preset=youtube_4k_preset,
             audio_stream=audio_source_stream(edl),
-            audio_repair_filter=audio_repair_filter_for(edl, src_name),
+            audio_repair_filter=audio_repair_filter_for(edl, src_name, start, end),
         )
         seg_paths.append(out_path)
 
