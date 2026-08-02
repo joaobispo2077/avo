@@ -35,7 +35,11 @@ Apply audio-first rules from `AGENTS.md`: speech intelligibility first, duck mus
 1. Parse assets and mode keyword.
 2. Diagnose sources (sample rate, channels, clipping, noise) before processing.
 3. **Never** destructively overwrite camera originals; work on copies under `edit/`.
-4. Noise reduction: narrow, conservative; back off on artifacts.
+4. **Noise reduction (`noise-reduction` mode):**
+   - Run `python -m avo.audio_analysis <footage> --suggest-nr [--heatmap]` (see [`noise-reduction-knowledge.md`](../../agent-skills/avo-pipeline/references/noise-reduction-knowledge.md)).
+   - Present suggested time ranges and **% strength**; confirm with user before updating EDL.
+   - Write `audio.restoration_default_pct` (default 35) and optional `restoration_segments[]`.
+   - Segments above **50%** require user approval (`approved_by_user: true`).
 5. Mix: dialogue lead → critical source → music → SFX → ambience.
 6. Measure loudness; record method in edit log when mastering.
 7. Re-sync to picture after audio edits; verify with `ffprobe` and spot-listen.

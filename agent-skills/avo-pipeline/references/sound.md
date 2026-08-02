@@ -8,7 +8,7 @@ Follow [`AGENTS.md`](../../../AGENTS.md) audio rules and [`docs/audio-post-produ
 
 | Keyword | Action |
 | ------- | ------ |
-| `noise-reduction` | Spectral/waveform targeted NR; conservative |
+| `noise-reduction` | Analyze waveform → suggest % per region → user confirms → EDL `restoration_segments[]` (see [`noise-reduction-knowledge.md`](noise-reduction-knowledge.md)) |
 | `level-match` | Gain-stage clips before mix |
 | `mix` | Full hierarchy with declared SFX/Music |
 
