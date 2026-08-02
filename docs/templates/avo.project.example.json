@@ -18,6 +18,14 @@
     "burnedIn": true,
     "platformCaptions": false
   },
+  "rights": {
+    "auditPath": "edit/review/rights-audit.md",
+    "earlyPass": false
+  },
+  "audioQc": {
+    "auditPath": "edit/review/audio-qc.md",
+    "channelTargetNote": "Document internal target in provider notes — not a universal platform number"
+  },
   "deliverable": {
     "profile": "long-form",
     "maxDurationSec": 60,
