@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1920, height=1080" />
+    <title>AVO Boil Insert — Text Starter</title>
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <script src="lib/boil-insert.js"></script>
+    <script src="lib/presets.js"></script>
+    <script src="lib/lifecycle.js"></script>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: transparent;
+      }
+      #root {
+        position: relative;
+        width: 1920px;
+        height: 1080px;
+        overflow: hidden;
+        background: transparent;
+        display: grid;
+        place-items: center;
+      }
+      #boil-target {
+        padding: 24px 48px;
+        font-family: Inter, "Noto Sans", system-ui, sans-serif;
+        font-size: 72px;
+        font-weight: 800;
+        letter-spacing: -0.02em;
+        color: #f7f9fc;
+        text-shadow:
+          0 2px 0 #16181f,
+          0 4px 12px rgba(0, 0, 0, 0.45);
+        text-align: center;
+        max-width: 16ch;
+        line-height: 1.05;
+      }
+    </style>
+  </head>
+  <body>
+    <div
+      id="root"
+      data-composition-id="main"
+      data-start="0"
+      data-width="1920"
+      data-height="1080"
+      data-duration="3"
+    >
+      <div id="boil-target">Big idea!</div>
+    </div>
+    <script>
+      window.__timelines = window.__timelines || {};
+      const SLOT = 3;
+      const preset = BoilPresets.getPreset("standard");
+      const phases = {
+        entrance: { start: 0, duration: 0.45, from: { opacity: 0, y: 32, scale: 0.92 } },
+        hold: { start: 0.45, duration: 2.0 },
+        exit: { start: 2.45, duration: 0.4, to: { opacity: 0, y: -16, scale: 0.96 } },
+      };
+
+      const { turb, filterUrl } = BoilInsert.createBoilFilter(document.body, {
+        filterId: "boil-filter-text",
+        ...preset,
+      });
+      BoilInsert.wrapBoilContent(document.getElementById("boil-target"), filterUrl);
+      BoilLifecycle.applyCenterOffset(document.getElementById("boil-target"), { x: 0, y: 0 });
+
+      const tl = gsap.timeline({ paused: true });
+      BoilLifecycle.scheduleInsertLifecycle(tl, "#boil-target", phases);
+
+      const hold = BoilLifecycle.boilHoldWindow(phases);
+      BoilInsert.applyBoil(tl, turb, {
+        duration: hold.duration,
+        startTime: hold.startTime,
+        fps: preset.fps,
+        seedStart: preset.seedStart,
+      });
+
+      tl.to({}, { duration: SLOT }, 0);
+      window.__timelines["main"] = tl;
+    </script>
+  </body>
+</html>
