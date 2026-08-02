@@ -5,10 +5,12 @@ on:
     branches:
       - main
       - develop
+      - release
       - 'feature/**'
   pull_request:
     branches:
       - main
+      - release
 
 env:
   PYTHON_VERSION: '3.12'
