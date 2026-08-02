@@ -1,6 +1,6 @@
 {
   "name": "avo",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Edit less, create more — local-first AI video orchestrator. Talk to your agent, drop in footage, mass-produce YouTube-ready videos per channel.",
   "private": true,
   "type": "module",
