@@ -19,10 +19,16 @@ Gate order in CI is enforced via job `needs:` in `.github/workflows/ci.yml`.
 
 | File | Role |
 | --- | --- |
-| `avo.config.json` | Job routing (which tool owns which stage) |
-| `avo.dependencies.json` | Gate 1 — pinned repos, clone paths, required vs optional |
+| `config/avo.config.json` | Job routing (which tool owns which stage) |
+| `config/avo.dependencies.json` | Gate 1 — pinned repos, clone paths, required vs optional |
 
-Every `job` in `avo.dependencies.json` must exist under `avo.config.json` → `jobs`.
+Every `job` in `config/avo.dependencies.json` must exist under `config/avo.config.json` → `jobs`.
+
+## Release automation
+
+- Config: [`release.config.mjs`](../release.config.mjs) (semantic-release plugins)
+- Workflow: `.github/workflows/release.yml` — runs after **CI** succeeds on `dev` (alpha) or `main` (stable)
+- Secret: `GH_TOKEN` with `contents: write` (see [versioning.md](./versioning.md))
 
 ## Workflows (maxframe-style layout)
 
@@ -32,7 +38,7 @@ Every `job` in `avo.dependencies.json` must exist under `avo.config.json` → `j
 | `setup-smoke.yml` | `workflow_dispatch` | Full `setup.sh` on ubuntu + windows |
 | `orchestrator-smoke.yml` | manual + weekly cron | Gate 1 (+ optional) + Whisper tiny model + Gate 2 |
 | `ffmpeg-whisper-smoke.yml` | `workflow_dispatch` | Binary/import smoke (like maxframe `yt-dlp-smoke.yml`) |
-| `release.yml` | `v*` tags | Gates + full pytest + version check + GitHub Release |
+| `release.yml` | After **CI** on `dev` / `main` (+ manual) | semantic-release dry-run → publish (alpha on `dev`, stable on `main`) |
 
 Reference: [maxframe workflows](https://github.com/joaobispo2077/maxframe/tree/main/.github/workflows).
 
@@ -82,5 +88,5 @@ npm run validate:usability -- --ci
 
 1. Add job to `avo.config.json` if new stage.
 2. Add tool entry to `avo.dependencies.json` (repo URL, clone path, `required`).
-3. Extend `helpers/validate_dependencies.py` if new `kind` is needed.
-4. Update `install.md` setup order if setup.sh prepares it.
+3. Extend `src/avo/validate_dependencies.py` if new `kind` is needed.
+4. Update `docs/install/README.md` setup order if setup.sh prepares it.

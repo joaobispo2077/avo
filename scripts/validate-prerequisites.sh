@@ -6,4 +6,5 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." >/dev/null 2>&1 && pwd)"
 cd "$REPO_ROOT"
 PY="${PY:-python3}"
 if ! command -v "$PY" >/dev/null 2>&1; then PY=python; fi
-exec "$PY" helpers/validate_dependencies.py "$@"
+export PYTHONPATH="${REPO_ROOT}/src${PYTHONPATH:+:${PYTHONPATH}}"
+exec "$PY" -m avo.validate_dependencies "$@"

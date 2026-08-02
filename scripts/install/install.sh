@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# AVO installer shim (bash). Delegates to bin/install.js or npx github:REPO.
+# AVO installer (bash). Delegates to bin/install.cjs or npx github:REPO.
 #
-# curl -fsSL https://raw.githubusercontent.com/joaobispo2077/avo/main/install.sh | bash
-# bash install.sh [--dry-run] [--full] [--lang en] [--only cursor]
+# curl -fsSL https://raw.githubusercontent.com/joaobispo2077/avo/main/scripts/install/install.sh | bash
+# bash scripts/install/install.sh [--dry-run] [--full] [--lang en] [--only cursor]
 
 set -euo pipefail
 
@@ -19,9 +19,10 @@ if [ "$NODE_MAJOR" -lt 18 ]; then
   exit 1
 fi
 
-here="$(cd "$(dirname "${BASH_SOURCE[0]:-}")" 2>/dev/null && pwd)" || here=""
-if [ -n "$here" ] && [ -f "$here/bin/install.cjs" ]; then
-  exec node "$here/bin/install.cjs" "$@"
+script_dir="$(cd "$(dirname "${BASH_SOURCE[0]:-}")" && pwd)"
+repo_root="$(cd "$script_dir/../.." && pwd)"
+if [ -f "$repo_root/bin/install.cjs" ]; then
+  exec node "$repo_root/bin/install.cjs" "$@"
 fi
 
 if ! command -v npx >/dev/null 2>&1; then

@@ -61,8 +61,12 @@ class InstallScriptTests(unittest.TestCase):
         self.assertNotIn("'browser-use/video-use'", src)
 
     def test_install_sh_default_repo(self) -> None:
-        sh = (ROOT / "install.sh").read_text(encoding="utf-8")
+        sh = (ROOT / "scripts" / "install" / "install.sh").read_text(encoding="utf-8")
         self.assertIn("joaobispo2077/avo", sh)
+
+    def test_install_scripts_resolve_repo_root(self) -> None:
+        sh = (ROOT / "scripts" / "install" / "install.sh").read_text(encoding="utf-8")
+        self.assertIn("script_dir/../..", sh)
 
     def test_skills_json_repo_slug(self) -> None:
         import json

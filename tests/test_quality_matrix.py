@@ -12,12 +12,19 @@ class QualityMatrixTests(unittest.TestCase):
         self.assertIn("run-unit-tests.sh", ci)
         self.assertIn('pip install -e ".[dev]"', ci)
 
-    def test_release_uses_shared_test_runner(self) -> None:
+    def test_release_uses_semantic_release_pipeline(self) -> None:
+        import json
+
         release = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
-        self.assertIn("run-unit-tests.sh", release)
+        config = (ROOT / "release.config.mjs").read_text(encoding="utf-8")
+        pkg = json.loads((ROOT / "package.json").read_text(encoding="utf-8"))
+        self.assertIn("workflow_run", release)
+        self.assertIn("semantic-release", release)
         self.assertIn("verify-release-version.sh", release)
-        self.assertIn("softprops/action-gh-release", release)
-        self.assertNotIn("publish-stub", release)
+        self.assertIn("branches:", config)
+        self.assertIn("prerelease: 'alpha'", config)
+        self.assertIn("semantic-release", pkg.get("devDependencies", {}))
+        self.assertIn("release", pkg.get("scripts", {}))
 
     def test_package_json_uses_pytest(self) -> None:
         import json
@@ -33,8 +40,10 @@ class QualityMatrixTests(unittest.TestCase):
     def test_agent_docs_reference_pytest(self) -> None:
         agents = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
         self.assertIn("pytest", agents)
-        rules = (ROOT / ".cursor/rules/20-testing-and-tdd.mdc").read_text(encoding="utf-8")
-        self.assertIn("pytest", rules)
+        instructions = (
+            ROOT / ".github" / "instructions" / "testing.instructions.md"
+        ).read_text(encoding="utf-8")
+        self.assertIn("pytest", instructions)
 
     def test_run_unit_tests_excludes_project_marker(self) -> None:
         script = (ROOT / "scripts/ci/run-unit-tests.sh").read_text(encoding="utf-8")

@@ -7,18 +7,18 @@ lighter/heavier alternatives exist — in setup, phase telemetry, and agent pros
 
 | Layer | File | Role |
 | --- | --- | --- |
-| Catalog | [`avo.model-catalog.json`](../avo.model-catalog.json) | All options + VRAM/RAM/disk/speed/quality |
-| Defaults | [`avo.config.json`](../avo.config.json) `models` | Orchestrator defaults |
+| Catalog | [`avo.model-catalog.json`](../config/avo.model-catalog.json) | All options + VRAM/RAM/disk/speed/quality |
+| Defaults | [`avo.config.json`](../config/avo.config.json) `models` | Orchestrator defaults |
 | Runtime | `.avo/state.json` | Setup-persisted whisper size + optional LLM tiers |
 | Project | `avo.project.json` | Per-video overrides (`transcription.model`, `models.*`) |
-| Advisory | [`helpers/hardware.py`](../helpers/hardware.py) | Suggested tiers from CPU/GPU/RAM |
+| Advisory | [`src/avo/hardware.py`](../helpers/hardware.py) | Suggested tiers from CPU/GPU/RAM |
 
 ## Resolver
 
 ```bash
-python helpers/models_cli.py show
-python helpers/models_cli.py alternatives transcribe
-python helpers/models_cli.py disclosure
+python -m avo.models_cli show
+python -m avo.models_cli alternatives transcribe
+python -m avo.models_cli disclosure
 ```
 
 Programmatic: `helpers.models.resolve_active_models()`, `list_alternatives(job)`.
@@ -45,7 +45,7 @@ Phase JSON (stderr `AVO_JSON`) includes `activeModels`:
 > Lighter: `<tier>` (faster). Heavier: `<tier>` (better quality). Advisory only —
 > say the word to change tiers.
 
-Load alternatives from `python helpers/models_cli.py alternatives <job> --json`.
+Load alternatives from `python -m avo.models_cli alternatives <job> --json`.
 
 ## Swapping models
 

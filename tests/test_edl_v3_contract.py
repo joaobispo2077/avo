@@ -7,9 +7,8 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "helpers"))
 
-import validate_edl
+import avo.validate_edl as validate_edl
 
 
 SLOT_IDS = [

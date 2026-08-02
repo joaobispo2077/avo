@@ -1,21 +1,9 @@
-"""speckit plan job stub."""
+"""Compatibility shim — remove in v0.2.0. Use `avo.adapters.stubs.plan_speckit`."""
+import warnings
 
-from __future__ import annotations
-
-from helpers.adapters.base import JobRequest, JobResult
-
-
-class SpeckitStubAdapter:
-    routing_id = "speckit"
-
-    def run(self, request: JobRequest) -> JobResult:
-        marker = request.root / ".specify"
-        if not marker.exists():
-            return JobResult(
-                exit_code=2,
-                stderr="speckit stub: .specify marker missing — install GitHub Spec Kit",
-            )
-        return JobResult(
-            exit_code=2,
-            stderr="speckit stub: marker present. Use /speckit.* commands via agent boundary.",
-        )
+warnings.warn(
+    "helpers.adapters/stubs/plan_speckit.py is deprecated; use avo.adapters.stubs.plan_speckit",
+    DeprecationWarning,
+    stacklevel=2,
+)
+from avo.adapters.stubs.plan_speckit import *  # noqa: F403

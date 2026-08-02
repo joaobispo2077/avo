@@ -7,11 +7,10 @@ from pathlib import Path
 from types import SimpleNamespace
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "helpers"))
 
-import pack_transcripts
-import render
-import transcribe
+from avo import pack_transcripts
+from avo import render
+from avo import transcribe
 
 
 class TranscriptContractTests(unittest.TestCase):

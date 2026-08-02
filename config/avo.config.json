@@ -97,5 +97,11 @@
   "migration": {
     "legacyRoutingIds": true,
     "legacyGate1Ids": ["video-use-engine"]
+  },
+  "stats": {
+    "timeSavedEditFactor": 2.5,
+    "sessionRetention": 200,
+    "deletedPathSampleLimit": 50,
+    "description": "Local-only /avo.stats settings. No network; reads .avo/state.json on disk."
   }
 }

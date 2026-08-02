@@ -2,7 +2,7 @@
 
 AVO ships **three skills** for every supported agent. They install via the
 [skills registry](https://www.npmjs.com/package/skills) (`npx skills add`) or the
-unified installer (`bash install.sh`).
+unified installer (`bash scripts/install/install.sh`).
 
 ## Skills package
 
@@ -19,7 +19,7 @@ Registry: [`skills.json`](../skills.json) → paths under [`agent-skills/`](../a
 **Detect and install every agent on the machine:**
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/joaobispo2077/avo/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/joaobispo2077/avo/main/scripts/install/install.sh | bash
 ```
 
 **One agent:**
@@ -59,7 +59,7 @@ in plain language (see [Use cases without slash commands](#use-cases-without-sla
 | `gemini` | Gemini CLI | `-a gemini` | No |
 | `opencode` | OpenCode | `-a opencode` | No |
 
-Full matrix: [`install.md`](../install.md#tier-1--fast-agent-install).
+Full matrix: [`docs/install/README.md`](install/README.md#tier-1--fast-agent-install).
 
 ### Offline / fallback copy
 
@@ -94,6 +94,7 @@ Equivalent to `/avo.pipeline` on Cursor. Mapping table:
 | Captions + overlays | `avo-pipeline` + embedded-captions / talking-head-recut | `/avo.motion` |
 | Format diagnosis | `avo-pipeline` | `/avo.guidelines --youtube` |
 | After master | `avo-pipeline` | `/avo.learndown` then `/avo.cleanup` |
+| Usage totals | `avo-pipeline` | `/avo.stats` |
 
 Extended prompts: [README use cases](../README.md#use-cases).
 

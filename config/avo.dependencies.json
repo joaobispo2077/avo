@@ -14,13 +14,13 @@
       "required": true,
       "job": "transcribe",
       "aliases": ["video-use-engine"],
-      "description": "Bundled AVO Python engine (pyproject.toml + transcription helpers)",
+      "description": "Bundled AVO Python engine (pyproject.toml + src/avo modules; helpers/ shims until v0.2.0)",
       "kind": "python-project",
       "manifest": "pyproject.toml",
       "helpers": [
-        "helpers/transcribe.py",
-        "helpers/prepare_transcription.py",
-        "helpers/avo_state.py"
+        "src/avo/transcribe.py",
+        "src/avo/prepare_transcription.py",
+        "src/avo/avo_state.py"
       ]
     },
     "ffmpeg": {

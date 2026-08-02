@@ -35,7 +35,7 @@ Human lines may append `| models transcribe=faster-whisper:small, understand=…
 
 ## Hardware advisory (optional)
 
-On render/watch phases, also run `helpers/hardware.py` and summarize tier recommendation in prose (advisory only, never blocks).
+On render/watch phases, also run `src/avo/hardware.py` and summarize tier recommendation in prose (advisory only, never blocks).
 
 ## Roll-up
 

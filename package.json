@@ -25,14 +25,24 @@
     "hf:check": "hyperframes check",
     "hf:snapshot": "hyperframes snapshot",
     "hf:preview": "hyperframes preview",
-    "hf:render": "hyperframes render"
+    "hf:render": "hyperframes render",
+    "release": "semantic-release",
+    "release:local": "semantic-release --no-ci",
+    "release:dry-run": "semantic-release --dry-run"
   },
   "devDependencies": {
+    "@semantic-release/changelog": "^6.0.3",
+    "@semantic-release/commit-analyzer": "^13.0.1",
+    "@semantic-release/git": "^10.0.1",
+    "@semantic-release/github": "^12.0.6",
+    "@semantic-release/npm": "^13.1.5",
+    "@semantic-release/release-notes-generator": "^14.1.0",
     "cross-env": "^7.0.3",
     "ffmpeg-static": "^5.3.0",
     "ffprobe-static": "^3.1.0",
     "hyperframes": "^0.7.69",
     "rimraf": "^6.0.0",
+    "semantic-release": "^25.0.3",
     "shx": "^0.3.4"
   },
   "dependencies": {

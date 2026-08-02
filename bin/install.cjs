@@ -3,8 +3,8 @@
  * AVO unified cross-platform installer.
  *
  * Local:  node bin/install.cjs [flags]
- * curl:   curl -fsSL .../install.sh | bash
- * Windows: irm .../install.ps1 | iex
+ * curl:   curl -fsSL .../scripts/install/install.sh | bash
+ * Windows: irm .../scripts/install/install.ps1 | iex
  *
  * Pure Node stdlib. Node ≥18 required.
  */
@@ -84,9 +84,11 @@ function parseArgs(argv) {
 
 function hasCommand(name) {
   try {
-    const cmd = process.platform === 'win32' ? 'where' : 'command';
-    const args = process.platform === 'win32' ? [name] : ['-v', name];
-    cp.execFileSync(cmd, args, { stdio: 'ignore', shell: process.platform === 'win32' });
+    if (process.platform === 'win32') {
+      cp.execFileSync('where', [name], { stdio: 'ignore', shell: true });
+    } else {
+      cp.execFileSync('sh', ['-c', `command -v ${name}`], { stdio: 'ignore' });
+    }
     return true;
   } catch {
     return false;
@@ -231,7 +233,9 @@ function installCursorCommands(root, opts) {
   }
   const targets = [];
   const cwdRoot = process.cwd();
-  if (fs.existsSync(path.join(cwdRoot, 'avo.config.json'))) {
+  const configAtRoot = path.join(cwdRoot, 'avo.config.json');
+  const configNested = path.join(cwdRoot, 'config', 'avo.config.json');
+  if (fs.existsSync(configAtRoot) || fs.existsSync(configNested)) {
     targets.push(path.join(cwdRoot, '.cursor', 'commands', 'avo'));
   }
   targets.push(path.join(os.homedir(), '.cursor', 'commands', 'avo'));
@@ -280,8 +284,8 @@ function printHelp() {
 
 Usage:
   node bin/install.cjs [flags]
-  curl -fsSL https://raw.githubusercontent.com/${REPO}/${PINNED_REF}/install.sh | bash
-  irm https://raw.githubusercontent.com/${REPO}/${PINNED_REF}/install.ps1 | iex
+  curl -fsSL https://raw.githubusercontent.com/${REPO}/${PINNED_REF}/scripts/install/install.sh | bash
+  irm https://raw.githubusercontent.com/${REPO}/${PINNED_REF}/scripts/install/install.ps1 | iex
 
 Flags:
   --dry-run       Print actions only
@@ -344,10 +348,10 @@ function main() {
     log('\n→ Full toolchain (setup.sh)');
     runFullSetup(opts);
   } else {
-    log('\nAgent brain installed. For ffmpeg + whisper + watch-skill, re-run with --full or see install.md.');
+    log('\nAgent brain installed. For ffmpeg + whisper + watch-skill, re-run with --full or see docs/install/README.md.');
   }
 
-  if (failed) die(`\n${failed} agent(s) failed. See install.md.`);
+  if (failed) die(`\n${failed} agent(s) failed. See docs/install/README.md.`);
   log('\nDone.');
 }
 

@@ -22,6 +22,7 @@ EXPECTED_COMMANDS = {
     "telemetry.md",
     "learndown.md",
     "cleanup.md",
+    "stats.md",
 }
 
 EXPECTED_UTILITY_REFS = {
@@ -36,6 +37,7 @@ EXPECTED_UTILITY_REFS = {
     "telemetry.md",
     "learndown.md",
     "cleanup.md",
+    "stats.md",
 }
 
 

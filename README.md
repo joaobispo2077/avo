@@ -6,7 +6,7 @@
 
 **Edit less. Create more.** [Quickstart now](#quickstart)
 
-Talk to your AI agent. Drop raw footage in a folder. Get a finished, YouTube-ready
+Talk to your AI agent. Drop raw footage in a folder. Get a finished, ready-to-publish
 video back, **local-first**, scoped to your channel, repeatable at scale.
 
 AVO started as a fork of [video-use](https://github.com/browser-use/video-use) and
@@ -28,7 +28,8 @@ the bundled editing engine and upstream [video-use](https://github.com/browser-u
 - **Create more, edit less.** Plan, transcribe, cut, caption, animate, and deliver
   by talking to your agent, not by clicking through every stage yourself.
 - **Local first.** Transcription and most of the pipeline run on your machine. No
-  account required for the core path.
+  account required for the core path. Usage stats (`/avo.stats`) and telemetry stay
+  on disk — see [Privacy — stats & telemetry](#privacy--stats--telemetry) (end of this page).
 - **Proves ideas cheaply.** Low-resolution previews first; full-quality render only
   when the cut is confident, saving time and disk.
 - **Checks its own work.** After each render, AVO watches the result, fixes problems,
@@ -82,7 +83,7 @@ channel starts smarter, while each project stays separate.
 ## Use cases
 
 After [Quickstart](#quickstart), install **AVO skills** for your agent
-(`bash install.sh` or [`docs/agent-skills.md`](docs/agent-skills.md)). Open your
+(`bash scripts/install/install.sh` or [`docs/agent-skills.md`](docs/agent-skills.md)). Open your
 **footage folder** in the agent (or paste its path). Tell it your **provider**
 (channel/brand) and **where the clips live** — plain English is fine; the agent
 maps that to `rawDir` internally. Then use a **slash command** (Cursor) or ask in
@@ -126,6 +127,7 @@ first, then overlay, or run HyperFrames directly on a clean MP4.
 | Dealer walkthrough with per-car lower-thirds | [Car dealer](#three-cars-in-one-take-fix-mistakes-lower-thirds-facebook-captions) |
 | Game review with verdict card | [Game review](#package-my-game-review-cut-the-ums-glitchy-captions-when-im-hyped-scoreboard-card-for-the-verdict) |
 | Tech / gadget first impression | [Tech first look](#first-impression-on-this-gadget-tight-cold-open-terminal-captions-on-specs-one-glass-verdict-card) |
+| Live pipeline demo + deep motion direction | [Pipeline demo motion](#live-pipeline-demo-four-beat-liquid-glass-cards-synced-to-the-second) |
 | Health / education comparison | [Physio demo](#i-demo-two-back-exercises-clean-both-takes-label-exercise-a-and-b-calm-documentary-captions-dont-hype) |
 | English master → other languages (coming soon) | [Going global](#going-global-coming-soon) |
 
@@ -307,6 +309,69 @@ SKU-specific props.
 
 ---
 
+#### "Live pipeline demo: four beat liquid-glass cards synced to the second."
+
+**You get:** A talking-head demo where timed overlay beats explain the AVO workflow —
+karaoke title, mistakes card, pipeline story, and a HyperFrames alt palette — each
+popping in on the exact spoken phrase. Full beat-level spec:
+[`docs/deep-animation-direction-exemplar.md`](docs/deep-animation-direction-exemplar.md).
+
+**Skills:** `avo` + `avo-pipeline` · **Provider:** `tech-first-look` (example)
+
+**Cursor:**
+
+```text
+/avo.pipeline
+Provider: tech-first-look
+The footage is in this folder.
+Follow specs/active/avo-pipeline-demo-motion/animation-direction.md
+```
+
+**Say to your agent** (deep animation direction — copy and adapt):
+
+```text
+Load avo-pipeline + talking-head-recut + motion-doctrine.
+Provider: tech-first-look. The footage is in this folder.
+
+Four beats — sync each to the spoken phrase (±100 ms):
+
+1. OPENING — when I say "This is the example video that we're editing live together":
+   left-half liquid glass card; karaoke-style word pop-in (title treatment).
+
+2. MISTAKES — when I say "I might make a few mistakes and that's okay":
+   bottom card: "Mistakes will be cut."; right-half trim/edit motion graphic.
+
+3. PIPELINE — when I describe dropping in a raw file and getting edits + motion:
+   center liquid glass card; story: raw file → transcript → cuts → motion layers → export.
+   Label illustrative if simplified. Density Level 4 inside the card only.
+
+4. HYPERFRAMES ALT — when I say "Using HyperFrames instead":
+   left + right cards simultaneously; different palette (teal/violet vs warm glass);
+   slide-in grammar instead of pop-in.
+
+Build four parallel slots under edit/animations/slot_*.
+Prove at 720p; run watch-skill LOOP per slot before composite.
+Stop at motion-proof approval gate.
+```
+
+**Beat map (reference timestamps from exemplar transcript):**
+
+| Beat | Trigger | In (s) | Visual |
+| --- | --- | --- | --- |
+| A | "…editing live together" | 0.84 | Left glass + karaoke title |
+| B | "…mistakes…okay" | 9.06 | Bottom card + right trim viz |
+| C | pipeline / raw file | 18.4 | Center pipeline story (5 sub-beats) |
+| D | "HyperFrames instead" | 38.92 | Left + right alt-palette cards |
+
+**AVO runs:** transcribe → edit → watch-skill → **you approve** → four parallel
+motion slots → parallel 720p LOOP → composite sync QC → **you approve** → deliver.
+
+**Motion:** HyperFrames `talking-head-recut` (beats A, B, D) + `general-video` (beat C).
+See [`animation-direction.md`](specs/active/avo-pipeline-demo-motion/animation-direction.md)
+for layout zones, motion tokens, and acceptance tests.
+
+---
+
 #### "I demo two back exercises. Clean both takes, label Exercise A and B, calm documentary captions. Don't hype."
 
 **You get:** A comparison edit with clear labels and conservative styling, no misleading motion.
@@ -352,6 +417,7 @@ Same goals in one line — load skill **`avo-pipeline`** (or **`avo-provider`** 
 | Ready for approval | `/avo.watch` |
 | Logo spin / glass card | `/avo.motion` |
 | Disk / progress report | `/avo.telemetry` |
+| Local usage stats | `/avo.stats` (local disk only — [`SECURITY.md#privacy--telemetry`](SECURITY.md#privacy--telemetry)) |
 | Create provider | `/avo.provider` |
 | After master approved | `/avo.learndown` then `/avo.cleanup` |
 | Open topic docs | `/avo.docs` |
@@ -377,7 +443,7 @@ Power-user prompts, one routing cell at a time. Full table: [Tool routing](#tool
 - **Prove cheaply first:** 360p edit proof, then 720p motion; full res only after approval.
 - **gemini-flow for this export:** swap **Paid** on render only.
 
-More mechanics: [`docs/avo-workflow.md`](docs/avo-workflow.md). Setup: [`install.md`](install.md).
+More mechanics: [`docs/avo-workflow.md`](docs/avo-workflow.md). Setup: [`docs/install/README.md`](docs/install/README.md).
 
 ---
 
@@ -440,12 +506,12 @@ table, not the whole pipeline.
 
 ```bash
 # macOS · Linux · WSL · Git Bash
-curl -fsSL https://raw.githubusercontent.com/joaobispo2077/avo/main/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/joaobispo2077/avo/main/scripts/install/install.sh | bash
 ```
 
 ```powershell
 # Windows · PowerShell 5.1+
-irm https://raw.githubusercontent.com/joaobispo2077/avo/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/joaobispo2077/avo/main/scripts/install/install.ps1 | iex
 ```
 
 ~30 seconds. Needs Node ≥18. Skips agents you do not have. Safe to re-run.
@@ -455,20 +521,20 @@ irm https://raw.githubusercontent.com/joaobispo2077/avo/main/install.ps1 | iex
 
 <br>
 
-Every agent has its own path (plugin, extension, rule file, or `npx skills add`). The full per-agent matrix, all flags, dry-run, and uninstall live in **[install.md § Tier 1](./install.md#tier-1--fast-agent-install)**. A few common ones:
+Every agent has its own path (plugin, extension, rule file, or `npx skills add`). The full per-agent matrix, all flags, dry-run, and uninstall live in **[docs/install/README.md § Tier 1](./docs/install/README.md#tier-1--fast-agent-install)**. A few common ones:
 
 ```bash
 # Cursor / Windsurf / Cline / Codex / 30+ more, via the skills registry
 npx skills add joaobispo2077/avo -a cursor
 
 # From a clone (local dev)
-bash install.sh --only cursor
+bash scripts/install/install.sh --only cursor
 node bin/install.cjs --dry-run
 ```
 
-**Need ffmpeg + whisper + watch-skill?** Re-run with `--full` or follow [Quickstart](#quickstart) / [install.md](install.md).
+**Need ffmpeg + whisper + watch-skill?** Re-run with `--full` or follow [Quickstart](#quickstart) / [docs/install/README.md](docs/install/README.md).
 
-**Install broke?** Open your agent in this repo and say: *"Read install.md and install AVO for me."*
+**Install broke?** Open your agent in this repo and say: *"Read docs/install/README.md and install AVO for me."*
 
 </details>
 
@@ -480,17 +546,17 @@ AVO installs into the agents it finds on your machine (or the one you pick with 
 
 | ID | Agent | Tier 1 (skills + commands) | Full toolchain |
 | -- | ----- | --------------------------- | -------------- |
-| `cursor` | [Cursor](https://cursor.com) | 3 skills + `/avo.*` slash commands | `bash install.sh --full` |
-| `claude` | Claude Code | 3 skills (`avo`, `avo-pipeline`, `avo-provider`) | `bash install.sh --full` |
-| `codex` | Codex CLI | 3 skills | `bash install.sh --full` |
-| `windsurf` | Windsurf | 3 skills | `bash install.sh --full` |
-| `cline` | Cline | 3 skills | `bash install.sh --full` |
-| `gemini` | Gemini CLI | 3 skills | `bash install.sh --full` |
-| `opencode` | OpenCode | 3 skills | `bash install.sh --full` |
+| `cursor` | [Cursor](https://cursor.com) | 3 skills + `/avo.*` slash commands | `bash scripts/install/install.sh --full` |
+| `claude` | Claude Code | 3 skills (`avo`, `avo-pipeline`, `avo-provider`) | `bash scripts/install/install.sh --full` |
+| `codex` | Codex CLI | 3 skills | `bash scripts/install/install.sh --full` |
+| `windsurf` | Windsurf | 3 skills | `bash scripts/install/install.sh --full` |
+| `cline` | Cline | 3 skills | `bash scripts/install/install.sh --full` |
+| `gemini` | Gemini CLI | 3 skills | `bash scripts/install/install.sh --full` |
+| `opencode` | OpenCode | 3 skills | `bash scripts/install/install.sh --full` |
 
 Skill details and non-Cursor prompts: **[docs/agent-skills.md](docs/agent-skills.md)**.
 
-Per-agent detect paths, flags, dry-run, and uninstall: **[install.md § Tier 1](./install.md#tier-1--fast-agent-install)**. List IDs from a clone: `node bin/install.cjs --list`.
+Per-agent detect paths, flags, dry-run, and uninstall: **[docs/install/README.md § Tier 1](./docs/install/README.md#tier-1--fast-agent-install)**. List IDs from a clone: `node bin/install.cjs --list`.
 
 ---
 
@@ -542,7 +608,7 @@ Tell it which **provider** the video is for and **where your clips live** (path 
 with the same lines. All generated output lives inside that footage folder; your
 source files are never touched.
 
-Full setup details and troubleshooting live in [`install.md`](install.md).
+Full setup details and troubleshooting live in [`docs/install/README.md`](docs/install/README.md).
 
 ---
 
@@ -550,7 +616,10 @@ Full setup details and troubleshooting live in [`install.md`](install.md).
 
 - [`docs/avo-workflow.md`](docs/avo-workflow.md): the AVO workflow, in precise,
   agent-facing detail (confidence gate, the LOOP, **human approval gates**,
-  telemetry, hardware advisory, learndown + cleanup, provider learning).
+  telemetry, hardware advisory, learndown + cleanup, wrap reports, `/avo.stats`,
+  provider learning).
+- [`SECURITY.md`](SECURITY.md#privacy--telemetry): privacy for telemetry and stats
+  (no phone home; local disk only).
 - [`docs/providers.md`](docs/providers.md): what an AVO **provider** is, multi-provider
   patterns (long-form vs Shorts), manifest fields, and setup workflow.
 - [`docs/agent-skills.md`](docs/agent-skills.md): install **`avo`**, **`avo-pipeline`**,
@@ -569,7 +638,7 @@ Full setup details and troubleshooting live in [`install.md`](install.md).
   the default motion framework.
 - [`docs/remotion-decision-guide.md`](docs/remotion-decision-guide.md): when to
   choose Remotion instead.
-- [Use cases](#use-cases) — all conversation prompts (product, promo, dealer, game, tech, health, going global, slash commands).
+- [Use cases](#use-cases) — all conversation prompts (product, promo, dealer, game, tech, pipeline demo motion, health, going global, slash commands).
 - [`docs/repo-layout.md`](docs/repo-layout.md): what ships in git vs install-time.
 - [`docs/launch.md`](docs/launch.md): pre-push GitHub checklist.
 - [`docs/delivery-specifications.md`](docs/delivery-specifications.md),
@@ -605,6 +674,16 @@ you'd like to move it up the queue. [Full roadmap → specs/backlog/README.md](s
 - **BL-005** [Multi-audio delivery manifest](specs/backlog/multi-audio-deliver.md): delivery folder with per-locale tracks and manifest.
 
 See [Sponsor](#sponsor) to fund priority items.
+
+---
+
+## Privacy: stats & telemetry
+
+**No phone home.** `/avo.stats` and phase telemetry read **local files only**
+(`.avo/state.json`, optional `avo.wrap.*` on your footage folders). No analytics
+backend, no accounts, no usage upload. Install-time network (git, models, agent
+registries) is separate — full detail in
+[`SECURITY.md#privacy--telemetry`](SECURITY.md#privacy--telemetry).
 
 ---
 

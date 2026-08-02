@@ -165,7 +165,7 @@ advance stage.
 new approval gate.
 
 **Config:** `avo.project.json` → `approvalGates.requireHumanSignOff` (default
-`true`). See [`../avo.project.schema.json`](../avo.project.schema.json).
+`true`). See [`../schemas/avo.project.schema.json`](../schemas/avo.project.schema.json).
 
 Spec: [`../specs/active/avo-approval-gates-ux/spec.md`](../specs/active/avo-approval-gates-ux/spec.md).
 
@@ -199,26 +199,26 @@ Example human line (illustrative form):
 project 6.3 GB · 66% · ~4m left (rough)
 ```
 
-Example JSON line (illustrative shape):
+Example JSON line (illustrative shape — field names match `src/avo/telemetry.py`):
 
 ```json
-{"phase":"motion-proof","n":4,"total":6,"pct":66,"diskFreeBytes":872000000000,
- "stepBytes":1900000000,"projectBytes":6300000000,"etaSeconds":240,"etaRough":true}
+{"phase":"motion-proof","index":4,"total":6,"percent":66.0,"diskFreeBytes":872000000000,
+ "createdBytes":1900000000,"cumulativeBytes":6300000000,"etaSeconds":240.0,"ts":"2026-08-01T12:00:00Z"}
 ```
 
 ---
 
 ## 6. Hardware capability advisory
 
-Owning helper: `helpers/hardware.py` (probed on render/watch phases). **Advisory
+Owning helper: `src/avo/hardware.py` (probed on render/watch phases). **Advisory
 only — it never blocks a run.**
 
 - Probes: CPU (cores/model), RAM, GPU (name/VRAM via `nvidia-smi` / `wmic` /
   `system_profiler`), free disk. Degrades gracefully to `"unknown"` per field.
 - Emits a JSON capability report plus a suggested tier map, e.g.
   `{ "whisper": "large-v3" | "small", "llm": "qwen2.5-7b" }`.
-- Catalog ids and alternatives live in [`avo.model-catalog.json`](../avo.model-catalog.json);
-  resolve active tiers with `python helpers/models_cli.py show` or
+- Catalog ids and alternatives live in [`avo.model-catalog.json`](../config/avo.model-catalog.json);
+  resolve active tiers with `python -m avo.models_cli show` or
   [`docs/model-transparency.md`](model-transparency.md).
 - **The agent reads the report and tells the user, in prose, what it selected and
   the better/worse alternatives.** Because AVO is agent-driven, the advisory
@@ -236,14 +236,37 @@ only — it never blocks a run.**
 
 ## 7. Post-render learndown + cleanup
 
-Runs after the final master is approved. Two steps, in order:
+Runs after the final master is approved. Pipeline kickoff starts a **session**
+(`python -m avo.session start`) and writes `.avo/sessions/<id>/pre.json` as
+a baseline inventory. After cleanup, a **session record** lands in
+`.avo/state.json` and per-video **wrap artifacts** survive on the footage volume.
 
-1. **Learndown (ai-memory, optional).** Consolidate what every iteration learned
-   toward the approved master, filed under the **provider** scope (§8). If
-   ai-memory is not installed, learndown is a no-op and cleanup still runs.
-   - Reports **space used vs space freed** and the preserved-set size (§5).
-2. **Cleanup (rimraf, cross-platform).** Delete everything the run created in the
-   video project folder **except** the preserved set.
+Two steps, in order:
+
+1. **Learndown (ai-memory optional + draft wrap).** Consolidate what every
+   iteration learned toward the approved master, filed under the **provider**
+   scope (§8). If ai-memory is not installed, learndown notes the skip and
+   cleanup still runs.
+   - **Inventory report:** `project_inventory.py report` (uses `pre.json` when
+     present for added/removed/modified classification).
+   - **Draft wrap (REQUIRED):** `<rawDir>/avo.wrap.draft.md` and
+     `avo.wrap.draft.json` (`status: "draft"`) — outside `<rawDir>/edit/`.
+     Includes narrative summary, scheduled deletions, preserved artifacts, space
+     estimates, ai-memory note.
+   - **Learndown telemetry:** `Telemetry.learndown()` — space used vs freed
+     preview and preserved-set size (§5).
+2. **Cleanup (rimraf + final wrap + stats record).** Delete everything the run
+   created in the video project folder **except** the preserved set.
+   - **Verify:** `project_inventory.py verify` — refuse if preserved set incomplete.
+   - **Execute:** `project_inventory.py cleanup` — assert delete list ∩ preserved
+     set = ∅, then `rimraf`.
+   - **Final wrap (REQUIRED):** `<rawDir>/avo.wrap.md` and `avo.wrap.json`
+     (`status: "final"`) with actual freed bytes and deleted file lists. Draft
+     wrap files are **retained** for audit comparison.
+   - **Session record (REQUIRED):** `python -m avo.stats record
+     --wrap-json <rawDir>/avo.wrap.json` → `.avo/state.json` → `stats.sessions[]`
+     + cumulative `stats.totals`.
+   - Optional cleanup telemetry via `Telemetry.cleanup()`.
 
 **Preserved-set invariant (release-blocking).** After cleanup, exactly these
 survive — nothing else the run created:
@@ -260,6 +283,9 @@ survive — nothing else the run created:
 
 Cleanup MUST use cross-platform deletes (`rimraf`), never `rm -rf` / `del`, and
 MUST refuse to delete anything in the preserved set.
+
+**Aggregate metrics:** `/avo.stats` (or `python -m avo.stats show`) reads
+local session history only — no network. Privacy: [`SECURITY.md#privacy--telemetry`](../SECURITY.md#privacy--telemetry).
 
 ---
 
@@ -296,8 +322,10 @@ MUST refuse to delete anything in the preserved set.
 - [ ] Telemetry reported at every phase boundary (disk / step / progress / ETA).
 - [ ] Hardware advisory surfaced on render/watch phases (advisory only).
 - [ ] Final master approved; final transcript generated from the master.
-- [ ] Learndown filed under provider; reports space used vs freed.
+- [ ] Learndown: draft wrap (`avo.wrap.draft.*`); inventory report; space preview telemetry.
+- [ ] Cleanup: verify preserved set → execute rimraf → final wrap → `stats record`.
 - [ ] Cleanup keeps only: raw, initial transcript, final transcript, final master.
+- [ ] `/avo.stats` shows cumulative totals (local only — [`SECURITY.md#privacy--telemetry`](../SECURITY.md#privacy--telemetry)).
 
 ---
 

@@ -9,7 +9,7 @@ Topic router for AVO documentation. Read-only.
 | `index` | [`docs/README.md`](../../README.md) |
 | `workflow` | [`docs/avo-workflow.md`](../../avo-workflow.md) |
 | `commands` | [`docs/avo-commands.md`](../../avo-commands.md) |
-| `install` | [`install.md`](../../../install.md) (Tier 1 + Tier 2) |
+| `install` | [`docs/install/README.md`](../../../docs/install/README.md) (Tier 1 + Tier 2) |
 | `audio` | [`docs/audio-post-production-system.md`](../../audio-post-production-system.md) |
 | `animation` | [`docs/animation-system.md`](../../animation-system.md) + [`docs/hyperframes-workflow.md`](../../hyperframes-workflow.md) |
 | `delivery` | [`docs/delivery-specifications.md`](../../delivery-specifications.md) |

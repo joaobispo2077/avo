@@ -60,8 +60,9 @@ Spoken alias: **`/avo --help`** → `/avo.help`
 | Command | Purpose |
 | ------- | ------- |
 | `/avo.telemetry` | Disk/progress/ETA report ([source](../commands/avo/telemetry.md)) |
-| `/avo.learndown` | ai-memory consolidation ([source](../commands/avo/learndown.md)) |
-| `/avo.cleanup` | Preserved-set cleanup ([source](../commands/avo/cleanup.md)) |
+| `/avo.learndown` | ai-memory consolidation + draft wrap ([source](../commands/avo/learndown.md)) |
+| `/avo.cleanup` | Preserved-set cleanup + final wrap + stats record ([source](../commands/avo/cleanup.md)) |
+| `/avo.stats` | Local aggregate metrics ([source](../commands/avo/stats.md)) |
 
 ### Provider setup
 
@@ -71,7 +72,7 @@ Spoken alias: **`/avo --help`** → `/avo.help`
 
 Skill: [`avo-provider`](../agent-skills/avo-provider/SKILL.md) · Concept: [`docs/providers.md`](providers.md)
 
-Shipped command files: [`../commands/avo/`](../commands/avo/) (15 commands)
+Shipped command files: [`../commands/avo/`](../commands/avo/) (16 commands)
 
 ---
 
@@ -140,6 +141,8 @@ The footage is at C:/Videos/review
 
 /avo.cleanup
 The footage is at C:/Videos/review
+
+/avo.stats
 ```
 
 ---

@@ -1,6 +1,6 @@
 # /avo.cleanup Command
 
-Delete run scratch files; preserve the invariant four artifacts.
+Delete run scratch files; preserve the invariant four artifacts; write **final wrap** and record session stats.
 
 **Skill:** [`docs/avo-pipeline/references/cleanup.md`](../../docs/avo-pipeline/references/cleanup.md)
 
@@ -22,17 +22,18 @@ Prerequisite: **final master approved**; run `/avo.learndown` first when ai-memo
 
 ## Role
 
-Workflow §7 step 2. Cross-platform `rimraf` deletes. **Release-blocking:** preserved set must survive.
+Workflow §7 step 2. Cross-platform `rimraf` deletes. **Release-blocking:** preserved set must survive. Records session for `/avo.stats`.
 
 ---
 
 ## Instructions
 
-1. Verify preserved set exists: raw file, initial transcript, final transcript (from master), final master.
-2. List all other paths under `<rawDir>/edit/` created by the run.
-3. Refuse to delete anything in the preserved set.
-4. Execute rimraf (or `--dry-run` list). Report bytes freed.
-5. Emit final telemetry with preserved-set size.
+1. **Verify preserved set (REQUIRED):** `python -m avo.project_inventory verify --raw-dir <rawDir> --master-basename <stem>` — refuse if any artifact missing.
+2. **Dry-run (recommended):** `python -m avo.project_inventory cleanup --raw-dir <rawDir> --master-basename <stem> --dry-run` — list delete candidates only.
+3. **Execute cleanup (REQUIRED):** `python -m avo.project_inventory cleanup --raw-dir <rawDir> --master-basename <stem>` — verify → assert no preserved paths in delete list → `npx rimraf`. **Abort** if intersection non-empty.
+4. **Final wrap (REQUIRED):** agent summary + `python -m avo.wrap final --raw-dir <rawDir> --master-basename <stem> --summary-file <path> [--session-id ID]` → `<rawDir>/avo.wrap.md` + `avo.wrap.json` with `status: "final"`. Retain `avo.wrap.draft.*`.
+5. **Record session (REQUIRED):** `python -m avo.stats record --wrap-json <rawDir>/avo.wrap.json` — append to `.avo/state.json` → `stats.sessions[]`, update `stats.totals`.
+6. Emit cleanup telemetry (optional `Telemetry.cleanup()` when available): bytes freed + preserved-set size.
 
 ---
 

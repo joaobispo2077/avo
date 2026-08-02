@@ -10,7 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 # Paths where video-use / browser-use/video-use is allowed (engine credit or routing).
 ALLOWLIST_GLOBS = [
     "README.md",
-    "install.md",
+    "docs/install/README.md",
     "docs/avo-workflow.md",
     "docs/avo-pipeline/**",
     "docs/ci.md",
@@ -18,8 +18,8 @@ ALLOWLIST_GLOBS = [
     "docs/repo-layout.md",
     "docs/engine-vs-orchestrator.md",
     "agent-skills/avo-pipeline/**",
-    "avo.config.json",
-    "avo.dependencies.json",
+    "config/avo.config.json",
+    "config/avo.dependencies.json",
     "scripts/setup.sh",
     "scripts/setup.ps1",
     "scripts/validate-prerequisites.sh",
@@ -29,8 +29,8 @@ ALLOWLIST_GLOBS = [
     "tests/test_video_use_traces.py",
     "specs/**",
     ".env.example",
-    "helpers/transcribe.py",
-    "install.md",
+    "src/avo/transcribe.py",
+    "docs/install/**",
 ]
 
 STALE_PATTERNS = [
