@@ -18,7 +18,7 @@ manifests, CI, and Spec Kit marker. Heavy tools and skills are installed by
 | `bin/install.cjs` | Unified installer implementation |
 | `agent-skills/`, `skills.json` | Skills registry package (`npx skills add`) |
 | `commands/avo/` | Shipped Cursor slash commands (`/avo.*`) |
-| `docs/avo-pipeline/` | Gateway skill + command reference slices |
+| `agent-skills/avo-pipeline/` | Gateway skill + command reference slices (canonical) |
 | `docs/avo-commands.md` | User index for slash commands |
 | `AGENTS.md`, `SKILL.md`, `CLAUDE.md` | Agent operating rules |
 | `config/` | Orchestrator manifests (`avo.config.json`, `avo.dependencies.json`, model catalog) |

@@ -71,7 +71,7 @@ Prove at 720p until I approve each gate.
 ## Related
 
 - [`docs/animation-system.md`](animation-system.md) — workflow and review gates
-- [`docs/avo-pipeline/references/motion.md`](avo-pipeline/references/motion.md) — slot layout
+- [`agent-skills/avo-pipeline/references/motion.md`](../agent-skills/avo-pipeline/references/motion.md) — slot layout
 - [`docs/templates/animation-design-system.md`](templates/animation-design-system.md) — DESIGN.md template
 - [`agent-skills/avo/references/use-cases.md`](../agent-skills/avo/references/use-cases.md) — skill map
 

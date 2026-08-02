@@ -29,4 +29,8 @@ YouTube Shorts guidelines (vertical ≤60s, or Shorts shelf intent).
 
 ## After guidelines
 
-Use `/avo.trim` + `/avo.motion` for native Shorts; `/avo.pipeline` when sourcing from long-form master.
+**Primary:** `/avo.shorts` — orchestrates diagnosis → trim → watch → motion? → captions? → deliver with Short defaults.
+
+**Escape hatch:** `/avo.trim` + `/avo.motion` + `/avo.captions` + `/avo.deliver` for manual stage control.
+
+**From long-form master:** `/avo.shorts --from-master` (delegates to `/avo.reframe`) or `/avo.reframe` directly with `from`/`to`.

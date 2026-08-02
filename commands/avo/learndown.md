@@ -2,7 +2,7 @@
 
 Post-master provider-scoped learning consolidation (ai-memory) and **draft wrap** preview.
 
-**Skill:** [`docs/avo-pipeline/references/learndown.md`](../../docs/avo-pipeline/references/learndown.md)
+**Skill:** [`agent-skills/avo-pipeline/references/learndown.md`](../../agent-skills/avo-pipeline/references/learndown.md)
 
 ---
 

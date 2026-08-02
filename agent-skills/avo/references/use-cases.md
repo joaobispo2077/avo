@@ -15,7 +15,10 @@ Add **`avo-provider`** when setting up a channel before the first video.
 | watch-skill LOOP | `/avo.watch` |
 | Scoped QC window | `/avo.audit` |
 | YouTube format rules | `/avo.guidelines --youtube` |
-| Shorts / TikTok | `/avo.guidelines --shorts` or `--tiktok` |
+| Shorts / TikTok | `/avo.shorts` or `/avo.guidelines --shorts` / `--tiktok` |
+| Captions burn-in | `/avo.captions` + `identity:` |
+| Master QC + manifest | `/avo.deliver` |
+| Vertical from master | `/avo.reframe` or `/avo.shorts --from-master` |
 | Create provider | `/avo.provider` |
 | After master approved | `/avo.learndown` then `/avo.cleanup` |
 | Command index | `/avo.help` |
@@ -36,7 +39,7 @@ The footage is at C:/Videos/my-edit
 | -------- | ------ | ------ |
 | Product review + spec cards | `avo`, `avo-pipeline` | `/avo.pipeline` |
 | Pet promo + logo + CTA | `avo`, `avo-pipeline`, `avo-provider` if new | `/avo.pipeline` |
-| Dealer walkthrough | `avo`, `avo-pipeline` | `/avo.trim` + `/avo.motion` |
+| Dealer walkthrough | `avo`, `avo-pipeline` | `/avo.trim` + `/avo.motion`; Shorts: `/avo.shorts` or `/avo.reframe` |
 | Game review | `avo`, `avo-pipeline` | `/avo.pipeline` |
 | Tech first impression | `avo`, `avo-pipeline` | `/avo.pipeline` |
 | Live pipeline demo + deep motion | `avo`, `avo-pipeline` | `/avo.pipeline` + [`animation-direction.md`](../../../specs/active/avo-pipeline-demo-motion/animation-direction.md) |

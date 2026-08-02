@@ -2,7 +2,7 @@
 
 Scoped quality check on a cut, transcript, or time slice.
 
-**Skill:** [`docs/avo-pipeline/references/audit.md`](../../docs/avo-pipeline/references/audit.md)
+**Skill:** [`agent-skills/avo-pipeline/references/audit.md`](../../agent-skills/avo-pipeline/references/audit.md)
 
 ---
 

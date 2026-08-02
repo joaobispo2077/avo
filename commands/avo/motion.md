@@ -2,7 +2,7 @@
 
 Add motion graphics or overlays on an approved cut (HyperFrames default).
 
-**Skill:** [`docs/avo-pipeline/references/motion.md`](../../docs/avo-pipeline/references/motion.md)
+**Skill:** [`agent-skills/avo-pipeline/references/motion.md`](../../agent-skills/avo-pipeline/references/motion.md)
 
 ---
 

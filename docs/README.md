@@ -42,6 +42,7 @@ Write for the **correct audience by file** — not by mixing tones in one file.
   editor MCPs (e.g. CapCut) vs AVO orchestration; for agents, not README copy.
 - [`use-cases.md`](use-cases.md) — redirect to [README use cases](../README.md#use-cases) (all prompts in one place).
 - [`repo-layout.md`](repo-layout.md) — what ships in git vs install-time vs ignored.
+- [`ROADMAP.md`](ROADMAP.md) — public product roadmap and backlog index.
 - [`launch.md`](launch.md) — pre-push checklist for GitHub publish.
 
 ## Editing & audio

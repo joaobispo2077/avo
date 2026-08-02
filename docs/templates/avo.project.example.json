@@ -13,6 +13,22 @@
   "transcription": {
     "language": "en"
   },
+  "captions": {
+    "identity": "anchor",
+    "burnedIn": true,
+    "platformCaptions": false
+  },
+  "deliverable": {
+    "profile": "long-form",
+    "maxDurationSec": 60,
+    "aspect": "16:9"
+  },
+  "reframe": {
+    "sourceMaster": "edit/masters/YYYYMMDD-slug-master-v001.mp4",
+    "from": "4:10",
+    "to": "4:55",
+    "cropStrategy": "face-safe"
+  },
   "approvalGates": {
     "requireHumanSignOff": true,
     "checkpoints": ["edit-proof", "motion-proof", "pre-master"]

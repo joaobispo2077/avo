@@ -2,7 +2,7 @@
 
 Run the full AVO pipeline from declared assets through deliver.
 
-**Skill:** [`docs/avo-pipeline/references/pipeline.md`](../../docs/avo-pipeline/references/pipeline.md)
+**Skill:** [`agent-skills/avo-pipeline/references/pipeline.md`](../../agent-skills/avo-pipeline/references/pipeline.md)
 
 **See also:** [`docs/avo-workflow.md`](../../docs/avo-workflow.md) · [`SKILL.md`](../../SKILL.md)
 
@@ -32,7 +32,7 @@ Orchestrate stages 0–7: plan (optional Spec Kit) → transcribe → edit → w
 
 ## Instructions
 
-1. **Parse inputs** per [`arguments.md`](../../docs/avo-pipeline/references/arguments.md).
+1. **Parse inputs** per [`arguments.md`](../../agent-skills/avo-pipeline/references/arguments.md).
 2. **Resolve provider** manifest: `providers/<provider>/avo.provider.json`.
 3. **Write or update** `<rawDir>/avo.project.json` with asset paths.
 4. **Start session (REQUIRED):** run `python -m avo.session start --raw-dir <rawDir> --provider <provider> [--title TEXT]` — writes `.avo/sessions/<id>/pre.json` baseline inventory for wrap diff and stats.
