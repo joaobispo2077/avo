@@ -44,7 +44,7 @@ Fill these per video or channel:
 | Loudness target | Channel standard TBD; prioritize intelligibility/headroom |
 | Captions | Corrected captions required when practical |
 | Thumbnail | Truthful candidate frames/contact sheet when requested |
-| Derivatives | Shorts, reframe, podcast-clip, trailer, chapters, thumbnail, end-screen via respective `/avo.*` commands |
+| Derivatives | Shorts, reframe, podcast-clip, trailer, chapters, thumbnail, end-screen, format/framework diagnosis, grade notes via respective `/avo.*` commands |
 
 ## Export Types
 

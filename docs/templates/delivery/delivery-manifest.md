@@ -20,6 +20,9 @@
 | End-screen checklist | optional | `<rawDir>/edit/review/end-screen-checklist.md` |
 | Color QC | optional | `<rawDir>/edit/review/color-qc.md` |
 | Sync check | optional | `<rawDir>/edit/review/sync-check.md` |
+| Format diagnosis | optional | `<rawDir>/edit/review/format-diagnosis.md` |
+| Framework selection | optional | `<rawDir>/edit/review/framework-selection.md` |
+| Grade notes | optional | `<rawDir>/edit/review/grade-notes.md` |
 
 ---
 
