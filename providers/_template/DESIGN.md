@@ -38,6 +38,19 @@ the editing workflow stays consistent across this provider's videos.
 
 Entrance/hold/exit conventions, easing character, and any density preferences.
 
+### Boil insert (optional)
+
+Timed wiggly/boiling overlays use presets from `brand/palette.json` → `boil`:
+
+| Preset | Character |
+|--------|-----------|
+| subtle | Restrained hand-drawn edge |
+| standard | Default callout boil |
+| wild | High-energy displacement |
+
+Boil applies to **insert layers only** — not full-frame ambient wobble. See
+`docs/exemplars/hyperframes-boil-insert/`.
+
 ## 7. Do / Do not
 
 - Do: …

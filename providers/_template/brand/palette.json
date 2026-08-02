@@ -9,5 +9,14 @@
     "$comment": "Optional: named semantic tokens used by captions, lower-thirds, callouts.",
     "captionFill": "#FFFFFF",
     "captionStroke": "#000000"
+  },
+  "boil": {
+    "$comment": "Optional wiggly/boiling insert defaults. Presets: subtle | standard | wild.",
+    "defaultPreset": "standard",
+    "scale": 10,
+    "baseFrequency": 0.02,
+    "numOctaves": 3,
+    "fps": 9,
+    "shadow": "0 2px 0 #000, 0 4px 12px rgba(0,0,0,0.4)"
   }
 }
