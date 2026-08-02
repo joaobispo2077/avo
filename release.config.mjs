@@ -32,7 +32,7 @@ const analyzerOpts = {
 /** @type {import('semantic-release').Options} */
 export default {
   branches: [
-    'main',
+    'release',
     { name: 'develop', prerelease: 'alpha' },
   ],
   plugins: [

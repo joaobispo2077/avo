@@ -12,9 +12,9 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class ReleasePipelineTests(unittest.TestCase):
-    def test_release_config_declares_develop_alpha_and_main(self) -> None:
+    def test_release_config_declares_develop_alpha_and_release(self) -> None:
         text = (ROOT / "release.config.mjs").read_text(encoding="utf-8")
-        self.assertIn("'main'", text)
+        self.assertIn("'release'", text)
         self.assertIn("name: 'develop'", text)
         self.assertIn("prerelease: 'alpha'", text)
         self.assertIn("firstParent: false", text)
