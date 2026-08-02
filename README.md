@@ -448,9 +448,17 @@ Same goals in one line. Load skill **`avo-pipeline`** (or **`avo-provider`** whe
 | Audio EQ rules | `/avo.guidelines --eq` |
 | TikTok / Shorts rules | `/avo.guidelines --tiktok` or `--shorts` |
 | Native Short workflow | `/avo.shorts` |
+| Podcast clip from long-form | `/avo.podcast-clip` |
+| Program trailer | `/avo.trailer` |
+| YouTube chapters | `/avo.chapters` |
+| Thumbnail candidates | `/avo.thumbnail` |
 | Vertical clip from master | `/avo.reframe` |
+| Rights before deliver | `/avo.rights` |
+| Master loudness QC | `/avo.audio-qc` |
 | Captions burn-in | `/avo.captions` + `identity:` |
 | Master QC + manifest | `/avo.deliver` |
+| PR → video | `/avo.pr-video` + `ProjectDir` + `Source` |
+| Changelog → video | `/avo.changelog-video` |
 | Transcribe only | `/avo.transcribe` |
 | Full folder with assets | `/avo.pipeline` |
 | Cut only | `/avo.trim` |

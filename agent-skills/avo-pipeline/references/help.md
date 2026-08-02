@@ -31,15 +31,42 @@ Spoken alias: **`/avo --help`**. Cursor file: `commands/avo/help.md` → `/avo.h
 | `/avo.motion` | HyperFrames overlays |
 | `/avo.captions` | Embedded captions (after overlays) |
 | `/avo.watch` | watch-skill LOOP |
-| `/avo.audit` | Scoped QC window |
-| `/avo.deliver` | Full master QC + delivery manifest |
 
-### Shorts
+### Format orchestrators
 
 | Command | When to use |
 | ------- | ----------- |
 | `/avo.shorts` | Orchestrated vertical Short workflow |
 | `/avo.reframe` | Extract 9:16 clip from long-form master |
+| `/avo.podcast-clip` | Podcast / interview clip extraction |
+| `/avo.trailer` | Teaser / trailer from long-form master |
+
+### Upload prep
+
+| Command | When to use |
+| ------- | ----------- |
+| `/avo.chapters` | YouTube chapters from final transcript |
+| `/avo.thumbnail` | Thumbnail candidate stills + checklist |
+
+### QC & deliver
+
+| Command | When to use |
+| ------- | ----------- |
+| `/avo.rights` | SOURCE-LOG, disclosure, reused-content audit |
+| `/avo.audio-qc` | Master loudness / true peak delivery QC |
+| `/avo.retention` | Pre-publish retention diagnosis (no render) |
+| `/avo.animation-qc` | Motion render QC before composite |
+| `/avo.audit` | Scoped QC window |
+| `/avo.deliver` | Full master QC + delivery manifest |
+
+### Content
+
+| Command | When to use |
+| ------- | ----------- |
+| `/avo.pr-video` | GitHub PR → explainer video |
+| `/avo.changelog-video` | Changelog markdown → branded video |
+| `/avo.explainer` | Article / notes → faceless explainer |
+| `/avo.slideshow` | Slide outline → HyperFrames slideshow |
 
 ### Post-master ops
 
@@ -62,6 +89,8 @@ Spoken alias: **`/avo --help`**. Cursor file: `commands/avo/help.md` → `/avo.h
 Provider: <name>
 The footage is at C:/path/to/footage
 ```
+
+Content routers use `ProjectDir` + `Source` instead of footage when applicable.
 
 Or, if the user opened the folder in the IDE: *The footage is in this folder.*
 

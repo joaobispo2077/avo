@@ -12,16 +12,49 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class ReleasePipelineTests(unittest.TestCase):
-    def test_release_config_declares_develop_alpha_and_main(self) -> None:
+    def test_release_config_declares_develop_alpha_and_release(self) -> None:
         text = (ROOT / "release.config.mjs").read_text(encoding="utf-8")
-        self.assertIn("'main'", text)
+        self.assertIn("'release'", text)
         self.assertIn("name: 'develop'", text)
         self.assertIn("prerelease: 'alpha'", text)
         self.assertIn("firstParent: false", text)
+        self.assertIn(
+            "./scripts/ci/semantic-release-pyproject-version.mjs",
+            text,
+        )
+
+    def test_semantic_release_pyproject_plugin_module(self) -> None:
+        plugin = ROOT / "scripts/ci/semantic-release-pyproject-version.mjs"
+        self.assertTrue(plugin.is_file())
 
     def test_determine_next_release_script_exists(self) -> None:
         script = ROOT / "scripts/ci/determine-next-release-version.sh"
         self.assertTrue(script.is_file())
+        text = script.read_text(encoding="utf-8")
+        self.assertIn("won.t be published", text)
+        self.assertIn("The next release version is ", text)
+        self.assertNotIn("grep -oE", text)
+
+    def test_determine_next_release_parsing_contract(self) -> None:
+        sample = (
+            "[semantic-release] › ℹ  Running semantic-release version 25.0.8\n"
+            "[semantic-release] › ℹ  The next release version is 1.0.0-alpha.1\n"
+        )
+        next_version = ""
+        for line in sample.splitlines():
+            marker = "The next release version is "
+            if marker in line:
+                rest = line.split(marker, 1)[1]
+                next_version = rest.split()[0]
+                break
+        self.assertEqual(next_version, "1.0.0-alpha.1")
+        self.assertNotEqual(next_version, "25.0.8")
+
+    def test_release_workflow_verifies_package_json_version(self) -> None:
+        release = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
+        self.assertIn("require('./package.json').version", release)
+        verify_block = release.split("Verify release manifests align", 1)[1]
+        self.assertNotIn("needs.determine-version.outputs.next-version", verify_block)
 
     def test_sync_pyproject_version_script(self) -> None:
         script = ROOT / "scripts/ci/sync-pyproject-version.mjs"
@@ -36,7 +69,7 @@ class ReleasePipelineTests(unittest.TestCase):
             lambda: (ROOT / "pyproject.toml").write_text(
                 re.sub(
                     r'^version\s*=\s*"[^"]+"',
-                    'version = "0.1.0"',
+                    'version = "1.0.0"',
                     (ROOT / "pyproject.toml").read_text(encoding="utf-8"),
                     count=1,
                     flags=re.M,

@@ -50,7 +50,7 @@ Releases are **automated** via [semantic-release](https://github.com/semantic-re
 | Branch | Channel | Example tag |
 |--------|---------|-------------|
 | `develop` | Alpha prerelease | `v0.2.0-alpha.1` |
-| `main` | Stable | `v0.2.0` |
+| `release` | Stable | `v0.2.0` |
 
 1. Workflow `.github/workflows/release.yml` runs (`workflow_run` after **CI**, or manual dispatch)
 2. `semantic-release --dry-run` skips the job when there are no releasable Conventional Commits
@@ -98,4 +98,4 @@ This is **not** SemVer and does **not** go in `CHANGELOG.md`.
 
 ## Current package version
 
-See `pyproject.toml` and `package.json` (`0.1.0` at foundation setup).
+See `pyproject.toml` and `package.json` (`1.0.0` public baseline).
