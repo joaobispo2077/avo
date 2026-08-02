@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1920, height=1080" />
+    <title>AVO Product Promo Starter</title>
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <style>
+      :root {
+        --promo-canvas: #050608;
+        --promo-ink: #f4f4f5;
+        --promo-accent: #6366f1;
+        --promo-muted: #71717a;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: var(--promo-canvas);
+        color: var(--promo-ink);
+        font-family: Inter, system-ui, sans-serif;
+      }
+      #root {
+        position: relative;
+        width: 1920px;
+        height: 1080px;
+        overflow: hidden;
+        background: var(--promo-canvas);
+      }
+      .clip {
+        position: absolute;
+        inset: 0;
+      }
+      .vignette {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        background: radial-gradient(ellipse at center, transparent 35%, #000 100%);
+        z-index: 10;
+      }
+      .beat-problem {
+        display: grid;
+        place-items: center;
+        padding: 80px;
+      }
+      .beat-problem h1 {
+        margin: 0;
+        font-size: 88px;
+        font-weight: 700;
+        letter-spacing: -0.03em;
+        text-align: center;
+        max-width: 14ch;
+        line-height: 1.05;
+      }
+      .beat-proof {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .ui-panel {
+        width: 720px;
+        padding: 48px;
+        border-radius: 24px;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        background: linear-gradient(
+          145deg,
+          rgba(255, 255, 255, 0.08) 0%,
+          rgba(255, 255, 255, 0.02) 100%
+        );
+        backdrop-filter: blur(14px) saturate(1.1);
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18);
+      }
+      .ui-panel h2 {
+        margin: 0 0 12px;
+        font-size: 40px;
+      }
+      .ui-panel p {
+        margin: 0;
+        color: var(--promo-muted);
+        font-size: 22px;
+        line-height: 1.4;
+      }
+      .beat-cta {
+        display: grid;
+        place-items: center;
+        gap: 24px;
+      }
+      .logo-mark {
+        width: 96px;
+        height: 96px;
+        border-radius: 24px;
+        background: linear-gradient(135deg, var(--promo-accent), #818cf8);
+        box-shadow: 0 24px 80px rgba(99, 102, 241, 0.35);
+      }
+      .beat-cta h2 {
+        margin: 0;
+        font-size: 56px;
+        font-weight: 600;
+      }
+      .beat-cta p {
+        margin: 0;
+        font-size: 24px;
+        color: var(--promo-muted);
+      }
+    </style>
+  </head>
+  <body>
+    <div
+      id="root"
+      data-composition-id="main"
+      data-start="0"
+      data-width="1920"
+      data-height="1080"
+      data-duration="15"
+    >
+      <section
+        id="beat-problem"
+        class="clip beat-problem"
+        data-start="0"
+        data-duration="5"
+        data-track-index="1"
+      >
+        <h1 id="headline-problem">Workflows break at scale</h1>
+      </section>
+
+      <section
+        id="beat-proof"
+        class="clip beat-proof"
+        data-start="5"
+        data-duration="5"
+        data-track-index="1"
+      >
+        <div id="ui-panel" class="ui-panel">
+          <h2>One dashboard</h2>
+          <p>See every pipeline stage without switching tools.</p>
+        </div>
+      </section>
+
+      <section
+        id="beat-cta"
+        class="clip beat-cta"
+        data-start="10"
+        data-duration="5"
+        data-track-index="1"
+      >
+        <div id="logo-mark" class="logo-mark" aria-hidden="true"></div>
+        <h2 id="cta-headline">Ship faster</h2>
+        <p id="cta-url">yourproduct.example</p>
+      </section>
+
+      <div id="vignette" class="vignette clip" data-start="0" data-duration="15" data-track-index="0"></div>
+    </div>
+    <script>
+      window.__timelines = window.__timelines || {};
+      const SLOT = 15;
+      const tl = gsap.timeline({ paused: true });
+
+      tl.from("#headline-problem", { y: 48, opacity: 0, duration: 0.7, ease: "power3.out" }, 0.3);
+
+      tl.from("#ui-panel", { y: 64, opacity: 0, duration: 0.8, ease: "power3.out" }, 5.2);
+
+      tl.from("#logo-mark", { scale: 0.85, opacity: 0, duration: 0.6, ease: "power2.out" }, 10.2);
+      tl.from(
+        ["#cta-headline", "#cta-url"],
+        { y: 24, opacity: 0, duration: 0.5, stagger: 0.12, ease: "power2.out" },
+        10.5
+      );
+
+      tl.to({}, { duration: SLOT }, 0);
+      window.__timelines["main"] = tl;
+    </script>
+  </body>
+</html>

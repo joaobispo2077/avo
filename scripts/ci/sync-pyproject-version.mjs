@@ -15,11 +15,16 @@ if (!version) {
 const root = resolve(import.meta.dirname, '../..');
 const path = resolve(root, 'pyproject.toml');
 const text = readFileSync(path, 'utf8');
+const currentMatch = text.match(/^version\s*=\s*"([^"]+)"/m);
 const next = text.replace(
   /^version\s*=\s*"[^"]+"/m,
   `version = "${version}"`,
 );
 if (next === text) {
+  if (currentMatch?.[1] === version) {
+    console.log(`pyproject.toml version already ${version}`);
+    process.exit(0);
+  }
   console.error('error: could not update version in pyproject.toml');
   process.exit(1);
 }
