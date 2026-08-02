@@ -1,3 +1,19 @@
+# [1.2.0](https://github.com/joaobispo2077/avo/compare/v1.1.1...v1.2.0) (2026-08-02)
+
+
+### Features
+
+* **scratch:** add learndown inventory scratch under .avo/tmp ([44c2cd8](https://github.com/joaobispo2077/avo/commit/44c2cd8ba2c1498ccab77f7e08c8c18ee0ef0a27))
+* **learndown:** add provider export engine and backfill CLI ([d9743f3](https://github.com/joaobispo2077/avo/commit/d9743f343b85055d357cb3ff4af36677bfbf7f86))
+* **learndown:** add provider export schemas and template layout ([26d0b72](https://github.com/joaobispo2077/avo/commit/26d0b72882e6bbcad15734aa0fe81933e202db6e))
+* **inventory:** add scratch-out lifecycle and faster Windows cleanup ([81a68f7](https://github.com/joaobispo2077/avo/commit/81a68f73c6c0f53c8e0995f7a091b3484e763369))
+* **update:** add self-update engine with provider preservation ([f400dc1](https://github.com/joaobispo2077/avo/commit/f400dc11530fb3dee843108f1d8ab2b31e764ec5))
+* **edl:** add source-to-output timeline mapping CLI ([fb90ad2](https://github.com/joaobispo2077/avo/commit/fb90ad280d9300da141ce02cf3c40020d5c1f01b))
+* **scripts:** add update native wrappers and npm run update ([ac9ee2e](https://github.com/joaobispo2077/avo/commit/ac9ee2e3e2f3079db724f79d54c594c92f677473))
+* **wrap:** export provider learndowns and fix provider resolution ([010b4fc](https://github.com/joaobispo2077/avo/commit/010b4fce8d5144679a9193a2433e5ba6f50a799b))
+* **validate:** gate /avo.update in Gate 2 usability checks ([9e2b8dd](https://github.com/joaobispo2077/avo/commit/9e2b8dd45c6c0eb21e0eab3eb8429158413311f9))
+* **commands:** ship /avo.update slash command for end users ([454f163](https://github.com/joaobispo2077/avo/commit/454f163d2bbfdc44f62b0e2f620472ae84b8f89b))
+
 ## [1.1.1](https://github.com/joaobispo2077/avo/compare/v1.1.0...v1.1.1) (2026-08-02)
 
 
