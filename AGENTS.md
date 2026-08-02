@@ -135,8 +135,6 @@ Both are idempotent: re-runs replace the block bracketed by
 without disturbing the rest of the file.
 <!-- ai-memory:end -->
 
-@RTK.md
-
 # YouTube Video Editing Agent Instructions
 
 `AGENTS.md` is the main source of truth for all AI agents in this repository.
