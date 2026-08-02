@@ -44,18 +44,35 @@ git push origin v0.2.0
 
 ### Release workflow (orchestrator)
 
-On push of annotated tag `vX.Y.Z`:
+Releases are **automated** via [semantic-release](https://github.com/semantic-release/semantic-release)
+(maxframe-style). After **CI** succeeds:
 
-1. CI `release.yml` runs Gate 1, Gate 2, and full pytest
-2. `scripts/ci/verify-release-version.sh` confirms tag matches `package.json`,
-   `pyproject.toml`, and `CHANGELOG.md` section `## [X.Y.Z]`
-3. GitHub Release is created with notes from `scripts/ci/extract-changelog-section.sh`
+| Branch | Channel | Example tag |
+|--------|---------|-------------|
+| `dev` | Alpha prerelease | `v0.2.0-alpha.1` |
+| `main` | Stable | `v0.2.0` |
 
-**Pre-tag checklist (maintainer):**
+1. Workflow `.github/workflows/release.yml` runs (`workflow_run` after **CI**, or manual dispatch)
+2. `semantic-release --dry-run` skips the job when there are no releasable Conventional Commits
+3. `npm run release` (see `release.config.mjs`) bumps `package.json` + `pyproject.toml`, updates
+   `CHANGELOG.md`, creates the git tag, and publishes the GitHub Release
+4. `scripts/ci/verify-release-version.sh` confirms manifest alignment post-release
+
+**Maintainer setup:** add repository secret **`GH_TOKEN`** (PAT or fine-grained token with
+`contents: write`). Maxframe uses the same pattern; `github.token` alone may be insufficient
+for `@semantic-release/git` pushes.
+
+**Local dry-run (no publish):**
 
 ```bash
-pip install -e ".[dev]"
-pytest
+npm ci
+npm run release:dry-run
+# or: npm run release:local
+```
+
+**Emergency manual tag** (discouraged — bypasses semantic-release):
+
+```bash
 bash scripts/ci/verify-release-version.sh v0.1.0   # after CHANGELOG section exists
 git tag -a v0.1.0 <commit-sha> -m "v0.1.0"
 git push origin v0.1.0
