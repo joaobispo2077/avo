@@ -114,6 +114,22 @@ def check_scaffold_scripts(root: Path) -> tuple[str, str]:
     return "OK", "new-provider + init-project --help ok"
 
 
+def check_update_command(root: Path) -> tuple[str, str]:
+    """Shipped /avo.update command + engine module for end-user agent refresh."""
+    command = root / "commands" / "avo" / "update.md"
+    skill_ref = root / "agent-skills" / "avo-pipeline" / "references" / "update.md"
+    engine = root / "src" / "avo" / "update.py"
+    for path in (command, skill_ref, engine):
+        if not path.is_file():
+            return "FAIL", f"missing {path.relative_to(root)}"
+    for name in ("update",):
+        sh = root / "scripts" / f"{name}.sh"
+        ps1 = root / "scripts" / f"{name}.ps1"
+        if not sh.is_file() and not ps1.is_file():
+            return "FAIL", f"scripts/{name} missing"
+    return "OK", "/avo.update command + update engine present"
+
+
 def check_core_helpers_import(root: Path) -> tuple[str, str]:
     modules = [
         "src/avo/avo_state.py",
@@ -142,6 +158,7 @@ def run_checks(root: Path, *, ci: bool) -> list[tuple[str, str, str]]:
         ("provider-scaffold", check_provider_scaffold(root)),
         ("setup-dry-run", check_setup_dry_run(root)),
         ("scaffold-scripts", check_scaffold_scripts(root)),
+        ("update-command", check_update_command(root)),
         ("core-helpers", check_core_helpers_import(root)),
     ]
     if ci:
