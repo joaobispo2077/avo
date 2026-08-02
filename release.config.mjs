@@ -11,10 +11,7 @@ const analyzerOpts = {
 
 /** @type {import('semantic-release').Options} */
 export default {
-  branches: [
-    'release',
-    { name: 'develop', prerelease: 'alpha' },
-  ],
+  branches: ['release'],
   plugins: [
     ['@semantic-release/commit-analyzer', analyzerOpts],
     [

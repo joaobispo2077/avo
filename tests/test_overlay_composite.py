@@ -21,6 +21,7 @@ class OverlayCompositeTests(unittest.TestCase):
         parts, output = render.build_overlay_filter_parts(overlays)
         graph = ";".join(parts)
         self.assertEqual(output, "[v1]")
+        self.assertIn("format=yuva420p", graph)
         self.assertIn("setpts=PTS-STARTPTS+3.5/TB", graph)
         self.assertIn("between(t,3.500,4.750)", graph)
 

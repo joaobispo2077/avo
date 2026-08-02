@@ -18,39 +18,4 @@ if [[ "$RAW_TAG" != v* ]]; then
 fi
 VERSION="${RAW_TAG#v}"
 
-python - "$VERSION" "$ROOT" <<'PY'
-import json
-import re
-import sys
-from pathlib import Path
-
-version = sys.argv[1]
-root = Path(sys.argv[2])
-
-pkg = json.loads((root / "package.json").read_text(encoding="utf-8"))["version"]
-pyproject = (root / "pyproject.toml").read_text(encoding="utf-8")
-match = re.search(r'^version\s*=\s*"([^"]+)"', pyproject, re.MULTILINE)
-if not match:
-    print("error: could not parse version from pyproject.toml", file=sys.stderr)
-    sys.exit(1)
-py_ver = match.group(1)
-
-changelog = (root / "CHANGELOG.md").read_text(encoding="utf-8")
-heading = f"## [{version}]"
-if heading not in changelog:
-    print(f"error: CHANGELOG.md missing section {heading}", file=sys.stderr)
-    sys.exit(1)
-
-errors = []
-if pkg != version:
-    errors.append(f"package.json version {pkg!r} != tag {version!r}")
-if py_ver != version:
-    errors.append(f"pyproject.toml version {py_ver!r} != tag {version!r}")
-
-if errors:
-    for msg in errors:
-        print(f"error: {msg}", file=sys.stderr)
-    sys.exit(1)
-
-print(f"OK: release version {version} aligned across tag, package.json, pyproject.toml, CHANGELOG.md")
-PY
+python "$ROOT/scripts/ci/verify-release-version.py" "$VERSION"

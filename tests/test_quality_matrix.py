@@ -31,7 +31,8 @@ class QualityMatrixTests(unittest.TestCase):
         self.assertIn("workflow_run.event == 'push'", release)
         self.assertIn("fetch-tags: true", release)
         self.assertIn("branches:", config)
-        self.assertIn("prerelease: 'alpha'", config)
+        self.assertIn("'release'", config)
+        self.assertNotIn("prerelease:", config)
         self.assertIn("semantic-release", pkg.get("devDependencies", {}))
         self.assertIn("release", pkg.get("scripts", {}))
 

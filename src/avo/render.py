@@ -729,7 +729,7 @@ def build_overlay_filter_parts(
         end = start + duration
         shifted = f"[a{sequence}]"
         output = f"[v{sequence}]"
-        overlay_chain = f"[{input_index}:v]"
+        overlay_chain = f"[{input_index}:v]format=yuva420p,"
         if overlay_scale:
             overlay_chain += f"scale={overlay_scale},"
         # Limit overlay streams to their approved EDL window. Without this,
