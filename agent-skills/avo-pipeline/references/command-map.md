@@ -47,6 +47,7 @@
 | `/avo.telemetry` | `commands/avo/telemetry.md` | `references/telemetry.md` |
 | `/avo.learndown` | `commands/avo/learndown.md` | `references/learndown.md` |
 | `/avo.cleanup` | `commands/avo/cleanup.md` | `references/cleanup.md` |
+| `/avo.update` | `commands/avo/update.md` | `references/update.md` |
 | `/avo.stats` | `commands/avo/stats.md` | `references/stats.md` |
 | `/avo.provider` | `commands/avo/provider.md` | `references/provider.md` |
 
