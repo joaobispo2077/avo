@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from avo import avo_state
-from avo.project_inventory import InventoryReport, build_inventory_report
+from avo.project_inventory import InventoryReport, build_inventory_report, load_project
 from avo.session import final_session_id, load_session_meta
 from avo.stats import load_stats_config
 
@@ -279,23 +279,30 @@ def _resolve_session_id(raw_dir: Path, master_basename: str, session_id: str | N
     raise ValueError("session_id required when session helpers unavailable")
 
 
-def _resolve_provider(raw_dir: Path, session_id: str | None) -> tuple[str, str]:
+def _resolve_provider(
+    raw_dir: Path,
+    session_id: str | None,
+    *,
+    override: str = "",
+) -> tuple[str, str]:
     title = ""
     provider = "unknown"
-    if session_id and load_session_meta is not None:
-        try:
-            meta = load_session_meta(session_id)
-            provider = str(meta.get("provider") or provider)
-            title = str(meta.get("title") or "")
-        except FileNotFoundError:
-            pass
+    if override.strip():
+        provider = override.strip()
     project_path = raw_dir / "avo.project.json"
     if project_path.is_file():
         try:
-            project = json.loads(project_path.read_text(encoding="utf-8"))
+            project = load_project(raw_dir)
             provider = str(project.get("provider") or provider)
-            title = str(project.get("title") or title)
+            title = str(project.get("title") or "")
         except (OSError, ValueError):
+            pass
+    if provider == "unknown" and session_id and load_session_meta is not None:
+        try:
+            meta = load_session_meta(session_id)
+            provider = str(meta.get("provider") or provider)
+            title = str(meta.get("title") or title)
+        except FileNotFoundError:
             pass
     return provider, title
 
@@ -307,7 +314,9 @@ def _cmd_draft(args: argparse.Namespace) -> int:
     raw_dir = Path(args.raw_dir)
     summary = Path(args.summary_file).read_text(encoding="utf-8")
     session_id = _resolve_session_id(raw_dir, args.master_basename, args.session_id)
-    provider, title = _resolve_provider(raw_dir, args.session_id)
+    provider, title = _resolve_provider(
+        raw_dir, session_id, override=args.provider or ""
+    )
     if args.title:
         title = args.title
 
@@ -328,6 +337,10 @@ def _cmd_draft(args: argparse.Namespace) -> int:
         ai_memory=args.ai_memory,
     )
     json_path, md_path = write_wrap_draft(raw_dir, payload)
+    if not args.no_export:
+        from avo.learndown_export import export_provider_learndown
+
+        export_provider_learndown(payload)
     print(f"draft wrap: {md_path}")
     print(f"draft json: {json_path}")
     return 0
@@ -340,7 +353,9 @@ def _cmd_final(args: argparse.Namespace) -> int:
     raw_dir = Path(args.raw_dir)
     summary = Path(args.summary_file).read_text(encoding="utf-8")
     session_id = _resolve_session_id(raw_dir, args.master_basename, args.session_id)
-    provider, title = _resolve_provider(raw_dir, args.session_id)
+    provider, title = _resolve_provider(
+        raw_dir, session_id, override=args.provider or ""
+    )
     if args.title:
         title = args.title
 
@@ -367,6 +382,10 @@ def _cmd_final(args: argparse.Namespace) -> int:
         freed_bytes=freed,
     )
     json_path, md_path = write_wrap_final(raw_dir, payload)
+    if not args.no_export:
+        from avo.learndown_export import export_provider_learndown
+
+        export_provider_learndown(payload)
     print(f"final wrap: {md_path}")
     print(f"final json: {json_path}")
     return 0
@@ -384,6 +403,16 @@ def build_parser() -> argparse.ArgumentParser:
     parent.add_argument("--title", default="")
     parent.add_argument("--pre", type=Path, default=None, help="Path to pre.json baseline.")
     parent.add_argument("--learning-note", default="")
+    parent.add_argument(
+        "--provider",
+        default="",
+        help="Override provider slug (defaults to avo.project.json).",
+    )
+    parent.add_argument(
+        "--no-export",
+        action="store_true",
+        help="Skip provider learndown export.",
+    )
     parent.add_argument(
         "--ai-memory",
         default="skipped",

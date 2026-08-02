@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/joaobispo2077/avo/schemas/avo.learndown-index.schema.json",
+  "title": "AVO Provider Learndown Index",
+  "description": "Catalog of learndown entries under providers/<slug>/learndowns/index.json.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "provider", "updatedAt", "entries"],
+  "properties": {
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "provider": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]*$"
+    },
+    "updatedAt": { "type": "string" },
+    "entries": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["entryId", "masterBasename", "rawDir", "status", "generatedAt"],
+        "properties": {
+          "entryId": { "type": "string" },
+          "masterBasename": { "type": "string" },
+          "rawDir": { "type": "string" },
+          "title": { "type": "string" },
+          "status": { "enum": ["draft", "final"] },
+          "generatedAt": { "type": "string" }
+        }
+      }
+    }
+  }
+}

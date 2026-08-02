@@ -105,6 +105,12 @@ AVO consolidates learndowns **per provider**, not per video. All videos tagged
 `provider: yt-acme-long` contribute to the same memory scope; Shorts on
 `yt-acme-shorts` do not pollute long-form decisions (and vice versa).
 
+**Filesystem export:** each wrap (draft or final) also writes under
+`providers/<slug>/learndowns/<YYYYMMDD-topic>/` — `learndown.json`, `learndown.md`,
+wrap copies, and a provider-level `index.json` catalog. ai-memory is optional;
+the repo export is the durable catalog agents can grep. Backfill:
+`python -m avo.learndown_export backfill --wrap-json <rawDir>/avo.wrap.draft.json`.
+
 That is why slug choice matters: it is the **learning boundary**, not just a folder name.
 
 ---

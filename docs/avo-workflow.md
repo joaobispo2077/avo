@@ -136,8 +136,16 @@ MCP, CLI, or REST). Runs alongside **every** render-producing stage.
 
 ## 4b. Human approval gate (blocking)
 
-After **§4 steps 1–5** complete for a checkpoint, the agent MUST open a human
-approval gate before resolution promotion or the next stage.
+## Agent pre-human gate (blocking)
+
+Before writing `approval-gate.md` or asking the creator to watch:
+
+1. **`edl_timeline verify`** — `anchor_in_source` matches `start_in_output`.
+2. **Transcript read** — cut edges, privacy spans, names/terms; cite source times.
+3. **`/avo.watch`** — proof render with timestamps at range joins, blocked B-windows,
+   and every overlay beat.
+
+Fix → re-render → repeat. **Only then** open the human approval gate (§4b).
 
 **Checkpoints:** `edit-proof` · `motion-proof` · `pre-master`
 
@@ -252,17 +260,25 @@ Two steps, in order:
    - **Draft wrap (REQUIRED):** `<rawDir>/avo.wrap.draft.md` and
      `avo.wrap.draft.json` (`status: "draft"`) — outside `<rawDir>/edit/`.
      Includes narrative summary, scheduled deletions, preserved artifacts, space
-     estimates, ai-memory note.
+     estimates, ai-memory note. **Provider export (REQUIRED):** wrap also writes
+     `providers/<slug>/learndowns/<entry-id>/` (`learndown.json`, `learndown.md`,
+     wrap copies) and updates `providers/<slug>/learndowns/index.json`. Use
+     `python -m avo.wrap draft … --no-export` only when debugging.
+   - **Scratch inventory (optional):** `project_inventory report --scratch-out
+     --session-id <id>` stages full JSON under `.avo/tmp/learndown/<id>/` — never
+     at repo root.
    - **Learndown telemetry:** `Telemetry.learndown()` — space used vs freed
      preview and preserved-set size (§5).
 2. **Cleanup (rimraf + final wrap + stats record).** Delete everything the run
    created in the video project folder **except** the preserved set.
    - **Verify:** `project_inventory.py verify` — refuse if preserved set incomplete.
    - **Execute:** `project_inventory.py cleanup` — assert delete list ∩ preserved
-     set = ∅, then `rimraf`.
+     set = ∅, then `rimraf`. Pass `--session-id` to purge learndown scratch under
+     `.avo/tmp/learndown/<id>/` after success.
    - **Final wrap (REQUIRED):** `<rawDir>/avo.wrap.md` and `avo.wrap.json`
      (`status: "final"`) with actual freed bytes and deleted file lists. Draft
-     wrap files are **retained** for audit comparison.
+     wrap files are **retained** for audit comparison. Re-exports the provider
+     learndown entry with `status: "final"` and final wrap copies when present.
    - **Session record (REQUIRED):** `python -m avo.stats record
      --wrap-json <rawDir>/avo.wrap.json` → `.avo/state.json` → `stats.sessions[]`
      + cumulative `stats.totals`.
@@ -295,7 +311,8 @@ local session history only — no network. Privacy: [`SECURITY.md#privacy--telem
   while each video remains a separate project.
 - **In-repo, tracked:** provider identity/design/brand under
   `providers/<name>/` — `avo.provider.json` (manifest), `DESIGN.md`, `logo/`,
-  `brand/` (palette, caption/lower-third presets).
+  `brand/` (palette, caption/lower-third presets), and **learndown exports** under
+  `providers/<name>/learndowns/` (`index.json` + one folder per master).
 - **External, gitignored:** all media. The manifest stores **paths only**
   (`media.rawRoot`, asset dirs); no footage enters the repo.
 - **Resolution flow.** A project reads its provider manifest to resolve brand +
