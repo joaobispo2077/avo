@@ -67,6 +67,7 @@ Also accept `9:30-9:35` or `--from 9:30 --to 9:35`.
 | `--eq` | guidelines | Audio EQ/restoration/loudness |
 | `--tiktok` | guidelines | TikTok vertical short-form |
 | `--shorts` | guidelines | YouTube Shorts |
+| `--early` | rights | Post-trim rights pass for clip-heavy formats (react, news, documentary) |
 | `--force` | transcribe | Re-transcribe despite cache |
 | `--dry-run` | cleanup | List deletes only |
 | `--json` | telemetry | Machine-readable line only |

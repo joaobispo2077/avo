@@ -17,7 +17,9 @@ Add **`avo-provider`** when setting up a channel before the first video.
 | YouTube format rules | `/avo.guidelines --youtube` |
 | Shorts / TikTok | `/avo.shorts` or `/avo.guidelines --shorts` / `--tiktok` |
 | Captions burn-in | `/avo.captions` + `identity:` |
-| Master QC + manifest | `/avo.deliver` |
+| Rights audit before deliver | `/avo.rights` (optional `--early` post-trim) |
+| Master loudness / true peak | `/avo.audio-qc` |
+| Master QC + manifest | `/avo.deliver` (after rights + audio-qc recommended) |
 | Vertical from master | `/avo.reframe` or `/avo.shorts --from-master` |
 | Create provider | `/avo.provider` |
 | After master approved | `/avo.learndown` then `/avo.cleanup` |

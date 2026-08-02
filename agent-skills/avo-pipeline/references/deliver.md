@@ -12,6 +12,8 @@ Full-program master QC and delivery manifest. **Not** `/avo.audit` — audit is 
 - [ ] `provider` + `rawDir` declared
 - [ ] Master export exists (or explicit path via `Footage:`)
 - [ ] `EDITLOG.md` / review gates satisfied for picture and audio
+- [ ] **Rights:** `<rawDir>/edit/review/rights-audit.md` **PASS** (or run [`/avo.rights`](rights.md) first — **warn** if missing; rights category **FAIL** if `SOURCE-LOG.md` incomplete)
+- [ ] **Audio delivery QC:** `<rawDir>/edit/review/audio-qc.md` **PASS** recommended (run [`/avo.audio-qc`](audio-qc.md) on master first)
 
 ## Load skill
 
@@ -22,10 +24,10 @@ Full-program master QC and delivery manifest. **Not** `/avo.audit` — audit is 
 | Category | Checks |
 | -------- | ------ |
 | **Editorial** | Title/thumbnail promise; meaning preservation; facts; conclusion |
-| **Audio** | Intelligibility; sync; no clipping/pops; loudness note (method documented); 48 kHz for YouTube master |
+| **Audio** | Intelligibility; sync; no clipping/pops; link [`audio-qc.md`](audio-qc.md) artifact when present (integrated loudness, true peak, method); 48 kHz for YouTube master |
 | **Visual** | Safe margins; labels; readability; no unintended letterbox; evidence integrity |
 | **Captions** | Match final master; names/terms; speaker IDs when needed; non-speech audio where meaningful |
-| **Rights / policy** | `SOURCE-LOG.md` complete; sponsorship/affiliate/AI disclosure; privacy/safety review |
+| **Rights / policy** | `SOURCE-LOG.md` complete; link [`rights-audit.md`](rights.md) artifact when present; sponsorship/affiliate/AI disclosure; privacy/safety review |
 | **Technical** | Resolution, aspect, fps, progressive, square pixels; codec/container; clean start/end |
 
 **Fail closed:** if any release-blocking category fails, status is **FAIL** — do not call export upload-ready.
@@ -64,6 +66,8 @@ When `deliverable.profile: shorts` in manifest or user declares Shorts deliverab
 
 ## Related
 
+- Rights stage: [`rights.md`](rights.md)
+- Audio delivery QC: [`audio-qc.md`](audio-qc.md)
 - Window QC: [`audit.md`](audit.md)
 - Captions stage: [`captions.md`](captions.md)
 - Shorts orchestrator: [`shorts.md`](shorts.md)

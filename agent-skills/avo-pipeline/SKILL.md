@@ -1,6 +1,6 @@
 ---
 name: avo-pipeline
-description: Gateway for AVO slash commands (/avo.help, /avo.guidelines, /avo.pipeline, /avo.trim, /avo.transcribe, /avo.sound, /avo.audit, /avo.watch, /avo.motion, /avo.captions, /avo.deliver, /avo.shorts, /avo.reframe, /avo.telemetry, /avo.learndown, /avo.cleanup, /avo.stats, /avo.docs). Load when the user invokes any /avo.* command or declares Footage/rawDir asset paths.
+description: Gateway for AVO slash commands (/avo.help, /avo.guidelines, /avo.pipeline, /avo.trim, /avo.transcribe, /avo.sound, /avo.audit, /avo.watch, /avo.motion, /avo.captions, /avo.rights, /avo.audio-qc, /avo.deliver, /avo.shorts, /avo.reframe, /avo.telemetry, /avo.learndown, /avo.cleanup, /avo.stats, /avo.docs). Load when the user invokes any /avo.* command or declares Footage/rawDir asset paths.
 ---
 
 # AVO pipeline commands (gateway)
@@ -27,6 +27,8 @@ Entry skill for **`/avo.*`** slash commands. Canonical rules: [`AGENTS.md`](../.
 | `/avo.watch` | [`references/watch.md`](references/watch.md) |
 | `/avo.motion` | [`references/motion.md`](references/motion.md) |
 | `/avo.captions` | [`references/captions.md`](references/captions.md) |
+| `/avo.rights` | [`references/rights.md`](references/rights.md) |
+| `/avo.audio-qc` | [`references/audio-qc.md`](references/audio-qc.md) |
 | `/avo.deliver` | [`references/deliver.md`](references/deliver.md) |
 | `/avo.shorts` | [`references/shorts.md`](references/shorts.md) |
 | `/avo.reframe` | [`references/reframe.md`](references/reframe.md) |
