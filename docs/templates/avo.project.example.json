@@ -31,6 +31,12 @@
     "maxDurationSec": 60,
     "aspect": "16:9"
   },
+  "chapters": {
+    "path": "edit/delivery/chapters.txt"
+  },
+  "thumbnails": {
+    "dir": "edit/delivery/thumbnails/"
+  },
   "reframe": {
     "sourceMaster": "edit/masters/YYYYMMDD-slug-master-v001.mp4",
     "from": "4:10",
