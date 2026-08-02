@@ -449,9 +449,13 @@ Same goals in one line. Load skill **`avo-pipeline`** (or **`avo-provider`** whe
 | TikTok / Shorts rules | `/avo.guidelines --tiktok` or `--shorts` |
 | Native Short workflow | `/avo.shorts` |
 | Podcast clip from long-form | `/avo.podcast-clip` |
+| Talking-head graphic overlays | `/avo.talking-head` |
 | Program trailer | `/avo.trailer` |
 | YouTube chapters | `/avo.chapters` |
 | Thumbnail candidates | `/avo.thumbnail` |
+| End-screen checklist | `/avo.end-screen` |
+| Audio sync diagnosis | `/avo.sync` |
+| Color / evidence QC | `/avo.color` |
 | Vertical clip from master | `/avo.reframe` |
 | Rights before deliver | `/avo.rights` |
 | Master loudness QC | `/avo.audio-qc` |
@@ -459,6 +463,10 @@ Same goals in one line. Load skill **`avo-pipeline`** (or **`avo-provider`** whe
 | Master QC + manifest | `/avo.deliver` |
 | PR → video | `/avo.pr-video` + `ProjectDir` + `Source` |
 | Changelog → video | `/avo.changelog-video` |
+| Product launch video | `/avo.launch` |
+| Music → video | `/avo.music-video` |
+| Figma import | `/avo.figma` |
+| Media catalog | `/avo.media` |
 | Transcribe only | `/avo.transcribe` |
 | Full folder with assets | `/avo.pipeline` |
 | Cut only | `/avo.trim` |

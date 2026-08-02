@@ -37,6 +37,15 @@
   "thumbnails": {
     "dir": "edit/delivery/thumbnails/"
   },
+  "endScreen": {
+    "checklistPath": "edit/review/end-screen-checklist.md"
+  },
+  "colorQc": {
+    "auditPath": "edit/review/color-qc.md"
+  },
+  "syncCheck": {
+    "auditPath": "edit/review/sync-check.md"
+  },
   "reframe": {
     "sourceMaster": "edit/masters/YYYYMMDD-slug-master-v001.mp4",
     "from": "4:10",

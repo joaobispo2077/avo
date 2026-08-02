@@ -17,6 +17,9 @@
 | Thumbnail | optional | Truthful candidate path |
 | Chapters | optional | `<rawDir>/edit/delivery/chapters.txt` |
 | Thumbnails dir | optional | `<rawDir>/edit/delivery/thumbnails/` |
+| End-screen checklist | optional | `<rawDir>/edit/review/end-screen-checklist.md` |
+| Color QC | optional | `<rawDir>/edit/review/color-qc.md` |
+| Sync check | optional | `<rawDir>/edit/review/sync-check.md` |
 
 ---
 

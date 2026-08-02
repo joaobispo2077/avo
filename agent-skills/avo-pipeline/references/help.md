@@ -27,6 +27,7 @@ Spoken alias: **`/avo --help`**. Cursor file: `commands/avo/help.md` → `/avo.h
 | `/avo.pipeline` | Full folder → master |
 | `/avo.trim` | Cut only |
 | `/avo.transcribe` | Transcribe only |
+| `/avo.sync` | Audio sync diagnosis (before long/external cuts) |
 | `/avo.sound` | Mix, NR, SFX |
 | `/avo.motion` | HyperFrames overlays |
 | `/avo.captions` | Embedded captions (after overlays) |
@@ -40,6 +41,7 @@ Spoken alias: **`/avo --help`**. Cursor file: `commands/avo/help.md` → `/avo.h
 | `/avo.reframe` | Extract 9:16 clip from long-form master |
 | `/avo.podcast-clip` | Podcast / interview clip extraction |
 | `/avo.trailer` | Teaser / trailer from long-form master |
+| `/avo.talking-head` | Graphic overlay packaging (talking-head-recut) |
 
 ### Upload prep
 
@@ -47,6 +49,7 @@ Spoken alias: **`/avo --help`**. Cursor file: `commands/avo/help.md` → `/avo.h
 | ------- | ----------- |
 | `/avo.chapters` | YouTube chapters from final transcript |
 | `/avo.thumbnail` | Thumbnail candidate stills + checklist |
+| `/avo.end-screen` | End-screen safe zone + asset checklist |
 
 ### QC & deliver
 
@@ -54,6 +57,7 @@ Spoken alias: **`/avo --help`**. Cursor file: `commands/avo/help.md` → `/avo.h
 | ------- | ----------- |
 | `/avo.rights` | SOURCE-LOG, disclosure, reused-content audit |
 | `/avo.audio-qc` | Master loudness / true peak delivery QC |
+| `/avo.color` | Color / evidence integrity QC |
 | `/avo.retention` | Pre-publish retention diagnosis (no render) |
 | `/avo.animation-qc` | Motion render QC before composite |
 | `/avo.audit` | Scoped QC window |
@@ -67,6 +71,10 @@ Spoken alias: **`/avo --help`**. Cursor file: `commands/avo/help.md` → `/avo.h
 | `/avo.changelog-video` | Changelog markdown → branded video |
 | `/avo.explainer` | Article / notes → faceless explainer |
 | `/avo.slideshow` | Slide outline → HyperFrames slideshow |
+| `/avo.launch` | Product / marketing URL → launch video |
+| `/avo.music-video` | Music track → visual video |
+| `/avo.figma` | Figma → HyperFrames import |
+| `/avo.media` | Catalog BGM/SFX/logos via media-use |
 
 ### Post-master ops
 
