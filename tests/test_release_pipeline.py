@@ -120,6 +120,21 @@ class ReleasePipelineTests(unittest.TestCase):
         pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
         self.assertIn('version = "9.9.9-test"', pyproject)
 
+    def test_sync_pyproject_version_noop_when_already_set(self) -> None:
+        script = ROOT / "scripts/ci/sync-pyproject-version.mjs"
+        py_original = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
+        match = re.search(r'^version\s*=\s*"([^"]+)"', py_original, re.M)
+        self.assertIsNotNone(match)
+        current = match.group(1)
+        proc = subprocess.run(
+            ["node", str(script), current],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(proc.returncode, 0, msg=proc.stderr)
+        self.assertIn("already", proc.stdout)
+
     def test_verify_release_version_accepts_prerelease_tag(self) -> None:
         changelog = ROOT / "CHANGELOG.md"
         original = changelog.read_text(encoding="utf-8")
