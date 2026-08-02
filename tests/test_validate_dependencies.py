@@ -10,7 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 class ValidateDependenciesManifestTests(unittest.TestCase):
     def test_manifest_required_tools(self) -> None:
-        data = json.loads((ROOT / "avo.dependencies.json").read_text(encoding="utf-8"))
+        data = json.loads((ROOT / "config" / "avo.dependencies.json").read_text(encoding="utf-8"))
         tools = data["tools"]
         self.assertEqual(tools["watch-skill"]["repo"], "https://github.com/oxbshw/watch-skill")
         self.assertEqual(tools["watch-skill"]["path"], "tools/watch-skill")
@@ -19,7 +19,7 @@ class ValidateDependenciesManifestTests(unittest.TestCase):
         import sys
 
         sys.path.insert(0, str(ROOT))
-        from helpers.validate_dependencies import (
+        from avo.validate_dependencies import (
             load_manifest,
             load_routing,
             routing_covers_manifest,
@@ -34,20 +34,20 @@ class ValidateDependenciesManifestTests(unittest.TestCase):
         import sys
 
         sys.path.insert(0, str(ROOT))
-        from helpers.validate_dependencies import check_python_project
+        from avo.validate_dependencies import check_python_project
 
         result = check_python_project(
             ROOT,
             "avo-engine",
             {
                 "manifest": "pyproject.toml",
-                "helpers": ["helpers/transcribe.py"],
+                "helpers": ["src/avo/transcribe.py"],
             },
         )
         self.assertEqual(result.status, "OK")
 
     def test_avo_engine_has_legacy_alias(self) -> None:
-        data = json.loads((ROOT / "avo.dependencies.json").read_text(encoding="utf-8"))
+        data = json.loads((ROOT / "config" / "avo.dependencies.json").read_text(encoding="utf-8"))
         engine = data["tools"]["avo-engine"]
         self.assertIn("video-use-engine", engine.get("aliases", []))
 
@@ -55,7 +55,7 @@ class ValidateDependenciesManifestTests(unittest.TestCase):
         import sys
 
         sys.path.insert(0, str(ROOT))
-        from helpers.validate_dependencies import iter_canonical_tools
+        from avo.validate_dependencies import iter_canonical_tools
 
         tools = {
             "avo-engine": {"aliases": ["video-use-engine"], "kind": "python-project"},
@@ -66,13 +66,13 @@ class ValidateDependenciesManifestTests(unittest.TestCase):
         self.assertEqual(canonical[0][0], "avo-engine")
         self.assertTrue(any(w.tool == "video-use-engine" for w in warnings))
 
-    @mock.patch("helpers.validate_dependencies.repo_reachable", return_value=True)
-    @mock.patch("helpers.validate_dependencies.shallow_clone", return_value=True)
+    @mock.patch("avo.validate_dependencies.repo_reachable", return_value=True)
+    @mock.patch("avo.validate_dependencies.shallow_clone", return_value=True)
     def test_watch_skill_shallow_clone_ci(self, _clone: mock.Mock, _reachable: mock.Mock) -> None:
         import sys
 
         sys.path.insert(0, str(ROOT))
-        from helpers.validate_dependencies import check_git_clone
+        from avo.validate_dependencies import check_git_clone
 
         spec = {
             "repo": "https://github.com/oxbshw/watch-skill",

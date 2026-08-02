@@ -233,7 +233,9 @@ function installCursorCommands(root, opts) {
   }
   const targets = [];
   const cwdRoot = process.cwd();
-  if (fs.existsSync(path.join(cwdRoot, 'avo.config.json'))) {
+  const configAtRoot = path.join(cwdRoot, 'avo.config.json');
+  const configNested = path.join(cwdRoot, 'config', 'avo.config.json');
+  if (fs.existsSync(configAtRoot) || fs.existsSync(configNested)) {
     targets.push(path.join(cwdRoot, '.cursor', 'commands', 'avo'));
   }
   targets.push(path.join(os.homedir(), '.cursor', 'commands', 'avo'));
