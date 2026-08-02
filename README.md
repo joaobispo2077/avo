@@ -467,6 +467,13 @@ Same goals in one line. Load skill **`avo-pipeline`** (or **`avo-provider`** whe
 | Music → video | `/avo.music-video` |
 | Figma import | `/avo.figma` |
 | Media catalog | `/avo.media` |
+| Format diagnosis | `/avo.format` |
+| Framework intake | `/avo.framework` |
+| Short motion graphic | `/avo.motion-graphics` |
+| Custom composition | `/avo.general` |
+| Remotion port | `/avo.remotion-port` |
+| Screencast tutorial | `/avo.screencast` |
+| Creative grade | `/avo.grade` |
 | Transcribe only | `/avo.transcribe` |
 | Full folder with assets | `/avo.pipeline` |
 | Cut only | `/avo.trim` |

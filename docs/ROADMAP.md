@@ -8,6 +8,7 @@ Public product roadmap for the AVO orchestrator. For shipped SemVer history see
 
 ## Shipped recently
 
+- **Wave 4 pipeline commands (docs):** `/avo.motion-graphics`, `/avo.general`, `/avo.remotion-port`, `/avo.screencast`, `/avo.format`, `/avo.framework`, `/avo.grade`
 - **Wave 3 pipeline commands (docs):** `/avo.launch`, `/avo.music-video`, `/avo.talking-head`, `/avo.figma`, `/avo.end-screen`, `/avo.color`, `/avo.sync`, `/avo.media`
 - **Wave 2 pipeline commands (docs):** `/avo.rights`, `/avo.audio-qc`, `/avo.chapters`, `/avo.thumbnail`, `/avo.podcast-clip`, `/avo.trailer`, content routers (`/avo.pr-video`, `/avo.changelog-video`, `/avo.explainer`, `/avo.slideshow`), optional `/avo.retention`, `/avo.animation-qc`
 - Review templates: rights, audio, end-screen, color, sync checklists; grouped `/avo.help`
@@ -16,7 +17,7 @@ Public product roadmap for the AVO orchestrator. For shipped SemVer history see
 - semantic-release pipeline (alpha on `develop`, stable on `release`)
 - Canonical pipeline references under `agent-skills/avo-pipeline/`
 
-Specs: [`avo-future-skills`](../specs/active/avo-future-skills/) · [`avo-wave3-skills`](../specs/active/avo-wave3-skills/feature-brief.md)
+Specs: [`avo-wave4-skills`](../specs/active/avo-wave4-skills/feature-brief.md) · [`avo-wave3-skills`](../specs/active/avo-wave3-skills/feature-brief.md) · [`avo-future-skills`](../specs/active/avo-future-skills/)
 
 ---
 

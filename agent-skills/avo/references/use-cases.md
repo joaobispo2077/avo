@@ -37,6 +37,13 @@ Add **`avo-provider`** when setting up a channel before the first video.
 | Music → video | `/avo.music-video` |
 | Figma import | `/avo.figma` |
 | Media catalog (BGM/SFX/logos) | `/avo.media` |
+| Format diagnosis (pre-edit) | `/avo.format` |
+| Framework intake (HF vs Remotion) | `/avo.framework` |
+| Short motion graphic | `/avo.motion-graphics` |
+| Custom HyperFrames composition | `/avo.general` |
+| Remotion → HyperFrames port | `/avo.remotion-port` |
+| Screencast oversized cursor | `/avo.screencast` |
+| Creative grade during edit | `/avo.grade` |
 | Article → explainer | `/avo.explainer` |
 | Slideshow | `/avo.slideshow` |
 | Create provider | `/avo.provider` |
@@ -59,6 +66,9 @@ Add **`avo-provider`** when setting up a channel before the first video.
 | Interview with graphic cards | `avo`, `avo-pipeline` | `/avo.talking-head` |
 | Product launch promo | `avo`, `avo-pipeline` | `/avo.launch` |
 | Music visualizer | `avo`, `avo-pipeline` | `/avo.music-video` |
+| Screencast tutorial | `avo`, `avo-pipeline` | `/avo.screencast` |
+| Custom motion beat | `avo`, `avo-pipeline` | `/avo.general` |
+| Remotion migration | `avo`, `avo-pipeline` | `/avo.remotion-port` |
 | Going global (backlog) | `avo`, `avo-pipeline` | locale stub — BL-003–005 |
 
 Install full toolchain for motion: `bash scripts/install/install.sh --full --lang en`.

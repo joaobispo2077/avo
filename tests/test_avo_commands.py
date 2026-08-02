@@ -23,6 +23,16 @@ WAVE3_COMMANDS = {
     "media.md",
 }
 
+WAVE4_COMMANDS = {
+    "motion-graphics.md",
+    "general.md",
+    "remotion-port.md",
+    "screencast.md",
+    "format.md",
+    "framework.md",
+    "grade.md",
+}
+
 EXPECTED_COMMANDS = {
     "help.md",
     "guidelines.md",
@@ -54,7 +64,7 @@ EXPECTED_COMMANDS = {
     "learndown.md",
     "cleanup.md",
     "stats.md",
-} | WAVE3_COMMANDS
+} | WAVE3_COMMANDS | WAVE4_COMMANDS
 
 EXPECTED_UTILITY_REFS = {
     "help.md",
@@ -94,6 +104,13 @@ EXPECTED_UTILITY_REFS = {
     "color.md",
     "sync.md",
     "media.md",
+    "motion-graphics.md",
+    "general.md",
+    "remotion-port.md",
+    "screencast.md",
+    "format.md",
+    "framework.md",
+    "grade.md",
 }
 
 EXPECTED_REVIEW_TEMPLATES = {
@@ -103,6 +120,8 @@ EXPECTED_REVIEW_TEMPLATES = {
     "end-screen-checklist.md",
     "color-qc.md",
     "sync-check.md",
+    "format-diagnosis.md",
+    "framework-selection.md",
 }
 
 
@@ -154,6 +173,28 @@ class AvoCommandParityTests(unittest.TestCase):
             "/avo.media",
         ):
             self.assertIn(cmd, text, cmd)
+
+    def test_command_map_lists_wave4_commands(self) -> None:
+        text = (REFS / "command-map.md").read_text(encoding="utf-8")
+        for cmd in (
+            "/avo.motion-graphics",
+            "/avo.general",
+            "/avo.remotion-port",
+            "/avo.screencast",
+            "/avo.format",
+            "/avo.framework",
+            "/avo.grade",
+        ):
+            self.assertIn(cmd, text, cmd)
+
+    def test_help_wave4_sections(self) -> None:
+        text = (REFS / "help.md").read_text(encoding="utf-8")
+        self.assertIn("### Motion & composition", text)
+        self.assertIn("/avo.format", text)
+        self.assertIn("/avo.framework", text)
+        self.assertIn("/avo.motion-graphics", text)
+        self.assertIn("/avo.general", text)
+        self.assertIn("/avo.grade", text)
 
     def test_help_wave3_sections(self) -> None:
         text = (REFS / "help.md").read_text(encoding="utf-8")

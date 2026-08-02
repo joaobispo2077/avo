@@ -46,6 +46,15 @@
   "syncCheck": {
     "auditPath": "edit/review/sync-check.md"
   },
+  "formatDiagnosis": {
+    "auditPath": "edit/review/format-diagnosis.md"
+  },
+  "frameworkSelection": {
+    "auditPath": "edit/review/framework-selection.md"
+  },
+  "gradeNotes": {
+    "auditPath": "edit/review/grade-notes.md"
+  },
   "reframe": {
     "sourceMaster": "edit/masters/YYYYMMDD-slug-master-v001.mp4",
     "from": "4:10",

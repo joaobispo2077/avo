@@ -6,14 +6,20 @@ HyperFrames-first. Load [`hyperframes`](../../../.claude/skills/hyperframes/SKIL
 
 Default Level 2–3 for explainers; Level 1 for read-heavy segments.
 
-## Common intents → skills
+## Common intents → commands
 
-| User asks for | Skill path |
-| ------------- | ---------- |
-| Liquid glass cards | talking-head-recut + HyperFrames |
-| Captions | embedded-captions |
-| Logo spin / lower third | talking-head-recut overlay |
-| Logo melt / morph | Custom HyperFrames composition |
+| User asks for | Command / skill |
+| ------------- | --------------- |
+| Liquid glass cards | [`talking-head.md`](talking-head.md) → talking-head-recut |
+| Captions | [`captions.md`](captions.md) → embedded-captions |
+| Logo spin / lower third | [`talking-head.md`](talking-head.md) or slot via this command |
+| Logo melt / morph | [`general.md`](general.md) → general-video |
+| Short motion graphic | [`motion-graphics.md`](motion-graphics.md) |
+| Remotion → HyperFrames port | [`remotion-port.md`](remotion-port.md) |
+| Screencast oversized cursor | [`screencast.md`](screencast.md) |
+| Framework pick (HF vs Remotion) | [`framework.md`](framework.md) — run before first slot |
+
+Run [`framework.md`](framework.md) when framework choice is not already documented.
 
 ## Slot layout
 

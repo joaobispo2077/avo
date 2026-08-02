@@ -21,7 +21,7 @@ Provider: <channel-or-brand>
 
 ## Non-footage workflows (content routers)
 
-For `/avo.pr-video`, `/avo.changelog-video`, `/avo.explainer`, `/avo.slideshow`, `/avo.launch`, `/avo.music-video`, `/avo.figma`, and `/avo.media`:
+For `/avo.pr-video`, `/avo.changelog-video`, `/avo.explainer`, `/avo.slideshow`, `/avo.launch`, `/avo.music-video`, `/avo.figma`, `/avo.media`, `/avo.motion-graphics`, `/avo.general`, `/avo.remotion-port`, and `/avo.screencast`:
 
 ```text
 ProjectDir: /path/to/project    # workflow root (= rawDir semantics)
@@ -38,6 +38,10 @@ Source: <url-or-path>         # PR URL, changelog.md, article, slide outline
 | `/avo.music-video` | `/path/to/track.mp3` |
 | `/avo.figma` | Figma file URL or export folder |
 | `/avo.media` | optional catalog query context in project notes |
+| `/avo.motion-graphics` | brief path or one-line concept |
+| `/avo.general` | composition brief or storyboard path |
+| `/avo.remotion-port` | Remotion project root or export folder |
+| `/avo.screencast` | screen recording file or folder |
 
 **Private repos / tokens:** PR and private URLs require authenticated `gh` or local paths — warn user; never log secrets.
 
