@@ -8,6 +8,8 @@ ROOT = Path(__file__).resolve().parents[1]
 COMMANDS = ROOT / "commands" / "avo"
 REFS = ROOT / "agent-skills" / "avo-pipeline" / "references"
 DOCS_PIPELINE = ROOT / "docs" / "avo-pipeline"
+REVIEW_TEMPLATES = ROOT / "docs" / "templates" / "review"
+SKILLS_JSON = ROOT / "skills.json"
 
 EXPECTED_COMMANDS = {
     "help.md",
@@ -21,6 +23,8 @@ EXPECTED_COMMANDS = {
     "watch.md",
     "motion.md",
     "captions.md",
+    "rights.md",
+    "audio-qc.md",
     "deliver.md",
     "shorts.md",
     "reframe.md",
@@ -44,9 +48,17 @@ EXPECTED_UTILITY_REFS = {
     "cleanup.md",
     "stats.md",
     "captions.md",
+    "rights.md",
+    "audio-qc.md",
     "deliver.md",
     "shorts.md",
     "reframe.md",
+}
+
+EXPECTED_REVIEW_TEMPLATES = {
+    "approval-gate-manifest.md",
+    "rights-audit.md",
+    "audio-qc.md",
 }
 
 
@@ -68,9 +80,29 @@ class AvoCommandParityTests(unittest.TestCase):
         self.assertIn("/avo.guidelines", text)
         self.assertIn("/avo.transcribe", text)
         self.assertIn("/avo.captions", text)
+        self.assertIn("/avo.rights", text)
+        self.assertIn("/avo.audio-qc", text)
         self.assertIn("/avo.deliver", text)
         self.assertIn("/avo.shorts", text)
         self.assertIn("/avo.reframe", text)
+
+    def test_help_qc_and_deliver_section(self) -> None:
+        text = (REFS / "help.md").read_text(encoding="utf-8")
+        self.assertIn("### QC & deliver", text)
+        self.assertIn("/avo.rights", text)
+        self.assertIn("/avo.audio-qc", text)
+        self.assertIn("/avo.audit", text)
+        self.assertIn("/avo.deliver", text)
+
+    def test_review_templates_exist(self) -> None:
+        found = {p.name for p in REVIEW_TEMPLATES.glob("*.md")}
+        self.assertTrue(EXPECTED_REVIEW_TEMPLATES.issubset(found), found - EXPECTED_REVIEW_TEMPLATES)
+
+    def test_skills_json_still_three_entries(self) -> None:
+        import json
+
+        data = json.loads(SKILLS_JSON.read_text(encoding="utf-8"))
+        self.assertEqual(len(data["skills"]), 3)
 
 
 if __name__ == "__main__":
