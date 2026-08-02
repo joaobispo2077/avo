@@ -43,7 +43,7 @@ Also accept `--identity anchor`. See embedded-captions `CATALOG.md`.
 
 ## Time windows
 
-For `/avo.audit` and scoped trim:
+For `/avo.audit`, scoped trim, and `/avo.reframe`:
 
 ```text
 from: 9:30
@@ -56,8 +56,10 @@ Also accept `9:30-9:35` or `--from 9:30 --to 9:35`.
 
 | Flag | Commands | Meaning |
 | ---- | -------- | ------- |
-| `--skip-motion` | pipeline, trim | Stop after edit master |
-| `--identity NAME` | captions | Caption identity (e.g. `anchor`) |
+| `--skip-motion` | pipeline, trim, shorts | Stop after edit master / skip motion phase |
+| `--identity NAME` | captions, shorts | Caption identity (e.g. `anchor`) |
+| `--from-master` | shorts | Extract from approved long-form master via reframe |
+| `--max-duration N` | shorts | Default 60; warn/block promotion over N seconds |
 | `--only-transcription` | audit | Check transcript/word timing only |
 | `--only-video` | audit | Check picture/sync only |
 | `--preview` | pipeline, trim, motion | Stay on 360p/720p proofs |

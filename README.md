@@ -207,7 +207,7 @@ Logo from providers/my-pet-care/logo.
 
 **Skills:** `avo` + `avo-pipeline`
 
-**Cursor:** `/avo.trim` then `/avo.motion` (or `/avo.pipeline` for end-to-end)
+**Cursor:** `/avo.trim` then `/avo.motion` (or `/avo.pipeline` for end-to-end). For a vertical Short from this master: `/avo.shorts --from-master` or `/avo.reframe` with `from`/`to`.
 
 **Say to your agent:**
 
@@ -220,6 +220,28 @@ Use 9:16 safe margins if this is for Shorts.
 ```
 
 **AVO runs:** edit → watch-skill → approve → motion → master.
+
+---
+
+#### "Ship a native vertical Short with captions and upload QC."
+
+**You get:** A ≤60s 9:16 Short with safe margins, burned captions, and a delivery manifest.
+
+**Skills:** `avo` + `avo-pipeline`
+
+**Cursor:** `/avo.shorts`
+
+**Say to your agent:**
+
+```text
+/avo.shorts
+Provider: my-channel
+The footage is at C:/Videos/short-hook-001
+identity: anchor
+Keep under 60 seconds; warn me before promoting if longer.
+```
+
+**AVO runs:** Shorts diagnosis → trim → watch-skill → approve → optional motion → captions → deliver.
 
 ---
 
@@ -409,6 +431,10 @@ Same goals in one line — load skill **`avo-pipeline`** (or **`avo-provider`** 
 | YouTube format rules | `/avo.guidelines --youtube` |
 | Audio EQ rules | `/avo.guidelines --eq` |
 | TikTok / Shorts rules | `/avo.guidelines --tiktok` or `--shorts` |
+| Native Short workflow | `/avo.shorts` |
+| Vertical clip from master | `/avo.reframe` |
+| Captions burn-in | `/avo.captions` + `identity:` |
+| Master QC + manifest | `/avo.deliver` |
 | Transcribe only | `/avo.transcribe` |
 | Full folder with assets | `/avo.pipeline` |
 | Cut only | `/avo.trim` |

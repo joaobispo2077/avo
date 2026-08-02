@@ -28,6 +28,8 @@ Entry skill for **`/avo.*`** slash commands. Canonical rules: [`AGENTS.md`](../.
 | `/avo.motion` | [`references/motion.md`](references/motion.md) |
 | `/avo.captions` | [`references/captions.md`](references/captions.md) |
 | `/avo.deliver` | [`references/deliver.md`](references/deliver.md) |
+| `/avo.shorts` | [`references/shorts.md`](references/shorts.md) |
+| `/avo.reframe` | [`references/reframe.md`](references/reframe.md) |
 | `/avo.telemetry` | [`references/telemetry.md`](references/telemetry.md) |
 | `/avo.learndown` | [`references/learndown.md`](references/learndown.md) |
 | `/avo.cleanup` | [`references/cleanup.md`](references/cleanup.md) |

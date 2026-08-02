@@ -34,6 +34,13 @@ Spoken alias: **`/avo --help`**. Cursor file: `commands/avo/help.md` → `/avo.h
 | `/avo.audit` | Scoped QC window |
 | `/avo.deliver` | Full master QC + delivery manifest |
 
+### Shorts
+
+| Command | When to use |
+| ------- | ----------- |
+| `/avo.shorts` | Orchestrated vertical Short workflow |
+| `/avo.reframe` | Extract 9:16 clip from long-form master |
+
 ### Post-master ops
 
 | Command | When to use |
