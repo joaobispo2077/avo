@@ -21,6 +21,7 @@ providers/
     logo/                    # SVG source + PNG exports (.gitkeep placeholder)
     brand/
       palette.json           # machine-readable brand tokens
+    learndowns/              # exported per-video learndowns (index.json + entries)
   <name>/                    # one directory per provider (lowercase kebab-case)
     ...same shape as _template...
 ```

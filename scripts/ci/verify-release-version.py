@@ -12,6 +12,7 @@ def changelog_has_version(changelog: str, version: str) -> bool:
     escaped = re.escape(version)
     patterns = (
         rf"^## \[{escaped}\](?:\(|\s|$)",
+        rf"^# \[{escaped}\](?:\(|\s|$)",
         rf"^# {escaped}(?:\s|\(|$)",
     )
     return any(re.search(pattern, changelog, re.MULTILINE) for pattern in patterns)
@@ -29,7 +30,7 @@ def verify_release_version(version: str, root: Path) -> None:
     if not changelog_has_version(changelog, version):
         raise SystemExit(
             f"error: CHANGELOG.md missing section for version {version!r} "
-            f"(expected ## [{version}] or # {version} (...))"
+            f"(expected ## [{version}], # [{version}](...), or # {version} (...))"
         )
 
     errors: list[str] = []

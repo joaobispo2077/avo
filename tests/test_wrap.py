@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import sys
 import tempfile
 import unittest
@@ -81,6 +82,12 @@ class WrapTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             raw_dir = Path(tmp) / "project"
             raw_dir.mkdir()
+            (raw_dir / "avo.project.json").write_text(
+                json.dumps({"provider": "bishop", "rawDir": str(raw_dir)}),
+                encoding="utf-8",
+            )
+            provider_root = Path(tmp) / "repo"
+            (provider_root / "providers" / "bishop" / "learndowns").mkdir(parents=True)
             payload = {
                 "schemaVersion": 1,
                 "status": "draft",

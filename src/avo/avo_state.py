@@ -36,6 +36,13 @@ def sessions_dir() -> Path:
     return path
 
 
+def tmp_dir() -> Path:
+    """Ephemeral scratch root (.avo/tmp/). Gitignored via .avo/."""
+    path = state_dir() / "tmp"
+    path.mkdir(parents=True, exist_ok=True)
+    return path
+
+
 def package_version() -> str:
     pkg = repo_root() / "package.json"
     try:

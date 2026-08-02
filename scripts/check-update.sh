@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 # AVO — weekly update check (macOS / Linux / WSL).
+# Lightweight advisory fetch/compare. For full refresh (skills + toolchain +
+# provider verify), the user runs /avo.update in their agent — see commands/avo/update.md
 # Reads lastUpdateCheck from .avo/state.json; if >= N days (default 7), fetches,
 # compares against upstream, offers a fast-forward pull, and rewrites the
 # timestamp. Skips cleanly on a dirty working tree or when offline (never

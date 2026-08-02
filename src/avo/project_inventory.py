@@ -16,6 +16,7 @@ from typing import Any
 from avo.session import diff_inventories as _session_diff_inventories
 from avo.session import scan_inventory as _session_scan_inventory
 from avo.telemetry import dir_size
+from avo import avo_state
 
 FINAL_TRANSCRIPT_SUFFIXES = (".json", ".txt", ".md", ".srt")
 RAW_SUBDIR = "raw"
@@ -107,6 +108,7 @@ class InventoryReport:
         return {
             "rawDir": str(self.raw_dir.resolve()),
             "masterBasename": self.master_basename,
+            "generatedAt": avo_state.now_iso(),
             "verifyErrors": self.verify_errors,
             "space": {
                 "preCleanupProjectBytes": self.pre_cleanup_project_bytes,
@@ -147,7 +149,7 @@ def load_project(raw_dir: Path) -> dict[str, Any]:
     project_path = raw_dir / "avo.project.json"
     if not project_path.is_file():
         return {}
-    return json.loads(project_path.read_text(encoding="utf-8"))
+    return json.loads(project_path.read_text(encoding="utf-8-sig"))
 
 
 def scan_inventory(root: Path, *, relative_to: Path | None = None) -> dict[str, int]:
@@ -450,6 +452,7 @@ def execute_cleanup(
     dry_run: bool = False,
     initial_transcript: Path | None = None,
     rimraf_runner: Any | None = None,
+    session_id: str | None = None,
 ) -> list[Path]:
     errors = verify_preserved_complete(
         raw_dir, master_basename, initial_transcript=initial_transcript
@@ -469,14 +472,26 @@ def execute_cleanup(
     runner = rimraf_runner or _default_rimraf_runner
     for path in delete_list:
         runner(path)
+    if session_id:
+        from avo.scratch import purge_scratch
+
+        if purge_scratch(session_id):
+            print(f"scratch purged: session {session_id}")
     return delete_list
 
 
 def _default_rimraf_runner(path: Path) -> None:
-    subprocess.run(
-        ["npx", "rimraf", str(path)],
-        check=True,
-    )
+    import shutil
+
+    if path.is_file() or path.is_symlink():
+        path.unlink(missing_ok=True)
+        return
+    if path.is_dir():
+        npx = "npx.cmd" if sys.platform == "win32" else "npx"
+        try:
+            subprocess.run([npx, "rimraf", str(path)], check=True)
+        except (FileNotFoundError, subprocess.CalledProcessError):
+            shutil.rmtree(path, ignore_errors=True)
 
 
 def _print_json(payload: Any) -> None:
@@ -524,6 +539,20 @@ def _cmd_report(args: argparse.Namespace) -> int:
         initial_transcript=args.initial_transcript,
     )
     payload = report.to_dict()
+    if args.scratch_out:
+        if not args.session_id:
+            print("error: --session-id required with --scratch-out", file=sys.stderr)
+            return 1
+        from avo.scratch import write_inventory_scratch
+
+        report_path, meta_path = write_inventory_scratch(args.session_id, payload)
+        print(f"scratch report: {report_path}")
+        print(f"scratch meta: {meta_path}")
+        if not args.json:
+            print(f"rawDir: {payload['rawDir']}")
+            print(f"masterBasename: {payload['masterBasename']}")
+            print(f"deleteCandidates: {len(payload['files']['scheduledForDeletion'])}")
+            return 0
     if args.json:
         _print_json(payload)
     else:
@@ -546,6 +575,7 @@ def _cmd_cleanup(args: argparse.Namespace) -> int:
             args.master_basename,
             dry_run=args.dry_run,
             initial_transcript=args.initial_transcript,
+            session_id=args.session_id,
         )
     except PreservedSetViolation as exc:
         print(str(exc), file=sys.stderr)
@@ -588,6 +618,16 @@ def build_parser() -> argparse.ArgumentParser:
     p_report = sub.add_parser("report", parents=[parent], help="Build inventory report.")
     p_report.add_argument("--pre", type=Path, default=None, help="Path to pre.json.")
     p_report.add_argument("--json", action="store_true")
+    p_report.add_argument(
+        "--scratch-out",
+        action="store_true",
+        help="Write full report under .avo/tmp/learndown/<session-id>/.",
+    )
+    p_report.add_argument(
+        "--session-id",
+        default=None,
+        help="Session id for scratch-out paths.",
+    )
     p_report.set_defaults(func=_cmd_report)
 
     p_cleanup = sub.add_parser("cleanup", parents=[parent], help="Verify and delete.")
@@ -595,6 +635,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--dry-run",
         action="store_true",
         help="List delete candidates without calling rimraf.",
+    )
+    p_cleanup.add_argument(
+        "--session-id",
+        default=None,
+        help="Purge learndown scratch for this session after successful cleanup.",
     )
     p_cleanup.set_defaults(func=_cmd_cleanup)
 

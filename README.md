@@ -599,6 +599,8 @@ node bin/install.cjs --dry-run
 
 **Need ffmpeg + whisper + watch-skill?** Re-run with `--full` or follow [Quickstart](#quickstart) / [docs/install/README.md](docs/install/README.md).
 
+**Already installed?** Every few weeks say **`/avo.update`** in your agent (or `/avo.update yes` to apply). Preserves your providers; refreshes skills + toolchain. See [docs/install/README.md § Updating](docs/install/README.md#updating-your-install).
+
 **Install broke?** Open your agent in this repo and say: *"Read docs/install/README.md and install AVO for me."*
 
 </details>

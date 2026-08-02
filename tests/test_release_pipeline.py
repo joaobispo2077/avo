@@ -12,11 +12,11 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class ReleasePipelineTests(unittest.TestCase):
-    def test_release_config_declares_develop_alpha_and_release(self) -> None:
+    def test_release_config_declares_release_branch_only(self) -> None:
         text = (ROOT / "release.config.mjs").read_text(encoding="utf-8")
         self.assertIn("'release'", text)
-        self.assertIn("name: 'develop'", text)
-        self.assertIn("prerelease: 'alpha'", text)
+        self.assertNotIn("prerelease:", text)
+        self.assertNotIn("develop", text)
         self.assertIn("firstParent: false", text)
         self.assertIn(
             "./scripts/ci/semantic-release-pyproject-version.mjs",
@@ -174,6 +174,46 @@ class ReleasePipelineTests(unittest.TestCase):
         self.assertEqual(pkg, version)
         self.assertEqual(match.group(1), version)
         self.assertIn(heading, changelog.read_text(encoding="utf-8"))
+
+    def test_verify_release_version_accepts_h1_linked_changelog_heading(self) -> None:
+        changelog = ROOT / "CHANGELOG.md"
+        original = changelog.read_text(encoding="utf-8")
+        version = "1.1.0"
+        semantic_heading = f"# [{version}](https://github.com/joaobispo2077/avo/compare/v1.0.1...v{version}) (2026-08-02)"
+        patched = (
+            f"{semantic_heading}\n\n### Bug Fixes\n\n"
+            "* **release:** smoke\n\n{original}"
+        )
+        changelog.write_text(patched, encoding="utf-8")
+        pkg_path = ROOT / "package.json"
+        pkg_original = pkg_path.read_text(encoding="utf-8")
+        pkg = json.loads(pkg_original)
+        pkg["version"] = version
+        pkg_path.write_text(json.dumps(pkg, indent=2) + "\n", encoding="utf-8")
+        py_original = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
+        py_patched = re.sub(
+            r'^version\s*=\s*"[^"]+"',
+            f'version = "{version}"',
+            py_original,
+            count=1,
+            flags=re.M,
+        )
+        (ROOT / "pyproject.toml").write_text(py_patched, encoding="utf-8")
+
+        def restore() -> None:
+            changelog.write_text(original, encoding="utf-8")
+            pkg_path.write_text(pkg_original, encoding="utf-8")
+            (ROOT / "pyproject.toml").write_text(py_original, encoding="utf-8")
+
+        self.addCleanup(restore)
+        proc = subprocess.run(
+            ["python", "scripts/ci/verify-release-version.py", version],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(proc.returncode, 0, msg=proc.stderr or proc.stdout)
+        self.assertIn("OK:", proc.stdout)
 
     def test_verify_release_version_accepts_semantic_release_changelog_heading(self) -> None:
         changelog = ROOT / "CHANGELOG.md"

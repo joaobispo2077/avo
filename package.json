@@ -11,6 +11,7 @@
     "new-provider": "node scripts/run-native.mjs new-provider",
     "init-project": "node scripts/run-native.mjs init-project",
     "check-update": "node scripts/run-native.mjs check-update",
+    "update": "node scripts/run-native.mjs update",
     "validate:prerequisites": "node scripts/run-native.mjs validate-prerequisites",
     "validate:usability": "node scripts/run-native.mjs validate-usability",
     "test:unit": "pytest --ignore=tests/projects -m \"not project\"",
