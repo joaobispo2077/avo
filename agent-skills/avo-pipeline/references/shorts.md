@@ -6,6 +6,8 @@
 
 Load [`guidelines-shorts.md`](guidelines-shorts.md) checklist. Record in project notes or `avo.project.json`:
 
+**HyperFrames motion (phase 3):** when not `--skip-motion`, load [`short-form-knowledge.md`](short-form-knowledge.md) before authoring 9:16 overlay slots — scaffold, face-mode, edited-time sync.
+
 | Field | Values |
 | ----- | ------ |
 | Mode | `native` (vertical source) \| `from-master` (extract + reframe) |
@@ -32,7 +34,7 @@ See [`arguments.md`](arguments.md).
 | 0 | Shorts diagnosis | [`guidelines-shorts.md`](guidelines-shorts.md) |
 | 1 | Trim + transcribe semantics | [`trim.md`](trim.md) — note 9:16 safe margins in manifest |
 | 2 | watch-skill LOOP + **human approval gate** | [`watch.md`](watch.md) |
-| 3 | Optional motion (Level 2–3 cap when text readable) | [`motion.md`](motion.md) — skip with `--skip-motion` |
+| 3 | Optional motion (Level 2–3 cap when text readable) | [`motion.md`](motion.md) + [`short-form-knowledge.md`](short-form-knowledge.md) — skip with `--skip-motion` |
 | 4 | Captions when `identity` provided or user requests | [`captions.md`](captions.md) |
 | 5 | Duration check (`ffprobe`); enforce `--max-duration` | block promotion without EDITLOG override |
 | 6 | Full master QC + manifest | [`deliver.md`](deliver.md) with Short profile |

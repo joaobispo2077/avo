@@ -78,6 +78,9 @@ jobs:
       - name: HyperFrames doctor
         run: npm run hf:doctor
 
+      - name: Lint HyperFrames exemplars
+        run: bash scripts/ci/lint-hyperframes-exemplars.sh
+
   usability-gate:
     name: Gate 2 — Project usability
     runs-on: ubuntu-latest

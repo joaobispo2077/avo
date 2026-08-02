@@ -80,6 +80,32 @@ Use higher density only with stronger hierarchy and clearer review gates.
 Do not invest in high-cost 3D, shaders, particles, or detailed secondary motion
 before message, storyboard, layout, and typography are approved.
 
+## Product-promo knowledge base
+
+For SaaS demos, feature reveals, and product launch films, load the curated bundle
+before composing:
+
+- [`docs/exemplars/hyperframes-product-promo/README.md`](exemplars/hyperframes-product-promo/README.md)
+- Templates: [`design-product-promo.md`](templates/animation/design-product-promo.md),
+  [`storyboard-product-promo.md`](templates/animation/storyboard-product-promo.md)
+- Spec: [`specs/active/avo-motion-knowledge/`](../specs/active/avo-motion-knowledge/)
+
+Source techniques adapted from [hyperframes-student-kit](https://github.com/nateherkai/hyperframes-student-kit).
+**Authoring files only** — reference renders stay upstream. `motion-doctrine` supersedes
+conflicting student-kit motion aesthetics.
+
+## Short-form knowledge base
+
+For 9:16 vertical (Shorts/Reels/TikTok) HyperFrames slots:
+
+- [`docs/exemplars/hyperframes-short-form/README.md`](exemplars/hyperframes-short-form/README.md)
+- Templates: [`design-short-form.md`](templates/animation/design-short-form.md),
+  [`storyboard-short-form.md`](templates/animation/storyboard-short-form.md)
+- Spec: [`specs/active/avo-motion-knowledge-phase2/`](../specs/active/avo-motion-knowledge-phase2/)
+- Footage orchestrator: `/avo.shorts` + [`short-form-knowledge.md`](../agent-skills/avo-pipeline/references/short-form-knowledge.md)
+
+Face footage stays in project assets — exemplar uses a placeholder div only.
+
 ## Final QC
 
 Final animation QC covers message, density, hierarchy, text, captions, evidence,
