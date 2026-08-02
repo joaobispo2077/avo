@@ -227,6 +227,9 @@ def _comparison_semantic_errors(
             errors.append("audio.noise_reduction_policy must be conservative_speech_first")
         if audio.get("channel_qc") not in {"pending", "passed_left_right_dialogue_audible"}:
             errors.append("audio.channel_qc must record stereo dialogue QC status")
+        from avo import audio_restoration
+
+        errors.extend(audio_restoration.validate_restoration_segments(audio))
         if render_gate.get("stage") == "v004_review_package":
             if render_gate.get("full_render_allowed") is not False:
                 errors.append("v004 review package gate must set full_render_allowed false")
@@ -378,6 +381,12 @@ def _semantic_errors(edl: dict, edit_dir: Path) -> list[str]:
         for index, item in enumerate(effects)
     )
     errors.extend(_check_assets(asset_fields, edit_dir))
+
+    audio = edl.get("audio") or {}
+    if audio.get("restoration_default_pct") is not None or audio.get("restoration_segments"):
+        from avo import audio_restoration
+
+        errors.extend(audio_restoration.validate_restoration_segments(audio))
 
     return errors
 

@@ -67,7 +67,26 @@
     },
     "audio": {
       "type": "object",
-      "additionalProperties": true
+      "additionalProperties": true,
+      "properties": {
+        "noise_reduction_policy": { "type": "string" },
+        "restoration_default_pct": { "type": "integer", "minimum": 0, "maximum": 100 },
+        "restoration_segments": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["start_in_source", "end_in_source", "strength_pct"],
+            "properties": {
+              "start_in_source": { "type": "number" },
+              "end_in_source": { "type": "number" },
+              "strength_pct": { "type": "integer", "minimum": 0, "maximum": 100 },
+              "reason": { "type": "string" },
+              "approved_by_user": { "type": "boolean" }
+            },
+            "additionalProperties": true
+          }
+        }
+      }
     },
     "caption_burn_in": {
       "type": ["object", "null"],
