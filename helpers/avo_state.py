@@ -1,8 +1,9 @@
 """Shared read/write for AVO runtime state (.avo/state.json).
 
 `.avo/` is gitignored. State holds only non-secret runtime data:
-version, last update check timestamp, chosen transcription language, and rolling
-telemetry stats. Used by setup, telemetry, and the update checker.
+version, last update check timestamp, chosen transcription language, rolling
+telemetry stats, and optional per-video session history for `/avo.stats`.
+Used by setup, telemetry, stats, session helpers, and the update checker.
 
 Cross-platform: pathlib only, no hardcoded separators.
 """
@@ -27,6 +28,13 @@ def state_dir() -> Path:
 
 def state_path() -> Path:
     return state_dir() / "state.json"
+
+
+def sessions_dir() -> Path:
+    """Per-pipeline session snapshots (.avo/sessions/<id>/). Gitignored via .avo/."""
+    path = state_dir() / "sessions"
+    path.mkdir(parents=True, exist_ok=True)
+    return path
 
 
 def package_version() -> str:
@@ -64,11 +72,19 @@ def load_state() -> dict[str, Any]:
     return base
 
 
-def save_state(state: dict[str, Any]) -> Path:
+def save_state_atomic(state: dict[str, Any]) -> Path:
+    """Write state atomically (temp file + replace) to avoid corruption on crash."""
     state_dir().mkdir(parents=True, exist_ok=True)
     path = state_path()
-    path.write_text(json.dumps(state, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    tmp = path.with_suffix(".json.tmp")
+    payload = json.dumps(state, indent=2, ensure_ascii=False) + "\n"
+    tmp.write_text(payload, encoding="utf-8")
+    tmp.replace(path)
     return path
+
+
+def save_state(state: dict[str, Any]) -> Path:
+    return save_state_atomic(state)
 
 
 def update_state(**changes: Any) -> dict[str, Any]:

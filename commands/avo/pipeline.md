@@ -35,13 +35,14 @@ Orchestrate stages 0–7: plan (optional Spec Kit) → transcribe → edit → w
 1. **Parse inputs** per [`arguments.md`](../../docs/avo-pipeline/references/arguments.md).
 2. **Resolve provider** manifest: `providers/<provider>/avo.provider.json`.
 3. **Write or update** `<rawDir>/avo.project.json` with asset paths.
-4. **Inventory** sources (`ffprobe`), transcribe, pack transcripts.
-5. **Converse** → propose strategy → **wait for confirmation**.
-6. **Execute** edit proof (~360p) → watch-skill LOOP → write `edit/review/edit-proof/approval-gate.md` → **wait for approval**.
-7. Unless `--skip-motion`: motion proof (~720p) → LOOP → approval gate → promote to source resolution.
-8. **Deliver** master + final transcript; run learndown cleanup per preserved-set rules.
+4. **Start session (REQUIRED):** run `python helpers/session.py start --raw-dir <rawDir> --provider <provider> [--title TEXT]` — writes `.avo/sessions/<id>/pre.json` baseline inventory for wrap diff and stats.
+5. **Inventory** sources (`ffprobe`), transcribe, pack transcripts.
+6. **Converse** → propose strategy → **wait for confirmation**.
+7. **Execute** edit proof (~360p) → watch-skill LOOP → write `edit/review/edit-proof/approval-gate.md` → **wait for approval**.
+8. Unless `--skip-motion`: motion proof (~720p) → LOOP → approval gate → promote to source resolution.
+9. **Deliver** master + final transcript; run `/avo.learndown` then `/avo.cleanup` per preserved-set rules (§7).
 
-Report telemetry at each phase boundary (disk, progress, ETA estimate).
+Report telemetry at each phase boundary (disk, progress, ETA estimate). Pass `session_id` when telemetry helper supports it.
 
 ---
 

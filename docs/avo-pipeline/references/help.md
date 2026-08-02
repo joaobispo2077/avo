@@ -38,7 +38,8 @@ Spoken alias: **`/avo --help`**. Cursor file: `commands/avo/help.md` → `/avo.h
 | ------- | ----------- |
 | `/avo.telemetry` | Disk/progress/ETA report |
 | `/avo.learndown` | ai-memory consolidation |
-| `/avo.cleanup` | Preserved-set delete |
+| `/avo.cleanup` | Preserved-set delete + final wrap + stats record |
+| `/avo.stats` | Local aggregate metrics (disk freed, videos completed) |
 
 ### Provider setup
 

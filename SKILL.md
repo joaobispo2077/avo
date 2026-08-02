@@ -7,7 +7,7 @@ description: AVO — AI Video Orchestrator. Agent contract for conversation-driv
 
 Canonical rules live in [`AGENTS.md`](AGENTS.md). Pipeline mechanics:
 [`docs/avo-workflow.md`](docs/avo-workflow.md). First-time setup:
-[`install.md`](install.md). **Slash commands:** [`docs/avo-commands.md`](docs/avo-commands.md) (`/avo.help`, `/avo.guidelines`, `/avo.pipeline`, `/avo.trim`, `/avo.transcribe`, `/avo.sound`, `/avo.audit`, `/avo.watch`, `/avo.motion`, `/avo.telemetry`, `/avo.learndown`, `/avo.cleanup`, `/avo.provider`, `/avo.docs`). All agents: see [`docs/agent-skills.md`](docs/agent-skills.md).
+[`install.md`](install.md). **Slash commands:** [`docs/avo-commands.md`](docs/avo-commands.md) (`/avo.help`, `/avo.guidelines`, `/avo.pipeline`, `/avo.trim`, `/avo.transcribe`, `/avo.sound`, `/avo.audit`, `/avo.watch`, `/avo.motion`, `/avo.telemetry`, `/avo.learndown`, `/avo.cleanup`, `/avo.stats`, `/avo.provider`, `/avo.docs`). All agents: see [`docs/agent-skills.md`](docs/agent-skills.md).
 
 Transcription uses prepared local faster-whisper model files; there is no hosted
 transcription fallback or credential path.
