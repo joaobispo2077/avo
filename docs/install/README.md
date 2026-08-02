@@ -147,6 +147,20 @@ bash scripts/install/install.sh --full --lang en
 
 Installer scripts live in [`scripts/install/`](../../scripts/install/).
 
+### Updating your install
+
+Every few weeks, in your agent:
+
+```text
+/avo.update
+```
+
+Confirm when prompted (`/avo.update yes`). Your agent pulls the latest AVO, refreshes skills and the full toolchain, and **verifies your providers** (e.g. `providers/bishop/`) are still there. Start a new chat afterward so new commands load.
+
+Details: [`commands/avo/update.md`](../../commands/avo/update.md). Manual/advanced: `npm run update -- apply --yes` from an AVO clone (same engine; for troubleshooting only).
+
+Tier 1 curl-only install (no clone): ask your agent to re-run the [Tier 1 one-liner](#one-command-every-agent); for provider workspaces you need an AVO clone — use `/avo.provider` after clone.
+
 ---
 
 ## Tier 2 — Full toolchain setup
