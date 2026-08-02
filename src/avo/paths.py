@@ -50,15 +50,6 @@ def schema_path(name: str) -> Path:
     nested = repo_root() / "schemas" / name
     if nested.is_file():
         return nested
-    legacy_specs = (
-        repo_root()
-        / "specs"
-        / "002-edit-switch-save-video"
-        / "contracts"
-        / name
-    )
-    if legacy_specs.is_file():
-        return legacy_specs
     return repo_root() / name
 
 
