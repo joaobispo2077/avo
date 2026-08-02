@@ -44,7 +44,7 @@ Fill these per video or channel:
 | Loudness target | Channel standard TBD; prioritize intelligibility/headroom |
 | Captions | Corrected captions required when practical |
 | Thumbnail | Truthful candidate frames/contact sheet when requested |
-| Derivatives | Shorts (9:16, ≤60s default): [`templates/delivery/delivery-manifest.md`](templates/delivery/delivery-manifest.md); vertical clips via `/avo.reframe`; podcast clips via `/avo.podcast-clip`; trailers via `/avo.trailer`; chapters via `/avo.chapters`; thumbnails via `/avo.thumbnail` |
+| Derivatives | Shorts, reframe, podcast-clip, trailer, chapters, thumbnail, end-screen via respective `/avo.*` commands |
 
 ## Export Types
 
