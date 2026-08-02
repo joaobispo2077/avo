@@ -52,14 +52,47 @@ Spoken alias: **`/avo --help`** → `/avo.help`
 | `/avo.sound` | Noise reduction, mix, SFX/Music ([source](../commands/avo/sound.md)) |
 | `/avo.sound create` | Creative SFX brief ([reference](../agent-skills/avo-pipeline/references/sound-create.md)) |
 | `/avo.audit` | Scoped QC ([source](../commands/avo/audit.md)) |
-| `/avo.watch` | Full watch-skill LOOP ([source](../commands/avo/watch.md)) |
 | `/avo.motion` | HyperFrames motion ([source](../commands/avo/motion.md)) |
 | `/avo.captions` | Embedded captions after overlays ([source](../commands/avo/captions.md)) |
-| `/avo.rights` | Rights and SOURCE-LOG audit before deliver ([source](../commands/avo/rights.md)) |
-| `/avo.audio-qc` | Master loudness / true peak QC ([source](../commands/avo/audio-qc.md)) |
-| `/avo.deliver` | Full master QC + delivery manifest ([source](../commands/avo/deliver.md)) |
+| `/avo.watch` | Full watch-skill LOOP ([source](../commands/avo/watch.md)) |
+
+### Format orchestrators
+
+| Command | Purpose |
+| ------- | ------- |
 | `/avo.shorts` | Orchestrated YouTube Shorts workflow ([source](../commands/avo/shorts.md)) |
 | `/avo.reframe` | Vertical clip from long-form master ([source](../commands/avo/reframe.md)) |
+| `/avo.podcast-clip` | Podcast / interview clip extraction ([source](../commands/avo/podcast-clip.md)) |
+| `/avo.trailer` | Teaser / trailer from long-form master ([source](../commands/avo/trailer.md)) |
+
+### Upload prep
+
+| Command | Purpose |
+| ------- | ------- |
+| `/avo.chapters` | YouTube chapters from final transcript ([source](../commands/avo/chapters.md)) |
+| `/avo.thumbnail` | Thumbnail candidate stills ([source](../commands/avo/thumbnail.md)) |
+
+### QC & deliver
+
+| Command | Purpose |
+| ------- | ------- |
+| `/avo.rights` | Rights and SOURCE-LOG audit ([source](../commands/avo/rights.md)) |
+| `/avo.audio-qc` | Master loudness / true peak QC ([source](../commands/avo/audio-qc.md)) |
+| `/avo.retention` | Retention diagnosis (no render) ([source](../commands/avo/retention.md)) |
+| `/avo.animation-qc` | Motion render QC before composite ([source](../commands/avo/animation-qc.md)) |
+| `/avo.audit` | Scoped QC window ([source](../commands/avo/audit.md)) |
+| `/avo.deliver` | Full master QC + delivery manifest ([source](../commands/avo/deliver.md)) |
+
+### Content (non-footage)
+
+| Command | Purpose |
+| ------- | ------- |
+| `/avo.pr-video` | GitHub PR → explainer video ([source](../commands/avo/pr-video.md)) |
+| `/avo.changelog-video` | Changelog → branded video ([source](../commands/avo/changelog-video.md)) |
+| `/avo.explainer` | Article → faceless explainer ([source](../commands/avo/explainer.md)) |
+| `/avo.slideshow` | Slide outline → HyperFrames slideshow ([source](../commands/avo/slideshow.md)) |
+
+Use `ProjectDir` + `Source` instead of footage paths — see [Shared arguments](#shared-arguments).
 
 ### Post-master ops
 
@@ -78,7 +111,7 @@ Spoken alias: **`/avo --help`** → `/avo.help`
 
 Skill: [`avo-provider`](../agent-skills/avo-provider/SKILL.md) · Concept: [`docs/providers.md`](providers.md)
 
-Shipped command files: [`../commands/avo/`](../commands/avo/) (22 commands)
+Shipped command files: [`../commands/avo/`](../commands/avo/) (32 commands)
 
 ---
 
@@ -93,6 +126,8 @@ B-roll: D:/assets/broll/
 Music: D:/assets/music/
 from: 9:30
 to: 9:35
+ProjectDir: /path/to/hyperframes-project
+Source: https://github.com/owner/repo/pull/123
 ```
 
 Say **this folder** when you already opened the footage directory in Cursor.

@@ -1,6 +1,6 @@
 ---
 name: avo-pipeline
-description: Gateway for AVO slash commands (/avo.help, /avo.guidelines, /avo.pipeline, /avo.trim, /avo.transcribe, /avo.sound, /avo.audit, /avo.watch, /avo.motion, /avo.captions, /avo.rights, /avo.audio-qc, /avo.deliver, /avo.shorts, /avo.reframe, /avo.telemetry, /avo.learndown, /avo.cleanup, /avo.stats, /avo.docs). Load when the user invokes any /avo.* command or declares Footage/rawDir asset paths.
+description: Gateway for AVO slash commands (/avo.help, /avo.guidelines, /avo.pipeline, /avo.trim, /avo.transcribe, /avo.sound, /avo.audit, /avo.watch, /avo.motion, /avo.captions, /avo.rights, /avo.audio-qc, /avo.chapters, /avo.thumbnail, /avo.deliver, /avo.shorts, /avo.reframe, /avo.podcast-clip, /avo.trailer, /avo.pr-video, /avo.changelog-video, /avo.explainer, /avo.slideshow, /avo.retention, /avo.animation-qc, /avo.telemetry, /avo.learndown, /avo.cleanup, /avo.stats, /avo.docs). Load when the user invokes any /avo.* command or declares Footage/rawDir asset paths.
 ---
 
 # AVO pipeline commands (gateway)
@@ -29,9 +29,19 @@ Entry skill for **`/avo.*`** slash commands. Canonical rules: [`AGENTS.md`](../.
 | `/avo.captions` | [`references/captions.md`](references/captions.md) |
 | `/avo.rights` | [`references/rights.md`](references/rights.md) |
 | `/avo.audio-qc` | [`references/audio-qc.md`](references/audio-qc.md) |
+| `/avo.chapters` | [`references/chapters.md`](references/chapters.md) |
+| `/avo.thumbnail` | [`references/thumbnail.md`](references/thumbnail.md) |
 | `/avo.deliver` | [`references/deliver.md`](references/deliver.md) |
 | `/avo.shorts` | [`references/shorts.md`](references/shorts.md) |
 | `/avo.reframe` | [`references/reframe.md`](references/reframe.md) |
+| `/avo.podcast-clip` | [`references/podcast-clip.md`](references/podcast-clip.md) |
+| `/avo.trailer` | [`references/trailer.md`](references/trailer.md) |
+| `/avo.pr-video` | [`references/pr-video.md`](references/pr-video.md) |
+| `/avo.changelog-video` | [`references/changelog-video.md`](references/changelog-video.md) |
+| `/avo.explainer` | [`references/explainer.md`](references/explainer.md) |
+| `/avo.slideshow` | [`references/slideshow.md`](references/slideshow.md) |
+| `/avo.retention` | [`references/retention.md`](references/retention.md) |
+| `/avo.animation-qc` | [`references/animation-qc.md`](references/animation-qc.md) |
 | `/avo.telemetry` | [`references/telemetry.md`](references/telemetry.md) |
 | `/avo.learndown` | [`references/learndown.md`](references/learndown.md) |
 | `/avo.cleanup` | [`references/cleanup.md`](references/cleanup.md) |

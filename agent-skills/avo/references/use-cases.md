@@ -16,11 +16,21 @@ Add **`avo-provider`** when setting up a channel before the first video.
 | Scoped QC window | `/avo.audit` |
 | YouTube format rules | `/avo.guidelines --youtube` |
 | Shorts / TikTok | `/avo.shorts` or `/avo.guidelines --shorts` / `--tiktok` |
+| Podcast clip from long-form | `/avo.podcast-clip` |
+| Trailer / teaser cut | `/avo.trailer` |
+| YouTube chapters | `/avo.chapters` |
+| Thumbnail candidates | `/avo.thumbnail` |
 | Captions burn-in | `/avo.captions` + `identity:` |
 | Rights audit before deliver | `/avo.rights` (optional `--early` post-trim) |
 | Master loudness / true peak | `/avo.audio-qc` |
+| Retention diagnosis | `/avo.retention` |
+| Motion render QC | `/avo.animation-qc` |
 | Master QC + manifest | `/avo.deliver` (after rights + audio-qc recommended) |
 | Vertical from master | `/avo.reframe` or `/avo.shorts --from-master` |
+| PR → video | `/avo.pr-video` + `ProjectDir` + `Source` |
+| Changelog → video | `/avo.changelog-video` |
+| Article → explainer | `/avo.explainer` |
+| Slideshow | `/avo.slideshow` |
 | Create provider | `/avo.provider` |
 | After master approved | `/avo.learndown` then `/avo.cleanup` |
 | Command index | `/avo.help` |
@@ -46,7 +56,9 @@ The footage is at C:/Videos/my-edit
 | Tech first impression | `avo`, `avo-pipeline` | `/avo.pipeline` |
 | Live pipeline demo + deep motion | `avo`, `avo-pipeline` | `/avo.pipeline` + [`animation-direction.md`](../../../specs/active/avo-pipeline-demo-motion/animation-direction.md) |
 | Health / physio comparison | `avo`, `avo-pipeline` | `/avo.trim` or `/avo.pipeline` |
-| Going global (backlog) | `avo`, `avo-pipeline` | `/avo.pipeline` after master |
+| Podcast highlight clip | `avo`, `avo-pipeline` | `/avo.podcast-clip` |
+| Program trailer | `avo`, `avo-pipeline` | `/avo.trailer` |
+| Going global (backlog) | `avo`, `avo-pipeline` | `/avo.pipeline` after master; locale: see [`locale-stub.md`](../../../specs/active/avo-future-skills/locale-stub.md) |
 
 ## Caption / motion skills (repo `.claude/skills/` or project skills)
 
