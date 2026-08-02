@@ -27,7 +27,7 @@ Every `job` in `config/avo.dependencies.json` must exist under `config/avo.confi
 ## Release automation
 
 - Config: [`release.config.mjs`](../release.config.mjs) (semantic-release plugins)
-- Workflow: `.github/workflows/release.yml` — runs after **CI** succeeds on `dev` (alpha) or `main` (stable)
+- Workflow: `.github/workflows/release.yml` runs after **CI** succeeds on `develop` (alpha) or `main` (stable)
 - Secret: `GH_TOKEN` with `contents: write` (see [versioning.md](./versioning.md))
 
 ## Workflows (maxframe-style layout)
@@ -38,7 +38,7 @@ Every `job` in `config/avo.dependencies.json` must exist under `config/avo.confi
 | `setup-smoke.yml` | `workflow_dispatch` | Full `setup.sh` on ubuntu + windows |
 | `orchestrator-smoke.yml` | manual + weekly cron | Gate 1 (+ optional) + Whisper tiny model + Gate 2 |
 | `ffmpeg-whisper-smoke.yml` | `workflow_dispatch` | Binary/import smoke (like maxframe `yt-dlp-smoke.yml`) |
-| `release.yml` | After **CI** on `dev` / `main` (+ manual) | semantic-release dry-run → publish (alpha on `dev`, stable on `main`) |
+| `release.yml` | After **CI** on `develop` / `main` (+ manual) | semantic-release dry-run → publish (alpha on `develop`, stable on `main`) |
 
 Reference: [maxframe workflows](https://github.com/joaobispo2077/maxframe/tree/main/.github/workflows).
 

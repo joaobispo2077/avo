@@ -23,7 +23,7 @@ jobs:
     if: >
       github.event_name == 'workflow_dispatch' ||
       (github.event.workflow_run.conclusion == 'success' &&
-       (github.event.workflow_run.head_branch == 'dev' ||
+       (github.event.workflow_run.head_branch == 'develop' ||
         github.event.workflow_run.head_branch == 'main'))
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -51,6 +51,7 @@ jobs:
         with:
           ref: ${{ steps.meta.outputs.sha }}
           fetch-depth: 0
+          fetch-tags: true
           persist-credentials: true
 
       - name: Setup Node
@@ -64,16 +65,7 @@ jobs:
 
       - name: Dry-run semantic-release to extract next version
         id: version
-        run: |
-          NEXT=$(npx semantic-release --dry-run 2>&1 \
-            | grep -oP '(?<=The next release version is )\S+' \
-            || true)
-          echo "next-version=${NEXT}" >> "$GITHUB_OUTPUT"
-          if [ -z "$NEXT" ]; then
-            echo "No releasable commits found — release job will be skipped."
-          else
-            echo "Next release version: ${NEXT} (branch: ${{ steps.meta.outputs.branch }})"
-          fi
+        run: bash scripts/ci/determine-next-release-version.sh
 
   release:
     name: Semantic release
@@ -90,6 +82,7 @@ jobs:
         with:
           ref: ${{ needs.determine-version.outputs.release-sha }}
           fetch-depth: 0
+          fetch-tags: true
           persist-credentials: true
 
       - name: Setup Node

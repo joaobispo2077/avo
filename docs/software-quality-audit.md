@@ -107,7 +107,7 @@ Run: `npm run test:projects`.
 
 | Workflow | Trigger | Tests |
 | --- | --- | --- |
-| `ci.yml` | PR + push main/dev/feature | AVO core pytest (`-m "not project"`) |
+| `ci.yml` | PR + push main/develop/feature | AVO core pytest (`-m "not project"`) |
 | `release.yml` | `v*` tags | AVO core pytest + version check + GitHub Release |
 | `orchestrator-smoke.yml` | weekly + manual | AVO core pytest + model prep |
 | `setup-smoke.yml` | manual | Setup scripts |
