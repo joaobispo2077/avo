@@ -84,9 +84,11 @@ function parseArgs(argv) {
 
 function hasCommand(name) {
   try {
-    const cmd = process.platform === 'win32' ? 'where' : 'command';
-    const args = process.platform === 'win32' ? [name] : ['-v', name];
-    cp.execFileSync(cmd, args, { stdio: 'ignore', shell: process.platform === 'win32' });
+    if (process.platform === 'win32') {
+      cp.execFileSync('where', [name], { stdio: 'ignore', shell: true });
+    } else {
+      cp.execFileSync('sh', ['-c', `command -v ${name}`], { stdio: 'ignore' });
+    }
     return true;
   } catch {
     return false;

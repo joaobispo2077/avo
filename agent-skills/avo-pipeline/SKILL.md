@@ -1,6 +1,6 @@
 ---
 name: avo-pipeline
-description: Gateway for AVO slash commands (/avo.help, /avo.guidelines, /avo.pipeline, /avo.trim, /avo.transcribe, /avo.sound, /avo.audit, /avo.watch, /avo.motion, /avo.telemetry, /avo.learndown, /avo.cleanup, /avo.docs). Load when the user invokes any /avo.* command or declares Footage/rawDir asset paths.
+description: Gateway for AVO slash commands (/avo.help, /avo.guidelines, /avo.pipeline, /avo.trim, /avo.transcribe, /avo.sound, /avo.audit, /avo.watch, /avo.motion, /avo.telemetry, /avo.learndown, /avo.cleanup, /avo.stats, /avo.docs). Load when the user invokes any /avo.* command or declares Footage/rawDir asset paths.
 ---
 
 # AVO pipeline commands (gateway)
@@ -29,6 +29,7 @@ Entry skill for **`/avo.*`** slash commands. Canonical rules: [`AGENTS.md`](../.
 | `/avo.telemetry` | [`references/telemetry.md`](references/telemetry.md) |
 | `/avo.learndown` | [`references/learndown.md`](references/learndown.md) |
 | `/avo.cleanup` | [`references/cleanup.md`](references/cleanup.md) |
+| `/avo.stats` | [`references/stats.md`](references/stats.md) |
 | `/avo.provider` | [`references/provider.md`](references/provider.md) — load skill **`avo-provider`** |
 
 Always parse shared args first: [`references/arguments.md`](references/arguments.md). Full map: [`references/command-map.md`](references/command-map.md).

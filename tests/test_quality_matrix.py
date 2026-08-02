@@ -33,8 +33,10 @@ class QualityMatrixTests(unittest.TestCase):
     def test_agent_docs_reference_pytest(self) -> None:
         agents = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
         self.assertIn("pytest", agents)
-        rules = (ROOT / ".cursor/rules/20-testing-and-tdd.mdc").read_text(encoding="utf-8")
-        self.assertIn("pytest", rules)
+        instructions = (
+            ROOT / ".github" / "instructions" / "testing.instructions.md"
+        ).read_text(encoding="utf-8")
+        self.assertIn("pytest", instructions)
 
     def test_run_unit_tests_excludes_project_marker(self) -> None:
         script = (ROOT / "scripts/ci/run-unit-tests.sh").read_text(encoding="utf-8")

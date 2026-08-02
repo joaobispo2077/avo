@@ -1,0 +1,5 @@
+{
+  "provider": "bishop",
+  "rawDir": "tests/fixtures/stats-project",
+  "title": "Stats fixture demo"
+}

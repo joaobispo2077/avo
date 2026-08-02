@@ -25,6 +25,11 @@ CLAUDE_SKILLS = [
     "architecture-selection/SKILL.md",
 ]
 
+CURSOR_RULES_DIR = ROOT / ".cursor" / "rules"
+CLAUDE_SKILLS_DIR = ROOT / ".claude" / "skills"
+CURSOR_SKILLS_DIR = ROOT / ".cursor" / "skills"
+DEV_TOOLING_PRESENT = CURSOR_RULES_DIR.is_dir() and CLAUDE_SKILLS_DIR.is_dir()
+
 
 class SoftwareFoundationTests(unittest.TestCase):
     def test_changelog_exists_with_semver_note(self) -> None:
@@ -36,10 +41,13 @@ class SoftwareFoundationTests(unittest.TestCase):
         for name in ("versioning.md", "branching.md", "software-foundation.md"):
             self.assertTrue((ROOT / "docs" / name).is_file(), msg=name)
 
+    @unittest.skipUnless(
+        DEV_TOOLING_PRESENT,
+        ".cursor/.claude dev tooling is gitignored in public checkouts",
+    )
     def test_cursor_foundation_rules_exist(self) -> None:
-        rules_dir = ROOT / ".cursor" / "rules"
         for name in CURSOR_RULES:
-            path = rules_dir / name
+            path = CURSOR_RULES_DIR / name
             self.assertTrue(path.is_file(), msg=name)
             text = path.read_text(encoding="utf-8")
             self.assertIn("alwaysApply: true", text)
@@ -50,15 +58,21 @@ class SoftwareFoundationTests(unittest.TestCase):
         for name in GITHUB_INSTRUCTIONS:
             self.assertTrue((ROOT / ".github" / "instructions" / name).is_file(), msg=name)
 
+    @unittest.skipUnless(
+        DEV_TOOLING_PRESENT,
+        ".cursor/.claude dev tooling is gitignored in public checkouts",
+    )
     def test_claude_foundation_skills_exist(self) -> None:
-        base = ROOT / ".claude" / "skills"
         for rel in CLAUDE_SKILLS:
-            self.assertTrue((base / rel).is_file(), msg=rel)
+            self.assertTrue((CLAUDE_SKILLS_DIR / rel).is_file(), msg=rel)
 
+    @unittest.skipUnless(
+        DEV_TOOLING_PRESENT,
+        ".cursor/.claude dev tooling is gitignored in public checkouts",
+    )
     def test_cursor_skills_mirrored(self) -> None:
-        base = ROOT / ".cursor" / "skills"
         for rel in CLAUDE_SKILLS:
-            self.assertTrue((base / rel).is_file(), msg=rel)
+            self.assertTrue((CURSOR_SKILLS_DIR / rel).is_file(), msg=rel)
 
     def test_agents_md_has_foundation_section(self) -> None:
         text = (ROOT / "AGENTS.md").read_text(encoding="utf-8")

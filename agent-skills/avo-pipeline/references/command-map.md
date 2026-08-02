@@ -16,6 +16,7 @@
 | `/avo.telemetry` | `commands/avo/telemetry.md` | `references/telemetry.md` |
 | `/avo.learndown` | `commands/avo/learndown.md` | `references/learndown.md` |
 | `/avo.cleanup` | `commands/avo/cleanup.md` | `references/cleanup.md` |
+| `/avo.stats` | `commands/avo/stats.md` | `references/stats.md` |
 
 Spoken alias: **`/avo --help`** → `/avo.help`
 
