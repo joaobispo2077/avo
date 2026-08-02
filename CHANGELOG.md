@@ -1,3 +1,10 @@
+## [1.0.1](https://github.com/joaobispo2077/avo/compare/v1.0.0...v1.0.1) (2026-08-02)
+
+
+### Bug Fixes
+
+* **release:** accept semantic-release changelog headings in verify step ([c009702](https://github.com/joaobispo2077/avo/commit/c0097022ac240fb241545652048f439c7432c898))
+
 # 1.0.0 (2026-08-02)
 
 
