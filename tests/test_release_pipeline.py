@@ -33,6 +33,7 @@ class ReleasePipelineTests(unittest.TestCase):
         text = script.read_text(encoding="utf-8")
         self.assertIn("won.t be published", text)
         self.assertIn("The next release version is ", text)
+        self.assertIn("env -u GITHUB_ACTIONS", text)
         self.assertNotIn("grep -oE", text)
 
     def test_determine_next_release_parsing_contract(self) -> None:
