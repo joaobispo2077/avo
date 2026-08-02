@@ -32,24 +32,39 @@ class ReleasePipelineTests(unittest.TestCase):
         self.assertTrue(script.is_file())
         text = script.read_text(encoding="utf-8")
         self.assertIn("won.t be published", text)
-        self.assertIn("The next release version is ", text)
+        self.assertIn("the next release version is", text)
         self.assertIn("env -u GITHUB_ACTIONS", text)
-        self.assertNotIn("grep -oE", text)
+        self.assertIn("grep -im1 -Eo", text)
+
+    @staticmethod
+    def _parse_next_release_version(output: str) -> str:
+        marker = "the next release version is "
+        for line in output.splitlines():
+            lower = line.lower()
+            if marker not in lower:
+                continue
+            rest = line[lower.index(marker) + len(marker) :]
+            token = rest.split()[0]
+            return token.split("(")[0].split(")")[0]
+        return ""
 
     def test_determine_next_release_parsing_contract(self) -> None:
-        sample = (
+        alpha_sample = (
             "[semantic-release] › ℹ  Running semantic-release version 25.0.8\n"
             "[semantic-release] › ℹ  The next release version is 1.0.0-alpha.1\n"
         )
-        next_version = ""
-        for line in sample.splitlines():
-            marker = "The next release version is "
-            if marker in line:
-                rest = line.split(marker, 1)[1]
-                next_version = rest.split()[0]
-                break
+        next_version = self._parse_next_release_version(alpha_sample)
         self.assertEqual(next_version, "1.0.0-alpha.1")
         self.assertNotEqual(next_version, "25.0.8")
+
+    def test_determine_next_release_parsing_first_release_message(self) -> None:
+        first_release_sample = (
+            "[semantic-release] › ℹ  There is no previous release, "
+            "the next release version is 1.0.0\n"
+            "[semantic-release] › ✔  Published release 1.0.0 on default channel\n"
+        )
+        next_version = self._parse_next_release_version(first_release_sample)
+        self.assertEqual(next_version, "1.0.0")
 
     def test_release_workflow_verifies_package_json_version(self) -> None:
         release = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")

@@ -1,6 +1,6 @@
 # /avo.color reference
 
-**Visual / color QC stage** — checklist only in v1. Distinct from creative grade during edit; confirms evidence and brand integrity before deliver.
+**Visual / color QC stage** — checklist only in v1. Distinct from creative grade during edit ([`grade.md`](grade.md)); confirms evidence and brand integrity before deliver.
 
 ## Preconditions
 

@@ -41,6 +41,7 @@ Spoken alias: **`/avo --help`** → `/avo.help`
 | `/avo.guidelines --eq` | Audio EQ, restoration, loudness |
 | `/avo.guidelines --tiktok` | TikTok vertical short-form |
 | `/avo.guidelines --shorts` | YouTube Shorts |
+| `/avo.format` | Format diagnosis before edit ([source](../commands/avo/format.md)) |
 
 ### Pipeline
 
@@ -56,6 +57,16 @@ Spoken alias: **`/avo --help`** → `/avo.help`
 | `/avo.motion` | HyperFrames motion ([source](../commands/avo/motion.md)) |
 | `/avo.captions` | Embedded captions after overlays ([source](../commands/avo/captions.md)) |
 | `/avo.watch` | Full watch-skill LOOP ([source](../commands/avo/watch.md)) |
+
+### Motion & composition
+
+| Command | Purpose |
+| ------- | ------- |
+| `/avo.framework` | HyperFrames vs Remotion intake ([source](../commands/avo/framework.md)) |
+| `/avo.motion-graphics` | Short motion graphic ([source](../commands/avo/motion-graphics.md)) |
+| `/avo.general` | Custom HyperFrames composition ([source](../commands/avo/general.md)) |
+| `/avo.remotion-port` | Remotion → HyperFrames port ([source](../commands/avo/remotion-port.md)) |
+| `/avo.screencast` | Screencast + oversized cursor ([source](../commands/avo/screencast.md)) |
 
 ### Format orchestrators
 
@@ -82,6 +93,7 @@ Spoken alias: **`/avo --help`** → `/avo.help`
 | `/avo.rights` | Rights and SOURCE-LOG audit ([source](../commands/avo/rights.md)) |
 | `/avo.audio-qc` | Master loudness / true peak QC ([source](../commands/avo/audio-qc.md)) |
 | `/avo.color` | Color / evidence QC ([source](../commands/avo/color.md)) |
+| `/avo.grade` | Creative grade during edit ([source](../commands/avo/grade.md)) |
 | `/avo.retention` | Retention diagnosis (no render) ([source](../commands/avo/retention.md)) |
 | `/avo.animation-qc` | Motion render QC before composite ([source](../commands/avo/animation-qc.md)) |
 | `/avo.audit` | Scoped QC window ([source](../commands/avo/audit.md)) |
@@ -119,7 +131,7 @@ Use `ProjectDir` + `Source` instead of footage paths — see [Shared arguments](
 
 Skill: [`avo-provider`](../agent-skills/avo-provider/SKILL.md) · Concept: [`docs/providers.md`](providers.md)
 
-Shipped command files: [`../commands/avo/`](../commands/avo/) (39 commands)
+Shipped command files: [`../commands/avo/`](../commands/avo/) (46 commands)
 
 ---
 
