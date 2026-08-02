@@ -27,6 +27,29 @@ class ReleasePipelineTests(unittest.TestCase):
         plugin = ROOT / "scripts/ci/semantic-release-pyproject-version.mjs"
         self.assertTrue(plugin.is_file())
 
+    def test_semantic_release_pyproject_plugin_resolves_sync_script(self) -> None:
+        proc = subprocess.run(
+            [
+                "node",
+                "-e",
+                (
+                    "import { fileURLToPath } from 'node:url';"
+                    "import { join } from 'node:path';"
+                    "import { accessSync } from 'node:fs';"
+                    "const pluginUrl = new URL("
+                    "'./scripts/ci/semantic-release-pyproject-version.mjs', "
+                    "import.meta.url);"
+                    "const rootDir = fileURLToPath(new URL('../../', pluginUrl));"
+                    "const syncScript = join(rootDir, 'scripts/ci/sync-pyproject-version.mjs');"
+                    "accessSync(syncScript);"
+                ),
+            ],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(proc.returncode, 0, msg=proc.stderr or proc.stdout)
+
     def test_determine_next_release_script_exists(self) -> None:
         script = ROOT / "scripts/ci/determine-next-release-version.sh"
         self.assertTrue(script.is_file())
