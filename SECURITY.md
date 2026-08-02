@@ -14,7 +14,7 @@
 
 **What stats modules do not do**
 
-- No network I/O in `helpers/stats.py`, `helpers/session.py`, `helpers/project_inventory.py`, or `helpers/wrap.py`
+- No network I/O in `src/avo/stats.py`, `src/avo/session.py`, `src/avo/project_inventory.py`, or `src/avo/wrap.py`
 - No secrets, API keys, or `.env` contents in session records or wrap JSON
 - No provider rollup files under tracked `providers/` paths in v1
 

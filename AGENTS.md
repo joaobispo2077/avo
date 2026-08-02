@@ -163,7 +163,7 @@ instructions.
 
 ## Software Engineering Foundation
 
-These rules apply to **orchestrator code** in this repository (`helpers/`, `scripts/`,
+These rules apply to **orchestrator code** in this repository (`src/avo/`, `scripts/`,
 `tests/`, install, CI). Editorial, audio, and animation rules below still apply for
 footage and deliverable work. Full scan: [`docs/software-foundation.md`](docs/software-foundation.md).
 
@@ -816,16 +816,16 @@ handling, and AVO must run fully without it.
 
 ### Engine vs upstream (hybrid model)
 
-- **AVO** = orchestrator; **avo-engine** = bundled `helpers/` (Gate 1 id `avo-engine`).
+- **AVO** = orchestrator; **avo-engine** = bundled `src/avo/` (Gate 1 id `avo-engine`; `helpers/` shims until v0.2.0).
 - Before editing engine code, read
   [`specs/upstream-diffs/video-use/LATEST.json`](specs/upstream-diffs/video-use/LATEST.json)
   when present, then the linked `summary.md`. See [`docs/adapters.md`](docs/adapters.md).
-- Run jobs via `python helpers/adapters/run_job.py <job> --label local|paid -- …`.
+- Run jobs via `python -m avo.adapters.run_job <job> --label local|paid -- …`.
 
 ### Model transparency
 
-- Read active models: `python helpers/models_cli.py show` or phase telemetry `activeModels`.
-- Before changing tiers, run `python helpers/models_cli.py alternatives <job>` and disclose
+- Read active models: `python -m avo.models_cli show` or phase telemetry `activeModels`.
+- Before changing tiers, run `python -m avo.models_cli alternatives <job>` and disclose
   VRAM/disk/speed/quality tradeoffs. See [`docs/model-transparency.md`](docs/model-transparency.md).
 - Canonical prose shape matches `docs/avo-workflow.md` §6 — use catalog data, do not invent tier names.
 <!-- avo:orchestrator:end -->

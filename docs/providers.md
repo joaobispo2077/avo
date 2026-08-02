@@ -135,14 +135,14 @@ Then edit:
 Bootstrap a video project:
 
 ```bash
-python helpers/init_project.py --provider yt-channel-name-long-videos \
+python -m avo.init_project --provider yt-channel-name-long-videos \
   --raw-dir /abs/path/to/long-form-footage/my-video-001
 ```
 
 List existing providers:
 
 ```bash
-python helpers/init_project.py --provider __list__  # not implemented — use ls providers/
+python -m avo.init_project --provider __list__  # not implemented — use ls providers/
 ```
 
 ---

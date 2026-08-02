@@ -216,7 +216,7 @@ npm run setup -- --lang pt --with-memory
 2. **GitHub Spec Kit** — verifies the `.specify` directory is present (installed via `specify init` or bundled with AVO).
 3. **video-use engine** — `uv sync` (or `pip install -e .`), verifies
    `ffmpeg`/`ffprobe`, records the chosen language in `.avo/state.json`, and
-   prepares the Whisper model via `helpers/prepare_transcription.py`.
+   prepares the Whisper model via `avo.prepare_transcription`.
 4. **watch-skill** — clones/updates `oxbshw/watch-skill` into `tools/`.
 5. **HyperFrames** — `npm install` + `hyperframes doctor`.
 6. **Remotion** — installed per-project when justified (see
@@ -236,7 +236,7 @@ satisfied steps.
   rejected; pick a multilingual size (`small`, `medium`, `large-v3`, …).
 - The default model directory is `~/.cache/video-use/models/<size>`. Set
   `VIDEO_USE_MODEL_DIR` to relocate the shared model root, or pass
-  `--model-dir` to `helpers/prepare_transcription.py`.
+  `--model-dir` to `avo.prepare_transcription`.
 
 ### Verify
 
@@ -251,8 +251,8 @@ After your first video project starts, expect **approval gates**: when watch-ski
 transcription analysis finish a stage, review files in `edit/preview/` and
 `edit/review/` before the agent promotes resolution. See [`docs/avo-workflow.md`](docs/avo-workflow.md) §4b.
 
-python helpers/prepare_transcription.py --help
-python helpers/transcribe.py --help
+python -m avo.prepare_transcription --help
+python -m avo.transcribe --help
 ffprobe -version
 pytest
 ```

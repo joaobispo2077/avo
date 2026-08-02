@@ -84,7 +84,7 @@ skill registration, local model). On cold start verify:
 - This skill vendors `skills/manim-video/`. Read its SKILL.md when building a Manim
   slot.
 
-Helpers (`helpers/transcribe.py`, `helpers/render.py`, etc.) live in the AVO repo.
+Helpers (`src/avo/transcribe.py`, `src/avo/render.py`, etc.) live in the AVO repo.
 Resolve paths relative to the repository root — the skill is typically symlinked at
 `~/.claude/skills/avo/` or registered as the `avo` skill.
 

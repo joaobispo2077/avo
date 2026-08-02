@@ -1,14 +1,14 @@
 # Port / adapter layer
 
-AVO routes **jobs** from [`avo.config.json`](../avo.config.json) through a thin
-**port/adapter** layer in `helpers/adapters/`. Adapters talk to engines and external tools
+AVO routes **jobs** from [`avo.config.json`](../config/avo.config.json) through a thin
+**port/adapter** layer in `src/avo/adapters/`. Adapters talk to engines and external tools
 via **subprocess or CLI only** — never deep-import from `tools/*` into orchestrator logic.
 
 ## Run a job
 
 ```bash
-python helpers/adapters/run_job.py transcribe --label local -- /path/to/video.mp4
-python helpers/adapters/run_job.py transcribe --label paid -- /path/to/video.mp4
+python -m avo.adapters.run_job transcribe --label local -- /path/to/video.mp4
+python -m avo.adapters.run_job transcribe --label paid -- /path/to/video.mp4
 ```
 
 Exit codes: `0` success, `1` adapter failure, `2` config/user error.
@@ -28,7 +28,7 @@ Exit codes: `0` success, `1` adapter failure, `2` config/user error.
 ## Adding an adapter
 
 1. Implement `JobAdapter` with a `routing_id` and `run(request) -> JobResult`.
-2. Register in `helpers/adapters/registry.py`.
+2. Register in `src/avo/adapters/registry.py`.
 3. Add tests under `tests/test_adapters_*.py`.
 4. Prefer subprocess to bundled scripts or external CLIs.
 

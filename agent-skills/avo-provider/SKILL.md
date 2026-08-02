@@ -113,7 +113,7 @@ Keep `DESIGN.md` and `palette.json` in sync. Reference example:
 
 ```bash
 # Manifest parses and provider resolves
-python helpers/init_project.py --provider <slug> --raw-dir <test-path> --print -y
+python -m avo.init_project --provider <slug> --raw-dir <test-path> --print -y
 
 # List providers (directories with avo.provider.json, excluding _template)
 python -c "from helpers.init_project import list_providers; print(list_providers())"
@@ -130,7 +130,7 @@ Confirm:
 ### 5. First video project
 
 ```bash
-python helpers/init_project.py --provider <slug> --raw-dir <path-to-one-video-folder>
+python -m avo.init_project --provider <slug> --raw-dir <path-to-one-video-folder>
 ```
 
 Writes `<rawDir>/avo.project.json`. All edit outputs go under `<rawDir>/edit/`.

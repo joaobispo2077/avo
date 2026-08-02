@@ -10,8 +10,8 @@ Setup populates it; nothing here is committed except this README.
 **video-use is a core dependency — but it does not live under `tools/`.**
 
 After the fork, the editing engine was **bundled into this repo** as the **AVO Python
-engine** (`helpers/`, `pyproject.toml`, `uv.lock`). Gate 1 validates it in-tree via
-**`avo-engine`** in [`avo.dependencies.json`](../avo.dependencies.json) (alias:
+engine** (`src/avo/`, `pyproject.toml`, `uv.lock`). Gate 1 validates it in-tree via
+**`avo-engine`** in [`avo.dependencies.json`](../config/avo.dependencies.json) (alias:
 `video-use-engine`) — not as a git clone.
 
 | Component | What it is | Where it lives |
@@ -24,7 +24,7 @@ See [`docs/engine-vs-orchestrator.md`](../docs/engine-vs-orchestrator.md) for na
 (AVO product vs engine vs upstream credit).
 
 Routing still labels the transcribe stage `video-use+faster-whisper` in
-[`avo.config.json`](../avo.config.json) — that names the **engine role**, not a path under
+[`avo.config.json`](../config/avo.config.json) — that names the **engine role**, not a path under
 `tools/`.
 
 Model cache (runtime): `~/.cache/video-use/models` (compat from fork; env
@@ -47,7 +47,7 @@ Run setup from the repo root:
 bash scripts/setup.sh --lang en
 ```
 
-Gate 1 validates clones via [`avo.dependencies.json`](../avo.dependencies.json) and the
+Gate 1 validates clones via [`avo.dependencies.json`](../config/avo.dependencies.json) and the
 bundled **avo-engine** via `pyproject.toml` + `helpers/` (`avo-engine` in manifest).
 
 ### Optional upstream reference (maintainers)

@@ -132,14 +132,15 @@ else {
       Record 'ffmpeg' 'WARN' 'ffmpeg/ffprobe not on PATH (Node ffmpeg-static is a fallback)'
       Info "install: winget install Gyan.FFmpeg  (or) choco install ffmpeg"
     }
-    Run $PY helpers/avo_state.py init --language $Lang --whisper-model $Model --touch-update | Out-Null
-    $rc = Run $PY helpers/prepare_transcription.py --model $Model
+    $env:PYTHONPATH = Join-Path $RepoRoot 'src'
+    Run $PY -m avo.avo_state init --language $Lang --whisper-model $Model --touch-update | Out-Null
+    $rc = Run $PY -m avo.prepare_transcription --model $Model
     if ($rc -eq 0) {
       Record 'engine' 'OK' "deps + model '$Model' (lang $Lang)"
-      if ((Run $PY helpers/models_cli.py disclosure) -eq 0) { Record 'models' 'OK' 'active models disclosed' }
+      if ((Run $PY -m avo.models_cli disclosure) -eq 0) { Record 'models' 'OK' 'active models disclosed' }
       else { Record 'models' 'WARN' 'model disclosure skipped' }
     }
-    else { Record 'engine' 'WARN' 'deps ok; model prep incomplete (offline?) - rerun helpers/prepare_transcription.py' }
+    else { Record 'engine' 'WARN' 'deps ok; model prep incomplete (offline?) - rerun python -m avo.prepare_transcription' }
   }
 }
 

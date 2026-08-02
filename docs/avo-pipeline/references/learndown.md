@@ -11,8 +11,8 @@ Implements [`docs/avo-workflow.md`](../../avo-workflow.md) §7 step 1.
 
 ## Actions (REQUIRED)
 
-1. **Inventory report:** `python helpers/project_inventory.py report --raw-dir <rawDir> --master-basename <stem> [--pre .avo/sessions/<id>/pre.json]`
-2. **Draft wrap:** agent narrative + `python helpers/wrap.py draft …` → `<rawDir>/avo.wrap.draft.md/json` (`status: "draft"`)
+1. **Inventory report:** `python -m avo.project_inventory report --raw-dir <rawDir> --master-basename <stem> [--pre .avo/sessions/<id>/pre.json]`
+2. **Draft wrap:** agent narrative + `python -m avo.wrap draft …` → `<rawDir>/avo.wrap.draft.md/json` (`status: "draft"`)
 3. Consolidate session learnings scoped to **provider** (not global bleed) when ai-memory present
 4. **Learndown telemetry:** `Telemetry.learndown()` — space used vs freed preview, preserved-set size
 5. Never store secrets in memory or wrap JSON

@@ -15,11 +15,11 @@ After cleanup, **exactly** these survive:
 
 ## Workflow (REQUIRED steps)
 
-1. **Verify:** `python helpers/project_inventory.py verify --raw-dir <rawDir> --master-basename <stem>`
+1. **Verify:** `python -m avo.project_inventory verify --raw-dir <rawDir> --master-basename <stem>`
 2. **Dry-run (recommended):** `… cleanup --dry-run` — list paths only
 3. **Execute:** `… cleanup` — verify → assert no preserved ∩ delete → `npx rimraf`
-4. **Final wrap:** `python helpers/wrap.py final …` → `<rawDir>/avo.wrap.md/json` (`status: "final"`). Keep `avo.wrap.draft.*`.
-5. **Record session:** `python helpers/stats.py record --wrap-json <rawDir>/avo.wrap.json`
+4. **Final wrap:** `python -m avo.wrap final …` → `<rawDir>/avo.wrap.md/json` (`status: "final"`). Keep `avo.wrap.draft.*`.
+5. **Record session:** `python -m avo.stats record --wrap-json <rawDir>/avo.wrap.json`
 
 ## Delete candidates
 
