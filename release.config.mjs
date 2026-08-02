@@ -18,21 +18,31 @@ function pyprojectVersionPlugin() {
   };
 }
 
+const analyzerOpts = {
+  preset: 'angular',
+  parserOpts: {
+    noteKeywords: ['BREAKING CHANGE', 'BREAKING CHANGES', 'BREAKING'],
+  },
+  // Include commits merged via GitHub PR merges (not only merge commit messages).
+  gitRawCommitsOpts: {
+    firstParent: false,
+  },
+};
+
 /** @type {import('semantic-release').Options} */
 export default {
   branches: [
     'main',
-    { name: 'dev', prerelease: 'alpha' },
+    { name: 'develop', prerelease: 'alpha' },
   ],
   plugins: [
-    '@semantic-release/commit-analyzer',
+    ['@semantic-release/commit-analyzer', analyzerOpts],
     [
       '@semantic-release/release-notes-generator',
       {
         preset: 'angular',
-        parserOpts: {
-          noteKeywords: ['BREAKING CHANGE', 'BREAKING CHANGES', 'BREAKING'],
-        },
+        parserOpts: analyzerOpts.parserOpts,
+        gitRawCommitsOpts: analyzerOpts.gitRawCommitsOpts,
         writerOpts: {
           commitsSort: ['subject', 'scope'],
         },

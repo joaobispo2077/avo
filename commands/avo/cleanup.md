@@ -2,7 +2,7 @@
 
 Delete run scratch files; preserve the invariant four artifacts; write **final wrap** and record session stats.
 
-**Skill:** [`docs/avo-pipeline/references/cleanup.md`](../../docs/avo-pipeline/references/cleanup.md)
+**Skill:** [`agent-skills/avo-pipeline/references/cleanup.md`](../../agent-skills/avo-pipeline/references/cleanup.md)
 
 ---
 

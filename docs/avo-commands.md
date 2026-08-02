@@ -18,7 +18,7 @@ New-Item -ItemType Directory -Force -Path .cursor/commands/avo | Out-Null
 Copy-Item -Recurse commands/avo/* .cursor/commands/avo/
 ```
 
-Gateway skill (agent auto-load): [`avo-pipeline/SKILL.md`](avo-pipeline/SKILL.md)
+Gateway skill (agent auto-load): [`agent-skills/avo-pipeline/SKILL.md`](../agent-skills/avo-pipeline/SKILL.md)
 
 Spoken alias: **`/avo --help`** → `/avo.help`
 
@@ -50,10 +50,14 @@ Spoken alias: **`/avo --help`** → `/avo.help`
 | `/avo.trim` | Transcribe + cut only ([source](../commands/avo/trim.md)) |
 | `/avo.transcribe` | Transcribe only, no cut ([source](../commands/avo/transcribe.md)) |
 | `/avo.sound` | Noise reduction, mix, SFX/Music ([source](../commands/avo/sound.md)) |
-| `/avo.sound create` | Creative SFX brief ([reference](avo-pipeline/references/sound-create.md)) |
+| `/avo.sound create` | Creative SFX brief ([reference](../agent-skills/avo-pipeline/references/sound-create.md)) |
 | `/avo.audit` | Scoped QC ([source](../commands/avo/audit.md)) |
 | `/avo.watch` | Full watch-skill LOOP ([source](../commands/avo/watch.md)) |
 | `/avo.motion` | HyperFrames motion ([source](../commands/avo/motion.md)) |
+| `/avo.captions` | Embedded captions after overlays ([source](../commands/avo/captions.md)) |
+| `/avo.deliver` | Full master QC + delivery manifest ([source](../commands/avo/deliver.md)) |
+| `/avo.shorts` | Orchestrated YouTube Shorts workflow ([source](../commands/avo/shorts.md)) |
+| `/avo.reframe` | Vertical clip from long-form master ([source](../commands/avo/reframe.md)) |
 
 ### Post-master ops
 
@@ -72,7 +76,7 @@ Spoken alias: **`/avo --help`** → `/avo.help`
 
 Skill: [`avo-provider`](../agent-skills/avo-provider/SKILL.md) · Concept: [`docs/providers.md`](providers.md)
 
-Shipped command files: [`../commands/avo/`](../commands/avo/) (16 commands)
+Shipped command files: [`../commands/avo/`](../commands/avo/) (20 commands)
 
 ---
 
@@ -92,7 +96,7 @@ to: 9:35
 Say **this folder** when you already opened the footage directory in Cursor.
 Power users may still write `rawDir: /abs/path`.
 
-Full schema: [`avo-pipeline/references/arguments.md`](avo-pipeline/references/arguments.md)
+Full schema: [`../agent-skills/avo-pipeline/references/arguments.md`](../agent-skills/avo-pipeline/references/arguments.md)
 
 ---
 
@@ -143,6 +147,32 @@ The footage is at C:/Videos/review
 The footage is at C:/Videos/review
 
 /avo.stats
+```
+
+**Captions on approved edit:**
+
+```text
+/avo.captions
+Provider: my-channel
+The footage is at C:/Videos/review
+identity: anchor
+```
+
+**Shorts (native vertical):**
+
+```text
+/avo.shorts
+Provider: my-channel
+The footage is at C:/Videos/short-001
+identity: anchor
+```
+
+**Deliver before upload:**
+
+```text
+/avo.deliver
+Provider: my-channel
+The footage is at C:/Videos/review
 ```
 
 ---

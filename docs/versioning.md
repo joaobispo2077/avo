@@ -49,7 +49,7 @@ Releases are **automated** via [semantic-release](https://github.com/semantic-re
 
 | Branch | Channel | Example tag |
 |--------|---------|-------------|
-| `dev` | Alpha prerelease | `v0.2.0-alpha.1` |
+| `develop` | Alpha prerelease | `v0.2.0-alpha.1` |
 | `main` | Stable | `v0.2.0` |
 
 1. Workflow `.github/workflows/release.yml` runs (`workflow_run` after **CI**, or manual dispatch)

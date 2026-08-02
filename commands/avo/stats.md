@@ -2,7 +2,7 @@
 
 Display local aggregate metrics from completed video sessions.
 
-**Skill:** [`docs/avo-pipeline/references/stats.md`](../../docs/avo-pipeline/references/stats.md)
+**Skill:** [`agent-skills/avo-pipeline/references/stats.md`](../../agent-skills/avo-pipeline/references/stats.md)
 
 **Privacy:** Local disk only — no phone home. See [`SECURITY.md#privacy--telemetry`](../../SECURITY.md#privacy--telemetry).
 

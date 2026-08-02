@@ -2,7 +2,7 @@
 
 Full watch-skill LOOP review and audit of the current proof scope.
 
-**Skill:** [`docs/avo-pipeline/references/watch.md`](../../docs/avo-pipeline/references/watch.md)
+**Skill:** [`agent-skills/avo-pipeline/references/watch.md`](../../agent-skills/avo-pipeline/references/watch.md)
 
 ---
 

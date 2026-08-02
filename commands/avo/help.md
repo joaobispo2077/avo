@@ -2,7 +2,7 @@
 
 Master index of all `/avo.*` slash commands. Spoken alias: **`/avo --help`**.
 
-**Skill:** [`docs/avo-pipeline/references/help.md`](../../docs/avo-pipeline/references/help.md)
+**Skill:** [`agent-skills/avo-pipeline/references/help.md`](../../agent-skills/avo-pipeline/references/help.md)
 
 ---
 
@@ -24,7 +24,7 @@ Discovery only. Does not run pipeline stages. Print the command catalog and poin
 
 ## Instructions
 
-1. Load [`help.md`](../../docs/avo-pipeline/references/help.md).
+1. Load [`help.md`](../../agent-skills/avo-pipeline/references/help.md).
 2. If `--section` set, print that group only; else print full index.
 3. Remind: declare **Provider** + **footage location** (path or “this folder”) before any executing command.
 4. Link [`docs/avo-commands.md`](../../docs/avo-commands.md) for copy-paste examples.
