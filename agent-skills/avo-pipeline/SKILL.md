@@ -1,6 +1,6 @@
 ---
 name: avo-pipeline
-description: Gateway for AVO slash commands (/avo.help, /avo.guidelines, /avo.pipeline, /avo.trim, /avo.transcribe, /avo.sound, /avo.audit, /avo.watch, /avo.motion, /avo.telemetry, /avo.learndown, /avo.cleanup, /avo.stats, /avo.docs). Load when the user invokes any /avo.* command or declares Footage/rawDir asset paths.
+description: Gateway for AVO slash commands (/avo.help, /avo.guidelines, /avo.pipeline, /avo.trim, /avo.transcribe, /avo.sound, /avo.audit, /avo.watch, /avo.motion, /avo.captions, /avo.deliver, /avo.telemetry, /avo.learndown, /avo.cleanup, /avo.stats, /avo.docs). Load when the user invokes any /avo.* command or declares Footage/rawDir asset paths.
 ---
 
 # AVO pipeline commands (gateway)
@@ -26,6 +26,8 @@ Entry skill for **`/avo.*`** slash commands. Canonical rules: [`AGENTS.md`](../.
 | `/avo.audit` | [`references/audit.md`](references/audit.md) |
 | `/avo.watch` | [`references/watch.md`](references/watch.md) |
 | `/avo.motion` | [`references/motion.md`](references/motion.md) |
+| `/avo.captions` | [`references/captions.md`](references/captions.md) |
+| `/avo.deliver` | [`references/deliver.md`](references/deliver.md) |
 | `/avo.telemetry` | [`references/telemetry.md`](references/telemetry.md) |
 | `/avo.learndown` | [`references/learndown.md`](references/learndown.md) |
 | `/avo.cleanup` | [`references/cleanup.md`](references/cleanup.md) |

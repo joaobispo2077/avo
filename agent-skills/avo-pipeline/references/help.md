@@ -29,8 +29,10 @@ Spoken alias: **`/avo --help`**. Cursor file: `commands/avo/help.md` → `/avo.h
 | `/avo.transcribe` | Transcribe only |
 | `/avo.sound` | Mix, NR, SFX |
 | `/avo.motion` | HyperFrames overlays |
+| `/avo.captions` | Embedded captions (after overlays) |
 | `/avo.watch` | watch-skill LOOP |
 | `/avo.audit` | Scoped QC window |
+| `/avo.deliver` | Full master QC + delivery manifest |
 
 ### Post-master ops
 
