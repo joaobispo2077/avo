@@ -8,10 +8,9 @@ import wave
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "helpers"))
 
-import generate_sfx
-import render
+from avo import generate_sfx
+from avo import render
 
 
 class AudioSfxPipelineTests(unittest.TestCase):

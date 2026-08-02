@@ -32,7 +32,7 @@ When layers conflict, **editorial meaning and safety rules win** for footage wor
 
 | Path | Role |
 | ---- | ---- |
-| `helpers/` | Python engine — transcribe, EDL, grade, render, validation |
+| `src/avo/` | Python engine — transcribe, EDL, grade, render, validation |
 | `scripts/` | Cross-platform setup, provider scaffolds, Gate 1/2 runners |
 | `tests/` | `pytest` — install, config, engine contracts, gitignore, traces, audio |
 | `docs/` | Workflow, launch checklist, versioning, branching, CI |
@@ -53,7 +53,7 @@ When layers conflict, **editorial meaning and safety rules win** for footage wor
 - **CI:** `.github/workflows/ci.yml` via `scripts/ci/run-unit-tests.sh`
 - **Audit:** [software-quality-audit.md](./software-quality-audit.md)
 - **Mindset:** Test Trophy — ~90% cheap unit tests; integration when boundaries crossed; E2E only for critical flows
-- **Gate 2:** `helpers/validate_usability.py`
+- **Gate 2:** `src/avo/validate_usability.py`
 
 ---
 

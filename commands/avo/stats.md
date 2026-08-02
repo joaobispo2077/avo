@@ -26,7 +26,7 @@ Read-only. Summarizes session history in `.avo/state.json`. Does not scan footag
 
 ## Instructions
 
-1. Run `python helpers/stats.py show` (or equivalent when helper ships).
+1. Run `python -m avo.stats show` (or equivalent when helper ships).
 2. **Tier A (default):** videos completed, total disk freed, preserved library size, last completed video, top provider, average freed per video, estimated time saved (with disclaimer).
 3. With `--verbose`: Tier B (cut ratio, phases per video, approval gates) and Tier C (full estimation model + factor).
 4. With `--json`: JSON on stdout; duplicate `AVO_JSON` line on stderr (telemetry pattern).
@@ -37,9 +37,9 @@ Read-only. Summarizes session history in `.avo/state.json`. Does not scan footag
 ## CLI equivalent
 
 ```bash
-python helpers/stats.py show
-python helpers/stats.py show --json
-python helpers/stats.py show --verbose
+python -m avo.stats show
+python -m avo.stats show --json
+python -m avo.stats show --verbose
 ```
 
 ---

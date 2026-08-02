@@ -7,9 +7,11 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-sys.path.insert(0, str(ROOT / "helpers"))
+SRC = ROOT / "src"
 
-import final_transcript_artifacts
+sys.path.insert(0, str(SRC))
+
+from avo import final_transcript_artifacts
 
 
 class FinalTranscriptArtifactTests(unittest.TestCase):

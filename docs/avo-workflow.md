@@ -165,7 +165,7 @@ advance stage.
 new approval gate.
 
 **Config:** `avo.project.json` → `approvalGates.requireHumanSignOff` (default
-`true`). See [`../avo.project.schema.json`](../avo.project.schema.json).
+`true`). See [`../schemas/avo.project.schema.json`](../schemas/avo.project.schema.json).
 
 Spec: [`../specs/active/avo-approval-gates-ux/spec.md`](../specs/active/avo-approval-gates-ux/spec.md).
 
@@ -199,7 +199,7 @@ Example human line (illustrative form):
 project 6.3 GB · 66% · ~4m left (rough)
 ```
 
-Example JSON line (illustrative shape — field names match `helpers/telemetry.py`):
+Example JSON line (illustrative shape — field names match `src/avo/telemetry.py`):
 
 ```json
 {"phase":"motion-proof","index":4,"total":6,"percent":66.0,"diskFreeBytes":872000000000,
@@ -210,15 +210,15 @@ Example JSON line (illustrative shape — field names match `helpers/telemetry.p
 
 ## 6. Hardware capability advisory
 
-Owning helper: `helpers/hardware.py` (probed on render/watch phases). **Advisory
+Owning helper: `src/avo/hardware.py` (probed on render/watch phases). **Advisory
 only — it never blocks a run.**
 
 - Probes: CPU (cores/model), RAM, GPU (name/VRAM via `nvidia-smi` / `wmic` /
   `system_profiler`), free disk. Degrades gracefully to `"unknown"` per field.
 - Emits a JSON capability report plus a suggested tier map, e.g.
   `{ "whisper": "large-v3" | "small", "llm": "qwen2.5-7b" }`.
-- Catalog ids and alternatives live in [`avo.model-catalog.json`](../avo.model-catalog.json);
-  resolve active tiers with `python helpers/models_cli.py show` or
+- Catalog ids and alternatives live in [`avo.model-catalog.json`](../config/avo.model-catalog.json);
+  resolve active tiers with `python -m avo.models_cli show` or
   [`docs/model-transparency.md`](model-transparency.md).
 - **The agent reads the report and tells the user, in prose, what it selected and
   the better/worse alternatives.** Because AVO is agent-driven, the advisory
@@ -237,7 +237,7 @@ only — it never blocks a run.**
 ## 7. Post-render learndown + cleanup
 
 Runs after the final master is approved. Pipeline kickoff starts a **session**
-(`python helpers/session.py start`) and writes `.avo/sessions/<id>/pre.json` as
+(`python -m avo.session start`) and writes `.avo/sessions/<id>/pre.json` as
 a baseline inventory. After cleanup, a **session record** lands in
 `.avo/state.json` and per-video **wrap artifacts** survive on the footage volume.
 
@@ -263,7 +263,7 @@ Two steps, in order:
    - **Final wrap (REQUIRED):** `<rawDir>/avo.wrap.md` and `avo.wrap.json`
      (`status: "final"`) with actual freed bytes and deleted file lists. Draft
      wrap files are **retained** for audit comparison.
-   - **Session record (REQUIRED):** `python helpers/stats.py record
+   - **Session record (REQUIRED):** `python -m avo.stats record
      --wrap-json <rawDir>/avo.wrap.json` → `.avo/state.json` → `stats.sessions[]`
      + cumulative `stats.totals`.
    - Optional cleanup telemetry via `Telemetry.cleanup()`.
@@ -284,7 +284,7 @@ survive — nothing else the run created:
 Cleanup MUST use cross-platform deletes (`rimraf`), never `rm -rf` / `del`, and
 MUST refuse to delete anything in the preserved set.
 
-**Aggregate metrics:** `/avo.stats` (or `python helpers/stats.py show`) reads
+**Aggregate metrics:** `/avo.stats` (or `python -m avo.stats show`) reads
 local session history only — no network. Privacy: [`SECURITY.md#privacy--telemetry`](../SECURITY.md#privacy--telemetry).
 
 ---

@@ -7,10 +7,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-HELPERS = Path(__file__).resolve().parents[1] / "helpers"
-sys.path.insert(0, str(HELPERS))
 
-import transcribe
+from avo import transcribe
 
 
 class FakeWord:
@@ -71,7 +69,7 @@ class TranscribeTests(unittest.TestCase):
 
     def test_missing_model_names_preparation_command(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            with self.assertRaisesRegex(RuntimeError, "prepare_transcription.py"):
+            with self.assertRaisesRegex(RuntimeError, "avo.prepare_transcription"):
                 transcribe.LocalTranscriber(model_dir=Path(tmp) / "missing")
 
     def test_empty_inference_is_valid(self) -> None:

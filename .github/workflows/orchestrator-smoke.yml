@@ -44,7 +44,9 @@ jobs:
         run: bash scripts/validate-prerequisites.sh --ci --include-optional
 
       - name: Prepare Whisper model (small)
-        run: python helpers/prepare_transcription.py --model tiny
+        run: python -m avo.prepare_transcription --model tiny
+        env:
+          PYTHONPATH: src
 
       - name: Gate 2
         run: bash scripts/validate-usability.sh --ci

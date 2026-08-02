@@ -1,4 +1,4 @@
-"""Tests for helpers/avo_state.py atomic persistence."""
+"""Tests for src/avo/avo_state.py atomic persistence."""
 from __future__ import annotations
 
 import json
@@ -9,15 +9,16 @@ from unittest import mock
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+SRC = ROOT / "src"
 
 
 class AvoStateAtomicTests(unittest.TestCase):
     def setUp(self) -> None:
-        sys.path.insert(0, str(ROOT))
+        sys.path.insert(0, str(SRC))
         self._temp_dir = tempfile.mkdtemp()
 
     def test_save_state_atomic_writes_valid_json(self) -> None:
-        from helpers import avo_state
+        from avo import avo_state
 
         with mock.patch.object(avo_state, "repo_root") as repo_root:
             repo_root.return_value = Path(self._temp_dir)
@@ -28,7 +29,7 @@ class AvoStateAtomicTests(unittest.TestCase):
             self.assertEqual(data["stats"]["a"], 1)
 
     def test_sessions_dir_creates_directory(self) -> None:
-        from helpers import avo_state
+        from avo import avo_state
 
         with mock.patch.object(avo_state, "repo_root") as repo_root:
             repo_root.return_value = Path(self._temp_dir)

@@ -1,6 +1,6 @@
 # /avo.stats reference
 
-Implements local aggregate metrics from session history. Owning helper: `helpers/stats.py`.
+Implements local aggregate metrics from session history. Owning helper: `src/avo/stats.py`.
 
 **Privacy:** Reads `.avo/state.json` on disk only — no phone home. See [`SECURITY.md#privacy--telemetry`](../../../SECURITY.md#privacy--telemetry).
 
@@ -12,15 +12,15 @@ Implements local aggregate metrics from session history. Owning helper: `helpers
 ## CLI
 
 ```bash
-python helpers/stats.py show
-python helpers/stats.py show --json
-python helpers/stats.py show --verbose
+python -m avo.stats show
+python -m avo.stats show --json
+python -m avo.stats show --verbose
 ```
 
 Session recording (agents run during cleanup, not via this command):
 
 ```bash
-python helpers/stats.py record --wrap-json <rawDir>/avo.wrap.json
+python -m avo.stats record --wrap-json <rawDir>/avo.wrap.json
 ```
 
 ## Metric tiers

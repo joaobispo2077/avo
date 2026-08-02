@@ -36,7 +36,7 @@ elif command -v python >/dev/null 2>&1; then PY=python; fi
 
 # --- is a check due? ---------------------------------------------------------
 if [ "$FORCE" -ne 1 ] && [ -n "$PY" ]; then
-  DUE_OUT="$("$PY" helpers/avo_state.py due --days "$DAYS" 2>/dev/null || echo 'due unknown')"
+  DUE_OUT="$(PYTHONPATH="${REPO_ROOT}/src${PYTHONPATH:+:${PYTHONPATH}}" "$PY" -m avo.avo_state due --days "$DAYS" 2>/dev/null || echo 'due unknown')"
   case "$DUE_OUT" in
     recent*) say "AVO update: checked recently (${DUE_OUT#recent }); use --force to check now."; exit 0;;
   esac
@@ -58,7 +58,7 @@ if ! git fetch --quiet 2>/dev/null; then
   exit 0
 fi
 
-touch_ts() { [ -n "$PY" ] && "$PY" helpers/avo_state.py touch-update >/dev/null 2>&1 || true; }
+touch_ts() { [ -n "$PY" ] && PYTHONPATH="${REPO_ROOT}/src${PYTHONPATH:+:${PYTHONPATH}}" "$PY" -m avo.avo_state touch-update >/dev/null 2>&1 || true; }
 
 BRANCH="$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo HEAD)"
 if ! git rev-parse --abbrev-ref '@{u}' >/dev/null 2>&1; then

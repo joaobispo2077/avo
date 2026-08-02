@@ -7,10 +7,9 @@ from pathlib import Path
 from types import SimpleNamespace
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "helpers"))
 
-import transcribe
-import transcribe_batch
+from avo import transcribe
+from avo import transcribe_batch
 
 
 class FakeRuntime:

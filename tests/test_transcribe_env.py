@@ -11,8 +11,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 class TranscribeEnvTests(unittest.TestCase):
     def setUp(self) -> None:
-        sys.path.insert(0, str(ROOT / "helpers"))
-        import transcribe
+        from avo import transcribe
 
         self.transcribe = transcribe
 

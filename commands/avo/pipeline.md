@@ -35,7 +35,7 @@ Orchestrate stages 0–7: plan (optional Spec Kit) → transcribe → edit → w
 1. **Parse inputs** per [`arguments.md`](../../docs/avo-pipeline/references/arguments.md).
 2. **Resolve provider** manifest: `providers/<provider>/avo.provider.json`.
 3. **Write or update** `<rawDir>/avo.project.json` with asset paths.
-4. **Start session (REQUIRED):** run `python helpers/session.py start --raw-dir <rawDir> --provider <provider> [--title TEXT]` — writes `.avo/sessions/<id>/pre.json` baseline inventory for wrap diff and stats.
+4. **Start session (REQUIRED):** run `python -m avo.session start --raw-dir <rawDir> --provider <provider> [--title TEXT]` — writes `.avo/sessions/<id>/pre.json` baseline inventory for wrap diff and stats.
 5. **Inventory** sources (`ffprobe`), transcribe, pack transcripts.
 6. **Converse** → propose strategy → **wait for confirmation**.
 7. **Execute** edit proof (~360p) → watch-skill LOOP → write `edit/review/edit-proof/approval-gate.md` → **wait for approval**.

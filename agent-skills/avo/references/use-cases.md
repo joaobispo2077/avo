@@ -39,6 +39,7 @@ The footage is at C:/Videos/my-edit
 | Dealer walkthrough | `avo`, `avo-pipeline` | `/avo.trim` + `/avo.motion` |
 | Game review | `avo`, `avo-pipeline` | `/avo.pipeline` |
 | Tech first impression | `avo`, `avo-pipeline` | `/avo.pipeline` |
+| Live pipeline demo + deep motion | `avo`, `avo-pipeline` | `/avo.pipeline` + [`animation-direction.md`](../../../specs/active/avo-pipeline-demo-motion/animation-direction.md) |
 | Health / physio comparison | `avo`, `avo-pipeline` | `/avo.trim` or `/avo.pipeline` |
 | Going global (backlog) | `avo`, `avo-pipeline` | `/avo.pipeline` after master |
 
@@ -55,4 +56,4 @@ These are separate from the AVO package but pair with `/avo.motion`:
 | Spec readout | `terminal` |
 | Glass cards | talking-head-recut + HyperFrames |
 
-Install full toolchain for motion: `bash install.sh --full --lang en`.
+Install full toolchain for motion: `bash scripts/install/install.sh --full --lang en`.

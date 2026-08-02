@@ -1,11 +1,11 @@
 {
-  "$schema": "../../avo.project.schema.json",
+  "$schema": "../../schemas/avo.project.schema.json",
   "provider": "my-channel",
   "rawDir": "/absolute/path/to/footage/my-video",
   "title": "Working title",
   "assets": {
-    "sfx": "",
-    "music": "",
+    "sfx": "/absolute/path/to/assets/sfx",
+    "music": "/absolute/path/to/assets/music",
     "inserts": "",
     "graphics": "",
     "logos": "providers/my-channel/logo"

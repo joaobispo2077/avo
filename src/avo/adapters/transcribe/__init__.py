@@ -1,0 +1,1 @@
+"""Transcribe job adapters."""

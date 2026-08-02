@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # AVO — bootstrap a per-video project (avo.project.json) in an external raw dir.
-# Thin wrapper over helpers/init_project.py (shared cross-platform logic).
+# Thin wrapper over avo.init_project (shared cross-platform logic).
 #
 # Usage:
 #   bash scripts/init-project.sh --provider bishop --raw-dir /abs/path/to/footage \
@@ -18,4 +18,5 @@ if [ -z "$PY" ]; then
   else echo "error: python3 not found on PATH" >&2; exit 1; fi
 fi
 
-exec "$PY" "$REPO_ROOT/helpers/init_project.py" "$@"
+export PYTHONPATH="${REPO_ROOT}/src${PYTHONPATH:+:${PYTHONPATH}}"
+exec "$PY" -m avo.init_project "$@"
