@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # Verify git tag vX.Y.Z matches package.json, pyproject.toml, and CHANGELOG.md.
+# Used post semantic-release in CI and for optional manual/emergency tag checks.
 # Usage: verify-release-version.sh [v0.1.0]   (defaults to GITHUB_REF_NAME)
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
