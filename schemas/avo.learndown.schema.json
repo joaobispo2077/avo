@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/joaobispo2077/avo/schemas/avo.learndown.schema.json",
+  "title": "AVO Provider Learndown Entry",
+  "description": "Provider-scoped learndown record exported to providers/<slug>/learndowns/<entry-id>/learndown.json after wrap draft/final.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "entryId",
+    "provider",
+    "masterBasename",
+    "rawDir",
+    "status",
+    "generatedAt",
+    "summary"
+  ],
+  "properties": {
+    "schemaVersion": { "type": "integer", "const": 1 },
+    "entryId": {
+      "type": "string",
+      "description": "Directory name under providers/<slug>/learndowns/, typically YYYYMMDD-topic-slug."
+    },
+    "provider": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]*$"
+    },
+    "masterBasename": { "type": "string" },
+    "rawDir": { "type": "string" },
+    "title": { "type": "string" },
+    "status": { "enum": ["draft", "final"] },
+    "generatedAt": { "type": "string" },
+    "summary": { "type": "string" },
+    "sessionId": { "type": "string" },
+    "space": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "preCleanupProjectBytes": { "type": "integer", "minimum": 0 },
+        "deleteCandidateBytes": { "type": "integer", "minimum": 0 },
+        "preservedBytes": { "type": "integer", "minimum": 0 },
+        "freedBytes": { "type": ["integer", "null"], "minimum": 0 }
+      }
+    },
+    "learning": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "aiMemory": { "enum": ["filed", "skipped", "exported"] },
+        "note": { "type": "string" }
+      }
+    },
+    "wrapPaths": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "draftJson": { "type": "string" },
+        "draftMd": { "type": "string" },
+        "finalJson": { "type": "string" },
+        "finalMd": { "type": "string" }
+      }
+    }
+  }
+}
