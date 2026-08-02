@@ -19,6 +19,7 @@
   "transcription": {
     "language": "en"
   },
+  "restoration_default_pct": 35,
   "brand": {
     "design": "providers/replace-with-provider-slug/DESIGN.md",
     "palette": "providers/replace-with-provider-slug/brand/palette.json"

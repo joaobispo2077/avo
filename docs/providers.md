@@ -88,6 +88,7 @@ that captions, pacing, and QC checklists differ.
 | **Media roots** | `media.rawRoot`, `media.editRoot` | External absolute paths |
 | **Assets** | `assets.sfx`, `music`, `inserts`, `graphics`, `logos` | External libs; logos usually in-repo |
 | **Transcription** | `transcription.language`, `model` | Provider default; overridable per video |
+| **Audio restoration** | `restoration_default_pct` | Optional 0–100% default NR for speech (Standard = 35); EDL overrides win |
 | **Brand** | `brand.design`, `brand.palette` | Pointers to `DESIGN.md` + `palette.json` |
 | **Routing** | `routingOverrides` | Patch over shared `avo.config.json` |
 
