@@ -9,7 +9,7 @@ cd "$ROOT"
 OUTPUT=""
 STATUS=0
 set +e
-OUTPUT="$(npx semantic-release --dry-run 2>&1)"
+OUTPUT="$(env -u GITHUB_ACTIONS npx semantic-release --dry-run 2>&1)"
 STATUS=$?
 set -e
 

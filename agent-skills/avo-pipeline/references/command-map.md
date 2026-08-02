@@ -27,6 +27,14 @@
 | `/avo.changelog-video` | `commands/avo/changelog-video.md` | `references/changelog-video.md` |
 | `/avo.explainer` | `commands/avo/explainer.md` | `references/explainer.md` |
 | `/avo.slideshow` | `commands/avo/slideshow.md` | `references/slideshow.md` |
+| `/avo.launch` | `commands/avo/launch.md` | `references/launch.md` |
+| `/avo.music-video` | `commands/avo/music-video.md` | `references/music-video.md` |
+| `/avo.talking-head` | `commands/avo/talking-head.md` | `references/talking-head.md` |
+| `/avo.figma` | `commands/avo/figma.md` | `references/figma.md` |
+| `/avo.end-screen` | `commands/avo/end-screen.md` | `references/end-screen.md` |
+| `/avo.color` | `commands/avo/color.md` | `references/color.md` |
+| `/avo.sync` | `commands/avo/sync.md` | `references/sync.md` |
+| `/avo.media` | `commands/avo/media.md` | `references/media.md` |
 | `/avo.retention` | `commands/avo/retention.md` | `references/retention.md` |
 | `/avo.animation-qc` | `commands/avo/animation-qc.md` | `references/animation-qc.md` |
 | `/avo.telemetry` | `commands/avo/telemetry.md` | `references/telemetry.md` |

@@ -8,15 +8,15 @@ Public product roadmap for the AVO orchestrator. For shipped SemVer history see
 
 ## Shipped recently
 
+- **Wave 3 pipeline commands (docs):** `/avo.launch`, `/avo.music-video`, `/avo.talking-head`, `/avo.figma`, `/avo.end-screen`, `/avo.color`, `/avo.sync`, `/avo.media`
 - **Wave 2 pipeline commands (docs):** `/avo.rights`, `/avo.audio-qc`, `/avo.chapters`, `/avo.thumbnail`, `/avo.podcast-clip`, `/avo.trailer`, content routers (`/avo.pr-video`, `/avo.changelog-video`, `/avo.explainer`, `/avo.slideshow`), optional `/avo.retention`, `/avo.animation-qc`
-- Review templates: `rights-audit.md`, `audio-qc.md`; grouped `/avo.help` (QC & deliver, Upload prep, Content)
+- Review templates: rights, audio, end-screen, color, sync checklists; grouped `/avo.help`
 - **Wave 1:** `/avo.captions`, `/avo.deliver`, `/avo.shorts`, `/avo.reframe`
 - Local `/avo.stats`, wrap reports, and privacy documentation
 - semantic-release pipeline (alpha on `develop`, stable on `release`)
-- Install guide and scripts under `docs/install/` and `scripts/install/`
 - Canonical pipeline references under `agent-skills/avo-pipeline/`
 
-Spec: [`specs/active/avo-future-skills/`](../specs/active/avo-future-skills/)
+Specs: [`avo-future-skills`](../specs/active/avo-future-skills/) · [`avo-wave3-skills`](../specs/active/avo-wave3-skills/feature-brief.md)
 
 ---
 
@@ -33,15 +33,15 @@ Spec: [`specs/active/avo-future-skills/`](../specs/active/avo-future-skills/)
 Each item has a detailed brief under `specs/backlog/` when present locally.
 Use [Sponsor](../README.md#sponsor) to help prioritize.
 
-| ID | Title | Summary |
-| -- | ----- | ------- |
-| BL-001 | Upscaling low-quality source | Controlled upscale path for phone/Zoom archives |
-| BL-002 | Higher-than-source output | Opt-in delivery above camera native resolution |
-| BL-003 | Provider voice profile | Sound like the creator on dubs, with consent |
-| BL-004 | Locale export pack | PT-BR, ES, JA, ZH captions-first from one English master |
-| BL-005 | Multi-audio delivery manifest | Per-locale tracks + manifest in deliver folder |
+| ID | Title | Summary | Future slash surface |
+| -- | ----- | ------- | -------------------- |
+| BL-001 | Upscaling low-quality source | Controlled upscale path for phone/Zoom archives | `/avo.upscale` (when engine ships) |
+| BL-002 | Higher-than-source output | Opt-in delivery above camera native resolution | deliver flag + config |
+| BL-003 | Provider voice profile | Sound like the creator on dubs, with consent | part of `/avo.locale` |
+| BL-004 | Locale export pack | PT-BR, ES, JA, ZH captions-first from one English master | `/avo.locale` |
+| BL-005 | Multi-audio delivery manifest | Per-locale tracks + manifest in deliver folder | `/avo.locale` deliver step |
 
-**Locale (`/avo.locale`):** design stub only — [`locale-stub.md`](../specs/active/avo-future-skills/locale-stub.md). Blocked until BL-003–005 engine jobs ship.
+**Locale (`/avo.locale`):** design stub only — [`locale-stub.md`](../specs/backlog/locale-stub.md). **Do not implement** until BL-003–005 engine jobs ship.
 
 Brief paths (when checked out): `specs/backlog/<slug>.md`
 
