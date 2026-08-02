@@ -7,6 +7,8 @@ cd "$ROOT"
 EXEMPLARS=(
   "docs/exemplars/hyperframes-product-promo/starter"
   "docs/exemplars/hyperframes-short-form/starter"
+  "docs/exemplars/hyperframes-boil-insert/starter"
+  "docs/exemplars/hyperframes-boil-insert/starter-image"
 )
 
 for dir in "${EXEMPLARS[@]}"; do
