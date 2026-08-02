@@ -63,13 +63,13 @@ Provider instances (e.g. `providers/bishop/`) are **gitignored** and never requi
 | `test_video_use_traces` | Product identity |
 | `test_software_foundation` | Foundation file layout |
 | `test_quality_matrix` | Doc/workflow drift guard |
-| `test_init_project` | `helpers/init_project.py` scaffold |
+| `test_init_project` | `src/avo/init_project.py` scaffold |
 
 ### Tier B — Engine core (AVO core pytest, PR CI)
 
 | Test module | Covers |
 | --- | --- |
-| `test_transcribe` | `helpers/transcribe.py` (mocked Whisper) |
+| `test_transcribe` | `src/avo/transcribe.py` (mocked Whisper) |
 | `test_transcribe_batch` | Batch transcribe |
 | `test_transcribe_cache` | Cache invalidation |
 | `test_prepare_transcription` | Model prep (mocked download) |
@@ -120,8 +120,8 @@ Run: `npm run test:projects`.
 | Helper | Status |
 | --- | --- |
 | `helpers/grade.py` | No dedicated unit test — manual QC |
-| `helpers/telemetry.py` | No dedicated unit test |
-| `helpers/hardware.py` | No dedicated unit test |
+| `src/avo/telemetry.py` | No dedicated unit test |
+| `src/avo/hardware.py` | No dedicated unit test |
 | `helpers/validate_edl.py` CLI | Covered indirectly via EDL contract tests |
 
 ---

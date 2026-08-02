@@ -57,8 +57,8 @@ Use AVO when the primary job is:
 ## Composability vs single-stack MCP
 
 An editor MCP typically exposes **that app's** primitives: tracks, clips, effects.
-AVO exposes **pipeline stages** and helper contracts (`helpers/transcribe.py`,
-`helpers/render.py`, HyperFrames slots, etc.). Stages can be upgraded independently
+AVO exposes **pipeline stages** and helper contracts (`src/avo/transcribe.py`,
+`src/avo/render.py`, HyperFrames slots, etc.). Stages can be upgraded independently
 (e.g. faster-whisper model tier, HyperFrames vs Remotion slot) without migrating
 the whole timeline into a new vendor.
 
@@ -78,5 +78,5 @@ stages map to which helpers.
 
 - [`avo-workflow.md`](avo-workflow.md) — full pipeline, telemetry, LOOP, cleanup
 - [`../AGENTS.md`](../AGENTS.md) — canonical rules including AVO Orchestrator section
-- [`../install.md`](../install.md) — setup contract
+- [`install/README.md`](install/README.md) — setup contract
 - [`../providers/_template/`](../providers/_template/) — provider scaffold

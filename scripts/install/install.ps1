@@ -1,7 +1,7 @@
-# AVO installer shim (PowerShell). Delegates to bin/install.js or npx github:REPO.
+# AVO installer (PowerShell). Delegates to bin/install.cjs or npx github:REPO.
 #
-# irm https://raw.githubusercontent.com/joaobispo2077/avo/main/install.ps1 | iex
-# pwsh install.ps1 -DryRun -Only cursor
+# irm https://raw.githubusercontent.com/joaobispo2077/avo/main/scripts/install/install.ps1 | iex
+# pwsh scripts/install/install.ps1 -DryRun -Only cursor
 
 $ErrorActionPreference = 'Stop'
 $Repo = if ($env:AVO_INSTALL_REPO) { $env:AVO_INSTALL_REPO } else { 'joaobispo2077/avo' }
@@ -19,8 +19,9 @@ function Test-Node {
 Test-Node
 
 $here = $PSScriptRoot
-if ($here -and (Test-Path (Join-Path $here 'bin\install.cjs'))) {
-  node (Join-Path $here 'bin\install.cjs') @args
+$repoRoot = (Resolve-Path (Join-Path $here '..\..')).Path
+if (Test-Path (Join-Path $repoRoot 'bin\install.cjs')) {
+  node (Join-Path $repoRoot 'bin\install.cjs') @args
   exit $LASTEXITCODE
 }
 

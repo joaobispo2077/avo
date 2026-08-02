@@ -3,4 +3,4 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT"
 node bin/install.cjs --dry-run --only cursor
-bash install.sh --dry-run --only cursor 2>/dev/null || true
+bash scripts/install/install.sh --dry-run --only cursor 2>/dev/null || true

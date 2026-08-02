@@ -6,10 +6,9 @@ import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-sys.path.insert(0, str(ROOT / "helpers"))
 
-import build_captions
-import render
+from avo import build_captions
+from avo import render
 
 
 class CaptionPlanTests(unittest.TestCase):

@@ -32,7 +32,7 @@ Reporting only. Implements workflow §5: disk free, step bytes, cumulative footp
 2. Sum bytes under `<rawDir>/edit/` (exclude raw sources if outside edit/).
 3. Emit **human line** and **JSON line** per workflow canonical shapes.
 4. Label ETA as rough estimate; never promise wall-clock accuracy.
-5. Optionally probe hardware via `helpers/hardware.py` when on render/watch phases.
+5. Optionally probe hardware via `src/avo/hardware.py` when on render/watch phases.
 
 ---
 

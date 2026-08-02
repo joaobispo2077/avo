@@ -15,7 +15,7 @@ Implements provider setup via skill **`avo-provider`**.
 | Explain concept | Summarize `docs/providers.md` |
 | Create provider | `scripts/new-provider.sh` / `new-provider.ps1`, then edit manifest + DESIGN + palette |
 | Audit provider | Validate manifest vs schema; check brand file sync |
-| First video | `python helpers/init_project.py --provider <slug> --raw-dir <path>` |
+| First video | `python -m avo.init_project --provider <slug> --raw-dir <path>` |
 
 ## Multi-provider reminder
 

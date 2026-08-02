@@ -124,16 +124,17 @@ if skipped engine; then record engine SKIP "--skip engine"; else
       record ffmpeg WARN "ffmpeg/ffprobe not on PATH (Node ffmpeg-static is a fallback)"
       info "install: macOS 'brew install ffmpeg' · Debian/Ubuntu 'sudo apt-get install -y ffmpeg' · Arch 'sudo pacman -S ffmpeg'"
     fi
-    run "$PY" helpers/avo_state.py init --language "$LANG_CODE" --whisper-model "$MODEL_SIZE" --touch-update
-    if run "$PY" helpers/prepare_transcription.py --model "$MODEL_SIZE"; then
+    export PYTHONPATH="${REPO_ROOT}/src${PYTHONPATH:+:${PYTHONPATH}}"
+    run "$PY" -m avo.avo_state init --language "$LANG_CODE" --whisper-model "$MODEL_SIZE" --touch-update
+    if run "$PY" -m avo.prepare_transcription --model "$MODEL_SIZE"; then
       record engine OK "deps + model '$MODEL_SIZE' (lang $LANG_CODE)"
-      if run "$PY" helpers/models_cli.py disclosure; then
+      if run "$PY" -m avo.models_cli disclosure; then
         record models OK "active models disclosed"
       else
         record models WARN "model disclosure skipped"
       fi
     else
-      record engine WARN "deps ok; model prep incomplete (offline?) — rerun helpers/prepare_transcription.py"
+      record engine WARN "deps ok; model prep incomplete (offline?) — rerun python -m avo.prepare_transcription"
     fi
   fi
 fi

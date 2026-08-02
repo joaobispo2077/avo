@@ -14,13 +14,13 @@
 
 **What stats modules do not do**
 
-- No network I/O in `helpers/stats.py`, `helpers/session.py`, `helpers/project_inventory.py`, or `helpers/wrap.py`
+- No network I/O in `src/avo/stats.py`, `src/avo/session.py`, `src/avo/project_inventory.py`, or `src/avo/wrap.py`
 - No secrets, API keys, or `.env` contents in session records or wrap JSON
 - No provider rollup files under tracked `providers/` paths in v1
 
 **Install-time network is separate**
 
-Setup may use network for things you explicitly run: `git clone`, `git pull`, model downloads, npm/pip installs, agent skill registries. That is **not** runtime stats telemetry. See [`install.md`](install.md) and [`docs/repo-layout.md`](docs/repo-layout.md).
+Setup may use network for things you explicitly run: `git clone`, `git pull`, model downloads, npm/pip installs, agent skill registries. That is **not** runtime stats telemetry. See [`docs/install/README.md`](docs/install/README.md) and [`docs/repo-layout.md`](docs/repo-layout.md).
 
 **Path metadata**
 

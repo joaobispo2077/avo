@@ -1,30 +1,57 @@
 name: Release
 
 on:
-  push:
-    tags:
-      - 'v*'
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+  workflow_dispatch:
+
+concurrency:
+  group: release-${{ github.event.workflow_run.head_branch || github.ref_name }}
+  cancel-in-progress: false
 
 permissions:
-  contents: read
+  contents: write
 
 env:
   PYTHON_VERSION: '3.12'
   NODE_VERSION: '22'
 
 jobs:
-  verify:
-    name: Pre-release verification
+  determine-version:
+    name: Determine next release version
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       (github.event.workflow_run.head_branch == 'dev' ||
+        github.event.workflow_run.head_branch == 'main'))
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 15
+    outputs:
+      next-version: ${{ steps.version.outputs.next-version }}
+      release-branch: ${{ steps.meta.outputs.branch }}
+      release-sha: ${{ steps.meta.outputs.sha }}
+    env:
+      GITHUB_TOKEN: ${{ secrets.GH_TOKEN || github.token }}
+      GH_TOKEN: ${{ secrets.GH_TOKEN || github.token }}
     steps:
+      - name: Resolve release ref
+        id: meta
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "branch=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+            echo "sha=${{ github.sha }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "branch=${{ github.event.workflow_run.head_branch }}" >> "$GITHUB_OUTPUT"
+            echo "sha=${{ github.event.workflow_run.head_sha }}" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
         with:
-          python-version: ${{ env.PYTHON_VERSION }}
+          ref: ${{ steps.meta.outputs.sha }}
+          fetch-depth: 0
+          persist-credentials: true
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -33,55 +60,51 @@ jobs:
           cache: npm
 
       - name: Install dependencies
+        run: npm ci
+
+      - name: Dry-run semantic-release to extract next version
+        id: version
         run: |
-          pip install -e ".[dev]"
-          npm ci
+          NEXT=$(npx semantic-release --dry-run 2>&1 \
+            | grep -oP '(?<=The next release version is )\S+' \
+            || true)
+          echo "next-version=${NEXT}" >> "$GITHUB_OUTPUT"
+          if [ -z "$NEXT" ]; then
+            echo "No releasable commits found — release job will be skipped."
+          else
+            echo "Next release version: ${NEXT} (branch: ${{ steps.meta.outputs.branch }})"
+          fi
 
-      - name: Gate 1
-        run: bash scripts/validate-prerequisites.sh --ci
-
-      - name: Gate 2
-        run: bash scripts/validate-usability.sh --ci
-
-      - name: Unit tests
-        run: bash scripts/ci/run-unit-tests.sh
-
-  version-check:
-    name: Version alignment
-    needs: verify
+  release:
+    name: Semantic release
+    needs: determine-version
+    if: needs.determine-version.outputs.next-version != ''
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      GITHUB_TOKEN: ${{ secrets.GH_TOKEN || github.token }}
+      GH_TOKEN: ${{ secrets.GH_TOKEN || github.token }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Verify tag matches manifests and CHANGELOG
-        run: bash scripts/ci/verify-release-version.sh "${{ github.ref_name }}"
-
-  github-release:
-    name: GitHub Release
-    needs: version-check
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Extract release notes
-        id: notes
-        run: |
-          VERSION="${GITHUB_REF_NAME#v}"
-          {
-            echo "body<<EOF"
-            bash scripts/ci/extract-changelog-section.sh "$VERSION"
-            echo "EOF"
-          } >> "$GITHUB_OUTPUT"
-
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.ref_name }}
-          name: AVO ${{ github.ref_name }}
-          body: ${{ steps.notes.outputs.body }}
-          draft: false
-          prerelease: ${{ contains(github.ref_name, '-') }}
+          ref: ${{ needs.determine-version.outputs.release-sha }}
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Release
+        run: npm run release
+
+      - name: Verify release manifests align
+        run: |
+          TAG="v${{ needs.determine-version.outputs.next-version }}"
+          bash scripts/ci/verify-release-version.sh "$TAG"

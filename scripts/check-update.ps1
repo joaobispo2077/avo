@@ -45,7 +45,8 @@ foreach ($c in @('python', 'python3', 'py')) { if (Have $c) { $py = $c; break } 
 
 # --- is a check due? ---------------------------------------------------------
 if (-not $Force -and $py) {
-  $due = (& $py helpers/avo_state.py due --days $Days 2>$null)
+  $env:PYTHONPATH = Join-Path $RepoRoot 'src'
+  $due = (& $py -m avo.avo_state due --days $Days 2>$null)
   if ($due -and $due -match '^recent') {
     Say "AVO update: checked recently ($($due -replace '^recent ','')); use --force to check now."
     exit 0
@@ -65,7 +66,7 @@ if ($dirty) { Warn "working tree has local changes - skipping update (won't clob
 git fetch --quiet 2>$null
 if ($LASTEXITCODE -ne 0) { Warn 'fetch failed (offline?) - skipping. Will retry next session.'; exit 0 }
 
-function Touch-Ts { if ($py) { & $py helpers/avo_state.py touch-update *> $null } }
+function Touch-Ts { if ($py) { $env:PYTHONPATH = Join-Path $RepoRoot 'src'; & $py -m avo.avo_state touch-update *> $null } }
 
 $branch = (git rev-parse --abbrev-ref HEAD 2>$null)
 git rev-parse --abbrev-ref '@{u}' *> $null

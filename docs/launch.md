@@ -16,11 +16,11 @@ Pre-push verification for publishing the orchestrator repo at **`joaobispo2077/a
 
 - [ ] `helpers/`, `scripts/`, `docs/`, `tests/`, `providers/`, `static/avo*`, `.github/`, `.specify/`
 - [ ] `avo.config.json`, `avo.dependencies.json`, manifests
-- [ ] `README.md`, `install.md`, `AGENTS.md`, `LICENSE`
+- [ ] `README.md`, `docs/install/README.md`, `AGENTS.md`, `LICENSE`
 
 ## Install slug QA
 
-- [ ] Default install slug is **`joaobispo2077/avo`** in `bin/install.cjs`, `install.sh`, `install.ps1`, `skills.json`, `install.md` (Tier 1), README install block
+- [ ] Default install slug is **`joaobispo2077/avo`** in `bin/install.cjs`, `scripts/install/*`, `skills.json`, `docs/install/README.md` (Tier 1), README install block
 - [ ] **`browser-use/video-use`** appears only where crediting the upstream editing engine (README fork line, routing table, Built on)
 - [ ] `pytest tests/test_install_scripts.py -v` passes (includes default REPO assertion)
 
@@ -30,7 +30,7 @@ Pre-push verification for publishing the orchestrator repo at **`joaobispo2077/a
 - [ ] Scaffold still trackable: `git check-ignore providers/_template/avo.provider.json` → exit 1 (not ignored)
 - [ ] Only `providers/_template/`, `providers/avo.provider.schema.json`, `providers/README.md` ship — no personal `H:/…` paths in staged files
 - [ ] `pytest tests/test_gitignore_scope.py -v` passes
-- [ ] `python helpers/validate_usability.py` passes without a personal provider present
+- [ ] `python -m avo.validate_usability` passes without a personal provider present
 
 ## Engine vs product identity QA
 
@@ -59,8 +59,8 @@ Pre-push verification for publishing the orchestrator repo at **`joaobispo2077/a
 ## Validation (run locally)
 
 ```bash
-python helpers/validate_dependencies.py          # Gate 1
-python helpers/validate_usability.py
+python -m avo.validate_dependencies          # Gate 1
+python -m avo.validate_usability
 pip install -e ".[dev]"
 bash scripts/ci/run-unit-tests.sh
 ```
@@ -70,7 +70,7 @@ bash scripts/ci/run-unit-tests.sh
 ```bash
 git clone https://github.com/joaobispo2077/avo.git /tmp/avo-smoke && cd /tmp/avo-smoke
 bash scripts/setup.sh --lang en --dry-run
-python helpers/validate_dependencies.py
+python -m avo.validate_dependencies
 ```
 
 ## First push (human-only — agents must NOT run this)
@@ -96,7 +96,7 @@ git push -u origin main
 After push, verify raw install URLs resolve:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/joaobispo2077/avo/main/install.sh | head
+curl -fsSL https://raw.githubusercontent.com/joaobispo2077/avo/main/scripts/install/install.sh | head
 ```
 
 ## Human sign-off

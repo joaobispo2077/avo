@@ -35,14 +35,16 @@ class GitignoreScopeTests(unittest.TestCase):
         self.assertNotEqual(r.returncode, 0, msg=f"{path} must remain trackable")
 
     def test_example_project_has_no_personal_paths(self) -> None:
-        data = json.loads((ROOT / "avo.project.example.json").read_text(encoding="utf-8"))
+        data = json.loads(
+            (ROOT / "docs" / "templates" / "avo.project.example.json").read_text(encoding="utf-8")
+        )
         blob = json.dumps(data)
         self.assertNotIn("bishop", blob.lower())
         self.assertNotIn("H:/", blob)
         self.assertNotIn("H:\\", blob)
 
     def test_validate_usability_does_not_require_bishop(self) -> None:
-        src = (ROOT / "helpers" / "validate_usability.py").read_text(encoding="utf-8")
+        src = (ROOT / "src" / "avo" / "validate_usability.py").read_text(encoding="utf-8")
         self.assertNotIn("providers/bishop", src)
 
 

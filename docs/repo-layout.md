@@ -2,9 +2,9 @@
 
 What belongs **in git** vs **install-time** vs **never in this repo**.
 
-AVO is an **orchestrator**. GitHub ships the contract — scripts, helpers, docs,
+AVO is an **orchestrator**. GitHub ships the contract — scripts, engine package, docs,
 manifests, CI, and Spec Kit marker. Heavy tools and skills are installed by
-[`../install.md`](../install.md) / `scripts/setup.sh`.
+[`install/README.md`](install/README.md) / `scripts/setup.sh`.
 
 ---
 
@@ -12,16 +12,20 @@ manifests, CI, and Spec Kit marker. Heavy tools and skills are installed by
 
 | Path | Purpose |
 | ---- | ------- |
-| `README.md`, `LICENSE`, `install.md`, `INSTALL.md` | User-facing entry |
-| `install.sh`, `install.ps1`, `bin/install.cjs` | One-command agent install |
+| `README.md`, `LICENSE` | User-facing entry |
+| `docs/install/` | Install guide |
+| `scripts/install/` | One-command agent install (`install.sh`, `install.ps1`) |
+| `bin/install.cjs` | Unified installer implementation |
 | `agent-skills/`, `skills.json` | Skills registry package (`npx skills add`) |
 | `commands/avo/` | Shipped Cursor slash commands (`/avo.*`) |
 | `docs/avo-pipeline/` | Gateway skill + command reference slices |
 | `docs/avo-commands.md` | User index for slash commands |
 | `AGENTS.md`, `SKILL.md`, `CLAUDE.md` | Agent operating rules |
-| `avo.config.json`, `avo.dependencies.json`, `avo.project.*` | Routing + Gate 1 manifest |
-| `helpers/` | Python engine (transcribe, grade, render, validation) |
-| `scripts/` | Cross-platform setup and native runners |
+| `config/` | Orchestrator manifests (`avo.config.json`, `avo.dependencies.json`, model catalog) |
+| `schemas/` | Public JSON Schema contracts (`avo.project.schema.json`, `edl.schema.json`) |
+| `src/avo/` | Python engine package (transcribe, grade, render, validation) |
+| `helpers/` | Temporary import shims → `avo.*` (removed in v0.2.0) |
+| `scripts/` | Cross-platform setup (`setup.sh`), agent install (`install/`), CI helpers |
 | `docs/` | Workflow, delivery specs, templates, use cases, [engine-vs-orchestrator.md](engine-vs-orchestrator.md), [software-foundation.md](software-foundation.md), [versioning.md](versioning.md), [branching.md](branching.md) |
 | `CHANGELOG.md` | Orchestrator SemVer history |
 | `tests/` | Unit and contract tests |
@@ -49,7 +53,7 @@ Setup clones or installs these under ignored paths:
 | faster-whisper models | `prepare_transcription.py` | `models/` |
 | HyperFrames agent skills | `hyperframes skills update` | user agent dirs, not AVO repo |
 
-See [`../avo.dependencies.json`](../avo.dependencies.json) and Gate 1:
+See [`../config/avo.dependencies.json`](../config/avo.dependencies.json) and Gate 1:
 `scripts/validate-prerequisites.sh`.
 
 ---
