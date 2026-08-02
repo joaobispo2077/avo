@@ -148,7 +148,7 @@ class AvoCommandParityTests(unittest.TestCase):
     def test_locale_stub_stop_gate(self) -> None:
         self.assertTrue(LOCALE_STUB.is_file())
         text = LOCALE_STUB.read_text(encoding="utf-8")
-        self.assertIn("Stop ÔÇö do not implement", text)
+        self.assertIn("do not implement", text)
         self.assertFalse((ROOT / "agent-skills" / "avo-locale").exists())
 
 
