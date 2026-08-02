@@ -175,6 +175,46 @@ class ReleasePipelineTests(unittest.TestCase):
         self.assertEqual(match.group(1), version)
         self.assertIn(heading, changelog.read_text(encoding="utf-8"))
 
+    def test_verify_release_version_accepts_semantic_release_changelog_heading(self) -> None:
+        changelog = ROOT / "CHANGELOG.md"
+        original = changelog.read_text(encoding="utf-8")
+        version = "1.0.0"
+        semantic_heading = f"# {version} (2026-08-02)"
+        patched = (
+            f"{original.rstrip()}\n\n{semantic_heading}\n\n### Bug Fixes\n\n"
+            "* **release:** smoke\n"
+        )
+        changelog.write_text(patched, encoding="utf-8")
+        pkg_path = ROOT / "package.json"
+        pkg_original = pkg_path.read_text(encoding="utf-8")
+        pkg = json.loads(pkg_original)
+        pkg["version"] = version
+        pkg_path.write_text(json.dumps(pkg, indent=2) + "\n", encoding="utf-8")
+        py_original = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
+        py_patched = re.sub(
+            r'^version\s*=\s*"[^"]+"',
+            f'version = "{version}"',
+            py_original,
+            count=1,
+            flags=re.M,
+        )
+        (ROOT / "pyproject.toml").write_text(py_patched, encoding="utf-8")
+
+        def restore() -> None:
+            changelog.write_text(original, encoding="utf-8")
+            pkg_path.write_text(pkg_original, encoding="utf-8")
+            (ROOT / "pyproject.toml").write_text(py_original, encoding="utf-8")
+
+        self.addCleanup(restore)
+        proc = subprocess.run(
+            ["python", "scripts/ci/verify-release-version.py", version],
+            cwd=ROOT,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(proc.returncode, 0, msg=proc.stderr or proc.stdout)
+        self.assertIn("OK:", proc.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()
