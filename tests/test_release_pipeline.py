@@ -18,6 +18,14 @@ class ReleasePipelineTests(unittest.TestCase):
         self.assertIn("name: 'develop'", text)
         self.assertIn("prerelease: 'alpha'", text)
         self.assertIn("firstParent: false", text)
+        self.assertIn(
+            "./scripts/ci/semantic-release-pyproject-version.mjs",
+            text,
+        )
+
+    def test_semantic_release_pyproject_plugin_module(self) -> None:
+        plugin = ROOT / "scripts/ci/semantic-release-pyproject-version.mjs"
+        self.assertTrue(plugin.is_file())
 
     def test_determine_next_release_script_exists(self) -> None:
         script = ROOT / "scripts/ci/determine-next-release-version.sh"
