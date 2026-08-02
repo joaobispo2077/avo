@@ -68,7 +68,9 @@ Always parse shared args first: [`references/arguments.md`](references/arguments
 ## Non-negotiable
 
 1. Declare `provider` + `rawDir` before any stage.
-2. Human approval gates after watch-skill + transcription analysis (see workflow §4b).
+2. **Agent pre-human gate:** watch-skill + transcript analysis + `edl_timeline verify`
+   before each human approval gate (see [`references/cuts.md`](references/cuts.md),
+   [`references/watch.md`](references/watch.md), workflow §4b).
 3. Subtitles last in filter chain; 30ms audio fades at cuts.
 4. Session outputs only under `<rawDir>/edit/`.
 

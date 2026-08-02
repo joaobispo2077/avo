@@ -38,6 +38,14 @@ edit/animations/slot_<id>/
 
 Spawn **parallel** sub-agents for multiple slots (SKILL Hard Rule 10).
 
+## Beat map (required before creator review)
+
+Overlays/SFX must store **`anchor_in_source`** (main camera seconds). After any
+cut change, recompute `start_in_output` — see [`cuts.md`](cuts.md).
+
+Write **`edit/animations/beat-map.md`** with B-time table (or run
+`python -m avo.edl_timeline write-docs edit/edl.json`). Link from `motion_notes`.
+
 ## Examples shipped in command
 
 - Cursor logo → liquid glass card spin
