@@ -21,6 +21,7 @@ class QualityMatrixTests(unittest.TestCase):
         self.assertIn("workflow_run", release)
         self.assertIn("semantic-release", release)
         self.assertIn("determine-next-release-version.sh", release)
+        self.assertIn("GITHUB_REF: refs/heads/", release)
         self.assertIn("fetch-tags: true", release)
         self.assertIn("branches:", config)
         self.assertIn("prerelease: 'alpha'", config)
