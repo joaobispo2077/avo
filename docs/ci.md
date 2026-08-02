@@ -84,6 +84,41 @@ npm run validate:usability -- --ci
 | `AVO_CI=1` | Set in workflows; reserved for future setup-script CI behavior |
 | `PY` / `PYTHON` | Override Python binary for gate scripts |
 
+## Branch protection (block merge until CI passes)
+
+`main` and `release` should require the three **CI** job checks before merge. GitHub
+shows them under the commit/PR checks tab with these exact names:
+
+- `Gate 1 — Orchestrator prerequisites`
+- `Unit tests (AVO repo)`
+- `Gate 2 — Project usability`
+
+### GitHub UI
+
+1. **Settings → Rules → Rulesets → New branch ruleset**
+2. **Target branches:** `main`, `release`
+3. Enable **Require status checks to pass**
+4. Search and add the three job names above (pick the GitHub Actions ones)
+5. Enable **Require branches to be up to date before merging** (recommended)
+6. Save — set enforcement to **Active**
+
+Repo already has ruleset `no-delete-no-force` on `main` (blocks delete/force-push only).
+Add a separate ruleset or extend targets; do not rely on that ruleset for CI gating.
+
+### `gh` CLI (repository ruleset)
+
+Run from a machine with admin access to `joaobispo2077/avo`:
+
+```bash
+gh api repos/joaobispo2077/avo/rulesets -X POST -f name="require-ci" -f target=branch -f enforcement=active -f bypass_actors='[]' -F 'conditions={"ref_name":{"include":["refs/heads/main","refs/heads/release"],"exclude":[]}}' -F 'rules=[{"type":"pull_request","parameters":{"required_approving_review_count":0,"dismiss_stale_reviews_on_push":false,"require_code_owner_review":false,"require_last_push_approval":false,"required_review_thread_resolution":false}},{"type":"required_status_checks","parameters":{"strict_required_status_checks_policy":true,"required_status_checks":[{"context":"Gate 1 — Orchestrator prerequisites"},{"context":"Unit tests (AVO repo)"},{"context":"Gate 2 — Project usability"}]}}]'
+```
+
+After the first CI run on a PR, if a check name is missing from the picker, merge one
+PR with CI green once — GitHub registers check names from completed runs.
+
+Private repos on the free plan support rulesets; legacy branch protection API also works
+but rulesets are easier for multiple branches.
+
 ## Adding a new orchestrated dependency
 
 1. Add job to `avo.config.json` if new stage.
