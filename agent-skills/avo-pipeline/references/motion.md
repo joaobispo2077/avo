@@ -2,6 +2,10 @@
 
 HyperFrames-first. Load [`hyperframes`](../../../.claude/skills/hyperframes/SKILL.md) entry + [`motion-doctrine`](../../../.claude/skills/motion-doctrine/SKILL.md) when building slots.
 
+**Product promo / SaaS launch:** load [`product-promo-knowledge.md`](product-promo-knowledge.md) first — curated technique index, render contract, and starter exemplar under `docs/exemplars/hyperframes-product-promo/`.
+
+**Short-form vertical (9:16):** load [`short-form-knowledge.md`](short-form-knowledge.md) — 4-layer scaffold, face-mode choreography, audio-sync protocol under `docs/exemplars/hyperframes-short-form/`.
+
 ## Density
 
 Default Level 2–3 for explainers; Level 1 for read-heavy segments.
@@ -18,6 +22,8 @@ Default Level 2–3 for explainers; Level 1 for read-heavy segments.
 | Remotion → HyperFrames port | [`remotion-port.md`](remotion-port.md) |
 | Screencast oversized cursor | [`screencast.md`](screencast.md) |
 | Framework pick (HF vs Remotion) | [`framework.md`](framework.md) — run before first slot |
+| Product promo / SaaS demo | [`product-promo-knowledge.md`](product-promo-knowledge.md) → product-launch-video |
+| Short-form 9:16 + overlays | [`short-form-knowledge.md`](short-form-knowledge.md) → `/avo.shorts` motion phase |
 
 Run [`framework.md`](framework.md) when framework choice is not already documented.
 

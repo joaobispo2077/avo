@@ -33,6 +33,20 @@ Use a project-local animation folder, usually under the footage project's
 `edit/animations/slot_<id>/` for overlays or a dedicated animation project folder
 for full compositions.
 
+**Product-promo knowledge base:** For SaaS/product launch motion, agents load
+[`exemplars/hyperframes-product-promo/README.md`](exemplars/hyperframes-product-promo/README.md)
+(technique index, render contract, pre-flight checklist, lint-verified starter).
+Pipeline router: [`agent-skills/avo-pipeline/references/product-promo-knowledge.md`](../agent-skills/avo-pipeline/references/product-promo-knowledge.md).
+Adapted from [hyperframes-student-kit](https://github.com/nateherkai/hyperframes-student-kit);
+AVO `motion-doctrine` wins on conflicts — no `.mp4` in repo.
+
+**Short-form knowledge base:** For 9:16 talking-head + overlays + captions, load
+[`exemplars/hyperframes-short-form/README.md`](exemplars/hyperframes-short-form/README.md).
+Pipeline router: [`agent-skills/avo-pipeline/references/short-form-knowledge.md`](../agent-skills/avo-pipeline/references/short-form-knowledge.md).
+Pairs with `/avo.shorts` footage orchestrator.
+
+**Exemplar index:** [`exemplars/README.md`](exemplars/README.md) · CI: `bash scripts/ci/lint-hyperframes-exemplars.sh`
+
 Suggested structure:
 
 ```text
