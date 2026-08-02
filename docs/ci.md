@@ -27,18 +27,18 @@ Every `job` in `config/avo.dependencies.json` must exist under `config/avo.confi
 ## Release automation
 
 - Config: [`release.config.mjs`](../release.config.mjs) (semantic-release plugins)
-- Workflow: `.github/workflows/release.yml` runs after **CI** succeeds on `develop` (alpha) or `main` (stable)
+- Workflow: `.github/workflows/release.yml` runs after **CI** succeeds on `develop` (alpha) or `release` (stable)
 - Secret: `GH_TOKEN` with `contents: write` (see [versioning.md](./versioning.md))
 
 ## Workflows (maxframe-style layout)
 
 | Workflow | Trigger | Purpose |
 | --- | --- | --- |
-| `ci.yml` | PR + push to `main` | Gate 1 → unit tests + `hf:doctor` → Gate 2 |
+| `ci.yml` | PR + push to `main`, `release`, `develop`, `feature/**` | Gate 1 → unit tests + `hf:doctor` → Gate 2 |
 | `setup-smoke.yml` | `workflow_dispatch` | Full `setup.sh` on ubuntu + windows |
 | `orchestrator-smoke.yml` | manual + weekly cron | Gate 1 (+ optional) + Whisper tiny model + Gate 2 |
 | `ffmpeg-whisper-smoke.yml` | `workflow_dispatch` | Binary/import smoke (like maxframe `yt-dlp-smoke.yml`) |
-| `release.yml` | After **CI** on `develop` / `main` (+ manual) | semantic-release dry-run → publish (alpha on `develop`, stable on `main`) |
+| `release.yml` | After **CI** on `develop` / `release` (+ manual) | semantic-release dry-run → publish (alpha on `develop`, stable on `release`) |
 
 Reference: [maxframe workflows](https://github.com/joaobispo2077/maxframe/tree/main/.github/workflows).
 
