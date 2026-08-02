@@ -22,6 +22,8 @@ EXPECTED_COMMANDS = {
     "motion.md",
     "captions.md",
     "deliver.md",
+    "shorts.md",
+    "reframe.md",
     "telemetry.md",
     "learndown.md",
     "cleanup.md",
@@ -43,6 +45,8 @@ EXPECTED_UTILITY_REFS = {
     "stats.md",
     "captions.md",
     "deliver.md",
+    "shorts.md",
+    "reframe.md",
 }
 
 
@@ -65,6 +69,8 @@ class AvoCommandParityTests(unittest.TestCase):
         self.assertIn("/avo.transcribe", text)
         self.assertIn("/avo.captions", text)
         self.assertIn("/avo.deliver", text)
+        self.assertIn("/avo.shorts", text)
+        self.assertIn("/avo.reframe", text)
 
 
 if __name__ == "__main__":
