@@ -21,6 +21,22 @@ the bundled editing engine and upstream [video-use](https://github.com/browser-u
 > less**: mass-producing videos per channel while the repetitive pipeline work
 > runs through your agent.
 
+## Contents
+
+- [What you get](#what-you-get)
+- [How it works](#how-it-works)
+- [Use cases](#use-cases)
+- [Why not a native video-editing MCP?](#why-not-a-native-video-editing-mcp)
+- [Tool routing](#tool-routing-who-owns-which-job)
+- [Install](#install)
+- [Supported agents](#supported-agents)
+- [Quickstart](#quickstart)
+- [Documentation](#documentation)
+- [Sponsor](#sponsor)
+- [Backlog](#backlog)
+- [Privacy: stats & telemetry](#privacy-stats--telemetry)
+- [Built on](#built-on)
+
 ---
 
 ## What you get
@@ -29,7 +45,7 @@ the bundled editing engine and upstream [video-use](https://github.com/browser-u
   by talking to your agent, not by clicking through every stage yourself.
 - **Local first.** Transcription and most of the pipeline run on your machine. No
   account required for the core path. Usage stats (`/avo.stats`) and telemetry stay
-  on disk — see [Privacy — stats & telemetry](#privacy--stats--telemetry) (end of this page).
+  on disk. See [Privacy: stats & telemetry](#privacy-stats--telemetry) (end of this page).
 - **Proves ideas cheaply.** Low-resolution previews first; full-quality render only
   when the cut is confident, saving time and disk.
 - **Checks its own work.** After each render, AVO watches the result, fixes problems,
@@ -85,7 +101,7 @@ channel starts smarter, while each project stays separate.
 After [Quickstart](#quickstart), install **AVO skills** for your agent
 (`bash scripts/install/install.sh` or [`docs/agent-skills.md`](docs/agent-skills.md)). Open your
 **footage folder** in the agent (or paste its path). Tell it your **provider**
-(channel/brand) and **where the clips live** — plain English is fine; the agent
+(channel/brand) and **where the clips live**; plain English is fine. The agent
 maps that to `rawDir` internally. Then use a **slash command** (Cursor) or ask in
 natural language (Claude Code, Codex, …).
 
@@ -95,7 +111,7 @@ natural language (Claude Code, Codex, …).
 | `avo-pipeline` | Transcribe, cut, sound, motion, watch, deliver |
 | `avo-provider` | Create/configure channel brand + manifest |
 
-**Cursor:** `/avo.pipeline`, `/avo.trim`, `/avo.motion`, … — full list in [`docs/avo-commands.md`](docs/avo-commands.md).  
+**Cursor:** `/avo.pipeline`, `/avo.trim`, `/avo.motion`, … Full list in [`docs/avo-commands.md`](docs/avo-commands.md).  
 **Other agents:** `Load avo-pipeline` + the same provider and folder lines (see [skill map](docs/agent-skills.md#use-cases-without-slash-commands)).
 
 ### Where is your footage?
@@ -333,8 +349,8 @@ SKU-specific props.
 
 #### "Live pipeline demo: four beat liquid-glass cards synced to the second."
 
-**You get:** A talking-head demo where timed overlay beats explain the AVO workflow —
-karaoke title, mistakes card, pipeline story, and a HyperFrames alt palette — each
+**You get:** A talking-head demo where timed overlay beats explain the AVO workflow:
+karaoke title, mistakes card, pipeline story, and a HyperFrames alt palette. Each
 popping in on the exact spoken phrase. Full beat-level spec:
 [`docs/deep-animation-direction-exemplar.md`](docs/deep-animation-direction-exemplar.md).
 
@@ -349,25 +365,25 @@ The footage is in this folder.
 Follow specs/active/avo-pipeline-demo-motion/animation-direction.md
 ```
 
-**Say to your agent** (deep animation direction — copy and adapt):
+**Say to your agent** (deep animation direction; copy and adapt):
 
 ```text
 Load avo-pipeline + talking-head-recut + motion-doctrine.
 Provider: tech-first-look. The footage is in this folder.
 
-Four beats — sync each to the spoken phrase (±100 ms):
+Four beats. Sync each to the spoken phrase (±100 ms):
 
-1. OPENING — when I say "This is the example video that we're editing live together":
+1. OPENING: when I say "This is the example video that we're editing live together":
    left-half liquid glass card; karaoke-style word pop-in (title treatment).
 
-2. MISTAKES — when I say "I might make a few mistakes and that's okay":
+2. MISTAKES: when I say "I might make a few mistakes and that's okay":
    bottom card: "Mistakes will be cut."; right-half trim/edit motion graphic.
 
-3. PIPELINE — when I describe dropping in a raw file and getting edits + motion:
+3. PIPELINE: when I describe dropping in a raw file and getting edits + motion:
    center liquid glass card; story: raw file → transcript → cuts → motion layers → export.
    Label illustrative if simplified. Density Level 4 inside the card only.
 
-4. HYPERFRAMES ALT — when I say "Using HyperFrames instead":
+4. HYPERFRAMES ALT: when I say "Using HyperFrames instead":
    left + right cards simultaneously; different palette (teal/violet vs warm glass);
    slide-in grammar instead of pop-in.
 
@@ -423,7 +439,7 @@ and factual restraint come first.
 
 ### Slash commands (Cursor)
 
-Same goals in one line — load skill **`avo-pipeline`** (or **`avo-provider`** where noted):
+Same goals in one line. Load skill **`avo-pipeline`** (or **`avo-provider`** where noted):
 
 | Goal | Command |
 | ---- | ------- |
@@ -443,7 +459,7 @@ Same goals in one line — load skill **`avo-pipeline`** (or **`avo-provider`** 
 | Ready for approval | `/avo.watch` |
 | Logo spin / glass card | `/avo.motion` |
 | Disk / progress report | `/avo.telemetry` |
-| Local usage stats | `/avo.stats` (local disk only — [`SECURITY.md#privacy--telemetry`](SECURITY.md#privacy--telemetry)) |
+| Local usage stats | `/avo.stats` (local disk only; [`SECURITY.md#privacy--telemetry`](SECURITY.md#privacy--telemetry)) |
 | Create provider | `/avo.provider` |
 | After master approved | `/avo.learndown` then `/avo.cleanup` |
 | Open topic docs | `/avo.docs` |
@@ -459,7 +475,7 @@ Power-user prompts, one routing cell at a time. Full table: [Tool routing](#tool
 
 - **Plan in Spec Kit first:** `/speckit.specify`, `/speckit.plan`, `/speckit.tasks` with `rawDir` as the workflow root ([GitHub Spec Kit](https://github.com/github/spec-kit)).
 - **Full folder → YouTube-ready:** Spec Kit (optional) → transcribe → cut → watch-skill → you approve → motion → master → cleanup.
-- **Local transcribe only:** faster-whisper on your machine; language set at setup (`--lang pt`, `--lang en`, …). Active model tier is disclosed at setup and in phase telemetry — see [`docs/model-transparency.md`](docs/model-transparency.md).
+- **Local transcribe only:** faster-whisper on your machine; language set at setup (`--lang pt`, `--lang en`, …). Active model tier is disclosed at setup and in phase telemetry. See [`docs/model-transparency.md`](docs/model-transparency.md).
 - **ElevenLabs for this one video:** swap **Paid** on transcribe only; everything else stays Local.
 - **Cut and caption only:** skip motion; master after edit-proof approval.
 - **HyperFrames, not Remotion:** default motion path; see [`docs/remotion-decision-guide.md`](docs/remotion-decision-guide.md) for exceptions.
@@ -664,7 +680,7 @@ Full setup details and troubleshooting live in [`docs/install/README.md`](docs/i
   the default motion framework.
 - [`docs/remotion-decision-guide.md`](docs/remotion-decision-guide.md): when to
   choose Remotion instead.
-- [Use cases](#use-cases) — all conversation prompts (product, promo, dealer, game, tech, pipeline demo motion, health, going global, slash commands).
+- [Use cases](#use-cases): all conversation prompts (product, promo, dealer, game, tech, pipeline demo motion, health, going global, slash commands).
 - [`docs/repo-layout.md`](docs/repo-layout.md): what ships in git vs install-time.
 - [`docs/launch.md`](docs/launch.md): pre-push GitHub checklist.
 - [`docs/delivery-specifications.md`](docs/delivery-specifications.md),
@@ -691,7 +707,7 @@ output:
 ## Backlog
 
 Some capabilities are planned but not yet implemented. Each has a sponsor CTA if
-you'd like to move it up the queue. [Full roadmap → specs/backlog/README.md](specs/backlog/README.md)
+you'd like to move it up the queue. [Full roadmap → docs/ROADMAP.md](docs/ROADMAP.md)
 
 - **BL-001** [Upscaling low-quality source footage](specs/backlog/upscaling.md): controlled upscale path for phone/Zoom archives.
 - **BL-002** [Higher-than-source output resolution](specs/backlog/higher-than-source-res.md): opt-in delivery above camera native resolution.
@@ -708,7 +724,7 @@ See [Sponsor](#sponsor) to fund priority items.
 **No phone home.** `/avo.stats` and phase telemetry read **local files only**
 (`.avo/state.json`, optional `avo.wrap.*` on your footage folders). No analytics
 backend, no accounts, no usage upload. Install-time network (git, models, agent
-registries) is separate — full detail in
+registries) is separate. Full detail in
 [`SECURITY.md#privacy--telemetry`](SECURITY.md#privacy--telemetry).
 
 ---
