@@ -98,4 +98,4 @@ This is **not** SemVer and does **not** go in `CHANGELOG.md`.
 
 ## Current package version
 
-See `pyproject.toml` and `package.json` (`0.1.0` at foundation setup).
+See `pyproject.toml` and `package.json` (`1.0.0` public baseline).
