@@ -17,8 +17,8 @@ After cleanup, **exactly** these survive:
 
 1. **Verify:** `python -m avo.project_inventory verify --raw-dir <rawDir> --master-basename <stem>`
 2. **Dry-run (recommended):** `… cleanup --dry-run` — list paths only
-3. **Execute:** `… cleanup` — verify → assert no preserved ∩ delete → `npx rimraf`
-4. **Final wrap:** `python -m avo.wrap final …` → `<rawDir>/avo.wrap.md/json` (`status: "final"`). Keep `avo.wrap.draft.*`.
+3. **Execute:** `… cleanup [--session-id <id>]` — verify → assert no preserved ∩ delete → `npx rimraf`. Purges `.avo/tmp/learndown/<session-id>/` when `--session-id` is set.
+4. **Final wrap:** `python -m avo.wrap final …` → `<rawDir>/avo.wrap.md/json` (`status: "final"`). Keep `avo.wrap.draft.*`. Updates provider learndown entry + index.
 5. **Record session:** `python -m avo.stats record --wrap-json <rawDir>/avo.wrap.json`
 
 ## Delete candidates

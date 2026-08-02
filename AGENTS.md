@@ -724,20 +724,26 @@ full mechanics live in [`docs/avo-workflow.md`](docs/avo-workflow.md).
 
 ### Weekly update check
 
-At session start, check whether AVO itself is up to date:
+At session start, check whether the user's AVO install is up to date:
 
 1. Read `lastUpdateCheck` from `.avo/state.json` (gitignored). If the file or
    field is absent, treat it as never-checked.
 2. If the last check was **≥ 7 days ago** (or never), run `git fetch` and compare
-   the local branch to its upstream.
-3. If updates exist **and the working tree is clean**, inform the user and pull
-   the latest changes (`git pull` / fast-forward). If the working tree is
-   **dirty**, or the machine is **offline**, warn and skip — **never clobber,
-   stash-discard, or force** local changes.
-4. Rewrite `lastUpdateCheck` to the current timestamp after the check completes,
+   the local branch to its upstream (or `npm run check-update` for the same advisory).
+3. If updates exist, tell the user in plain language and suggest **`/avo.update`**
+   (or `/avo.update yes` to apply). **Do not** paste npm/git commands unless they
+   ask for manual control. When they confirm, run the update yourself per
+   [`commands/avo/update.md`](commands/avo/update.md).
+4. If the working tree is **dirty**, or the machine is **offline**, warn and
+   skip — **never clobber, stash-discard, or force** local changes.
+5. Rewrite `lastUpdateCheck` to the current timestamp after the check completes,
    whether or not a pull happened.
-5. This check is advisory maintenance; it must never block or delay the user's
+6. This check is advisory maintenance; it must never block or delay the user's
    actual editing request.
+
+**Provider safety:** `/avo.update` snapshots gitignored `providers/<slug>/`
+workspaces before pull/sync and verifies manifests after. Never delete or
+overwrite user provider directories during update.
 
 ### Provider + inputs declaration (project start)
 

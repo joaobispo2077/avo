@@ -114,6 +114,15 @@ Spoken alias: **`/avo --help`** → `/avo.help`
 
 Use `ProjectDir` + `Source` instead of footage paths — see [Shared arguments](#shared-arguments).
 
+### Install & maintenance
+
+| Command | Purpose |
+| ------- | ------- |
+| `/avo.update` | Refresh AVO from GitHub; full skills + toolchain sync; preserves your providers ([source](../commands/avo/update.md)) |
+| `/avo.provider` | Create or configure a provider — brand, manifest, scope ([source](../commands/avo/provider.md)) |
+
+Skill: [`avo-provider`](../agent-skills/avo-provider/SKILL.md) · Concept: [`docs/providers.md`](providers.md)
+
 ### Post-master ops
 
 | Command | Purpose |
@@ -122,14 +131,6 @@ Use `ProjectDir` + `Source` instead of footage paths — see [Shared arguments](
 | `/avo.learndown` | ai-memory consolidation + draft wrap ([source](../commands/avo/learndown.md)) |
 | `/avo.cleanup` | Preserved-set cleanup + final wrap + stats record ([source](../commands/avo/cleanup.md)) |
 | `/avo.stats` | Local aggregate metrics ([source](../commands/avo/stats.md)) |
-
-### Provider setup
-
-| Command | Purpose |
-| ------- | ------- |
-| `/avo.provider` | Create or configure a provider — brand, manifest, scope ([source](../commands/avo/provider.md)) |
-
-Skill: [`avo-provider`](../agent-skills/avo-provider/SKILL.md) · Concept: [`docs/providers.md`](providers.md)
 
 Shipped command files: [`../commands/avo/`](../commands/avo/) (46 commands)
 

@@ -88,6 +88,13 @@ Spoken alias: **`/avo --help`**. Cursor file: `commands/avo/help.md` → `/avo.h
 | `/avo.figma` | Figma → HyperFrames import |
 | `/avo.media` | Catalog BGM/SFX/logos via media-use |
 
+### Install & maintenance
+
+| Command | When to use |
+| ------- | ----------- |
+| `/avo.update` | Refresh AVO from GitHub; skills + toolchain; preserves providers |
+| `/avo.provider` | Create or configure a provider (brand, manifest, scope) |
+
 ### Post-master ops
 
 | Command | When to use |
@@ -96,12 +103,6 @@ Spoken alias: **`/avo --help`**. Cursor file: `commands/avo/help.md` → `/avo.h
 | `/avo.learndown` | ai-memory consolidation |
 | `/avo.cleanup` | Preserved-set delete + final wrap + stats record |
 | `/avo.stats` | Local aggregate metrics (disk freed, videos completed) |
-
-### Provider setup
-
-| Command | When to use |
-| ------- | ----------- |
-| `/avo.provider` | Create or configure a provider (brand, manifest, scope) |
 
 ## Before any executing command
 
