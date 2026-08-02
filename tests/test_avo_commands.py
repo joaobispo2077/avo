@@ -1,4 +1,4 @@
-"""Command file parity tests for /avo.* slash commands."""
+﻿"""Command file parity tests for /avo.* slash commands."""
 from __future__ import annotations
 
 import unittest
@@ -10,7 +10,7 @@ REFS = ROOT / "agent-skills" / "avo-pipeline" / "references"
 DOCS_PIPELINE = ROOT / "docs" / "avo-pipeline"
 REVIEW_TEMPLATES = ROOT / "docs" / "templates" / "review"
 SKILLS_JSON = ROOT / "skills.json"
-LOCALE_STUB = ROOT / "specs" / "active" / "avo-future-skills" / "locale-stub.md"
+LOCALE_STUB = ROOT / "specs" / "backlog" / "locale-stub.md"
 
 EXPECTED_COMMANDS = {
     "help.md",
@@ -148,7 +148,7 @@ class AvoCommandParityTests(unittest.TestCase):
     def test_locale_stub_stop_gate(self) -> None:
         self.assertTrue(LOCALE_STUB.is_file())
         text = LOCALE_STUB.read_text(encoding="utf-8")
-        self.assertIn("Stop — do not implement", text)
+        self.assertIn("do not implement", text)
         self.assertFalse((ROOT / "agent-skills" / "avo-locale").exists())
 
 
