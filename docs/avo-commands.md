@@ -49,6 +49,7 @@ Spoken alias: **`/avo --help`** → `/avo.help`
 | `/avo.pipeline` | Full pipeline with Footage, SFX, B-roll, Music ([source](../commands/avo/pipeline.md)) |
 | `/avo.trim` | Transcribe + cut only ([source](../commands/avo/trim.md)) |
 | `/avo.transcribe` | Transcribe only, no cut ([source](../commands/avo/transcribe.md)) |
+| `/avo.sync` | Audio sync diagnosis ([source](../commands/avo/sync.md)) |
 | `/avo.sound` | Noise reduction, mix, SFX/Music ([source](../commands/avo/sound.md)) |
 | `/avo.sound create` | Creative SFX brief ([reference](../agent-skills/avo-pipeline/references/sound-create.md)) |
 | `/avo.audit` | Scoped QC ([source](../commands/avo/audit.md)) |
@@ -64,6 +65,7 @@ Spoken alias: **`/avo --help`** → `/avo.help`
 | `/avo.reframe` | Vertical clip from long-form master ([source](../commands/avo/reframe.md)) |
 | `/avo.podcast-clip` | Podcast / interview clip extraction ([source](../commands/avo/podcast-clip.md)) |
 | `/avo.trailer` | Teaser / trailer from long-form master ([source](../commands/avo/trailer.md)) |
+| `/avo.talking-head` | Talking-head graphic overlays ([source](../commands/avo/talking-head.md)) |
 
 ### Upload prep
 
@@ -71,6 +73,7 @@ Spoken alias: **`/avo --help`** → `/avo.help`
 | ------- | ------- |
 | `/avo.chapters` | YouTube chapters from final transcript ([source](../commands/avo/chapters.md)) |
 | `/avo.thumbnail` | Thumbnail candidate stills ([source](../commands/avo/thumbnail.md)) |
+| `/avo.end-screen` | End-screen safe zone checklist ([source](../commands/avo/end-screen.md)) |
 
 ### QC & deliver
 
@@ -78,6 +81,7 @@ Spoken alias: **`/avo --help`** → `/avo.help`
 | ------- | ------- |
 | `/avo.rights` | Rights and SOURCE-LOG audit ([source](../commands/avo/rights.md)) |
 | `/avo.audio-qc` | Master loudness / true peak QC ([source](../commands/avo/audio-qc.md)) |
+| `/avo.color` | Color / evidence QC ([source](../commands/avo/color.md)) |
 | `/avo.retention` | Retention diagnosis (no render) ([source](../commands/avo/retention.md)) |
 | `/avo.animation-qc` | Motion render QC before composite ([source](../commands/avo/animation-qc.md)) |
 | `/avo.audit` | Scoped QC window ([source](../commands/avo/audit.md)) |
@@ -91,6 +95,10 @@ Spoken alias: **`/avo --help`** → `/avo.help`
 | `/avo.changelog-video` | Changelog → branded video ([source](../commands/avo/changelog-video.md)) |
 | `/avo.explainer` | Article → faceless explainer ([source](../commands/avo/explainer.md)) |
 | `/avo.slideshow` | Slide outline → HyperFrames slideshow ([source](../commands/avo/slideshow.md)) |
+| `/avo.launch` | Product launch video ([source](../commands/avo/launch.md)) |
+| `/avo.music-video` | Music → visual video ([source](../commands/avo/music-video.md)) |
+| `/avo.figma` | Figma import ([source](../commands/avo/figma.md)) |
+| `/avo.media` | Media catalog router ([source](../commands/avo/media.md)) |
 
 Use `ProjectDir` + `Source` instead of footage paths — see [Shared arguments](#shared-arguments).
 
@@ -111,7 +119,7 @@ Use `ProjectDir` + `Source` instead of footage paths — see [Shared arguments](
 
 Skill: [`avo-provider`](../agent-skills/avo-provider/SKILL.md) · Concept: [`docs/providers.md`](providers.md)
 
-Shipped command files: [`../commands/avo/`](../commands/avo/) (32 commands)
+Shipped command files: [`../commands/avo/`](../commands/avo/) (39 commands)
 
 ---
 

@@ -1,6 +1,6 @@
 ---
 name: avo-pipeline
-description: Gateway for AVO slash commands (/avo.help, /avo.guidelines, /avo.pipeline, /avo.trim, /avo.transcribe, /avo.sound, /avo.audit, /avo.watch, /avo.motion, /avo.captions, /avo.rights, /avo.audio-qc, /avo.chapters, /avo.thumbnail, /avo.deliver, /avo.shorts, /avo.reframe, /avo.podcast-clip, /avo.trailer, /avo.pr-video, /avo.changelog-video, /avo.explainer, /avo.slideshow, /avo.retention, /avo.animation-qc, /avo.telemetry, /avo.learndown, /avo.cleanup, /avo.stats, /avo.docs). Load when the user invokes any /avo.* command or declares Footage/rawDir asset paths.
+description: Gateway for AVO slash commands (/avo.help, /avo.guidelines, /avo.pipeline, /avo.trim, /avo.transcribe, /avo.sound, /avo.sync, /avo.audit, /avo.watch, /avo.motion, /avo.captions, /avo.talking-head, /avo.rights, /avo.audio-qc, /avo.color, /avo.chapters, /avo.thumbnail, /avo.end-screen, /avo.deliver, /avo.shorts, /avo.reframe, /avo.podcast-clip, /avo.trailer, /avo.pr-video, /avo.changelog-video, /avo.explainer, /avo.slideshow, /avo.launch, /avo.music-video, /avo.figma, /avo.media, /avo.retention, /avo.animation-qc, /avo.telemetry, /avo.learndown, /avo.cleanup, /avo.stats, /avo.docs). Load when the user invokes any /avo.* command or declares Footage/rawDir asset paths.
 ---
 
 # AVO pipeline commands (gateway)
@@ -23,14 +23,18 @@ Entry skill for **`/avo.*`** slash commands. Canonical rules: [`AGENTS.md`](../.
 | `/avo.transcribe` | [`references/transcribe.md`](references/transcribe.md) |
 | `/avo.sound` (mix/NR) | [`references/sound.md`](references/sound.md) |
 | `/avo.sound create` | [`references/sound-create.md`](references/sound-create.md) |
+| `/avo.sync` | [`references/sync.md`](references/sync.md) |
 | `/avo.audit` | [`references/audit.md`](references/audit.md) |
 | `/avo.watch` | [`references/watch.md`](references/watch.md) |
 | `/avo.motion` | [`references/motion.md`](references/motion.md) |
 | `/avo.captions` | [`references/captions.md`](references/captions.md) |
+| `/avo.talking-head` | [`references/talking-head.md`](references/talking-head.md) |
 | `/avo.rights` | [`references/rights.md`](references/rights.md) |
 | `/avo.audio-qc` | [`references/audio-qc.md`](references/audio-qc.md) |
+| `/avo.color` | [`references/color.md`](references/color.md) |
 | `/avo.chapters` | [`references/chapters.md`](references/chapters.md) |
 | `/avo.thumbnail` | [`references/thumbnail.md`](references/thumbnail.md) |
+| `/avo.end-screen` | [`references/end-screen.md`](references/end-screen.md) |
 | `/avo.deliver` | [`references/deliver.md`](references/deliver.md) |
 | `/avo.shorts` | [`references/shorts.md`](references/shorts.md) |
 | `/avo.reframe` | [`references/reframe.md`](references/reframe.md) |
@@ -40,6 +44,10 @@ Entry skill for **`/avo.*`** slash commands. Canonical rules: [`AGENTS.md`](../.
 | `/avo.changelog-video` | [`references/changelog-video.md`](references/changelog-video.md) |
 | `/avo.explainer` | [`references/explainer.md`](references/explainer.md) |
 | `/avo.slideshow` | [`references/slideshow.md`](references/slideshow.md) |
+| `/avo.launch` | [`references/launch.md`](references/launch.md) |
+| `/avo.music-video` | [`references/music-video.md`](references/music-video.md) |
+| `/avo.figma` | [`references/figma.md`](references/figma.md) |
+| `/avo.media` | [`references/media.md`](references/media.md) |
 | `/avo.retention` | [`references/retention.md`](references/retention.md) |
 | `/avo.animation-qc` | [`references/animation-qc.md`](references/animation-qc.md) |
 | `/avo.telemetry` | [`references/telemetry.md`](references/telemetry.md) |

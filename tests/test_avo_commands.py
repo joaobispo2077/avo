@@ -12,6 +12,17 @@ REVIEW_TEMPLATES = ROOT / "docs" / "templates" / "review"
 SKILLS_JSON = ROOT / "skills.json"
 LOCALE_STUB = ROOT / "specs" / "backlog" / "locale-stub.md"
 
+WAVE3_COMMANDS = {
+    "launch.md",
+    "music-video.md",
+    "talking-head.md",
+    "figma.md",
+    "end-screen.md",
+    "color.md",
+    "sync.md",
+    "media.md",
+}
+
 EXPECTED_COMMANDS = {
     "help.md",
     "guidelines.md",
@@ -43,7 +54,7 @@ EXPECTED_COMMANDS = {
     "learndown.md",
     "cleanup.md",
     "stats.md",
-}
+} | WAVE3_COMMANDS
 
 EXPECTED_UTILITY_REFS = {
     "help.md",
@@ -75,12 +86,23 @@ EXPECTED_UTILITY_REFS = {
     "slideshow.md",
     "retention.md",
     "animation-qc.md",
+    "launch.md",
+    "music-video.md",
+    "talking-head.md",
+    "figma.md",
+    "end-screen.md",
+    "color.md",
+    "sync.md",
+    "media.md",
 }
 
 EXPECTED_REVIEW_TEMPLATES = {
     "approval-gate-manifest.md",
     "rights-audit.md",
     "audio-qc.md",
+    "end-screen-checklist.md",
+    "color-qc.md",
+    "sync-check.md",
 }
 
 
@@ -118,6 +140,29 @@ class AvoCommandParityTests(unittest.TestCase):
             "/avo.animation-qc",
         ):
             self.assertIn(cmd, text, cmd)
+
+    def test_command_map_lists_wave3_commands(self) -> None:
+        text = (REFS / "command-map.md").read_text(encoding="utf-8")
+        for cmd in (
+            "/avo.launch",
+            "/avo.music-video",
+            "/avo.talking-head",
+            "/avo.figma",
+            "/avo.end-screen",
+            "/avo.color",
+            "/avo.sync",
+            "/avo.media",
+        ):
+            self.assertIn(cmd, text, cmd)
+
+    def test_help_wave3_sections(self) -> None:
+        text = (REFS / "help.md").read_text(encoding="utf-8")
+        self.assertIn("/avo.talking-head", text)
+        self.assertIn("/avo.end-screen", text)
+        self.assertIn("/avo.color", text)
+        self.assertIn("/avo.sync", text)
+        self.assertIn("/avo.launch", text)
+        self.assertIn("/avo.media", text)
 
     def test_help_grouped_sections(self) -> None:
         text = (REFS / "help.md").read_text(encoding="utf-8")
