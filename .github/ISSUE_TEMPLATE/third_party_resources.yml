@@ -1,0 +1,34 @@
+name: Third-party resources
+description: Music, SFX, LUTs, fonts, models, or other licensed assets for AVO examples
+title: "[Resources]: "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Propose royalty-free or properly licensed assets for docs, examples, or default libraries.
+        AVO tracks third-party material in SOURCE-LOG patterns — include license evidence.
+  - type: textarea
+    id: resource
+    attributes:
+      label: Resource description
+      placeholder: Cinematic LUT pack, BGM loop, SFX kit, font …
+    validations:
+      required: true
+  - type: input
+    id: license
+    attributes:
+      label: License or permission basis
+      placeholder: CC0, Epidemic Sound subscription, creator permission
+    validations:
+      required: true
+  - type: input
+    id: link
+    attributes:
+      label: Link or path
+  - type: textarea
+    id: use-case
+    attributes:
+      label: Intended use in AVO
+      placeholder: Default provider example, docs screenshot, bundled test fixture …

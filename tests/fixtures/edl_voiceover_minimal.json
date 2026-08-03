@@ -1,0 +1,42 @@
+{
+  "version": 3,
+  "feature_id": "voiceover-v1",
+  "story_map_approval": "user-approved-story-map",
+  "sources": {
+    "clip_a": "clip_a.mp4",
+    "voiceover": "voiceover.wav"
+  },
+  "ranges": [
+    {
+      "source": "clip_a",
+      "start": 0,
+      "end": 5.0,
+      "note": "opening"
+    },
+    {
+      "source": "clip_a",
+      "start": 10.0,
+      "end": 15.0,
+      "note": "proof beat"
+    }
+  ],
+  "grade": null,
+  "overlays": [],
+  "sound_effects": [],
+  "subtitles": null,
+  "caption_policy": {
+    "visual_subtitles": false
+  },
+  "audio": {
+    "program_mode": "external_voiceover",
+    "voiceover_source": "voiceover",
+    "noise_reduction_policy": "conservative_speech_first",
+    "loudnorm_enabled": true
+  },
+  "motion_policy": {
+    "enabled": false
+  },
+  "render_gate": {
+    "stage": "voiceover_preview"
+  }
+}

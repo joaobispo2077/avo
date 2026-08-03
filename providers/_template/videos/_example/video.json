@@ -1,0 +1,10 @@
+{
+  "$schema": "../../../../schemas/avo.video.schema.json",
+  "id": "_example",
+  "provider": "replace-with-provider-slug",
+  "rawDir": "REPLACE/with/EXTERNAL/absolute/path/to/one-video-folder",
+  "title": "Example video registry stub (paths only — no media in repo)",
+  "status": "in-progress",
+  "createdAt": "2026-08-03T00:00:00Z",
+  "projectFile": "avo.project.json"
+}

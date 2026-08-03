@@ -50,6 +50,10 @@
 | `/avo.update` | `commands/avo/update.md` | `references/update.md` |
 | `/avo.stats` | `commands/avo/stats.md` | `references/stats.md` |
 | `/avo.provider` | `commands/avo/provider.md` | `references/provider.md` |
+| `/avo.issues` | `commands/avo/issues.md` | `references/issues.md` |
+| `/avo.supporters` | `commands/avo/supporters.md` | `references/supporters.md` |
+| `/avo.creators` | `commands/avo/creators.md` | `references/creators.md` |
+| `/avo.voiceover` | `commands/avo/voiceover.md` | `references/voiceover.md` |
 
 Spoken alias: **`/avo --help`** → `/avo.help`
 

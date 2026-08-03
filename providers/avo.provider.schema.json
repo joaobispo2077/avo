@@ -80,6 +80,35 @@
         }
       }
     },
+    "restoration_default_pct": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 100,
+      "description": "Default noise-reduction strength (0-100) for speech-led content. EDL overrides win."
+    },
+    "loudness": {
+      "type": "object",
+      "description": "Provider default loudness intent and channel reference targets.",
+      "additionalProperties": false,
+      "properties": {
+        "default_intent": {
+          "type": "string",
+          "enum": ["platform_fit", "channel_standard", "creative"],
+          "description": "Default loudness resolution intent when project/EDL do not override."
+        },
+        "channel_standard": {
+          "type": "object",
+          "description": "Channel-owned integrated loudness, true peak, and LRA reference.",
+          "additionalProperties": false,
+          "properties": {
+            "integrated_lufs": { "type": "number", "description": "Target integrated loudness (LUFS/LKFS)." },
+            "true_peak_dbtp": { "type": "number", "description": "True-peak ceiling (dBTP)." },
+            "lra_lu": { "type": "number", "description": "Loudness range target (LU)." },
+            "note": { "type": "string", "description": "Human note — not an official platform requirement." }
+          }
+        }
+      }
+    },
     "brand": {
       "type": "object",
       "description": "Pointers to this provider's in-repo brand material.",

@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=1920, height=1080" />
+    <title>AVO Boil Insert — Image Starter</title>
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <script src="lib/boil-insert.js"></script>
+    <script src="lib/presets.js"></script>
+    <script src="lib/lifecycle.js"></script>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: transparent;
+      }
+      #root {
+        position: relative;
+        width: 1920px;
+        height: 1080px;
+        overflow: hidden;
+        background: transparent;
+        display: grid;
+        place-items: center;
+      }
+      #boil-wrap {
+        width: 420px;
+        height: 420px;
+        display: grid;
+        place-items: center;
+      }
+      #boil-sticker {
+        width: 360px;
+        height: 360px;
+        border-radius: 48px;
+        background: linear-gradient(145deg, #19d8ff 0%, #371960 100%);
+        box-shadow: 0 24px 64px rgba(25, 216, 255, 0.35);
+        display: grid;
+        place-items: center;
+        font-family: Inter, system-ui, sans-serif;
+        font-size: 120px;
+        font-weight: 800;
+        color: #f7f9fc;
+      }
+    </style>
+  </head>
+  <body>
+    <div
+      id="root"
+      data-composition-id="main"
+      data-start="0"
+      data-width="1920"
+      data-height="1080"
+      data-duration="3"
+    >
+      <div id="boil-wrap">
+        <div id="boil-sticker" aria-label="Sticker placeholder">★</div>
+      </div>
+    </div>
+    <script>
+      window.__timelines = window.__timelines || {};
+      const SLOT = 3;
+      const preset = BoilPresets.getPreset("standard");
+      const phases = {
+        entrance: { start: 0, duration: 0.5, from: { opacity: 0, scale: 0.6, rotation: -8 } },
+        hold: { start: 0.5, duration: 1.85 },
+        exit: { start: 2.35, duration: 0.45, to: { opacity: 0, scale: 0.75, rotation: 6 } },
+      };
+
+      const { turb, filterUrl } = BoilInsert.createBoilFilter(document.body, {
+        filterId: "boil-filter-image",
+        ...preset,
+      });
+      BoilInsert.wrapBoilContent(document.getElementById("boil-wrap"), filterUrl);
+
+      const tl = gsap.timeline({ paused: true });
+      BoilLifecycle.scheduleInsertLifecycle(tl, "#boil-wrap", phases);
+
+      const hold = BoilLifecycle.boilHoldWindow(phases);
+      BoilInsert.applyBoil(tl, turb, {
+        duration: hold.duration,
+        startTime: hold.startTime,
+        fps: preset.fps,
+        seedStart: preset.seedStart,
+      });
+
+      tl.to({}, { duration: SLOT }, 0);
+      window.__timelines["main"] = tl;
+    </script>
+  </body>
+</html>

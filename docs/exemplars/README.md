@@ -6,6 +6,7 @@ Committed reference compositions and knowledge bundles for AVO agents. **Authori
 | ------ | ------ | ---- |
 | Product promo | 16:9 SaaS / launch | [`hyperframes-product-promo/`](hyperframes-product-promo/README.md) |
 | Short-form vertical | 9:16 talking-head + overlays | [`hyperframes-short-form/`](hyperframes-short-form/README.md) |
+| Boil insert | Alpha overlay — wiggly text / image / video | [`hyperframes-boil-insert/`](hyperframes-boil-insert/README.md) |
 
 ## CI
 
@@ -19,6 +20,7 @@ bash scripts/ci/lint-hyperframes-exemplars.sh
 
 - [`agent-skills/avo-pipeline/references/product-promo-knowledge.md`](../../agent-skills/avo-pipeline/references/product-promo-knowledge.md)
 - [`agent-skills/avo-pipeline/references/short-form-knowledge.md`](../../agent-skills/avo-pipeline/references/short-form-knowledge.md)
+- [`agent-skills/avo-pipeline/references/boil-insert-knowledge.md`](../../agent-skills/avo-pipeline/references/boil-insert-knowledge.md)
 
 ## Shared rules
 
