@@ -33,6 +33,16 @@ WAVE4_COMMANDS = {
     "grade.md",
 }
 
+WAVE5_COMMANDS = {
+    "issues.md",
+    "supporters.md",
+    "creators.md",
+}
+
+WAVE6_COMMANDS = {
+    "voiceover.md",
+}
+
 EXPECTED_COMMANDS = {
     "help.md",
     "guidelines.md",
@@ -64,7 +74,7 @@ EXPECTED_COMMANDS = {
     "learndown.md",
     "cleanup.md",
     "stats.md",
-} | WAVE3_COMMANDS | WAVE4_COMMANDS
+} | WAVE3_COMMANDS | WAVE4_COMMANDS | WAVE5_COMMANDS | WAVE6_COMMANDS
 
 EXPECTED_UTILITY_REFS = {
     "help.md",
@@ -111,6 +121,10 @@ EXPECTED_UTILITY_REFS = {
     "format.md",
     "framework.md",
     "grade.md",
+    "issues.md",
+    "supporters.md",
+    "creators.md",
+    "voiceover.md",
 }
 
 EXPECTED_REVIEW_TEMPLATES = {
@@ -122,6 +136,7 @@ EXPECTED_REVIEW_TEMPLATES = {
     "sync-check.md",
     "format-diagnosis.md",
     "framework-selection.md",
+    "voiceover-gate.md",
 }
 
 
@@ -186,6 +201,44 @@ class AvoCommandParityTests(unittest.TestCase):
             "/avo.grade",
         ):
             self.assertIn(cmd, text, cmd)
+
+    def test_command_map_lists_wave5_commands(self) -> None:
+        text = (REFS / "command-map.md").read_text(encoding="utf-8")
+        for cmd in (
+            "/avo.issues",
+            "/avo.supporters",
+            "/avo.creators",
+        ):
+            self.assertIn(cmd, text, cmd)
+
+    def test_command_map_lists_wave6_commands(self) -> None:
+        text = (REFS / "command-map.md").read_text(encoding="utf-8")
+        self.assertIn("/avo.voiceover", text)
+
+    def test_help_wave6_discovery(self) -> None:
+        text = (REFS / "help.md").read_text(encoding="utf-8")
+        self.assertIn("/avo.voiceover", text)
+
+    def test_help_wave5_discovery(self) -> None:
+        text = (REFS / "help.md").read_text(encoding="utf-8")
+        self.assertIn("/avo.issues", text)
+        self.assertIn("/avo.supporters", text)
+        self.assertIn("/avo.creators", text)
+
+    def test_issue_templates_exist(self) -> None:
+        template_dir = ROOT / ".github" / "ISSUE_TEMPLATE"
+        for name in (
+            "config.yml",
+            "bug_report.yml",
+            "documentation.yml",
+            "enhancement.yml",
+            "third_party_resources.yml",
+            "other_request.yml",
+        ):
+            self.assertTrue((template_dir / name).is_file(), name)
+
+    def test_creators_doc_exists(self) -> None:
+        self.assertTrue((ROOT / "docs" / "creators.md").is_file())
 
     def test_help_wave4_sections(self) -> None:
         text = (REFS / "help.md").read_text(encoding="utf-8")

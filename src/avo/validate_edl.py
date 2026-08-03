@@ -193,6 +193,58 @@ def _bluray_ps5_semantic_errors(
     return errors
 
 
+def _is_external_voiceover_edl(edl: dict) -> bool:
+    return (edl.get("audio") or {}).get("program_mode") == "external_voiceover"
+
+
+def _voiceover_semantic_errors(
+    edl: dict,
+    edit_dir: Path,
+    output_duration: float,
+) -> list[str]:
+    errors: list[str] = []
+    audio = edl.get("audio") or {}
+    vo_key = audio.get("voiceover_source")
+    if not vo_key:
+        errors.append(
+            "audio.voiceover_source is required when program_mode is external_voiceover"
+        )
+        return errors
+
+    sources = edl.get("sources") or {}
+    if vo_key not in sources:
+        errors.append(f"audio.voiceover_source '{vo_key}' does not resolve in sources")
+    else:
+        vo_path = _resolve(source_path_value(sources[vo_key]), edit_dir)
+        if not vo_path.exists():
+            errors.append(f"voiceover source file does not exist: {sources[vo_key]}")
+
+    if edl.get("overlays"):
+        errors.append("external_voiceover v1 does not support overlays")
+    if edl.get("sound_effects"):
+        errors.append("external_voiceover v1 does not support sound_effects")
+
+    motion = edl.get("motion_policy") or {}
+    if motion.get("enabled") is True:
+        errors.append("motion_policy.enabled must be false for external_voiceover v1")
+
+    if output_duration <= 0:
+        errors.append("external_voiceover EDL must define positive output duration from ranges")
+
+    if audio.get("restoration_default_pct") is not None or audio.get("restoration_segments"):
+        from avo import audio_restoration
+
+        errors.extend(audio_restoration.validate_restoration_segments(audio))
+
+    return errors
+
+
+def source_path_value(source_record: object) -> str:
+    if isinstance(source_record, dict):
+        return str(source_record.get("path") or "")
+    return str(source_record)
+
+
 def _is_comparison_edl(edl: dict) -> bool:
     return int(edl.get("version", 1)) >= 4 or "caption_policy" in edl
 
@@ -227,6 +279,9 @@ def _comparison_semantic_errors(
             errors.append("audio.noise_reduction_policy must be conservative_speech_first")
         if audio.get("channel_qc") not in {"pending", "passed_left_right_dialogue_audible"}:
             errors.append("audio.channel_qc must record stereo dialogue QC status")
+        from avo import audio_restoration
+
+        errors.extend(audio_restoration.validate_restoration_segments(audio))
         if render_gate.get("stage") == "v004_review_package":
             if render_gate.get("full_render_allowed") is not False:
                 errors.append("v004 review package gate must set full_render_allowed false")
@@ -314,6 +369,10 @@ def _semantic_errors(edl: dict, edit_dir: Path) -> list[str]:
         else:
             output_duration += end - start
 
+    if _is_external_voiceover_edl(edl):
+        errors.extend(_voiceover_semantic_errors(edl, edit_dir, output_duration))
+        return errors
+
     if int(edl.get("version", 1)) < 3:
         return errors
 
@@ -378,6 +437,20 @@ def _semantic_errors(edl: dict, edit_dir: Path) -> list[str]:
         for index, item in enumerate(effects)
     )
     errors.extend(_check_assets(asset_fields, edit_dir))
+
+    audio = edl.get("audio") or {}
+    if audio.get("restoration_default_pct") is not None or audio.get("restoration_segments"):
+        from avo import audio_restoration
+
+        errors.extend(audio_restoration.validate_restoration_segments(audio))
+    if (
+        audio.get("gain_default_pct") is not None
+        or audio.get("gain_segments")
+        or audio.get("gain_policy") == "level_match_speech"
+    ):
+        from avo import audio_gain
+
+        errors.extend(audio_gain.validate_gain_segments(audio))
 
     return errors
 

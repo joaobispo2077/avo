@@ -6,36 +6,14 @@
 
 **Edit less. Create more.** [Quickstart now](#quickstart)
 
-Talk to your AI agent. Drop raw footage in a folder. Get a finished, ready-to-publish
-video back, **local-first**, scoped to your channel, repeatable at scale.
+> **Empower editors, don't replace them.** Keep Premiere, DaVinci, or CapCut for
+> craft. AVO handles the repetitive glue so you ship more videos.
 
-AVO started as a fork of [video-use](https://github.com/browser-use/video-use) and
-grew into something for everyone. Today it is an **orchestrator**: it routes each
-step in the pipeline to the tool that owns that job, and you drive the whole thing
-through conversation, not a timeline you have to learn.
+Talk to your AI agent. Drop raw footage in a folder. Mass-produce high-quality videos
+**local-first**, scoped to your channel, repeatable at scale.
 
-See **[Engine vs orchestrator](docs/engine-vs-orchestrator.md)** for how AVO relates to
-the bundled editing engine and upstream [video-use](https://github.com/browser-use/video-use).
-
-> AVO does **not** replace your video editor. It empowers you to do **more with
-> less**: mass-producing videos per channel while the repetitive pipeline work
-> runs through your agent.
-
-## Contents
-
-- [What you get](#what-you-get)
-- [How it works](#how-it-works)
-- [Use cases](#use-cases)
-- [Why not a native video-editing MCP?](#why-not-a-native-video-editing-mcp)
-- [Tool routing](#tool-routing-who-owns-which-job)
-- [Install](#install)
-- [Supported agents](#supported-agents)
-- [Quickstart](#quickstart)
-- [Documentation](#documentation)
-- [Sponsor](#sponsor)
-- [Backlog](#backlog)
-- [Privacy: stats & telemetry](#privacy-stats--telemetry)
-- [Built on](#built-on)
+[Quickstart](#quickstart) · [Install](#install) · [Use cases](#use-cases) · [Workflow](#how-it-works) · [Docs](#documentation) · [Sponsor](#sponsor)  
+[Why not editor MCP](#why-not-a-native-video-editing-mcp) · [Privacy](#privacy-stats--telemetry) · [ROADMAP](#roadmap) · [AGENTS.md](AGENTS.md)
 
 ---
 
@@ -91,7 +69,7 @@ Everything AVO learns is filed under your provider, so the next video for the sa
 channel starts smarter, while each project stays separate.
 
 > **Resolution note.** AVO matches final output to your source. Producing above
-> source resolution is **not yet supported**; see the [backlog](#backlog) and consider
+> source resolution is **not yet supported**; see the [roadmap](#roadmap) and consider
 > [sponsoring](#sponsor) to help us get there.
 
 ---
@@ -629,9 +607,41 @@ Per-agent detect paths, flags, dry-run, and uninstall: **[docs/install/README.md
 
 ## Quickstart
 
-AVO ships **native setup scripts** that prepare the whole toolchain (GitHub Spec Kit,
-video-use + faster-whisper, watch-skill, HyperFrames, Remotion, and optional
-extras). You'll be asked which transcription language to prepare.
+### 1. Copy into your agent *(fastest)*
+
+Already use Cursor, Claude Code, Codex, or similar? Paste this — the agent installs
+AVO for you:
+
+```text
+Set up AVO here: https://github.com/joaobispo2077/avo
+Follow docs/install/README.md — install skills and slash commands for my agent first. Ask before full toolchain setup.
+```
+
+**You get:** agent skills + `/avo.*` slash commands (Cursor) in ~30 seconds.  
+**Next:** point the agent at a footage folder ([first video](#first-video) below) or
+run the full toolchain in step 3.
+
+<details>
+<summary><strong>Shorter prompt</strong></summary>
+
+```text
+Set up AVO for me: https://github.com/joaobispo2077/avo
+```
+
+The agent should still read [`docs/install/README.md`](docs/install/README.md) before changing anything.
+
+</details>
+
+### 2. One-command install *(manual)*
+
+Prefer the terminal? See [Install](#install) — one curl/powershell line, ~30 seconds,
+every agent on your machine.
+
+### 3. Full toolchain *(ffmpeg, whisper, watch-skill)*
+
+After step 1 or 2, run native setup scripts when you need the whole pipeline locally
+(GitHub Spec Kit, video-use + faster-whisper, watch-skill, HyperFrames, Remotion, and
+optional extras). You'll be asked which transcription language to prepare.
 
 **Windows / WSL (PowerShell):**
 
@@ -653,9 +663,12 @@ Common flags: `--lang <code>` (transcription language), `--with-memory`
 (install the optional [ai-jail](https://github.com/akitaonrails/ai-jail)
 sandbox), `--with-logo` (install the logo pipeline), `--skip <tool>`.
 
-Then point your agent at a folder of raw footage and start a conversation:
+Full setup details and troubleshooting: [`docs/install/README.md`](docs/install/README.md).
 
-**Or use pipeline slash commands** (copy `commands/avo/` → `.cursor/commands/avo/`; see [`docs/avo-commands.md`](docs/avo-commands.md)). Start with `/avo.help` or `/avo --help`:
+### First video
+
+Point your agent at a folder of raw footage and start a conversation. Use pipeline
+slash commands (Cursor: `/avo.help` or `/avo --help`; see [`docs/avo-commands.md`](docs/avo-commands.md)):
 
 ```text
 /avo.pipeline
@@ -675,53 +688,22 @@ Tell it which **provider** the video is for and **where your clips live** (path 
 with the same lines. All generated output lives inside that footage folder; your
 source files are never touched.
 
-Full setup details and troubleshooting live in [`docs/install/README.md`](docs/install/README.md).
-
 ---
 
 ## Documentation
 
-- [`docs/avo-workflow.md`](docs/avo-workflow.md): the AVO workflow, in precise,
-  agent-facing detail (confidence gate, the LOOP, **human approval gates**,
-  telemetry, hardware advisory, learndown + cleanup, wrap reports, `/avo.stats`,
-  provider learning).
-- [`SECURITY.md`](SECURITY.md#privacy--telemetry): privacy for telemetry and stats
-  (no phone home; local disk only).
-- [`docs/providers.md`](docs/providers.md): what an AVO **provider** is, multi-provider
-  patterns (long-form vs Shorts), manifest fields, and setup workflow.
-- [`docs/agent-skills.md`](docs/agent-skills.md): install **`avo`**, **`avo-pipeline`**,
-  **`avo-provider`** on Cursor, Claude Code, Codex, and other supported agents.
-- [`docs/why-not-editor-mcp.md`](docs/why-not-editor-mcp.md): why AVO orchestrates
-  across tools instead of controlling one editor app.
-- [`docs/ci.md`](docs/ci.md): CI gates, GitHub Actions workflows, local reproduce commands.
-- [`docs/README.md`](docs/README.md): index of every topic doc below.
-- [`docs/editing-system.md`](docs/editing-system.md): the YouTube editing
-  workflow and philosophy.
-- [`docs/audio-post-production-system.md`](docs/audio-post-production-system.md):
-  audio intake, sync, restoration, and mix.
-- [`docs/animation-system.md`](docs/animation-system.md): the animation and
-  motion-design system.
-- [`docs/hyperframes-workflow.md`](docs/hyperframes-workflow.md): HyperFrames,
-  the default motion framework.
-- [`docs/remotion-decision-guide.md`](docs/remotion-decision-guide.md): when to
-  choose Remotion instead.
-- [Use cases](#use-cases): all conversation prompts (product, promo, dealer, game, tech, pipeline demo motion, health, going global, slash commands).
-- [`docs/repo-layout.md`](docs/repo-layout.md): what ships in git vs install-time.
-- [`docs/launch.md`](docs/launch.md): pre-push GitHub checklist.
-- [`docs/delivery-specifications.md`](docs/delivery-specifications.md),
-  [`docs/audio-delivery-specifications.md`](docs/audio-delivery-specifications.md),
-  [`docs/animation-delivery-specifications.md`](docs/animation-delivery-specifications.md):
-  delivery specs for video, audio, and animation.
+Full index: [`docs/README.md`](docs/README.md)
 
-The canonical rules for every agent driving AVO live in
-[`AGENTS.md`](AGENTS.md).
+**Essentials:** [Install](docs/install/README.md) · [Workflow](docs/avo-workflow.md) · [Providers](docs/providers.md) · [Commands](docs/avo-commands.md) · [Privacy](SECURITY.md#privacy--telemetry)
+
+Canonical agent rules: [`AGENTS.md`](AGENTS.md)
 
 ---
 
 ## Sponsor
 
 AVO is free and open. If it saves you time, you can help fund the roadmap,
-including the [backlog](#backlog) items like upscaling and higher-than-source
+including the [roadmap](#roadmap) items like upscaling and higher-than-source
 output:
 
 - **GitHub Sponsors:** [github.com/sponsors/joaobispo2077](https://github.com/sponsors/joaobispo2077)
@@ -729,16 +711,36 @@ output:
 
 ---
 
-## Backlog
+## ROADMAP
 
-Some capabilities are planned but not yet implemented. Each has a sponsor CTA if
-you'd like to move it up the queue. [Full roadmap → docs/ROADMAP.md](docs/ROADMAP.md)
+Planned capabilities — sponsor-friendly. Full table:
+[docs/ROADMAP.md](docs/ROADMAP.md). Run [`/avo.supporters`](commands/avo/supporters.md)
+or see [Sponsor](#sponsor) to help prioritize.
+
+### Engine & delivery
 
 - **BL-001** [Upscaling low-quality source footage](specs/backlog/upscaling.md): controlled upscale path for phone/Zoom archives.
 - **BL-002** [Higher-than-source output resolution](specs/backlog/higher-than-source-res.md): opt-in delivery above camera native resolution.
 - **BL-003** [Provider voice profile from past videos](specs/backlog/voice-profile.md): sound like the creator on dubs, with consent.
 - **BL-004** [Locale export pack (ES, PT-BR, JA, ZH)](specs/backlog/locale-export.md): captions-first exports from one English master.
 - **BL-005** [Multi-audio delivery manifest](specs/backlog/multi-audio-deliver.md): delivery folder with per-locale tracks and manifest.
+
+### Library & workflow
+
+- **BL-010** [Organize footage libraries](specs/backlog/organize-v1.md): index and optionally transcribe a folder of clips before you commit to a full pipeline run.
+- **BL-011** [Composition planning](specs/backlog/composition-command.md): select clips and get a composition brief (and draft EDL) before render cost.
+- **BL-012** [Voiceover lite path](specs/backlog/voiceover-v1.md): merge clips + external voiceover + EQ — no motion pipeline required.
+
+### Transparency & scale
+
+- **BL-013** [Multicam metadata](specs/backlog/multicam-metadata.md): register CAM1/CAM2/CAM3 so your agent stops re-explaining angle files every session.
+- **BL-014** [Agent cost transparency](specs/backlog/costs-transparency.md): local token/USD estimates and a learning curve so you can budget agent spend.
+- **BL-015** [Concurrent workstreams](specs/backlog/concurrent-workstreams.md): run multiple videos per channel in parallel — separate `rawDir` per project.
+
+### NLE escape hatch
+
+- **BL-016** [Cinematic LUT library](specs/backlog/luts-library.md): import `.cube` LUTs in AVO and export guidance for Premiere, DaVinci, and CapCut.
+- **BL-017** [NLE timeline export](specs/backlog/nle-exports.md): export AVO's cut to your editor timeline — JSON EDL, CMX, and FCP XML interchange.
 
 See [Sponsor](#sponsor) to fund priority items.
 
@@ -778,6 +780,18 @@ authors and communities:
   logo and brand asset generation.
 - [ElevenLabs](https://elevenlabs.io) and gemini-flow: optional Paid
   alternatives for transcription and render.
+
+AVO started as a fork of [video-use](https://github.com/browser-use/video-use) and
+grew into something for everyone. Today it is an **orchestrator**: it routes each
+step in the pipeline to the tool that owns that job, and you drive the whole thing
+through conversation, not a timeline you have to learn.
+
+See **[Engine vs orchestrator](docs/engine-vs-orchestrator.md)** for how AVO relates to
+the bundled editing engine and upstream [video-use](https://github.com/browser-use/video-use).
+
+> AVO does **not** replace your video editor. It empowers you to do **more with
+> less**: mass-producing videos per channel while the repetitive pipeline work
+> runs through your agent.
 
 ---
 

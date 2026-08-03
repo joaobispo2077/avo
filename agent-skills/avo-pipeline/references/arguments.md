@@ -6,7 +6,14 @@ Parse these from the user's slash command or ask once before executing.
 
 ```text
 Provider: <channel-or-brand>
+Video: <registry-video-id>       # optional but recommended when registered
 <footage location — plain language or path>
+```
+
+When the video is registered under `providers/<provider>/videos/<id>/`, prefer `Video: <id>` over re-typing the full `rawDir`. Resolve with:
+
+```bash
+python -m avo.videos resolve --provider <slug> --video-id <id>
 ```
 
 **Accept any of these from the user** (map to `rawDir` internally):
@@ -95,12 +102,23 @@ Also accept `9:30-9:35` or `--from 9:30 --to 9:35`.
 | `--only-video` | audit | Check picture/sync only |
 | `--youtube` | guidelines | YouTube format playbooks |
 | `--eq` | guidelines | Audio EQ/restoration/loudness |
+| `--loudness-preset` | render | Override reference preset for one render |
+| `--no-loudnorm` | render | Skip final loudness normalization |
 | `--tiktok` | guidelines | TikTok vertical short-form |
 | `--shorts` | guidelines | YouTube Shorts |
 | `--force` | transcribe | Re-transcribe despite cache |
 | `--dry-run` | cleanup | List deletes only |
 | `--json` | telemetry | Machine-readable line only |
 | `--section` | help | Filter help index group |
+| `--video-id` | pipeline, stats, videos | Registry video slug; requires `--provider` |
+
+## Work modes (multi-video)
+
+**Parallelism (recommended):** one chat per video. Declare `Provider` + `Video` at session start. Do not use `.avo/active-context.json`.
+
+**Concurrency (discouraged):** same chat, multiple videos. Before every `/avo.*` command, confirm `Video:` matches `python -m avo.videos context show`. Call `videos context set` when switching. Warn the user about confusion risk.
+
+Full reference: [`docs/video-work-modes.md`](../../../docs/video-work-modes.md).
 
 ## Canonical rules
 

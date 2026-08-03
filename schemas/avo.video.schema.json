@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://avo.local/schemas/avo.video.schema.json",
+  "title": "AVO Video Registry Stub",
+  "description": "In-repo registry entry pointing at an external rawDir workflow root. Media and edit/ outputs never live under providers/.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "provider", "rawDir", "status", "createdAt"],
+  "properties": {
+    "$schema": { "type": "string" },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]*$",
+      "description": "Stable video slug; must match providers/<provider>/videos/<id>/ directory name."
+    },
+    "provider": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]*$"
+    },
+    "rawDir": {
+      "type": "string",
+      "minLength": 1,
+      "description": "EXTERNAL absolute path to the footage workflow root."
+    },
+    "title": { "type": "string" },
+    "status": {
+      "type": "string",
+      "enum": ["in-progress", "completed", "archived"]
+    },
+    "createdAt": {
+      "type": "string",
+      "minLength": 1,
+      "description": "ISO8601 timestamp when the registry stub was created."
+    },
+    "updatedAt": { "type": "string" },
+    "projectFile": {
+      "type": "string",
+      "default": "avo.project.json",
+      "description": "Project manifest filename relative to rawDir."
+    },
+    "defaults": {
+      "type": "object",
+      "description": "Optional bootstrap hints copied to avo.project.json on init when fields are absent.",
+      "additionalProperties": false,
+      "properties": {
+        "transcription": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "language": { "type": "string" },
+            "model": { "type": "string" }
+          }
+        },
+        "models": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "understand": { "type": "string" },
+            "plan": { "type": "string" }
+          }
+        }
+      }
+    }
+  }
+}

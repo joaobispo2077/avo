@@ -24,6 +24,7 @@ Default Level 2–3 for explainers; Level 1 for read-heavy segments.
 | Framework pick (HF vs Remotion) | [`framework.md`](framework.md) — run before first slot |
 | Product promo / SaaS demo | [`product-promo-knowledge.md`](product-promo-knowledge.md) → product-launch-video |
 | Short-form 9:16 + overlays | [`short-form-knowledge.md`](short-form-knowledge.md) → `/avo.shorts` motion phase |
+| Wiggly / boil insert (text, image, video) | [`boil-insert-knowledge.md`](boil-insert-knowledge.md) → `motion-graphics` kinetic-type / `/avo.motion` slot |
 
 Run [`framework.md`](framework.md) when framework choice is not already documented.
 

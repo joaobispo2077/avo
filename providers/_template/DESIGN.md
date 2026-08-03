@@ -38,6 +38,29 @@ the editing workflow stays consistent across this provider's videos.
 
 Entrance/hold/exit conventions, easing character, and any density preferences.
 
+### Boil insert (optional)
+
+Timed wiggly/boiling overlays use presets from `brand/palette.json` → `boil`:
+
+| Preset | Character |
+|--------|-----------|
+| subtle | Restrained hand-drawn edge |
+| standard | Default callout boil |
+| wild | High-energy displacement |
+
+Boil applies to **insert layers only** — not full-frame ambient wobble. See
+`docs/exemplars/hyperframes-boil-insert/`.
+
+### Audio restoration (optional)
+
+Default noise-reduction strength for speech-led videos:
+
+- `restoration_default_pct` in `avo.provider.json` (optional, 0–100)
+- **Standard 35%** if omitted — matches legacy conservative denoise
+- Per-segment overrides live in each video's `edit/edl.json` → `audio.restoration_segments[]`
+
+See `agent-skills/avo-pipeline/references/noise-reduction-knowledge.md`.
+
 ## 7. Do / Do not
 
 - Do: …

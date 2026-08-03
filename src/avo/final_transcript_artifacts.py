@@ -78,12 +78,83 @@ def write_artifacts(transcript_json: Path, basename: str | None = None) -> dict[
     return {"json": transcript_json, "txt": txt_path, "md": md_path, "srt": srt_path}
 
 
+def generate_from_master(
+    master_path: Path,
+    edit_dir: Path | None = None,
+    *,
+    model: str = "small",
+    device: str = "auto",
+    compute_type: str = "auto",
+    force: bool = False,
+) -> dict[str, Path]:
+    """Transcribe an exported master and write final transcript sidecars."""
+    from avo.transcribe import transcribe_one
+
+    master_path = master_path.resolve()
+    if not master_path.is_file():
+        raise FileNotFoundError(f"master not found: {master_path}")
+
+    resolved_edit_dir = (edit_dir or master_path.parent.parent).resolve()
+    transcript_json = transcribe_one(
+        master_path,
+        resolved_edit_dir,
+        model=model,
+        device=device,
+        compute_type=compute_type,
+        force=force,
+    )
+    return write_artifacts(transcript_json, basename=master_path.stem)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("transcript_json", type=Path)
-    parser.add_argument("--basename")
+    sub = parser.add_subparsers(dest="command")
+
+    write_parser = sub.add_parser("write", help="Write sidecars from transcript JSON")
+    write_parser.add_argument("transcript_json", type=Path)
+    write_parser.add_argument("--basename")
+
+    gen_parser = sub.add_parser(
+        "generate",
+        help="Transcribe exported master and write all final transcript sidecars",
+    )
+    gen_parser.add_argument("master", type=Path, help="Path to final master MP4")
+    gen_parser.add_argument(
+        "--edit-dir",
+        type=Path,
+        default=None,
+        help="Edit folder (default: parent of masters/)",
+    )
+    gen_parser.add_argument("--model", default="small")
+    gen_parser.add_argument("--device", default="auto")
+    gen_parser.add_argument("--compute-type", default="auto")
+    gen_parser.add_argument("--force", action="store_true")
+
+    # Legacy: python -m avo.final_transcript_artifacts path/to/transcript.json
+    parser.add_argument(
+        "legacy_transcript_json",
+        type=Path,
+        nargs="?",
+        help=argparse.SUPPRESS,
+    )
+    parser.add_argument("--basename", help=argparse.SUPPRESS)
+
     args = parser.parse_args()
-    outputs = write_artifacts(args.transcript_json, basename=args.basename)
+    if args.command == "generate":
+        outputs = generate_from_master(
+            args.master,
+            args.edit_dir,
+            model=args.model,
+            device=args.device,
+            compute_type=args.compute_type,
+            force=args.force,
+        )
+    elif args.command == "write":
+        outputs = write_artifacts(args.transcript_json, basename=args.basename)
+    elif args.legacy_transcript_json is not None:
+        outputs = write_artifacts(args.legacy_transcript_json, basename=args.basename)
+    else:
+        parser.error("provide transcript JSON, or: generate <master.mp4>")
     for kind, path in outputs.items():
         print(f"{kind}: {path}")
 

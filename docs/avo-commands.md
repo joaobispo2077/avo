@@ -32,6 +32,9 @@ Spoken alias: **`/avo --help`** → `/avo.help`
 | ------- | ------- |
 | `/avo.help` | Master command index ([source](../commands/avo/help.md)) |
 | `/avo.docs` | Route to topic docs ([source](../commands/avo/docs.md)) |
+| `/avo.issues` | Prepare GitHub issue with environment context ([source](../commands/avo/issues.md)) |
+| `/avo.supporters` | Sponsor links + backlog policy ([source](../commands/avo/supporters.md)) |
+| `/avo.creators` | Creators showcase ([source](../commands/avo/creators.md)) |
 
 ### Guidelines
 
@@ -49,6 +52,7 @@ Spoken alias: **`/avo --help`** → `/avo.help`
 | ------- | ------- |
 | `/avo.pipeline` | Full pipeline with Footage, SFX, B-roll, Music ([source](../commands/avo/pipeline.md)) |
 | `/avo.trim` | Transcribe + cut only ([source](../commands/avo/trim.md)) |
+| `/avo.voiceover` | Lite concat + external VO, no motion ([source](../commands/avo/voiceover.md)) |
 | `/avo.transcribe` | Transcribe only, no cut ([source](../commands/avo/transcribe.md)) |
 | `/avo.sync` | Audio sync diagnosis ([source](../commands/avo/sync.md)) |
 | `/avo.sound` | Noise reduction, mix, SFX/Music ([source](../commands/avo/sound.md)) |

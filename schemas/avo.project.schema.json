@@ -71,6 +71,74 @@
           "default": ["edit-proof", "motion-proof", "pre-master"]
         }
       }
+    },
+    "deliverable": {
+      "type": "object",
+      "description": "Delivery profile hints for loudness preset resolution and manifest.",
+      "additionalProperties": false,
+      "properties": {
+        "profile": {
+          "type": "string",
+          "enum": ["long-form", "shorts", "tiktok", "podcast-clip", "trailer", "music-video"],
+          "description": "Maps to default loudness reference preset when intent is platform_fit."
+        },
+        "maxDurationSec": { "type": "number" },
+        "aspect": { "type": "string" }
+      }
+    },
+    "audio": {
+      "type": "object",
+      "description": "Per-video audio delivery and restoration settings.",
+      "additionalProperties": false,
+      "properties": {
+        "loudness_intent": {
+          "type": "string",
+          "enum": ["platform_fit", "channel_standard", "creative"],
+          "description": "How to resolve integrated loudness target."
+        },
+        "loudness_preset": {
+          "type": "string",
+          "enum": [
+            "youtube_long_form_speech",
+            "youtube_shorts",
+            "instagram_reels",
+            "tiktok",
+            "music_video",
+            "podcast_clip"
+          ],
+          "description": "Reference preset id (not an official platform requirement)."
+        },
+        "loudness_range_preference": {
+          "type": "string",
+          "enum": ["tight", "balanced", "preserve_dynamics"],
+          "default": "balanced"
+        },
+        "loudness_custom": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "integrated_lufs": { "type": "number" },
+            "true_peak_dbtp": { "type": "number", "maximum": -0.5 },
+            "lra_lu": { "type": "number" },
+            "approved_by_user": { "type": "boolean" }
+          },
+          "required": ["integrated_lufs", "true_peak_dbtp"]
+        },
+        "loudnorm_enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "When false, render skips loudness normalization."
+        }
+      }
+    },
+    "audioQc": {
+      "type": "object",
+      "description": "Audio QC artifact paths and notes.",
+      "additionalProperties": false,
+      "properties": {
+        "auditPath": { "type": "string" },
+        "channelTargetNote": { "type": "string" }
+      }
     }
   }
 }
