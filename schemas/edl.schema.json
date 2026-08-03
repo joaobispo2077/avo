@@ -69,6 +69,11 @@
       "type": "object",
       "additionalProperties": true,
       "properties": {
+        "program_mode": {
+          "type": "string",
+          "enum": ["camera", "external_voiceover"]
+        },
+        "voiceover_source": { "type": "string" },
         "noise_reduction_policy": { "type": "string" },
         "restoration_default_pct": { "type": "integer", "minimum": 0, "maximum": 100 },
         "restoration_segments": {
