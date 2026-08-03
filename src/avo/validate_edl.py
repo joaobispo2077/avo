@@ -387,6 +387,14 @@ def _semantic_errors(edl: dict, edit_dir: Path) -> list[str]:
         from avo import audio_restoration
 
         errors.extend(audio_restoration.validate_restoration_segments(audio))
+    if (
+        audio.get("gain_default_pct") is not None
+        or audio.get("gain_segments")
+        or audio.get("gain_policy") == "level_match_speech"
+    ):
+        from avo import audio_gain
+
+        errors.extend(audio_gain.validate_gain_segments(audio))
 
     return errors
 

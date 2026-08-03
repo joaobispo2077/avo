@@ -85,6 +85,23 @@
             },
             "additionalProperties": true
           }
+        },
+        "gain_policy": { "type": "string" },
+        "gain_default_pct": { "type": "integer", "minimum": 0, "maximum": 100 },
+        "gain_segments": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["start_in_source", "end_in_source", "boost_pct"],
+            "properties": {
+              "start_in_source": { "type": "number" },
+              "end_in_source": { "type": "number" },
+              "boost_pct": { "type": "integer", "minimum": 0, "maximum": 100 },
+              "reason": { "type": "string" },
+              "approved_by_user": { "type": "boolean" }
+            },
+            "additionalProperties": true
+          }
         }
       }
     },
