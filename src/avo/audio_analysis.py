@@ -300,11 +300,20 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("media", type=Path, help="Video or audio file")
     parser.add_argument("--suggest-nr", action="store_true", help="Emit noise reduction suggestions JSON")
+    parser.add_argument("--suggest-eq", action="store_true", help="Emit EQ suggestions JSON (read-only)")
+    parser.add_argument("--suggest-gain", action="store_true", help="Emit regional gain suggestions JSON (read-only)")
+    parser.add_argument("--measure-loudness", action="store_true", help="Measure loudness vs resolved profile")
+    parser.add_argument("--project", type=Path, help="avo.project.json for loudness profile resolution")
+    parser.add_argument("--edl", type=Path, help="edl.json for loudness overrides")
+    parser.add_argument("--loudness-preset", dest="loudness_preset", help="Override loudness preset id")
     parser.add_argument("--transcript", type=Path, help="Word-timed transcript JSON")
     parser.add_argument("--out-dir", type=Path, help="Output directory for artifacts")
-    parser.add_argument("--heatmap", action="store_true", help="Write heatmap PNG alongside JSON")
+    parser.add_argument("--heatmap", action="store_true", help="Write NR heatmap PNG alongside JSON")
+    parser.add_argument("--eq-heatmap", action="store_true", help="Write EQ heatmap PNG alongside JSON")
     parser.add_argument("--preview-segment", nargs=2, type=float, metavar=("START", "END"))
+    parser.add_argument("--preview-gain-segment", nargs=2, type=float, metavar=("START", "END"))
     parser.add_argument("--strength-pct", type=int, default=70)
+    parser.add_argument("--boost-pct", type=int, default=25)
     args = parser.parse_args(argv)
 
     if not args.media.exists():
@@ -319,8 +328,98 @@ def main(argv: list[str] | None = None) -> int:
         print(json.dumps(paths, indent=2))
         return 0
 
+    if args.preview_gain_segment:
+        from avo import audio_gain
+
+        start, end = args.preview_gain_segment
+        paths = audio_gain.preview_gain_segment(
+            args.media, start, end, args.boost_pct, out_dir
+        )
+        print(json.dumps(paths, indent=2))
+        return 0
+
+    if args.measure_loudness:
+        from avo import loudness_profiles
+
+        edl: dict = {}
+        if args.edl and args.edl.exists():
+            edl = json.loads(args.edl.read_text(encoding="utf-8"))
+        project: dict = {}
+        provider: dict = {}
+        if args.project and args.project.exists():
+            project = loudness_profiles.load_project_json(args.project)
+            slug = str(project.get("provider") or "").strip()
+            if slug:
+                from avo.init_project import load_provider
+
+                try:
+                    provider = load_provider(slug)
+                except FileNotFoundError:
+                    provider = {}
+        elif args.edl:
+            project, provider = loudness_profiles.load_context_for_edit_dir(args.edl.parent)
+
+        try:
+            profile = loudness_profiles.resolve_loudness_profile(
+                edl,
+                project,
+                provider,
+                preset_override=args.loudness_preset,
+            )
+        except ValueError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 1
+
+        measurement = loudness_profiles.measure_loudness(args.media, profile)
+        if measurement is None:
+            print("error: loudness measurement failed", file=sys.stderr)
+            return 1
+
+        payload = loudness_profiles.compare_measurement(measurement, profile)
+        json_path = out_dir / "loudness-analysis.json"
+        json_path.parent.mkdir(parents=True, exist_ok=True)
+        json_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+        print(json.dumps(payload, indent=2))
+        return 0
+
+    if args.suggest_eq:
+        from avo import audio_eq
+
+        suggestions = audio_eq.suggest_eq(args.media)
+        payload = {
+            "media": str(args.media.resolve()),
+            "suggestions": [s.to_dict() for s in suggestions],
+        }
+        json_path = out_dir / "eq-suggestions.json"
+        json_path.parent.mkdir(parents=True, exist_ok=True)
+        json_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+        print(json.dumps(payload, indent=2))
+        if args.eq_heatmap:
+            heatmap_path = out_dir / "eq-suggestions-heatmap.png"
+            audio_eq.render_eq_heatmap(args.media, suggestions, heatmap_path)
+            print(f"heatmap: {heatmap_path}", file=sys.stderr)
+        return 0
+
+    if args.suggest_gain:
+        from avo import audio_gain
+
+        suggestions = audio_gain.suggest_gain(args.media, args.transcript)
+        payload = {
+            "media": str(args.media.resolve()),
+            "suggestions": [s.to_dict() for s in suggestions],
+            "default_boost_pct": audio_gain.ENGINE_DEFAULT_BOOST_PCT,
+        }
+        json_path = out_dir / "gain-suggestions.json"
+        json_path.parent.mkdir(parents=True, exist_ok=True)
+        json_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+        print(json.dumps(payload, indent=2))
+        return 0
+
     if not args.suggest_nr:
-        parser.error("Specify --suggest-nr or --preview-segment")
+        parser.error(
+            "Specify --suggest-nr, --suggest-eq, --suggest-gain, --measure-loudness, "
+            "or a preview flag"
+        )
 
     suggestions = suggest_noise_reduction(args.media, args.transcript)
     payload = {
