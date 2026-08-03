@@ -10,6 +10,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 from avo import generate_sfx
+from avo import loudness_profiles
 from avo import render
 
 
@@ -103,7 +104,8 @@ class AudioSfxPipelineTests(unittest.TestCase):
         self.assertIn("lowpass=f=16000", chain)
 
     def test_youtube_true_peak_limiter_matches_minus_three_dbtp(self) -> None:
-        self.assertIn("limit=0.630", render.LIMITER_FILTER)
+        limiter = loudness_profiles.limiter_filter_for(-3.0)
+        self.assertIn("limit=0.630", limiter)
 
 
 if __name__ == "__main__":
