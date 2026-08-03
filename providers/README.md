@@ -22,8 +22,12 @@ providers/
     brand/
       palette.json           # machine-readable brand tokens
     learndowns/              # exported per-video learndowns (index.json + entries)
+    videos/                  # optional in-repo registry stubs (paths only)
+      <video-id>/
+        video.json           # points at external rawDir; no media here
   <name>/                    # one directory per provider (lowercase kebab-case)
     ...same shape as _template...
+    videos.index.json        # generated catalog (provider root)
 ```
 
 ## Manifest — `avo.provider.json`

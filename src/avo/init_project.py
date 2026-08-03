@@ -74,9 +74,11 @@ def build_project(
     language: str = "",
     provider_manifest: dict[str, Any] | None = None,
     config: dict[str, Any] | None = None,
+    registry_defaults: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     provider_manifest = provider_manifest or {}
     config = config or {}
+    registry_defaults = registry_defaults or {}
     asset_overrides = asset_overrides or {}
 
     provider_assets = provider_manifest.get("assets", {}) or {}
@@ -87,11 +89,15 @@ def build_project(
     if not assets["logos"]:
         assets["logos"] = f"providers/{provider_slug}/logo"
 
+    reg_transcription = (registry_defaults.get("transcription") or {})
+    reg_models = (registry_defaults.get("models") or {})
     resolved_language = (
         language.strip()
+        or reg_transcription.get("language", "")
         or (provider_manifest.get("transcription", {}) or {}).get("language", "")
         or (config.get("transcription", {}) or {}).get("language", "")
     )
+    resolved_model = reg_transcription.get("model", "")
 
     project: dict[str, Any] = {
         "$schema": "./avo.project.schema.json",
@@ -101,8 +107,15 @@ def build_project(
     if title.strip():
         project["title"] = title.strip()
     project["assets"] = assets
+    transcription: dict[str, str] = {}
     if resolved_language and resolved_language != "<set-at-setup>":
-        project["transcription"] = {"language": resolved_language}
+        transcription["language"] = str(resolved_language)
+    if resolved_model:
+        transcription["model"] = str(resolved_model)
+    if transcription:
+        project["transcription"] = transcription
+    if reg_models:
+        project["models"] = dict(reg_models)
     return project
 
 
@@ -130,6 +143,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--graphics", default="")
     parser.add_argument("--logos", default="")
     parser.add_argument("--lang", default="", help="Transcription language override.")
+    parser.add_argument("--video-id", default="", help="Registry slug under providers/<provider>/videos/.")
     parser.add_argument("--print", action="store_true", dest="print_only",
                         help="Print the project JSON to stdout instead of writing it.")
     parser.add_argument("--yes", "-y", action="store_true", help="Non-interactive; use provided/defaults only.")
@@ -175,6 +189,17 @@ def main(argv: list[str] | None = None) -> int:
             if not asset_overrides[key]:
                 asset_overrides[key] = _prompt(f"{key} path (optional)", "", interactive)
 
+    registry_defaults: dict[str, Any] = {}
+    video_id = (args.video_id or "").strip()
+    if video_id:
+        from avo import video_registry
+
+        try:
+            existing = video_registry.load_registry(provider_slug, video_id)
+            registry_defaults = existing.get("defaults") or {}
+        except FileNotFoundError:
+            pass
+
     project = build_project(
         provider_slug,
         raw_dir,
@@ -183,6 +208,7 @@ def main(argv: list[str] | None = None) -> int:
         language=args.lang,
         provider_manifest=provider_manifest,
         config=load_config(),
+        registry_defaults=registry_defaults,
     )
 
     text = json.dumps(project, indent=2, ensure_ascii=False) + "\n"
@@ -205,6 +231,23 @@ def main(argv: list[str] | None = None) -> int:
     print(f"Created project: {out}")
     print(f"  provider : {provider_slug} ({provider_manifest.get('kind', '?')})")
     print(f"  rawDir   : {raw_dir}")
+
+    if video_id:
+        from avo import video_registry
+
+        try:
+            reg_path = video_registry.write_registry(
+                provider_slug,
+                video_id,
+                target,
+                title=title,
+                root=repo_root(),
+            )
+        except video_registry.VideoRegistryError as exc:
+            print(f"warning: project created but registry failed: {exc}", file=sys.stderr)
+            return 0
+        print(f"  registry : {reg_path}")
+
     return 0
 
 
