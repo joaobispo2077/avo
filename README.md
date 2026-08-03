@@ -607,9 +607,41 @@ Per-agent detect paths, flags, dry-run, and uninstall: **[docs/install/README.md
 
 ## Quickstart
 
-AVO ships **native setup scripts** that prepare the whole toolchain (GitHub Spec Kit,
-video-use + faster-whisper, watch-skill, HyperFrames, Remotion, and optional
-extras). You'll be asked which transcription language to prepare.
+### 1. Copy into your agent *(fastest)*
+
+Already use Cursor, Claude Code, Codex, or similar? Paste this — the agent installs
+AVO for you:
+
+```text
+Set up AVO here: https://github.com/joaobispo2077/avo
+Follow docs/install/README.md — install skills and slash commands for my agent first. Ask before full toolchain setup.
+```
+
+**You get:** agent skills + `/avo.*` slash commands (Cursor) in ~30 seconds.  
+**Next:** point the agent at a footage folder ([first video](#first-video) below) or
+run the full toolchain in step 3.
+
+<details>
+<summary><strong>Shorter prompt</strong></summary>
+
+```text
+Set up AVO for me: https://github.com/joaobispo2077/avo
+```
+
+The agent should still read [`docs/install/README.md`](docs/install/README.md) before changing anything.
+
+</details>
+
+### 2. One-command install *(manual)*
+
+Prefer the terminal? See [Install](#install) — one curl/powershell line, ~30 seconds,
+every agent on your machine.
+
+### 3. Full toolchain *(ffmpeg, whisper, watch-skill)*
+
+After step 1 or 2, run native setup scripts when you need the whole pipeline locally
+(GitHub Spec Kit, video-use + faster-whisper, watch-skill, HyperFrames, Remotion, and
+optional extras). You'll be asked which transcription language to prepare.
 
 **Windows / WSL (PowerShell):**
 
@@ -631,9 +663,12 @@ Common flags: `--lang <code>` (transcription language), `--with-memory`
 (install the optional [ai-jail](https://github.com/akitaonrails/ai-jail)
 sandbox), `--with-logo` (install the logo pipeline), `--skip <tool>`.
 
-Then point your agent at a folder of raw footage and start a conversation:
+Full setup details and troubleshooting: [`docs/install/README.md`](docs/install/README.md).
 
-**Or use pipeline slash commands** (copy `commands/avo/` → `.cursor/commands/avo/`; see [`docs/avo-commands.md`](docs/avo-commands.md)). Start with `/avo.help` or `/avo --help`:
+### First video
+
+Point your agent at a folder of raw footage and start a conversation. Use pipeline
+slash commands (Cursor: `/avo.help` or `/avo --help`; see [`docs/avo-commands.md`](docs/avo-commands.md)):
 
 ```text
 /avo.pipeline
@@ -652,8 +687,6 @@ Tell it which **provider** the video is for and **where your clips live** (path 
 “this folder”), then ask it to edit. Or run [`/avo.pipeline`](docs/avo-commands.md)
 with the same lines. All generated output lives inside that footage folder; your
 source files are never touched.
-
-Full setup details and troubleshooting live in [`docs/install/README.md`](docs/install/README.md).
 
 ---
 
