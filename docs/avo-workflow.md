@@ -54,7 +54,7 @@ below names its **owning tool**, its **inputs**, and its **outputs**.
 | 2 | Edit / cut / caption | video-use | initial transcript, edit intent | EDL, cut proof render |
 | 3 | Understand / verify (THE LOOP) | watch-skill (MCP/CLI/REST) | proof render | confidence score, defect list, fix directives → **human approval gate** (§4b) |
 | 4 | Motion / animation | HyperFrames (default) → Remotion | **user-approved** cut, brand tokens | motion proof render → **human approval gate** (§4b) |
-| 5 | Render / encode | local render helpers (Paid: gemini-flow) | user-approved motion + cut | resolution-promoted render (after pre-master approval) |
+| 5 | Render / encode | local render helpers (Paid: gemini-flow) | user-approved motion + cut | resolution-promoted render; **`--youtube-4k` also runs final PT-BR transcript** |
 | 6 | Deliver | video-use | approved 1080p render | **final master** + **final transcript** |
 | 7 | Learndown + cleanup | ai-memory (optional) + rimraf | full project tree | preserved set only; learning filed by provider |
 

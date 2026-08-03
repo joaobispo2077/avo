@@ -1,0 +1,28 @@
+name: Other request
+description: Creator showcase, sponsorship question, or anything else
+title: "[Other]: "
+labels:
+  - question
+body:
+  - type: markdown
+    attributes:
+      value: |
+        For **creator showcase** submissions, include channel name, platform, public URL, and opt-in confirmation.
+        For sponsorship, see `/avo.supporters` or [docs/ROADMAP.md](docs/ROADMAP.md).
+  - type: dropdown
+    id: category
+    attributes:
+      label: Category
+      options:
+        - Creator showcase (add to docs/creators.md)
+        - Sponsorship / prioritization
+        - Community / process
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: details
+    attributes:
+      label: Details
+    validations:
+      required: true

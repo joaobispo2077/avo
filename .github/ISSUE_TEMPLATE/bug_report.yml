@@ -1,0 +1,92 @@
+name: Bug report
+description: Something broke in AVO, a slash command, or the install path
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. Run `/avo.issues` with your agent first if you want help gathering environment details.
+        Do **not** paste secrets, `.env` contents, or private footage paths unless you intend to share them publicly.
+  - type: input
+    id: avo-version
+    attributes:
+      label: AVO version or commit
+      description: Output of `git describe --tags` from the AVO repo, or the release tag you installed
+      placeholder: v0.1.x or commit SHA
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - Windows
+        - macOS
+        - Linux
+        - WSL on Windows
+        - Other
+    validations:
+      required: true
+  - type: dropdown
+    id: agent
+    attributes:
+      label: Agent product
+      options:
+        - Cursor
+        - Claude Code
+        - Codex / OpenAI
+        - Gemini CLI
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: provider
+    attributes:
+      label: Provider slug (if applicable)
+      description: Your channel/brand provider name, or "none" for install-only issues
+      placeholder: bishop
+  - type: input
+    id: command
+    attributes:
+      label: Stage or slash command
+      description: e.g. `/avo.transcribe`, `/avo.pipeline`, install, `/avo.update`
+      placeholder: /avo.trim
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Provider: …
+        2. Footage folder: …
+        3. Ran …
+        4. Saw …
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs or errors
+      description: Terminal output, pytest failure, or agent error — redact paths if needed
+  - type: checkboxes
+    id: sponsor
+    attributes:
+      label: Sponsor interest (optional)
+      options:
+        - label: I am a GitHub Sponsor or Buy Me a Coffee supporter and would like this investigated with priority when feasible
+          required: false

@@ -31,6 +31,12 @@
     "maxDurationSec": 60,
     "aspect": "16:9"
   },
+  "audio": {
+    "loudness_intent": "platform_fit",
+    "loudness_preset": "youtube_long_form_speech",
+    "loudness_range_preference": "balanced",
+    "loudnorm_enabled": true
+  },
   "chapters": {
     "path": "edit/delivery/chapters.txt"
   },

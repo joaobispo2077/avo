@@ -61,8 +61,64 @@ def default_state() -> dict[str, Any]:
         "version": package_version(),
         "lastUpdateCheck": None,
         "transcription": {},
+        "models": {},
+        "videos": {},
         "stats": {},
     }
+
+
+def active_context_path() -> Path:
+    return state_dir() / "active-context.json"
+
+
+def video_state_key(provider: str, video_id: str) -> str:
+    return f"{provider.strip()}:{video_id.strip()}"
+
+
+def get_video_state(state: dict[str, Any], key: str) -> dict[str, Any]:
+    videos = state.get("videos") or {}
+    slice_ = videos.get(key)
+    return dict(slice_) if isinstance(slice_, dict) else {}
+
+
+def set_video_state(state: dict[str, Any], key: str, patch: dict[str, Any]) -> dict[str, Any]:
+    videos = state.setdefault("videos", {})
+    current = get_video_state(state, key)
+    for part, value in patch.items():
+        if isinstance(value, dict) and isinstance(current.get(part), dict):
+            merged = dict(current[part])
+            merged.update(value)
+            current[part] = merged
+        else:
+            current[part] = value
+    videos[key] = current
+    return current
+
+
+def load_active_context() -> dict[str, Any] | None:
+    path = active_context_path()
+    if not path.is_file():
+        return None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def save_active_context(payload: dict[str, Any]) -> Path:
+    state_dir().mkdir(parents=True, exist_ok=True)
+    path = active_context_path()
+    body = dict(payload)
+    body["updatedAt"] = now_iso()
+    path.write_text(json.dumps(body, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    return path
+
+
+def clear_active_context() -> None:
+    path = active_context_path()
+    if path.is_file():
+        path.unlink()
 
 
 def load_state() -> dict[str, Any]:

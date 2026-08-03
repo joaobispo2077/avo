@@ -1,0 +1,10 @@
+{
+  "id": "avo-boil-insert-image-starter",
+  "name": "AVO Boil Insert — Image Starter",
+  "width": 1920,
+  "height": 1080,
+  "fps": 30,
+  "duration": 3,
+  "preset": "standard",
+  "contentType": "image"
+}

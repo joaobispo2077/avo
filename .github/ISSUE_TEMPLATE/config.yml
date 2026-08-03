@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/joaobispo2077/avo/security/advisories/new
+    about: Report a security issue privately via GitHub (do not paste secrets or private footage paths).
+  - name: Ask a question
+    url: https://github.com/joaobispo2077/avo/discussions
+    about: General questions and workflow help — use Discussions when unsure which template fits.

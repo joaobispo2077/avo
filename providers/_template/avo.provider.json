@@ -19,6 +19,16 @@
   "transcription": {
     "language": "en"
   },
+  "restoration_default_pct": 35,
+  "loudness": {
+    "default_intent": "channel_standard",
+    "channel_standard": {
+      "integrated_lufs": -16.0,
+      "true_peak_dbtp": -1.0,
+      "lra_lu": 9.0,
+      "note": "Speech-led long-form reference preset — not an official platform requirement"
+    }
+  },
   "brand": {
     "design": "providers/replace-with-provider-slug/DESIGN.md",
     "palette": "providers/replace-with-provider-slug/brand/palette.json"
