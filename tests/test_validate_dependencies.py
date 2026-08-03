@@ -83,5 +83,50 @@ class ValidateDependenciesManifestTests(unittest.TestCase):
         self.assertIn(result.status, ("OK", "WARN"))
 
 
+class OptionalToolHealthTests(unittest.TestCase):
+    @mock.patch("avo.validate_dependencies._probe_ai_memory_server", return_value=False)
+    @mock.patch("avo.validate_dependencies.shutil.which", return_value=None)
+    @mock.patch("avo.validate_dependencies.check_git_clone")
+    def test_ai_memory_optional_warns_without_server(
+        self, clone: mock.Mock, _which: mock.Mock, _probe: mock.Mock
+    ) -> None:
+        import sys
+
+        sys.path.insert(0, str(ROOT))
+        from avo.validate_dependencies import CheckResult, check_ai_memory_optional
+
+        clone.return_value = CheckResult("ai-memory", "OK", "present at tools/ai-memory")
+        result = check_ai_memory_optional(
+            ROOT,
+            "ai-memory",
+            {"path": "tools/ai-memory", "repo": "https://example.com/ai-memory"},
+            ci=False,
+        )
+        self.assertEqual(result.status, "WARN")
+        self.assertIn("server not running", result.note)
+
+    @mock.patch("avo.validate_dependencies.shutil.which")
+    def test_ai_jail_linux_warns_without_bwrap(self, which: mock.Mock) -> None:
+        import sys
+
+        sys.path.insert(0, str(ROOT))
+        from avo.validate_dependencies import check_ai_jail_optional
+
+        def _which(name: str):
+            return "/usr/bin/ai-jail" if name == "ai-jail" else None
+
+        which.side_effect = _which
+        with mock.patch("platform.system", return_value="Linux"):
+            result = check_ai_jail_optional(
+                ROOT,
+                "ai-jail",
+                {"binary": "ai-jail", "path": "tools/ai-jail"},
+                ci=False,
+            )
+        self.assertEqual(result.status, "WARN")
+        self.assertIn("bwrap", result.note)
+
+
+
 if __name__ == "__main__":
     unittest.main()
