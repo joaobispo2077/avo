@@ -16,6 +16,7 @@ from typing import Any
 from avo import avo_state
 from avo.paths import config_path
 from avo.project_inventory import resolve_preserved_set
+from avo.session import normalize_path
 from avo.telemetry import human_bytes, human_duration
 
 try:
@@ -188,17 +189,70 @@ def _avg_freed(totals: dict[str, int]) -> float:
     return int(totals.get("bytesFreed", 0)) / completed
 
 
+def _filter_sessions(
+    sessions: list[dict[str, Any]],
+    *,
+    raw_dir: str = "",
+    provider: str = "",
+    video_id: str = "",
+) -> list[dict[str, Any]]:
+    filtered = sessions
+    if provider.strip():
+        slug = provider.strip()
+        filtered = [s for s in filtered if str(s.get("provider") or "") == slug]
+    if video_id.strip() and provider.strip():
+        key = avo_state.video_state_key(provider.strip(), video_id.strip())
+        keyed = [s for s in filtered if str(s.get("videoKey") or "") == key]
+        if keyed:
+            filtered = keyed
+        elif raw_dir.strip():
+            target = normalize_path(Path(raw_dir.strip()).expanduser())
+            filtered = [
+                s
+                for s in filtered
+                if normalize_path(Path(str(s.get("rawDir") or ".")).expanduser()) == target
+            ]
+    elif raw_dir.strip():
+        target = normalize_path(Path(raw_dir.strip()).expanduser())
+        filtered = [
+            s
+            for s in filtered
+            if normalize_path(Path(str(s.get("rawDir") or ".")).expanduser()) == target
+        ]
+    return filtered
+
+
+def _totals_for_sessions(sessions: list[dict[str, Any]]) -> dict[str, int]:
+    totals = _default_totals()
+    for session in sessions:
+        _add_totals(totals, _session_contribution(session))
+    return totals
+
+
 def compute_display_metrics(
     state: dict[str, Any] | None = None,
     *,
     verbose: bool = False,
+    raw_dir: str = "",
+    provider: str = "",
+    video_id: str = "",
 ) -> dict[str, Any]:
     """Build structured metrics for human or JSON display."""
     state = state or avo_state.load_state()
     cfg = load_stats_config()
     stats = state.get("stats") or {}
-    totals = dict(stats.get("totals") or _default_totals())
-    sessions: list[dict[str, Any]] = list(stats.get("sessions") or [])
+    all_sessions: list[dict[str, Any]] = list(stats.get("sessions") or [])
+    sessions = _filter_sessions(
+        all_sessions,
+        raw_dir=raw_dir,
+        provider=provider,
+        video_id=video_id,
+    )
+    totals = (
+        _totals_for_sessions(sessions)
+        if raw_dir.strip() or provider.strip() or video_id.strip()
+        else dict(stats.get("totals") or _default_totals())
+    )
 
     last_session = None
     if sessions:
@@ -216,6 +270,12 @@ def compute_display_metrics(
         "estimationModel": ESTIMATION_MODEL,
         "timeSavedEditFactor": cfg.time_saved_edit_factor,
     }
+    if raw_dir.strip() or provider.strip() or video_id.strip():
+        display["filter"] = {
+            "rawDir": raw_dir.strip() or None,
+            "provider": provider.strip() or None,
+            "videoId": video_id.strip() or None,
+        }
 
     if last_session:
         display["lastSession"] = {
@@ -416,11 +476,43 @@ def session_from_wrap(wrap: dict[str, Any], *, wrap_path: Path | None = None) ->
         "wrapPath": str(wrap_file.resolve()),
         "pathStatus": path_status,
     }
+    provider_slug = str(wrap.get("provider") or session["provider"])
+    try:
+        from avo import video_registry
+
+        found = video_registry.find_video_by_raw_dir(raw_dir, provider=provider_slug)
+        if found:
+            session["videoId"] = str(found.get("id") or "")
+            session["videoKey"] = avo_state.video_state_key(
+                provider_slug,
+                session["videoId"],
+            )
+    except Exception:
+        pass
     return session
 
 
 def _cmd_show(args: argparse.Namespace) -> int:
-    display = compute_display_metrics(verbose=args.verbose)
+    raw_dir = args.raw_dir or ""
+    provider = args.provider or ""
+    if args.video_id and args.provider:
+        from avo import video_registry
+
+        try:
+            raw_dir = str(video_registry.resolve_raw_dir(args.provider, args.video_id))
+        except (FileNotFoundError, video_registry.VideoRegistryError) as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 1
+    elif args.video_id and not args.provider:
+        print("error: --video-id requires --provider", file=sys.stderr)
+        return 1
+
+    display = compute_display_metrics(
+        verbose=args.verbose,
+        raw_dir=raw_dir,
+        provider=provider,
+        video_id=args.video_id or "",
+    )
     if args.json:
         payload = format_json(display)
         sys.stdout.write(json.dumps(payload, indent=2, ensure_ascii=False) + "\n")
@@ -463,6 +555,13 @@ def build_parser() -> argparse.ArgumentParser:
     p_show = sub.add_parser("show", help="Display aggregate local stats.")
     p_show.add_argument("--json", action="store_true")
     p_show.add_argument("--verbose", action="store_true", help="Include Tier B/C metrics.")
+    p_show.add_argument("--provider", default="", help="Filter sessions to one provider slug.")
+    p_show.add_argument("--raw-dir", default="", help="Filter sessions to one external rawDir.")
+    p_show.add_argument(
+        "--video-id",
+        default="",
+        help="Resolve providers/<provider>/videos/<id> to rawDir and filter sessions.",
+    )
     p_show.set_defaults(func=_cmd_show)
 
     p_record = sub.add_parser("record", help="Record session from final wrap JSON.")

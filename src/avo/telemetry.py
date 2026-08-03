@@ -118,6 +118,9 @@ class Telemetry:
         volume: Path | None = None,
         active_models: dict[str, str] | None = None,
         session_id: str | None = None,
+        video_key: str | None = None,
+        video_id: str | None = None,
+        project: dict[str, Any] | None = None,
         emit: bool = True,
     ) -> dict[str, Any]:
         self._phase_count += 1
@@ -156,16 +159,15 @@ class Telemetry:
             try:
                 from avo.models import resolve_active_models
 
-                active_models = resolve_active_models()
+                active_models = resolve_active_models(project=project, video_key=video_key)
             except Exception:
-                try:
-                    from avo.models import resolve_active_models
-
-                    active_models = resolve_active_models()
-                except Exception:
-                    active_models = {}
+                active_models = {}
         if active_models:
             record["activeModels"] = active_models
+        if video_key:
+            record["videoKey"] = video_key
+        if video_id:
+            record["videoId"] = video_id
 
         if session_id:
             self._append_session_phase(session_id, record)
