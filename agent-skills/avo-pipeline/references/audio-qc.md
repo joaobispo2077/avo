@@ -23,10 +23,18 @@ Delivery loudness and true-peak QC on the **approved master export**. Distinct f
 
 ## Measure
 
-1. Integrated loudness (document standard, e.g. ITU-R BS.1770-style) and settings used.
-2. True peak (dBTP) on approved master.
-3. **Channel target** from provider notes, `avo.project.json`, or documented internal target — **not** a universal official YouTube number.
-4. Optional: loudness range when useful.
+1. Run engine QC (same resolver as render):
+
+   ```bash
+   python -m avo.audio_qc <master.mp4> --project <rawDir>/avo.project.json --edl <rawDir>/edit/edl.json \
+     --out <rawDir>/edit/review/audio-qc.json
+   ```
+
+2. Integrated loudness (ITU-R BS.1770-style via FFmpeg `loudnorm` measurement pass).
+3. True peak (dBTP) on approved master.
+4. **Resolved target** from `avo.project.json` / provider / EDL — see [`loudness-knowledge.md`](loudness-knowledge.md). **Not** a universal official YouTube number.
+5. Pass window: integrated ±1 LU; true peak ≤ target; upload candidate TP delta ≤ 0.3 dBTP.
+6. Optional: loudness range (informational).
 
 ## Spot checks
 

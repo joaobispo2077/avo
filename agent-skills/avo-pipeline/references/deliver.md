@@ -36,8 +36,16 @@ Full-program master QC and delivery manifest. **Not** `/avo.audit` — audit is 
 
 Generate transcript **from the exported master file**, not from rough cut or EDL alone.
 
-- Path: `<rawDir>/edit/transcripts/<master-basename>.txt` (and sidecar formats per project)
-- Optional helper: `python -m avo.final_transcript_artifacts` when master path is known
+- Path: `<rawDir>/edit/transcripts/<master-basename>.txt` (and `.json`, `.md`, `.srt`)
+- **Immediately after** a 4K/`--youtube-4k` master render completes, run (or rely on
+  `avo.render` auto-step):
+  ```bash
+  python -m avo.final_transcript_artifacts generate <master.mp4> --edit-dir <rawDir>/edit
+  ```
+  Or: `python -m avo.transcribe <master.mp4> --edit-dir <rawDir>/edit` then
+  `python -m avo.final_transcript_artifacts edit/transcripts/<basename>.json`
+
+**Blocking:** Do not call deliver/cleanup complete until final transcript sidecars exist.
 
 ## Output
 

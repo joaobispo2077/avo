@@ -4,18 +4,17 @@ Load [`arguments.md`](arguments.md) first.
 
 ## Stages executed
 
-| # | Stage | Tool |
-| - | ----- | ---- |
-| 0 | Plan | Spec Kit (optional) |
-| 0b | Session start | `session.py start` → `pre.json` |
-| 1 | Transcribe | faster-whisper |
-| 2 | Edit | video-use + render helpers |
-| 3 | Verify | watch-skill |
-| 4 | Motion | HyperFrames |
-| 5 | Render | local render |
-| 6 | Deliver | master + final transcript |
-| 7 | Learndown + cleanup | draft wrap → rimraf → final wrap → `stats record` |
-
+| # | Stage | Tool | Inputs | Outputs |
+| - | ----- | ---- | ------ | ------- |
+| 0 | Plan | Spec Kit (optional) | scope | spec/plan |
+| 0b | Session start | `session.py start` | rawDir | `pre.json` |
+| 1 | Transcribe | faster-whisper | raw file(s) | **initial transcript** |
+| 2 | Edit | render helpers | transcript, EDL | cut proofs |
+| 3 | Verify | watch-skill | proof render | agent QC + human gate |
+| 4 | Motion | HyperFrames | approved cut | motion proof + human gate |
+| 5 | Render | `avo.render --youtube-4k` | approved pre-master | **final master** + **final transcript** (auto) |
+| 6 | Deliver | QC + manifest | master + final transcript | delivery manifest |
+| 7 | Learndown + cleanup | rimraf | project tree | preserved set only |
 ## Asset manifest
 
 Write to `avo.project.json`:

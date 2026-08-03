@@ -95,6 +95,8 @@ Also accept `9:30-9:35` or `--from 9:30 --to 9:35`.
 | `--only-video` | audit | Check picture/sync only |
 | `--youtube` | guidelines | YouTube format playbooks |
 | `--eq` | guidelines | Audio EQ/restoration/loudness |
+| `--loudness-preset` | render | Override reference preset for one render |
+| `--no-loudnorm` | render | Skip final loudness normalization |
 | `--tiktok` | guidelines | TikTok vertical short-form |
 | `--shorts` | guidelines | YouTube Shorts |
 | `--force` | transcribe | Re-transcribe despite cache |
