@@ -32,6 +32,9 @@ Spoken alias: **`/avo --help`** → `/avo.help`
 | ------- | ------- |
 | `/avo.help` | Master command index ([source](../commands/avo/help.md)) |
 | `/avo.docs` | Route to topic docs ([source](../commands/avo/docs.md)) |
+| `/avo.issues` | Prepare GitHub issue with environment context ([source](../commands/avo/issues.md)) |
+| `/avo.supporters` | Sponsor links + backlog policy ([source](../commands/avo/supporters.md)) |
+| `/avo.creators` | Creators showcase ([source](../commands/avo/creators.md)) |
 
 ### Guidelines
 

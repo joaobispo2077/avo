@@ -10,6 +10,9 @@ Spoken alias: **`/avo --help`**. Cursor file: `commands/avo/help.md` → `/avo.h
 | ------- | ----------- |
 | `/avo.help` | List all commands (this index) |
 | `/avo.docs` | Open topic documentation |
+| `/avo.issues` | Prepare a GitHub issue (environment + template chooser) |
+| `/avo.supporters` | Sponsor links + backlog prioritization policy |
+| `/avo.creators` | Curated channels using AVO |
 
 ### Guidelines (diagnose before editing)
 
