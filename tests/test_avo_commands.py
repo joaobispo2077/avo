@@ -39,6 +39,10 @@ WAVE5_COMMANDS = {
     "creators.md",
 }
 
+WAVE6_COMMANDS = {
+    "voiceover.md",
+}
+
 EXPECTED_COMMANDS = {
     "help.md",
     "guidelines.md",
@@ -70,7 +74,7 @@ EXPECTED_COMMANDS = {
     "learndown.md",
     "cleanup.md",
     "stats.md",
-} | WAVE3_COMMANDS | WAVE4_COMMANDS | WAVE5_COMMANDS
+} | WAVE3_COMMANDS | WAVE4_COMMANDS | WAVE5_COMMANDS | WAVE6_COMMANDS
 
 EXPECTED_UTILITY_REFS = {
     "help.md",
@@ -120,6 +124,7 @@ EXPECTED_UTILITY_REFS = {
     "issues.md",
     "supporters.md",
     "creators.md",
+    "voiceover.md",
 }
 
 EXPECTED_REVIEW_TEMPLATES = {
@@ -131,6 +136,7 @@ EXPECTED_REVIEW_TEMPLATES = {
     "sync-check.md",
     "format-diagnosis.md",
     "framework-selection.md",
+    "voiceover-gate.md",
 }
 
 
@@ -204,6 +210,14 @@ class AvoCommandParityTests(unittest.TestCase):
             "/avo.creators",
         ):
             self.assertIn(cmd, text, cmd)
+
+    def test_command_map_lists_wave6_commands(self) -> None:
+        text = (REFS / "command-map.md").read_text(encoding="utf-8")
+        self.assertIn("/avo.voiceover", text)
+
+    def test_help_wave6_discovery(self) -> None:
+        text = (REFS / "help.md").read_text(encoding="utf-8")
+        self.assertIn("/avo.voiceover", text)
 
     def test_help_wave5_discovery(self) -> None:
         text = (REFS / "help.md").read_text(encoding="utf-8")

@@ -53,6 +53,7 @@
 | `/avo.issues` | `commands/avo/issues.md` | `references/issues.md` |
 | `/avo.supporters` | `commands/avo/supporters.md` | `references/supporters.md` |
 | `/avo.creators` | `commands/avo/creators.md` | `references/creators.md` |
+| `/avo.voiceover` | `commands/avo/voiceover.md` | `references/voiceover.md` |
 
 Spoken alias: **`/avo --help`** → `/avo.help`
 
