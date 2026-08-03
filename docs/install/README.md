@@ -219,8 +219,8 @@ npm run setup -- --lang pt --with-memory
 | --- | --- |
 | `--lang CODE` | faster-whisper transcription language (e.g. `pt`, `en`, `es`). Prompted if omitted. |
 | `--model SIZE` | Whisper model size to prepare (default `small`). |
-| `--with-memory` | Install [ai-memory](https://github.com/akitaonrails/ai-memory) (optional; zero-LLM by default). |
-| `--with-jail` | Install [ai-jail](https://github.com/akitaonrails/ai-jail) (optional agent sandbox; **WSL-only on Windows**). |
+| `--with-memory` | Clone [ai-memory](https://github.com/akitaonrails/ai-memory) source to `tools/ai-memory/` (optional; runtime install is manual — see [`docs/ai-memory-and-ai-jail.md`](../ai-memory-and-ai-jail.md)). |
+| `--with-jail` | Install/verify [ai-jail](https://github.com/akitaonrails/ai-jail) (optional; Linux/macOS native, **WSL2 on Windows** — no native Windows sandbox backend). |
 | `--with-logo` | Install [logo-generator-skill](https://github.com/op7418/logo-generator-skill) (optional). |
 | `--skip TOOL` | Skip a step: `speckit`, `engine`, `watch`, `hyperframes`, `remotion` (repeatable). |
 | `--yes` / `-y` | Non-interactive; accept defaults. |
@@ -239,7 +239,7 @@ npm run setup -- --lang pt --with-memory
    `docs/remotion-decision-guide.md`).
 7. **ai-memory** *(with `--with-memory`)* — clones `akitaonrails/ai-memory`.
 8. **ai-jail** *(with `--with-jail`)* — installs via `brew`/`cargo`/`mise`/`nix`
-   (Linux/macOS) or inside **WSL** on Windows.
+   (Linux/macOS) or verifies inside **WSL2** on Windows.
 9. **logo-generator-skill** *(with `--with-logo`)*.
 
 Each step prints a pass/fail row. Required steps (`python`, `engine`) fail the

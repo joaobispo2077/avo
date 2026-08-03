@@ -528,7 +528,7 @@ it's billed, nothing more).
 | Motion / animation | HyperFrames (default) → [Remotion](https://github.com/remotion-dev/remotion) | |
 | Render / encode | local render helpers | gemini-flow |
 | Cross-session memory | [ai-memory](https://github.com/akitaonrails/ai-memory) (optional) | |
-| Agent sandbox | [ai-jail](https://github.com/akitaonrails/ai-jail) (optional, WSL-only on Windows) | |
+| Agent sandbox | [ai-jail](https://github.com/akitaonrails/ai-jail) (optional; Linux/macOS native, WSL2 on Windows) | |
 | Logo / brand | [logo-generator-skill](https://github.com/op7418/logo-generator-skill) | |
 | Post-render cleanup | rimraf + ai-memory learndown (reports space used vs freed) | |
 
@@ -659,9 +659,11 @@ bash scripts/setup.sh --lang en
 ```
 
 Common flags: `--lang <code>` (transcription language), `--with-memory`
-(install [ai-memory](https://github.com/akitaonrails/ai-memory)), `--with-jail`
+(install [ai-memory](https://github.com/akitaonrails/ai-memory) — clones source;
+see [`docs/ai-memory-and-ai-jail.md`](docs/ai-memory-and-ai-jail.md) for runtime install),
+ `--with-jail`
 (install the optional [ai-jail](https://github.com/akitaonrails/ai-jail)
-sandbox), `--with-logo` (install the logo pipeline), `--skip <tool>`.
+sandbox — Linux/macOS native, WSL2 on Windows), `--with-logo` (install the logo pipeline), `--skip <tool>`.
 
 Full setup details and troubleshooting: [`docs/install/README.md`](docs/install/README.md).
 
@@ -775,7 +777,8 @@ authors and communities:
 - [ai-memory](https://github.com/akitaonrails/ai-memory): optional cross-session
   memory.
 - [ai-jail](https://github.com/akitaonrails/ai-jail): optional agent sandbox
-  (WSL-only on Windows).
+  (Linux/macOS native; WSL2 on Windows — no native Windows backend).
+  Operator guide: [`docs/ai-memory-and-ai-jail.md`](docs/ai-memory-and-ai-jail.md).
 - [logo-generator-skill](https://github.com/op7418/logo-generator-skill):
   logo and brand asset generation.
 - [ElevenLabs](https://elevenlabs.io) and gemini-flow: optional Paid
