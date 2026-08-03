@@ -1,0 +1,28 @@
+name: Documentation
+description: README, docs/, command reference, or AGENTS.md improvement
+title: "[Docs]: "
+labels:
+  - documentation
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Suggest clearer docs, missing links, or outdated command references.
+  - type: input
+    id: page
+    attributes:
+      label: Page or file
+      placeholder: README.md, docs/avo-workflow.md, /avo.help
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: What is unclear or wrong?
+    validations:
+      required: true
+  - type: textarea
+    id: suggestion
+    attributes:
+      label: Suggested improvement
+      description: Optional draft wording or structure
