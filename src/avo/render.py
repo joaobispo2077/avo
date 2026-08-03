@@ -327,6 +327,7 @@ def extract_segment(
     youtube_4k_preset: str = "slow",
     audio_stream: str = "a:0",
     audio_repair_filter: str = "",
+    include_source_audio: bool = True,
 ) -> None:
     """Extract a cut range as its own MP4 with grade + 30ms audio fades baked in.
 
@@ -358,14 +359,6 @@ def extract_segment(
         vf_parts.append(grade_filter)
     vf = ",".join(vf_parts)
 
-    # 30ms audio fades at both edges (Rule 3) — prevent pops
-    fade_out_start = max(0.0, duration - 0.03)
-    af_parts = []
-    if audio_repair_filter:
-        af_parts.append(audio_repair_filter)
-    af_parts.append(f"afade=t=in:st=0:d=0.03,afade=t=out:st={fade_out_start:.3f}:d=0.03")
-    af = ",".join(af_parts)
-
     if draft:
         preset, crf = "ultrafast", "28"
     elif preview:
@@ -383,18 +376,26 @@ def extract_segment(
         "-i", str(source),
         "-t", f"{duration:.3f}",
         "-vf", vf,
-        "-af", af,
         "-map", "0:v:0",
-        "-map", f"0:{audio_stream}",
         "-c:v", "libx264", "-preset", preset, "-crf", crf,
         "-pix_fmt", "yuv420p",
         "-profile:v", "high",
-        # YouTube deliverables are stereo. FFmpeg duplicates mono sources to
-        # centered dual-mono while leaving native stereo channel selection intact.
-        "-c:a", "aac", "-b:a", audio_bitrate, "-ar", "48000", "-ac", "2",
-        "-movflags", "+faststart",
-        str(out_path),
     ]
+    if include_source_audio:
+        fade_out_start = max(0.0, duration - 0.03)
+        af_parts = []
+        if audio_repair_filter:
+            af_parts.append(audio_repair_filter)
+        af_parts.append(f"afade=t=in:st=0:d=0.03,afade=t=out:st={fade_out_start:.3f}:d=0.03")
+        af = ",".join(af_parts)
+        cmd += [
+            "-af", af,
+            "-map", f"0:{audio_stream}",
+            "-c:a", "aac", "-b:a", audio_bitrate, "-ar", "48000", "-ac", "2",
+        ]
+    else:
+        cmd += ["-an"]
+    cmd += ["-movflags", "+faststart", str(out_path)]
     if youtube_4k:
         cmd[-3:-3] = ["-b:v", "40M", "-maxrate", "45M", "-bufsize", "90M"]
     run_ffmpeg_progress(cmd, f"segment {out_path.name}", expected_duration=duration)
@@ -427,6 +428,9 @@ def extract_all_segments(
 
     ranges = edl["ranges"]
     sources = edl["sources"]
+    from avo.voiceover import is_external_voiceover_edl
+
+    video_only = is_external_voiceover_edl(edl)
 
     seg_paths: list[Path] = []
     print(f"extracting {len(ranges)} segment(s) -> {clips_dir.name}/")
@@ -470,6 +474,7 @@ def extract_all_segments(
             youtube_4k_preset=youtube_4k_preset,
             audio_stream=audio_source_stream(edl),
             audio_repair_filter=audio_repair_filter_for(edl, src_name, start, end),
+            include_source_audio=not video_only,
         )
         seg_paths.append(out_path)
 
@@ -874,6 +879,59 @@ def build_final_composite(
     run_ffmpeg_progress(cmd, f"composite {out_path.name}", expected_duration=media_duration(base_path))
 
 
+# -------- External voiceover mux ---------------------------------------------
+
+
+def mux_external_voiceover(
+    base_video_path: Path,
+    edl: dict,
+    edit_dir: Path,
+    out_path: Path,
+    youtube_4k: bool = False,
+) -> None:
+    """Mux video-only concat with external voiceover audio (EQ/NR on VO track)."""
+    from avo.voiceover import output_duration_from_edl, resolve_voiceover_path, voiceover_source_key
+
+    vo_path = resolve_voiceover_path(edl, edit_dir)
+    cut_duration = output_duration_from_edl(edl)
+    vo_key = voiceover_source_key(edl)
+    repair = audio_repair_filter_for(edl, vo_key)
+
+    af_parts: list[str] = []
+    if repair:
+        af_parts.append(repair)
+    af_parts.extend(
+        [
+            f"atrim=0:{cut_duration:.3f}",
+            "asetpts=PTS-STARTPTS",
+            "aformat=channel_layouts=stereo",
+            "aresample=48000",
+        ]
+    )
+    af = ",".join(af_parts)
+    audio_bitrate = "384k" if youtube_4k else "192k"
+
+    cmd = [
+        "ffmpeg", "-y", "-hide_banner", "-nostats",
+        "-i", str(base_video_path),
+        "-i", str(vo_path),
+        "-map", "0:v:0",
+        "-map", "1:a:0",
+        "-filter:a:0", af,
+        "-c:v", "copy",
+        "-c:a", "aac", "-b:a", audio_bitrate, "-ar", "48000", "-ac", "2",
+        "-shortest",
+        "-movflags", "+faststart",
+        str(out_path),
+    ]
+    print(f"voiceover mux -> {out_path.name}")
+    run_ffmpeg_progress(
+        cmd,
+        f"voiceover mux {out_path.name}",
+        expected_duration=cut_duration,
+    )
+
+
 # -------- Main ---------------------------------------------------------------
 
 
@@ -969,6 +1027,14 @@ def main() -> None:
 
     skip_loudnorm = args.no_loudnorm or not loudness_profile.loudnorm_enabled
 
+    from avo.voiceover import is_external_voiceover_edl, preflight as voiceover_preflight
+
+    voiceover_mode = is_external_voiceover_edl(edl)
+    if voiceover_mode:
+        vo_issues = voiceover_preflight(edl, edit_dir)
+        if vo_issues:
+            sys.exit("Voiceover preflight failed:\n- " + "\n- ".join(vo_issues))
+
     # 1. Extract per-segment (auto-grade per range if EDL grade is "auto")
     segment_paths = extract_all_segments(
         edl,
@@ -995,7 +1061,7 @@ def main() -> None:
     # 3. Captions: keep the complete selectable SRT, but burn only the
     # first-minute derived file for EDL v3.
     subs_path: Path | None = None
-    if not args.no_subtitles:
+    if not voiceover_mode and not args.no_subtitles:
         full_subs_path = (
             resolve_path(edl["subtitles"], edit_dir)
             if edl.get("subtitles")
@@ -1023,9 +1089,37 @@ def main() -> None:
                 subs_path = None
 
     # 4. Composite overlays and SFX, then burn first-minute captions last.
+    #    External voiceover mode muxes VO audio instead of camera program audio.
     overlays = edl.get("overlays") or []
     sound_effects = edl.get("sound_effects") or []
-    if skip_loudnorm:
+    if voiceover_mode:
+        if skip_loudnorm:
+            mux_external_voiceover(
+                base_path,
+                edl,
+                edit_dir,
+                out_path,
+                youtube_4k=args.youtube_4k,
+            )
+        else:
+            tmp_mux = out_path.with_suffix(".premux.mp4")
+            mux_external_voiceover(
+                base_path,
+                edl,
+                edit_dir,
+                tmp_mux,
+                youtube_4k=args.youtube_4k,
+            )
+            print(f"audio treatment -> {loudness_profile.log_line()}")
+            apply_loudnorm_two_pass(
+                tmp_mux,
+                out_path,
+                preview=args.draft,
+                youtube_4k=args.youtube_4k,
+                profile=loudness_profile,
+            )
+            tmp_mux.unlink(missing_ok=True)
+    elif skip_loudnorm:
         build_final_composite(
             base_path,
             overlays,

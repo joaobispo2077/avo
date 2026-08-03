@@ -102,6 +102,9 @@ def restoration_enabled(edl: dict, source_name: str) -> bool:
     audio = edl.get("audio") or {}
     if audio.get("noise_reduction_policy") != "conservative_speech_first":
         return False
+    if audio.get("program_mode") == "external_voiceover":
+        vo_key = str(audio.get("voiceover_source") or "voiceover")
+        return str(source_name) == vo_key
     return str(source_name).startswith("main")
 
 
