@@ -68,7 +68,7 @@ Use [Sponsor](../README.md#sponsor) to help prioritize.
 | BL-012 | Voiceover lite path | Merge clips + external VO + EQ (no motion) | `/avo.voiceover` _(shipped)_ |
 | BL-013 | Multicam metadata | CAM1/CAM2/CAM3 registration in `multicam.json` | `/avo.multicam` |
 | BL-014 | Agent cost transparency | Local token/USD estimates + learning curve | `/avo.costs` (`/avo.metrics` alias) |
-| BL-015 | Concurrent workstreams | Multiple videos per provider via external `rawDir` | docs + stats filter |
+| BL-015 | Concurrent workstreams | Multiple videos per provider via external `rawDir` | docs + `avo.videos` _(shipped)_ |
 | BL-016 | LUT library | `.cube` import/apply + NLE export notes | `/avo.luts` |
 | BL-017 | NLE export pack | JSON EDL → CMX EDL → FCP XML 1.3 interchange | `/avo.exports` |
 

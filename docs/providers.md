@@ -96,7 +96,68 @@ Resolution order for a video project:
 
 1. `avo.config.json` (global defaults)
 2. `providers/<slug>/avo.provider.json` (provider)
-3. `<rawDir>/avo.project.json` (this video only)
+3. `providers/<slug>/videos/<video-id>/video.json` *(optional registry — identity + external rawDir)*
+4. `<rawDir>/avo.project.json` (runtime overrides for this video)
+
+---
+
+## Concurrent workstreams (video registry)
+
+Run multiple videos for one provider in parallel by giving each an external `rawDir` and an in-repo **registry stub**:
+
+```text
+providers/bishop/videos/20260803-explainer/
+  video.json                 ← paths only; git-safe metadata
+
+D:/footage/explainer-01/   ← workflow root (unchanged)
+  avo.project.json
+  edit/
+```
+
+Bootstrap both files:
+
+```bash
+python -m avo.init_project \
+  --provider bishop \
+  --video-id 20260803-explainer \
+  --raw-dir D:/footage/explainer-01
+```
+
+List registered videos:
+
+```bash
+python -m avo.videos list --provider bishop
+python -m avo.videos resolve --provider bishop --video-id 20260803-explainer
+```
+
+Filter local stats to one project:
+
+```bash
+python -m avo.stats show --provider bishop --video-id 20260803-explainer
+python -m avo.stats show --raw-dir D:/footage/explainer-01
+```
+
+**Hard rules:**
+
+- Registry stubs store **absolute external paths only** — never footage or `edit/` under `providers/`
+- `<rawDir>/edit/` remains the only session output location
+- Do not point two registry entries at the same `rawDir` while agents run concurrently
+
+### Work modes (v2)
+
+See **[video-work-modes.md](video-work-modes.md)** for the full reference.
+
+| Mode | Pattern | Recommendation |
+|------|---------|----------------|
+| **Parallelism** | One Cursor chat per video; declare `Provider` + `Video` once | Recommended |
+| **Concurrency** | Same chat; declare `Video:` on every pipeline turn; use `videos context set` | Supported, discouraged |
+
+```bash
+python -m avo.videos context set --provider bishop --video-id 20260803-explainer
+python -m avo.videos lock status --raw-dir D:/footage/explainer-01
+```
+
+Global `avo.config.json` can change freely; per-video `avo.project.json` and scoped `.avo/state.json` `videos["provider:videoId"]` protect in-flight work.
 
 ---
 
