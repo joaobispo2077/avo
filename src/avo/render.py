@@ -226,15 +226,27 @@ def audio_repair_filter_for(
     source_start: float | None = None,
     source_end: float | None = None,
 ) -> str:
-    """Return main-camera speech cleanup chain with percent-based denoise."""
-    from avo import audio_restoration
+    """Return main-camera extract chain: regional gain, then EQ/NR."""
+    from avo import audio_gain, audio_restoration
 
-    return audio_restoration.audio_repair_filter_for(
+    parts: list[str] = []
+    gain = audio_gain.gain_filter_for(
         edl,
         source_name,
         source_start=source_start,
         source_end=source_end,
     )
+    if gain:
+        parts.append(gain)
+    repair = audio_restoration.audio_repair_filter_for(
+        edl,
+        source_name,
+        source_start=source_start,
+        source_end=source_end,
+    )
+    if repair:
+        parts.append(repair)
+    return ",".join(parts)
 
 
 def visual_subtitles_enabled(edl: dict) -> bool:
@@ -590,49 +602,28 @@ def build_master_srt(edl: dict, edit_dir: Path, out_path: Path) -> None:
     print(f"master SRT -> {out_path.name} ({len(entries)} cues)")
 
 
-# -------- Loudness normalization (social-ready audio) -----------------------
+# -------- Loudness normalization (platform reference presets) -----------------
+
+from avo.loudness_profiles import (
+    ResolvedLoudnessProfile,
+    limiter_filter_for,
+    load_context_for_edit_dir,
+    measure_loudness as measure_loudness_profile,
+    nr_loudness_warning,
+    preset_stale_advisory,
+    resolve_loudness_profile,
+    get_preset,
+)
 
 
-# Social-media standard: -14 LUFS integrated, -1 dBTP peak, LRA 11 LU.
-# Matches YouTube / Instagram / TikTok / X / LinkedIn normalization targets.
-LOUDNORM_I = -16.0
-LOUDNORM_TP = -3.0
-LOUDNORM_LRA = 7.0
-LIMITER_FILTER = "alimiter=limit=0.630:level=false:attack=5:release=50"
-
-
-def measure_loudness(video_path: Path) -> dict[str, str] | None:
-    """Run ffmpeg loudnorm first pass and parse the JSON measurement.
-
-    Returns a dict with measured_i, measured_tp, measured_lra, measured_thresh,
-    target_offset, or None if measurement failed.
-    """
-    filter_str = (
-        f"loudnorm=I={LOUDNORM_I}:TP={LOUDNORM_TP}:LRA={LOUDNORM_LRA}:print_format=json"
-    )
-    cmd = [
-        "ffmpeg", "-y", "-hide_banner", "-nostats",
-        "-i", str(video_path),
-        "-af", filter_str,
-        "-vn", "-f", "null", "-",
-    ]
-    proc = subprocess.run(cmd, capture_output=True, text=True)
-    # loudnorm prints the JSON to stderr at the end of the run
-    stderr = proc.stderr
-
-    # Find the JSON block — loudnorm output contains a `{ ... }` block
-    start = stderr.rfind("{")
-    end = stderr.rfind("}")
-    if start == -1 or end == -1 or end <= start:
-        return None
-    try:
-        data = json.loads(stderr[start : end + 1])
-    except json.JSONDecodeError:
-        return None
-    needed = {"input_i", "input_tp", "input_lra", "input_thresh", "target_offset"}
-    if not needed.issubset(data.keys()):
-        return None
-    return data
+def measure_loudness(
+    video_path: Path,
+    profile: ResolvedLoudnessProfile | None = None,
+) -> dict[str, str] | None:
+    """Run ffmpeg loudnorm first pass and parse the JSON measurement."""
+    if profile is None:
+        profile = resolve_loudness_profile()
+    return measure_loudness_profile(video_path, profile)
 
 
 def apply_loudnorm_two_pass(
@@ -640,6 +631,7 @@ def apply_loudnorm_two_pass(
     output_path: Path,
     preview: bool = False,
     youtube_4k: bool = False,
+    profile: ResolvedLoudnessProfile | None = None,
 ) -> bool:
     """Run two-pass loudnorm on input_path, write normalized copy to output_path.
 
@@ -649,13 +641,16 @@ def apply_loudnorm_two_pass(
     In preview mode, skips the measurement pass and uses a one-pass approximation
     for speed. Final mode always does the proper two-pass.
     """
+    if profile is None:
+        profile = resolve_loudness_profile()
+    limiter = limiter_filter_for(profile.true_peak_dbtp)
     audio_bitrate = "384k" if youtube_4k else "192k"
 
     if preview:
         # One-pass approximation — faster, slightly less accurate.
         filter_str = (
-            f"loudnorm=I={LOUDNORM_I}:TP={LOUDNORM_TP}:LRA={LOUDNORM_LRA},"
-            f"{LIMITER_FILTER}"
+            f"loudnorm=I={profile.integrated_lufs}:TP={profile.true_peak_dbtp}:LRA={profile.lra_lu},"
+            f"{limiter}"
         )
         cmd = [
             "ffmpeg", "-y", "-hide_banner", "-nostats",
@@ -672,7 +667,7 @@ def apply_loudnorm_two_pass(
 
     # Full two-pass
     print(f"  loudnorm pass 1: measuring {input_path.name}")
-    measurement = measure_loudness(input_path)
+    measurement = measure_loudness(input_path, profile)
     if measurement is None:
         print("  loudnorm measurement failed — falling back to 1-pass")
         return apply_loudnorm_two_pass(
@@ -680,13 +675,14 @@ def apply_loudnorm_two_pass(
             output_path,
             preview=True,
             youtube_4k=youtube_4k,
+            profile=profile,
         )
 
     print(f"    measured: I={measurement['input_i']} LUFS  "
           f"TP={measurement['input_tp']}  LRA={measurement['input_lra']}")
 
     loudnorm_filter = (
-        f"loudnorm=I={LOUDNORM_I}:TP={LOUDNORM_TP}:LRA={LOUDNORM_LRA}"
+        f"loudnorm=I={profile.integrated_lufs}:TP={profile.true_peak_dbtp}:LRA={profile.lra_lu}"
         f":measured_I={measurement['input_i']}"
         f":measured_TP={measurement['input_tp']}"
         f":measured_LRA={measurement['input_lra']}"
@@ -694,7 +690,7 @@ def apply_loudnorm_two_pass(
         f":offset={measurement['target_offset']}"
         f":linear=true"
     )
-    filter_str = f"{loudnorm_filter},{LIMITER_FILTER}"
+    filter_str = f"{loudnorm_filter},{limiter}"
     cmd = [
         "ffmpeg", "-y", "-hide_banner", "-nostats",
         "-i", str(input_path),
@@ -908,7 +904,13 @@ def main() -> None:
     ap.add_argument(
         "--no-loudnorm",
         action="store_true",
-        help="Skip audio treatment. Default is on (-16 LUFS, peak-safe limiter, LRA 7).",
+        help="Skip audio loudness normalization (overrides project/EDL loudnorm_enabled).",
+    )
+    ap.add_argument(
+        "--loudness-preset",
+        dest="loudness_preset",
+        default=None,
+        help="Override loudness reference preset for this render only (e.g. youtube_shorts, tiktok).",
     )
     ap.add_argument(
         "--youtube-4k",
@@ -945,6 +947,27 @@ def main() -> None:
     edit_dir = edl_path.parent
     out_path = args.output.resolve()
     version = int(edl.get("version", 1))
+
+    project, provider = load_context_for_edit_dir(edit_dir)
+    try:
+        loudness_profile = resolve_loudness_profile(
+            edl,
+            project,
+            provider,
+            preset_override=args.loudness_preset,
+        )
+    except ValueError as exc:
+        sys.exit(str(exc))
+
+    nr_warning = nr_loudness_warning(edl, loudness_profile)
+    if nr_warning:
+        print(f"warning: {nr_warning}")
+
+    stale = preset_stale_advisory(get_preset(loudness_profile.preset_id))
+    if stale:
+        print(f"advisory: {stale}")
+
+    skip_loudnorm = args.no_loudnorm or not loudness_profile.loudnorm_enabled
 
     # 1. Extract per-segment (auto-grade per range if EDL grade is "auto")
     segment_paths = extract_all_segments(
@@ -1002,7 +1025,7 @@ def main() -> None:
     # 4. Composite overlays and SFX, then burn first-minute captions last.
     overlays = edl.get("overlays") or []
     sound_effects = edl.get("sound_effects") or []
-    if args.no_loudnorm:
+    if skip_loudnorm:
         build_final_composite(
             base_path,
             overlays,
@@ -1025,17 +1048,26 @@ def main() -> None:
             youtube_4k=args.youtube_4k,
             youtube_4k_preset=args.youtube_4k_preset,
         )
-        print("audio treatment -> -16 LUFS / -3 dBTP target / LRA 7 / peak-safe limiter")
+        print(f"audio treatment -> {loudness_profile.log_line()}")
         apply_loudnorm_two_pass(
             tmp_composite,
             out_path,
             preview=args.draft,
             youtube_4k=args.youtube_4k,
+            profile=loudness_profile,
         )
         tmp_composite.unlink(missing_ok=True)
 
     size_mb = out_path.stat().st_size / (1024 * 1024)
     print(f"\ndone: {out_path} ({size_mb:.1f} MB)")
+
+    if args.youtube_4k:
+        from avo.final_transcript_artifacts import generate_from_master
+
+        print("\nfinal transcript -> transcribing master (PT-BR)...")
+        outputs = generate_from_master(out_path, edit_dir)
+        for kind, path in outputs.items():
+            print(f"  {kind}: {path}")
 
 
 if __name__ == "__main__":
