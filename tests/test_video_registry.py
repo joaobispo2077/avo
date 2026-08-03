@@ -17,6 +17,11 @@ from avo import init_project, stats, video_registry
 from avo.paths import repo_root
 
 
+def _external_raw(name: str) -> Path:
+    """Portable absolute external path (works on Linux CI and Windows)."""
+    return Path(tempfile.gettempdir()) / "avo-test-footage" / name
+
+
 class VideoRegistryTests(unittest.TestCase):
     def setUp(self) -> None:
         self.tmp = tempfile.TemporaryDirectory()
@@ -32,7 +37,7 @@ class VideoRegistryTests(unittest.TestCase):
         self.tmp.cleanup()
 
     def test_write_and_list_registry(self) -> None:
-        raw = Path("H:/footage/demo-one")
+        raw = _external_raw("demo-one")
         reg = video_registry.write_registry(
             "_template",
             "demo-one",
@@ -58,7 +63,7 @@ class VideoRegistryTests(unittest.TestCase):
     def test_resolve_raw_dir(self) -> None:
         from avo.session import normalize_path
 
-        raw = Path("H:/footage/demo-two")
+        raw = _external_raw("demo-two")
         video_registry.write_registry("_template", "demo-two", raw, root=self.root)
         resolved = video_registry.resolve_raw_dir("_template", "demo-two", root=self.root)
         self.assertEqual(normalize_path(resolved), normalize_path(raw))
@@ -67,7 +72,7 @@ class VideoRegistryTests(unittest.TestCase):
         video_registry.write_registry(
             "_template",
             "indexed",
-            Path("H:/footage/indexed"),
+            _external_raw("indexed"),
             root=self.root,
         )
         index_path = video_registry.rebuild_index("_template", root=self.root)

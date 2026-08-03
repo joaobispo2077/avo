@@ -105,7 +105,7 @@ class AudioSfxPipelineTests(unittest.TestCase):
 
     def test_youtube_true_peak_limiter_matches_minus_three_dbtp(self) -> None:
         limiter = loudness_profiles.limiter_filter_for(-3.0)
-        self.assertIn("limit=0.630", limiter)
+        self.assertIn("limit=0.708", limiter)
 
 
 if __name__ == "__main__":
