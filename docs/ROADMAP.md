@@ -65,7 +65,7 @@ Use [Sponsor](../README.md#sponsor) to help prioritize.
 | -- | ----- | ------- | -------------------- |
 | BL-010 | Library organize v1 | Folder index + batch transcribe with cost gates | `/avo.organize` |
 | BL-011 | Composition planning | Selected clips → brief + draft EDL (no auto-render) | `/avo.composition` |
-| BL-012 | Voiceover lite path | Merge clips + external VO + EQ (no motion) | `/avo.voiceover` |
+| BL-012 | Voiceover lite path | Merge clips + external VO + EQ (no motion) | `/avo.voiceover` _(shipped)_ |
 | BL-013 | Multicam metadata | CAM1/CAM2/CAM3 registration in `multicam.json` | `/avo.multicam` |
 | BL-014 | Agent cost transparency | Local token/USD estimates + learning curve | `/avo.costs` (`/avo.metrics` alias) |
 | BL-015 | Concurrent workstreams | Multiple videos per provider via external `rawDir` | docs + stats filter |
