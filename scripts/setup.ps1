@@ -5,7 +5,7 @@
 .DESCRIPTION
   Prepares the toolchain AVO orchestrates. Native primary entrypoint for
   Windows. Idempotent: re-running skips already-satisfied steps. Optional tools
-  never fail the run. ai-jail is WSL-only on Windows.
+  never fail the run. ai-jail on Windows uses WSL2 (no native sandbox backend).
 
 .PARAMETER Lang
   faster-whisper transcription language (e.g. pt, en, es).
@@ -14,7 +14,7 @@
 .PARAMETER WithMemory
   Install ai-memory (optional cross-session memory).
 .PARAMETER WithJail
-  Install ai-jail (optional agent sandbox) - via WSL on Windows.
+  Install ai-jail (optional; verify/install via WSL2 on Windows).
 .PARAMETER WithLogo
   Install logo-generator-skill (optional brand assets).
 .PARAMETER WithUpstreamRef
@@ -189,24 +189,35 @@ if ($WithMemory) {
   } else { Record 'ai-memory' 'WARN' 'git missing' }
 } else { Record 'ai-memory' 'SKIP' 'enable with --with-memory' }
 
-# ---- 7. ai-jail (optional; WSL-only on Windows) -----------------------------
+# ---- 7. ai-jail (optional; Linux/macOS native; WSL2 on Windows) --------------
 if ($WithJail) {
-  Step 'ai-jail (optional agent sandbox - WSL-only on Windows)'
+  Step 'ai-jail (optional agent sandbox - WSL2 on Windows)'
   if ($IsWsl) {
-    Info 'Installing inside WSL (ai-jail has no native Windows backend).'
+    Info 'Verifying ai-jail + bubblewrap inside default WSL distro (no native Windows backend).'
+    $wslVerify = 'command -v bwrap >/dev/null 2>&1 && command -v ai-jail >/dev/null 2>&1 && ai-jail --version'
     $wslCmd = 'if command -v ai-jail >/dev/null 2>&1; then echo already; elif command -v brew >/dev/null 2>&1; then brew install akitaonrails/tap/ai-jail; elif command -v cargo >/dev/null 2>&1; then cargo install ai-jail; elif command -v mise >/dev/null 2>&1; then mise use -g ai-jail; else echo noinstaller; fi'
-    if ($DryRun) { Info "`$ wsl bash -lc `"$wslCmd`""; Record 'ai-jail' 'SKIP' 'dry-run (WSL)' }
+    if ($DryRun) { Info "`$ wsl -e bash -lc `"$wslVerify`""; Info "`$ wsl -e bash -lc `"$wslCmd`""; Record 'ai-jail' 'SKIP' 'dry-run (WSL)' }
     else {
-      $out = wsl bash -lc $wslCmd 2>&1
-      Info "$out"
-      if ("$out" -match 'noinstaller') { Record 'ai-jail' 'WARN' 'no brew/cargo/mise in WSL - see https://github.com/akitaonrails/ai-jail' }
-      else { Record 'ai-jail' 'OK' 'installed/verified in WSL' }
+      $verifyOut = wsl -e bash -lc $wslVerify 2>&1
+      if ($LASTEXITCODE -eq 0) {
+        Record 'ai-jail' 'OK' "verified in WSL ($verifyOut)"
+      } else {
+        $out = wsl -e bash -lc $wslCmd 2>&1
+        Info "$out"
+        $null = wsl -e bash -lc 'command -v bwrap' 2>&1
+        if ($LASTEXITCODE -ne 0) { Record 'bwrap' 'WARN' 'missing in WSL — run: sudo apt install bubblewrap' }
+        $verifyOut = wsl -e bash -lc $wslVerify 2>&1
+        if ($LASTEXITCODE -eq 0) { Record 'ai-jail' 'OK' 'installed/verified in WSL' }
+        elseif ("$out" -match 'noinstaller') { Record 'ai-jail' 'WARN' 'no brew/cargo/mise in WSL - see https://github.com/akitaonrails/ai-jail' }
+        else { Record 'ai-jail' 'WARN' "WSL install/verify incomplete ($verifyOut)" }
+      }
     }
   } else {
-    Record 'ai-jail' 'WARN' 'WSL not available; ai-jail is WSL-only on Windows (see https://github.com/akitaonrails/ai-jail)'
+    Record 'ai-jail' 'WARN' 'WSL not available; on Windows use WSL2 (see https://github.com/akitaonrails/ai-jail#windows)'
   }
   Info 'Sandbox tips: mask secrets (e.g. --mask .env); map the EXTERNAL media root read-write.'
-} else { Record 'ai-jail' 'SKIP' 'enable with --with-jail (WSL-only on Windows)' }
+  Info 'Operator guide: docs/ai-memory-and-ai-jail.md'
+} else { Record 'ai-jail' 'SKIP' 'enable with --with-jail (optional; WSL2 on Windows)' }
 
 # ---- 8. logo-generator-skill (optional) -------------------------------------
 if ($WithLogo) {

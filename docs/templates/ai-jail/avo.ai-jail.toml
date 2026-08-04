@@ -1,0 +1,3 @@
+﻿# AVO ai-jail starter policy — copy to `.ai-jail` and customize.
+mask = [".env", ".env.local", ".ai-memory.toml", "credentials.json"]
+# rw_maps = ["/abs/path/to/raw-footage"]

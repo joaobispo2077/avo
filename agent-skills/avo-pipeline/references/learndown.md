@@ -7,15 +7,20 @@ Implements [`docs/avo-workflow.md`](../../docs/avo-workflow.md) §7 step 1.
 - Human approved **final master**
 - `Provider` declared
 - Session started at pipeline kickoff (`session.py start` → `pre.json`)
-- ai-memory installed (`--with-memory` setup) or command notes skip in wrap
+- ai-memory is **optional** (`--with-memory` clones source; runtime install is manual — see [`docs/ai-memory-and-ai-jail.md`](../../../docs/ai-memory-and-ai-jail.md))
 
-## Actions (REQUIRED)
+## Actions
+
+### REQUIRED (with or without ai-memory)
 
 1. **Inventory report:** `python -m avo.project_inventory report --raw-dir <rawDir> --master-basename <stem> [--pre .avo/sessions/<id>/pre.json] [--scratch-out] [--session-id <id>]`
 2. **Draft wrap:** agent narrative + `python -m avo.wrap draft …` → `<rawDir>/avo.wrap.draft.md/json` (`status: "draft"`). Auto-exports `providers/<slug>/learndowns/<entry-id>/` unless `--no-export`.
-3. Consolidate session learnings scoped to **provider** (not global bleed) when ai-memory present
-4. **Learndown telemetry:** `Telemetry.learndown()` — space used vs freed preview, preserved-set size
-5. Never store secrets in memory or wrap JSON
+3. **Learndown telemetry:** `Telemetry.learndown()` — space used vs freed preview, preserved-set size
+4. Never store secrets in memory or wrap JSON
+
+### OPTIONAL (ai-memory MCP only)
+
+5. Consolidate session learnings scoped to **provider** (not global bleed) when ai-memory server + MCP tools are available. Skip this step when absent — filesystem export (step 2) is the durable catalog.
 
 ## Provider export (filesystem)
 
@@ -45,4 +50,4 @@ Learndown does **not** delete files. Run `/avo.cleanup` after learndown complete
 
 ## If ai-memory absent
 
-Print one-line skip notice in wrap learning section; proceed to cleanup when user ready.
+Print one-line skip notice in wrap learning section (`aiMemory: "skipped"`). **Steps 1–3 above still run.** Proceed to `/avo.cleanup` when user ready. See [`docs/ai-memory-and-ai-jail.md`](../../../docs/ai-memory-and-ai-jail.md) for manual install.

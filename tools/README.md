@@ -37,9 +37,9 @@ Model cache (runtime): `~/.cache/video-use/models` (compat from fork; env
 | Path | Installed by | Upstream |
 | ---- | ------------ | -------- |
 | `watch-skill/` | `scripts/setup.sh` (required) | [oxbshw/watch-skill](https://github.com/oxbshw/watch-skill) |
-| `ai-memory/` | `--with-memory` | [akitaonrails/ai-memory](https://github.com/akitaonrails/ai-memory) |
+| `ai-memory/` | `--with-memory` (clone only) | [akitaonrails/ai-memory](https://github.com/akitaonrails/ai-memory) — runtime install: [`docs/ai-memory-and-ai-jail.md`](../docs/ai-memory-and-ai-jail.md) |
 | `logo-generator-skill/` | `--with-logo` | [op7418/logo-generator-skill](https://github.com/op7418/logo-generator-skill) |
-| `ai-jail/` | `--with-jail` (optional) | [akitaonrails/ai-jail](https://github.com/akitaonrails/ai-jail) |
+| `ai-jail/` | `--with-jail` (optional binary) | [akitaonrails/ai-jail](https://github.com/akitaonrails/ai-jail) — Linux/macOS native, WSL2 on Windows |
 
 Run setup from the repo root:
 
