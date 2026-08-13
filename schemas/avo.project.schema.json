@@ -86,6 +86,45 @@
         "aspect": { "type": "string" }
       }
     },
+    "shorts": {
+      "type": "object",
+      "description": "Optional reusable defaults and canonical request location for /avo.shorts. Runtime plan, status, approvals, and render state remain in the external edit/shorts batch directory.",
+      "additionalProperties": false,
+      "properties": {
+        "requestPath": {
+          "type": "string",
+          "description": "External path to the canonical Shorts batch request."
+        },
+        "defaults": {
+          "type": "object",
+          "description": "Provider-compatible shared defaults; the strict batch request resolves and validates execution values.",
+          "additionalProperties": false,
+          "properties": {
+            "speed": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "default": { "type": "number", "exclusiveMinimum": 0 },
+                "minimum": { "type": "number", "exclusiveMinimum": 0 },
+                "maximum": { "type": "number", "exclusiveMinimum": 0 }
+              }
+            },
+            "layout": {
+              "type": "string",
+              "enum": ["full-frame", "split"]
+            },
+            "captionAnchor": {
+              "type": "string",
+              "enum": ["top", "bottom", "center", "seam"]
+            },
+            "maxDurationSec": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            }
+          }
+        }
+      }
+    },
     "audio": {
       "type": "object",
       "description": "Per-video audio delivery and restoration settings.",

@@ -1,0 +1,410 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://avo.local/contracts/shorts-batch-plan.schema.json",
+  "title": "AVO Resolved Shorts Batch Plan",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "batchId",
+    "planRevision",
+    "requestPath",
+    "requestHash",
+    "requestedCount",
+    "resolvedCount",
+    "output",
+    "items",
+    "insertionAllocation",
+    "planApproval",
+    "planHash"
+  ],
+  "properties": {
+    "version": {
+      "const": "1.0"
+    },
+    "batchId": {
+      "type": "string"
+    },
+    "planRevision": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "requestPath": {
+      "type": "string"
+    },
+    "requestHash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "sourceFingerprint": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "providerTokensFingerprint": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "providerTokens": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "requestedCount": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "resolvedCount": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "output": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "items": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/item"
+      }
+    },
+    "insertionAllocation": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "candidateId",
+          "insertionId"
+        ],
+        "properties": {
+          "candidateId": {
+            "type": "string"
+          },
+          "insertionId": {
+            "type": "string"
+          },
+          "reason": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "requiredHumanReviews": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "planApproval": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "status"
+      ],
+      "properties": {
+        "status": {
+          "enum": [
+            "pending",
+            "approved",
+            "rejected"
+          ]
+        },
+        "reference": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "timestamp": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        }
+      }
+    },
+    "planHash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    }
+  },
+  "$defs": {
+    "range": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "startSec",
+        "endSec"
+      ],
+      "properties": {
+        "startSec": {
+          "type": "number",
+          "minimum": 0
+        },
+        "endSec": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        }
+      }
+    },
+    "word": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "text",
+        "startSec",
+        "endSec",
+        "punch",
+        "highlightEnterSec",
+        "highlightExitSec"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1
+        },
+        "startSec": {
+          "type": "number",
+          "minimum": 0
+        },
+        "endSec": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "punch": {
+          "type": "boolean"
+        },
+        "highlightEnterSec": {
+          "type": "number",
+          "minimum": 0
+        },
+        "highlightExitSec": {
+          "type": "number",
+          "minimum": 0
+        }
+      }
+    },
+    "phrase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "startSec",
+        "endSec",
+        "renderedText",
+        "words"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "startSec": {
+          "type": "number",
+          "minimum": 0
+        },
+        "endSec": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "renderedText": {
+          "type": "string"
+        },
+        "words": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/word"
+          }
+        },
+        "autofixes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "sourceMap": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "outputStartSec",
+        "outputEndSec",
+        "sourceStartSec",
+        "sourceEndSec"
+      ],
+      "properties": {
+        "outputStartSec": {
+          "type": "number",
+          "minimum": 0
+        },
+        "outputEndSec": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "sourceStartSec": {
+          "type": "number",
+          "minimum": 0
+        },
+        "sourceEndSec": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        }
+      }
+    },
+    "item": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "order",
+        "coreIdea",
+        "viewerPromise",
+        "postingTitle",
+        "sourceRange",
+        "sourceEvidence",
+        "speed",
+        "editedDurationSec",
+        "layout",
+        "captions",
+        "inputFingerprint",
+        "expectedOutputBasename",
+        "qcProfile"
+      ],
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "order": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "coreIdea": {
+          "type": "string"
+        },
+        "viewerPromise": {
+          "type": "string"
+        },
+        "postingTitle": {
+          "type": "string"
+        },
+        "sourceRange": {
+          "$ref": "#/$defs/range"
+        },
+        "sourceEvidence": {
+          "type": "string"
+        },
+        "speed": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "editedDurationSec": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "layout": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "captions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/phrase"
+          }
+        },
+        "insertion": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "id": {
+              "type": "string"
+            },
+            "videoStreamIndex": {
+              "type": "string"
+            },
+            "audioStreamIndex": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "targetDurationSec": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "supportVolume": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "sourceTimeMap": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "$ref": "#/$defs/sourceMap"
+              }
+            },
+            "rightsReference": {
+              "type": "string"
+            }
+          }
+        },
+        "compositionSpecPath": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "compositionSpecHash": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "inputFingerprint": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "expectedOutputBasename": {
+          "type": "string"
+        },
+        "rightsReviewReferences": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "factualReviewReferences": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "qcProfile": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

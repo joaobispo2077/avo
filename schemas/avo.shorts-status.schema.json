@@ -1,0 +1,278 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://avo.local/contracts/shorts-batch-status.schema.json",
+  "title": "AVO Shorts Batch Status",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "batchId",
+    "planPath",
+    "planHash",
+    "batchState",
+    "updatedAt",
+    "items"
+  ],
+  "properties": {
+    "version": {
+      "const": "1.0"
+    },
+    "batchId": {
+      "type": "string"
+    },
+    "planPath": {
+      "type": "string"
+    },
+    "planHash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "batchState": {
+      "enum": [
+        "draft",
+        "resolved",
+        "plan-approved",
+        "building-proofs",
+        "proofs-ready",
+        "proof-partial",
+        "proof-review",
+        "picture-locked",
+        "building-masters",
+        "master-qc",
+        "delivered",
+        "blocked"
+      ]
+    },
+    "updatedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "items": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/itemStatus"
+      }
+    },
+    "batchApprovals": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/approval"
+      }
+    },
+    "blockingRisks": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "batchQcSummary": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": true
+    },
+    "deliveryComplete": {
+      "type": "boolean",
+      "default": false
+    }
+  },
+  "$defs": {
+    "approval": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "gate",
+        "status"
+      ],
+      "properties": {
+        "gate": {
+          "enum": [
+            "batch-plan",
+            "motion-proof",
+            "picture-lock",
+            "rights",
+            "pre-master"
+          ]
+        },
+        "status": {
+          "enum": [
+            "pending",
+            "approved",
+            "rejected",
+            "overridden"
+          ]
+        },
+        "reference": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "timestamp": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        }
+      }
+    },
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "path",
+        "hash",
+        "revision"
+      ],
+      "properties": {
+        "kind": {
+          "enum": [
+            "prepared-base",
+            "prepared-dialogue",
+            "prepared-insertion-video",
+            "prepared-insertion-audio",
+            "composition",
+            "proof",
+            "master",
+            "qc",
+            "transcript",
+            "manifest",
+            "contact-sheet"
+          ]
+        },
+        "path": {
+          "type": "string"
+        },
+        "hash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "itemStatus": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "shortId",
+        "inputFingerprint",
+        "state",
+        "dirty",
+        "proofRevision",
+        "masterRevision",
+        "artifacts",
+        "errors"
+      ],
+      "properties": {
+        "shortId": {
+          "type": "string"
+        },
+        "inputFingerprint": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "state": {
+          "enum": [
+            "pending",
+            "preparing",
+            "composition-ready",
+            "validating",
+            "proof-rendering",
+            "proof-ready",
+            "proof-approved",
+            "dirty",
+            "master-rendering",
+            "master-qc",
+            "delivered",
+            "failed",
+            "blocked"
+          ]
+        },
+        "dirty": {
+          "type": "boolean"
+        },
+        "dirtyReasons": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "proofRevision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "masterRevision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "artifacts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/artifact"
+          }
+        },
+        "hyperframesValidation": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": true
+        },
+        "watchReviewReference": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "qc": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": true
+        },
+        "approvals": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/approval"
+          }
+        },
+        "errors": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "renderProfile": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "preview",
+            "width",
+            "height"
+          ],
+          "properties": {
+            "preview": {
+              "type": "boolean"
+            },
+            "width": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "height": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        }
+      }
+    }
+  }
+}
