@@ -56,6 +56,13 @@ class PathsTests(unittest.TestCase):
     def test_assert_layout_passes(self) -> None:
         assert_layout()
 
+    def test_shorts_hyperframes_template_is_packaged(self) -> None:
+        from importlib import resources
+
+        template = resources.files("avo.templates.shorts_hyperframes")
+        for name in ("index.html", "styles.css", "runtime.js", "hyperframes.json"):
+            self.assertTrue(template.joinpath(name).is_file())
+
 
 if __name__ == "__main__":
     unittest.main()
