@@ -1,0 +1,32 @@
+{
+  "version": "1.1",
+  "recordedAt": "2026-08-13",
+  "status": "parity-gates-in-progress",
+  "operatorRunbook": "specs/001-batch-shorts-workflow/t072-switch-migration-runbook.md",
+  "completed": {
+    "canonicalRequest": true,
+    "exactCount": 10,
+    "insertionCandidateIds": ["02", "04", "06"],
+    "approvedGameplayWindow": {"startSec": 5.0, "endSec": 46.5},
+    "selectedAudioStream": "0:a:0",
+    "deterministicPlanRegression": true,
+    "selectiveInvalidationRegression": true,
+    "runtimeDependencyGate": true,
+    "syntheticForbiddenFrameAndStreamRegression": true,
+    "realHyperFramesStrictSmoke": true,
+    "phase9PreviewInvalidation": true,
+    "phase9QcAndPromoteCliTests": true
+  },
+  "pending": {
+    "fullRealBatchRenderedOnlyThroughAvoShorts": true,
+    "watchVisualParityApprovalForTenNewProofs": true,
+    "scriptRetirement": true
+  },
+  "evidenceTemplate": {
+    "planHash": null,
+    "proofRevisions": {},
+    "qcSummary": {"passed": 0, "failed": 0},
+    "watchApprovals": {"batch": null, "insertions": {}}
+  },
+  "removalDecision": "blocked until T072 operator runbook completes with Watch approval; preserve historical media, QC, manifests, and one-off scripts meanwhile"
+}

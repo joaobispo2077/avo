@@ -1,0 +1,83 @@
+{
+  "version": "1.0",
+  "batchId": "planning-demo",
+  "provider": "bishop",
+  "source": {
+    "masterPath": "master.mp4",
+    "transcriptPath": "transcript.json"
+  },
+  "destination": "youtube-shorts",
+  "language": "pt-BR",
+  "requestedCount": 10,
+  "output": {
+    "width": 1080,
+    "height": 1920,
+    "fps": 30,
+    "maxDurationSec": 60,
+    "audioSampleRateHz": 48000,
+    "audioChannels": 2
+  },
+  "diagnosis": {
+    "primaryFormat": "comparison-review",
+    "viewerIntent": "decide",
+    "trafficPosture": "search-led",
+    "sourceLimitations": ["synthetic planning fixture"],
+    "informationDensity": "high",
+    "rightsNotes": ["first-party source"]
+  },
+  "defaults": {
+    "speed": {
+      "default": 1.0,
+      "minimum": 1.0,
+      "maximum": 1.2,
+      "preservePitch": true,
+      "perShortAllowed": true,
+      "intelligibilityReviewRequiredAbove": 1.15
+    },
+    "layout": {
+      "mode": "full-frame",
+      "captionAnchor": "bottom",
+      "cropMode": "cover",
+      "focusPoint": {"x": 0.5, "y": 0.5},
+      "labels": []
+    },
+    "captions": {
+      "identity": "anchor-rail",
+      "continuousDuringSpeech": true,
+      "anchor": "bottom",
+      "grouping": {
+        "maxWords": 4,
+        "maxCharacters": 32,
+        "maxDurationSec": 1.35,
+        "maxGapSec": 0.42,
+        "mergeOrphans": true
+      },
+      "timing": {
+        "minimumHoldSec": 0.18,
+        "frameEpsilon": 0.033333,
+        "tailPadSec": 0.18,
+        "autofixPolicy": "report-and-fix"
+      },
+      "highlight": {
+        "mode": "moving-background",
+        "resetAtPhraseBoundary": true
+      }
+    }
+  },
+  "candidates": [
+    {"id": "01", "order": 1, "coreIdea": "Ideia um", "viewerPromise": "Entrega um", "postingTitle": "Título um", "sourceEvidence": "ideia um", "sourceRange": {"startSec": 0, "endSec": 5}, "requestedSpeed": 1.2, "editorialApprovalReference": "review://01"},
+    {"id": "02", "order": 2, "coreIdea": "Ideia dois", "viewerPromise": "Entrega dois", "postingTitle": "Título dois", "sourceEvidence": "ideia dois", "sourceRange": {"startSec": 10, "endSec": 15}, "editorialApprovalReference": "review://02"},
+    {"id": "03", "order": 3, "coreIdea": "Ideia três", "viewerPromise": "Entrega três", "postingTitle": "Título três", "sourceEvidence": "ideia três", "sourceRange": {"startSec": 20, "endSec": 25}, "editorialApprovalReference": "review://03"},
+    {"id": "04", "order": 4, "coreIdea": "Ideia quatro", "viewerPromise": "Entrega quatro", "postingTitle": "Título quatro", "sourceEvidence": "ideia quatro", "sourceRange": {"startSec": 30, "endSec": 35}, "editorialApprovalReference": "review://04"},
+    {"id": "05", "order": 5, "coreIdea": "Ideia cinco", "viewerPromise": "Entrega cinco", "postingTitle": "Título cinco", "sourceEvidence": "ideia cinco", "sourceRange": {"startSec": 40, "endSec": 45}, "editorialApprovalReference": "review://05"},
+    {"id": "06", "order": 6, "coreIdea": "Ideia seis", "viewerPromise": "Entrega seis", "postingTitle": "Título seis", "sourceEvidence": "ideia seis", "sourceRange": {"startSec": 50, "endSec": 55}, "editorialApprovalReference": "review://06"},
+    {"id": "07", "order": 7, "coreIdea": "Ideia sete", "viewerPromise": "Entrega sete", "postingTitle": "Título sete", "sourceEvidence": "ideia sete", "sourceRange": {"startSec": 60, "endSec": 65}, "editorialApprovalReference": "review://07"},
+    {"id": "08", "order": 8, "coreIdea": "Ideia oito", "viewerPromise": "Entrega oito", "postingTitle": "Título oito", "sourceEvidence": "ideia oito", "sourceRange": {"startSec": 70, "endSec": 75}, "editorialApprovalReference": "review://08"},
+    {"id": "09", "order": 9, "coreIdea": "Ideia nove", "viewerPromise": "Entrega nove", "postingTitle": "Título nove", "sourceEvidence": "ideia nove", "sourceRange": {"startSec": 80, "endSec": 85}, "editorialApprovalReference": "review://09"},
+    {"id": "10", "order": 10, "coreIdea": "Ideia dez", "viewerPromise": "Entrega dez", "postingTitle": "Título dez", "sourceEvidence": "ideia dez", "sourceRange": {"startSec": 90, "endSec": 95}, "editorialApprovalReference": "review://10"}
+  ],
+  "corrections": [
+    {"operation": "replace", "match": ["ideia", "tres"], "replacement": ["ideia", "três"], "reason": "PT-BR spelling", "approved": true}
+  ],
+  "approvalGates": ["batch-plan", "motion-proof", "picture-lock", "rights", "pre-master"]
+}

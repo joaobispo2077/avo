@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "text": "ideia um ideia dois ideia três ideia quatro ideia cinco ideia seis ideia sete ideia oito ideia nove ideia dez",
+  "language_code": "pt-BR",
+  "engine_language": "pt",
+  "engine": "fixture",
+  "engine_version": "1",
+  "model": "fixture",
+  "source": {
+    "path": "master.mp4",
+    "size_bytes": 72,
+    "mtime_ns": 0,
+    "sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "words": [
+    {"text": "ideia um", "start": 1.0, "end": 3.0, "type": "word", "speaker_id": null},
+    {"text": "ideia dois", "start": 11.0, "end": 13.0, "type": "word", "speaker_id": null},
+    {"text": "ideia três", "start": 21.0, "end": 23.0, "type": "word", "speaker_id": null},
+    {"text": "ideia quatro", "start": 31.0, "end": 33.0, "type": "word", "speaker_id": null},
+    {"text": "ideia cinco", "start": 41.0, "end": 43.0, "type": "word", "speaker_id": null},
+    {"text": "ideia seis", "start": 51.0, "end": 53.0, "type": "word", "speaker_id": null},
+    {"text": "ideia sete", "start": 61.0, "end": 63.0, "type": "word", "speaker_id": null},
+    {"text": "ideia oito", "start": 71.0, "end": 73.0, "type": "word", "speaker_id": null},
+    {"text": "ideia nove", "start": 81.0, "end": 83.0, "type": "word", "speaker_id": null},
+    {"text": "ideia dez", "start": 91.0, "end": 93.0, "type": "word", "speaker_id": null}
+  ]
+}
