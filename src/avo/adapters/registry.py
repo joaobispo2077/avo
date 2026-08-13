@@ -17,7 +17,7 @@ UNDERSTAND_ADAPTERS: dict[str, str] = {
 }
 
 MOTION_ADAPTERS: dict[str, str] = {
-    "hyperframes": "avo.adapters.stubs.motion_hyperframes:HyperframesStubAdapter",
+    "hyperframes": "avo.adapters.motion.hyperframes:HyperframesAdapter",
     "remotion": "avo.adapters.stubs.motion_remotion:RemotionStubAdapter",
 }
 
