@@ -13,7 +13,7 @@ TRANSCRIBE_ADAPTERS: dict[str, str] = {
 }
 
 UNDERSTAND_ADAPTERS: dict[str, str] = {
-    "watch-skill": "avo.adapters.stubs.understand_watch_skill:WatchSkillStubAdapter",
+    "watch-skill": "avo.adapters.understand.watch_skill:WatchSkillAdapter",
 }
 
 MOTION_ADAPTERS: dict[str, str] = {
