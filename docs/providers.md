@@ -182,15 +182,17 @@ That is why slug choice matters: it is the **learning boundary**, not just a fol
 Preferred — scaffolder:
 
 ```bash
-bash scripts/new-provider.sh yt-channel-name-long-videos \
+python -m avo.provider_scaffold yt-channel-name-long-videos \
   --kind youtube \
   --raw-root /abs/path/to/long-form-footage \
   --lang en
 ```
 
+The same command is cross-platform. On Windows, for example:
+
 ```powershell
-pwsh scripts/new-provider.ps1 -Name yt-channel-name-short-videos `
-  -Kind shorts -RawRoot 'D:\footage\acme-shorts' -Lang en
+python -m avo.provider_scaffold yt-channel-name-short-videos `
+  --kind shorts --raw-root 'D:\footage\acme-shorts' --lang en
 ```
 
 Then edit:
