@@ -11,8 +11,6 @@ from avo.paths import repo_root, config_path
 import argparse
 import json
 import os
-import platform
-import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -71,48 +69,21 @@ def check_provider_scaffold(root: Path) -> tuple[str, str]:
     return "OK", "_template provider scaffold present"
 
 
-def _run_native_script(root: Path, name: str, *args: str) -> subprocess.CompletedProcess[str]:
-    is_windows = platform.system() == "Windows"
-    if is_windows:
-        ps1 = root / "scripts" / f"{name}.ps1"
-        shell = "pwsh" if shutil.which("pwsh") else "powershell"
-        cmd = [shell, "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(ps1), *args]
-    else:
-        sh = root / "scripts" / f"{name}.sh"
-        cmd = ["bash", str(sh), *args]
-    return subprocess.run(cmd, cwd=root, capture_output=True, text=True)
-
-
-def check_setup_dry_run(root: Path) -> tuple[str, str]:
-    if not (root / "scripts/setup.sh").is_file() and not (root / "scripts/setup.ps1").is_file():
-        return "FAIL", "setup script missing"
-    proc = _run_native_script(
-        root,
-        "setup",
-        "--dry-run",
-        "--yes",
-        "--lang",
-        "en",
-        "--skip",
-        "engine",
+def _run_python_module(root: Path, module: str, *args: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [sys.executable, "-m", module, *args], cwd=root, capture_output=True, text=True,
+        env={**os.environ, "PYTHONPATH": str(root / "src")},
     )
-    if proc.returncode != 0:
-        detail = (proc.stderr or proc.stdout or "setup dry-run failed").strip()
-        return "FAIL", detail[:500]
-    return "OK", "setup --dry-run exited 0"
 
 
-def check_scaffold_scripts(root: Path) -> tuple[str, str]:
-    for name in ("new-provider", "init-project"):
-        sh = root / "scripts" / f"{name}.sh"
-        ps1 = root / "scripts" / f"{name}.ps1"
-        if not sh.is_file() and not ps1.is_file():
-            return "FAIL", f"scripts/{name} missing"
-        proc = _run_native_script(root, name, "--help")
-        if proc.returncode not in (0, 1):
-            return "FAIL", f"{name} --help exited {proc.returncode}"
-    return "OK", "new-provider + init-project --help ok"
-
+def check_python_flows(root: Path) -> tuple[str, str]:
+    modules = ("avo.validate_dependencies", "avo.provider_scaffold", "avo.init_project")
+    for module in modules:
+        proc = _run_python_module(root, module, "--help")
+        if proc.returncode != 0:
+            detail = (proc.stderr or proc.stdout or "module help failed").strip()
+            return "FAIL", f"{module} --help: {detail[:400]}"
+    return "OK", "setup validation + provider/project scaffolds use Python flows"
 
 def check_update_command(root: Path) -> tuple[str, str]:
     """Shipped /avo.update command + engine module for end-user agent refresh."""
@@ -122,12 +93,10 @@ def check_update_command(root: Path) -> tuple[str, str]:
     for path in (command, skill_ref, engine):
         if not path.is_file():
             return "FAIL", f"missing {path.relative_to(root)}"
-    for name in ("update",):
-        sh = root / "scripts" / f"{name}.sh"
-        ps1 = root / "scripts" / f"{name}.ps1"
-        if not sh.is_file() and not ps1.is_file():
-            return "FAIL", f"scripts/{name} missing"
-    return "OK", "/avo.update command + update engine present"
+    proc = _run_python_module(root, "avo.update", "--help")
+    if proc.returncode != 0:
+        return "FAIL", "python -m avo.update --help failed"
+    return "OK", "/avo.update command + Python update engine present"
 
 
 def check_core_helpers_import(root: Path) -> tuple[str, str]:
@@ -156,8 +125,7 @@ def run_checks(root: Path, *, ci: bool) -> list[tuple[str, str, str]]:
     checks = [
         ("avo.config", check_avo_config(root)),
         ("provider-scaffold", check_provider_scaffold(root)),
-        ("setup-dry-run", check_setup_dry_run(root)),
-        ("scaffold-scripts", check_scaffold_scripts(root)),
+        ("python-flows", check_python_flows(root)),
         ("update-command", check_update_command(root)),
         ("core-helpers", check_core_helpers_import(root)),
     ]

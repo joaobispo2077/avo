@@ -1,0 +1,420 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/joaobispo2077/avo/schemas/avo.timeline-common.schema.json",
+  "title": "AVO Timeline Artifact Envelope",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "artifactType",
+    "artifactId",
+    "videoId",
+    "provider",
+    "timelineDomain",
+    "currentRevisionId",
+    "approvedRevisionId",
+    "revisions"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "artifactType": {
+      "type": "string",
+      "enum": [
+        "cmap",
+        "bmap",
+        "tracks",
+        "animation",
+        "sync-map"
+      ]
+    },
+    "artifactId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "videoId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "provider": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]*$"
+    },
+    "timelineDomain": {
+      "$ref": "#/$defs/timelineDomain"
+    },
+    "currentRevisionId": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "approvedRevisionId": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "revisions": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/revision"
+      }
+    },
+    "decisions": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/approval"
+      },
+      "default": []
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "timelineDomain": {
+      "type": "string",
+      "enum": [
+        "raw-source",
+        "sync-corrected-source",
+        "cmap-output"
+      ]
+    },
+    "fingerprint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sha256",
+        "sizeBytes"
+      ],
+      "properties": {
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "sizeBytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "mediaSignature": {
+          "type": "object"
+        },
+        "locator": {
+          "type": "string"
+        }
+      }
+    },
+    "timebase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "num",
+        "den"
+      ],
+      "properties": {
+        "num": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "den": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "timeValue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ticks",
+        "timebase",
+        "domain"
+      ],
+      "properties": {
+        "ticks": {
+          "type": "integer"
+        },
+        "timebase": {
+          "$ref": "#/$defs/timebase"
+        },
+        "domain": {
+          "$ref": "#/$defs/timelineDomain"
+        },
+        "sourceId": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "domain": {
+                "enum": [
+                  "raw-source",
+                  "sync-corrected-source"
+                ]
+              }
+            },
+            "required": [
+              "domain"
+            ]
+          },
+          "then": {
+            "required": [
+              "sourceId"
+            ]
+          }
+        }
+      ]
+    },
+    "dependencyRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "artifactType",
+        "artifactId",
+        "revisionId",
+        "sha256",
+        "state"
+      ],
+      "properties": {
+        "artifactType": {
+          "type": "string",
+          "minLength": 1
+        },
+        "artifactId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "revisionId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "outputSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "state": {
+          "type": "string",
+          "enum": [
+            "valid",
+            "stale",
+            "blocked",
+            "superseded"
+          ]
+        }
+      }
+    },
+    "diffOperation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "op",
+        "targetId",
+        "reason"
+      ],
+      "properties": {
+        "op": {
+          "type": "string",
+          "enum": [
+            "add",
+            "remove",
+            "replace",
+            "move",
+            "split",
+            "merge"
+          ]
+        },
+        "targetId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "before": {},
+        "after": {},
+        "timeSpan": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "start",
+            "end"
+          ],
+          "properties": {
+            "start": {
+              "$ref": "#/$defs/timeValue"
+            },
+            "end": {
+              "$ref": "#/$defs/timeValue"
+            }
+          }
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "evidenceRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "evidenceId",
+        "sha256"
+      ],
+      "properties": {
+        "evidenceId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "kind": {
+          "type": "string"
+        }
+      }
+    },
+    "approval": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "decisionId",
+        "decision",
+        "revisionId",
+        "revisionHash",
+        "candidateHash",
+        "dependencyHashes",
+        "actor",
+        "decidedAt"
+      ],
+      "properties": {
+        "decisionId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "decision": {
+          "type": "string",
+          "enum": [
+            "approved",
+            "rejected",
+            "changes-requested",
+            "revoked"
+          ]
+        },
+        "revisionId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "revisionHash": {
+          "$ref": "#/$defs/sha256"
+        },
+        "candidateHash": {
+          "$ref": "#/$defs/sha256"
+        },
+        "dependencyHashes": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/sha256"
+          }
+        },
+        "scope": {
+          "type": "string"
+        },
+        "actor": {
+          "type": "string",
+          "minLength": 1
+        },
+        "decidedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "reason": {
+          "type": "string"
+        }
+      }
+    },
+    "revision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "revisionId",
+        "parentRevisionId",
+        "createdAt",
+        "actor",
+        "reason",
+        "snapshot",
+        "diff",
+        "dependencies",
+        "contentHash",
+        "evidence",
+        "state"
+      ],
+      "properties": {
+        "revisionId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "parentRevisionId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "actor": {
+          "type": "string",
+          "minLength": 1
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        },
+        "snapshot": {
+          "type": "object"
+        },
+        "diff": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/diffOperation"
+          }
+        },
+        "dependencies": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/dependencyRef"
+          }
+        },
+        "contentHash": {
+          "$ref": "#/$defs/sha256"
+        },
+        "evidence": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/evidenceRef"
+          }
+        },
+        "state": {
+          "type": "string",
+          "enum": [
+            "draft",
+            "review-ready",
+            "approved",
+            "rejected",
+            "superseded",
+            "stale",
+            "blocked",
+            "unknown"
+          ]
+        }
+      }
+    }
+  }
+}

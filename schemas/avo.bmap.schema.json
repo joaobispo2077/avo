@@ -1,0 +1,614 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/joaobispo2077/avo/schemas/avo.bmap.schema.json",
+  "title": "AVO Canonical Beat Map",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "artifactType",
+    "artifactId",
+    "videoId",
+    "provider",
+    "timelineDomain",
+    "currentRevisionId",
+    "approvedRevisionId",
+    "revisions"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "artifactType": {
+      "const": "bmap"
+    },
+    "artifactId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "videoId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "provider": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]*$"
+    },
+    "timelineDomain": {
+      "const": "cmap-output"
+    },
+    "currentRevisionId": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "approvedRevisionId": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "revisions": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/revision"
+      }
+    },
+    "decisions": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/approval"
+      },
+      "default": []
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "timelineDomain": {
+      "type": "string",
+      "enum": [
+        "raw-source",
+        "sync-corrected-source",
+        "cmap-output"
+      ]
+    },
+    "fingerprint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sha256",
+        "sizeBytes"
+      ],
+      "properties": {
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "sizeBytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "mediaSignature": {
+          "type": "object"
+        },
+        "locator": {
+          "type": "string"
+        }
+      }
+    },
+    "timebase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "num",
+        "den"
+      ],
+      "properties": {
+        "num": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "den": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "timeValue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ticks",
+        "timebase",
+        "domain"
+      ],
+      "properties": {
+        "ticks": {
+          "type": "integer"
+        },
+        "timebase": {
+          "$ref": "#/$defs/timebase"
+        },
+        "domain": {
+          "$ref": "#/$defs/timelineDomain"
+        },
+        "sourceId": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "domain": {
+                "enum": [
+                  "raw-source",
+                  "sync-corrected-source"
+                ]
+              }
+            },
+            "required": [
+              "domain"
+            ]
+          },
+          "then": {
+            "required": [
+              "sourceId"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "domain": {
+                "const": "cmap-output"
+              }
+            },
+            "required": [
+              "domain"
+            ]
+          },
+          "then": {
+            "not": {
+              "required": [
+                "sourceId"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "dependencyRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "artifactType",
+        "artifactId",
+        "revisionId",
+        "sha256",
+        "state"
+      ],
+      "properties": {
+        "artifactType": {
+          "type": "string",
+          "minLength": 1
+        },
+        "artifactId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "revisionId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "outputSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "state": {
+          "type": "string",
+          "enum": [
+            "valid",
+            "stale",
+            "blocked",
+            "superseded"
+          ]
+        }
+      }
+    },
+    "diffOperation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "op",
+        "targetId",
+        "reason"
+      ],
+      "properties": {
+        "op": {
+          "type": "string",
+          "enum": [
+            "add",
+            "remove",
+            "replace",
+            "move",
+            "split",
+            "merge"
+          ]
+        },
+        "targetId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "before": {},
+        "after": {},
+        "timeSpan": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "start",
+            "end"
+          ],
+          "properties": {
+            "start": {
+              "$ref": "#/$defs/timeValue"
+            },
+            "end": {
+              "$ref": "#/$defs/timeValue"
+            }
+          }
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "evidenceRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "evidenceId",
+        "sha256"
+      ],
+      "properties": {
+        "evidenceId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "kind": {
+          "type": "string"
+        }
+      }
+    },
+    "approval": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "decisionId",
+        "decision",
+        "revisionId",
+        "revisionHash",
+        "candidateHash",
+        "dependencyHashes",
+        "actor",
+        "decidedAt"
+      ],
+      "properties": {
+        "decisionId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "decision": {
+          "type": "string",
+          "enum": [
+            "approved",
+            "rejected",
+            "changes-requested",
+            "revoked"
+          ]
+        },
+        "revisionId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "revisionHash": {
+          "$ref": "#/$defs/sha256"
+        },
+        "candidateHash": {
+          "$ref": "#/$defs/sha256"
+        },
+        "dependencyHashes": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/sha256"
+          }
+        },
+        "scope": {
+          "type": "string"
+        },
+        "actor": {
+          "type": "string",
+          "minLength": 1
+        },
+        "decidedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "reason": {
+          "type": "string"
+        }
+      }
+    },
+    "revision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "revisionId",
+        "parentRevisionId",
+        "createdAt",
+        "actor",
+        "reason",
+        "snapshot",
+        "diff",
+        "dependencies",
+        "contentHash",
+        "evidence",
+        "state"
+      ],
+      "properties": {
+        "revisionId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "parentRevisionId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "actor": {
+          "type": "string",
+          "minLength": 1
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        },
+        "snapshot": {
+          "$ref": "#/$defs/bmapSnapshot"
+        },
+        "diff": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/diffOperation"
+          }
+        },
+        "dependencies": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/dependencyRef"
+          }
+        },
+        "contentHash": {
+          "$ref": "#/$defs/sha256"
+        },
+        "evidence": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/evidenceRef"
+          }
+        },
+        "state": {
+          "type": "string",
+          "enum": [
+            "draft",
+            "review-ready",
+            "approved",
+            "rejected",
+            "superseded",
+            "stale",
+            "blocked",
+            "unknown"
+          ]
+        }
+      }
+    },
+    "bmapBasis": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "artifactType",
+        "artifactId",
+        "revisionId",
+        "sha256",
+        "outputSha256",
+        "state"
+      ],
+      "properties": {
+        "artifactType": {
+          "const": "cmap"
+        },
+        "artifactId": {
+          "type": "string"
+        },
+        "revisionId": {
+          "type": "string"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "outputSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "state": {
+          "const": "valid"
+        }
+      }
+    },
+    "cue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "cueId",
+        "start",
+        "end",
+        "kind",
+        "contentRef",
+        "targetLayerId",
+        "intent",
+        "reason",
+        "reviewState"
+      ],
+      "properties": {
+        "cueId": {
+          "type": "string",
+          "minLength": 1,
+          "pattern": "^[a-z][a-z0-9-]{2,63}$"
+        },
+        "start": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/timeValue"
+            },
+            {
+              "properties": {
+                "domain": {
+                  "const": "cmap-output"
+                }
+              }
+            }
+          ]
+        },
+        "end": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/timeValue"
+            },
+            {
+              "properties": {
+                "domain": {
+                  "const": "cmap-output"
+                }
+              }
+            }
+          ]
+        },
+        "kind": {
+          "enum": [
+            "ambience",
+            "animation",
+            "caption",
+            "card",
+            "clip",
+            "end-screen",
+            "grade",
+            "insert",
+            "music",
+            "sfx",
+            "text",
+            "transition"
+          ]
+        },
+        "contentRef": {
+          "type": "object"
+        },
+        "targetLayerId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "intent": {
+          "type": "string",
+          "minLength": 1
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        },
+        "reviewState": {
+          "enum": [
+            "pending",
+            "approved",
+            "rejected",
+            "stale",
+            "needs-human-judgment"
+          ]
+        },
+        "animation": {
+          "type": "object"
+        },
+        "audio": {
+          "type": "object"
+        },
+        "rawAnchors": {
+          "type": "array"
+        },
+        "assetRef": {
+          "$ref": "#/$defs/fingerprint"
+        },
+        "componentRef": {
+          "type": "string",
+          "minLength": 1
+        },
+        "rebaseHints": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "rawAnchors": {
+              "type": "array",
+              "items": {
+                "type": "object"
+              }
+            },
+            "transcriptSpanSha256": {
+              "$ref": "#/$defs/sha256"
+            }
+          }
+        },
+        "rebaseState": {
+          "enum": [
+            "preserved",
+            "shifted",
+            "split",
+            "removed",
+            "ambiguous",
+            "unsupported"
+          ]
+        }
+      }
+    },
+    "bmapSnapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "basis",
+        "cues"
+      ],
+      "properties": {
+        "basis": {
+          "$ref": "#/$defs/bmapBasis"
+        },
+        "cues": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/cue"
+          }
+        }
+      }
+    }
+  }
+}

@@ -6,6 +6,18 @@ from avo import audio_restoration
 
 
 class AudioRestorationTests(unittest.TestCase):
+    def test_camera_program_accepts_chronological_source_keys(self) -> None:
+        edl = {
+            "audio": {
+                "program_mode": "camera",
+                "noise_reduction_policy": "conservative_speech_first",
+                "restoration_default_pct": 45,
+                "camera_source_keys": ["s01"],
+            }
+        }
+        chain = audio_restoration.audio_repair_filter_for(edl, "s01", 0.0, 2.0)
+        self.assertIn("afftdn=nr=", chain)
+
     def test_standard_pct_matches_production_afftdn(self) -> None:
         chain = audio_restoration.build_repair_filter(35)
         self.assertIn("afftdn=nr=8.00:nf=-35.0:tn=1", chain)

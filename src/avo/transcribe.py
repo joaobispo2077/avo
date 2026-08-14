@@ -396,3 +396,29 @@ def main(argv: list[str] | None = None) -> None:
 
 if __name__ == "__main__":
     main()
+
+
+def transcript_review_evidence(
+    transcript_path: Path,
+    *,
+    candidate_hash: str,
+    dependency_hashes: dict[str, str],
+    findings: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """Bind semantic transcript analysis to the exact rendered candidate."""
+    from avo.timeline.contracts import file_fingerprint
+    fingerprint = file_fingerprint(transcript_path)
+    return {
+        "evidenceId": f"transcript-{fingerprint['sha256'][:12]}",
+        "kind": "transcript-analysis",
+        "tool": "avo.transcribe",
+        "toolVersion": "1",
+        "runAt": __import__("avo.avo_state", fromlist=["now_iso"]).now_iso(),
+        "candidateHash": candidate_hash,
+        "dependencyHashes": dict(sorted(dependency_hashes.items())),
+        "scope": "whole",
+        "coverage": {"status": "full", "transcriptHash": fingerprint["sha256"]},
+        "status": "pass" if not findings else "fail",
+        "findings": findings or [],
+        "artifacts": [str(transcript_path)],
+    }

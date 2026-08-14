@@ -22,6 +22,48 @@ from avo.paths import config_path, providers_dir as _providers_dir, repo_root
 
 
 ASSET_KEYS = ("sfx", "music", "inserts", "graphics", "logos")
+TIMELINE_ARTIFACTS = ("cmap", "bmap", "tracks", "animation", "sync-map")
+
+
+def initialize_timeline_layout(
+    raw_dir: str | Path, *, video_id: str = "", provider: str = "",
+) -> Path:
+    """Create additive canonical directories and projection metadata.
+
+    Artifact files are created only when their video identity and first revision
+    are known; initialization must not fabricate editorial state or approval.
+    """
+    raw_path = Path(raw_dir).expanduser()
+    timeline = raw_path / "edit" / "timeline"
+    revisions = timeline / "revisions"
+    for artifact in TIMELINE_ARTIFACTS:
+        (revisions / artifact).mkdir(parents=True, exist_ok=True)
+    (timeline / "events").mkdir(parents=True, exist_ok=True)
+    (raw_path / "edit" / "review").mkdir(parents=True, exist_ok=True)
+    (raw_path / "edit" / "transcripts").mkdir(parents=True, exist_ok=True)
+    if video_id and provider:
+        from avo.timeline.workspace import ARTIFACTS
+        from avo.timeline.store import ArtifactStore
+        for artifact, domain in ARTIFACTS.items():
+            ArtifactStore(timeline / f"{artifact}.json").initialize(
+                artifact_type=artifact, artifact_id=f"{video_id}:{artifact}",
+                video_id=video_id, provider=provider, timeline_domain=domain,
+            )
+    projection = timeline / "projection.json"
+    if not projection.exists():
+        from avo.timeline.store import atomic_write_json
+
+        atomic_write_json(
+            projection,
+            {
+                "schemaVersion": "1.0.0",
+                "canonicalDirectory": "edit/timeline",
+                "generatedEdlPath": "edit/edl.json",
+                "canonicalFirst": True,
+                "status": "not-generated",
+            },
+        )
+    return timeline
 
 
 def providers_dir(root: Path | None = None) -> Path:
@@ -49,7 +91,7 @@ def load_provider(slug: str, root: Path | None = None) -> dict[str, Any]:
         available = ", ".join(list_providers(root)) or "(none)"
         raise FileNotFoundError(
             f"provider '{slug}' not found at {manifest}. Available: {available}. "
-            f"Create one with scripts/new-provider.sh / new-provider.ps1."
+            f"Create one with python -m avo.provider_scaffold."
         )
     return json.loads(manifest.read_text(encoding="utf-8"))
 
@@ -116,6 +158,16 @@ def build_project(
         project["transcription"] = transcription
     if reg_models:
         project["models"] = dict(reg_models)
+    project["timeline"] = {
+        "directory": "edit/timeline",
+        "reviewDirectory": "edit/review",
+        "generatedEdlPath": "edit/edl.json",
+        "canonicalFirst": True,
+        "migration": {
+            "allowLegacyEdlFallback": True,
+            "warnOnDerivedEdlMismatch": True,
+        },
+    }
     return project
 
 
@@ -228,6 +280,8 @@ def main(argv: list[str] | None = None) -> int:
         print(f"error: {out} already exists (refusing to overwrite)", file=sys.stderr)
         return 1
     out.write_text(text, encoding="utf-8")
+    resolved_video_id = video_id or target.name.lower().replace(" ", "-")
+    initialize_timeline_layout(target, video_id=resolved_video_id, provider=provider_slug)
     print(f"Created project: {out}")
     print(f"  provider : {provider_slug} ({provider_manifest.get('kind', '?')})")
     print(f"  rawDir   : {raw_dir}")

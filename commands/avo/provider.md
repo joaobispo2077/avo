@@ -1,5 +1,7 @@
 # /avo.provider Command
 
+**Timeline integration:** Owns
+
 Configure or create an AVO **provider** — publishing destination, brand, palette,
 manifest metadata, and scope.
 
@@ -33,3 +35,11 @@ Provider setup only. Does not transcribe, cut, or render. Outputs a configured
 3. If `create` — run diagnosis (platform, slug, scope, split vs merge), then scaffolder + brand files.
 4. If `audit` — read existing manifest, DESIGN.md, palette; report gaps vs checklist.
 5. Never commit media; never set `rawRoot` inside the AVO repo.
+
+## Animation library integration
+
+Configures the optional provider animation catalog pointer and performs only explicit creator-authorized sanitized promotion. Video or chapter approval never promotes a pattern.
+
+## Shared timeline gateway
+
+Uses shared timeline storage, transition guards, invalidation, and AI review services. It cannot maintain private CMap, BMap, sync, track, animation, or approval truth.

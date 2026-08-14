@@ -1,5 +1,7 @@
 # /avo.motion Command
 
+**Timeline integration:** Owns
+
 Add motion graphics or overlays on an approved cut (HyperFrames default).
 
 **Skill:** [`agent-skills/avo-pipeline/references/motion.md`](../../agent-skills/avo-pipeline/references/motion.md)
@@ -52,3 +54,16 @@ Provider: my-channel
 rawDir: /videos/demo
 Spin providers/my-channel/logo in a liquid glass lower third during the spec readout
 ```
+
+## Canonical timeline contract
+
+`/avo.motion` blocks until the latest CMap revision and exact generated cut
+fingerprint have explicit approval. It authors BMap cues only in `cmap-output`
+time, then resolves animation strategy and video tracks through shared timeline
+services. Raw/semantic anchors are rebase hints, never BMap timing truth. Any
+CMap basis change stales BMap, tracks, timed animation, previews, evidence, and
+approval before another render or human gate.
+
+## Shared timeline gateway
+
+Uses shared timeline storage, transition guards, invalidation, and AI review services. It cannot maintain private CMap, BMap, sync, track, animation, or approval truth.

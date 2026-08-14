@@ -1,5 +1,15 @@
 # AVO Workflow (agent-facing deep dive)
 
+> Canonical runtime amendment: Python services under `avo.timeline` own the
+> lifecycle and all mutations. `edit/timeline/{sync-map,cmap,bmap,tracks,animation}.json`
+> are canonical indexes over immutable revisions/events. `edit/edl.json` is a
+> generated renderer projection. CMap is always raw-based; BMap is always based
+> on the latest effective approved CMap cut output. Exact-candidate Watch,
+> transcription, and checkpoint QC run before any human gate. Legacy projects
+> use `python -m avo.cli migrate-timeline plan|apply|validate|activate|rollback`;
+> cleanup requires a verified reconstruction bundle.
+
+
 This is the precise, unambiguous specification of the AVO pipeline for the coding
 agent driving it. `AGENTS.md` is canonical; this document expands the workflow
 mechanics and must not contradict it. The user-facing summary lives in
@@ -31,6 +41,7 @@ below names its **owning tool**, its **inputs**, and its **outputs**.
   <video_project>/
     raw/                      # untouched source (PRESERVED)
     edit/
+      timeline/               # canonical indexes + immutable revisions/events
       transcripts/            # initial + final transcripts (PRESERVED)
       preview/                # proof MP4s for human watch (360p / 720p / pre-master)
       review/                 # human approval packages (see §4b)
@@ -51,7 +62,7 @@ below names its **owning tool**, its **inputs**, and its **outputs**.
 | - | ----- | ------------------- | ------ | ------- |
 | 0 | Plan & spec | GitHub Spec Kit (`/speckit.*`) | `/speckit.specify`, `rawDir`, provider manifest | spec/plan/tasks for the video |
 | 1 | Transcribe | video-use + faster-whisper (lang @ setup) | raw file(s), language | **initial transcript** (word-timed) |
-| 2 | Edit / cut / caption | video-use | initial transcript, edit intent | EDL, cut proof render |
+| 2 | Edit / cut | AVO timeline + renderer | raw inventory, SyncMap, transcript | raw CMap, generated EDL, cut proof |
 | 3 | Understand / verify (THE LOOP) | watch-skill (MCP/CLI/REST) | proof render | confidence score, defect list, fix directives → **human approval gate** (§4b) |
 | 4 | Motion / animation | HyperFrames (default) → Remotion | **user-approved** cut, brand tokens | motion proof render → **human approval gate** (§4b) |
 | 5 | Render / encode | local render helpers (Paid: gemini-flow) | user-approved motion + cut | resolution-promoted render; **`--youtube-4k` also runs final PT-BR transcript** |
@@ -72,8 +83,8 @@ by the watch-skill LOOP (§4), not by wall-clock or iteration count.
   - **≈360p** at the **edit stage** (video-use, stage 2).
   - **≈720p** at the **motion stage** (HyperFrames/Remotion, stage 4).
 - **High confidence → promote to 1080p** (stage 5).
-- **Each iteration** stores what it learned and **deletes stale intermediates**
-  immediately (do not accumulate dead proof renders).
+- **Each iteration** preserves immutable decision/evidence metadata. Bulky
+  superseded proof media may be pruned only after its hash/provenance is recorded.
 - **Final resolution is inferred from the raw files.** 1080p above is the common
   case; if the source is lower, the target is the source resolution.
   **Above-source output is NOT supported.** See
@@ -140,7 +151,7 @@ MCP, CLI, or REST). Runs alongside **every** render-producing stage.
 
 Before writing `approval-gate.md` or asking the creator to watch:
 
-1. **`edl_timeline verify`** — `anchor_in_source` matches `start_in_output`.
+1. **Canonical validation** — raw CMap, effective CMap-bound BMap, dependency hashes, and generated projection are current.
 2. **Transcript read** — cut edges, privacy spans, names/terms; cite source times.
 3. **`/avo.watch`** — proof render with timestamps at range joins, blocked B-windows,
    and every overlay beat.
@@ -157,10 +168,11 @@ Fix → re-render → repeat. **Only then** open the human approval gate (§4b).
 
 **Agent MUST:**
 
-1. Write or update `edit/review/<checkpoint>/approval-gate.md` using
+1. Write canonical `edit/review/<checkpoint>/<candidate>/review.json` and
+   derive `approval-gate.md` using
    [`templates/review/approval-gate-manifest.md`](templates/review/approval-gate-manifest.md).
 2. List every path the user should open (preview MP4, EDL, transcript JSON, stills).
-3. Summarize watch-skill + transcription analysis in plain language.
+3. Summarize the exact immutable revision/diff changes, where/why they occur, stale dependencies, Watch, and transcription analysis in plain language.
 4. Ask explicitly: **Approve to promote / advance, or request changes?**
 5. **Wait** for user response. Never assume approval because watch-skill confidence
    is high.
@@ -249,6 +261,23 @@ Runs after the final master is approved. Pipeline kickoff starts a **session**
 a baseline inventory. After cleanup, a **session record** lands in
 `.avo/state.json` and per-video **wrap artifacts** survive on the footage volume.
 
+**Orchestrator scratch roots.** Ephemeral QC, proofs, contact sheets, caption
+experiments, and session dumps the orchestrator or its agent workflow creates
+must land in a remembered root:
+
+- `.avo/tmp/<kind>/<session-id>/` with kinds `learndown`, `qc`, `shorts-proof`,
+  `session` (via `avo.scratch.scratch_path` / `avo.avo_state.tmp_dir`), or
+- `<rawDir>/edit/` for footage preview, verify, and review proofs.
+
+Repo-root `.tmp-*` is a defect. Never write QC or proofs into the AVO clone
+(repo root, `specs/`, and `src/` included). Footage `edit/` proofs belong on the
+footage volume; they are not orchestrator-repo files. A writer that cannot use
+those roots must fail closed with remediation pointing at `avo.scratch` /
+`avo.avo_state.tmp_dir` — do not silently fall back to `.tmp-*`. Existing
+repo-root tmp (`.tmp-*`, `.codex-qc/`, `.codex-tmp/`, `.avo-test-sessions/`,
+`NUL`, `err.txt`, `out.txt`, `*.orig`) is listed for delete, never committed,
+and removed only after explicit user confirm.
+
 Two steps, in order:
 
 1. **Learndown (draft wrap + optional ai-memory).** Condense iteration learnings
@@ -271,10 +300,15 @@ Two steps, in order:
      preview and preserved-set size (§5).
 2. **Cleanup (rimraf + final wrap + stats record).** Delete everything the run
    created in the video project folder **except** the preserved set.
-   - **Verify:** `project_inventory.py verify` — refuse if preserved set incomplete.
-   - **Execute:** `project_inventory.py cleanup` — assert delete list ∩ preserved
-     set = ∅, then `rimraf`. Pass `--session-id` to purge learndown scratch under
-     `.avo/tmp/learndown/<id>/` after success.
+   - **Verify:** `python -m avo.cli cleanup verify --project <avo.project.json>
+     --master-basename <stem>` — refuse if preserved set incomplete.
+   - **Execute:** `python -m avo.cli cleanup execute --project <avo.project.json>
+     --master-basename <stem> [--session-id <id>]` — not a dry-run. Assert
+     delete list ∩ preserved set = ∅, then `rimraf` footage delete candidates
+     under `<rawDir>/edit/`. On success with `--session-id`, purge **all**
+     session kinds under `.avo/tmp/<kind>/<session-id>/` (`learndown`, `qc`,
+     `shorts-proof`, `session`), not only `learndown`. Incomplete preserved set
+     or preserved ∩ delete refuses the run and skips purge.
    - **Final wrap (REQUIRED):** `<rawDir>/avo.wrap.md` and `avo.wrap.json`
      (`status: "final"`) with actual freed bytes and deleted file lists. Draft
      wrap files are **retained** for audit comparison. Re-exports the provider
@@ -284,13 +318,15 @@ Two steps, in order:
      + cumulative `stats.totals`.
    - Optional cleanup telemetry via `Telemetry.cleanup()`.
 
-**Preserved-set invariant (release-blocking).** After cleanup, exactly these
-survive — nothing else the run created:
+**Preserved-set invariant (release-blocking).** After cleanup, the verified reconstruction graph survives:
 
 - the **raw file**,
 - the **initial transcript**,
 - the **final transcript**,
-- the **final master** output.
+- the **final master** output,
+- canonical timeline indexes, immutable revisions/events, projection lineage,
+- candidate-bound review evidence and exact approvals,
+- `edit/timeline/reconstruction-bundle.json`.
 
 > The final transcript MUST be generated from the final exported master itself
 > (per `AGENTS.md` → Captions And Accessibility), not from the source footage or
@@ -356,3 +392,7 @@ local session history only — no network. Privacy: [`SECURITY.md#privacy--telem
   [`animation-system.md`](animation-system.md) — per-domain systems.
 - [`delivery-specifications.md`](delivery-specifications.md) and siblings —
   delivery specs.
+
+## Canonical timeline lifecycle
+
+Canonical video state lives in edit/timeline/{cmap,bmap,tracks,animation,sync-map}.json with immutable revisions and stable-ID diffs. edit/edl.json is generated renderer compatibility output. Lifecycle: intake → sources-ready → sync-ready → cmap-draft → cut-ai-review → cmap-approved → bmap-draft → assembly-ai-review → picture-locked → finishing → pre-master-ai-review → master-approved → delivered → archived. All 51 commands declare Owns, Evidence, Consumes, Profile, or Admin and share guards, invalidation, and review. Missing current Watch/transcript blocks. Cleanup preserves compact reconstruction metadata.

@@ -116,6 +116,41 @@
             "null"
           ],
           "format": "date-time"
+        },
+        "candidateHash": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "proofRevision": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1
+        },
+        "candidateIdentityHash": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "dependencyLockSha256": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "evidenceBundleSha256": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[a-f0-9]{64}$"
         }
       }
     },
@@ -267,6 +302,47 @@
               "minimum": 1
             },
             "height": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        },
+        "watchReview": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": false,
+          "required": [
+            "reference",
+            "candidateHash",
+            "candidateIdentityHash",
+            "dependencyLockSha256",
+            "evidenceBundleSha256",
+            "proofRevision"
+          ],
+          "properties": {
+            "reference": {
+              "type": "string",
+              "minLength": 1
+            },
+            "candidateHash": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "candidateIdentityHash": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "dependencyLockSha256": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "evidenceBundleSha256": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "proofRevision": {
               "type": "integer",
               "minimum": 1
             }

@@ -43,6 +43,20 @@ When layers conflict, **editorial meaning and safety rules win** for footage wor
 | `.github/workflows/` | CI — Gate 1 prerequisites, Gate 2 usability, tests |
 | `.specify/` | GitHub Spec Kit marker |
 
+### Timeline decision boundary
+
+Timeline decisions use one cohesive `src/avo/timeline/` bounded context inside
+the existing modular monolith. It is not a repository-wide architecture
+rewrite. Canonical per-video artifacts live under `<rawDir>/edit/timeline/`;
+`edit/edl.json` is a deterministic, one-way compatibility projection for the
+existing renderer.
+
+Rollout is additive: strict read-only contracts and characterization tests land
+first, legacy EDL import is dry-run/idempotent, canonical artifacts are preferred
+when present, and direct EDL authoring is deprecated only after two representative
+project migrations pass parity. Feature enforcement must fail closed on lineage
+or evidence mismatch and must never invent historical approval.
+
 **Not in git (local/dev):** `.cursor/`, `.claude/`, `.agents/`, `specs/` (except backlog), `providers/<real-slug>/`, `tools/*` clones.
 
 ---

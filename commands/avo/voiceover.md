@@ -1,5 +1,7 @@
 # /avo.voiceover Command
 
+**Timeline integration:** Profile
+
 Lite merge path: concat clips + external voiceover + EQ/loudness. No motion pipeline.
 
 **Skill:** [`agent-skills/avo-pipeline/references/voiceover.md`](../../agent-skills/avo-pipeline/references/voiceover.md)
@@ -47,3 +49,7 @@ rawDir: /videos/explainer-01
 Voiceover: /videos/explainer-01/vo-final.wav
 Clips: /videos/explainer-01/raw/a-roll.mp4
 ```
+
+## Shared timeline gateway
+
+Runs the base pipeline with format-specific diagnosis and policy. It creates its own timeline context for derivatives and cannot bypass lineage, invalidation, Watch, transcript, or approval gates.

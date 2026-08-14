@@ -49,12 +49,10 @@ format rules truly match.
 ### 1. Scaffold (preferred)
 
 ```bash
-bash scripts/new-provider.sh <slug> --kind <kind> --raw-root <abs-path> [--lang <code>]
+python -m avo.provider_scaffold <slug> --kind <kind> --raw-root <abs-path> [--lang <code>]
 ```
 
-```powershell
-pwsh scripts/new-provider.ps1 -Name <slug> -Kind <kind> -RawRoot '<abs-path>' [-Lang <code>]
-```
+The Python scaffolder is cross-platform on Windows, macOS, Linux, and WSL.
 
 Refuses to overwrite an existing slug. Creates `avo.provider.json`, `DESIGN.md`,
 `brand/palette.json`, `logo/.gitkeep`.

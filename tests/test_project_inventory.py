@@ -10,6 +10,7 @@ import json
 import os
 import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -178,7 +179,7 @@ class ProjectInventoryTests(unittest.TestCase):
                 dry_run=False,
                 rimraf_runner=fake_rimraf,
             )
-            self.assertEqual(len(deleted), 3)
+            self.assertEqual(len(deleted), 2)
             self.assertFalse((raw_dir / "edit" / "preview" / "edit-proof.mp4").exists())
             self.assertFalse((raw_dir / "edit" / "clips_graded" / "intermediate.mov").exists())
             self.assertTrue(
@@ -188,6 +189,28 @@ class ProjectInventoryTests(unittest.TestCase):
                 (raw_dir / "edit" / "transcripts" / "initial-whisper.json").exists()
             )
 
+    def test_cleanup_preserves_reconstruction_metadata(self) -> None:
+        with self._temp_project(include_edit=True) as raw_dir:
+            timeline = raw_dir / "edit" / "timeline"
+            review = raw_dir / "edit" / "review" / "pre-master"
+            timeline.mkdir(parents=True)
+            review.mkdir(parents=True)
+            (timeline / "cmap.json").write_text("{}", encoding="utf-8")
+            (review / "review.json").write_text("{}", encoding="utf-8")
+            preserved = project_inventory.resolve_preserved_set(raw_dir, self.master)
+            names = {
+                project_inventory._relative_posix(raw_dir, item)
+                for item in preserved.reconstruction_metadata
+            }
+            self.assertIn("edit/timeline/cmap.json", names)
+            self.assertIn("edit/review/pre-master/review.json", names)
+            deleted = {
+                project_inventory._relative_posix(raw_dir, item)
+                for item in project_inventory.list_delete_candidates(raw_dir, preserved)
+            }
+            self.assertNotIn("edit/timeline/cmap.json", deleted)
+            self.assertNotIn("edit/review/pre-master/review.json", deleted)
+
     def test_cleanup_refuses_on_verify_failure(self) -> None:
         with self._temp_project(include_edit=True, include_master=False) as raw_dir:
             with self.assertRaises(SystemExit):
@@ -196,6 +219,75 @@ class ProjectInventoryTests(unittest.TestCase):
                     self.master,
                     dry_run=True,
                 )
+
+    def test_cleanup_execute_purges_all_session_tmp_kinds(self) -> None:
+        from avo import scratch
+
+        deleted: list[str] = []
+
+        def fake_rimraf(path: Path) -> None:
+            deleted.append(str(path.resolve()))
+            if path.is_file():
+                path.unlink()
+
+        with self._temp_project(include_edit=True) as raw_dir:
+            with tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                with mock.patch.object(scratch, "tmp_dir", return_value=root):
+                    keep = scratch.scratch_path("qc", "sess-keep", "a.bin")
+                    keep.write_bytes(b"keep")
+                    for kind in scratch.SCRATCH_KINDS:
+                        target = scratch.scratch_path(kind, "sess-ok", "drop.bin")
+                        target.write_bytes(b"drop")
+
+                    project_inventory.execute_cleanup(
+                        raw_dir,
+                        self.master,
+                        dry_run=False,
+                        rimraf_runner=fake_rimraf,
+                        session_id="sess-ok",
+                    )
+                    self.assertGreaterEqual(len(deleted), 1)
+                    for kind in scratch.SCRATCH_KINDS:
+                        self.assertFalse((root / kind / "sess-ok").exists())
+                    self.assertTrue(keep.is_file())
+
+    def test_cleanup_dry_run_with_session_id_does_not_purge(self) -> None:
+        from avo import scratch
+
+        with self._temp_project(include_edit=True) as raw_dir:
+            with tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                with mock.patch.object(scratch, "tmp_dir", return_value=root):
+                    marker = scratch.scratch_path("shorts-proof", "sess-dry", "x.bin")
+                    marker.write_bytes(b"x")
+                    project_inventory.execute_cleanup(
+                        raw_dir,
+                        self.master,
+                        dry_run=True,
+                        session_id="sess-dry",
+                    )
+                    self.assertTrue(marker.is_file())
+                    preview = raw_dir / "edit" / "preview" / "edit-proof.mp4"
+                    self.assertTrue(preview.is_file())
+
+    def test_cleanup_refuse_incomplete_does_not_purge_session_tmp(self) -> None:
+        from avo import scratch
+
+        with self._temp_project(include_edit=True, include_master=False) as raw_dir:
+            with tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                with mock.patch.object(scratch, "tmp_dir", return_value=root):
+                    marker = scratch.scratch_path("session", "sess-fail", "x.bin")
+                    marker.write_bytes(b"x")
+                    with self.assertRaises(SystemExit):
+                        project_inventory.execute_cleanup(
+                            raw_dir,
+                            self.master,
+                            dry_run=False,
+                            session_id="sess-fail",
+                        )
+                    self.assertTrue(marker.is_file())
 
     def test_scan_inventory_local_fallback(self) -> None:
         inventory = project_inventory.scan_inventory(self.raw_dir, relative_to=self.raw_dir)

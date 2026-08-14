@@ -1,5 +1,7 @@
 # /avo.trim Command
 
+**Timeline integration:** Owns
+
 Transcribe and cut only. Skip motion unless the user asks to continue.
 
 **Skill:** [`agent-skills/avo-pipeline/references/trim.md`](../../agent-skills/avo-pipeline/references/trim.md)
@@ -43,3 +45,17 @@ Provider: my-channel
 rawDir: /videos/product-review
 Footage: /videos/product-review/raw/take-a.mp4
 ```
+
+## Canonical timeline contract
+
+`/avo.trim` owns only CMap decisions. It inventories and fingerprints brute/raw
+sources, creates an immutable `edit/timeline/cmap.json` revision in raw-source
+time, generates `edit/edl.json` as a compatibility projection, renders a cut
+proof, transcribes that exact proof, and runs the shared Watch/review gate.
+Approval binds the CMap revision hash, cut-output SHA-256, and candidate SHA-256.
+It never uses a proxy, synchronized export, previous trim, or proof as editorial
+truth. Motion, music, SFX, captions, and other BMap work are out of scope.
+
+## Shared timeline gateway
+
+Uses shared timeline storage, transition guards, invalidation, and AI review services. It cannot maintain private CMap, BMap, sync, track, animation, or approval truth.

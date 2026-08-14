@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 4,
+  "feature": "timeline-parity-fixture",
+  "sources": {"a": "source-a.mp4", "b": "source-b.mp4"},
+  "ranges": [
+    {"source": "b", "start": 0.5, "end": 2.0, "story_section_id": "opening"},
+    {"source": "a", "start": 0.25, "end": 1.75, "story_section_id": "body"}
+  ],
+  "overlays": [
+    {"id": "image-1", "type": "image", "start": 0.7, "end": 1.4, "source": "insert.png"},
+    {"id": "caption-1", "type": "caption", "start": 1.5, "end": 2.2, "text": "Legacy caption"}
+  ],
+  "sound_effects": [
+    {"id": "sfx-1", "start": 0.7, "source": "pop.mp3", "gain_db": -12}
+  ],
+  "music": [
+    {"id": "music-1", "start": 1.8, "end": 2.8, "source": "bed.mp3", "gain_db": -24}
+  ],
+  "approval": {"status": "unknown", "reason": "legacy decision is not fingerprint-bound"},
+  "extensions": {"legacy.example/unsupported-transition": {"kind": "custom"}}
+}

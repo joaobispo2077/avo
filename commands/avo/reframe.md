@@ -1,5 +1,7 @@
 # /avo.reframe Command
 
+**Timeline integration:** Profile
+
 Extract a vertical (9:16) clip from an approved long-form master for Shorts repurposing.
 
 **Skill:** [`agent-skills/avo-pipeline/references/reframe.md`](../../agent-skills/avo-pipeline/references/reframe.md)
@@ -45,3 +47,7 @@ from: 4:10
 to: 4:55
 crop: face-safe
 ```
+
+## Shared timeline gateway
+
+Runs the base pipeline with format-specific diagnosis and policy. It creates its own timeline context for derivatives and cannot bypass lineage, invalidation, Watch, transcript, or approval gates.

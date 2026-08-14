@@ -1,5 +1,7 @@
 # /avo.talking-head Command
 
+**Timeline integration:** Profile
+
 Orchestrator for talking-head graphic overlay packaging (not plain captions).
 
 **Skill:** [`agent-skills/avo-pipeline/references/talking-head.md`](../../agent-skills/avo-pipeline/references/talking-head.md)
@@ -30,3 +32,7 @@ Package existing talking-head clip with **designed graphic cards** via `talking-
 1. Parse `Provider`, `rawDir`, `Footage:` (required).
 2. Load [`talking-head.md`](../../agent-skills/avo-pipeline/references/talking-head.md).
 3. Route plain subtitles to `/avo.captions` if user intent is captions-only.
+
+## Shared timeline gateway
+
+Runs the base pipeline with format-specific diagnosis and policy. It creates its own timeline context for derivatives and cannot bypass lineage, invalidation, Watch, transcript, or approval gates.

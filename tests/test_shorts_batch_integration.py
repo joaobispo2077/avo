@@ -268,12 +268,42 @@ class ShortsPlanningIntegrationTests(unittest.TestCase):
                 item["qc"] = {"status": "passed", "findings": []}
             shorts_contract.atomic_write_json(status_path, status)
             manifest_path = root / "approvals.json"
+            current_proofs = {
+                item["shortId"]: next(
+                    artifact for artifact in reversed(item["artifacts"])
+                    if artifact["kind"] == "proof" and artifact["revision"] == item["proofRevision"]
+                )
+                for item in status["items"]
+            }
+            first_item = status["items"][0]
+            first_proof = current_proofs[first_item["shortId"]]
             manifest_path.write_text(json.dumps({
                 "approvals": [
-                    {"gate": gate, "status": "approved", "reference": f"review://{gate}", "timestamp": "2026-08-12T12:00:00Z"}
+                    {
+                        "gate": gate,
+                        "status": "approved",
+                        "reference": f"review://{gate}",
+                        "timestamp": "2026-08-12T12:00:00Z",
+                        "candidateHash": first_proof["hash"],
+                        "candidateIdentityHash": "a" * 64,
+                        "dependencyLockSha256": "b" * 64,
+                        "evidenceBundleSha256": "c" * 64,
+                        "proofRevision": first_item["proofRevision"],
+                    }
                     for gate in ("batch-plan", "motion-proof", "picture-lock", "rights", "pre-master")
                 ],
-                "watchReviews": [],
+                "watchReviews": [
+                    {
+                        "shortId": item["shortId"],
+                        "candidateHash": current_proofs[item["shortId"]]["hash"],
+                        "candidateIdentityHash": "d" * 64,
+                        "dependencyLockSha256": "e" * 64,
+                        "evidenceBundleSha256": "f" * 64,
+                        "proofRevision": item["proofRevision"],
+                        "reference": f"watch://{item['shortId']}/proof-v{item['proofRevision']:03d}",
+                    }
+                    for item in status["items"]
+                ],
             }), encoding="utf-8")
 
             def fake_transcript(master: Path, edit_dir: Path) -> dict[str, Path]:

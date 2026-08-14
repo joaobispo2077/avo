@@ -1,5 +1,7 @@
 # /avo.guidelines Command
 
+**Timeline integration:** Consumes
+
 Load editorial guidelines for a platform or discipline before editing.
 
 **Skill:** [`agent-skills/avo-pipeline/references/guidelines.md`](../../agent-skills/avo-pipeline/references/guidelines.md)
@@ -47,3 +49,7 @@ rawDir: /videos/review-001
 rawDir: /podcast/ep42
 Footage: /podcast/ep42/raw/dialogue.wav
 ```
+
+## Shared timeline gateway
+
+Resolves provider/video context and reads only exact approved lineage. It performs no canonical timeline mutation.

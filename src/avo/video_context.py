@@ -28,6 +28,53 @@ class VideoContext:
     project: dict[str, Any] = field(default_factory=dict)
 
 
+@dataclass(frozen=True)
+class TimelinePaths:
+    directory: Path
+    cmap: Path
+    bmap: Path
+    tracks: Path
+    animation: Path
+    sync_map: Path
+    revisions: Path
+    review: Path
+    generated_edl: Path
+    legacy_fallback_allowed: bool
+    warn_on_derived_mismatch: bool
+
+
+def timeline_paths(ctx: VideoContext) -> TimelinePaths:
+    policy = ctx.project.get("timeline") or {}
+    directory = ctx.raw_dir / str(policy.get("directory") or "edit/timeline")
+    artifacts = policy.get("artifactPaths") or {}
+    migration = policy.get("migration") or {}
+    return TimelinePaths(
+        directory=directory,
+        cmap=directory / str(artifacts.get("cmap") or "cmap.json"),
+        bmap=directory / str(artifacts.get("bmap") or "bmap.json"),
+        tracks=directory / str(artifacts.get("tracks") or "tracks.json"),
+        animation=directory / str(artifacts.get("animation") or "animation.json"),
+        sync_map=directory / str(artifacts.get("syncMap") or "sync-map.json"),
+        revisions=directory / "revisions",
+        review=ctx.raw_dir / str(policy.get("reviewDirectory") or "edit/review"),
+        generated_edl=ctx.raw_dir / str(policy.get("generatedEdlPath") or "edit/edl.json"),
+        legacy_fallback_allowed=bool(
+            migration.get("allowLegacyEdlFallback", True)
+        ),
+        warn_on_derived_mismatch=bool(
+            migration.get("warnOnDerivedEdlMismatch", True)
+        ),
+    )
+
+
+def canonical_timeline_available(ctx: VideoContext) -> bool:
+    paths = timeline_paths(ctx)
+    return any(
+        path.is_file()
+        for path in (paths.cmap, paths.bmap, paths.tracks, paths.animation, paths.sync_map)
+    )
+
+
 def make_video_key(provider: str, video_id: str) -> str:
     return avo_state.video_state_key(provider, video_id)
 
@@ -111,7 +158,9 @@ def merge_config(ctx: VideoContext, root: Path | None = None) -> dict[str, Any]:
         for key in ("transcription", "models"):
             if defaults.get(key):
                 merged[key] = {**(merged.get(key) or {}), **defaults[key]}
-    for key in ("transcription", "models", "assets", "approvalGates", "deliverable"):
+    for key in (
+        "transcription", "models", "assets", "approvalGates", "deliverable", "timeline",
+    ):
         if ctx.project.get(key):
             merged[key] = {**(merged.get(key) or {}), **ctx.project[key]}
     return merged

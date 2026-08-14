@@ -1,5 +1,7 @@
 # /avo.sound Command
 
+**Timeline integration:** Owns
+
 Audio post: read-only audit, noise reduction, regional gain, dialogue cleanup, SFX/music mix hierarchy.
 
 **Skill:** [`agent-skills/avo-pipeline/references/sound.md`](../../agent-skills/avo-pipeline/references/sound.md)
@@ -68,3 +70,11 @@ Footage: /shows/ep-12/raw/cam-a.mp4
 audit
 Transcript: /shows/ep-12/edit/transcripts/cam-a.json
 ```
+
+## Canonical track integration
+
+Owns ordered audioTracks layers and BMap audio cues against the exact approved CMap output. Changes stale audio/composite Watch and QC evidence. Dialogue remains centered and leading; music/SFX expose gains, fades, ducking, channels, mute, and loudness intent.
+
+## Shared timeline gateway
+
+Uses shared timeline storage, transition guards, invalidation, and AI review services. It cannot maintain private CMap, BMap, sync, track, animation, or approval truth.

@@ -1,5 +1,7 @@
 # /avo.audit Command
 
+**Timeline integration:** Evidence
+
 Scoped quality check on a cut, transcript, or time slice.
 
 **Skill:** [`agent-skills/avo-pipeline/references/audit.md`](../../agent-skills/avo-pipeline/references/audit.md)
@@ -51,3 +53,13 @@ from: 9:30
 to: 9:35
 --only-video
 ```
+
+## Shared evidence runner
+
+`/avo.audit` runs selected checks through the shared orchestrator and writes
+candidate-bound scoped evidence. A partial audit cannot satisfy a checkpoint
+unless the declarative gate matrix confirms all required kinds and coverage.
+
+## Shared timeline gateway
+
+Runs shared candidate-bound checks and emits evidence with exact candidate/dependency hashes. Scoped evidence cannot satisfy a larger gate without required coverage.

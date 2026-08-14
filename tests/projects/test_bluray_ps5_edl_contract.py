@@ -113,6 +113,11 @@ def valid_edl(root: Path) -> dict:
 
 
 class BlurayPs5EdlContractTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        if not SCHEMA.is_file():
+            raise unittest.SkipTest(f"missing local project spec (not in public repo): {SCHEMA}")
+
     def test_valid_bluray_ps5_edl_passes_semantics(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
