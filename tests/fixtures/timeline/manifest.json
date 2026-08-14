@@ -1,0 +1,37 @@
+{
+  "schemaVersion": "1.0.0",
+  "timebase": {"num": 1, "den": 1000},
+  "fixtures": {
+    "clean-clock": {
+      "generator": "clean-clock.mp4",
+      "syncRisk": "not-applicable",
+      "expectedChannels": 1,
+      "sampleRate": 48000,
+      "toleranceMs": 20
+    },
+    "constant-plus-128ms": {
+      "generator": "audio-plus-128ms.mp4",
+      "transform": {"kind": "constant-offset", "offsetMs": 128},
+      "positiveOffsetMeaning": "delay-selected-audio-relative-to-picture",
+      "validationWindowsMs": [250, 2000, 3750],
+      "toleranceMs": 20
+    },
+    "linear-drift": {
+      "generator": "linear-drift.mp4",
+      "transform": {"kind": "linear-drift", "rateRatio": "1000/999"},
+      "validationWindowsMs": [250, 3000, 5750],
+      "toleranceMs": 25
+    },
+    "piecewise-drift": {
+      "generator": "piecewise-drift.mp4",
+      "transform": {"kind": "piecewise", "controlPointCount": 3},
+      "validationWindowsMs": [250, 2000, 4000, 5750],
+      "toleranceMs": 25
+    },
+    "multi-source-reorder": {
+      "generators": ["source-a.mp4", "source-b.mp4"],
+      "keptOrder": ["source-b:500-2000", "source-a:250-1750"],
+      "expectedDurationMs": 3000
+    }
+  }
+}

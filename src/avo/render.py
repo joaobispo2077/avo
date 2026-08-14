@@ -220,6 +220,16 @@ def output_sample_rate(edl: dict) -> int:
     return int((edl.get("audio") or {}).get("sample_rate_hz") or 48000)
 
 
+def dialogue_channel_filter(edl: dict) -> str:
+    """Return an explicit dialogue channel mapping for camera programs."""
+    channel = str((edl.get("audio") or {}).get("dialogue_channel") or "").lower()
+    if channel == "left":
+        return "pan=stereo|c0=c0|c1=c0"
+    if channel == "right":
+        return "pan=stereo|c0=c1|c1=c1"
+    return ""
+
+
 def audio_repair_filter_for(
     edl: dict,
     source_name: str,
@@ -230,6 +240,9 @@ def audio_repair_filter_for(
     from avo import audio_gain, audio_restoration
 
     parts: list[str] = []
+    channel_map = dialogue_channel_filter(edl)
+    if channel_map:
+        parts.append(channel_map)
     gain = audio_gain.gain_filter_for(
         edl,
         source_name,
@@ -730,16 +743,22 @@ def build_overlay_filter_parts(
         shifted = f"[a{sequence}]"
         output = f"[v{sequence}]"
         overlay_chain = f"[{input_index}:v]format=yuva420p,"
-        if overlay_scale:
+        width, height = overlay.get("width"), overlay.get("height")
+        if width and height:
+            overlay_chain += f"scale={int(width)}:{int(height)},"
+        elif overlay_scale:
             overlay_chain += f"scale={overlay_scale},"
         # Limit overlay streams to their approved EDL window. Without this,
         # a longer reusable overlay asset can extend the output timeline even
         # when the overlay filter's enable window has already ended.
         overlay_chain += f"trim=duration={duration:.3f},setpts=PTS-STARTPTS+{start:g}/TB{shifted}"
         parts.append(overlay_chain)
+        position = ""
+        if "x" in overlay or "y" in overlay:
+            position = f"x={overlay.get('x', 0)}:y={overlay.get('y', 0)}:"
         parts.append(
             f"{current}{shifted}"
-            f"overlay=enable='between(t,{start:.3f},{end:.3f})'{output}"
+            f"overlay={position}enable='between(t,{start:.3f},{end:.3f})'{output}"
         )
         current = output
     return parts, current
@@ -804,6 +823,7 @@ def build_final_composite(
     out_path: Path,
     edit_dir: Path,
     sound_effects: list[dict] | None = None,
+    timeline_tracks: dict | None = None,
     youtube_4k: bool = False,
     youtube_4k_preset: str = "slow",
 ) -> None:
@@ -813,9 +833,26 @@ def build_final_composite(
     timeline and mixed below the base speech before final loudness treatment.
     """
     sound_effects = sound_effects or []
+    timeline_tracks = timeline_tracks or {}
+    audio_layers = (timeline_tracks.get("audioTracks") or {}).get("layers") or []
+    video_layers = (timeline_tracks.get("videoTracks") or {}).get("layers") or []
+    if video_layers:
+        from avo.adapters.media.video_tracks import compile_video_layers
+        compiled_video = compile_video_layers(video_layers)
+        overlays = [*overlays, *compiled_video["overlays"]]
+        if subtitles_path is None and compiled_video.get("captions"):
+            subtitles_path = resolve_path(compiled_video["captions"]["file"], edit_dir)
+    else:
+        compiled_video = {"trace": []}
+    if audio_layers and sound_effects:
+        raise ValueError("canonical audio Tracks cannot be mixed with legacy sound_effects")
     has_overlays = bool(overlays)
     has_subs = subtitles_path is not None and subtitles_path.exists()
-    has_sfx = bool(sound_effects)
+    has_audio_tracks = any(
+        not layer.get("mute") and layer.get("role") not in {"dialogue", "source-audio"}
+        for layer in audio_layers
+    )
+    has_sfx = bool(sound_effects) or bool(audio_layers)
 
     if not has_overlays and not has_subs and not has_sfx:
         run(["ffmpeg", "-y", "-i", str(base_path), "-c", "copy", str(out_path)], quiet=True)
@@ -826,6 +863,16 @@ def build_final_composite(
         inputs += ["-i", str(resolve_path(overlay["file"], edit_dir))]
     for effect in sound_effects:
         inputs += ["-i", str(resolve_path(effect["file"], edit_dir))]
+
+    audio_compiled = None
+    if audio_layers:
+        from avo.adapters.media.audio_tracks import compile_audio_layers
+        audio_compiled = compile_audio_layers(
+            audio_layers,
+            first_input_index=1 + len(overlays),
+        )
+        for source in audio_compiled["inputs"]:
+            inputs += ["-i", str(resolve_path(source, edit_dir))]
 
     video_parts, current_video = build_overlay_filter_parts(
         overlays,
@@ -842,10 +889,14 @@ def build_final_composite(
         video_output = "0:v:0"
 
     first_sfx_input = 1 + len(overlays)
-    audio_parts, audio_output = build_audio_filter_parts(
-        sound_effects,
-        first_input_index=first_sfx_input,
-    )
+    if audio_compiled is not None:
+        audio_parts = audio_compiled["filters"]
+        audio_output = audio_compiled["outputLabel"]
+    else:
+        audio_parts, audio_output = build_audio_filter_parts(
+            sound_effects,
+            first_input_index=first_sfx_input,
+        )
     filter_parts = video_parts + audio_parts
 
     cmd = [
@@ -1092,6 +1143,7 @@ def main() -> None:
     #    External voiceover mode muxes VO audio instead of camera program audio.
     overlays = edl.get("overlays") or []
     sound_effects = edl.get("sound_effects") or []
+    timeline_tracks = edl.get("timeline_tracks") or {}
     if voiceover_mode:
         if skip_loudnorm:
             mux_external_voiceover(
@@ -1127,6 +1179,7 @@ def main() -> None:
             out_path,
             edit_dir,
             sound_effects=sound_effects,
+            timeline_tracks=timeline_tracks,
             youtube_4k=args.youtube_4k,
             youtube_4k_preset=args.youtube_4k_preset,
         )
@@ -1139,6 +1192,7 @@ def main() -> None:
             tmp_composite,
             edit_dir,
             sound_effects=sound_effects,
+            timeline_tracks=timeline_tracks,
             youtube_4k=args.youtube_4k,
             youtube_4k_preset=args.youtube_4k_preset,
         )

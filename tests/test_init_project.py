@@ -39,6 +39,37 @@ class InitProjectTests(unittest.TestCase):
         self.assertEqual(project["rawDir"], "H:/footage/demo")
         self.assertIn("assets", project)
 
+    def test_initialize_timeline_layout_is_additive(self) -> None:
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmp:
+            raw = Path(tmp)
+            timeline = init_project.initialize_timeline_layout(raw)
+            self.assertEqual(timeline, raw / "edit" / "timeline")
+            for artifact in init_project.TIMELINE_ARTIFACTS:
+                self.assertTrue((timeline / "revisions" / artifact).is_dir())
+            projection = json.loads(
+                (timeline / "projection.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(projection["status"], "not-generated")
+            init_project.initialize_timeline_layout(raw)
+            self.assertEqual(
+                json.loads((timeline / "projection.json").read_text())["status"],
+                "not-generated",
+            )
+
+
+    def test_initialize_with_identity_creates_valid_empty_indexes(self) -> None:
+        import tempfile
+        from avo.timeline.store import ArtifactStore
+        with tempfile.TemporaryDirectory() as tmp:
+            timeline=init_project.initialize_timeline_layout(tmp,video_id="demo",provider="bishop")
+            for artifact in init_project.TIMELINE_ARTIFACTS:
+                index=ArtifactStore(timeline/f"{artifact}.json").load_index()
+                self.assertIsNone(index["headRevisionId"])
+                self.assertIsNone(index["approvedRevisionId"])
+                self.assertEqual(index["revisionRefs"],[])
+
     def test_help_exits_zero(self) -> None:
         proc = subprocess.run(
             [sys.executable, "-m", "avo.init_project", "--help"],

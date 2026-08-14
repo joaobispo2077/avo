@@ -1,0 +1,178 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://avo.local/avo.pipeline-run.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "runId",
+    "videoId",
+    "provider",
+    "projectPath",
+    "mainState",
+    "sideState",
+    "activeRefs",
+    "blockers",
+    "transitionHistory",
+    "origin",
+    "createdAt",
+    "updatedAt"
+  ],
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "schemaVersion": {
+      "const": "1.0.0"
+    },
+    "runId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "videoId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "provider": {
+      "type": "string",
+      "minLength": 1
+    },
+    "projectPath": {
+      "type": "string",
+      "minLength": 1
+    },
+    "mainState": {
+      "enum": [
+        "intake",
+        "sources-ready",
+        "sync-ready",
+        "cmap-draft",
+        "cut-ai-review",
+        "cmap-approved",
+        "bmap-draft",
+        "assembly-ai-review",
+        "picture-locked",
+        "finishing",
+        "pre-master-ai-review",
+        "master-approved",
+        "delivered",
+        "archived"
+      ]
+    },
+    "sideState": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "enum": [
+        null,
+        "fixing",
+        "needs-human-judgment",
+        "blocked",
+        "stale",
+        "superseded"
+      ]
+    },
+    "activeRefs": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "blockers": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "transitionHistory": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "eventId",
+          "occurredAt",
+          "actor",
+          "fromMainState",
+          "toMainState",
+          "fromSideState",
+          "toSideState",
+          "reason"
+        ],
+        "properties": {
+          "eventId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "occurredAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "actor": {
+            "type": "string",
+            "minLength": 1
+          },
+          "fromMainState": {
+            "type": "string"
+          },
+          "toMainState": {
+            "type": "string"
+          },
+          "fromSideState": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "toSideState": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "origin": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "command",
+        "mode"
+      ],
+      "properties": {
+        "command": {
+          "type": "string",
+          "minLength": 1
+        },
+        "mode": {
+          "enum": [
+            "Owns",
+            "Evidence",
+            "Consumes",
+            "Profile",
+            "Admin"
+          ]
+        },
+        "parentTimelineRef": {
+          "type": "object"
+        }
+      }
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "updatedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "extensions": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  }
+}

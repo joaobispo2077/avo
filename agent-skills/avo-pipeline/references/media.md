@@ -23,3 +23,7 @@ Run **`--adopt`** first when project already has local assets to register.
 ## Related
 
 - SOURCE-LOG: log resolved assets in footage projects
+
+## Canonical track integration
+
+Inspect videoTracks before render: source/generator fingerprint, regions, z-order, fit/crop, compositing, captions/evidence safe zones, and face avoidance. Every contribution links to BMap intent; unresolved or changed sources block.

@@ -52,3 +52,7 @@ Use ffmpeg filters and project audio helpers. Log substantial work to `AUDIO-EDI
 ## `/avo.sound create`
 
 See [`sound-create.md`](sound-create.md) for designed SFX (NS2-style cinematic briefs).
+
+## Canonical track integration
+
+Inspect audioTracks before render: dialogue priority and channel mapping, music/SFX purpose, source fingerprint, regions, gains, fades, ducking, mute, loudness intent, and BMap cue links. Audio changes invalidate candidate-bound audio and composite evidence.

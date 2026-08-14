@@ -3,8 +3,8 @@
   "batchId": "switch-comparison",
   "provider": "bishop",
   "source": {
-    "masterPath": "/mnt/h/bishop/film/brute/dji oslo pocket 3/POV Gameplays/1-GAMEVLOG/ideas/Comparativo Definitivo Nintendo Switch 2 VS OLED VS LITE/edit/masters/20260731-switch-comparison-master-v009-conclusion-fix-candidate.mp4",
-    "transcriptPath": "/mnt/h/bishop/film/brute/dji oslo pocket 3/POV Gameplays/1-GAMEVLOG/ideas/Comparativo Definitivo Nintendo Switch 2 VS OLED VS LITE/edit/transcripts/20260731-switch-comparison-master-v009-conclusion-fix-candidate.json",
+    "masterPath": "external/edit/masters/20260731-switch-comparison-master-v009-conclusion-fix-candidate.mp4",
+    "transcriptPath": "external/edit/transcripts/20260731-switch-comparison-master-v009-conclusion-fix-candidate.json",
     "expectedFingerprint": "9faef441bc0d0a8d39315ad9000ad6e975523c87c3a4545dda78938c9d3fd989"
   },
   "destination": "youtube-shorts",
@@ -42,7 +42,7 @@
     {"id":"10","order":10,"coreIdea":"Qual Switch serve cada pessoa","viewerPromise":"Entregar a recomendação final","postingTitle":"Qual Nintendo Switch é para você?","sourceEvidence":"Se você não tem uma TV à sua disposição","sourceRange":{"startSec":2801.26,"endSec":2829.6305},"requestedSpeed":1.15,"editorialApprovalReference":"watch://switch-v002/10"}
   ],
   "insertions": [{
-    "id":"nier-gameplay","sourcePath":"/mnt/h/bishop/pcrecordings/2025-10-30 12-20-11.mkv","sourceFingerprint":"b2264c8fde9feb87b0f95a43f0e867e5b8cf36a3854b315bd39bc645d8fd6d7e","videoStream":"0:v:0","audioStream":"0:a:0",
+    "id":"nier-gameplay","sourcePath":"external/gameplay.mkv","sourceFingerprint":"b2264c8fde9feb87b0f95a43f0e867e5b8cf36a3854b315bd39bc645d8fd6d7e","videoStream":"0:v:0","audioStream":"0:a:0",
     "approvedWindows":[{"startSec":5.0,"endSec":46.5}],"excludedWindows":[{"startSec":46.5,"endSec":60.0}],"repeatMode":"finite-repeat","supportVolume":0.2,"layoutRole":"secondary-pane","rightsBasis":"user-provided owned gameplay","riskNotes":["PCSHOP Content ID review"],"semanticApprovalReference":"watch://switch-v002/active-gameplay",
     "allocation":{"mode":"explicit","candidateIds":["02","04","06"],"selectionRule":"explicit"}
   }],

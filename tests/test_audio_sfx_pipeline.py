@@ -15,6 +15,13 @@ from avo import render
 
 
 class AudioSfxPipelineTests(unittest.TestCase):
+    def test_left_dialogue_channel_is_duplicated_to_stereo(self) -> None:
+        edl = {"audio": {"dialogue_channel": "left"}}
+        self.assertEqual(
+            render.dialogue_channel_filter(edl),
+            "pan=stereo|c0=c0|c1=c0",
+        )
+
     def test_sfx_are_deterministic_stereo_48k(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

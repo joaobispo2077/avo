@@ -1,5 +1,7 @@
 # /avo.trailer Command
 
+**Timeline integration:** Profile
+
 Teaser / trailer orchestrator with retention diagnosis. Default target duration 90s.
 
 **Skill:** [`agent-skills/avo-pipeline/references/trailer.md`](../../agent-skills/avo-pipeline/references/trailer.md)
@@ -42,3 +44,7 @@ Provider: my-channel
 The footage is at C:/Videos/long-form-doc
 --max-duration 90
 ```
+
+## Shared timeline gateway
+
+Runs the base pipeline with format-specific diagnosis and policy. It creates its own timeline context for derivatives and cannot bypass lineage, invalidation, Watch, transcript, or approval gates.

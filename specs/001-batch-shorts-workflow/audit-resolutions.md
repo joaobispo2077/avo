@@ -30,10 +30,10 @@
 
 | Audit ID | Status | Gate |
 |----------|--------|------|
-| #7 Real Switch batch | Pending T072 | Full rerender only through `/avo.shorts` + Watch approval |
-| #8 Script retirement | Pending T075–T076 | Blocked on T072 and explicit removal approval |
+| #7 Real-footage validation | External | Owned by the footage project; no private migration state is tracked in AVO |
+| #8 Script retirement | Complete | Generic `/avo.shorts` coverage replaces repository-specific repair scripts |
 | T078 validation record | Pending | Run full suite and record commands/results in `tasks.md` |
-| T079 constitution recheck | Pending | Record after T072 |
+| T079 repository-purity recheck | Complete | Generic runtime retained; private automation removed |
 
 ## Design Decisions
 

@@ -31,3 +31,7 @@ Open these files before approving:
 ---
 
 _Agent: set Status to `approved` with date when the user approves. Do not promote until a box is checked and confirmed in chat._
+
+## Machine authority
+
+Adjacent review.json is authoritative: exact candidate SHA-256, dependency hashes, structured revision/diff change summary, stale dependencies, evidence tool/version/time, scope, coverage, findings, fix revisions, attempts, blockers, and approval identity. This Markdown file is a generated human projection. Editing it cannot create approval or freshen stale evidence.

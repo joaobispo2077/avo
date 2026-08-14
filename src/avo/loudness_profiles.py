@@ -160,8 +160,12 @@ def apply_range_preference(base_lra: float, preference: str) -> float:
 
 
 def _audio_block(*sources: dict[str, Any] | None) -> dict[str, Any]:
+    """Merge audio blocks with earlier sources taking precedence."""
     merged: dict[str, Any] = {}
-    for src in sources:
+    # Callers pass EDL before project because the documented resolution order
+    # is EDL -> project -> provider. Merge low priority first so EDL overrides
+    # are not silently replaced by project defaults.
+    for src in reversed(sources):
         if not src:
             continue
         audio = src.get("audio")

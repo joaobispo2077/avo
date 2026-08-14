@@ -1,5 +1,7 @@
 # /avo.chapters Command
 
+**Timeline integration:** Consumes
+
 YouTube chapter markers from the final-file transcript and approved structure.
 
 **Skill:** [`agent-skills/avo-pipeline/references/chapters.md`](../../agent-skills/avo-pipeline/references/chapters.md)
@@ -42,3 +44,7 @@ Provider: my-channel
 The footage is at C:/Videos/review
 Transcript: edit/transcripts/20260801-review-master-v001.txt
 ```
+
+## Shared timeline gateway
+
+Resolves provider/video context and reads only exact approved lineage. It performs no canonical timeline mutation.

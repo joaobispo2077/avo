@@ -1,4 +1,4 @@
-﻿"""Command file parity tests for /avo.* slash commands."""
+"""Command file parity tests for /avo.* slash commands."""
 from __future__ import annotations
 
 import unittest
@@ -289,6 +289,23 @@ class AvoCommandParityTests(unittest.TestCase):
         text = LOCALE_STUB.read_text(encoding="utf-8")
         self.assertIn("do not implement", text)
         self.assertFalse((ROOT / "agent-skills" / "avo-locale").exists())
+
+
+    def test_every_command_declares_timeline_integration_mode(self) -> None:
+        allowed = {"Owns", "Evidence", "Consumes", "Profile", "Admin"}
+        found = sorted(COMMANDS.glob("*.md"))
+        self.assertEqual(len(found), 51)
+        failures = []
+        for command in found:
+            declarations = [
+                line.split(":", 1)[1].strip().strip("* ")
+                for line in command.read_text(encoding="utf-8").splitlines()
+                if line.startswith("**Timeline integration:**")
+            ]
+            if len(declarations) != 1 or declarations[0] not in allowed:
+                failures.append((command.name, declarations))
+        self.assertEqual(failures, [])
+
 
 
 if __name__ == "__main__":

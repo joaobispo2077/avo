@@ -1,5 +1,7 @@
 # /avo.stats Command
 
+**Timeline integration:** Admin
+
 Display local aggregate metrics from completed video sessions.
 
 **Skill:** [`agent-skills/avo-pipeline/references/stats.md`](../../agent-skills/avo-pipeline/references/stats.md)
@@ -53,3 +55,7 @@ python -m avo.stats show --verbose
 
 /avo.stats --json
 ```
+
+## Shared timeline gateway
+
+Resolves provider/video context but performs no editorial timeline mutation. Reports and configuration reference canonical artifact/revision identities.

@@ -1,0 +1,786 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://avo.local/avo.tracks.schema.json",
+  "title": "AVO Timeline Artifact Envelope",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "artifactType",
+    "artifactId",
+    "videoId",
+    "provider",
+    "timelineDomain",
+    "currentRevisionId",
+    "approvedRevisionId",
+    "revisions"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"
+    },
+    "artifactType": {
+      "const": "tracks"
+    },
+    "artifactId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "videoId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "provider": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]*$"
+    },
+    "timelineDomain": {
+      "const": "cmap-output"
+    },
+    "currentRevisionId": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "approvedRevisionId": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "revisions": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/revision"
+      }
+    },
+    "decisions": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/approval"
+      },
+      "default": []
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "timelineDomain": {
+      "type": "string",
+      "enum": [
+        "raw-source",
+        "sync-corrected-source",
+        "cmap-output"
+      ]
+    },
+    "fingerprint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sha256",
+        "sizeBytes"
+      ],
+      "properties": {
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "sizeBytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "mediaSignature": {
+          "type": "object"
+        },
+        "locator": {
+          "type": "string"
+        }
+      }
+    },
+    "timebase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "num",
+        "den"
+      ],
+      "properties": {
+        "num": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "den": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "timeValue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ticks",
+        "timebase",
+        "domain"
+      ],
+      "properties": {
+        "ticks": {
+          "type": "integer"
+        },
+        "timebase": {
+          "$ref": "#/$defs/timebase"
+        },
+        "domain": {
+          "$ref": "#/$defs/timelineDomain"
+        },
+        "sourceId": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "domain": {
+                "enum": [
+                  "raw-source",
+                  "sync-corrected-source"
+                ]
+              }
+            },
+            "required": [
+              "domain"
+            ]
+          },
+          "then": {
+            "required": [
+              "sourceId"
+            ]
+          }
+        }
+      ]
+    },
+    "dependencyRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "artifactType",
+        "artifactId",
+        "revisionId",
+        "sha256",
+        "state"
+      ],
+      "properties": {
+        "artifactType": {
+          "type": "string",
+          "minLength": 1
+        },
+        "artifactId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "revisionId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "outputSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "state": {
+          "type": "string",
+          "enum": [
+            "valid",
+            "stale",
+            "blocked",
+            "superseded"
+          ]
+        }
+      }
+    },
+    "diffOperation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "op",
+        "targetId",
+        "reason"
+      ],
+      "properties": {
+        "op": {
+          "type": "string",
+          "enum": [
+            "add",
+            "remove",
+            "replace",
+            "move",
+            "split",
+            "merge"
+          ]
+        },
+        "targetId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "before": {},
+        "after": {},
+        "timeSpan": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "start",
+            "end"
+          ],
+          "properties": {
+            "start": {
+              "$ref": "#/$defs/timeValue"
+            },
+            "end": {
+              "$ref": "#/$defs/timeValue"
+            }
+          }
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "evidenceRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "evidenceId",
+        "sha256"
+      ],
+      "properties": {
+        "evidenceId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "kind": {
+          "type": "string"
+        }
+      }
+    },
+    "approval": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "decisionId",
+        "decision",
+        "revisionId",
+        "revisionHash",
+        "candidateHash",
+        "dependencyHashes",
+        "actor",
+        "decidedAt"
+      ],
+      "properties": {
+        "decisionId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "decision": {
+          "type": "string",
+          "enum": [
+            "approved",
+            "rejected",
+            "changes-requested",
+            "revoked"
+          ]
+        },
+        "revisionId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "revisionHash": {
+          "$ref": "#/$defs/sha256"
+        },
+        "candidateHash": {
+          "$ref": "#/$defs/sha256"
+        },
+        "dependencyHashes": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/sha256"
+          }
+        },
+        "scope": {
+          "type": "string"
+        },
+        "actor": {
+          "type": "string",
+          "minLength": 1
+        },
+        "decidedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "reason": {
+          "type": "string"
+        }
+      }
+    },
+    "revision": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "revisionId",
+        "parentRevisionId",
+        "createdAt",
+        "actor",
+        "reason",
+        "snapshot",
+        "diff",
+        "dependencies",
+        "contentHash",
+        "evidence",
+        "state"
+      ],
+      "properties": {
+        "revisionId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "parentRevisionId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "actor": {
+          "type": "string",
+          "minLength": 1
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        },
+        "snapshot": {
+          "$ref": "#/$defs/tracksSnapshot"
+        },
+        "diff": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/diffOperation"
+          }
+        },
+        "dependencies": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/dependencyRef"
+          }
+        },
+        "contentHash": {
+          "$ref": "#/$defs/sha256"
+        },
+        "evidence": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/evidenceRef"
+          }
+        },
+        "state": {
+          "type": "string",
+          "enum": [
+            "draft",
+            "review-ready",
+            "approved",
+            "rejected",
+            "superseded",
+            "stale",
+            "blocked",
+            "unknown"
+          ]
+        }
+      }
+    },
+    "tracksSnapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "basis",
+        "audioTracks",
+        "videoTracks"
+      ],
+      "properties": {
+        "basis": {
+          "$ref": "#/$defs/dependencyRef"
+        },
+        "audioTracks": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "layers"
+          ],
+          "properties": {
+            "layers": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "layerId",
+                  "order",
+                  "role",
+                  "source",
+                  "regions"
+                ],
+                "properties": {
+                  "layerId": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9-]{2,63}$"
+                  },
+                  "order": {
+                    "type": "integer"
+                  },
+                  "role": {
+                    "enum": [
+                      "dialogue",
+                      "music",
+                      "sfx",
+                      "ambience",
+                      "source-audio"
+                    ]
+                  },
+                  "source": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "sha256",
+                      "sizeBytes"
+                    ],
+                    "properties": {
+                      "sha256": {
+                        "$ref": "#/$defs/sha256"
+                      },
+                      "sizeBytes": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "locator": {
+                        "type": "string"
+                      },
+                      "generator": {
+                        "type": "string"
+                      }
+                    },
+                    "oneOf": [
+                      {
+                        "required": [
+                          "locator"
+                        ],
+                        "not": {
+                          "required": [
+                            "generator"
+                          ]
+                        }
+                      },
+                      {
+                        "required": [
+                          "generator"
+                        ],
+                        "not": {
+                          "required": [
+                            "locator"
+                          ]
+                        }
+                      }
+                    ]
+                  },
+                  "regions": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "startTicks",
+                        "endTicks",
+                        "cueIds",
+                        "regionId"
+                      ],
+                      "properties": {
+                        "startTicks": {
+                          "type": "integer"
+                        },
+                        "endTicks": {
+                          "type": "integer"
+                        },
+                        "cueIds": {
+                          "type": "array",
+                          "minItems": 1,
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "gainDb": {
+                          "type": "number"
+                        },
+                        "fadeInTicks": {
+                          "type": "integer"
+                        },
+                        "fadeOutTicks": {
+                          "type": "integer"
+                        },
+                        "ducking": {
+                          "type": "object"
+                        },
+                        "regionId": {
+                          "type": "string",
+                          "pattern": "^[a-z][a-z0-9-]{2,63}$"
+                        }
+                      }
+                    }
+                  },
+                  "channels": {
+                    "type": "array",
+                    "items": {
+                      "type": "integer"
+                    }
+                  },
+                  "gainDb": {
+                    "type": "number"
+                  },
+                  "fades": {
+                    "type": "object"
+                  },
+                  "ducking": {
+                    "type": "object"
+                  },
+                  "mute": {
+                    "type": "boolean"
+                  },
+                  "loudnessIntent": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "string"
+                  },
+                  "provenance": {
+                    "type": "object"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "videoTracks": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "layers"
+          ],
+          "properties": {
+            "layers": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "layerId",
+                  "order",
+                  "role",
+                  "regions",
+                  "zOrder"
+                ],
+                "properties": {
+                  "layerId": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9-]{2,63}$"
+                  },
+                  "order": {
+                    "type": "integer"
+                  },
+                  "role": {
+                    "enum": [
+                      "base",
+                      "clip",
+                      "image",
+                      "text",
+                      "card",
+                      "graphic",
+                      "caption",
+                      "grade",
+                      "end-screen",
+                      "overlay"
+                    ]
+                  },
+                  "source": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "sha256",
+                      "sizeBytes"
+                    ],
+                    "properties": {
+                      "sha256": {
+                        "$ref": "#/$defs/sha256"
+                      },
+                      "sizeBytes": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "locator": {
+                        "type": "string"
+                      },
+                      "generator": {
+                        "type": "string"
+                      }
+                    },
+                    "oneOf": [
+                      {
+                        "required": [
+                          "locator"
+                        ],
+                        "not": {
+                          "required": [
+                            "generator"
+                          ]
+                        }
+                      },
+                      {
+                        "required": [
+                          "generator"
+                        ],
+                        "not": {
+                          "required": [
+                            "locator"
+                          ]
+                        }
+                      }
+                    ]
+                  },
+                  "generator": {
+                    "type": "object"
+                  },
+                  "regions": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "startTicks",
+                        "endTicks",
+                        "cueIds",
+                        "regionId"
+                      ],
+                      "properties": {
+                        "startTicks": {
+                          "type": "integer"
+                        },
+                        "endTicks": {
+                          "type": "integer"
+                        },
+                        "cueIds": {
+                          "type": "array",
+                          "minItems": 1,
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "gainDb": {
+                          "type": "number"
+                        },
+                        "fadeInTicks": {
+                          "type": "integer"
+                        },
+                        "fadeOutTicks": {
+                          "type": "integer"
+                        },
+                        "ducking": {
+                          "type": "object"
+                        },
+                        "regionId": {
+                          "type": "string",
+                          "pattern": "^[a-z][a-z0-9-]{2,63}$"
+                        }
+                      }
+                    }
+                  },
+                  "zOrder": {
+                    "type": "integer"
+                  },
+                  "fit": {
+                    "enum": [
+                      "contain",
+                      "cover",
+                      "fill",
+                      "none"
+                    ]
+                  },
+                  "crop": {
+                    "type": "object"
+                  },
+                  "safeZones": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "faceAvoidance": {
+                    "type": "boolean"
+                  },
+                  "composite": {
+                    "type": "object"
+                  },
+                  "animationRef": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "string"
+                  },
+                  "provenance": {
+                    "type": "object"
+                  },
+                  "placement": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "x": {
+                        "type": "number"
+                      },
+                      "y": {
+                        "type": "number"
+                      },
+                      "width": {
+                        "type": "number",
+                        "exclusiveMinimum": 0
+                      },
+                      "height": {
+                        "type": "number",
+                        "exclusiveMinimum": 0
+                      }
+                    }
+                  },
+                  "captionAvoidance": {
+                    "type": "boolean"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "cmapBasis": {
+          "$ref": "#/$defs/dependencyRef"
+        },
+        "animationBasis": {
+          "$ref": "#/$defs/dependencyRef"
+        }
+      }
+    }
+  }
+}

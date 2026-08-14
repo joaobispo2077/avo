@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import re
 import subprocess
+import sys
 import unittest
 from pathlib import Path
 
@@ -98,26 +99,17 @@ class ReleasePipelineTests(unittest.TestCase):
     def test_sync_pyproject_version_script(self) -> None:
         script = ROOT / "scripts/ci/sync-pyproject-version.mjs"
         self.assertTrue(script.is_file())
+        py_path = ROOT / "pyproject.toml"
+        py_original = py_path.read_text(encoding="utf-8")
+        self.addCleanup(lambda: py_path.write_text(py_original, encoding="utf-8"))
         proc = subprocess.run(
             ["node", str(script), "9.9.9-test"],
             cwd=ROOT,
             capture_output=True,
             text=True,
         )
-        self.addCleanup(
-            lambda: (ROOT / "pyproject.toml").write_text(
-                re.sub(
-                    r'^version\s*=\s*"[^"]+"',
-                    'version = "1.0.0"',
-                    (ROOT / "pyproject.toml").read_text(encoding="utf-8"),
-                    count=1,
-                    flags=re.M,
-                ),
-                encoding="utf-8",
-            )
-        )
         self.assertEqual(proc.returncode, 0, msg=proc.stderr)
-        pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
+        pyproject = py_path.read_text(encoding="utf-8")
         self.assertIn('version = "9.9.9-test"', pyproject)
 
     def test_sync_pyproject_version_noop_when_already_set(self) -> None:
@@ -207,7 +199,7 @@ class ReleasePipelineTests(unittest.TestCase):
 
         self.addCleanup(restore)
         proc = subprocess.run(
-            ["python", "scripts/ci/verify-release-version.py", version],
+            [sys.executable, "scripts/ci/verify-release-version.py", version],
             cwd=ROOT,
             capture_output=True,
             text=True,
@@ -247,7 +239,7 @@ class ReleasePipelineTests(unittest.TestCase):
 
         self.addCleanup(restore)
         proc = subprocess.run(
-            ["python", "scripts/ci/verify-release-version.py", version],
+            [sys.executable, "scripts/ci/verify-release-version.py", version],
             cwd=ROOT,
             capture_output=True,
             text=True,

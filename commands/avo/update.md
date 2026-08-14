@@ -1,5 +1,7 @@
 # /avo.update Command
 
+**Timeline integration:** Admin
+
 Refresh your AVO install from GitHub — new features, updated agent skills, and toolchain — **without losing the providers you already set up** (e.g. `bishop`).
 
 **Skill:** [`agent-skills/avo-pipeline/references/update.md`](../../agent-skills/avo-pipeline/references/update.md)
@@ -82,3 +84,7 @@ Agent: "Updated to 1.0.2. bishop provider OK. Skills and toolchain refreshed. St
 - First install: README § Install
 - Create a provider: `/avo.provider`
 - Advisory background check (agents only): weekly `check-update` — lightweight, not a substitute for `/avo.update`
+
+## Shared timeline gateway
+
+Resolves provider/video context but performs no editorial timeline mutation. Reports and configuration reference canonical artifact/revision identities.
