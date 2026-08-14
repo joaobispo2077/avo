@@ -273,7 +273,10 @@ Repo-root `.tmp-*` is a defect. Never write QC or proofs into the AVO clone
 (repo root, `specs/`, and `src/` included). Footage `edit/` proofs belong on the
 footage volume; they are not orchestrator-repo files. A writer that cannot use
 those roots must fail closed with remediation pointing at `avo.scratch` /
-`avo.avo_state.tmp_dir` — do not silently fall back to `.tmp-*`.
+`avo.avo_state.tmp_dir` — do not silently fall back to `.tmp-*`. Existing
+repo-root tmp (`.tmp-*`, `.codex-qc/`, `.codex-tmp/`, `.avo-test-sessions/`,
+`NUL`, `err.txt`, `out.txt`, `*.orig`) is listed for delete, never committed,
+and removed only after explicit user confirm.
 
 Two steps, in order:
 
