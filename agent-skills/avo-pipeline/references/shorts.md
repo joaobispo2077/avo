@@ -1,6 +1,9 @@
 # /avo.shorts reference
 
-**Orchestrator** for YouTube Shorts (vertical ≤60s shelf intent). Distinct from [`guidelines-shorts.md`](guidelines-shorts.md) (`/avo.guidelines --shorts` = diagnosis only).
+**Orchestrator** for one or many YouTube Shorts (vertical ≤60s shelf intent).
+Distinct from [`guidelines-shorts.md`](guidelines-shorts.md)
+(`/avo.guidelines --shorts` = diagnosis only). Users provide editorial,
+review, and delivery parameters; HyperFrames stays internal.
 
 ## Phase 0 — Diagnosis
 
@@ -15,6 +18,29 @@ Load [`guidelines-shorts.md`](guidelines-shorts.md) checklist. Record in project
 | Rights posture | music, clips, reused-content |
 | Caption intent | identity if known |
 
+## Batch planning contract
+
+For several Shorts from one approved master, collect:
+
+- provider, master path/fingerprint, word transcript or permission to create it;
+- requested count, destination, language, output profile, and maximum duration;
+- diagnosis, viewer intent, traffic posture, limitations, and rights risks;
+- shared speed/layout/caption/review/delivery policies;
+- one distinct candidate per requested output with idea, promise, title,
+  transcript evidence, range, and editorial approval reference;
+- optional per-Short overrides and optional insertion policies.
+
+Persist the result as `edit/shorts/<batch-id>/shorts.request.json`. Then run:
+
+```bash
+python -m avo.shorts validate <request>
+python -m avo.shorts resolve <request> -o <batch>/plans/shorts.plan-v001.json
+```
+
+The resolved plan owns exact count, stable order, edited durations, concrete
+defaults/overrides, warnings, fingerprints, and required human reviews.
+Generated media/HTML never becomes the source of truth.
+
 ## Flags
 
 | Flag | Default | Meaning |
@@ -25,6 +51,10 @@ Load [`guidelines-shorts.md`](guidelines-shorts.md) checklist. Record in project
 | `--identity NAME` | — | Pass to `/avo.captions` |
 | `--preview` | on | Stay on 360p/720p until approved |
 
+Batch input also accepts `Count:`, `Master:`, `Transcript:`,
+`Destination:`, `Language:`, shared speed/layout/caption policies, and
+explicit per-Short overrides.
+
 See [`arguments.md`](arguments.md).
 
 ## Workflow phases
@@ -32,12 +62,31 @@ See [`arguments.md`](arguments.md).
 | Phase | Action | Reference |
 | ----- | ------ | --------- |
 | 0 | Shorts diagnosis | [`guidelines-shorts.md`](guidelines-shorts.md) |
-| 1 | Trim + transcribe semantics | [`trim.md`](trim.md) — note 9:16 safe margins in manifest |
-| 2 | watch-skill LOOP + **human approval gate** | [`watch.md`](watch.md) |
-| 3 | Optional motion (Level 2–3 cap when text readable) | [`motion.md`](motion.md) + [`short-form-knowledge.md`](short-form-knowledge.md) — skip with `--skip-motion` |
-| 4 | Captions when `identity` provided or user requests | [`captions.md`](captions.md) |
-| 5 | Duration check (`ffprobe`); enforce `--max-duration` | block promotion without EDITLOG override |
-| 6 | Full master QC + manifest | [`deliver.md`](deliver.md) with Short profile |
+| 1 | Transcript-backed candidate request | exact count, promise, evidence, ranges |
+| 2 | Resolve immutable batch plan + **human approval gate** | `python -m avo.shorts resolve` |
+| 3 | Parameter-driven proof build | full-frame/split, speed, anchor rail, optional insertion |
+| 4 | watch-skill LOOP + picture-lock gate | [`watch.md`](watch.md) |
+| 5 | Targeted/shared correction and dirty rebuild | preserve approved sibling revisions |
+| 6 | Full master QC + immutable delivery | [`deliver.md`](deliver.md) with Short profile |
+
+Executable batch operations:
+
+```bash
+python -m avo.shorts build <plan> --stage proof [--short ID] [--workers 2]
+python -m avo.shorts qc <plan> --stage proof|master [--short ID]
+python -m avo.shorts status <plan>
+python -m avo.shorts promote <plan> --approval-manifest <review.json>
+```
+
+The approval manifest carries explicit batch gates and Watch references; it is
+review evidence, not a way to infer approval. A failed Short moves the batch to
+partial state while clean siblings and their hashes remain unchanged.
+
+Insertion safety is constructive: AVO resolves identities before render,
+materializes exact-duration finite repeats only from approved windows, extracts
+only the selected stream into separate audio, records output-to-source maps,
+and requires Watch semantic review. Never use HTML media looping or infer
+"active gameplay" from freeze detection alone.
 
 ## Branch: `--from-master`
 
@@ -65,6 +114,10 @@ See [`arguments.md`](arguments.md).
 ## Escape hatch
 
 Low-level manual chain still valid: `/avo.trim` + `/avo.motion` + `/avo.captions` + `/avo.deliver`. Prefer `/avo.shorts` for consistent gates and duration checks.
+
+Do not create per-project JavaScript/shell patchers or hand-edit generated
+HyperFrames compositions. Missing reusable behavior belongs in `/avo.shorts`
+contracts, media preparation, templates, validation, or QC.
 
 ## Related
 

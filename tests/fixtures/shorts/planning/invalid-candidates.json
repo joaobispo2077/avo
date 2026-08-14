@@ -1,0 +1,19 @@
+{
+  "cases": [
+    {
+      "name": "duplicate-range-and-promise",
+      "candidateIds": ["01", "02"],
+      "expectedFinding": "duplicate viewer promise and source range"
+    },
+    {
+      "name": "range-without-transcript-words",
+      "candidateIds": ["10"],
+      "expectedFinding": "source range has no transcript words"
+    },
+    {
+      "name": "speed-over-maximum",
+      "candidateIds": ["01"],
+      "expectedFinding": "requested speed exceeds policy"
+    }
+  ]
+}

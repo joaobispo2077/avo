@@ -225,6 +225,12 @@ Use 9:16 safe margins if this is for Shorts.
 
 **Cursor:** `/avo.shorts`
 
+Batch Shorts can be planned once and reproduced from parameters: transcript
+ranges, speed, full-frame/split layout, PT-BR anchor-rail captions, approved
+insertion windows/stream, and review gates. Generated HyperFrames projects are
+disposable outputs; the request, plan, status, QC, and delivery manifest are the
+source of truth.
+
 **Say to your agent:**
 
 ```text

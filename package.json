@@ -41,6 +41,7 @@
     "cross-env": "^7.0.3",
     "ffmpeg-static": "^5.3.0",
     "ffprobe-static": "^3.1.0",
+    "gsap": "^3.14.2",
     "hyperframes": "^0.7.69",
     "rimraf": "^6.0.0",
     "semantic-release": "^25.0.3",

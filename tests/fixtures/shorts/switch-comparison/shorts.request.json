@@ -1,0 +1,54 @@
+{
+  "version": "1.0",
+  "batchId": "switch-comparison",
+  "provider": "bishop",
+  "source": {
+    "masterPath": "/mnt/h/bishop/film/brute/dji oslo pocket 3/POV Gameplays/1-GAMEVLOG/ideas/Comparativo Definitivo Nintendo Switch 2 VS OLED VS LITE/edit/masters/20260731-switch-comparison-master-v009-conclusion-fix-candidate.mp4",
+    "transcriptPath": "/mnt/h/bishop/film/brute/dji oslo pocket 3/POV Gameplays/1-GAMEVLOG/ideas/Comparativo Definitivo Nintendo Switch 2 VS OLED VS LITE/edit/transcripts/20260731-switch-comparison-master-v009-conclusion-fix-candidate.json",
+    "expectedFingerprint": "9faef441bc0d0a8d39315ad9000ad6e975523c87c3a4545dda78938c9d3fd989"
+  },
+  "destination": "youtube-shorts",
+  "language": "pt-BR",
+  "requestedCount": 10,
+  "output": {"width": 1080, "height": 1920, "fps": 30, "maxDurationSec": 60, "audioSampleRateHz": 48000, "audioChannels": 2},
+  "diagnosis": {
+    "primaryFormat": "comparison-review",
+    "viewerIntent": "decide which Nintendo Switch fits use and budget",
+    "trafficPosture": "search-led",
+    "sourceLimitations": ["single approved talking-head/product master"],
+    "informationDensity": "high",
+    "rightsNotes": ["creator-owned master", "creator-provided gameplay; Content ID review required"]
+  },
+  "defaults": {
+    "speed": {"default": 1.2, "minimum": 1.0, "maximum": 1.2, "preservePitch": true, "perShortAllowed": true, "intelligibilityReviewRequiredAbove": 1.15},
+    "layout": {"mode": "full-frame", "captionAnchor": "bottom", "cropMode": "cover", "focusPoint": {"x": 0.5, "y": 0.5}, "labels": []},
+    "captions": {
+      "identity": "anchor-rail", "continuousDuringSpeech": true, "anchor": "auto",
+      "grouping": {"maxWords": 4, "maxCharacters": 32, "maxDurationSec": 1.35, "maxGapSec": 0.42, "mergeOrphans": true},
+      "timing": {"minimumHoldSec": 0.18, "frameEpsilon": 0.033333, "tailPadSec": 0.18, "autofixPolicy": "report-and-fix"},
+      "highlight": {"mode": "moving-background", "resetAtPhraseBoundary": true}
+    }
+  },
+  "candidates": [
+    {"id":"01","order":1,"coreIdea":"Lite usado ainda é a porta de entrada","viewerPromise":"Mostrar quando o Lite usado vale a pena","postingTitle":"Switch Lite usado vale a pena?","sourceEvidence":"preço usado dele também varia bastante","sourceRange":{"startSec":175.26,"endSec":245.5},"editorialApprovalReference":"watch://switch-v002/01"},
+    {"id":"02","order":2,"coreIdea":"Console não pode desestabilizar a casa","viewerPromise":"Proteger as finanças antes da compra","postingTitle":"Não destrua suas finanças por um Switch","sourceEvidence":"desestabilizar as finanças da sua casa","sourceRange":{"startSec":873.42,"endSec":924.576},"layoutOverride":{"mode":"split","captionAnchor":"seam","paneOrder":"base-first","splitRatio":0.5,"cropMode":"cover","focusPoint":{"x":0.5,"y":0.5},"labels":[]},"editorialApprovalReference":"watch://switch-v002/02"},
+    {"id":"03","order":3,"coreIdea":"Faixa real de preço do OLED","viewerPromise":"Dar uma referência de preço do OLED","postingTitle":"OLED: quanto custa de verdade?","sourceEvidence":"fora de promoção","sourceRange":{"startSec":424.74,"endSec":475.0},"editorialApprovalReference":"watch://switch-v002/03"},
+    {"id":"04","order":4,"coreIdea":"Switch 2 sem bundle custa caro","viewerPromise":"Mostrar o choque de preço do Switch 2","postingTitle":"Switch 2: o preço assusta","sourceEvidence":"sem bando do Mario Kart","sourceRange":{"startSec":727.12,"endSec":785.0},"layoutOverride":{"mode":"split","captionAnchor":"seam","paneOrder":"base-first","splitRatio":0.5,"cropMode":"cover","focusPoint":{"x":0.5,"y":0.5},"labels":[]},"editorialApprovalReference":"watch://switch-v002/04"},
+    {"id":"05","order":5,"coreIdea":"Jogos de Switch 2 chegam a R$ 500","viewerPromise":"Explicar o custo dos jogos","postingTitle":"Jogo de Switch 2 a R$ 500?","sourceEvidence":"jogos estão saindo","sourceRange":{"startSec":1026.66,"endSec":1079.6},"editorialApprovalReference":"watch://switch-v002/05"},
+    {"id":"06","order":6,"coreIdea":"Lite é portátil de verdade","viewerPromise":"Resumir peso tela e ausência de dock","postingTitle":"Switch Lite: portátil de verdade","sourceEvidence":"ele só tem acesso ao modo portátil","sourceRange":{"startSec":1286.8,"endSec":1342.0},"layoutOverride":{"mode":"split","captionAnchor":"seam","paneOrder":"base-first","splitRatio":0.5,"cropMode":"cover","focusPoint":{"x":0.5,"y":0.5},"labels":[]},"editorialApprovalReference":"watch://switch-v002/06"},
+    {"id":"07","order":7,"coreIdea":"OLED é híbrido e tem tela maior","viewerPromise":"Explicar a vantagem prática do OLED","postingTitle":"OLED: a vantagem é a dock?","sourceEvidence":"Nintendo Switch OLED ele vai rodar todos","sourceRange":{"startSec":1575.0,"endSec":1632.0},"editorialApprovalReference":"watch://switch-v002/07"},
+    {"id":"08","order":8,"coreIdea":"Bateria observada do Switch 2 é curta","viewerPromise":"Contrastar promessa e experiência pessoal","postingTitle":"Switch 2: bateria de 2 horas?","sourceEvidence":"se muito duas horas","sourceRange":{"startSec":2352.18,"endSec":2421.28},"editorialApprovalReference":"watch://switch-v002/08","factualNotes":["experiência pessoal, não especificação universal"]},
+    {"id":"09","order":9,"coreIdea":"Compre pelos jogos","viewerPromise":"Recentrar a decisão na biblioteca","postingTitle":"Compre o Switch pelos jogos","sourceEvidence":"compra o videogame pelos jogos","sourceRange":{"startSec":2490.0,"endSec":2549.43},"editorialApprovalReference":"watch://switch-v002/09"},
+    {"id":"10","order":10,"coreIdea":"Qual Switch serve cada pessoa","viewerPromise":"Entregar a recomendação final","postingTitle":"Qual Nintendo Switch é para você?","sourceEvidence":"Se você não tem uma TV à sua disposição","sourceRange":{"startSec":2801.26,"endSec":2829.6305},"requestedSpeed":1.15,"editorialApprovalReference":"watch://switch-v002/10"}
+  ],
+  "insertions": [{
+    "id":"nier-gameplay","sourcePath":"/mnt/h/bishop/pcrecordings/2025-10-30 12-20-11.mkv","sourceFingerprint":"b2264c8fde9feb87b0f95a43f0e867e5b8cf36a3854b315bd39bc645d8fd6d7e","videoStream":"0:v:0","audioStream":"0:a:0",
+    "approvedWindows":[{"startSec":5.0,"endSec":46.5}],"excludedWindows":[{"startSec":46.5,"endSec":60.0}],"repeatMode":"finite-repeat","supportVolume":0.2,"layoutRole":"secondary-pane","rightsBasis":"user-provided owned gameplay","riskNotes":["PCSHOP Content ID review"],"semanticApprovalReference":"watch://switch-v002/active-gameplay",
+    "allocation":{"mode":"explicit","candidateIds":["02","04","06"],"selectionRule":"explicit"}
+  }],
+  "corrections": [
+    {"scopeCandidateIds":["04"],"operation":"merge","match":["R", "$", "3", ".700"],"replacement":["R$", "3.700"],"reason":"reviewed PT-BR currency tokenization","approved":true},
+    {"scopeCandidateIds":["10"],"operation":"replace","match":["Bananza"],"replacement":["Bananza"],"reason":"reviewed product title preserved","approved":true}
+  ],
+  "approvalGates":["batch-plan","motion-proof","picture-lock","rights","pre-master"]
+}

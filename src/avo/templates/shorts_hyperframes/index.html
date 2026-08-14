@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=__WIDTH__, height=__HEIGHT__" />
+    <title>AVO Short __SHORT_ID__</title>
+    <link rel="stylesheet" href="styles.css" />
+    <script src="assets/gsap.min.js"></script>
+  </head>
+  <body>
+    <main
+      id="short-root"
+      data-composition-id="short-__SHORT_ID__"
+      data-start="0"
+      data-width="__WIDTH__"
+      data-height="__HEIGHT__"
+      data-duration="__DURATION__"
+      data-layout="__LAYOUT_MODE__"
+      data-pane-order="__PANE_ORDER__"
+      data-caption-anchor="__CAPTION_ANCHOR__"
+      style="--canvas-width: __WIDTH__px; --canvas-height: __HEIGHT__px; __TOKEN_CSS__"
+    >
+      <video
+        id="base-video"
+        class="clip media-pane base-pane"
+        src="assets/base-video.mp4"
+        data-start="0"
+        data-duration="__DURATION__"
+        data-track-index="0"
+        muted
+        playsinline
+      ></video>
+__INSERTION_MEDIA__
+      <section
+        id="caption-rail"
+        class="clip caption-rail anchor-__CAPTION_ANCHOR__"
+        data-start="0"
+        data-duration="__DURATION__"
+        data-track-index="2"
+        aria-label="Legendas em português"
+      >
+__CAPTION_MARKUP__
+      </section>
+      <audio
+        id="dialogue-audio"
+        src="assets/dialogue-audio.m4a"
+        data-start="0"
+        data-duration="__DURATION__"
+        data-track-index="10"
+        data-volume="1"
+      ></audio>
+__INSERTION_AUDIO__
+    </main>
+    <script>
+      window.__timelines = window.__timelines || {};
+      window.__timelines["short-__SHORT_ID__"] = gsap.timeline({ paused: true });
+    </script>
+    <script src="runtime.js"></script>
+  </body>
+</html>
