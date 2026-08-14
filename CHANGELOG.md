@@ -1,3 +1,12 @@
+# [1.6.0](https://github.com/joaobispo2077/avo/compare/v1.5.0...v1.6.0) (2026-08-14)
+
+
+### Features
+
+* **models:** add optional Bonsai understand catalog options ([1e3dd36](https://github.com/joaobispo2077/avo/commit/1e3dd36d3da5fb2b2df03aa4d05ddd70699f14f8))
+* **understand:** fail closed when Bonsai Watch runtime is missing ([9693789](https://github.com/joaobispo2077/avo/commit/96937891c4f759a9087f6630c34c767a03e558e8))
+* **hardware:** note optional Bonsai understand without changing llm ([49e6a92](https://github.com/joaobispo2077/avo/commit/49e6a923d61e1f12b8c13fd41184d716a42bf782))
+
 # [1.5.0](https://github.com/joaobispo2077/avo/compare/v1.4.0...v1.5.0) (2026-08-14)
 
 
