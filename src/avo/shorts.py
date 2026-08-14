@@ -351,10 +351,18 @@ def _promote(args: argparse.Namespace) -> int:
     status_path = _status_path(plan_path)
     status = shorts_contract.load_document(status_path, "status")
     approvals = json.loads(args.approval_manifest.read_text(encoding="utf-8"))
+    shorts_contract.validate_promotion_evidence(status, approvals)
     status["batchApprovals"] = approvals["approvals"]
     for review in approvals.get("watchReviews") or []:
         match = next(item for item in status["items"] if item["shortId"] == review["shortId"])
         match["watchReviewReference"] = review["reference"]
+        match["watchReview"] = {
+            key: review[key]
+            for key in (
+                "reference", "candidateHash", "candidateIdentityHash",
+                "dependencyLockSha256", "evidenceBundleSha256", "proofRevision",
+            )
+        }
     delivery_dir = (args.delivery_dir or plan_path.parent / "delivery" / plan["batchId"]).resolve()
     result = shorts_delivery.promote_batch(plan, status, delivery_dir)
     result["status"]["updatedAt"] = _now()

@@ -252,3 +252,55 @@ def transition_item(item: Mapping[str, Any], state: str, *, reason: str | None =
         updated["dirty"] = True
         updated["dirtyReasons"] = [*(item.get("dirtyReasons") or []), reason or "superseded-input"]
     return updated
+
+
+def validate_promotion_evidence(
+    status: Mapping[str, Any],
+    manifest: Mapping[str, Any],
+) -> None:
+    """Require common exact candidate/dependency identity for every promoted Short."""
+    reviews = {item.get("shortId"): item for item in manifest.get("watchReviews") or []}
+    approvals = manifest.get("approvals") or []
+    if not approvals:
+        raise ContractValidationError("promotion requires exact approvals")
+    required_hashes = (
+        "candidateHash", "candidateIdentityHash",
+        "dependencyLockSha256", "evidenceBundleSha256",
+    )
+    for item in status.get("items") or []:
+        short_id = item.get("shortId")
+        proof = next(
+            (
+                artifact for artifact in reversed(item.get("artifacts") or [])
+                if artifact.get("kind") == "proof"
+                and artifact.get("revision") == item.get("proofRevision")
+            ),
+            None,
+        )
+        review = reviews.get(short_id)
+        if proof is None or review is None:
+            raise ContractValidationError(
+                f"promotion requires current proof and Watch evidence for {short_id}"
+            )
+        if review.get("candidateHash") != proof.get("hash"):
+            raise ContractValidationError(f"Watch candidate hash is stale for {short_id}")
+        if review.get("proofRevision") != item.get("proofRevision"):
+            raise ContractValidationError(f"Watch proof revision is stale for {short_id}")
+        if not review.get("reference"):
+            raise ContractValidationError(f"Watch reference is required for {short_id}")
+        for field in required_hashes[1:]:
+            if len(str(review.get(field) or "")) != 64:
+                raise ContractValidationError(
+                    f"Watch {field} is missing or invalid for {short_id}"
+                )
+    for approval in approvals:
+        if approval.get("status") == "approved":
+            for field in required_hashes:
+                if len(str(approval.get(field) or "")) != 64:
+                    raise ContractValidationError(
+                        f"approved promotion decision requires exact {field}"
+                    )
+            if int(approval.get("proofRevision") or 0) < 1:
+                raise ContractValidationError(
+                    "approved promotion decisions require proofRevision"
+                )
