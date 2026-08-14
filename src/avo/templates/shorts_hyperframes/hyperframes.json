@@ -1,0 +1,12 @@
+{
+  "entry": "index.html",
+  "fps": 30,
+  "offline": true,
+  "renderContract": {
+    "width": 1080,
+    "height": 1920,
+    "timelineCount": 1,
+    "frameworkOwnedMedia": true,
+    "networkRequests": false
+  }
+}

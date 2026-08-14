@@ -210,6 +210,80 @@ def check_documentation_only(root: Path, tool_id: str, spec: dict[str, Any]) -> 
     return CheckResult(tool_id, "SKIP", "per-project install documented elsewhere")
 
 
+
+
+def _probe_ai_memory_server() -> bool:
+    try:
+        req = urllib.request.Request("http://127.0.0.1:49374/health", method="GET")
+        with urllib.request.urlopen(req, timeout=2) as resp:
+            return 200 <= resp.status < 400
+    except (OSError, urllib.error.URLError, ValueError):
+        return False
+
+
+def _wsl_bash(command: str) -> tuple[int, str]:
+    import platform
+    import subprocess
+
+    if platform.system() != "Windows":
+        return 1, ""
+    try:
+        proc = subprocess.run(
+            ["wsl", "-e", "bash", "-lc", command],
+            capture_output=True,
+            text=True,
+            timeout=20,
+        )
+        out = (proc.stdout or proc.stderr or "").strip()
+        return proc.returncode, out
+    except (OSError, subprocess.TimeoutExpired):
+        return 1, ""
+
+
+def check_ai_memory_optional(
+    root: Path, tool_id: str, spec: dict[str, Any], *, ci: bool
+) -> CheckResult:
+    base = check_git_clone(root, tool_id, spec, ci=ci)
+    on_path = bool(shutil.which("ai-memory"))
+    server_up = _probe_ai_memory_server()
+    doc = "see docs/ai-memory-and-ai-jail.md"
+    if on_path and server_up:
+        return CheckResult(tool_id, "OK", "ai-memory on PATH; server reachable")
+    if on_path:
+        return CheckResult(tool_id, "WARN", f"ai-memory on PATH; server not detected ({doc})")
+    if base.status == "OK" and server_up:
+        return CheckResult(tool_id, "OK", f"{base.note}; server reachable")
+    if base.status == "OK":
+        return CheckResult(tool_id, "WARN", f"{base.note}; server not running ({doc})")
+    return base
+
+
+def check_ai_jail_optional(
+    root: Path, tool_id: str, spec: dict[str, Any], *, ci: bool
+) -> CheckResult:
+    import platform
+
+    binary = spec.get("binary", "ai-jail")
+    if shutil.which(binary):
+        notes = [f"{binary} on PATH"]
+        if platform.system() == "Linux" and not shutil.which("bwrap"):
+            notes.append("bwrap missing on PATH")
+            return CheckResult(tool_id, "WARN", "; ".join(notes))
+        return CheckResult(tool_id, "OK", "; ".join(notes))
+    if platform.system() == "Windows":
+        code, out = _wsl_bash("command -v ai-jail >/dev/null && ai-jail --version")
+        if code == 0:
+            bwrap_code, _ = _wsl_bash("command -v bwrap >/dev/null")
+            if bwrap_code != 0:
+                return CheckResult(
+                    tool_id,
+                    "WARN",
+                    "ai-jail in WSL; bwrap missing — sudo apt install bubblewrap",
+                )
+            line = out.splitlines()[-1] if out else "verified in WSL"
+            return CheckResult(tool_id, "OK", f"ai-jail in WSL ({line})")
+    return check_git_clone(root, tool_id, spec, ci=ci)
+
 def check_external_binary_or_clone(
     root: Path, tool_id: str, spec: dict[str, Any], *, ci: bool
 ) -> CheckResult:
@@ -253,13 +327,19 @@ def run_checks(root: Path, *, ci: bool, optional: bool) -> list[CheckResult]:
         elif kind == "system-binary":
             r = check_system_binary(tool_id, spec, ci=ci)
         elif kind == "git-clone":
-            r = check_git_clone(root, tool_id, spec, ci=ci)
+            if tool_id == "ai-memory":
+                r = check_ai_memory_optional(root, tool_id, spec, ci=ci)
+            else:
+                r = check_git_clone(root, tool_id, spec, ci=ci)
         elif kind == "npm-package":
             r = check_npm_package(root, tool_id, spec)
         elif kind == "documentation-only":
             r = check_documentation_only(root, tool_id, spec)
         elif kind == "external-binary-or-clone":
-            r = check_external_binary_or_clone(root, tool_id, spec, ci=ci)
+            if tool_id == "ai-jail":
+                r = check_ai_jail_optional(root, tool_id, spec, ci=ci)
+            else:
+                r = check_external_binary_or_clone(root, tool_id, spec, ci=ci)
         else:
             r = CheckResult(tool_id, "FAIL", f"unknown kind: {kind}")
         r.tool = tool_id

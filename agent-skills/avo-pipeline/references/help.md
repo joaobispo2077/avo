@@ -104,7 +104,7 @@ Spoken alias: **`/avo --help`**. Cursor file: `commands/avo/help.md` → `/avo.h
 | Command | When to use |
 | ------- | ----------- |
 | `/avo.telemetry` | Disk/progress/ETA report |
-| `/avo.learndown` | ai-memory consolidation |
+| `/avo.learndown` | Iteration condensation + optional ai-memory; see [`docs/ai-memory-and-ai-jail.md`](../../../docs/ai-memory-and-ai-jail.md) |
 | `/avo.cleanup` | Preserved-set delete + final wrap + stats record |
 | `/avo.stats` | Local aggregate metrics (disk freed, videos completed) |
 

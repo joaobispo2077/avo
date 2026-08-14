@@ -57,7 +57,7 @@
     "ai-memory": {
       "required": false,
       "job": "memory",
-      "description": "Optional cross-session memory",
+      "description": "Optional cross-session memory (clone for reference; see docs/ai-memory-and-ai-jail.md for runtime install)",
       "kind": "git-clone",
       "repo": "https://github.com/akitaonrails/ai-memory",
       "path": "tools/ai-memory"
@@ -65,7 +65,7 @@
     "ai-jail": {
       "required": false,
       "job": "sandbox",
-      "description": "Optional agent sandbox (WSL-only on Windows)",
+      "description": "Optional agent sandbox (Linux/macOS native; WSL2 on Windows)",
       "kind": "external-binary-or-clone",
       "binary": "ai-jail",
       "repo": "https://github.com/akitaonrails/ai-jail",

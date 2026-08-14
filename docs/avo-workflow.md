@@ -251,10 +251,10 @@ a baseline inventory. After cleanup, a **session record** lands in
 
 Two steps, in order:
 
-1. **Learndown (ai-memory optional + draft wrap).** Consolidate what every
-   iteration learned toward the approved master, filed under the **provider**
-   scope (§8). If ai-memory is not installed, learndown notes the skip and
-   cleanup still runs.
+1. **Learndown (draft wrap + optional ai-memory).** Condense iteration learnings
+   toward the approved master under the **provider** scope (§8). **Without
+   ai-memory, only MCP wiki consolidation is skipped** — inventory, draft wrap,
+   provider export, and telemetry still run; cleanup proceeds normally.
    - **Inventory report:** `project_inventory.py report` (uses `pre.json` when
      present for added/removed/modified classification).
    - **Draft wrap (REQUIRED):** `<rawDir>/avo.wrap.draft.md` and
