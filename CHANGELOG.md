@@ -1,3 +1,94 @@
+# [1.4.0](https://github.com/joaobispo2077/avo/compare/v1.3.0...v1.4.0) (2026-08-14)
+
+
+### Features
+
+* **shorts:** add batch workflow CLI ([fd44cc9](https://github.com/joaobispo2077/avo/commit/fd44cc9d4f714a85b96129e8a20cce68b5a29e54))
+* **shorts:** add contracts and planning ([1965c5b](https://github.com/joaobispo2077/avo/commit/1965c5bd4518fff47883d2d4ffa2d62b6507bd8d))
+* **shorts:** add HyperFrames renderer ([9398c66](https://github.com/joaobispo2077/avo/commit/9398c6634a6b6b02e58111ca2dc10b20bb4a8f22))
+* **gate1:** add optional ai-memory and ai-jail health probes ([7e3d8c3](https://github.com/joaobispo2077/avo/commit/7e3d8c3895dadd811b3d6eb01bd7972d6dec05ca))
+* **shorts:** add QC and delivery ([3cfd216](https://github.com/joaobispo2077/avo/commit/3cfd216370a3cc8b34b88560bb3a919a870ecd9d))
+* **setup:** harden ai-jail install verification per OS ([da2d74c](https://github.com/joaobispo2077/avo/commit/da2d74cc20be9173e6d18520502e26824318b5ad))
+* **shorts:** prepare deterministic media ([20c5232](https://github.com/joaobispo2077/avo/commit/20c5232060feb1aef17c99b6699a816867b4c8a6))
+
+# [1.3.0](https://github.com/joaobispo2077/avo/compare/v1.2.0...v1.3.0) (2026-08-03)
+
+
+### Bug Fixes
+
+* **test:** make limiter and video registry tests CI-portable ([f31bc1c](https://github.com/joaobispo2077/avo/commit/f31bc1c089a1b471323f33a9f120be716fd4cdd4))
+* **test:** use loudness_profiles limiter in sfx pipeline test ([3ad56fe](https://github.com/joaobispo2077/avo/commit/3ad56fed5f985d8b555b72ecc5e2eb28ca9fe221))
+
+
+### Features
+
+* **providers:** add boil preset tokens to template ([50990fc](https://github.com/joaobispo2077/avo/commit/50990fcb92bca4b8853b538c5c4312aeb125e6d1))
+* **audio:** add delivery loudness QC CLI ([7846054](https://github.com/joaobispo2077/avo/commit/784605416ee4964697213290a8021e7428a4fd95))
+* **voiceover:** add external voiceover EDL helpers and preflight CLI ([1f40658](https://github.com/joaobispo2077/avo/commit/1f40658f591bf6660e28af2061e8dddf75f4c336))
+* **schema:** add external voiceover fields to EDL schema ([62dcd49](https://github.com/joaobispo2077/avo/commit/62dcd49dce30afc420fcea00a953b09b6928f542))
+* **edl:** add gain segment schema and validation ([31f2288](https://github.com/joaobispo2077/avo/commit/31f228823de592f237921379753fc6ea06e90f1a))
+* **transcript:** add generate-from-master CLI for final artifacts ([f098207](https://github.com/joaobispo2077/avo/commit/f0982075227d90fe2bd3e7b1fa1d0dd6ea946b11))
+* **exemplars:** add hyperframes-boil-insert bundle ([d1fccbb](https://github.com/joaobispo2077/avo/commit/d1fccbb2289893ce3d18dac30d72e03b4b13624e))
+* **video-registry:** add in-repo registry stubs and bootstrap integration ([a824f7c](https://github.com/joaobispo2077/avo/commit/a824f7c335ccd6a01c7ba455ed05d0101c31bbbc))
+* **commands:** add issues, supporters, and creators slash commands ([02ea447](https://github.com/joaobispo2077/avo/commit/02ea447255fdd4c491eb7500bf2cb599392f5d62))
+* **provider:** add loudness and restoration defaults to provider schema ([436b557](https://github.com/joaobispo2077/avo/commit/436b557f86eddc18712e1965929d2d79edbb573f))
+* **audio:** add noise analysis and suggestion CLI ([05decbd](https://github.com/joaobispo2077/avo/commit/05decbd76d33e81fc40c33bb61d024f6267db0cc))
+* **video-work-modes:** add per-video state, context CLI, and model scoping ([199038a](https://github.com/joaobispo2077/avo/commit/199038a0010d89d2ba379a975b644e9d7d8749f8))
+* **audio:** add percent-based restoration module ([4d1cadc](https://github.com/joaobispo2077/avo/commit/4d1cadcf119c7ed1e66795cace5fdfccf9cafb4e))
+* **audio:** add platform loudness profile resolver ([b54cb15](https://github.com/joaobispo2077/avo/commit/b54cb151612067f01a783170cc677cd37f0faae7))
+* **audio:** add read-only EQ suggestion heuristics ([d9b1fc5](https://github.com/joaobispo2077/avo/commit/d9b1fc5d5d11854e9a758d644492d183bbff381b))
+* **audio:** add regional gain segments and suggestions ([6fc2bca](https://github.com/joaobispo2077/avo/commit/6fc2bcae728538be7d340498593df522bae45574))
+* **providers:** add restoration_default_pct to template ([e5b1013](https://github.com/joaobispo2077/avo/commit/e5b1013b69a7f9484d23d1c7a92353a8687b071f))
+* **github:** add structured issue form templates ([8a486f0](https://github.com/joaobispo2077/avo/commit/8a486f0f80555986bf3e2c95bb0c6c9bb4747ac1))
+* **audio:** add unified read-only audio audit CLI ([53ced4b](https://github.com/joaobispo2077/avo/commit/53ced4b871b54c95dc2d54937dcc648bcce9e352))
+* **commands:** add voiceover slash command and pipeline wiring ([959d0bb](https://github.com/joaobispo2077/avo/commit/959d0bbf3caa1a96ac71720c51aa9ef52be18a83))
+* **schema:** declare audio loudness fields on project manifest ([812c87f](https://github.com/joaobispo2077/avo/commit/812c87f035794f64f9dca934fafb1f9acb8cf79b))
+* **pipeline:** document percent-based noise reduction workflow ([e2e781b](https://github.com/joaobispo2077/avo/commit/e2e781b5d99e5a4e0cce4e3dbcd5d0924a3420c0))
+* **audio:** extend analysis CLI for loudness, EQ, and gain ([2b6357b](https://github.com/joaobispo2077/avo/commit/2b6357b93bdc0dbb2f3f5e27ccc7054fef4560be))
+* **render:** integrate loudness profiles, regional gain, and 4K transcript ([37920b0](https://github.com/joaobispo2077/avo/commit/37920b0024a99f84560318519667cab81ba2f499))
+* **pipeline:** route wiggly boil inserts in motion skill ([1d5ea90](https://github.com/joaobispo2077/avo/commit/1d5ea90d87bf483bf24b89e366a2c857fc9cbd85))
+* **render:** support external voiceover mux in render pipeline ([22ffd1c](https://github.com/joaobispo2077/avo/commit/22ffd1c2afa68360d7e9733cffd4e8cfe225e476))
+* **edl:** validate restoration segment fields ([ae69b4e](https://github.com/joaobispo2077/avo/commit/ae69b4ed229cadf256df61ea9cd5a28f4a5caae7))
+* **render:** wire restoration strength into segment extract ([3cee921](https://github.com/joaobispo2077/avo/commit/3cee921482ff2be3944c491c3d2cf7520ab46fab))
+
+# [1.2.0](https://github.com/joaobispo2077/avo/compare/v1.1.1...v1.2.0) (2026-08-02)
+
+
+### Features
+
+* **scratch:** add learndown inventory scratch under .avo/tmp ([44c2cd8](https://github.com/joaobispo2077/avo/commit/44c2cd8ba2c1498ccab77f7e08c8c18ee0ef0a27))
+* **learndown:** add provider export engine and backfill CLI ([d9743f3](https://github.com/joaobispo2077/avo/commit/d9743f343b85055d357cb3ff4af36677bfbf7f86))
+* **learndown:** add provider export schemas and template layout ([26d0b72](https://github.com/joaobispo2077/avo/commit/26d0b72882e6bbcad15734aa0fe81933e202db6e))
+* **inventory:** add scratch-out lifecycle and faster Windows cleanup ([81a68f7](https://github.com/joaobispo2077/avo/commit/81a68f73c6c0f53c8e0995f7a091b3484e763369))
+* **update:** add self-update engine with provider preservation ([f400dc1](https://github.com/joaobispo2077/avo/commit/f400dc11530fb3dee843108f1d8ab2b31e764ec5))
+* **edl:** add source-to-output timeline mapping CLI ([fb90ad2](https://github.com/joaobispo2077/avo/commit/fb90ad280d9300da141ce02cf3c40020d5c1f01b))
+* **scripts:** add update native wrappers and npm run update ([ac9ee2e](https://github.com/joaobispo2077/avo/commit/ac9ee2e3e2f3079db724f79d54c594c92f677473))
+* **wrap:** export provider learndowns and fix provider resolution ([010b4fc](https://github.com/joaobispo2077/avo/commit/010b4fce8d5144679a9193a2433e5ba6f50a799b))
+* **validate:** gate /avo.update in Gate 2 usability checks ([9e2b8dd](https://github.com/joaobispo2077/avo/commit/9e2b8dd45c6c0eb21e0eab3eb8429158413311f9))
+* **commands:** ship /avo.update slash command for end users ([454f163](https://github.com/joaobispo2077/avo/commit/454f163d2bbfdc44f62b0e2f620472ae84b8f89b))
+
+## [1.1.1](https://github.com/joaobispo2077/avo/compare/v1.1.0...v1.1.1) (2026-08-02)
+
+
+### Bug Fixes
+
+* **release:** accept H1 linked changelog headings and drop develop alphas ([57bf96e](https://github.com/joaobispo2077/avo/commit/57bf96e206b5225b4087d37c8d2265b5ebd90b3f))
+
+# [1.1.0](https://github.com/joaobispo2077/avo/compare/v1.0.1...v1.1.0) (2026-08-02)
+
+
+### Bug Fixes
+
+* **release:** accept semantic-release changelog headings in verify step ([1dd3201](https://github.com/joaobispo2077/avo/commit/1dd3201766cf222e9bf17fc539d831abd46d5005))
+* **render:** apply yuva420p before overlay scale in composite graph ([80386c4](https://github.com/joaobispo2077/avo/commit/80386c456305a793c2208d3095becf90203c90c1))
+
+
+### Features
+
+* **docs:** add HyperFrames product-promo motion knowledge exemplars ([244fb37](https://github.com/joaobispo2077/avo/commit/244fb37ca9ae8ed68505a6b8d5562255254de1cb))
+* **docs:** add HyperFrames short-form vertical motion knowledge exemplars ([c83a55a](https://github.com/joaobispo2077/avo/commit/c83a55a345c88403289e6e518e358abcb3558d30))
+* **ci:** lint HyperFrames exemplar compositions in unit test job ([bd01cd5](https://github.com/joaobispo2077/avo/commit/bd01cd547867088818ce0bd379f9359831f18997))
+
 ## [1.0.1](https://github.com/joaobispo2077/avo/compare/v1.0.0...v1.0.1) (2026-08-02)
 # 1.0.0-alpha.1 (2026-08-02)
 
