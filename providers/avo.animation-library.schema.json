@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://avo.local/provider-animation-library.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "provider", "patterns", "events"],
+  "properties": {
+    "schemaVersion": {"const": "1.0.0"},
+    "provider": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$"},
+    "patterns": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/pattern"}
+    },
+    "events": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/event"}
+    }
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "pattern": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "patternId", "name", "version", "behavior", "contexts", "exclusions",
+        "requiredAssets", "accessibility", "provenance", "promotionEventId"
+      ],
+      "properties": {
+        "patternId": {"type": "string", "pattern": "^[a-z][a-z0-9-]{2,63}$"},
+        "name": {"type": "string", "minLength": 1},
+        "version": {"type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"},
+        "behavior": {"type": "object", "additionalProperties": true},
+        "contexts": {"type": "array", "minItems": 1, "items": {"type": "string"}},
+        "exclusions": {"type": "array", "items": {"type": "string"}},
+        "requiredAssets": {"type": "array", "items": {"type": "string"}},
+        "accessibility": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["reducedMotion", "flashingSafe"],
+          "properties": {
+            "reducedMotion": {"type": "boolean"},
+            "flashingSafe": {"type": "boolean"}
+          }
+        },
+        "provenance": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["sourceVideoId", "candidateSha256", "sectionRefs"],
+          "properties": {
+            "sourceVideoId": {"type": "string"},
+            "candidateSha256": {"$ref": "#/$defs/sha256"},
+            "sectionRefs": {"type": "array", "items": {"type": "string"}}
+          }
+        },
+        "promotionEventId": {"type": "string"}
+      }
+    },
+    "event": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["eventId", "type", "patternId", "proposalSha256", "actor", "occurredAt", "reason"],
+      "properties": {
+        "eventId": {"type": "string"},
+        "type": {"enum": ["promotion-approved", "promotion-rejected", "recommendation-rejected"]},
+        "patternId": {"type": "string"},
+        "proposalSha256": {"$ref": "#/$defs/sha256"},
+        "actor": {"type": "string"},
+        "occurredAt": {"type": "string", "format": "date-time"},
+        "reason": {"type": "string"},
+        "evidenceSha256": {"$ref": "#/$defs/sha256"}
+      }
+    }
+  }
+}

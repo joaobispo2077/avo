@@ -1,5 +1,7 @@
 # /avo.podcast-clip Command
 
+**Timeline integration:** Profile
+
 Orchestrated podcast / interview clip extraction with rights, audio QC, and deliver.
 
 **Skill:** [`agent-skills/avo-pipeline/references/podcast-clip.md`](../../agent-skills/avo-pipeline/references/podcast-clip.md)
@@ -46,3 +48,7 @@ from: 45:00
 to: 52:30
 identity: documentary
 ```
+
+## Shared timeline gateway
+
+Runs the base pipeline with format-specific diagnosis and policy. It creates its own timeline context for derivatives and cannot bypass lineage, invalidation, Watch, transcript, or approval gates.

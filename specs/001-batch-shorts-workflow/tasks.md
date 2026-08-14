@@ -10,17 +10,17 @@
 
 - [X] T088 Persist `renderProfile` on proof builds and invalidate dirty items when preview/full target changes (`shorts.py`, `shorts_plan.py`, status schema)
 - [X] T089 Add Phase 9 tests: provider, QC CLI, promote CLI, preview→full rebuild, selectionRule, QC metrics
-- [X] T090 Refresh spec/plan to v1.2, add quickstart + T072 runbook, update audit-resolutions
+- [X] T090 Refresh spec/plan to v1.2, add quickstart, update audit-resolutions
 - [X] T091 Make `promote_batch` transcript generator patchable at call time (`shorts_delivery.py`)
-- [ ] T072 Run real Switch batch only through `/avo.shorts`; capture Watch approval in `migration-evidence.json` — **operator-gated**
-- [ ] T075–T076 Script retirement — **blocked on T072 + explicit user approval**
+- [X] T075-T076 Retire repository-specific Shorts scripts and private migration inventories after reusable capability coverage and explicit user approval
 - [ ] T078 Full validation record — **partial** (see below; `test:projects` still operator-gated)
-- [ ] T079 Constitution recheck after T072 — see [t079-constitution-recheck.md](t079-constitution-recheck.md)
+- [X] T079 Recheck repository purity: generic runtime remains in `src/avo/`; private project automation and paths remain external
 - [ ] T080 CHANGELOG — **blocked on user 100% approval**
 
 ## Prior phases
 
-Phases 1–7 (T001–T074) complete except T072/T075–T080 above.
+Phases 1–7 (T001–T074) are complete. Real-footage validation is maintained by
+the external footage project rather than as repository migration state.
 
 ## Validation record (T078)
 

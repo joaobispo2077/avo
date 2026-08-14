@@ -265,3 +265,57 @@ class HyperframesAdapter:
         if len(request.argv) < 2:
             return JobResult(exit_code=2, stderr="usage: <check|snapshot|preview|render> PROJECT [args]")
         return self.execute(request.argv[0], Path(request.argv[1]), *request.argv[2:], root=request.root)
+
+
+    def render_timeline_instance(
+        self,
+        *,
+        project: Path,
+        output: Path,
+        instance: Mapping[str, Any],
+        component_contract: Mapping[str, Any],
+        root: Path | None = None,
+        quality: str = "draft",
+    ) -> dict[str, Any]:
+        """Check then render one frozen, BMap-timed/Tracks-placed instance."""
+        from avo.timeline.contracts import file_fingerprint
+
+        required = {"componentRef", "bmapCueId", "placement", "range", "reducedMotion"}
+        missing = required - set(instance)
+        if missing:
+            raise HyperframesError(
+                "animation instance missing resolved fields: " + ", ".join(sorted(missing))
+            )
+        if not component_contract.get("lifecycle"):
+            raise HyperframesError("animation component requires a declared lifecycle")
+        for path in list(Path(project).rglob("*.html")) + list(Path(project).rglob("*.js")):
+            source = path.read_text(encoding="utf-8", errors="replace")
+            forbidden = ("Math.random(", "Date.now(", "performance.now(", "fetch(", "http://", "https://")
+            if any(token in source for token in forbidden):
+                raise HyperframesError(f"nondeterministic/network animation source: {path}")
+        checked = self.execute("check", project, "--strict", root=root)
+        if checked.exit_code != 0:
+            raise HyperframesError(checked.stderr or checked.stdout or "HyperFrames check failed")
+        rendered = self.execute(
+            "render",
+            project,
+            "--quality",
+            quality,
+            "--output",
+            str(output),
+            root=root,
+        )
+        if rendered.exit_code != 0:
+            raise HyperframesError(rendered.stderr or rendered.stdout or "HyperFrames render failed")
+        if not Path(output).is_file():
+            raise HyperframesError(f"HyperFrames output missing: {output}")
+        return {
+            "status": "pass",
+            "output": file_fingerprint(Path(output)),
+            "componentRef": instance["componentRef"],
+            "bmapCueId": instance["bmapCueId"],
+            "placement": dict(instance["placement"]),
+            "range": dict(instance["range"]),
+            "reducedMotion": bool(instance["reducedMotion"]),
+            "producer": {"name": "hyperframes", "version": "installed"},
+        }

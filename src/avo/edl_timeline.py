@@ -12,6 +12,12 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from avo.timeline.mapping import (
+    legacy_output_duration,
+    legacy_output_to_source_anchor,
+    legacy_source_to_output,
+)
+
 
 @dataclass(frozen=True)
 class Range:
@@ -40,31 +46,31 @@ def parse_ranges(edl: dict) -> list[Range]:
 
 
 def output_duration(ranges: list[Range]) -> float:
-    return sum(item.duration for item in ranges)
+    return legacy_output_duration(ranges)
 
 
-def source_to_output(ranges: list[Range], source_time: float) -> float | None:
-    """Return B-time for a point on the main source timeline, or None if cut."""
-    offset = 0.0
-    for item in ranges:
-        if source_time < item.start - 1e-6:
-            return None
-        if source_time <= item.end + 1e-6:
-            return offset + (source_time - item.start)
-        offset += item.duration
-    return None
+def _source_ids(ranges: list[Range]) -> set[str]:
+    return {item.source for item in ranges}
+
+
+def source_to_output(
+    ranges: list[Range], source_time: float, *, source: str | None = None
+) -> float | None:
+    """Return output time for a source point, or None when cut."""
+    return legacy_source_to_output(ranges, source_time, source=source)
+
+
+def output_to_source_anchor(
+    ranges: list[Range], output_time: float
+) -> tuple[str, float] | None:
+    """Return (source_id, source_time) for an output position."""
+    return legacy_output_to_source_anchor(ranges, output_time)
 
 
 def output_to_source(ranges: list[Range], output_time: float) -> float | None:
-    """Return main-source time for a B-time position."""
-    offset = 0.0
-    for item in ranges:
-        if output_time <= offset + item.duration + 1e-6:
-            if output_time < offset - 1e-6:
-                return None
-            return item.start + (output_time - offset)
-        offset += item.duration
-    return None
+    """Return source time for B-time; use ``output_to_source_anchor`` for ID."""
+    anchor = output_to_source_anchor(ranges, output_time)
+    return anchor[1] if anchor is not None else None
 
 
 def format_mmss(seconds: float) -> str:
@@ -96,10 +102,20 @@ def remap_timed_items(
             if anchor is None:
                 remapped.append(copy)
                 continue
-            mapped = source_to_output(ranges, float(anchor))
+            anchor_source = copy.get("anchor_source")
+            if anchor_source is None and len(_source_ids(ranges)) > 1:
+                raise ValueError(
+                    f"{key} {_item_label(copy)} requires anchor_source for "
+                    "multi-source EDL"
+                )
+            mapped = source_to_output(
+                ranges, float(anchor),
+                source=str(anchor_source) if anchor_source is not None else None,
+            )
             if mapped is None:
                 raise ValueError(
-                    f"{key} {_item_label(copy)} anchor {anchor} falls inside a cut"
+                    f"{key} {_item_label(copy)} anchor {anchor_source}:{anchor} "
+                    "falls inside a cut"
                 )
             copy[start_field] = round(mapped, 3)
             remapped.append(copy)
@@ -121,16 +137,28 @@ def verify_timed_items(edl: dict, *, tolerance: float = 0.05) -> list[str]:
             start = item.get("start_in_output")
             if anchor is None or start is None:
                 continue
-            expected = source_to_output(ranges, float(anchor))
+            anchor_source = item.get("anchor_source")
+            if anchor_source is None and len(_source_ids(ranges)) > 1:
+                errors.append(
+                    f"{key} {_item_label(item)} requires anchor_source for "
+                    "multi-source EDL"
+                )
+                continue
+            expected = source_to_output(
+                ranges,
+                float(anchor),
+                source=str(anchor_source) if anchor_source is not None else None,
+            )
             if expected is None:
                 errors.append(
-                    f"{key} {_item_label(item)} anchor {anchor} is inside a removed range"
+                    f"{key} {_item_label(item)} anchor {anchor_source}:{anchor} "
+                    "is inside a removed range"
                 )
                 continue
             if abs(float(start) - expected) > tolerance:
                 errors.append(
                     f"{key} {_item_label(item)} start_in_output {start} != "
-                    f"mapped {expected:.3f} from anchor {anchor}"
+                    f"mapped {expected:.3f} from anchor {anchor_source}:{anchor}"
                 )
     return errors
 
@@ -140,12 +168,14 @@ def cut_map_rows(edl: dict) -> list[dict[str, str]]:
     ranges = parse_ranges(edl)
     rows: list[dict[str, str]] = []
     for item in edl.get("blocked_source_ranges") or []:
+        source = str(item["source"])
         cut_start = float(item["final_cut_start"])
         cut_end = float(item["final_cut_end"])
-        b_start = source_to_output(ranges, cut_start)
-        b_end = source_to_output(ranges, cut_end)
+        b_start = source_to_output(ranges, cut_start, source=source)
+        b_end = source_to_output(ranges, cut_end, source=source)
         rows.append(
             {
+                "source": source,
                 "reason": str(item.get("reason") or "cut"),
                 "source_in": f"{format_mmss(cut_start)}–{format_mmss(cut_end)}",
                 "source_seconds": f"{cut_start:.2f}–{cut_end:.2f}",
@@ -169,18 +199,20 @@ def render_cut_map_markdown(edl: dict) -> str:
         "",
         f"**Output duration:** {format_mmss(duration)} ({duration:.1f}s)",
         "",
-        "| Reason | Source removed | Δ sec | User note |",
-        "| --- | --- | --- | --- |",
+        "| Source | Reason | Source removed | Δ sec | User note |",
+        "| --- | --- | --- | --- | --- |",
     ]
     for row in cut_map_rows(edl):
         lines.append(
-            f"| {row['reason']} | {row['source_in']} | {row['removed_seconds']} | {row['user_note']} |"
+            f"| {row['source']} | {row['reason']} | {row['source_in']} | "
+            f"{row['removed_seconds']} | {row['user_note']} |"
         )
     lines.extend(["", "## Range kept spans (main source)", ""])
     offset = 0.0
     for index, item in enumerate(parse_ranges(edl), start=1):
         lines.append(
-            f"{index}. `{format_mmss(item.start)}–{format_mmss(item.end)}` "
+            f"{index}. `{item.source}` "
+            f"`{format_mmss(item.start)}–{format_mmss(item.end)}` "
             f"→ B `{format_mmss(offset)}–{format_mmss(offset + item.duration)}` "
             f"({item.story_section_id or 'section'})"
         )
@@ -207,7 +239,10 @@ def render_beat_map_markdown(edl: dict) -> str:
         slot = str(overlay.get("motion_brief_id") or overlay.get("file"))
         start = float(overlay["start_in_output"])
         anchor = overlay.get("anchor_in_source")
-        anchor_text = format_mmss(float(anchor)) if anchor is not None else "—"
+        anchor_source = overlay.get("anchor_source")
+        anchor_text = (
+            f"{anchor_source}:{format_mmss(float(anchor))}" if anchor is not None else "—"
+        )
         sfx = sfx_by_slot.get(slot)
         sfx_text = "—"
         if sfx:
@@ -235,6 +270,11 @@ def main() -> None:
         default="source",
         help="Interpret TIME as source seconds (default) or output seconds",
     )
+    map_parser.add_argument(
+        "--source",
+        default=None,
+        help="Source ID for --from source; required by multi-source EDLs",
+    )
 
     docs_parser = sub.add_parser("write-docs", help="Write cut-map.md and beat-map.md")
     docs_parser.add_argument("edl", type=Path)
@@ -254,11 +294,15 @@ def main() -> None:
 
     if args.command == "map":
         if args.from_mode == "source":
-            mapped = source_to_output(ranges, args.time)
-            print(f"source {args.time:.3f}s -> output {mapped}")
+            mapped = source_to_output(ranges, args.time, source=args.source)
+            source_label = args.source or "source"
+            print(f"source {source_label}:{args.time:.3f}s -> output {mapped}")
         else:
-            mapped = output_to_source(ranges, args.time)
-            print(f"output {args.time:.3f}s -> source {mapped}")
+            mapped = output_to_source_anchor(ranges, args.time)
+            if mapped is None:
+                print(f"output {args.time:.3f}s -> source None")
+            else:
+                print(f"output {args.time:.3f}s -> source {mapped[0]}:{mapped[1]:.3f}s")
         return
 
     edit_dir = (args.edit_dir or edl_path.parent).resolve()

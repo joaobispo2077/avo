@@ -105,7 +105,11 @@ def restoration_enabled(edl: dict, source_name: str) -> bool:
     if audio.get("program_mode") == "external_voiceover":
         vo_key = str(audio.get("voiceover_source") or "voiceover")
         return str(source_name) == vo_key
-    return str(source_name).startswith("main")
+    # Projects may use chronological keys (s01, s02, ...) for dialogue-camera
+    # sources. Keep the legacy ``main`` convention while allowing an explicit
+    # camera-source allowlist so B-roll audio is never repaired by accident.
+    camera_sources = {str(key) for key in audio.get("camera_source_keys") or []}
+    return str(source_name).startswith("main") or str(source_name) in camera_sources
 
 
 def resolve_default_pct(edl: dict, provider: dict | None = None) -> int:

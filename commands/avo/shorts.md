@@ -1,5 +1,7 @@
 # /avo.shorts Command
 
+**Timeline integration:** Profile
+
 Orchestrated YouTube Shorts workflow (9:16, duration checks, captions, deliver). **Not** the same as `/avo.guidelines --shorts` (diagnosis only).
 
 **Skill:** [`agent-skills/avo-pipeline/references/shorts.md`](../../agent-skills/avo-pipeline/references/shorts.md)
@@ -120,3 +122,7 @@ identity: anchor
 Existing single-Short usage remains supported. Batch mode is selected by
 supplying `Count` plus a master/request; `/avo.guidelines --shorts` remains
 diagnosis-only.
+
+## Shared timeline gateway
+
+Runs the base pipeline with format-specific diagnosis and policy. It creates its own timeline context for derivatives and cannot bypass lineage, invalidation, Watch, transcript, or approval gates.

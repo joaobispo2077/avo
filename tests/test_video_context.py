@@ -47,6 +47,29 @@ class VideoContextTests(unittest.TestCase):
         merged = video_context.merge_config(ctx, root=self.root)
         self.assertIn("transcription", merged)
 
+    def test_timeline_paths_use_project_policy_and_canonical_first(self) -> None:
+        project = {
+            "provider": "_template",
+            "rawDir": str(self.raw),
+            "timeline": {
+                "directory": "edit/decisions",
+                "generatedEdlPath": "edit/generated-edl.json",
+                "migration": {"allowLegacyEdlFallback": False},
+            },
+        }
+        (self.raw / "avo.project.json").write_text(json.dumps(project), encoding="utf-8")
+        ctx = video_context.resolve_context(
+            provider="_template", video_id="ctx-demo", root=self.root
+        )
+        paths = video_context.timeline_paths(ctx)
+        self.assertEqual(paths.cmap, self.raw / "edit" / "decisions" / "cmap.json")
+        self.assertEqual(paths.generated_edl, self.raw / "edit" / "generated-edl.json")
+        self.assertFalse(paths.legacy_fallback_allowed)
+        self.assertFalse(video_context.canonical_timeline_available(ctx))
+        paths.directory.mkdir(parents=True)
+        paths.cmap.write_text("{}", encoding="utf-8")
+        self.assertTrue(video_context.canonical_timeline_available(ctx))
+
     def test_advisory_lock_acquire_release(self) -> None:
         ctx = video_context.resolve_context(provider="_template", video_id="ctx-demo", root=self.root)
         path = video_context.acquire_lock(ctx)

@@ -1,5 +1,7 @@
 # /avo.captions Command
 
+**Timeline integration:** Owns
+
 Dedicated caption stage: identity selection, burn-in order, and caption QC. Does not replace `/avo.motion` for graphics cards.
 
 **Skill:** [`agent-skills/avo-pipeline/references/captions.md`](../../agent-skills/avo-pipeline/references/captions.md)
@@ -45,3 +47,11 @@ identity: anchor
 ```
 
 Common identities: `anchor`, `documentary`, `keynote`, `terminal` — see embedded-captions `CATALOG.md`.
+
+## Canonical track integration
+
+Captions are ordered accessibility video layers and BMap cues on the approved cut. Changes stale visual/accessibility/Watch evidence and must preserve face, evidence, UI, and safe areas.
+
+## Shared timeline gateway
+
+Uses shared timeline storage, transition guards, invalidation, and AI review services. It cannot maintain private CMap, BMap, sync, track, animation, or approval truth.

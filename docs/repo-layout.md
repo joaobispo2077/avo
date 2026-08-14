@@ -89,7 +89,11 @@ These were tracked in the old fork and are **removed**:
 
 ## Footage projects (always external)
 
-Video work never lives in the AVO repo:
+Video work never lives in the AVO repo. Per-video scripts, hard-coded footage paths,
+private migration inventories, and one-off proof-repair helpers also stay external.
+Reusable behavior belongs in generic `src/avo/` Python services/CLI; per-video decisions
+belong in canonical `edit/timeline/*.json` artifacts.
+
 
 ```
 <footage>/raw/          # untouched sources

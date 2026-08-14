@@ -175,6 +175,15 @@ delete, rename, checkout, switch, or orchestrate branches. See [`docs/branching.
 Change code behavior only when explicitly requested. No speculative refactors or unrelated
 cleanup. Prefer small, focused diffs.
 
+### Repository purity
+
+Per-video scripts, hard-coded footage paths, private project migration inventories, and
+one-off proof-repair helpers must stay in the external footage project and must not be
+tracked in the AVO repository. When a capability is reusable, implement it as a generic
+Python service/CLI under `src/avo/`, persist video decisions in canonical JSON under
+`<rawDir>/edit/timeline/`, and cover it with tests. Do not add tracked ad hoc shell,
+PowerShell, JavaScript, or Python scripts for a single video.
+
 ### TDD and testing
 
 Validate behavior first. Test Trophy mindset: ~90% cheap unit tests when possible, then

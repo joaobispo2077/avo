@@ -1,5 +1,7 @@
 # /avo.supporters Command
 
+**Timeline integration:** Admin
+
 Sponsorship links and roadmap prioritization policy.
 
 **Skill:** [`agent-skills/avo-pipeline/references/supporters.md`](../../agent-skills/avo-pipeline/references/supporters.md)
@@ -34,3 +36,7 @@ Read-only. Prints sponsor CTAs and how manual queue prioritization works. No pay
 ```text
 /avo.supporters
 ```
+
+## Shared timeline gateway
+
+Resolves provider/video context but performs no editorial timeline mutation. Reports and configuration reference canonical artifact/revision identities.

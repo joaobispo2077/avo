@@ -6,6 +6,22 @@ from avo import loudness_profiles
 
 
 class LoudnessProfilesTests(unittest.TestCase):
+    def test_edl_audio_overrides_project_audio(self) -> None:
+        profile = loudness_profiles.resolve_loudness_profile(
+            edl={
+                "audio": {
+                    "loudness_intent": "creative",
+                    "loudness_custom": {
+                        "integrated_lufs": -16.0,
+                        "true_peak_dbtp": -1.8,
+                    },
+                }
+            },
+            project={"audio": {"loudness_intent": "channel_standard"}},
+        )
+        self.assertEqual(profile.intent, "creative")
+        self.assertEqual(profile.true_peak_dbtp, -1.8)
+
     def test_platform_fit_shorts_preset(self) -> None:
         project = {"deliverable": {"profile": "shorts"}, "audio": {"loudness_intent": "platform_fit"}}
         profile = loudness_profiles.resolve_loudness_profile(project=project)

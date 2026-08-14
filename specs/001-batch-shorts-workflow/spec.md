@@ -23,7 +23,9 @@ One approved master and transcript produce a reviewable, parameter-driven batch 
 - **FR-016**: Contact-sheet visual evidence when HyperFrames snapshots exist.
 - **FR-017**: CLI `qc` includes probe, captions, Watch insertion review, and supporting black/freeze/loudness metrics.
 - **FR-018**: Master promotion copies approved proof at target delivery geometry (no separate re-encode in v1).
-- **FR-022**: Script retirement blocked until T072 Watch approval.
+- **FR-022**: Project-specific automation, private footage paths, and migration
+  inventories MUST remain outside the AVO repository once their reusable
+  capabilities are covered by the generic workflow and regression tests.
 
 ## Preview workflow
 
@@ -41,4 +43,3 @@ Agent-only: `--from-master`, `--skip-motion` (expressed in `shorts.request.json`
 
 - [audit-resolutions.md](audit-resolutions.md)
 - [quickstart.md](quickstart.md)
-- [t072-switch-migration-runbook.md](t072-switch-migration-runbook.md)

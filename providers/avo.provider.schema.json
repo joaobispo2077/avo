@@ -5,7 +5,11 @@
   "description": "Manifest for an AVO provider workspace (providers/<name>/avo.provider.json). A provider is a publishing destination/identity (YouTube channel, TikTok account, Instagram profile, ...). Provider identity, design, logo and brand live in-repo; ALL media stays EXTERNAL — the manifest stores paths only, never media.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["name", "kind", "media"],
+  "required": [
+    "name",
+    "kind",
+    "media"
+  ],
   "properties": {
     "$schema": {
       "type": "string",
@@ -23,7 +27,15 @@
     "kind": {
       "type": "string",
       "description": "Publishing destination type.",
-      "enum": ["youtube", "tiktok", "instagram", "x", "podcast", "shorts", "generic"]
+      "enum": [
+        "youtube",
+        "tiktok",
+        "instagram",
+        "x",
+        "podcast",
+        "shorts",
+        "generic"
+      ]
     },
     "description": {
       "type": "string",
@@ -41,7 +53,9 @@
       "type": "object",
       "description": "EXTERNAL media roots. These are filesystem paths ONLY — no media is ever committed. Paths are gitignored at their source location.",
       "additionalProperties": false,
-      "required": ["rawRoot"],
+      "required": [
+        "rawRoot"
+      ],
       "properties": {
         "rawRoot": {
           "type": "string",
@@ -58,11 +72,26 @@
       "description": "Optional default asset locations for this provider. sfx/music/inserts/graphics are EXTERNAL paths. logos MAY reference the in-repo providers/<name>/logo directory.",
       "additionalProperties": false,
       "properties": {
-        "sfx": { "type": "string", "description": "External path to sound-effects library." },
-        "music": { "type": "string", "description": "External path to music library." },
-        "inserts": { "type": "string", "description": "External path to insert/b-roll clips." },
-        "graphics": { "type": "string", "description": "External path to graphics/overlays." },
-        "logos": { "type": "string", "description": "Logo location. Usually the in-repo path 'providers/<name>/logo'." }
+        "sfx": {
+          "type": "string",
+          "description": "External path to sound-effects library."
+        },
+        "music": {
+          "type": "string",
+          "description": "External path to music library."
+        },
+        "inserts": {
+          "type": "string",
+          "description": "External path to insert/b-roll clips."
+        },
+        "graphics": {
+          "type": "string",
+          "description": "External path to graphics/overlays."
+        },
+        "logos": {
+          "type": "string",
+          "description": "Logo location. Usually the in-repo path 'providers/<name>/logo'."
+        }
       }
     },
     "transcription": {
@@ -93,7 +122,11 @@
       "properties": {
         "default_intent": {
           "type": "string",
-          "enum": ["platform_fit", "channel_standard", "creative"],
+          "enum": [
+            "platform_fit",
+            "channel_standard",
+            "creative"
+          ],
           "description": "Default loudness resolution intent when project/EDL do not override."
         },
         "channel_standard": {
@@ -101,10 +134,22 @@
           "description": "Channel-owned integrated loudness, true peak, and LRA reference.",
           "additionalProperties": false,
           "properties": {
-            "integrated_lufs": { "type": "number", "description": "Target integrated loudness (LUFS/LKFS)." },
-            "true_peak_dbtp": { "type": "number", "description": "True-peak ceiling (dBTP)." },
-            "lra_lu": { "type": "number", "description": "Loudness range target (LU)." },
-            "note": { "type": "string", "description": "Human note — not an official platform requirement." }
+            "integrated_lufs": {
+              "type": "number",
+              "description": "Target integrated loudness (LUFS/LKFS)."
+            },
+            "true_peak_dbtp": {
+              "type": "number",
+              "description": "True-peak ceiling (dBTP)."
+            },
+            "lra_lu": {
+              "type": "number",
+              "description": "Loudness range target (LU)."
+            },
+            "note": {
+              "type": "string",
+              "description": "Human note — not an official platform requirement."
+            }
           }
         }
       }
@@ -114,14 +159,24 @@
       "description": "Pointers to this provider's in-repo brand material.",
       "additionalProperties": false,
       "properties": {
-        "design": { "type": "string", "description": "Path to the provider DESIGN.md (relative to repo root)." },
-        "palette": { "type": "string", "description": "Path to a palette.json under brand/ (relative to repo root)." }
+        "design": {
+          "type": "string",
+          "description": "Path to the provider DESIGN.md (relative to repo root)."
+        },
+        "palette": {
+          "type": "string",
+          "description": "Path to a palette.json under brand/ (relative to repo root)."
+        }
       }
     },
     "routingOverrides": {
       "type": "object",
       "description": "Per-provider overrides that patch the shared avo.config.json routing (jobs, confidence, transcription). Same shape as avo.config.json; only the keys to override need to be present.",
       "additionalProperties": true
+    },
+    "animationLibrary": {
+      "type": "string",
+      "description": "Optional provider-relative path to the explicitly approved sanitized animation catalog, normally animations/animation.json. Runtime video timing and media never belong here."
     }
   }
 }

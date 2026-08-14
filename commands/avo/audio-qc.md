@@ -1,5 +1,7 @@
 # /avo.audio-qc Command
 
+**Timeline integration:** Evidence
+
 Loudness and delivery audio QC on the **approved master export**. Distinct from `/avo.sound` (mix/restoration).
 
 **Skill:** [`agent-skills/avo-pipeline/references/audio-qc.md`](../../agent-skills/avo-pipeline/references/audio-qc.md)
@@ -44,3 +46,11 @@ Provider: my-channel
 The footage is at C:/Videos/my-edit
 Footage: edit/masters/20260801-demo-master-v001.mp4
 ```
+
+## Candidate-bound evidence
+
+Evidence binds channel mapping, dialogue intelligibility, loudness, true peak, clipping, and residual sync results to the exact candidate SHA-256. Missing or ambiguous state blocks the applicable human gate.
+
+## Shared timeline gateway
+
+Runs shared candidate-bound checks and emits evidence with exact candidate/dependency hashes. Scoped evidence cannot satisfy a larger gate without required coverage.

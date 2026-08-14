@@ -1,5 +1,7 @@
 # /avo.issues Command
 
+**Timeline integration:** Admin
+
 Prepare a GitHub issue with full environment context — user submits manually.
 
 **Skill:** [`agent-skills/avo-pipeline/references/issues.md`](../../agent-skills/avo-pipeline/references/issues.md)
@@ -42,3 +44,7 @@ Read-only preparation. Gathers reproducible context and formats a markdown body 
 /avo.issues
 type: bug
 ```
+
+## Shared timeline gateway
+
+Resolves provider/video context but performs no editorial timeline mutation. Reports and configuration reference canonical artifact/revision identities.

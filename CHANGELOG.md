@@ -1,3 +1,26 @@
+# [1.5.0](https://github.com/joaobispo2077/avo/compare/v1.4.0...v1.5.0) (2026-08-14)
+
+
+### Bug Fixes
+
+* **audio:** allow camera_source_keys for dialogue restoration ([2fb4f3c](https://github.com/joaobispo2077/avo/commit/2fb4f3cf5ca8dd92bb68c890889f5752fb2c3ec8))
+* **loudness:** let EDL loudness override project and provider ([7b46924](https://github.com/joaobispo2077/avo/commit/7b46924ad24239490c4ce5fb5a8071f871f39f14))
+* **test:** restore original pyproject version after sync-script test ([b17f24b](https://github.com/joaobispo2077/avo/commit/b17f24b51d9ccf91487f5b8a0168348a084f8ef6))
+
+
+### Features
+
+* **timeline:** add canonical artifact JSON schemas ([a996922](https://github.com/joaobispo2077/avo/commit/a996922c96e66075e5970f4bdf9617f86d29f18d))
+* **timeline:** add canonical CMap BMap Sync Tracks Animation stores ([5890a31](https://github.com/joaobispo2077/avo/commit/5890a31f25ba66fab93799218303b21847ab255b))
+* **adapters:** add media inventory sync render and track compilers ([1d72fbd](https://github.com/joaobispo2077/avo/commit/1d72fbdb3ff6dab6e80b6f49424c4a7a925beea4))
+* **timeline:** add review QC and watch adapters ([839a3ff](https://github.com/joaobispo2077/avo/commit/839a3ff7e44e97ac95fa274a4dff950fbabf9ad8))
+* **transcribe:** bind review evidence to transcript candidates ([67af916](https://github.com/joaobispo2077/avo/commit/67af9164d7a2ae460c588f181ed9f5de36e5d790))
+* **cli:** expose timeline sync review migrate cleanup commands ([cac024d](https://github.com/joaobispo2077/avo/commit/cac024ddba1e67e419270cb9d0aa24bf4cbf6dca))
+* **render:** honor dialogue channels and optional track layers ([5e7fda1](https://github.com/joaobispo2077/avo/commit/5e7fda1849b3e6958dfc2a58b7b8c28d3b15b340))
+* **shorts:** require Watch hashes before shorts promotion ([59f62e7](https://github.com/joaobispo2077/avo/commit/59f62e77c0297a36d363f339aa9ce67dd51c47de))
+* **timeline:** resolve canonical map paths from video context ([9b6bb21](https://github.com/joaobispo2077/avo/commit/9b6bb21934c4405f87b0de45fc9510ec52ead3e5))
+* **transcript:** validate master transcript against the export ([dd0e0df](https://github.com/joaobispo2077/avo/commit/dd0e0df32f9b4b965b6e9b063f9610a15a0dcc57))
+
 # [1.4.0](https://github.com/joaobispo2077/avo/compare/v1.3.0...v1.4.0) (2026-08-14)
 
 

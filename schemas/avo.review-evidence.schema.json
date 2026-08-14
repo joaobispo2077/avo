@@ -1,0 +1,501 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://avo.local/avo.review-evidence.schema.json",
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "actor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "id"
+      ],
+      "properties": {
+        "type": {
+          "enum": [
+            "user",
+            "agent",
+            "migration"
+          ]
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "toolVersion": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "window": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "start",
+        "end",
+        "reason"
+      ],
+      "properties": {
+        "start": {
+          "type": "number",
+          "minimum": 0
+        },
+        "end": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "tool": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "version"
+      ],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1
+        },
+        "model": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "artifact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "sha256"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "kind": {
+          "type": "string"
+        }
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "evidenceId",
+        "kind",
+        "tool",
+        "runAt",
+        "candidateHash",
+        "candidateIdentityHash",
+        "dependencyLockSha256",
+        "dependencyHashes",
+        "scope",
+        "coverage",
+        "status",
+        "findings",
+        "artifacts",
+        "attempt"
+      ],
+      "properties": {
+        "evidenceId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "kind": {
+          "type": "string",
+          "minLength": 1
+        },
+        "tool": {
+          "$ref": "#/$defs/tool"
+        },
+        "runAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "candidateHash": {
+          "$ref": "#/$defs/sha256"
+        },
+        "candidateIdentityHash": {
+          "$ref": "#/$defs/sha256"
+        },
+        "dependencyLockSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "dependencyHashes": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": {
+            "$ref": "#/$defs/sha256"
+          }
+        },
+        "scope": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "mode",
+            "windows",
+            "rationale"
+          ],
+          "properties": {
+            "mode": {
+              "enum": [
+                "full",
+                "windows"
+              ]
+            },
+            "windows": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/window"
+              }
+            },
+            "rationale": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "allOf": [
+            {
+              "if": {
+                "properties": {
+                  "mode": {
+                    "const": "windows"
+                  }
+                }
+              },
+              "then": {
+                "properties": {
+                  "windows": {
+                    "minItems": 1
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "coverage": {
+          "type": "object",
+          "additionalProperties": true,
+          "required": [
+            "requiredWindows",
+            "reviewedWindows"
+          ],
+          "properties": {
+            "durationSeconds": {
+              "type": "number",
+              "minimum": 0
+            },
+            "reviewedSeconds": {
+              "type": "number",
+              "minimum": 0
+            },
+            "requiredWindows": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "reviewedWindows": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        },
+        "status": {
+          "enum": [
+            "pending",
+            "pass",
+            "fail",
+            "error",
+            "stale",
+            "not-applicable"
+          ]
+        },
+        "findings": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "fixRevisionRefs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "artifacts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/artifact"
+          }
+        },
+        "attempt": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "supersedes": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "notApplicable": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "policy",
+            "rationale",
+            "actor",
+            "basisSha256"
+          ],
+          "properties": {
+            "policy": {
+              "type": "string",
+              "minLength": 1
+            },
+            "rationale": {
+              "type": "string",
+              "minLength": 1
+            },
+            "actor": {
+              "$ref": "#/$defs/actor"
+            },
+            "basisSha256": {
+              "$ref": "#/$defs/sha256"
+            }
+          }
+        },
+        "dependencyProfile": {
+          "enum": [
+            "exact-candidate",
+            "raw-sync",
+            "source-rights"
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "not-applicable"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "notApplicable"
+            ]
+          }
+        }
+      ]
+    }
+  },
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "checkpoint",
+    "candidate",
+    "dependencyLockSha256",
+    "state",
+    "evidence",
+    "attempts",
+    "unresolvedRisks",
+    "approval"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "1.0.0"
+    },
+    "checkpoint": {
+      "enum": [
+        "sync-ready",
+        "cut-proof",
+        "motion-proof",
+        "pre-master",
+        "deliver"
+      ]
+    },
+    "candidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sha256",
+        "byteSize",
+        "path",
+        "dependencies",
+        "renderProfile",
+        "identityHash"
+      ],
+      "properties": {
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "byteSize": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "dependencies": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": {
+            "$ref": "#/$defs/sha256"
+          }
+        },
+        "renderProfile": {
+          "type": "string",
+          "minLength": 1
+        },
+        "identityHash": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "dependencyLockSha256": {
+      "$ref": "#/$defs/sha256"
+    },
+    "state": {
+      "enum": [
+        "draft",
+        "reviewing",
+        "fixing",
+        "ai-passed",
+        "needs-human-judgment",
+        "blocked",
+        "superseded"
+      ]
+    },
+    "evidence": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/evidence"
+      }
+    },
+    "attempts": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "unresolvedRisks": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      }
+    },
+    "blocker": {
+      "type": "string"
+    },
+    "approval": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "changeSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "headline",
+        "items",
+        "windows",
+        "staleDependencies"
+      ],
+      "properties": {
+        "headline": {
+          "type": "string",
+          "minLength": 1
+        },
+        "items": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "artifactType",
+              "revisionId",
+              "reason",
+              "operationCounts",
+              "targets",
+              "truncatedTargets"
+            ],
+            "properties": {
+              "artifactType": {
+                "type": "string",
+                "minLength": 1
+              },
+              "revisionId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "reason": {
+                "type": "string",
+                "minLength": 1
+              },
+              "operationCounts": {
+                "type": "object",
+                "minProperties": 1,
+                "additionalProperties": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              },
+              "targets": {
+                "type": "array",
+                "uniqueItems": true,
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
+              "truncatedTargets": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          }
+        },
+        "windows": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/window"
+          }
+        },
+        "staleDependencies": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    }
+  }
+}

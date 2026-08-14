@@ -157,6 +157,11 @@ def valid_edl(root: Path) -> dict:
 
 
 class SwitchComparisonEdlContractTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        if not SCHEMA.is_file():
+            raise unittest.SkipTest(f"missing local project spec (not in public repo): {SCHEMA}")
+
     def test_valid_comparison_edl_allows_many_overlays_optional_sfx_no_burn_in(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

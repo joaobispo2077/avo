@@ -6,7 +6,9 @@
 
 ## System status
 
-US1–US4 runtime and Phase 8–9 audit fixes are implemented. Migration gates T072 and script retirement remain operator-gated.
+US1–US4 runtime and Phase 8–9 audit fixes are implemented. Repository-specific
+Switch automation has been retired; real-footage validation remains owned by the
+external footage project.
 
 ## Preview tier invalidation (v1.2)
 
@@ -54,9 +56,9 @@ Proof at target resolution is the deliverable candidate. `promote` copies proof 
 | Selection rule / warnings | `test_shorts_plan.py` |
 | QC metrics wiring | `test_shorts_qc.py` |
 
-## Open migration gates
+## Remaining validation
 
-- T072 real Switch batch — see [t072-switch-migration-runbook.md](t072-switch-migration-runbook.md)
-- T075–T076 script retirement after Watch approval
 - T078 validation record in [tasks.md](tasks.md)
-- T079 constitution recheck after T072
+- Real-footage and Watch validation remain external project responsibilities;
+  they do not justify tracking private paths, migration inventories, or one-off
+  repair scripts in AVO.

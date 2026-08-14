@@ -1,0 +1,242 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://avo.local/avo.timeline-revision.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "artifactType",
+    "artifactId",
+    "revisionId",
+    "parentRevisionId",
+    "createdAt",
+    "actor",
+    "reason",
+    "timelineDomain",
+    "basis",
+    "snapshot",
+    "diff",
+    "inputEvidenceRefs",
+    "contentSha256"
+  ],
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "schemaVersion": {
+      "const": "1.0.0"
+    },
+    "artifactType": {
+      "enum": [
+        "cmap",
+        "bmap",
+        "tracks",
+        "animation",
+        "sync-map"
+      ]
+    },
+    "artifactId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "revisionId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "parentRevisionId": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "sourceRevisionRefs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "actor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "id"
+      ],
+      "properties": {
+        "type": {
+          "enum": [
+            "user",
+            "agent",
+            "migration",
+            "system"
+          ]
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "toolVersion": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "reason": {
+      "type": "string",
+      "minLength": 1
+    },
+    "timelineDomain": {
+      "enum": [
+        "raw-source",
+        "sync-corrected-source",
+        "cmap-output"
+      ]
+    },
+    "basis": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "artifactType",
+          "artifactId",
+          "revisionId",
+          "contentSha256"
+        ],
+        "properties": {
+          "artifactType": {
+            "type": "string",
+            "minLength": 1
+          },
+          "artifactId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "revisionId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "contentSha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "outputSha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          }
+        }
+      }
+    },
+    "snapshot": {
+      "type": "object"
+    },
+    "diff": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "opId",
+          "op",
+          "target",
+          "reason",
+          "actorIntent"
+        ],
+        "properties": {
+          "opId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "op": {
+            "enum": [
+              "add",
+              "remove",
+              "replace",
+              "move",
+              "split",
+              "merge"
+            ]
+          },
+          "target": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "collection",
+              "stableId"
+            ],
+            "properties": {
+              "collection": {
+                "type": "string",
+                "minLength": 1
+              },
+              "stableId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "fieldPointer": {
+                "type": "string",
+                "pattern": "^(/[^0-9][^/]*)*$"
+              }
+            }
+          },
+          "before": {},
+          "after": {},
+          "fromOrder": {
+            "type": "integer"
+          },
+          "toOrder": {
+            "type": "integer"
+          },
+          "affectedTimeRanges": {
+            "type": "array"
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1
+          },
+          "actorIntent": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "inputEvidenceRefs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "evidenceId",
+          "sha256"
+        ],
+        "properties": {
+          "evidenceId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "kind": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "contentSha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "extensions": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  }
+}

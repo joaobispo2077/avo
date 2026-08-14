@@ -1,0 +1,340 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://avo.local/avo.animation.schema.json",
+  "oneOf": [
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "scope",
+        "videoId",
+        "provider",
+        "currentRevisionId",
+        "revisions"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": "1.0.0"
+        },
+        "scope": {
+          "const": "video"
+        },
+        "videoId": {
+          "type": "string"
+        },
+        "provider": {
+          "type": "string"
+        },
+        "currentRevisionId": {
+          "type": "string"
+        },
+        "revisions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "revisionId",
+              "strategy"
+            ],
+            "properties": {
+              "revisionId": {
+                "type": "string"
+              },
+              "strategy": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "formatDiagnosis",
+                  "density",
+                  "safeZones",
+                  "components",
+                  "accessibility",
+                  "framework",
+                  "dependencies"
+                ],
+                "properties": {
+                  "formatDiagnosis": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "format",
+                      "viewerIntent",
+                      "motionDensity"
+                    ],
+                    "properties": {
+                      "format": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "viewerIntent": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "motionDensity": {
+                        "type": "integer",
+                        "minimum": 0,
+                        "maximum": 5
+                      },
+                      "constraints": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  },
+                  "density": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 5
+                  },
+                  "safeZones": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  },
+                  "components": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "componentId",
+                        "lifecycle",
+                        "accessibility"
+                      ],
+                      "properties": {
+                        "componentId": {
+                          "type": "string",
+                          "pattern": "^[a-z][a-z0-9-]{2,63}$"
+                        },
+                        "providerPatternRef": {
+                          "type": "string"
+                        },
+                        "lifecycle": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "preEntry",
+                            "entrance",
+                            "hold",
+                            "exit"
+                          ],
+                          "properties": {
+                            "preEntry": {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "entrance": {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "hold": {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "exit": {
+                              "type": "string",
+                              "minLength": 1
+                            }
+                          }
+                        },
+                        "audioRelationship": {
+                          "type": "object",
+                          "additionalProperties": true
+                        },
+                        "accessibility": {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "reducedMotion"
+                          ],
+                          "properties": {
+                            "reducedMotion": {
+                              "type": [
+                                "string",
+                                "boolean"
+                              ]
+                            }
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "accessibility": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "reducedMotion",
+                      "flashingSafe"
+                    ],
+                    "properties": {
+                      "reducedMotion": {
+                        "type": "boolean"
+                      },
+                      "flashingSafe": {
+                        "type": "boolean"
+                      }
+                    }
+                  },
+                  "providerPatternRefs": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "framework": {
+                    "const": "hyperframes"
+                  },
+                  "dependencies": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "cmap",
+                      "bmap",
+                      "tracks"
+                    ],
+                    "properties": {
+                      "cmap": {
+                        "type": "string",
+                        "pattern": "^[a-f0-9]{64}$"
+                      },
+                      "bmap": {
+                        "type": "string",
+                        "pattern": "^[a-f0-9]{64}$"
+                      },
+                      "tracks": {
+                        "type": "string",
+                        "pattern": "^[a-f0-9]{64}$"
+                      }
+                    }
+                  },
+                  "extensions": {
+                    "type": "object",
+                    "additionalProperties": true
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "scope",
+        "provider",
+        "patterns"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": "1.0.0"
+        },
+        "scope": {
+          "const": "provider"
+        },
+        "provider": {
+          "type": "string"
+        },
+        "patterns": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "patternId",
+              "name",
+              "behavior",
+              "contexts",
+              "exclusions",
+              "requiredAssets",
+              "accessibility",
+              "exemplars",
+              "promotion"
+            ],
+            "properties": {
+              "patternId": {
+                "type": "string"
+              },
+              "name": {
+                "type": "string"
+              },
+              "behavior": {
+                "type": "object"
+              },
+              "contexts": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "exclusions": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "requiredAssets": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "accessibility": {
+                "type": "object"
+              },
+              "exemplars": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "candidateHash",
+                    "section"
+                  ],
+                  "properties": {
+                    "candidateHash": {
+                      "type": "string",
+                      "pattern": "^[a-f0-9]{64}$"
+                    },
+                    "section": {
+                      "type": "string"
+                    }
+                  }
+                }
+              },
+              "promotion": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "actor",
+                  "promotedAt",
+                  "approvalReference"
+                ],
+                "properties": {
+                  "actor": {
+                    "type": "string"
+                  },
+                  "promotedAt": {
+                    "type": "string"
+                  },
+                  "approvalReference": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

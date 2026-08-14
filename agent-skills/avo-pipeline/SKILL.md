@@ -69,8 +69,8 @@ Always parse shared args first: [`references/arguments.md`](references/arguments
 ## Non-negotiable
 
 1. Declare `provider` + `rawDir` before any stage.
-2. **Agent pre-human gate:** watch-skill + transcript analysis + `edl_timeline verify`
-   before each human approval gate (see [`references/cuts.md`](references/cuts.md),
+2. **Agent pre-human gate:** exact-candidate Watch + transcript analysis +
+   canonical lineage/projection/QC before each human approval gate (see [`references/cuts.md`](references/cuts.md),
    [`references/watch.md`](references/watch.md), workflow §4b).
 3. Subtitles last in filter chain; 30ms audio fades at cuts.
 4. Session outputs only under `<rawDir>/edit/`.
@@ -85,3 +85,7 @@ cp -r commands/avo .cursor/commands/
 ```
 
 Or install per [`docs/avo-commands.md`](../../docs/avo-commands.md).
+
+## Canonical timeline gateway
+
+Every command resolves the same video/provider context and declares its integration mode. CMap is raw-only. BMap is based only on the latest exact approved cut. Tracks resolve BMap; animation strategy references provider patterns; sync is raw-based. Candidate evidence and approvals bind content/dependency hashes. No command keeps private timeline or approval truth, and no human gate opens before current Watch plus candidate transcript analysis.

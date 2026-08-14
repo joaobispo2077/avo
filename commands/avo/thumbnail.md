@@ -1,5 +1,7 @@
 # /avo.thumbnail Command
 
+**Timeline integration:** Consumes
+
 Frame candidates and safe-zone checklist from the approved master (ffmpeg stills v1).
 
 **Skill:** [`agent-skills/avo-pipeline/references/thumbnail.md`](../../agent-skills/avo-pipeline/references/thumbnail.md)
@@ -41,3 +43,7 @@ Extract truthful candidate stills to `<rawDir>/edit/delivery/thumbnails/` with p
 Provider: my-channel
 The footage is at C:/Videos/review
 ```
+
+## Shared timeline gateway
+
+Resolves provider/video context and reads only exact approved lineage. It performs no canonical timeline mutation.

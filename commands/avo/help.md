@@ -1,5 +1,7 @@
 # /avo.help Command
 
+**Timeline integration:** Admin
+
 Master index of all `/avo.*` slash commands. Spoken alias: **`/avo --help`**.
 
 **Skill:** [`agent-skills/avo-pipeline/references/help.md`](../../agent-skills/avo-pipeline/references/help.md)
@@ -28,3 +30,7 @@ Discovery only. Does not run pipeline stages. Print the command catalog and poin
 2. If `--section` set, print that group only; else print full index.
 3. Remind: declare **Provider** + **footage location** (path or “this folder”) before any executing command.
 4. Link [`docs/avo-commands.md`](../../docs/avo-commands.md) for copy-paste examples.
+
+## Shared timeline gateway
+
+Resolves provider/video context but performs no editorial timeline mutation. Reports and configuration reference canonical artifact/revision identities.

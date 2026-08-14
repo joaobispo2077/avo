@@ -1,5 +1,7 @@
 # /avo.telemetry Command
 
+**Timeline integration:** Admin
+
 Emit phase-boundary telemetry for the current project.
 
 **Skill:** [`agent-skills/avo-pipeline/references/telemetry.md`](../../agent-skills/avo-pipeline/references/telemetry.md)
@@ -45,3 +47,7 @@ phase: 3
 total: 7
 label: edit-proof-watch
 ```
+
+## Shared timeline gateway
+
+Resolves provider/video context but performs no editorial timeline mutation. Reports and configuration reference canonical artifact/revision identities.
