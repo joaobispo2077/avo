@@ -26,6 +26,13 @@ class RepoLayoutTests(unittest.TestCase):
     def test_schemas_live_under_schemas(self) -> None:
         for name in (
             "avo.project.schema.json",
+            "avo.timeline-common.schema.json",
+            "avo.cmap.schema.json",
+            "avo.bmap.schema.json",
+            "avo.tracks.schema.json",
+            "avo.animation.schema.json",
+            "avo.sync-map.schema.json",
+            "avo.review-evidence.schema.json",
             "edl.schema.json",
             "avo.shorts-batch.schema.json",
             "avo.shorts-plan.schema.json",
@@ -50,6 +57,25 @@ class RepoLayoutTests(unittest.TestCase):
             "src/avo/templates/shorts_hyperframes/index.html",
             "src/avo/templates/shorts_hyperframes/styles.css",
             "src/avo/templates/shorts_hyperframes/runtime.js",
+        )
+        for relative_path in expected:
+            self.assertTrue((self.root / relative_path).is_file(), msg=relative_path)
+
+    def test_timeline_bounded_context_layout(self) -> None:
+        expected = (
+            "src/avo/timeline/__init__.py",
+            "src/avo/timeline/models.py",
+            "src/avo/timeline/contracts.py",
+            "src/avo/timeline/store.py",
+            "src/avo/timeline/lifecycle.py",
+            "src/avo/timeline/mapping.py",
+            "src/avo/timeline/lineage.py",
+            "src/avo/timeline/projection.py",
+            "src/avo/timeline/sync.py",
+            "src/avo/timeline/review.py",
+            "src/avo/timeline/migration.py",
+            "src/avo/timeline/tracks.py",
+            "src/avo/timeline/animation.py",
         )
         for relative_path in expected:
             self.assertTrue((self.root / relative_path).is_file(), msg=relative_path)
