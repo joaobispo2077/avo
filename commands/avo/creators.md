@@ -1,5 +1,7 @@
 # /avo.creators Command
 
+**Timeline integration:** Admin
+
 Curated opt-in list of channels and sites using AVO.
 
 **Skill:** [`agent-skills/avo-pipeline/references/creators.md`](../../agent-skills/avo-pipeline/references/creators.md)
@@ -33,3 +35,7 @@ Read-only showcase. Lists maintainer-curated entries from `docs/creators.md`. No
 ```text
 /avo.creators
 ```
+
+## Shared timeline gateway
+
+Resolves provider/video context but performs no editorial timeline mutation. Reports and configuration reference canonical artifact/revision identities.

@@ -1,5 +1,7 @@
 # /avo.motion-graphics Command
 
+**Timeline integration:** Profile
+
 Router to short design-led motion graphic skill.
 
 **Skill:** [`agent-skills/avo-pipeline/references/motion-graphics.md`](../../agent-skills/avo-pipeline/references/motion-graphics.md)
@@ -21,3 +23,7 @@ Source: /path/to/brief.md
 
 1. Parse `Provider`, `ProjectDir`, `Source` (brief, outline, or one-line concept).
 2. Follow [`motion-graphics.md`](../../agent-skills/avo-pipeline/references/motion-graphics.md).
+
+## Shared timeline gateway
+
+Runs the base pipeline with format-specific diagnosis and policy. It creates its own timeline context for derivatives and cannot bypass lineage, invalidation, Watch, transcript, or approval gates.

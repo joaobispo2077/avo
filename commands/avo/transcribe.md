@@ -1,5 +1,7 @@
 # /avo.transcribe Command
 
+**Timeline integration:** Evidence
+
 Transcribe only. No cut, no motion, no deliver.
 
 **Skill:** [`agent-skills/avo-pipeline/references/transcribe.md`](../../agent-skills/avo-pipeline/references/transcribe.md)
@@ -44,3 +46,11 @@ rawDir: H:/footage/exercise-demo
 Footage: H:/footage/exercise-demo/raw/take-a.mp4
 --lang en
 ```
+
+## Candidate-bound evidence
+
+Evidence binds transcript hash and semantic name, term, cut-edge, and meaning findings to the exact candidate SHA-256 and dependency snapshot. Missing or ambiguous state blocks the applicable human gate.
+
+## Shared timeline gateway
+
+Runs shared candidate-bound checks and emits evidence with exact candidate/dependency hashes. Scoped evidence cannot satisfy a larger gate without required coverage.

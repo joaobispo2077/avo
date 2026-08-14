@@ -1,5 +1,7 @@
 # /avo.animation-qc Command
 
+**Timeline integration:** Evidence
+
 Animation render QC after motion slots, before final composite. Wraps `animation-validation-and-render-qc`.
 
 **Skill:** [`agent-skills/avo-pipeline/references/animation-qc.md`](../../agent-skills/avo-pipeline/references/animation-qc.md)
@@ -29,3 +31,11 @@ Validate determinism, accessibility, snapshot/render parity on motion outputs be
 1. Parse `Provider`, `rawDir`.
 2. Run after `/avo.motion` slot proofs approved; before final composite deliver.
 3. Load [`animation-qc.md`](../../agent-skills/avo-pipeline/references/animation-qc.md) and **`animation-validation-and-render-qc`**.
+
+## Candidate-bound evidence
+
+Evidence binds overlay lifecycle, face/caption/evidence avoidance, readability, flashing safety, and render parity to the exact candidate SHA-256. Missing or ambiguous state blocks the applicable human gate.
+
+## Shared timeline gateway
+
+Runs shared candidate-bound checks and emits evidence with exact candidate/dependency hashes. Scoped evidence cannot satisfy a larger gate without required coverage.

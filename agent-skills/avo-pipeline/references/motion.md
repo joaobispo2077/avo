@@ -53,3 +53,14 @@ Write **`edit/animations/beat-map.md`** with B-time table (or run
 - OpenAI logo from folder → melt into verdict card
 
 Preserve brand assets; never invent trademarked logos when user supplies a path.
+
+## Canonical BMap rule
+
+BMap may be created only from the latest explicitly approved CMap revision and
+its exact cut-output SHA-256. All cue times use `cmap-output`; raw and semantic
+anchors are optional rebase hints. A new CMap approval immediately stales BMap,
+tracks, timed animation, candidates, Watch/transcript/QC evidence, and approvals.
+Rebase classifies each cue as preserved, shifted, split, removed, ambiguous, or
+unsupported. Only unambiguous shifts auto-apply; ambiguity stops for human
+judgment.
+

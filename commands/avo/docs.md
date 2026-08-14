@@ -1,5 +1,7 @@
 # /avo.docs Command
 
+**Timeline integration:** Admin
+
 Route to AVO topic documentation.
 
 **Skill:** [`agent-skills/avo-pipeline/references/docs.md`](../../agent-skills/avo-pipeline/references/docs.md)
@@ -37,3 +39,7 @@ Doc discovery. Opens the right markdown file; does not execute pipeline.
 /avo.docs
 topic: workflow
 ```
+
+## Shared timeline gateway
+
+Resolves provider/video context but performs no editorial timeline mutation. Reports and configuration reference canonical artifact/revision identities.

@@ -1,5 +1,7 @@
 # /avo.pipeline Command
 
+**Timeline integration:** Owns
+
 Run the full AVO pipeline from declared assets through deliver.
 
 **Skill:** [`agent-skills/avo-pipeline/references/pipeline.md`](../../agent-skills/avo-pipeline/references/pipeline.md)
@@ -55,3 +57,23 @@ rawDir: H:/footage/dealer-walk
 Footage: H:/footage/dealer-walk/raw/walkthrough.mp4
 Music: H:/assets/music/soft-bed.wav
 ```
+
+## Canonical timeline lifecycle
+
+This command owns the shared lifecycle: intake → sources-ready → sync-ready →
+cmap-draft → cut-ai-review → cmap-approved → bmap-draft →
+assembly-ai-review → picture-locked → finishing → pre-master-ai-review →
+master-approved → delivered → archived. Independently invoked stage/profile
+commands call the same transition guards, artifact store, hash invalidation, and
+review orchestrator.
+
+Before every human question, validate lineage, render the exact candidate,
+transcribe that candidate, run deterministic QC, run Watch over the full program
+when practical plus every changed/risk window, auto-fix only reversible defects
+inside approved intent using a new revision, and rerun affected checks. Missing
+Watch/current transcript blocks. Meaning, rights, disclosure, privacy, safety,
+policy, factual conflict, and ambiguous rebase require human judgment.
+
+## Shared timeline gateway
+
+Uses shared timeline storage, transition guards, invalidation, and AI review services. It cannot maintain private CMap, BMap, sync, track, animation, or approval truth.

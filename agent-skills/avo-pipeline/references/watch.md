@@ -42,3 +42,18 @@ See [`cuts.md`](cuts.md) for the full cut-map / beat-map requirements.
 - `edit-proof` — after cut proof
 - `motion-proof` — after motion proof
 - `pre-master` — before 1080p/source promotion
+
+## Non-overridable AI-first gate
+
+Human review opens only after current candidate Watch evidence, current-candidate
+transcript analysis, and all checkpoint-specific deterministic checks. Evidence
+is fresh only when candidate and dependency hashes match exactly. Missing Watch
+or transcript remains `blocked`; do not hide a waiver in chat.
+
+Safe automatic fixes must be reversible, remain inside approved intent, create
+a new immutable revision, invalidate affected evidence, and rerun checks.
+Meaning, chronology, rights, disclosure, privacy, safety, policy, factual
+conflict, and ambiguous rebase become `needs-human-judgment`. Persist attempts,
+blockers, coverage, and recovery commands in `review.json`; generate
+`approval-gate.md` only as its human-readable projection.
+

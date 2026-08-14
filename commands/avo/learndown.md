@@ -1,5 +1,7 @@
 # /avo.learndown Command
 
+**Timeline integration:** Admin
+
 Post-master provider-scoped learning consolidation and **draft wrap** preview. **ai-memory is optional** — without it, only MCP wiki consolidation is skipped; all other steps below remain **REQUIRED**.
 
 **Skill:** [`agent-skills/avo-pipeline/references/learndown.md`](../../agent-skills/avo-pipeline/references/learndown.md) · **Optional tools:** [`docs/ai-memory-and-ai-jail.md`](../../docs/ai-memory-and-ai-jail.md)
@@ -42,3 +44,11 @@ Workflow §7 step 1. Consolidate iteration learnings under the provider. Produce
 Provider: auto-lot
 rawDir: H:/footage/dealer-walk
 ```
+
+## Animation library integration
+
+May identify and generalize reusable behavior with provenance, contexts, exclusions, assets, and accessibility, but only proposes a provider pattern. Promotion remains a separate explicit creator decision.
+
+## Shared timeline gateway
+
+Resolves provider/video context but performs no editorial timeline mutation. Reports and configuration reference canonical artifact/revision identities.
