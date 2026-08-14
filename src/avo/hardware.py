@@ -254,6 +254,35 @@ def suggest_tier(report: dict[str, Any]) -> dict[str, Any]:
     if ram_gb and ram_gb < 8:
         notes.append("low RAM — keep proofs at 360p/720p and avoid large LLMs")
 
+    # Optional Bonsai understand — notes only; never change llm id.
+    # Map: compressed Qwen3.6-27B; footprint vs AVO Qwen 2.5 ladder (not quality).
+    bonsai_note = False
+    if has_gpu and vram_mb >= 8 * 1024:
+        notes.append(
+            "optional understand bonsai-27b-gguf: Bonsai 27B 1-bit ~4–8 GB VRAM "
+            "(≈ Qwen3.6-27B FP16 ~54 GB; Q4 ~18 GB) — Watch; operator pin; not default"
+        )
+        bonsai_note = True
+        if vram_mb >= 10 * 1024:
+            notes.append(
+                "optional understand ternary-bonsai-27b-gguf: Ternary Bonsai 27B "
+                "~7–12 GB VRAM (≈ Qwen3.6-27B FP16 ~54 GB) — heavier than 1-bit; "
+                "not the first fits-like-7B option"
+            )
+    elif has_gpu and vram_mb >= 6 * 1024:
+        notes.append(
+            "optional understand bonsai-27b-gguf is tight/experimental at ~6 GB "
+            "VRAM — Bonsai 27B 1-bit ~4–8 GB class (≈ Qwen3.6-27B ~54 GB FP16); "
+            "operator pin; not default"
+        )
+        bonsai_note = True
+
+    if whisper == "large-v3" and bonsai_note:
+        notes.append(
+            "do not assume whisper large-v3 and bonsai both fit in ~10 GB on the "
+            "same GPU — concurrent VRAM risk"
+        )
+
     return {
         "whisper": whisper,
         "llm": llm,

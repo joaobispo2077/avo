@@ -22,7 +22,7 @@ def pattern() -> dict:
         "requiredAssets": ["chapter-label", "topic-label"],
         "accessibility": {"reducedMotion": True, "flashingSafe": True},
         "provenance": {
-            "sourceVideoId": "splatoon-raiders",
+            "sourceVideoId": "example-source-video",
             "candidateSha256": "a" * 64,
             "sectionRefs": ["C01", "C02"],
         },

@@ -100,6 +100,28 @@
           "speed": "slowest",
           "quality": "best",
           "notes": "Workstation-class; watch-skill agent must configure."
+        },
+        {
+          "id": "bonsai-27b-gguf",
+          "label": "Bonsai 27B GGUF (1-bit · ~8 GB ≈ Qwen3.6-27B ~54 GB)",
+          "vramMB": 8192,
+          "ramMB": 16384,
+          "diskMB": 5000,
+          "speed": "balanced",
+          "quality": "high",
+          "hfRepo": "prism-ml/Bonsai-27B-gguf",
+          "notes": "Bonsai 27B 1-bit ~4 GB weights / ~8 GB Watch VRAM (≈ Qwen3.6-27B FP16 ~54 GB; Q4 ~18 GB). Compressed Qwen3.6-27B — not a 7B. Optional Watch via llama.cpp + mmproj + setup-vision --provider custom. Apache 2.0. Not default."
+        },
+        {
+          "id": "ternary-bonsai-27b-gguf",
+          "label": "Ternary Bonsai 27B GGUF (~12 GB ≈ Qwen3.6-27B ~54 GB)",
+          "vramMB": 12288,
+          "ramMB": 24576,
+          "diskMB": 8000,
+          "speed": "slow",
+          "quality": "best",
+          "hfRepo": "prism-ml/Ternary-Bonsai-27B-gguf",
+          "notes": "Ternary Bonsai 27B ~7 GB weights / ~10–12 GB Watch VRAM (≈ Qwen3.6-27B FP16 ~54 GB). Heavier than 1-bit; quality nearer full 27B — not the fits-like-7B pick. Watch needs mmproj + llama.cpp custom provider. Apache 2.0. Not default."
         }
       ]
     },
