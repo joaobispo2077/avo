@@ -1,3 +1,16 @@
+# [1.4.0](https://github.com/joaobispo2077/avo/compare/v1.3.0...v1.4.0) (2026-08-14)
+
+
+### Features
+
+* **shorts:** add batch workflow CLI ([fd44cc9](https://github.com/joaobispo2077/avo/commit/fd44cc9d4f714a85b96129e8a20cce68b5a29e54))
+* **shorts:** add contracts and planning ([1965c5b](https://github.com/joaobispo2077/avo/commit/1965c5bd4518fff47883d2d4ffa2d62b6507bd8d))
+* **shorts:** add HyperFrames renderer ([9398c66](https://github.com/joaobispo2077/avo/commit/9398c6634a6b6b02e58111ca2dc10b20bb4a8f22))
+* **gate1:** add optional ai-memory and ai-jail health probes ([7e3d8c3](https://github.com/joaobispo2077/avo/commit/7e3d8c3895dadd811b3d6eb01bd7972d6dec05ca))
+* **shorts:** add QC and delivery ([3cfd216](https://github.com/joaobispo2077/avo/commit/3cfd216370a3cc8b34b88560bb3a919a870ecd9d))
+* **setup:** harden ai-jail install verification per OS ([da2d74c](https://github.com/joaobispo2077/avo/commit/da2d74cc20be9173e6d18520502e26824318b5ad))
+* **shorts:** prepare deterministic media ([20c5232](https://github.com/joaobispo2077/avo/commit/20c5232060feb1aef17c99b6699a816867b4c8a6))
+
 # [1.3.0](https://github.com/joaobispo2077/avo/compare/v1.2.0...v1.3.0) (2026-08-03)
 
 
