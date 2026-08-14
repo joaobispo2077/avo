@@ -43,3 +43,10 @@ def test_bishop_catalog_promotes_approved_splatoon_chapter_support_pattern():
  assert pattern["behavior"]["durationProfiles"]["comicBeatSeconds"] == 1.6
  assert pattern["behavior"]["sfxRelationships"]["trembleEntry"]["sync"] == "first-frame"
  assert pattern["behavior"]["layout"]["faceAvoidance"] == "required-per-cue"
+ assert pattern["behavior"]["motionRecipes"]["tremble"]["totalEntrySeconds"] == 0.42
+ assert pattern["behavior"]["styleTokens"]["colors"]["cyan"] == "#19d8ff"
+ assert pattern["behavior"]["comicBeat"]["ideaId"] == "premature-rating-question"
+ assert pattern["behavior"]["comicBeat"]["sourceCueIds"] == ["V07a", "V07b"]
+ assert pattern["behavior"]["comicBeat"]["layout"]["meme"]["anchor"] == "far-right"
+ assert pattern["behavior"]["comicBeat"]["layout"]["questionPlaque"]["anchor"] == "chest"
+ assert ".png" not in json.dumps(pattern)
