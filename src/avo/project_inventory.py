@@ -55,6 +55,7 @@ class PreservedSetResult:
     initial_transcript: Path | None
     final_transcripts: list[Path]
     final_master: list[Path]
+    reconstruction_metadata: list[Path] = field(default_factory=list)
 
     @property
     def all_paths(self) -> list[Path]:
@@ -64,6 +65,7 @@ class PreservedSetResult:
             paths.append(self.initial_transcript)
         paths.extend(self.final_transcripts)
         paths.extend(self.final_master)
+        paths.extend(self.reconstruction_metadata)
         return paths
 
 
@@ -276,6 +278,37 @@ def _resolve_final_master(raw_dir: Path, master_basename: str) -> list[Path]:
     return paths
 
 
+def _resolve_reconstruction_metadata(raw_dir: Path) -> list[Path]:
+    bundle_path = raw_dir / "edit" / "timeline" / "reconstruction-bundle.json"
+    if bundle_path.is_file():
+        try:
+            from avo.timeline.reconstruction import verify_reconstruction_bundle
+            bundle = verify_reconstruction_bundle(raw_dir, bundle_path)
+            return sorted({
+                bundle_path,
+                *(raw_dir / item["path"] for item in bundle["files"]),
+            })
+        except Exception:
+            return [bundle_path]
+    roots = (raw_dir / "edit" / "timeline", raw_dir / "edit" / "review")
+    paths: list[Path] = []
+    for root in roots:
+        if root.is_dir():
+            paths.extend(
+                path for path in root.rglob("*")
+                if path.is_file() and not path.is_symlink()
+                and path.suffix.lower() in {".json", ".md"}
+            )
+    for name in (
+        "EDITLOG.md", "SOURCE-LOG.md", "AUDIO-EDITLOG.md",
+        "AUDIO-SOURCE-LOG.md", "ANIMATION-EDITLOG.md", "ANIMATION-SOURCE-LOG.md",
+    ):
+        path = raw_dir / name
+        if path.is_file() and not path.is_symlink():
+            paths.append(path)
+    return sorted(set(paths))
+
+
 def resolve_preserved_set(
     raw_dir: Path,
     master_basename: str,
@@ -290,6 +323,7 @@ def resolve_preserved_set(
         ),
         final_transcripts=_resolve_final_transcripts(raw_dir, master_basename),
         final_master=_resolve_final_master(raw_dir, master_basename),
+        reconstruction_metadata=_resolve_reconstruction_metadata(raw_dir),
     )
 
 
@@ -340,6 +374,15 @@ def verify_preserved_complete(
                 errors.append(
                     f"missing final master: {_relative_posix(raw_dir, path)}"
                 )
+
+    timeline = raw_dir / "edit" / "timeline"
+    canonical = [timeline / f"{name}.json" for name in ("cmap", "bmap", "tracks", "animation", "sync-map")]
+    if all(path.is_file() for path in canonical):
+        try:
+            from avo.timeline.reconstruction import verify_reconstruction_bundle
+            verify_reconstruction_bundle(raw_dir)
+        except Exception as error:
+            errors.append(f"invalid or missing reconstruction bundle: {error}")
 
     return errors
 
@@ -473,9 +516,13 @@ def execute_cleanup(
     for path in delete_list:
         runner(path)
     if session_id:
-        from avo.scratch import purge_scratch
+        from avo.scratch import ScratchError, purge_session_tmp
 
-        if purge_scratch(session_id):
+        try:
+            purged = purge_session_tmp(session_id)
+        except ScratchError:
+            purged = False
+        if purged:
             print(f"scratch purged: session {session_id}")
     return delete_list
 
@@ -639,7 +686,10 @@ def build_parser() -> argparse.ArgumentParser:
     p_cleanup.add_argument(
         "--session-id",
         default=None,
-        help="Purge learndown scratch for this session after successful cleanup.",
+        help=(
+            "After successful cleanup, purge all .avo/tmp/<kind>/<session-id>/ "
+            "kinds (not dry-run)."
+        ),
     )
     p_cleanup.set_defaults(func=_cmd_cleanup)
 
