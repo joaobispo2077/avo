@@ -161,3 +161,43 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
+
+
+def validate_master_transcript(master_path: Path, transcript_json: Path) -> dict:
+    """Validate that a word-timed transcript was produced from exact master bytes."""
+    from avo.transcribe import source_fingerprint, validate_transcript_payload
+
+    master_path = Path(master_path).resolve()
+    transcript_json = Path(transcript_json).resolve()
+    payload = json.loads(transcript_json.read_text(encoding="utf-8"))
+    validate_transcript_payload(payload)
+    fingerprint = source_fingerprint(master_path)
+    if payload["source"]["sha256"] != fingerprint["sha256"]:
+        raise ValueError("final transcript source hash does not match master bytes")
+    duration = None
+    try:
+        import subprocess
+        completed = subprocess.run(
+            [
+                "ffprobe", "-v", "error", "-show_entries", "format=duration",
+                "-of", "default=noprint_wrappers=1:nokey=1", str(master_path),
+            ],
+            check=True, capture_output=True, text=True,
+        )
+        duration = float(completed.stdout.strip())
+    except Exception:
+        duration = None
+    if duration is not None:
+        for word in payload.get("words") or []:
+            if float(word["end"]) > duration + 0.1:
+                raise ValueError("final transcript word exceeds master duration")
+    return {
+        "sourceSha256": fingerprint["sha256"],
+        "engine": payload["engine"],
+        "engineVersion": payload["engine_version"],
+        "model": payload["model"],
+        "language": payload["language_code"],
+        "wordCount": len(payload.get("words") or []),
+        "durationSeconds": duration,
+    }
