@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import re
 import subprocess
+import sys
 import unittest
 from pathlib import Path
 
@@ -207,7 +208,7 @@ class ReleasePipelineTests(unittest.TestCase):
 
         self.addCleanup(restore)
         proc = subprocess.run(
-            ["python", "scripts/ci/verify-release-version.py", version],
+            [sys.executable, "scripts/ci/verify-release-version.py", version],
             cwd=ROOT,
             capture_output=True,
             text=True,
@@ -247,7 +248,7 @@ class ReleasePipelineTests(unittest.TestCase):
 
         self.addCleanup(restore)
         proc = subprocess.run(
-            ["python", "scripts/ci/verify-release-version.py", version],
+            [sys.executable, "scripts/ci/verify-release-version.py", version],
             cwd=ROOT,
             capture_output=True,
             text=True,

@@ -64,7 +64,9 @@ class QualityMatrixTests(unittest.TestCase):
 
         pkg = json.loads((ROOT / "package.json").read_text(encoding="utf-8"))
         self.assertIn("not project", pkg["scripts"]["test:unit"])
-        self.assertEqual(pkg["scripts"]["test:projects"], "pytest tests/projects")
+        self.assertIn("pytest", pkg["scripts"]["test:projects"])
+        self.assertIn("tests/projects", pkg["scripts"]["test:projects"])
+        self.assertIn("uv run --frozen --extra dev", pkg["scripts"]["test:projects"])
 
     def test_projects_readme_exists(self) -> None:
         readme = ROOT / "tests/projects/README.md"
