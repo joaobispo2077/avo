@@ -13,6 +13,34 @@ from avo import render
 
 
 class WorkflowCompatibilityTests(unittest.TestCase):
+    def test_runtime_has_no_bespoke_splatoon_helpers(self) -> None:
+        runtime_roots = (ROOT / "src" / "avo", ROOT / "commands" / "avo", ROOT / "agent-skills" / "avo-pipeline")
+        forbidden = ("splatoon", "sync-map-v017", "rebuild-v010", "audio-plus-128", "resync-calibration")
+        findings = []
+        for base in runtime_roots:
+            for path in base.rglob("*"):
+                if path.is_file() and path.suffix in {".py", ".md", ".json"}:
+                    lowered = path.read_text(encoding="utf-8", errors="ignore").lower()
+                    if any(token in lowered for token in forbidden):
+                        findings.append(str(path.relative_to(ROOT)))
+        self.assertEqual([], findings)
+
+    def test_every_command_uses_shared_timeline_gateway(self) -> None:
+        commands = sorted((ROOT / "commands" / "avo").glob("*.md"))
+        self.assertEqual(51, len(commands))
+        for path in commands:
+            text = path.read_text(encoding="utf-8")
+            self.assertEqual(1, text.count("**Timeline integration:**"), path.name)
+            self.assertEqual(1, text.count("## Shared timeline gateway"), path.name)
+            mode = text.split("**Timeline integration:**", 1)[1].splitlines()[0].strip()
+            self.assertIn(mode, {"Owns", "Evidence", "Consumes", "Profile", "Admin"}, path.name)
+
+    def test_edl_is_only_a_generated_compatibility_projection(self) -> None:
+        workflow = (ROOT / "docs" / "avo-workflow.md").read_text(encoding="utf-8")
+        projection = (ROOT / "src" / "avo" / "timeline" / "projection.py").read_text(encoding="utf-8")
+        self.assertIn("edit/edl.json is generated renderer compatibility output", workflow)
+        self.assertIn("canonical timeline → legacy EDL compatibility projection", projection)
+
     def test_local_transcript_packs_and_builds_srt(self) -> None:
         fixture = json.loads(
             (ROOT / "tests/fixtures/transcript_ptbr.json").read_text(encoding="utf-8")
