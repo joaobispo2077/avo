@@ -76,6 +76,12 @@ class RepoLayoutTests(unittest.TestCase):
             "src/avo/timeline/migration.py",
             "src/avo/timeline/tracks.py",
             "src/avo/timeline/animation.py",
+            "src/avo/adapters/media/__init__.py",
+            "src/avo/adapters/media/ffprobe.py",
+            "src/avo/adapters/media/sync_materializer.py",
+            "src/avo/adapters/media/audio_tracks.py",
+            "src/avo/adapters/media/video_tracks.py",
+            "src/avo/adapters/media/timeline_render.py",
         )
         for relative_path in expected:
             self.assertTrue((self.root / relative_path).is_file(), msg=relative_path)

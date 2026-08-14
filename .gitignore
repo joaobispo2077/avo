@@ -183,6 +183,9 @@ build/
 #    when a skill is accidentally invoked inside the repo directory.
 # -----------------------------------------------------------------------------
 media/
+# Orchestrator ffmpeg adapters are source, not footage.
+!src/avo/adapters/media/
+!src/avo/adapters/media/*.py
 edit/
 transcripts/
 animations/
