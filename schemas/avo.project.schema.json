@@ -51,6 +51,36 @@
         "plan": { "type": "string", "description": "Qwen tier for planning agent." }
       }
     },
+    "timeline": {
+      "type": "object",
+      "description": "Canonical timeline locations and additive migration policy. Runtime revisions and approvals live in external artifacts, never here.",
+      "additionalProperties": false,
+      "properties": {
+        "directory": { "type": "string", "default": "edit/timeline" },
+        "reviewDirectory": { "type": "string", "default": "edit/review" },
+        "generatedEdlPath": { "type": "string", "default": "edit/edl.json" },
+        "canonicalFirst": { "type": "boolean", "default": true },
+        "artifactPaths": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "cmap": { "type": "string", "default": "cmap.json" },
+            "bmap": { "type": "string", "default": "bmap.json" },
+            "tracks": { "type": "string", "default": "tracks.json" },
+            "animation": { "type": "string", "default": "animation.json" },
+            "syncMap": { "type": "string", "default": "sync-map.json" }
+          }
+        },
+        "migration": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "allowLegacyEdlFallback": { "type": "boolean", "default": true },
+            "warnOnDerivedEdlMismatch": { "type": "boolean", "default": true }
+          }
+        }
+      }
+    },
     "approvalGates": {
       "type": "object",
       "description": "Human approval gates after watch-skill LOOP + transcription analysis. Default: require sign-off at all checkpoints.",

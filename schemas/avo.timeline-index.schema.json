@@ -1,0 +1,161 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://avo.local/avo.timeline-index.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "artifactType",
+    "artifactId",
+    "videoId",
+    "provider",
+    "timelineDomain",
+    "headRevisionId",
+    "approvedRevisionId",
+    "revisionRefs",
+    "eventRefs",
+    "activeState",
+    "updatedAt"
+  ],
+  "properties": {
+    "$schema": {
+      "type": "string"
+    },
+    "schemaVersion": {
+      "const": "1.0.0"
+    },
+    "artifactType": {
+      "enum": [
+        "cmap",
+        "bmap",
+        "tracks",
+        "animation",
+        "sync-map"
+      ]
+    },
+    "artifactId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "videoId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "provider": {
+      "type": "string",
+      "minLength": 1
+    },
+    "timelineDomain": {
+      "enum": [
+        "raw-source",
+        "sync-corrected-source",
+        "cmap-output"
+      ]
+    },
+    "headRevisionId": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "approvedRevisionId": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "revisionRefs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "revisionId",
+          "path",
+          "contentSha256",
+          "createdAt",
+          "parentRevisionId"
+        ],
+        "properties": {
+          "revisionId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "path": {
+            "type": "string",
+            "minLength": 1
+          },
+          "contentSha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "parentRevisionId": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      }
+    },
+    "eventRefs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "eventId",
+          "path",
+          "sha256",
+          "type",
+          "occurredAt"
+        ],
+        "properties": {
+          "eventId": {
+            "type": "string",
+            "minLength": 1
+          },
+          "path": {
+            "type": "string",
+            "minLength": 1
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "type": {
+            "type": "string",
+            "minLength": 1
+          },
+          "occurredAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      }
+    },
+    "activeState": {
+      "enum": [
+        "valid",
+        "stale",
+        "blocked",
+        "superseded"
+      ]
+    },
+    "stateReason": {
+      "type": "string"
+    },
+    "updatedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "extensions": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  }
+}
