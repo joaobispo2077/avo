@@ -813,10 +813,11 @@ only.
 ### ai-jail sandbox (optional)
 
 Running the driving agent inside [ai-jail](https://github.com/akitaonrails/ai-jail)
-is **optional and opt-in** (`--with-jail` at setup). On **Windows it is
-WSL-only** (no native Windows backend). When used, mask `.env` and map the
-external media root read-write. ai-jail does not weaken AVO's own secret
-handling, and AVO must run fully without it.
+is **optional and opt-in** (`--with-jail` at setup). **Linux and macOS run ai-jail
+natively; on Windows use WSL2** (no native Windows sandbox backend). When used,
+mask `.env` and map the external media root read-write. Operator guide:
+[`docs/ai-memory-and-ai-jail.md`](docs/ai-memory-and-ai-jail.md). ai-jail does not
+weaken AVO's own secret handling, and AVO must run fully without it.
 
 ### Engine vs upstream (hybrid model)
 

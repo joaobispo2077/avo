@@ -1,0 +1,246 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://avo.local/contracts/shorts-composition.schema.json",
+  "title": "AVO Shorts Composition Spec",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "version",
+    "batchId",
+    "shortId",
+    "proofRevision",
+    "width",
+    "height",
+    "fps",
+    "durationSec",
+    "assets",
+    "layout",
+    "captions",
+    "providerTokens",
+    "templateVersion",
+    "expectedOutputPath"
+  ],
+  "properties": {
+    "version": {
+      "const": "1.0"
+    },
+    "batchId": {
+      "type": "string"
+    },
+    "shortId": {
+      "type": "string"
+    },
+    "proofRevision": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "width": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "height": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "fps": {
+      "type": "number",
+      "exclusiveMinimum": 0
+    },
+    "durationSec": {
+      "type": "number",
+      "exclusiveMinimum": 0
+    },
+    "assets": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "baseVideo",
+        "dialogueAudio"
+      ],
+      "properties": {
+        "baseVideo": {
+          "$ref": "#/$defs/asset"
+        },
+        "dialogueAudio": {
+          "$ref": "#/$defs/asset"
+        },
+        "insertionVideo": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/asset"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "insertionAudio": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/asset"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "layout": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mode",
+        "captionAnchor",
+        "baseRegion"
+      ],
+      "properties": {
+        "mode": {
+          "enum": [
+            "full-frame",
+            "split"
+          ]
+        },
+        "captionAnchor": {
+          "enum": [
+            "top",
+            "bottom",
+            "center",
+            "seam"
+          ]
+        },
+        "baseRegion": {
+          "$ref": "#/$defs/rect"
+        },
+        "insertionRegion": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/rect"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "paneOrder": {
+          "enum": [
+            "base-first",
+            "insertion-first"
+          ]
+        },
+        "focusPoint": {
+          "$ref": "#/$defs/point"
+        },
+        "safeMargins": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      }
+    },
+    "captions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true
+      }
+    },
+    "providerTokens": {
+      "type": "object",
+      "additionalProperties": true
+    },
+    "templateVersion": {
+      "type": "string"
+    },
+    "expectedTimelineCount": {
+      "const": 1
+    },
+    "expectedOutputPath": {
+      "type": "string"
+    },
+    "provenanceReferences": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "$defs": {
+    "asset": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "hash",
+        "durationSec"
+      ],
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "hash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "durationSec": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "muted": {
+          "type": "boolean"
+        }
+      }
+    },
+    "rect": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "x",
+        "y",
+        "width",
+        "height"
+      ],
+      "properties": {
+        "x": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "y": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "width": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 1
+        },
+        "height": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 1
+        }
+      }
+    },
+    "point": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "x",
+        "y"
+      ],
+      "properties": {
+        "x": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "y": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      }
+    }
+  }
+}

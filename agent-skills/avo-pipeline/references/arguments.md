@@ -75,6 +75,38 @@ identity: anchor
 
 Also accept `--identity anchor`. See embedded-captions `CATALOG.md`.
 
+## Batch Shorts
+
+For `/avo.shorts` batch mode:
+
+```text
+Master: /path/to/approved-master.mp4
+Transcript: /path/to/word-transcript.json   # optional; create before resolve
+Count: 10
+Destination: youtube-shorts
+Language: pt-BR
+Max duration: 60
+Speed: 1.0-1.2
+Layout: full-frame | split
+Caption anchor: top | bottom | center | seam
+```
+
+Optional insertion parameters:
+
+```text
+Insertion: /path/to/gameplay.mkv
+Approved windows: 00:05-00:46.5
+Excluded windows: 00:46.5-end
+Allocation: 30%
+Audio stream: <friendly label or stream selector>
+Support volume: 0.25
+Repeat: finite-repeat
+```
+
+Friendly audio labels must resolve through ffprobe to one concrete stream before
+plan approval. Percentage allocation must resolve to explicit Short IDs before
+proof rendering.
+
 ## Time windows
 
 For `/avo.audit`, scoped trim, `/avo.reframe`, and `/avo.podcast-clip`:
@@ -95,7 +127,7 @@ Also accept `9:30-9:35` or `--from 9:30 --to 9:35`.
 | `--from-master` | shorts | Extract from approved long-form master via reframe |
 | `--max-duration N` | shorts, podcast-clip, trailer | Shorts default 60; trailer default 90; warn/block over N without EDITLOG override |
 | `--vertical` | podcast-clip | Delegate to reframe for 9:16 from long-form master |
-| `--count N` | thumbnail | Frame still count (default ≥3) |
+| `--count N` | thumbnail, shorts | Frame still count for thumbnail; exact derivative count for a Shorts batch |
 | `--preview` | pipeline, trim, motion, chapters, trailer, animation-qc | Stay on proofs / draft-only where applicable |
 | `--early` | rights | Post-trim rights pass for clip-heavy formats (react, news, documentary) |
 | `--only-transcription` | audit | Check transcript/word timing only |

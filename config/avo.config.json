@@ -33,7 +33,7 @@
     "sandbox": {
       "local": "ai-jail",
       "optional": true,
-      "description": "Agent sandbox. Optional; WSL-only on Windows."
+      "description": "Agent sandbox. Optional; Linux/macOS native; WSL2 on Windows."
     },
     "logo": {
       "local": "logo-generator-skill",

@@ -77,6 +77,11 @@ Spoken alias: **`/avo --help`** → `/avo.help`
 | Command | Purpose |
 | ------- | ------- |
 | `/avo.shorts` | Orchestrated YouTube Shorts workflow ([source](../commands/avo/shorts.md)) |
+
+`/avo.shorts` batch mode persists a request and immutable plan, then exposes
+`validate`, `resolve`, `build --stage proof`, `qc`, `status`, and `promote` via
+`python -m avo.shorts`. HyperFrames remains an internal rendering adapter; no
+generated composition should be hand edited.
 | `/avo.reframe` | Vertical clip from long-form master ([source](../commands/avo/reframe.md)) |
 | `/avo.podcast-clip` | Podcast / interview clip extraction ([source](../commands/avo/podcast-clip.md)) |
 | `/avo.trailer` | Teaser / trailer from long-form master ([source](../commands/avo/trailer.md)) |

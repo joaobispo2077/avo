@@ -16,7 +16,7 @@
 #   --lang CODE     faster-whisper transcription language (e.g. pt, en, es).
 #   --model SIZE    Whisper model size to prepare (default: small).
 #   --with-memory   Install ai-memory (optional cross-session memory).
-#   --with-jail     Install ai-jail (optional agent sandbox; WSL-only on Windows).
+#   --with-jail     Install ai-jail (optional; Linux/macOS native; WSL2 on Windows).
 #   --with-logo     Install logo-generator-skill (optional brand assets).
 #   --with-upstream-ref  Sync tools/video-use-upstream/ for maintainer diffs (optional).
 #   --skip TOOL     Skip a step: speckit|engine|watch|hyperframes|remotion (repeatable).
@@ -199,11 +199,26 @@ else
   record ai-memory SKIP "enable with --with-memory"
 fi
 
-# ---- 7. ai-jail (optional; WSL-only on Windows) -----------------------------
+# ---- 7. ai-jail (optional; Linux/macOS native; WSL2 on Windows) --------------
 if [ "$WITH_JAIL" -eq 1 ]; then
   step "ai-jail (optional agent sandbox)"
+  UNAME_S="$(uname -s 2>/dev/null || echo unknown)"
+  if [ "$UNAME_S" = "Linux" ]; then
+    if have bwrap; then
+      record bwrap OK "on PATH ($(command -v bwrap))"
+    else
+      record bwrap WARN "missing — install bubblewrap (e.g. apt install bubblewrap)"
+      info "Ubuntu 24.04+ AppArmor userns: see https://github.com/akitaonrails/ai-jail#ubuntu-2404--debian-13-users"
+    fi
+  elif [ "$UNAME_S" = "Darwin" ]; then
+    info "macOS uses sandbox-exec (system); no bubblewrap required"
+  fi
   if have ai-jail; then
-    record ai-jail OK "already installed ($(command -v ai-jail))"
+    if run ai-jail --version >/dev/null 2>&1; then
+      record ai-jail OK "already installed ($(command -v ai-jail))"
+    else
+      record ai-jail WARN "binary found but ai-jail --version failed"
+    fi
   elif have brew; then
     run brew install akitaonrails/tap/ai-jail && record ai-jail OK "via brew" || record ai-jail WARN "brew install failed — see https://github.com/akitaonrails/ai-jail"
   elif have cargo; then
@@ -214,11 +229,12 @@ if [ "$WITH_JAIL" -eq 1 ]; then
     info "nix detected: install ai-jail via your flake/profile (nix profile install github:akitaonrails/ai-jail)"
     record ai-jail WARN "install via nix manually"
   else
-    record ai-jail WARN "no supported installer (brew/cargo/mise/nix) — see https://github.com/akitaonrails/ai-jail"
+    record ai-jail WARN "no supported installer — try GitHub Releases: https://github.com/akitaonrails/ai-jail/releases"
   fi
   info "Sandbox tips: mask secrets (e.g. --mask .env); map the EXTERNAL media root read-write."
+  info "Operator guide: docs/ai-memory-and-ai-jail.md"
 else
-  record ai-jail SKIP "enable with --with-jail (WSL-only on Windows)"
+  record ai-jail SKIP "enable with --with-jail (optional; Linux/macOS native, WSL2 on Windows)"
 fi
 
 # ---- 8. logo-generator-skill (optional) -------------------------------------

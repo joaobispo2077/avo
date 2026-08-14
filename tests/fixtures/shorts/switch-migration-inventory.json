@@ -1,0 +1,41 @@
+{
+  "version": "1.0",
+  "capturedAt": "2026-08-12",
+  "purpose": "Migration evidence only; these scripts are not reusable production dependencies.",
+  "avoOneOffScripts": [
+    "scripts/apply-anchor-rail-pilots.mjs",
+    "scripts/build-continuous-caption-pilots.mjs",
+    "scripts/clamp-caption-boundaries.mjs",
+    "scripts/finalize-switch-shorts-docs.mjs",
+    "scripts/fix-continuous-caption-pilots.mjs",
+    "scripts/normalize-switch-short-transcripts.mjs",
+    "scripts/qc-switch-shorts.sh",
+    "scripts/revise-switch-short-layouts.mjs"
+  ],
+  "footageProject": {
+    "root": "/mnt/h/bishop/film/brute/dji oslo pocket 3/POV Gameplays/1-GAMEVLOG/ideas/Comparativo Definitivo Nintendo Switch 2 VS OLED VS LITE/edit/shorts/switch-comparison-shorts-proofs",
+    "oneOffScripts": [
+      "scripts/build-shorts.mjs",
+      "scripts/rebuild-nier-inserts.mjs"
+    ],
+    "incompletePlan": {
+      "path": "scripts/shorts-plan.json",
+      "entryCount": 8,
+      "ownedShortIds": ["01", "03", "04", "05", "06", "07", "08", "09"],
+      "manualPrototypeShortIds": ["02", "10"],
+      "canonical": false
+    },
+    "approvedEvidence": {
+      "masters": "delivery/20260810-switch-comparison-short-??-master-v002.mp4",
+      "checksums": "delivery/SHA256SUMS-v002.txt",
+      "deliveryManifest": "DELIVERY-MANIFEST.md",
+      "finalQc": "FINAL-QC.md",
+      "editLog": "ANIMATION-EDITLOG.md",
+      "sourceLog": "ANIMATION-SOURCE-LOG.md",
+      "probeReports": "qc/v002/probe/short-??.json",
+      "transcriptQuality": "qc/v002/transcript-quality.json",
+      "approvedCompositions": "short??/index.html"
+    }
+  },
+  "goldenSourceRule": "Parity is judged against the ten approved v002 masters, compositions, manifests, transcripts, QC evidence, and Watch approval; the incomplete plan and scripts alone are not a golden source."
+}
