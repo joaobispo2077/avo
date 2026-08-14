@@ -26,3 +26,11 @@ npm run test:projects
 
 Provider-specific configs (e.g. `providers/bishop/`) are gitignored and are **never**
 required for AVO core tests.
+
+The private Switch batch regression is opt-in and never embeds personal paths in Git:
+
+```bash
+AVO_SWITCH_COMPARISON_PROJECT=/path/to/switch-project npm run test:projects
+# Optional when exercising encoded insertion rendering:
+AVO_SWITCH_COMPARISON_INSERT=/path/to/gameplay.mkv
+```
