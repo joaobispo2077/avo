@@ -13,9 +13,45 @@ from typing import Any
 from avo.adapters.base import JobRequest, JobResult
 from avo.timeline.ports import ToolError
 
+_BONSAI_OPTION_IDS = frozenset({"bonsai-27b-gguf", "ternary-bonsai-27b-gguf"})
+
 
 def _repository_root() -> Path:
     return Path(__file__).resolve().parents[4]
+
+
+def _require_bonsai_runtime(option_id: str) -> None:
+    """Fail closed when a Bonsai understand pin lacks GGUF, mmproj, or custom vision."""
+    if option_id not in _BONSAI_OPTION_IDS:
+        return
+    gguf = (os.environ.get("AVO_UNDERSTAND_GGUF") or "").strip()
+    if not gguf or not Path(gguf).is_file():
+        raise ToolError(
+            "WATCH_UNAVAILABLE",
+            "Bonsai GGUF is not ready: set AVO_UNDERSTAND_GGUF to an existing file from "
+            "prism-ml/Bonsai-27B-gguf (or the ternary sibling) before Watch review.",
+            True,
+            "download the language GGUF, set AVO_UNDERSTAND_GGUF, then retry",
+        )
+    mmproj = (os.environ.get("AVO_UNDERSTAND_MMPROJ") or "").strip()
+    if not mmproj or not Path(mmproj).is_file():
+        raise ToolError(
+            "WATCH_UNAVAILABLE",
+            "Watch needs the Bonsai vision mmproj alongside the language GGUF.",
+            True,
+            "set AVO_UNDERSTAND_MMPROJ to the vision mmproj path and retry",
+        )
+    custom_url = (os.environ.get("WATCHSKILL_CUSTOM_BASE_URL") or "").strip()
+    cheap = (os.environ.get("WATCHSKILL_VISION_CHEAP_PROVIDER") or "").strip()
+    strong = (os.environ.get("WATCHSKILL_VISION_STRONG_PROVIDER") or "").strip()
+    if not custom_url and cheap != "custom" and strong != "custom":
+        raise ToolError(
+            "WATCH_UNAVAILABLE",
+            "Bonsai understand pin only after llama.cpp custom vision is up "
+            "(WATCHSKILL_CUSTOM_BASE_URL or WATCHSKILL_VISION_*_PROVIDER=custom).",
+            True,
+            "start llama-server with GGUF+mmproj, run watch-skill setup-vision --provider custom, then retry",
+        )
 
 
 def _bundled_executable() -> str | None:
@@ -104,6 +140,16 @@ class WatchSkillAdapter:
         scope = str(request.get("scope") or "full")
         windows = list(request.get("windows") or [])
         self.validate_coverage(scope, windows)
+        # Resolve understand against the AVO repo catalog — never the candidate/tmp root.
+        option_id = request.get("option_id")
+        if option_id is None:
+            try:
+                from avo.models import resolve_option_id
+
+                option_id = resolve_option_id("understand", root=_repository_root())
+            except Exception:
+                option_id = ""
+        _require_bonsai_runtime(str(option_id or ""))
         artifact_dir = Path(
             request.get("artifact_dir")
             or Path(request.get("root") or candidate.parent) / ".avo-watch"
