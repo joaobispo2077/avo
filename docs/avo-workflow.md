@@ -247,10 +247,21 @@ only — it never blocks a run.**
 **Advisory message form (canonical shape the agent should produce):**
 
 > Detected: `<CPU model, N cores>`, `<RAM> GB` RAM, GPU `<name, VRAM>`, `<free>`
-> free on the edit volume. For this hardware I used **`qwen-<x>`** +
+> free on the edit volume. For this hardware I used **`<understand label>`** +
 > **`faster-whisper-<y>`**. A higher-quality option is `<larger tier>` (slower /
 > more VRAM); a lighter option is `<smaller tier>` (faster / lower quality). This
 > is advisory only — say the word to change tiers.
+
+`<understand label>` is the catalog label for the resolved understand option
+(default **Qwen 2.5 7B** / `qwen2.5-7b`; a pinned Bonsai label is valid when
+`models.understand` points at an optional Bonsai GGUF id). Keep the
+`faster-whisper-<y>` / Qwen examples for the default case.
+
+When mentioning Bonsai, lead with capacity: **Bonsai 27B 1-bit ~4–8 GB VRAM
+(≈ Qwen3.6-27B ~54 GB FP16)**; **ternary ~7–12 GB VRAM (≈ same Qwen3.6-27B
+~54 GB FP16)**. Do not call Bonsai “a 7B” or “a rename of Qwen 2.5 32B”. Load
+path (llama-server + `setup-vision --provider custom`) and the full table: see
+[`docs/model-transparency.md`](model-transparency.md).
 
 ---
 
