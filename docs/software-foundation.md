@@ -86,10 +86,19 @@ See [versioning.md](./versioning.md).
 
 | Tool | Entry |
 | ---- | ----- |
-| All agents | `AGENTS.md` |
+| All agents | `AGENTS.md` (canonical) |
 | Claude | `CLAUDE.md` → `@AGENTS.md` |
-| Cursor | `.cursor/rules/*.mdc` |
+| Cursor | `AGENTS.md`; optional local `.cursor/rules/*.mdc` (**dev-only**, gitignored — not on fresh public clones) |
 | Copilot | `.github/copilot-instructions.md`, `.github/instructions/*.md` |
+| Codex | `AGENTS.md` (no project `.codex/` rules tree) |
+| OpenCode | `AGENTS.md` (`.opencode/` is local SpecKit/dev tooling when present) |
+| Gemini | `GEMINI.md` → follow `AGENTS.md` |
+
+**Ship vs local:** Product install (`skills.json` / `npx skills add`) ships
+`avo`, `avo-pipeline`, and `avo-provider` only. Cursor foundation MDCs and
+on-demand `design-pattern-selection` / `architecture-selection` skill mirrors
+under `.cursor/` / `.claude/` / `.agents/` are **development tooling** — not
+AVO product deliverables.
 
 ---
 
