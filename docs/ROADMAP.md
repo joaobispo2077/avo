@@ -71,6 +71,7 @@ Use [Sponsor](../README.md#sponsor) to help prioritize.
 | BL-015 | Concurrent workstreams | Multiple videos per provider via external `rawDir` | docs + `avo.videos` _(shipped)_ |
 | BL-016 | LUT library | `.cube` import/apply + NLE export notes | `/avo.luts` |
 | BL-017 | NLE export pack | JSON EDL → CMX EDL → FCP XML 1.3 interchange | `/avo.exports` |
+| BL-018 | avo.cloud (weak-hardware path) | Optional remote AVO when below local model floor; cloud MCP auth last; never blocks local | remote runtime + cloud `avo.mcp` |
 
 **Locale (`/avo.locale`):** design stub only — [`locale-stub.md`](../specs/backlog/locale-stub.md). **Do not implement** until BL-003–005 engine jobs ship.
 

@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "avo": {
+      "command": "uv",
+      "args": ["run", "--frozen", "python", "-m", "avo.mcp"],
+      "env": {
+        "PYTHONPATH": "src"
+      }
+    }
+  }
+}
