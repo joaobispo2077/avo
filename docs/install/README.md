@@ -168,7 +168,9 @@ Tier 1 curl-only install (no clone): ask your agent to re-run the [Tier 1 one-li
 AVO orchestrates independent local tools. This section is the **toolchain setup contract**
 (full ffmpeg, whisper, watch-skill, HyperFrames).
 
-`AGENTS.md` is canonical; do not contradict it. Pipeline detail: [`docs/avo-workflow.md`](../avo-workflow.md).
+`AGENTS.md` is canonical; do not contradict it. Gemini CLI also loads root
+[`GEMINI.md`](../../GEMINI.md) (thin pointer at `AGENTS.md`). Pipeline detail:
+[`docs/avo-workflow.md`](../avo-workflow.md).
 
 > Historical context: AVO started as a fork of `browser-use/video-use` and grew
 > into an orchestrator over video-use, watch-skill, HyperFrames, Remotion, GitHub Spec Kit,
