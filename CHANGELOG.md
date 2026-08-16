@@ -1,3 +1,10 @@
+# [1.7.0](https://github.com/joaobispo2077/avo/compare/v1.6.0...v1.7.0) (2026-08-16)
+
+
+### Features
+
+* **mcp:** add local avo.mcp stdio server and CLI bridge ([4db81ad](https://github.com/joaobispo2077/avo/commit/4db81ad2fd686531fc27f082710fb904b29ff073))
+
 # [1.6.0](https://github.com/joaobispo2077/avo/compare/v1.5.0...v1.6.0) (2026-08-14)
 
 
