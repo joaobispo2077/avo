@@ -12,8 +12,22 @@
 Talk to your AI agent. Drop raw footage in a folder. Mass-produce high-quality videos
 **local-first**, scoped to your channel, repeatable at scale.
 
-[Quickstart](#quickstart) · [Install](#install) · [Use cases](#use-cases) · [Workflow](#how-it-works) · [Docs](#documentation) · [Sponsor](#sponsor)  
-[Why not editor MCP](#why-not-a-native-video-editing-mcp) · [Privacy](#privacy-stats--telemetry) · [ROADMAP](#roadmap) · [AGENTS.md](AGENTS.md)
+<table width="100%">
+  <tr>
+    <td align="center" width="20%"><a href="#quickstart">Quickstart</a></td>
+    <td align="center" width="20%"><a href="#install">Install</a></td>
+    <td align="center" width="20%"><a href="#minimum-requirements-100-local">Min requirements</a></td>
+    <td align="center" width="20%"><a href="#use-cases">Use cases</a></td>
+    <td align="center" width="20%"><a href="#documentation">Docs</a></td>
+  </tr>
+  <tr>
+    <td align="center"><a href="#how-it-works">Workflow</a></td>
+    <td align="center"><a href="#why-not-a-native-video-editing-mcp">Why not editor MCP</a></td>
+    <td align="center"><a href="docs/avo-mcp.md">avo.mcp</a></td>
+    <td align="center"><a href="#privacy-stats--telemetry">Privacy</a></td>
+    <td align="center"><a href="#roadmap">ROADMAP</a></td>
+  </tr>
+</table>
 
 ---
 
@@ -35,6 +49,47 @@ Talk to your AI agent. Drop raw footage in a folder. Mass-produce high-quality v
   new video for that provider starts smarter.
 - **Cleans up after itself.** When the master is approved, scratch files go away.
   You keep the raw file, transcripts, and final master; nothing else.
+
+---
+
+## Minimum requirements (100% local)
+
+To run AVO **fully on your machine** today (no cloud transcription / no paid
+understand API), use the catalog’s **weakest working** local tiers. Figures come
+from [`config/avo.model-catalog.json`](config/avo.model-catalog.json); details in
+[`docs/model-transparency.md`](docs/model-transparency.md). Advisory only —
+heavier tiers raise quality and VRAM.
+
+### Weakest working model stack
+
+| Job | Weakest working option | Approx. VRAM | Approx. RAM | Approx. disk (weights) |
+| --- | --- | ---: | ---: | ---: |
+| **Transcribe** | `faster-whisper` **`base`** | ~1 GB | ~4 GB | ~150 MB |
+| **Understand** (watch-skill / THE LOOP) | **Qwen 2.5 1.5B** (`qwen2.5-1.5b`) | ~4 GB | ~8 GB | ~3 GB |
+| **Understand** (optional Bonsai path) | **Bonsai 27B 1-bit** (`bonsai-27b-gguf`) | ~8 GB | ~16 GB | ~5 GB |
+
+- **Default** setup often picks `faster-whisper/small` + `qwen2.5-7b` (heavier).
+  For the floor above, pin lighter tiers via setup / `.avo/state.json` /
+  `python -m avo.models_cli` (see model transparency docs).
+- **Bonsai** is not a smaller Qwen 2.5 — it is compressed **Qwen3.6-27B** quality
+  in an ~8 GB Watch VRAM band. Needs llama.cpp + `mmproj` + watch-skill custom
+  vision provider ([docs](docs/model-transparency.md#optional-understand-bonsai-27b-gguf)).
+- If Whisper and Watch share one GPU, budget for the **larger** of the two (or
+  run Whisper on CPU). Concurrent peaks can need more than the single-job row.
+
+### Machine floor (practical)
+
+| Resource | Minimum for the weakest stack above |
+| --- | --- |
+| **GPU** | ~**4 GB** VRAM (Qwen 1.5B path) · ~**8 GB** VRAM (Bonsai 1-bit path) · or CPU-only Whisper + very patient LLM |
+| **System RAM** | ~**8 GB** (Qwen 1.5B) · ~**16 GB** recommended if using Bonsai |
+| **Disk** | Models (~4–8 GB for the light stack) **plus** free space for footage / `edit/` proofs |
+| **Software** | Node ≥ 18 · Python ≥ 3.10 · ffmpeg · optional `avo[mcp]` for local MCP (no account) |
+
+Weak hardware that cannot hold even this floor may later use optional
+**[avo.cloud](specs/backlog/avo-cloud.md)** ([ROADMAP](#roadmap) **BL-018**) —
+that path never blocks local skills, CLI, or `avo.mcp`. Help prioritize it via
+[Sponsor](#sponsor).
 
 ---
 
@@ -517,6 +572,10 @@ best tool for each step.
 
 For the full decision record, see [`docs/why-not-editor-mcp.md`](docs/why-not-editor-mcp.md).
 
+Optional **orchestrator** MCP (`avo.mcp`) is different: local stdio tools over the
+existing CLI — additive to skills and `avo` CLI, not an editor timeline MCP. Install
+and harness templates: [`docs/avo-mcp.md`](docs/avo-mcp.md).
+
 ---
 
 ## Tool routing: who owns which job
@@ -702,7 +761,7 @@ source files are never touched.
 
 Full index: [`docs/README.md`](docs/README.md)
 
-**Essentials:** [Install](docs/install/README.md) · [Workflow](docs/avo-workflow.md) · [Providers](docs/providers.md) · [Commands](docs/avo-commands.md) · [Privacy](SECURITY.md#privacy--telemetry)
+**Essentials:** [Install](docs/install/README.md) · [Workflow](docs/avo-workflow.md) · [Providers](docs/providers.md) · [Commands](docs/avo-commands.md) · [avo.mcp](docs/avo-mcp.md) · [Privacy](SECURITY.md#privacy--telemetry)
 
 Canonical agent rules: [`AGENTS.md`](AGENTS.md)
 
@@ -744,6 +803,7 @@ or see [Sponsor](#sponsor) to help prioritize.
 - **BL-013** [Multicam metadata](specs/backlog/multicam-metadata.md): register CAM1/CAM2/CAM3 so your agent stops re-explaining angle files every session.
 - **BL-014** [Agent cost transparency](specs/backlog/costs-transparency.md): local token/USD estimates and a learning curve so you can budget agent spend.
 - **BL-015** [Concurrent workstreams](specs/backlog/concurrent-workstreams.md): run multiple videos per channel in parallel — separate `rawDir` per project.
+- **BL-018** [avo.cloud (weak-hardware path)](specs/backlog/avo-cloud.md): optional remote AVO for machines below the [local floor](#minimum-requirements-100-local); cloud MCP auth last. Never blocks local skills, CLI, or `avo.mcp`.
 
 ### NLE escape hatch
 

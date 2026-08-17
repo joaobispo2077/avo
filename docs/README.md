@@ -38,6 +38,9 @@ Write for the **correct audience by file** — not by mixing tones in one file.
   `edit/` layout including `preview/` and `review/`.
 - [`templates/review/approval-gate-manifest.md`](templates/review/approval-gate-manifest.md)
   — checklist template agents copy per approval gate.
+- [`avo-mcp.md`](avo-mcp.md) — local `avo.mcp` install (`avo[mcp]`), stdio run,
+  harness wiring overview, coexistence with skills/CLI, health/capabilities smoke.
+  Additive orchestrator adapter — not editor MCP; cloud/Docker not required.
 - [`why-not-editor-mcp.md`](why-not-editor-mcp.md) — decision record: native
   editor MCPs (e.g. CapCut) vs AVO orchestration; for agents, not README copy.
 - [`use-cases.md`](use-cases.md) — redirect to [README use cases](../README.md#use-cases) (all prompts in one place).

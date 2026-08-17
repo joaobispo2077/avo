@@ -80,6 +80,13 @@ class SoftwareFoundationTests(unittest.TestCase):
         self.assertIn("design-pattern-selection", text)
         self.assertIn("SemVer", text)
 
+    def test_gemini_md_points_at_agents(self) -> None:
+        path = ROOT / "GEMINI.md"
+        self.assertTrue(path.is_file(), msg="GEMINI.md")
+        text = path.read_text(encoding="utf-8")
+        self.assertIn("AGENTS.md", text)
+        self.assertRegex(text, r"(?i)canonical")
+
 
 if __name__ == "__main__":
     unittest.main()
