@@ -60,9 +60,8 @@ def group_into_phrases(
             raw = (w.get("text") or "").strip()
             if not raw:
                 continue
-            if t == "audio_event":
-                if not raw.startswith("("):
-                    raw = f"({raw})"
+            if t == "audio_event" and not raw.startswith("("):
+                raw = f"({raw})"
             text_parts.append(raw)
         if not text_parts:
             current_words = []
@@ -70,14 +69,23 @@ def group_into_phrases(
             current_speaker = None
             return
         text = " ".join(text_parts)
-        text = text.replace(" ,", ",").replace(" .", ".").replace(" ?", "?").replace(" !", "!")
-        end_time = current_words[-1].get("end", current_words[-1].get("start", current_start or 0.0))
-        phrases.append({
-            "start": current_start,
-            "end": end_time,
-            "text": text,
-            "speaker_id": current_speaker,
-        })
+        text = (
+            text.replace(" ,", ",")
+            .replace(" .", ".")
+            .replace(" ?", "?")
+            .replace(" !", "!")
+        )
+        end_time = current_words[-1].get(
+            "end", current_words[-1].get("start", current_start or 0.0)
+        )
+        phrases.append(
+            {
+                "start": current_start,
+                "end": end_time,
+                "text": text,
+                "speaker_id": current_speaker,
+            }
+        )
         current_words = []
         current_start = None
         current_speaker = None
@@ -104,7 +112,11 @@ def group_into_phrases(
         speaker = w.get("speaker_id")
 
         # Flush on speaker change
-        if current_speaker is not None and speaker is not None and speaker != current_speaker:
+        if (
+            current_speaker is not None
+            and speaker is not None
+            and speaker != current_speaker
+        ):
             flush()
 
         # Flush on a long gap from the previous kept token
@@ -121,7 +133,9 @@ def group_into_phrases(
     return phrases
 
 
-def pack_one_file(json_path: Path, silence_threshold: float) -> tuple[str, float, list[dict]]:
+def pack_one_file(
+    json_path: Path, silence_threshold: float
+) -> tuple[str, float, list[dict]]:
     """Return (header_name, duration, phrases) for one transcript file."""
     data = json.loads(json_path.read_text(encoding="utf-8"))
     words = data.get("words", [])
@@ -133,15 +147,21 @@ def pack_one_file(json_path: Path, silence_threshold: float) -> tuple[str, float
     return json_path.stem, duration, phrases
 
 
-def render_markdown(entries: list[tuple[str, float, list[dict]]], silence_threshold: float) -> str:
+def render_markdown(
+    entries: list[tuple[str, float, list[dict]]], silence_threshold: float
+) -> str:
     lines: list[str] = []
     lines.append("# Packed transcripts")
     lines.append("")
-    lines.append(f"Phrase-level, grouped on silences ≥ {silence_threshold:.1f}s or speaker change.")
+    lines.append(
+        f"Phrase-level, grouped on silences ≥ {silence_threshold:.1f}s or speaker change."
+    )
     lines.append("Use `[start-end]` ranges to address cuts in the EDL.")
     lines.append("")
     for name, duration, phrases in entries:
-        lines.append(f"## {name}  (duration: {format_duration(duration)}, {len(phrases)} phrases)")
+        lines.append(
+            f"## {name}  (duration: {format_duration(duration)}, {len(phrases)} phrases)"
+        )
         if not phrases:
             lines.append("  _no speech detected_")
             lines.append("")
@@ -151,19 +171,27 @@ def render_markdown(entries: list[tuple[str, float, list[dict]]], silence_thresh
             if spk is not None:
                 # Normalize IDs such as "speaker_0" when diarization is available.
                 spk_str = str(spk)
-                if spk_str.startswith("speaker_"):
-                    spk_str = spk_str[len("speaker_"):]
+                spk_str = spk_str.removeprefix("speaker_")
                 spk_tag = f" S{spk_str}"
             else:
                 spk_tag = ""
-            lines.append(f"  [{format_time(p['start'])}-{format_time(p['end'])}]{spk_tag} {p['text']}")
+            lines.append(
+                f"  [{format_time(p['start'])}-{format_time(p['end'])}]{spk_tag} {p['text']}"
+            )
         lines.append("")
     return "\n".join(lines)
 
 
 def main() -> None:
-    ap = argparse.ArgumentParser(description="Pack word-timed transcripts into takes_packed.md")
-    ap.add_argument("--edit-dir", type=Path, required=True, help="Edit directory containing transcripts/")
+    ap = argparse.ArgumentParser(
+        description="Pack word-timed transcripts into takes_packed.md"
+    )
+    ap.add_argument(
+        "--edit-dir",
+        type=Path,
+        required=True,
+        help="Edit directory containing transcripts/",
+    )
     ap.add_argument(
         "--silence-threshold",
         type=float,
@@ -171,7 +199,8 @@ def main() -> None:
         help="Break phrases on silences >= this (seconds). Default 0.5.",
     )
     ap.add_argument(
-        "-o", "--output",
+        "-o",
+        "--output",
         type=Path,
         default=None,
         help="Output path (default: <edit-dir>/takes_packed.md)",

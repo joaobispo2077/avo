@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import argparse
-from copy import deepcopy
-from datetime import datetime, timezone
 import hashlib
 import json
+from collections.abc import Callable
+from copy import deepcopy
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 from uuid import uuid4
 
 from .contracts import content_hash, file_fingerprint, validate_document
@@ -61,8 +62,12 @@ def _expected_answers(manifest: dict[str, Any]) -> dict[str, Any]:
             if normalized not in windows:
                 windows.append(normalized)
     return {
-        "whatChanged": str(change_summary.get("headline") or "candidate bytes and exact canonical dependency snapshot"),
-        "whereWhy": windows or [{"scope": "full-program", "reason": "checkpoint review"}],
+        "whatChanged": str(
+            change_summary.get("headline")
+            or "candidate bytes and exact canonical dependency snapshot"
+        ),
+        "whereWhy": windows
+        or [{"scope": "full-program", "reason": "checkpoint review"}],
         "staleDependencies": sorted(stale),
         "evidenceStatuses": dict(sorted(evidence_statuses.items())),
         "candidateSha256": manifest["candidate"]["sha256"],
@@ -72,22 +77,24 @@ def _expected_answers(manifest: dict[str, Any]) -> dict[str, Any]:
 
 
 def _questions(package_id: str) -> str:
-    return "\n".join([
-        f"# Review comprehension questionnaire: {package_id}",
-        "",
-        "Read approval-gate.md. Do not inspect scoring.json. Answer JSON fields:",
-        "",
-        "- whatChanged: what changed in this candidate?",
-        "- whereWhy: where did it change and why? Copy the shown windows/reasons, or full-program scope.",
-        "- staleDependencies: list every stale evidence/dependency kind.",
-        "- evidenceStatuses: map every evidence kind to its status.",
-        "- candidateSha256: exact candidate SHA-256.",
-        "- dependencyLockSha256: exact dependency-lock SHA-256.",
-        "- checkpoint: exact approval checkpoint.",
-        "",
-        "Complete within 120 seconds of begin.",
-        "",
-    ])
+    return "\n".join(
+        [
+            f"# Review comprehension questionnaire: {package_id}",
+            "",
+            "Read approval-gate.md. Do not inspect scoring.json. Answer JSON fields:",
+            "",
+            "- whatChanged: what changed in this candidate?",
+            "- whereWhy: where did it change and why? Copy the shown windows/reasons, or full-program scope.",
+            "- staleDependencies: list every stale evidence/dependency kind.",
+            "- evidenceStatuses: map every evidence kind to its status.",
+            "- candidateSha256: exact candidate SHA-256.",
+            "- dependencyLockSha256: exact dependency-lock SHA-256.",
+            "- checkpoint: exact approval checkpoint.",
+            "",
+            "Complete within 120 seconds of begin.",
+            "",
+        ]
+    )
 
 
 def prepare_study(
@@ -98,7 +105,9 @@ def prepare_study(
     clock: Callable[[], str] = now_iso,
 ) -> dict[str, Any]:
     if len(review_paths) != REQUIRED_REVIEWERS:
-        raise ValueError(f"SC-003 requires exactly {REQUIRED_REVIEWERS} representative packages")
+        raise ValueError(
+            f"SC-003 requires exactly {REQUIRED_REVIEWERS} representative packages"
+        )
     resolved = [Path(path).resolve() for path in review_paths]
     if len(set(resolved)) != REQUIRED_REVIEWERS:
         raise ValueError("study review packages must be unique")
@@ -115,32 +124,41 @@ def prepare_study(
         if manifest["state"] not in {"ai-passed", "needs-human-judgment"}:
             raise ValueError(f"review package is not human-reviewable: {source}")
         if not manifest.get("changeSummary"):
-            raise ValueError(f"review package lacks structured change summary: {source}")
+            raise ValueError(
+                f"review package lacks structured change summary: {source}"
+            )
         package_id = f"package-{index:02d}"
         package_dir = root / "packages" / package_id
-        review_json, approval_gate = write_review_package(package_dir, deepcopy(manifest))
+        review_json, approval_gate = write_review_package(
+            package_dir, deepcopy(manifest)
+        )
         if approval_gate is None:
             raise ValueError(f"approval package could not be generated: {source}")
         questions = package_dir / "questions.md"
         questions.write_text(_questions(package_id), encoding="utf-8")
         answers_template = package_dir / "answers-template.json"
-        atomic_write_json(answers_template, {
-            "whatChanged": "",
-            "whereWhy": [],
-            "staleDependencies": [],
-            "evidenceStatuses": {},
-            "candidateSha256": "",
-            "dependencyLockSha256": "",
-            "checkpoint": "",
-        })
-        packages.append({
-            "packageId": package_id,
-            "reviewPath": review_json.relative_to(root).as_posix(),
-            "approvalGatePath": approval_gate.relative_to(root).as_posix(),
-            "questionsPath": questions.relative_to(root).as_posix(),
-            "answersTemplatePath": answers_template.relative_to(root).as_posix(),
-            "sourceReviewSha256": file_fingerprint(source)["sha256"],
-        })
+        atomic_write_json(
+            answers_template,
+            {
+                "whatChanged": "",
+                "whereWhy": [],
+                "staleDependencies": [],
+                "evidenceStatuses": {},
+                "candidateSha256": "",
+                "dependencyLockSha256": "",
+                "checkpoint": "",
+            },
+        )
+        packages.append(
+            {
+                "packageId": package_id,
+                "reviewPath": review_json.relative_to(root).as_posix(),
+                "approvalGatePath": approval_gate.relative_to(root).as_posix(),
+                "questionsPath": questions.relative_to(root).as_posix(),
+                "answersTemplatePath": answers_template.relative_to(root).as_posix(),
+                "sourceReviewSha256": file_fingerprint(source)["sha256"],
+            }
+        )
         expected = _expected_answers(manifest)
         scoring["packages"][package_id] = {
             field: content_hash(value) for field, value in expected.items()
@@ -194,9 +212,16 @@ def begin_session(
     }
     study["sessions"].append(session)
     atomic_write_json(path, study)
-    package = next(item for item in study["packages"] if item["packageId"] == package_id)
+    package = next(
+        item for item in study["packages"] if item["packageId"] == package_id
+    )
     resolved_package = dict(package)
-    for key in ("reviewPath", "approvalGatePath", "questionsPath", "answersTemplatePath"):
+    for key in (
+        "reviewPath",
+        "approvalGatePath",
+        "questionsPath",
+        "answersTemplatePath",
+    ):
         resolved_package[key] = str((path.parent / package[key]).resolve())
     return {**session, **resolved_package, "studyPath": str(path.resolve())}
 
@@ -217,13 +242,17 @@ def complete_session(
 ) -> dict[str, Any]:
     path = Path(study_path)
     study = _load_json(path)
-    session = next((item for item in study["sessions"] if item["sessionId"] == session_id), None)
+    session = next(
+        (item for item in study["sessions"] if item["sessionId"] == session_id), None
+    )
     if session is None:
         raise ValueError(f"unknown session: {session_id}")
     if session["completedAt"] is not None:
         raise ValueError("session is already complete")
     completed_at = clock()
-    elapsed = (_parse_time(completed_at) - _parse_time(session["startedAt"])).total_seconds()
+    elapsed = (
+        _parse_time(completed_at) - _parse_time(session["startedAt"])
+    ).total_seconds()
     if elapsed < 0:
         raise ValueError("completion time precedes session start")
     scoring = _load_json(path.parent / "scoring.json")
@@ -233,17 +262,21 @@ def complete_session(
         for field in ANSWER_FIELDS
     }
     passed = elapsed <= float(study["maxSeconds"]) and all(correctness.values())
-    session.update({
-        "completedAt": completed_at,
-        "elapsedSeconds": elapsed,
-        "answersCorrect": correctness,
-        "passed": passed,
-    })
+    session.update(
+        {
+            "completedAt": completed_at,
+            "elapsedSeconds": elapsed,
+            "answersCorrect": correctness,
+            "passed": passed,
+        }
+    )
     completed = [item for item in study["sessions"] if item["completedAt"] is not None]
     passed_count = sum(bool(item["passed"]) for item in completed)
     study["summary"] = {"completed": len(completed), "passed": passed_count}
     if len(completed) >= int(study["requiredReviewers"]):
-        study["state"] = "passed" if passed_count >= int(study["passThreshold"]) else "failed"
+        study["state"] = (
+            "passed" if passed_count >= int(study["passThreshold"]) else "failed"
+        )
     atomic_write_json(path, study)
     return {
         "sessionId": session_id,
@@ -267,7 +300,10 @@ def study_status(study_path: Path) -> dict[str, Any]:
         "availablePackages": [
             item["packageId"]
             for item in study["packages"]
-            if not any(session["packageId"] == item["packageId"] for session in study["sessions"])
+            if not any(
+                session["packageId"] == item["packageId"]
+                for session in study["sessions"]
+            )
         ],
     }
 
@@ -298,11 +334,15 @@ def main(argv: list[str] | None = None) -> int:
         result = prepare_study(args.output, args.review, actor=args.actor)
     elif args.command == "begin":
         result = begin_session(
-            args.study, reviewer_token=args.reviewer_token, package_id=args.package_id,
+            args.study,
+            reviewer_token=args.reviewer_token,
+            package_id=args.package_id,
         )
     elif args.command == "complete":
         result = complete_session(
-            args.study, session_id=args.session_id, answers=_load_json(args.answers),
+            args.study,
+            session_id=args.session_id,
+            answers=_load_json(args.answers),
         )
     else:
         result = study_status(args.study)

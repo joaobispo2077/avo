@@ -17,14 +17,18 @@ from avo.models import (
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="AVO model catalog — show active models and alternatives")
+    parser = argparse.ArgumentParser(
+        description="AVO model catalog — show active models and alternatives"
+    )
     sub = parser.add_subparsers(dest="cmd", required=True)
 
     p_show = sub.add_parser("show", help="Show active models for all jobs")
     p_show.add_argument("--root", type=Path, default=None)
     p_show.add_argument("--json", action="store_true")
 
-    p_alt = sub.add_parser("alternatives", help="List lighter/heavier options for one job")
+    p_alt = sub.add_parser(
+        "alternatives", help="List lighter/heavier options for one job"
+    )
     p_alt.add_argument("job", choices=["transcribe", "understand", "plan"])
     p_alt.add_argument("--label", default="local", choices=["local", "paid"])
     p_alt.add_argument("--root", type=Path, default=None)
@@ -62,11 +66,15 @@ def main(argv: list[str] | None = None) -> int:
             if alt.lighter:
                 print("Lighter:")
                 for o in alt.lighter:
-                    print(f"  - {o.get('label')} ({o.get('speed')}, {o.get('quality')})")
+                    print(
+                        f"  - {o.get('label')} ({o.get('speed')}, {o.get('quality')})"
+                    )
             if alt.heavier:
                 print("Heavier:")
                 for o in alt.heavier:
-                    print(f"  - {o.get('label')} ({o.get('speed')}, {o.get('quality')})")
+                    print(
+                        f"  - {o.get('label')} ({o.get('speed')}, {o.get('quality')})"
+                    )
         return 0
 
     if args.cmd == "disclosure":

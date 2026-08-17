@@ -13,10 +13,10 @@ import math
 import os
 import tempfile
 import time
+from collections.abc import Iterable
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
-from typing import Any, Iterable
-
+from typing import Any
 
 DEFAULT_MODEL = "small"
 ENGINE = "faster-whisper"
@@ -39,13 +39,17 @@ def validate_model_name(model: str) -> str:
 
 
 def default_model_root() -> Path:
-    configured = os.environ.get("AVO_MODEL_DIR") or os.environ.get("VIDEO_USE_MODEL_DIR")
+    configured = os.environ.get("AVO_MODEL_DIR") or os.environ.get(
+        "VIDEO_USE_MODEL_DIR"
+    )
     if configured:
         return Path(configured).expanduser().resolve()
     return (Path.home() / ".cache" / "video-use" / "models").resolve()
 
 
-def resolve_model_dir(model: str = DEFAULT_MODEL, model_dir: Path | None = None) -> Path:
+def resolve_model_dir(
+    model: str = DEFAULT_MODEL, model_dir: Path | None = None
+) -> Path:
     model = validate_model_name(model)
     if model_dir is not None:
         return model_dir.expanduser().resolve()
@@ -103,7 +107,11 @@ def inspect_cache(
     except (OSError, json.JSONDecodeError):
         return "invalid"
 
-    if not isinstance(payload, dict) or "source" not in payload or "engine" not in payload:
+    if (
+        not isinstance(payload, dict)
+        or "source" not in payload
+        or "engine" not in payload
+    ):
         return "legacy"
     expected = (
         payload.get("schema_version") == SCHEMA_VERSION
@@ -219,9 +227,7 @@ def validate_transcript_payload(payload: dict[str, Any]) -> None:
             )
         probability = word.get("probability")
         if probability is not None and not 0 <= probability <= 1:
-            raise ValueError(
-                "transcript word probability must be between 0 and 1"
-            )
+            raise ValueError("transcript word probability must be between 0 and 1")
         previous_start = float(start)
 
 
@@ -305,7 +311,9 @@ class LocalTranscriber:
                 self.engine_version,
             )
         except Exception as exc:
-            raise RuntimeError(f"local PT-BR transcription failed for {video.name}: {exc}") from exc
+            raise RuntimeError(
+                f"local PT-BR transcription failed for {video.name}: {exc}"
+            ) from exc
 
 
 def transcribe_one(
@@ -363,9 +371,7 @@ class PTBRArgumentParser(argparse.ArgumentParser):
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = PTBRArgumentParser(
-        description="Transcribe one video locally in PT-BR"
-    )
+    parser = PTBRArgumentParser(description="Transcribe one video locally in PT-BR")
     parser.add_argument("video", type=Path, help="Path to the PT-BR source video")
     parser.add_argument("--edit-dir", type=Path, default=None)
     parser.add_argument("--model", default=DEFAULT_MODEL)
@@ -407,6 +413,7 @@ def transcript_review_evidence(
 ) -> dict[str, Any]:
     """Bind semantic transcript analysis to the exact rendered candidate."""
     from avo.timeline.contracts import file_fingerprint
+
     fingerprint = file_fingerprint(transcript_path)
     return {
         "evidenceId": f"transcript-{fingerprint['sha256'][:12]}",

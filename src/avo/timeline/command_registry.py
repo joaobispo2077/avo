@@ -101,7 +101,9 @@ def authorize(
             f"{name} ({spec.mode}) cannot mutate canonical artifact {mutation}"
         )
     if writes_evidence and spec.mode not in {"Evidence", "Owns"}:
-        raise CommandPermissionError(f"{name} ({spec.mode}) cannot write review evidence")
+        raise CommandPermissionError(
+            f"{name} ({spec.mode}) cannot write review evidence"
+        )
     if spec.mode == "Profile":
         if target_scope != "child" or not parent_timeline_ref:
             raise CommandPermissionError(

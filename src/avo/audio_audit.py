@@ -8,11 +8,13 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from avo import audio_analysis
-from avo import audio_eq
-from avo import audio_gain
-from avo import audio_restoration
-from avo import loudness_profiles
+from avo import (
+    audio_analysis,
+    audio_eq,
+    audio_gain,
+    audio_restoration,
+    loudness_profiles,
+)
 
 STRICT_LU_TOLERANCE = 2.0
 
@@ -67,7 +69,9 @@ def build_audit_report(
 
     measurement = loudness_profiles.measure_loudness(media, profile)
     if measurement is None:
-        warnings.append("Loudness measurement failed — ffmpeg ebur128 unavailable or silent input")
+        warnings.append(
+            "Loudness measurement failed — ffmpeg ebur128 unavailable or silent input"
+        )
     else:
         loudness_section = loudness_profiles.compare_measurement(measurement, profile)
         integrated = loudness_section.get("integrated_lufs")
@@ -110,11 +114,17 @@ def build_audit_report(
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("media", type=Path, help="Video or audio file to audit")
-    parser.add_argument("--project", type=Path, help="avo.project.json for loudness profile resolution")
-    parser.add_argument("--edl", type=Path, help="edl.json for loudness and segment overrides")
+    parser.add_argument(
+        "--project", type=Path, help="avo.project.json for loudness profile resolution"
+    )
+    parser.add_argument(
+        "--edl", type=Path, help="edl.json for loudness and segment overrides"
+    )
     parser.add_argument("--transcript", type=Path, help="Word-timed transcript JSON")
     parser.add_argument("--out-dir", type=Path, help="Output directory (default: cwd)")
-    parser.add_argument("--loudness-preset", dest="loudness_preset", help="Override loudness preset id")
+    parser.add_argument(
+        "--loudness-preset", dest="loudness_preset", help="Override loudness preset id"
+    )
     parser.add_argument(
         "--strict",
         action="store_true",
@@ -151,9 +161,12 @@ def main(argv: list[str] | None = None) -> int:
         loudness = report["loudness"]
         integrated = loudness.get("integrated_lufs")
         target = loudness.get("target_integrated_lufs")
-        if integrated is not None and target is not None:
-            if abs(float(integrated) - float(target)) >= STRICT_LU_TOLERANCE:
-                return 2
+        if (
+            integrated is not None
+            and target is not None
+            and (abs(float(integrated) - float(target)) >= STRICT_LU_TOLERANCE)
+        ):
+            return 2
     return 0
 
 

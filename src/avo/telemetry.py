@@ -42,7 +42,7 @@ def human_bytes(num: float) -> str:
 def human_duration(seconds: float | None) -> str:
     if seconds is None:
         return "unknown"
-    seconds = int(round(seconds))
+    seconds = round(seconds)
     if seconds < 60:
         return f"{seconds}s"
     minutes, sec = divmod(seconds, 60)
@@ -159,7 +159,9 @@ class Telemetry:
             try:
                 from avo.models import resolve_active_models
 
-                active_models = resolve_active_models(project=project, video_key=video_key)
+                active_models = resolve_active_models(
+                    project=project, video_key=video_key
+                )
             except Exception:
                 active_models = {}
         if active_models:
@@ -177,7 +179,9 @@ class Telemetry:
             pct = f" {percent:.0f}%" if percent is not None else ""
             models_note = ""
             if active_models:
-                models_note = " | models " + ", ".join(f"{k}={v}" for k, v in active_models.items())
+                models_note = " | models " + ", ".join(
+                    f"{k}={v}" for k, v in active_models.items()
+                )
             line = (
                 f"{phase_label}{pct} {phase} | "
                 f"+{human_bytes(created_bytes)} step | "
@@ -208,7 +212,9 @@ class Telemetry:
             "usedBytes": int(used_bytes),
             "freedBytes": int(freed_bytes),
             "netBytes": net,
-            "preservedBytes": int(preserved_bytes) if preserved_bytes is not None else None,
+            "preservedBytes": int(preserved_bytes)
+            if preserved_bytes is not None
+            else None,
             "ts": avo_state.now_iso(),
         }
 
@@ -246,7 +252,9 @@ class Telemetry:
         record = {
             "event": "cleanup",
             "freedBytes": int(freed_bytes),
-            "preservedBytes": int(preserved_bytes) if preserved_bytes is not None else None,
+            "preservedBytes": int(preserved_bytes)
+            if preserved_bytes is not None
+            else None,
             "ts": avo_state.now_iso(),
         }
 
@@ -273,6 +281,7 @@ class Telemetry:
 
 # ---- module-level convenience ----------------------------------------------
 
+
 def report(phase: str, **kwargs: Any) -> dict[str, Any]:
     return Telemetry().report(phase, **kwargs)
 
@@ -292,27 +301,38 @@ def build_parser() -> argparse.ArgumentParser:
     p_rep = sub.add_parser("report", help="Report a phase boundary.")
     p_rep.add_argument("--phase", required=True)
     p_rep.add_argument("--created-bytes", type=int, default=0)
-    p_rep.add_argument("--created-path", default="",
-                       help="Measure created bytes as the size of this path (overrides --created-bytes).")
+    p_rep.add_argument(
+        "--created-path",
+        default="",
+        help="Measure created bytes as the size of this path (overrides --created-bytes).",
+    )
     p_rep.add_argument("--index", type=int, default=None)
     p_rep.add_argument("--total", type=int, default=None)
     p_rep.add_argument("--volume", default="")
     p_rep.add_argument("--note", default="")
-    p_rep.add_argument("--session-id", default="", help="Optional session id for phases.jsonl log.")
+    p_rep.add_argument(
+        "--session-id", default="", help="Optional session id for phases.jsonl log."
+    )
 
     p_ld = sub.add_parser("learndown", help="Report post-render space used vs freed.")
     p_ld.add_argument("--used", type=int, default=0)
     p_ld.add_argument("--freed", type=int, default=0)
     p_ld.add_argument("--preserved", type=int, default=None)
-    p_ld.add_argument("--preserved-path", default="",
-                      help="Measure preserved bytes as the size of this path.")
+    p_ld.add_argument(
+        "--preserved-path",
+        default="",
+        help="Measure preserved bytes as the size of this path.",
+    )
     p_ld.add_argument("--note", default="")
 
     p_cl = sub.add_parser("cleanup", help="Report post-cleanup freed/preserved bytes.")
     p_cl.add_argument("--freed", type=int, default=0)
     p_cl.add_argument("--preserved", type=int, default=None)
-    p_cl.add_argument("--preserved-path", default="",
-                      help="Measure preserved bytes as the size of this path.")
+    p_cl.add_argument(
+        "--preserved-path",
+        default="",
+        help="Measure preserved bytes as the size of this path.",
+    )
     p_cl.add_argument("--note", default="")
     return parser
 

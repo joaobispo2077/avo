@@ -3,6 +3,7 @@
 Docs discovery (FR-13) is folded into ``avo_list_capabilities`` via a docs
 pointer — no separate ``avo_docs`` tool in phase-1 (per plan open question #3).
 """
+
 from __future__ import annotations
 
 from typing import Any

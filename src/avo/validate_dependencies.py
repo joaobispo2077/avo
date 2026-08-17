@@ -7,7 +7,6 @@ Whisper models are never downloaded here.
 
 from __future__ import annotations
 
-from avo.paths import repo_root, config_path
 import argparse
 import json
 import shutil
@@ -19,6 +18,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from avo.paths import config_path, repo_root
+
 
 @dataclass
 class CheckResult:
@@ -27,14 +28,16 @@ class CheckResult:
     note: str
 
 
-
-
 def load_json(path: Path) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
 def load_manifest(root: Path) -> dict[str, Any]:
-    path = config_path("avo.dependencies.json") if root.resolve() == repo_root().resolve() else _config_at(root, "avo.dependencies.json")
+    path = (
+        config_path("avo.dependencies.json")
+        if root.resolve() == repo_root().resolve()
+        else _config_at(root, "avo.dependencies.json")
+    )
     if not path.is_file():
         raise FileNotFoundError(f"missing dependency manifest: {path}")
     data = load_json(path)
@@ -54,7 +57,11 @@ def _config_at(root: Path, name: str) -> Path:
 
 
 def load_routing(root: Path) -> dict[str, Any]:
-    path = config_path("avo.config.json") if root.resolve() == repo_root().resolve() else _config_at(root, "avo.config.json")
+    path = (
+        config_path("avo.config.json")
+        if root.resolve() == repo_root().resolve()
+        else _config_at(root, "avo.config.json")
+    )
     if not path.is_file():
         raise FileNotFoundError(f"missing routing config: {path}")
     return load_json(path)
@@ -89,7 +96,9 @@ def iter_canonical_tools(
     return canonical, warnings
 
 
-def routing_covers_manifest(routing: dict[str, Any], manifest: dict[str, Any]) -> list[str]:
+def routing_covers_manifest(
+    routing: dict[str, Any], manifest: dict[str, Any]
+) -> list[str]:
     """Return manifest tools whose job id is absent from avo.config.json jobs."""
     jobs = routing.get("jobs") or {}
     missing: list[str] = []
@@ -126,9 +135,7 @@ def check_python_project(root: Path, tool_id: str, spec: dict[str, Any]) -> Chec
     return CheckResult(tool_id, "OK", f"{manifest} + engine modules present")
 
 
-def check_system_binary(
-    tool_id: str, spec: dict[str, Any], *, ci: bool
-) -> CheckResult:
+def check_system_binary(tool_id: str, spec: dict[str, Any], *, ci: bool) -> CheckResult:
     binaries = spec.get("binaries") or []
     missing = [b for b in binaries if shutil.which(b) is None]
     if not missing:
@@ -203,13 +210,13 @@ def check_npm_package(root: Path, tool_id: str, spec: dict[str, Any]) -> CheckRe
     return CheckResult(tool_id, "OK", f"{name} declared in package.json")
 
 
-def check_documentation_only(root: Path, tool_id: str, spec: dict[str, Any]) -> CheckResult:
+def check_documentation_only(
+    root: Path, tool_id: str, spec: dict[str, Any]
+) -> CheckResult:
     doc = spec.get("doc")
     if doc and (root / doc).is_file():
         return CheckResult(tool_id, "OK", doc)
     return CheckResult(tool_id, "SKIP", "per-project install documented elsewhere")
-
-
 
 
 def _probe_ai_memory_server() -> bool:
@@ -250,7 +257,9 @@ def check_ai_memory_optional(
     if on_path and server_up:
         return CheckResult(tool_id, "OK", "ai-memory on PATH; server reachable")
     if on_path:
-        return CheckResult(tool_id, "WARN", f"ai-memory on PATH; server not detected ({doc})")
+        return CheckResult(
+            tool_id, "WARN", f"ai-memory on PATH; server not detected ({doc})"
+        )
     if base.status == "OK" and server_up:
         return CheckResult(tool_id, "OK", f"{base.note}; server reachable")
     if base.status == "OK":
@@ -283,6 +292,7 @@ def check_ai_jail_optional(
             line = out.splitlines()[-1] if out else "verified in WSL"
             return CheckResult(tool_id, "OK", f"ai-jail in WSL ({line})")
     return check_git_clone(root, tool_id, spec, ci=ci)
+
 
 def check_external_binary_or_clone(
     root: Path, tool_id: str, spec: dict[str, Any], *, ci: bool
@@ -365,8 +375,12 @@ def print_report(results: list[CheckResult]) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="AVO Gate 1 — orchestrator prerequisites")
-    parser.add_argument("--ci", action="store_true", help="CI mode: lighter checks, shallow clone")
+    parser = argparse.ArgumentParser(
+        description="AVO Gate 1 — orchestrator prerequisites"
+    )
+    parser.add_argument(
+        "--ci", action="store_true", help="CI mode: lighter checks, shallow clone"
+    )
     parser.add_argument(
         "--include-optional",
         action="store_true",

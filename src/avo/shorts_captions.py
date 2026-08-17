@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import html
 import re
+from collections.abc import Iterable, Mapping
 from copy import deepcopy
-from typing import Any, Iterable, Mapping
+from typing import Any
 
 
 class CaptionError(ValueError):
@@ -20,7 +21,9 @@ def normalize_pt_br(text: str) -> str:
 
 
 def _matches(words: list[dict[str, Any]], index: int, match: list[str]) -> bool:
-    actual = [str(word["text"]).casefold() for word in words[index:index + len(match)]]
+    actual = [
+        str(word["text"]).casefold() for word in words[index : index + len(match)]
+    ]
     return actual == [token.casefold() for token in match]
 
 
@@ -34,12 +37,16 @@ def _replacement_words(
     step = (end - start) / len(replacement)
     result = []
     for index, text in enumerate(replacement):
-        result.append({
-            **deepcopy(originals[min(index, len(originals) - 1)]),
-            "text": text,
-            "start": start + index * step,
-            "end": end if index == len(replacement) - 1 else start + (index + 1) * step,
-        })
+        result.append(
+            {
+                **deepcopy(originals[min(index, len(originals) - 1)]),
+                "text": text,
+                "start": start + index * step,
+                "end": end
+                if index == len(replacement) - 1
+                else start + (index + 1) * step,
+            }
+        )
     return result
 
 
@@ -73,26 +80,34 @@ def apply_corrections(
             if not _matches(result, index, match):
                 index += 1
                 continue
-            originals = result[index:index + len(match)]
-            new_words = [] if operation == "omit" else _replacement_words(originals, replacement)
-            result[index:index + len(match)] = new_words
-            audit.append({
-                "correctionIndex": correction_index,
-                "operation": operation,
-                "match": match,
-                "replacement": replacement,
-                "reason": correction["reason"],
-                "candidateId": candidate_id,
-            })
+            originals = result[index : index + len(match)]
+            new_words = (
+                []
+                if operation == "omit"
+                else _replacement_words(originals, replacement)
+            )
+            result[index : index + len(match)] = new_words
+            audit.append(
+                {
+                    "correctionIndex": correction_index,
+                    "operation": operation,
+                    "match": match,
+                    "replacement": replacement,
+                    "reason": correction["reason"],
+                    "candidateId": candidate_id,
+                }
+            )
             index += max(1, len(new_words))
             applied = True
         if not applied:
-            audit.append({
-                "correctionIndex": correction_index,
-                "operation": operation,
-                "status": "not-matched",
-                "candidateId": candidate_id,
-            })
+            audit.append(
+                {
+                    "correctionIndex": correction_index,
+                    "operation": operation,
+                    "status": "not-matched",
+                    "candidateId": candidate_id,
+                }
+            )
     return result, audit
 
 
@@ -112,12 +127,14 @@ def map_to_edited_time(
             continue
         start = max(source_start, float(word["start"]))
         end = min(source_end, float(word["end"]))
-        mapped.append({
-            **deepcopy(dict(word)),
-            "text": normalize_pt_br(str(word["text"])),
-            "start": max(0.0, min(duration, (start - source_start) / speed)),
-            "end": max(0.0, min(duration, (end - source_start) / speed)),
-        })
+        mapped.append(
+            {
+                **deepcopy(dict(word)),
+                "text": normalize_pt_br(str(word["text"])),
+                "start": max(0.0, min(duration, (start - source_start) / speed)),
+                "end": max(0.0, min(duration, (end - source_start) / speed)),
+            }
+        )
     return mapped
 
 
@@ -165,8 +182,10 @@ def group_words(
 
 def _rects_overlap(a: Mapping[str, float], b: Mapping[str, float]) -> bool:
     return not (
-        a["x"] + a["width"] <= b["x"] or b["x"] + b["width"] <= a["x"]
-        or a["y"] + a["height"] <= b["y"] or b["y"] + b["height"] <= a["y"]
+        a["x"] + a["width"] <= b["x"]
+        or b["x"] + b["width"] <= a["x"]
+        or a["y"] + a["height"] <= b["y"]
+        or b["y"] + b["height"] <= a["y"]
     )
 
 
@@ -180,18 +199,22 @@ def validate_anchor(
     if anchor == "seam" and layout_mode != "split":
         raise CaptionError("seam anchor requires split layout")
     zones = {
-        "top": {"x": .05, "y": .08, "width": .9, "height": .2},
-        "center": {"x": .05, "y": .4, "width": .9, "height": .2},
-        "bottom": {"x": .05, "y": .72, "width": .9, "height": .2},
-        "seam": {"x": .05, "y": .42, "width": .9, "height": .16},
+        "top": {"x": 0.05, "y": 0.08, "width": 0.9, "height": 0.2},
+        "center": {"x": 0.05, "y": 0.4, "width": 0.9, "height": 0.2},
+        "bottom": {"x": 0.05, "y": 0.72, "width": 0.9, "height": 0.2},
+        "seam": {"x": 0.05, "y": 0.42, "width": 0.9, "height": 0.16},
     }
     if anchor not in zones:
         raise CaptionError(f"unknown caption anchor: {anchor}")
-    if not reviewed_override and any(_rects_overlap(zones[anchor], region) for region in protected_regions):
+    if not reviewed_override and any(
+        _rects_overlap(zones[anchor], region) for region in protected_regions
+    ):
         raise CaptionError(f"{anchor} caption rail overlaps a protected region")
 
 
-def _apply_punch_selection(group: list[dict[str, Any]], policy: Mapping[str, Any]) -> None:
+def _apply_punch_selection(
+    group: list[dict[str, Any]], policy: Mapping[str, Any]
+) -> None:
     highlight = policy.get("highlight") or {}
     if highlight.get("punchSelection") != "last-content-word":
         return
@@ -217,9 +240,16 @@ def build_phrases(
     for phrase_index, group in enumerate(groups):
         group = [dict(word) for word in group]
         _apply_punch_selection(group, policy)
-        next_start = float(groups[phrase_index + 1][0]["start"]) if phrase_index + 1 < len(groups) else duration
+        next_start = (
+            float(groups[phrase_index + 1][0]["start"])
+            if phrase_index + 1 < len(groups)
+            else duration
+        )
         natural_end = min(duration, float(group[-1]["end"]) + tail)
-        end = min(natural_end, max(float(group[0]["start"]) + minimum_hold, next_start - epsilon))
+        end = min(
+            natural_end,
+            max(float(group[0]["start"]) + minimum_hold, next_start - epsilon),
+        )
         autofixes: list[str] = []
         if end < natural_end - 1e-9:
             if timing["autofixPolicy"] == "fail":
@@ -230,25 +260,33 @@ def build_phrases(
         for word_index, word in enumerate(group):
             word_start = max(phrase_start, float(word["start"]))
             word_end = min(end, float(word["end"]))
-            following = float(group[word_index + 1]["start"]) if word_index + 1 < len(group) else end
+            following = (
+                float(group[word_index + 1]["start"])
+                if word_index + 1 < len(group)
+                else end
+            )
             highlight_exit = min(word_end, max(word_start, following - epsilon), end)
-            caption_words.append({
-                "id": f"p{phrase_index + 1}-w{word_index + 1}",
-                "text": html.escape(str(word["text"]), quote=True),
-                "startSec": round(word_start, 6),
-                "endSec": round(max(word_start, word_end), 6),
-                "punch": bool(word.get("punch", False)),
-                "highlightEnterSec": round(word_start, 6),
-                "highlightExitSec": round(highlight_exit, 6),
-            })
-        phrases.append({
-            "id": f"phrase-{phrase_index + 1}",
-            "startSec": round(phrase_start, 6),
-            "endSec": round(end, 6),
-            "renderedText": " ".join(str(word["text"]) for word in group),
-            "words": caption_words,
-            "autofixes": autofixes,
-        })
+            caption_words.append(
+                {
+                    "id": f"p{phrase_index + 1}-w{word_index + 1}",
+                    "text": html.escape(str(word["text"]), quote=True),
+                    "startSec": round(word_start, 6),
+                    "endSec": round(max(word_start, word_end), 6),
+                    "punch": bool(word.get("punch", False)),
+                    "highlightEnterSec": round(word_start, 6),
+                    "highlightExitSec": round(highlight_exit, 6),
+                }
+            )
+        phrases.append(
+            {
+                "id": f"phrase-{phrase_index + 1}",
+                "startSec": round(phrase_start, 6),
+                "endSec": round(end, 6),
+                "renderedText": " ".join(str(word["text"]) for word in group),
+                "words": caption_words,
+                "autofixes": autofixes,
+            }
+        )
     return phrases
 
 
@@ -258,7 +296,11 @@ def active_word_at(phrases: Iterable[Mapping[str, Any]], at_sec: float) -> str |
         if not float(phrase["startSec"]) <= at_sec < float(phrase["endSec"]):
             continue
         for word in phrase["words"]:
-            if float(word["highlightEnterSec"]) <= at_sec < float(word["highlightExitSec"]):
+            if (
+                float(word["highlightEnterSec"])
+                <= at_sec
+                < float(word["highlightExitSec"])
+            ):
                 return str(word["id"])
         return None
     return None
@@ -275,7 +317,9 @@ def plan_captions(
     speed: float,
     duration: float,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    corrected, audit = apply_corrections(source_words, corrections, candidate_id=candidate_id)
+    corrected, audit = apply_corrections(
+        source_words, corrections, candidate_id=candidate_id
+    )
     mapped = map_to_edited_time(
         corrected,
         source_start=source_start,

@@ -87,7 +87,9 @@ def transition(
     if target in SIDE_STATES:
         return target
     if current in SIDE_STATES:
-        raise LifecycleError("side-state recovery requires an explicit resume transition")
+        raise LifecycleError(
+            "side-state recovery requires an explicit resume transition"
+        )
     try:
         expected = MAIN_SEQUENCE[MAIN_SEQUENCE.index(current) + 1]
     except (ValueError, IndexError) as exc:
@@ -97,7 +99,9 @@ def transition(
             f"invalid transition {current.value} -> {target.value}; expected {expected.value}"
         )
     if target == PipelineState.SYNC_READY and not facts.sync_ready:
-        raise LifecycleError("sync-ready requires resolved or not-applicable sync evidence")
+        raise LifecycleError(
+            "sync-ready requires resolved or not-applicable sync evidence"
+        )
     if target == PipelineState.BMAP_DRAFT:
         if not facts.cmap_approved:
             raise LifecycleError("bmap-draft requires the latest approved CMap")
@@ -123,19 +127,33 @@ class PipelineRunStore:
 
     def __init__(self, path, *, clock=None):
         from pathlib import Path
+
         from .store import now_iso
+
         self.path = Path(path)
         self.clock = clock or now_iso
 
     def _validate(self, document):
         from .contracts import ContractError, validate_document
+
         try:
             validate_document(document, "avo.pipeline-run.schema.json")
         except ContractError as exc:
             raise LifecycleError(f"invalid pipeline run: {exc}") from exc
 
-    def initialize(self, *, run_id, video_id, provider, project_path, command="pipeline", mode="Owns", parent_timeline_ref=None):
+    def initialize(
+        self,
+        *,
+        run_id,
+        video_id,
+        provider,
+        project_path,
+        command="pipeline",
+        mode="Owns",
+        parent_timeline_ref=None,
+    ):
         from .store import atomic_write_json
+
         if self.path.exists():
             return self.load()
         timestamp = self.clock()
@@ -143,11 +161,19 @@ class PipelineRunStore:
         if parent_timeline_ref is not None:
             origin["parentTimelineRef"] = parent_timeline_ref
         document = {
-            "schemaVersion": "1.0.0", "runId": run_id, "videoId": video_id,
-            "provider": provider, "projectPath": str(project_path),
-            "mainState": PipelineState.INTAKE.value, "sideState": None,
-            "activeRefs": {}, "blockers": [], "transitionHistory": [],
-            "origin": origin, "createdAt": timestamp, "updatedAt": timestamp,
+            "schemaVersion": "1.0.0",
+            "runId": run_id,
+            "videoId": video_id,
+            "provider": provider,
+            "projectPath": str(project_path),
+            "mainState": PipelineState.INTAKE.value,
+            "sideState": None,
+            "activeRefs": {},
+            "blockers": [],
+            "transitionHistory": [],
+            "origin": origin,
+            "createdAt": timestamp,
+            "updatedAt": timestamp,
         }
         self._validate(document)
         atomic_write_json(self.path, document)
@@ -155,17 +181,24 @@ class PipelineRunStore:
 
     def load(self):
         import json
+
         try:
             document = json.loads(self.path.read_text(encoding="utf-8"))
         except (OSError, ValueError) as exc:
-            raise LifecycleError(f"cannot load pipeline run {self.path}: {exc}") from exc
+            raise LifecycleError(
+                f"cannot load pipeline run {self.path}: {exc}"
+            ) from exc
         self._validate(document)
         return document
 
     def _write(self, document, *, expected_updated_at=None):
         from .store import atomic_write_json
+
         current = self.load()
-        if expected_updated_at is not None and current["updatedAt"] != expected_updated_at:
+        if (
+            expected_updated_at is not None
+            and current["updatedAt"] != expected_updated_at
+        ):
             raise LifecycleError("pipeline compare-and-swap failed")
         self._validate(document)
         atomic_write_json(self.path, document)
@@ -175,20 +208,35 @@ class PipelineRunStore:
         timestamp = self.clock()
         return {
             "eventId": f"transition-{len(current['transitionHistory']) + 1:04d}",
-            "occurredAt": timestamp, "actor": actor,
-            "fromMainState": current["mainState"], "toMainState": to_main,
-            "fromSideState": current["sideState"], "toSideState": to_side,
+            "occurredAt": timestamp,
+            "actor": actor,
+            "fromMainState": current["mainState"],
+            "toMainState": to_main,
+            "fromSideState": current["sideState"],
+            "toSideState": to_side,
             "reason": reason,
         }
 
-    def advance(self, target, facts, *, actor, reason, expected_updated_at=None, active_refs=None):
+    def advance(
+        self,
+        target,
+        facts,
+        *,
+        actor,
+        reason,
+        expected_updated_at=None,
+        active_refs=None,
+    ):
         from copy import deepcopy
+
         current = self.load()
         if current["sideState"] is not None:
             raise LifecycleError("side-state recovery requires explicit resume")
         next_state = transition(current["mainState"], target, facts)
         updated = deepcopy(current)
-        history = self._history(current, actor=actor, reason=reason, to_main=next_state.value, to_side=None)
+        history = self._history(
+            current, actor=actor, reason=reason, to_main=next_state.value, to_side=None
+        )
         updated["mainState"] = next_state.value
         updated["transitionHistory"].append(history)
         updated["updatedAt"] = history["occurredAt"]
@@ -196,8 +244,11 @@ class PipelineRunStore:
             updated["activeRefs"] = active_refs
         return self._write(updated, expected_updated_at=expected_updated_at)
 
-    def enter_side_state(self, state, *, actor, reason, blockers=None, expected_updated_at=None):
+    def enter_side_state(
+        self, state, *, actor, reason, blockers=None, expected_updated_at=None
+    ):
         from copy import deepcopy
+
         state = PipelineState(state)
         if state not in SIDE_STATES:
             raise LifecycleError(f"not a side state: {state.value}")
@@ -205,7 +256,13 @@ class PipelineRunStore:
         if current["sideState"] is not None:
             raise LifecycleError("pipeline already has an active side state")
         updated = deepcopy(current)
-        history = self._history(current, actor=actor, reason=reason, to_main=current["mainState"], to_side=state.value)
+        history = self._history(
+            current,
+            actor=actor,
+            reason=reason,
+            to_main=current["mainState"],
+            to_side=state.value,
+        )
         updated["sideState"] = state.value
         updated["blockers"] = list(blockers or [])
         updated["transitionHistory"].append(history)
@@ -214,13 +271,20 @@ class PipelineRunStore:
 
     def resume(self, *, actor, reason, recovery_event, expected_updated_at=None):
         from copy import deepcopy
+
         current = self.load()
         if current["sideState"] is None:
             raise LifecycleError("pipeline is not in a recoverable side state")
         if not recovery_event:
             raise LifecycleError("resume requires an explicit recovery event")
         updated = deepcopy(current)
-        history = self._history(current, actor=actor, reason=reason, to_main=current["mainState"], to_side=None)
+        history = self._history(
+            current,
+            actor=actor,
+            reason=reason,
+            to_main=current["mainState"],
+            to_side=None,
+        )
         updated["sideState"] = None
         updated["blockers"] = []
         updated["transitionHistory"].append(history)

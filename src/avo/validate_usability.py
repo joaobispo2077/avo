@@ -7,7 +7,6 @@ setup dry-run contract, and core helper imports — not external clone presence
 
 from __future__ import annotations
 
-from avo.paths import repo_root, config_path
 import argparse
 import json
 import os
@@ -16,7 +15,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-
+from avo.paths import config_path, repo_root
 
 
 def load_json(path: Path) -> dict[str, Any]:
@@ -34,7 +33,11 @@ def _config_at(root: Path, name: str) -> Path:
 
 
 def check_avo_config(root: Path) -> tuple[str, str]:
-    path = config_path("avo.config.json") if root.resolve() == repo_root().resolve() else _config_at(root, "avo.config.json")
+    path = (
+        config_path("avo.config.json")
+        if root.resolve() == repo_root().resolve()
+        else _config_at(root, "avo.config.json")
+    )
     if not path.is_file():
         return "FAIL", "avo.config.json missing"
     data = load_json(path)
@@ -64,14 +67,19 @@ def check_provider_scaffold(root: Path) -> tuple[str, str]:
         jsonschema.validate(load_json(template), schema_data)
     except ImportError:
         return "WARN", "jsonschema not installed; skipped provider schema validation"
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         return "FAIL", f"provider schema validation failed: {exc}"
     return "OK", "_template provider scaffold present"
 
 
-def _run_python_module(root: Path, module: str, *args: str) -> subprocess.CompletedProcess[str]:
+def _run_python_module(
+    root: Path, module: str, *args: str
+) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
-        [sys.executable, "-m", module, *args], cwd=root, capture_output=True, text=True,
+        [sys.executable, "-m", module, *args],
+        cwd=root,
+        capture_output=True,
+        text=True,
         env={**os.environ, "PYTHONPATH": str(root / "src")},
     )
 
@@ -84,6 +92,7 @@ def check_python_flows(root: Path) -> tuple[str, str]:
             detail = (proc.stderr or proc.stdout or "module help failed").strip()
             return "FAIL", f"{module} --help: {detail[:400]}"
     return "OK", "setup validation + provider/project scaffolds use Python flows"
+
 
 def check_update_command(root: Path) -> tuple[str, str]:
     """Shipped /avo.update command + engine module for end-user agent refresh."""
@@ -132,7 +141,9 @@ def run_checks(root: Path, *, ci: bool) -> list[tuple[str, str, str]]:
     if ci:
         deps_manifest = _config_at(root, "avo.dependencies.json")
         if not deps_manifest.is_file():
-            checks.append(("avo.dependencies", ("FAIL", "avo.dependencies.json missing")))
+            checks.append(
+                ("avo.dependencies", ("FAIL", "avo.dependencies.json missing"))
+            )
         else:
             checks.append(("avo.dependencies", ("OK", "manifest present")))
     return [(name, status, note) for name, (status, note) in checks]

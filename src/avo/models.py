@@ -61,7 +61,9 @@ def _option_index(options: list[dict[str, Any]], option_id: str) -> int:
     return -1
 
 
-def catalog_option(catalog: dict[str, Any], job_key: str, option_id: str) -> dict[str, Any] | None:
+def catalog_option(
+    catalog: dict[str, Any], job_key: str, option_id: str
+) -> dict[str, Any] | None:
     job_spec = (catalog.get("jobs") or {}).get(job_key)
     if not job_spec:
         return None
@@ -127,7 +129,9 @@ def resolve_option_id(
             return str(project_model)
         if video_key and video_transcription.get("model"):
             return str(video_transcription["model"])
-        state_model = (state.get("transcription") or {}).get("model") or state_models.get("transcribe")
+        state_model = (state.get("transcription") or {}).get(
+            "model"
+        ) or state_models.get("transcribe")
         if state_model and not video_key:
             return str(state_model)
         if hardware_tier and hardware_tier.get("whisper"):
@@ -148,7 +152,9 @@ def resolve_option_id(
             if llm.startswith("cloud/"):
                 return str(configured or default_id)
             return llm
-        override = models_cfg.get("default") if isinstance(models_cfg, dict) else configured
+        override = (
+            models_cfg.get("default") if isinstance(models_cfg, dict) else configured
+        )
         return str(override or default_id)
 
     return str(configured or default_id)

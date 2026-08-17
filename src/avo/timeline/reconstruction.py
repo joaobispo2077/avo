@@ -33,8 +33,11 @@ def _raw_sources(raw_dir: Path) -> list[Path]:
         return sorted(path for path in raw_root.rglob("*") if path.is_file())
     excluded = {"avo.project.json", "EDITLOG.md", "SOURCE-LOG.md"}
     return sorted(
-        path for path in raw_dir.iterdir()
-        if path.is_file() and path.name not in excluded and not path.name.startswith(".")
+        path
+        for path in raw_dir.iterdir()
+        if path.is_file()
+        and path.name not in excluded
+        and not path.name.startswith(".")
     )
 
 
@@ -45,7 +48,9 @@ def build_reconstruction_bundle(
     actor: str,
 ) -> dict[str, Any]:
     raw_dir = workspace.raw_dir.resolve()
-    master_candidates = sorted((raw_dir / "edit" / "masters").glob(f"{master_basename}.*"))
+    master_candidates = sorted(
+        (raw_dir / "edit" / "masters").glob(f"{master_basename}.*")
+    )
     master_candidates = [path for path in master_candidates if path.is_file()]
     if not master_candidates:
         raise ReconstructionError("final master is missing")
@@ -67,9 +72,21 @@ def build_reconstruction_bundle(
         canonical.append(index_entry)
         graph_files.append(index_entry)
         for ref in index["revisionRefs"]:
-            graph_files.append(_entry(raw_dir, workspace.timeline_dir / ref["path"], f"{artifact_type}-revision"))
+            graph_files.append(
+                _entry(
+                    raw_dir,
+                    workspace.timeline_dir / ref["path"],
+                    f"{artifact_type}-revision",
+                )
+            )
         for ref in index["eventRefs"]:
-            graph_files.append(_entry(raw_dir, workspace.timeline_dir / ref["path"], f"{artifact_type}-event"))
+            graph_files.append(
+                _entry(
+                    raw_dir,
+                    workspace.timeline_dir / ref["path"],
+                    f"{artifact_type}-event",
+                )
+            )
 
     for optional in (
         workspace.timeline_dir / "pipeline-run.json",
@@ -88,7 +105,9 @@ def build_reconstruction_bundle(
             review_entries.append(_entry(raw_dir, path, "review-projection"))
     graph_files.extend(review_entries)
 
-    raw_entries = [_entry(raw_dir, path, "raw-source") for path in _raw_sources(raw_dir)]
+    raw_entries = [
+        _entry(raw_dir, path, "raw-source") for path in _raw_sources(raw_dir)
+    ]
     if not raw_entries:
         raise ReconstructionError("raw source inventory is empty")
     master_entry = _entry(raw_dir, master, "final-master")
@@ -115,16 +134,24 @@ def build_reconstruction_bundle(
     return body
 
 
-def verify_reconstruction_bundle(raw_dir: Path, bundle_path: Path | None = None) -> dict[str, Any]:
+def verify_reconstruction_bundle(
+    raw_dir: Path, bundle_path: Path | None = None
+) -> dict[str, Any]:
     raw_dir = Path(raw_dir).resolve()
-    bundle_path = Path(bundle_path or raw_dir / "edit" / "timeline" / "reconstruction-bundle.json")
+    bundle_path = Path(
+        bundle_path or raw_dir / "edit" / "timeline" / "reconstruction-bundle.json"
+    )
     try:
         bundle = json.loads(bundle_path.read_text(encoding="utf-8"))
     except (OSError, ValueError) as error:
-        raise ReconstructionError(f"cannot load reconstruction bundle: {error}") from error
+        raise ReconstructionError(
+            f"cannot load reconstruction bundle: {error}"
+        ) from error
     validate_document(bundle, "avo.reconstruction-bundle.schema.json")
     expected = bundle["bundleSha256"]
-    actual = content_hash({key: value for key, value in bundle.items() if key != "bundleSha256"})
+    actual = content_hash(
+        {key: value for key, value in bundle.items() if key != "bundleSha256"}
+    )
     if expected != actual:
         raise ReconstructionError("reconstruction bundle hash mismatch")
     for entry in bundle["files"]:
@@ -132,10 +159,19 @@ def verify_reconstruction_bundle(raw_dir: Path, bundle_path: Path | None = None)
         if not path.is_file():
             raise ReconstructionError(f"reconstruction file missing: {entry['path']}")
         current = file_fingerprint(path)
-        if current["sha256"] != entry["sha256"] or current["sizeBytes"] != entry["sizeBytes"]:
+        if (
+            current["sha256"] != entry["sha256"]
+            or current["sizeBytes"] != entry["sizeBytes"]
+        ):
             raise ReconstructionError(f"reconstruction file changed: {entry['path']}")
     master = raw_dir / bundle["master"]["path"]
-    transcript = json.loads((raw_dir / bundle["finalTranscript"]["path"]).read_text(encoding="utf-8"))
-    if (transcript.get("source") or {}).get("sha256") != file_fingerprint(master)["sha256"]:
-        raise ReconstructionError("reconstruction final transcript/master binding is stale")
+    transcript = json.loads(
+        (raw_dir / bundle["finalTranscript"]["path"]).read_text(encoding="utf-8")
+    )
+    if (transcript.get("source") or {}).get("sha256") != file_fingerprint(master)[
+        "sha256"
+    ]:
+        raise ReconstructionError(
+            "reconstruction final transcript/master binding is stale"
+        )
     return bundle

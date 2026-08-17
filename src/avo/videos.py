@@ -7,7 +7,7 @@ import json
 import sys
 from pathlib import Path
 
-from avo import avo_state, init_project, video_context, video_registry
+from avo import avo_state, video_context, video_registry
 
 
 def _cmd_list(args: argparse.Namespace) -> int:
@@ -52,7 +52,9 @@ def _cmd_show(args: argparse.Namespace) -> int:
     print(f"rawDir   : {entry['rawDir']}")
     if entry.get("title"):
         print(f"title    : {entry['title']}")
-    project_path = Path(str(entry["rawDir"])) / str(entry.get("projectFile") or "avo.project.json")
+    project_path = Path(str(entry["rawDir"])) / str(
+        entry.get("projectFile") or "avo.project.json"
+    )
     if project_path.is_file():
         print(f"project  : {project_path} (exists)")
     else:
@@ -103,7 +105,9 @@ def _cmd_reindex(args: argparse.Namespace) -> int:
 
 def _cmd_context_set(args: argparse.Namespace) -> int:
     try:
-        ctx = video_context.resolve_context(provider=args.provider, video_id=args.video_id)
+        ctx = video_context.resolve_context(
+            provider=args.provider, video_id=args.video_id
+        )
     except (FileNotFoundError, video_registry.VideoRegistryError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
@@ -128,7 +132,9 @@ def _cmd_context_show(args: argparse.Namespace) -> int:
         sys.stdout.write(json.dumps(active or {}, indent=2, ensure_ascii=False) + "\n")
         return 0
     if not active:
-        print("No active context (concurrency mode). Use: videos context set --provider X --video-id Y")
+        print(
+            "No active context (concurrency mode). Use: videos context set --provider X --video-id Y"
+        )
         return 0
     print(f"mode     : {active.get('mode', 'concurrency')}")
     print(f"provider : {active.get('provider')}")
@@ -147,8 +153,12 @@ def _cmd_context_clear(args: argparse.Namespace) -> int:
 
 def _cmd_lock_acquire(args: argparse.Namespace) -> int:
     try:
-        ctx = video_context.resolve_context(provider=args.provider, video_id=args.video_id)
-        path = video_context.acquire_lock(ctx, force=args.force, session_id=args.session_id)
+        ctx = video_context.resolve_context(
+            provider=args.provider, video_id=args.video_id
+        )
+        path = video_context.acquire_lock(
+            ctx, force=args.force, session_id=args.session_id
+        )
     except video_registry.VideoRegistryError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
@@ -204,7 +214,9 @@ def build_parser() -> argparse.ArgumentParser:
     p_resolve.add_argument("--json", action="store_true")
     p_resolve.set_defaults(func=_cmd_resolve)
 
-    p_reindex = sub.add_parser("reindex", help="Rebuild providers/<slug>/videos.index.json.")
+    p_reindex = sub.add_parser(
+        "reindex", help="Rebuild providers/<slug>/videos.index.json."
+    )
     p_reindex.add_argument("--provider", required=True)
     p_reindex.set_defaults(func=_cmd_reindex)
 
@@ -226,7 +238,9 @@ def build_parser() -> argparse.ArgumentParser:
     p_lock = sub.add_parser("lock", help="Advisory edit/ lock (warn-only).")
     lock_sub = p_lock.add_subparsers(dest="lock_cmd", required=True)
 
-    p_lock_acquire = lock_sub.add_parser("acquire", help="Acquire advisory lock on rawDir/edit/.")
+    p_lock_acquire = lock_sub.add_parser(
+        "acquire", help="Acquire advisory lock on rawDir/edit/."
+    )
     p_lock_acquire.add_argument("--provider", required=True)
     p_lock_acquire.add_argument("--video-id", required=True)
     p_lock_acquire.add_argument("--force", action="store_true")

@@ -26,7 +26,11 @@ def _word_cues(words: list[dict]) -> list[tuple[float, float, str]]:
     cues: list[tuple[float, float, str]] = []
     current: list[dict] = []
     for word in words:
-        if word.get("type") != "word" or word.get("start") is None or word.get("end") is None:
+        if (
+            word.get("type") != "word"
+            or word.get("start") is None
+            or word.get("end") is None
+        ):
             continue
         text = str(word.get("text") or "").strip()
         if not text:
@@ -34,7 +38,12 @@ def _word_cues(words: list[dict]) -> list[tuple[float, float, str]]:
         current.append(word)
         span = float(current[-1]["end"]) - float(current[0]["start"])
         joined = " ".join(str(item.get("text") or "").strip() for item in current)
-        if len(current) >= 8 or len(joined) >= 52 or span >= 3.2 or text.endswith((".", "?", "!")):
+        if (
+            len(current) >= 8
+            or len(joined) >= 52
+            or span >= 3.2
+            or text.endswith((".", "?", "!"))
+        ):
             cues.append(
                 (
                     float(current[0]["start"]),
@@ -55,7 +64,9 @@ def _word_cues(words: list[dict]) -> list[tuple[float, float, str]]:
     return cues
 
 
-def write_artifacts(transcript_json: Path, basename: str | None = None) -> dict[str, Path]:
+def write_artifacts(
+    transcript_json: Path, basename: str | None = None
+) -> dict[str, Path]:
     transcript_json = transcript_json.resolve()
     transcript = json.loads(transcript_json.read_text(encoding="utf-8"))
     stem = basename or transcript_json.stem
@@ -163,7 +174,6 @@ if __name__ == "__main__":
     main()
 
 
-
 def validate_master_transcript(master_path: Path, transcript_json: Path) -> dict:
     """Validate that a word-timed transcript was produced from exact master bytes."""
     from avo.transcribe import source_fingerprint, validate_transcript_payload
@@ -178,12 +188,21 @@ def validate_master_transcript(master_path: Path, transcript_json: Path) -> dict
     duration = None
     try:
         import subprocess
+
         completed = subprocess.run(
             [
-                "ffprobe", "-v", "error", "-show_entries", "format=duration",
-                "-of", "default=noprint_wrappers=1:nokey=1", str(master_path),
+                "ffprobe",
+                "-v",
+                "error",
+                "-show_entries",
+                "format=duration",
+                "-of",
+                "default=noprint_wrappers=1:nokey=1",
+                str(master_path),
             ],
-            check=True, capture_output=True, text=True,
+            check=True,
+            capture_output=True,
+            text=True,
         )
         duration = float(completed.stdout.strip())
     except Exception:
