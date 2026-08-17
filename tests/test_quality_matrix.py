@@ -231,6 +231,11 @@ class QualityMatrixTests(unittest.TestCase):
         ci = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
         self.assertIn("run-coverage.sh", ci)
         self.assertIn("Software quality — coverage", ci)
+        quality_block = ci.split("software-quality:", 1)[1].split("usability-gate:", 1)[
+            0
+        ]
+        self.assertIn("Install ffmpeg", quality_block)
+        self.assertIn("apt-get install -y ffmpeg", quality_block)
 
         pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
         self.assertIn("[tool.coverage.report]", pyproject)

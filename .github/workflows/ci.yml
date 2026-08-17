@@ -129,6 +129,9 @@ jobs:
       - name: Install Node dependencies
         run: npm ci
 
+      - name: Install ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
       # Spec v1.4 / task-013: Phase-1 fast gates — all fail-immediately (no soft stubs).
       # Umbrella scripts match local `npm run quality` / scripts/ci/quality.sh.
       - name: Software quality — lint
