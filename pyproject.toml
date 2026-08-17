@@ -44,6 +44,19 @@ python_files = ["test_*.py"]
 python_classes = ["Test*", "*Tests", "*TestCase"]
 python_functions = ["test_*"]
 addopts = "-ra"
+norecursedirs = [
+    ".*",
+    "build",
+    "dist",
+    "CVS",
+    "_darcs",
+    "{arch}",
+    "*.egg",
+    "venv",
+    ".venv",
+    "mutants",
+    "node_modules",
+]
 markers = [
     "slow: downloads models or heavy IO (orchestrator-smoke only)",
     "integration: crosses script/subprocess boundaries",
@@ -167,7 +180,14 @@ source_paths = [
     "src/avo/validate_edl.py",
     "src/avo/adapters/registry.py",
 ]
-pytest_add_cli_args = ["-q", "--tb=no", "-m", "not project"]
+pytest_add_cli_args = [
+    "-q",
+    "--tb=short",
+    "--ignore=mutants",
+    "--ignore=tests/projects",
+    "-m",
+    "not project",
+]
 pytest_add_cli_args_test_selection = [
     "tests/test_mcp_package.py",
     "tests/test_mcp_bridge.py",

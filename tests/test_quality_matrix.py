@@ -643,6 +643,12 @@ class QualityMatrixTests(unittest.TestCase):
         pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
         self.assertIn("[tool.mutmut]", pyproject)
         self.assertIn("src/avo/mcp", pyproject)
+        self.assertIn("norecursedirs", pyproject)
+        mutmut_block = pyproject.split("[tool.mutmut]", 1)[1]
+        self.assertIn("--tb=short", mutmut_block)
+        self.assertNotIn("--tb=no", mutmut_block)
+        self.assertIn("--ignore=mutants", mutmut_block)
+        self.assertIn("--ignore=tests/projects", mutmut_block)
 
         audit = (ROOT / "docs/software-quality-audit.md").read_text(encoding="utf-8")
         self.assertIn("light/PR", audit)
