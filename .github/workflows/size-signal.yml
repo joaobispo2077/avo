@@ -1,0 +1,90 @@
+# Informational pack/install footprint on release-flow PRs (Maxframe size-limit shape).
+# Non-blocking forever unless explicitly evolved to fail.
+
+name: Size signal (PR)
+
+on:
+  pull_request:
+    branches:
+      - develop
+      - release
+
+permissions:
+  contents: read
+  pull-requests: write
+
+env:
+  NODE_VERSION: '22'
+  AVO_CI: '1'
+
+jobs:
+  size-signal:
+    name: Size signal (informational)
+    # Release flow only:
+    # - feature/* -> develop
+    # - develop -> release
+    if: >-
+      ${{
+        github.event_name == 'pull_request' &&
+        (
+          (github.base_ref == 'develop' && startsWith(github.head_ref, 'feature/')) ||
+          (github.base_ref == 'release' && github.head_ref == 'develop')
+        )
+      }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Collect size signal (non-blocking)
+        id: run-size-signal
+        shell: bash
+        env:
+          NO_COLOR: '1'
+        run: |
+          bash scripts/ci/size-signal.sh size-signal-raw.txt
+          echo "exit_code=0" >> "$GITHUB_OUTPUT"
+
+      - name: Build size report markdown
+        shell: bash
+        run: |
+          if [ "${{ steps.run-size-signal.outputs.exit_code }}" = "0" ]; then
+            status_text="PASS (signal collected)"
+          else
+            status_text="SIGNAL ERROR (informational only)"
+          fi
+          {
+            echo "## Size Signal Report"
+            echo
+            echo "- Status: **${status_text}**"
+            echo "- Policy: **non-blocking** (PR signal only)"
+            echo "- Scope: \`npm pack --dry-run\` + install footprint proxy"
+            echo
+            echo "<details>"
+            echo "<summary>CLI output</summary>"
+            echo
+            echo '```text'
+            # Strip ANSI if present
+            sed 's/\x1b\[[0-9;]*[a-zA-Z]//g' size-signal-raw.txt 2>/dev/null \
+              || cat size-signal-raw.txt
+            echo '```'
+            echo
+            echo "</details>"
+          } > size-signal-report.md
+
+      - name: Publish size report to PR (sticky)
+        uses: marocchino/sticky-pull-request-comment@v3
+        with:
+          path: size-signal-report.md
+          header: size-signal-report
+          recreate: true
