@@ -3,6 +3,9 @@
 from __future__ import annotations
 
 import json
+import re
+import sys
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -20,6 +23,97 @@ ARTIFACTS = {
 
 class WorkspaceError(RuntimeError):
     pass
+
+
+_WSL_MNT_RE = re.compile(r"^/mnt/([a-zA-Z])/(.*)$")
+
+
+def _wsl_mnt_text(declared: str | Path) -> str:
+    text = str(declared).replace("\\", "/")
+    if not text.startswith("/") and text.lower().startswith("mnt/"):
+        text = "/" + text
+    return text
+
+
+def map_wsl_mnt_path(declared: str | Path, *, platform: str | None = None) -> Path:
+    """Map WSL ``/mnt/<letter>/...`` paths to a Windows drive path when on win32."""
+    platform = platform or sys.platform
+    match = _WSL_MNT_RE.match(_wsl_mnt_text(declared))
+    if platform == "win32" and match:
+        rest = match.group(2).replace("/", "\\")
+        return Path(f"{match.group(1).upper()}:\\{rest}")
+    return Path(declared)
+
+
+def _try_resolve_existing(path: Path, exists_fn: Callable[[Path], bool]) -> Path | None:
+    if not exists_fn(path):
+        return None
+    try:
+        if path.exists():
+            return path.resolve()
+    except OSError:
+        pass
+    return path
+
+
+def _missing_raw_dir_error(
+    candidate: Path, attempted: list[Path], parent_fallback: Path | None
+) -> WorkspaceError:
+    tried = "; ".join(str(path) for path in attempted)
+    parent_note = (
+        f"; project parent {parent_fallback}" if parent_fallback is not None else ""
+    )
+    return WorkspaceError(
+        f"rawDir does not exist: declared/mapped {candidate}{parent_note} (tried: {tried})"
+    )
+
+
+def _declared_candidate(
+    project_path: Path | None,
+    declared: str | Path,
+    *,
+    platform: str,
+) -> Path:
+    candidate = map_wsl_mnt_path(declared, platform=platform)
+    mapping_applied = (
+        platform == "win32" and _WSL_MNT_RE.match(_wsl_mnt_text(declared)) is not None
+    )
+    if project_path is not None and not candidate.is_absolute() and not mapping_applied:
+        return project_path.parent / candidate
+    return candidate
+
+
+def resolve_project_raw_dir(
+    project_path: Path | None,
+    declared: str | Path,
+    *,
+    platform: str | None = None,
+    exists: Callable[[Path], bool] | None = None,
+) -> Path:
+    """Resolve a project ``rawDir`` to a usable footage root.
+
+    On Windows, ``/mnt/<letter>/...`` maps to ``<letter>:\\...``. If the
+    mapped/declared path is missing and ``project_path.parent / "edit"`` exists,
+    the project parent is used. Fail closed naming both attempted paths.
+    """
+    platform = platform or sys.platform
+    exists_fn = exists or (lambda path: Path(path).exists())
+    project_path = Path(project_path).expanduser() if project_path else None
+    candidate = _declared_candidate(project_path, declared, platform=platform)
+    attempted: list[Path] = [candidate]
+    found = _try_resolve_existing(candidate, exists_fn)
+    if found is not None:
+        return found
+
+    parent_fallback: Path | None = None
+    if project_path is not None:
+        parent_fallback = project_path.parent
+        attempted.append(parent_fallback)
+        if exists_fn(parent_fallback / "edit"):
+            found_parent = _try_resolve_existing(parent_fallback, exists_fn)
+            return found_parent if found_parent is not None else parent_fallback
+
+    raise _missing_raw_dir_error(candidate, attempted, parent_fallback)
 
 
 class TimelineWorkspace:
@@ -57,9 +151,7 @@ class TimelineWorkspace:
         except (OSError, ValueError) as exc:
             raise WorkspaceError(f"cannot load project {project_path}: {exc}") from exc
         raw_value = str(project.get("rawDir") or project_path.parent)
-        raw_dir = Path(raw_value).expanduser()
-        if not raw_dir.is_absolute():
-            raw_dir = (project_path.parent / raw_dir).resolve()
+        raw_dir = resolve_project_raw_dir(project_path, raw_value)
         return cls(
             project_path=project_path,
             project=project,
