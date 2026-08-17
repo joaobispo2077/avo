@@ -559,7 +559,10 @@ def _remaining_bridge_defs() -> list[BridgeToolDef]:
             "avo_cleanup_verify",
             "cleanup",
             "verify",
-            "Verify cleanup prerequisites (CLI: avo cleanup verify).",
+            "Verify cleanup prerequisites. Returns compact JSON (status, "
+            "verifyErrors, counts/sample) — not every path. Use built-in CLI/MCP; "
+            "do not write .avo/tmp/**/execute_*.py walk/delete scripts. "
+            "(CLI: avo cleanup verify).",
             extra_params=(ParamSpec("master_basename", str, required=True),),
         ),
         _tool(
@@ -577,15 +580,22 @@ def _remaining_bridge_defs() -> list[BridgeToolDef]:
             "avo_cleanup_dry_run",
             "cleanup",
             "dry-run",
-            "Dry-run cleanup without deleting files (CLI: avo cleanup dry-run).",
+            "Dry-run cleanup without deleting files. Returns compact JSON "
+            "(candidateCount, leftoverCandidates, candidateSample ≤50). Full path "
+            "lists live in optional CLI scratch (--session-id --scratch-out). "
+            "Do not write .avo/tmp/**/execute_*.py walk/delete scripts. "
+            "(CLI: avo cleanup dry-run).",
             extra_params=(ParamSpec("master_basename", str, required=True),),
         ),
         _tool(
             "avo_cleanup_execute",
             "cleanup",
             "execute",
-            _DESTRUCTIVE_WARN + "Permanently delete non-preserved run artifacts "
-            "(CLI: avo cleanup execute). Prefer dry-run first.",
+            _DESTRUCTIVE_WARN + "Permanently delete non-preserved run artifacts. "
+            "Returns compact JSON (deletedCount, deletedSample, space.freedBytes) "
+            "before session tmp purge. Prefer dry-run first. Do not write "
+            ".avo/tmp/**/execute_*.py walk/delete scripts. "
+            "(CLI: avo cleanup execute).",
             destructive=True,
             extra_params=(
                 ParamSpec("master_basename", str, required=True),
