@@ -1,0 +1,54 @@
+# Dependencies / generated
+node_modules/
+.venv/
+venv/
+dist/
+coverage/
+htmlcov/
+.tmp/
+tmp/
+.avo/
+.mutmut-cache/
+stryker-tmp/
+reports/
+package-lock.json
+uv.lock
+
+# Agent / SDD / editor tooling
+.sdd/
+.cursor/
+.git/
+
+# HyperFrames exemplars (domain lint via hf:lint)
+docs/exemplars/
+
+# Out of ESLint/Prettier FR-3 Node-glue scope (bin/scripts/helpers/release)
+schemas/
+.specify/
+config/
+static/
+skills/
+.agents/
+providers/
+specs/
+src/
+tests/
+commands/
+
+# Non-JS surfaces — Prettier gate targets Node glue (FR-3)
+*.md
+*.py
+*.sh
+*.ps1
+*.toml
+*.yml
+*.yaml
+*.html
+*.css
+*.svg
+*.png
+*.jpg
+*.webp
+*.mp4
+*.jsonl
+*.skill.md
