@@ -296,11 +296,16 @@ Two steps, in order:
    ai-memory, only MCP wiki consolidation is skipped** — inventory, draft wrap,
    provider export, and telemetry still run; cleanup proceeds normally.
    - **Inventory report:** `project_inventory.py report` (uses `pre.json` when
-     present for added/removed/modified classification).
+     present for added/removed/modified classification). Default `--json` is
+     compact counts + sample; `--scratch-out --session-id` still writes the
+     **full** report under `.avo/tmp/learndown/<id>/`. `--full-paths` is
+     debug-only. Agents MUST call this CLI (or MCP that wraps it). Ad-hoc
+     `.avo/tmp/**/execute_*.py` walk/delete scripts are out of contract.
    - **Draft wrap (REQUIRED):** `<rawDir>/avo.wrap.draft.md` and
      `avo.wrap.draft.json` (`status: "draft"`) — outside `<rawDir>/edit/`.
-     Includes narrative summary, scheduled deletions, preserved artifacts, space
-     estimates, ai-memory note. **Provider export (REQUIRED):** wrap also writes
+     Includes narrative summary, **sample** scheduled deletions (`deletedCount`
+     is the true total), preserved artifacts, space estimates, ai-memory note.
+     **Provider export (REQUIRED):** wrap also writes
      `providers/<slug>/learndowns/<entry-id>/` (`learndown.json`, `learndown.md`,
      wrap copies) and updates `providers/<slug>/learndowns/index.json`. Use
      `python -m avo.wrap draft … --no-export` only when debugging.
@@ -311,19 +316,37 @@ Two steps, in order:
      preview and preserved-set size (§5).
 2. **Cleanup (rimraf + final wrap + stats record).** Delete everything the run
    created in the video project folder **except** the preserved set.
+   - **Windows `rawDir`:** `--project` maps WSL paths `/mnt/<letter>/...` to
+     `<letter>:\...`. If the mapped path is missing and `avo.project.json`'s
+     parent contains `edit/`, that parent is used. Otherwise fail closed.
    - **Verify:** `python -m avo.cli cleanup verify --project <avo.project.json>
-     --master-basename <stem>` — refuse if preserved set incomplete.
+     --master-basename <stem>` — compact JSON (`status`, `verifyErrors`); refuse
+     if preserved set incomplete.
+   - **Dry-run:** `python -m avo.cli cleanup dry-run --project <avo.project.json>
+     --master-basename <stem> [--session-id <id> --scratch-out]` — compact JSON
+     (`candidateCount`, `candidateSample`, leftover OSError skips). Writes
+     nothing. `--full-paths` is debug-only.
    - **Execute:** `python -m avo.cli cleanup execute --project <avo.project.json>
-     --master-basename <stem> [--session-id <id>]` — not a dry-run. Assert
-     delete list ∩ preserved set = ∅, then `rimraf` footage delete candidates
-     under `<rawDir>/edit/`. On success with `--session-id`, purge **all**
-     session kinds under `.avo/tmp/<kind>/<session-id>/` (`learndown`, `qc`,
-     `shorts-proof`, `session`), not only `learndown`. Incomplete preserved set
-     or preserved ∩ delete refuses the run and skips purge.
+     --master-basename <stem> [--session-id <id>]` — not a dry-run. Prints
+     compact JSON **before** session tmp purge. Assert delete list ∩ preserved
+     set = ∅, then `rimraf` footage delete candidates under `<rawDir>/edit/`.
+     Walk/unlink `OSError` skips that path and increments `leftoverCandidates`.
+     On success with `--session-id`, purge **all** session kinds under
+     `.avo/tmp/<kind>/<session-id>/` (`learndown`, `qc`, `shorts-proof`,
+     `session`). Incomplete preserved set or preserved ∩ delete refuses the run
+     and skips purge (`status: blocked`).
+   - **Legacy vs canonical:** when all five canonical indexes exist, the
+     reconstruction bundle remains required. When they are absent, execute
+     copies `edit/edl.json` / `edl-v*.json` / edit logs into
+     `edit/review/legacy-reconstruction/` and root `EDITLOG.md` /
+     `AUDIO-EDITLOG.md` (dry-run does not write). Do not use migrate-timeline
+     for that copy.
    - **Final wrap (REQUIRED):** `<rawDir>/avo.wrap.md` and `avo.wrap.json`
-     (`status: "final"`) with actual freed bytes and deleted file lists. Draft
-     wrap files are **retained** for audit comparison. Re-exports the provider
-     learndown entry with `status: "final"` and final wrap copies when present.
+     (`status: "final"`) with actual freed bytes (inherited from the draft when
+     post-delete candidates are empty) and **sample-capped** deleted file lists
+     plus `deletedCount`. Draft wrap files are **retained** for audit
+     comparison. Re-exports the provider learndown entry with `status: "final"`
+     and final wrap copies when present.
    - **Session record (REQUIRED):** `python -m avo.stats record
      --wrap-json <rawDir>/avo.wrap.json` → `.avo/state.json` → `stats.sessions[]`
      + cumulative `stats.totals`.

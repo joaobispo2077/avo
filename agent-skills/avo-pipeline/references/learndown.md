@@ -13,7 +13,7 @@ Implements [`docs/avo-workflow.md`](../../docs/avo-workflow.md) §7 step 1.
 
 ### REQUIRED (with or without ai-memory)
 
-1. **Inventory report:** `python -m avo.project_inventory report --raw-dir <rawDir> --master-basename <stem> [--pre .avo/sessions/<id>/pre.json] [--scratch-out] [--session-id <id>]`
+1. **Inventory report:** `python -m avo.project_inventory report --raw-dir <rawDir> --master-basename <stem> [--pre .avo/sessions/<id>/pre.json] [--scratch-out] [--session-id <id>]` — compact stdout; `--scratch-out` still writes the full report under `.avo/tmp/learndown/<session-id>/`. `--full-paths` is debug-only. Do not write `.avo/tmp/**/execute_*.py` walk/delete scripts. Narrative `--summary-file` remains agent-authored.
 2. **Draft wrap:** agent narrative + `python -m avo.wrap draft …` → `<rawDir>/avo.wrap.draft.md/json` (`status: "draft"`). Auto-exports `providers/<slug>/learndowns/<entry-id>/` unless `--no-export`.
 3. **Learndown telemetry:** `Telemetry.learndown()` — space used vs freed preview, preserved-set size
 4. Never store secrets in memory or wrap JSON
@@ -35,7 +35,7 @@ Backfill from an existing wrap: `python -m avo.learndown_export backfill --wrap-
 
 ## Scratch inventory (optional)
 
-Use `--scratch-out --session-id <id>` on inventory `report` to stage the full JSON under `.avo/tmp/learndown/<session-id>/`. Never write scratch JSON at repo root. Cleanup with `--session-id` purges the scratch dir after successful delete.
+Use `--scratch-out --session-id <id>` on inventory `report` to stage the **full** JSON under `.avo/tmp/learndown/<session-id>/`. Default stdout is compact counts + sample. `--full-paths` is a local debug flag. Never write scratch JSON at repo root and never invent `.avo/tmp/**/execute_*.py` walkers. Cleanup with `--session-id` purges the scratch dir after successful delete.
 
 ## Draft wrap contents
 

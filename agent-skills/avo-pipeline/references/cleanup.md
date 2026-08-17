@@ -18,8 +18,7 @@ delete, never committed, and removed only after explicit user confirm.
 
 ## Preserved-set invariant (release-blocking)
 
-Cleanup is allowed only after `edit/timeline/reconstruction-bundle.json`
-verifies. These artifacts survive:
+Cleanup is allowed on **canonical** projects only after `edit/timeline/reconstruction-bundle.json` verifies. **Legacy** projects (the five indexes absent) are cleaned after execute copies reconstruction sources into preserved locations — do not run migrate-timeline for that copy.
 
 | Artifact | Typical path |
 | -------- | ------------ |
@@ -33,10 +32,10 @@ verifies. These artifacts survive:
 
 ## Workflow (REQUIRED steps)
 
-1. **Build bundle:** `python -m avo.cli cleanup bundle --project <avo.project.json> --master-basename <stem> --actor <id>`
-2. **Verify:** `python -m avo.cli cleanup verify --project <avo.project.json> --master-basename <stem>`
-3. **Dry-run:** `python -m avo.cli cleanup dry-run --project <avo.project.json> --master-basename <stem>` — lists paths only; writes nothing.
-4. **Execute:** `python -m avo.cli cleanup execute --project <avo.project.json> --master-basename <stem> [--session-id <id>]` — not a dry-run. Verify → assert no preserved ∩ delete → `npx rimraf` footage delete candidates under `<rawDir>/edit/`. On success with `--session-id`, purge **all** `.avo/tmp/<kind>/<session-id>/` kinds (`learndown`, `qc`, `shorts-proof`, `session`), not only learndown. Incomplete preserved set or preserved ∩ delete refuses the run and skips purge.
+1. **Build bundle:** `python -m avo.cli cleanup bundle --project <avo.project.json> --master-basename <stem> --actor <id>` (canonical indexes only; not migrate-timeline)
+2. **Verify:** `python -m avo.cli cleanup verify --project <avo.project.json> --master-basename <stem>` — compact `verifyErrors`
+3. **Dry-run:** `python -m avo.cli cleanup dry-run --project <avo.project.json> --master-basename <stem> [--session-id <id> --scratch-out]` — compact JSON; writes nothing; `--full-paths` debug-only
+4. **Execute:** `python -m avo.cli cleanup execute --project <avo.project.json> --master-basename <stem> [--session-id <id>]` — not a dry-run. Prints compact JSON **before** session tmp purge. Verify → assert no preserved ∩ delete → `npx rimraf` footage delete candidates under `<rawDir>/edit/`. On success with `--session-id`, purge **all** `.avo/tmp/<kind>/<session-id>/` kinds. Incomplete preserved set or preserved ∩ delete refuses the run and skips purge. **Do not** write `.avo/tmp/**/execute_*.py` walk/delete scripts.
 5. **Final wrap:** `python -m avo.wrap final …` → `<rawDir>/avo.wrap.md/json` (`status: "final"`). Keep `avo.wrap.draft.*`. Updates provider learndown entry + index.
 6. **Record session:** `python -m avo.stats record --wrap-json <rawDir>/avo.wrap.json`
 
@@ -53,7 +52,12 @@ the AVO clone.
 
 - Use **rimraf**, not `rm -rf` / `del`, for footage delete candidates
 - Refuse if delete list intersects preserved set (release-blocking)
-- `cleanup dry-run` lists paths only; `cleanup execute` is the destructive step
+- `cleanup dry-run` returns compact JSON (counts/sample); `cleanup execute` is the destructive step
+- `--full-paths` is CLI debug only; MCP cleanup tools stay compact
+- Use the built-in inventory/wrap/cleanup CLIs. Ad-hoc `.avo/tmp/**/execute_*.py` walkers are out of contract
+- Windows `--project` maps WSL `rawDir` `/mnt/<letter>/...` to `<letter>:\...`
+- OSError on walk/unlink skips that path and increments leftover counts; it does not abort
+- Legacy projects (no five canonical indexes): execute copies EDL/logs into preserved locations; dry-run does not write
 - Final transcript MUST be generated from master export, not source footage
 - Never write QC/proofs as repo-root `.tmp-*`
 
