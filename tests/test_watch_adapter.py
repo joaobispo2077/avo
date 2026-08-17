@@ -46,8 +46,8 @@ class WatchAdapterTests(unittest.TestCase):
                     JobResult(
                         exit_code=0,
                         stdout=(
-                            "{\"status\":\"pass\",\"confidence\":0.91,"
-                            "\"findings\":[]}\n(confidence: 0.91)"
+                            '{"status":"pass","confidence":0.91,'
+                            '"findings":[]}\n(confidence: 0.91)'
                         ),
                     ),
                     JobResult(exit_code=0, stdout="0.6.0\n"),
@@ -78,16 +78,18 @@ class WatchAdapterTests(unittest.TestCase):
             candidate = root / "proof.mp4"
             candidate.write_bytes(b"proof")
             adapter = WatchSkillAdapter(executable="watch-skill")
-            with mock.patch.object(
-                adapter,
-                "run",
-                side_effect=[
-                    JobResult(exit_code=0, stdout="video_id `vid-1`"),
-                    JobResult(exit_code=0, stdout="looks fine"),
-                ],
+            with (
+                mock.patch.object(
+                    adapter,
+                    "run",
+                    side_effect=[
+                        JobResult(exit_code=0, stdout="video_id `vid-1`"),
+                        JobResult(exit_code=0, stdout="looks fine"),
+                    ],
+                ),
+                self.assertRaises(ToolError) as raised,
             ):
-                with self.assertRaises(ToolError) as raised:
-                    adapter.review(candidate, scope="full", artifact_dir=root / "review")
+                adapter.review(candidate, scope="full", artifact_dir=root / "review")
             self.assertEqual(raised.exception.code, "WATCH_MALFORMED")
 
     def test_empty_windows_rejected_for_targeted_review(self):
@@ -109,7 +111,9 @@ class WatchAdapterTests(unittest.TestCase):
                     os.environ.pop("AVO_UNDERSTAND_GGUF", None)
                     with mock.patch.object(adapter, "run") as run:
                         with self.assertRaises(ToolError) as raised:
-                            adapter.review(candidate, scope="full", artifact_dir=root / "review")
+                            adapter.review(
+                                candidate, scope="full", artifact_dir=root / "review"
+                            )
             self.assertEqual(raised.exception.code, "WATCH_UNAVAILABLE")
             self.assertTrue(raised.exception.retryable)
             self.assertIn("Bonsai GGUF", raised.exception.message)
@@ -133,7 +137,9 @@ class WatchAdapterTests(unittest.TestCase):
                     os.environ.pop("AVO_UNDERSTAND_MMPROJ", None)
                     with mock.patch.object(adapter, "run") as run:
                         with self.assertRaises(ToolError) as raised:
-                            adapter.review(candidate, scope="full", artifact_dir=root / "review")
+                            adapter.review(
+                                candidate, scope="full", artifact_dir=root / "review"
+                            )
             self.assertEqual(raised.exception.code, "WATCH_UNAVAILABLE")
             self.assertIn("mmproj", raised.exception.message.lower())
             run.assert_not_called()
@@ -162,7 +168,9 @@ class WatchAdapterTests(unittest.TestCase):
                         os.environ.pop(key, None)
                     with mock.patch.object(adapter, "run") as run:
                         with self.assertRaises(ToolError) as raised:
-                            adapter.review(candidate, scope="full", artifact_dir=root / "review")
+                            adapter.review(
+                                candidate, scope="full", artifact_dir=root / "review"
+                            )
             self.assertEqual(raised.exception.code, "WATCH_UNAVAILABLE")
             message = raised.exception.message.lower()
             self.assertTrue("custom" in message or "llama.cpp" in message)
@@ -196,8 +204,8 @@ class WatchAdapterTests(unittest.TestCase):
                             JobResult(
                                 exit_code=0,
                                 stdout=(
-                                    "{\"status\":\"pass\",\"confidence\":0.91,"
-                                    "\"findings\":[]}\n(confidence: 0.91)"
+                                    '{"status":"pass","confidence":0.91,'
+                                    '"findings":[]}\n(confidence: 0.91)'
                                 ),
                             ),
                             JobResult(exit_code=0, stdout="0.6.0\n"),

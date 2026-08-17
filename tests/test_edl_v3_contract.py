@@ -1,15 +1,13 @@
 from __future__ import annotations
 
 import json
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
-import avo.validate_edl as validate_edl
-
+from avo import validate_edl
 
 SLOT_IDS = [
     "transfer-direction",
@@ -148,4 +146,3 @@ class EdlV3ContractTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

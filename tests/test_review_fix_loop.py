@@ -6,7 +6,6 @@ from pathlib import Path
 
 from avo.timeline.review import run_fix_loop
 from avo.timeline.review_runner import ReviewRunner
-
 from tests.test_timeline_review_integration import FakeQc, FakeTranscript, FakeWatch
 
 
@@ -46,7 +45,9 @@ class FixLoopTests(unittest.TestCase):
         class QcWithSafeFinding(FakeQc):
             def check(self, candidate: Path, **request):
                 result = super().check(candidate, **request)
-                result["findings"] = [{"id": "layout", "classification": "safe", "message": "move card"}]
+                result["findings"] = [
+                    {"id": "layout", "classification": "safe", "message": "move card"}
+                ]
                 return result
 
         class NoOpFix:

@@ -1,4 +1,5 @@
 """Unit tests for avo.mcp CLI bridge (argv mapping + envelope; tmp_path only)."""
+
 from __future__ import annotations
 
 import io
@@ -85,7 +86,9 @@ def test_run_bridged_strips_mrtr_before_argv(monkeypatch: pytest.MonkeyPatch) ->
         captured.append(argv)
         from avo.mcp.bridge import BridgeResult
 
-        return BridgeResult(ok=True, exit_code=0, stdout="{}", stderr="", parsed_json={})
+        return BridgeResult(
+            ok=True, exit_code=0, stdout="{}", stderr="", parsed_json={}
+        )
 
     monkeypatch.setattr("avo.mcp.bridge.run_cli", _fake_run_cli)
     result = run_bridged(
@@ -98,9 +101,7 @@ def test_run_bridged_strips_mrtr_before_argv(monkeypatch: pytest.MonkeyPatch) ->
         },
     )
     assert result.ok is True
-    assert captured == [
-        ["cleanup", "status", "--project", "/tmp/p.json", "--json"]
-    ]
+    assert captured == [["cleanup", "status", "--project", "/tmp/p.json", "--json"]]
 
 
 def test_kwargs_to_argv_repeats_list_flags() -> None:

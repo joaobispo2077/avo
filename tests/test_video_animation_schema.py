@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import copy
+
 import pytest
+
 from avo.timeline.contracts import ContractError, validate_document
 
 
@@ -12,32 +14,40 @@ def strategy_document():
         "videoId": "video",
         "provider": "bishop",
         "currentRevisionId": "animation-r0001",
-        "revisions": [{
-            "revisionId": "animation-r0001",
-            "strategy": {
-                "formatDiagnosis": {
-                    "format": "talking-head-review",
-                    "viewerIntent": "decide",
-                    "motionDensity": 2,
-                },
-                "density": 2,
-                "components": [{
-                    "componentId": "chapter-card",
-                    "providerPatternRef": "c01-c02",
-                    "lifecycle": {
-                        "preEntry": "hidden",
-                        "entrance": "tremble",
-                        "hold": "readable",
-                        "exit": "fade",
+        "revisions": [
+            {
+                "revisionId": "animation-r0001",
+                "strategy": {
+                    "formatDiagnosis": {
+                        "format": "talking-head-review",
+                        "viewerIntent": "decide",
+                        "motionDensity": 2,
                     },
-                    "accessibility": {"reducedMotion": "fade"},
-                }],
-                "safeZones": ["face-left", "captions"],
-                "accessibility": {"reducedMotion": True, "flashingSafe": True},
-                "dependencies": {"cmap": "a"*64, "bmap": "b"*64, "tracks": "c"*64},
-                "framework": "hyperframes",
-            },
-        }],
+                    "density": 2,
+                    "components": [
+                        {
+                            "componentId": "chapter-card",
+                            "providerPatternRef": "c01-c02",
+                            "lifecycle": {
+                                "preEntry": "hidden",
+                                "entrance": "tremble",
+                                "hold": "readable",
+                                "exit": "fade",
+                            },
+                            "accessibility": {"reducedMotion": "fade"},
+                        }
+                    ],
+                    "safeZones": ["face-left", "captions"],
+                    "accessibility": {"reducedMotion": True, "flashingSafe": True},
+                    "dependencies": {
+                        "cmap": "a" * 64,
+                        "bmap": "b" * 64,
+                        "tracks": "c" * 64,
+                    },
+                    "framework": "hyperframes",
+                },
+            }
+        ],
     }
 
 

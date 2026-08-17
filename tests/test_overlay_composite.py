@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import sys
 import unittest
 from pathlib import Path
 
@@ -59,4 +58,3 @@ class OverlayCompositeTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

@@ -23,7 +23,10 @@ class LoudnessProfilesTests(unittest.TestCase):
         self.assertEqual(profile.true_peak_dbtp, -1.8)
 
     def test_platform_fit_shorts_preset(self) -> None:
-        project = {"deliverable": {"profile": "shorts"}, "audio": {"loudness_intent": "platform_fit"}}
+        project = {
+            "deliverable": {"profile": "shorts"},
+            "audio": {"loudness_intent": "platform_fit"},
+        }
         profile = loudness_profiles.resolve_loudness_profile(project=project)
         self.assertEqual(profile.preset_id, "youtube_shorts")
         self.assertEqual(profile.integrated_lufs, -14.0)
@@ -102,7 +105,12 @@ class LoudnessProfilesTests(unittest.TestCase):
 
     def test_evaluate_qc_pass(self) -> None:
         profile = loudness_profiles.resolve_loudness_profile(
-            project={"audio": {"loudness_preset": "youtube_shorts", "loudness_intent": "platform_fit"}}
+            project={
+                "audio": {
+                    "loudness_preset": "youtube_shorts",
+                    "loudness_intent": "platform_fit",
+                }
+            }
         )
         measurement = {"input_i": "-14.2", "input_tp": "-1.5", "input_lra": "10.0"}
         result = loudness_profiles.evaluate_qc(measurement, profile)
@@ -110,7 +118,12 @@ class LoudnessProfilesTests(unittest.TestCase):
 
     def test_evaluate_qc_fail_integrated(self) -> None:
         profile = loudness_profiles.resolve_loudness_profile(
-            project={"audio": {"loudness_preset": "youtube_shorts", "loudness_intent": "platform_fit"}}
+            project={
+                "audio": {
+                    "loudness_preset": "youtube_shorts",
+                    "loudness_intent": "platform_fit",
+                }
+            }
         )
         measurement = {"input_i": "-11.0", "input_tp": "-1.5", "input_lra": "10.0"}
         result = loudness_profiles.evaluate_qc(measurement, profile)
@@ -119,18 +132,28 @@ class LoudnessProfilesTests(unittest.TestCase):
     def test_nr_warning(self) -> None:
         edl = {
             "audio": {
-                "restoration_segments": [{"strength_pct": 70, "approved_by_user": True}],
+                "restoration_segments": [
+                    {"strength_pct": 70, "approved_by_user": True}
+                ],
             }
         }
         profile = loudness_profiles.resolve_loudness_profile(
             edl=edl,
-            project={"audio": {"loudness_preset": "youtube_shorts", "loudness_intent": "platform_fit"}},
+            project={
+                "audio": {
+                    "loudness_preset": "youtube_shorts",
+                    "loudness_intent": "platform_fit",
+                }
+            },
         )
         warning = loudness_profiles.nr_loudness_warning(edl, profile)
         self.assertIsNotNone(warning)
 
     def test_resolver_is_deterministic(self) -> None:
-        project = {"deliverable": {"profile": "tiktok"}, "audio": {"loudness_intent": "platform_fit"}}
+        project = {
+            "deliverable": {"profile": "tiktok"},
+            "audio": {"loudness_intent": "platform_fit"},
+        }
         first = loudness_profiles.resolve_loudness_profile(project=project)
         second = loudness_profiles.resolve_loudness_profile(project=project)
         self.assertEqual(first.to_dict(), second.to_dict())

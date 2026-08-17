@@ -1,4 +1,5 @@
 """Unit tests for avo.mcp package skeleton (no live stdio host required)."""
+
 from __future__ import annotations
 
 import importlib

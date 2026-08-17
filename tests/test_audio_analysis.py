@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import tempfile
 import unittest
 import wave
@@ -44,7 +43,13 @@ class AudioAnalysisTests(unittest.TestCase):
             suggestions = audio_analysis.suggest_noise_reduction(wav)
             if suggestions:
                 item = suggestions[0].to_dict()
-                for key in ("start", "end", "noise_score", "suggested_strength_pct", "confidence"):
+                for key in (
+                    "start",
+                    "end",
+                    "noise_score",
+                    "suggested_strength_pct",
+                    "confidence",
+                ):
                     self.assertIn(key, item)
 
     def test_score_helpers(self) -> None:

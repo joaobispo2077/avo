@@ -17,8 +17,8 @@ MASTER_BASENAME = "20260801-demo-master-v001"
 
 sys.path.insert(0, str(SRC))
 
-from avo.cli import build_parser, main  # noqa: E402
-from avo import scratch  # noqa: E402
+from avo import scratch
+from avo.cli import build_parser, main
 
 
 class CleanupCliTests(unittest.TestCase):

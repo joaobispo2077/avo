@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import unittest
-from pathlib import Path
 
 from avo.paths import config_path, repo_root, schema_path
 
@@ -93,7 +92,9 @@ class RepoLayoutTests(unittest.TestCase):
             "avo.model-catalog.json",
             "avo.project.schema.json",
         ):
-            self.assertFalse((self.root / name).is_file(), msg=f"legacy root file: {name}")
+            self.assertFalse(
+                (self.root / name).is_file(), msg=f"legacy root file: {name}"
+            )
 
     def test_github_surfaces_do_not_embed_personal_absolute_paths(self) -> None:
         needles = ("/mnt/h/bishop/", "H:/bishop/", "C:/Users/vitor/")
@@ -110,7 +111,19 @@ class RepoLayoutTests(unittest.TestCase):
                 if (
                     not path.is_file()
                     or "__pycache__" in path.parts
-                    or path.suffix not in {".py", ".md", ".json", ".js", ".mjs", ".sh", ".ps1", ".toml", ".yml", ".yaml"}
+                    or path.suffix
+                    not in {
+                        ".py",
+                        ".md",
+                        ".json",
+                        ".js",
+                        ".mjs",
+                        ".sh",
+                        ".ps1",
+                        ".toml",
+                        ".yml",
+                        ".yaml",
+                    }
                 ):
                     continue
                 content = path.read_text(encoding="utf-8", errors="ignore")
@@ -118,13 +131,16 @@ class RepoLayoutTests(unittest.TestCase):
                     offenders.append(str(path.relative_to(self.root)))
         self.assertEqual(offenders, [], msg=f"personal absolute paths: {offenders}")
 
-
     def test_no_project_specific_one_off_scripts_or_dependencies(self) -> None:
         repository_scripts = (
-            "apply-anchor-rail-pilots.mjs", "build-continuous-caption-pilots.mjs",
-            "clamp-caption-boundaries.mjs", "finalize-switch-shorts-docs.mjs",
-            "fix-continuous-caption-pilots.mjs", "normalize-switch-short-transcripts.mjs",
-            "qc-switch-shorts.sh", "revise-switch-short-layouts.mjs",
+            "apply-anchor-rail-pilots.mjs",
+            "build-continuous-caption-pilots.mjs",
+            "clamp-caption-boundaries.mjs",
+            "finalize-switch-shorts-docs.mjs",
+            "fix-continuous-caption-pilots.mjs",
+            "normalize-switch-short-transcripts.mjs",
+            "qc-switch-shorts.sh",
+            "revise-switch-short-layouts.mjs",
         )
         known_external_helpers = ("rebuild-nier-inserts.mjs",)
         for name in repository_scripts:
@@ -133,7 +149,9 @@ class RepoLayoutTests(unittest.TestCase):
                 msg=f"project-specific script must stay outside AVO: scripts/{name}",
             )
         self.assertFalse(
-            (self.root / "tests/fixtures/shorts/switch-migration-inventory.json").exists(),
+            (
+                self.root / "tests/fixtures/shorts/switch-migration-inventory.json"
+            ).exists(),
             msg="private project migration inventory must stay outside AVO",
         )
         names = repository_scripts + known_external_helpers
@@ -141,7 +159,14 @@ class RepoLayoutTests(unittest.TestCase):
         offenders = []
         for root in roots:
             for path in root.rglob("*"):
-                if path.is_file() and path.suffix in {".py", ".md", ".json", ".js", ".mjs", ".sh"}:
+                if path.is_file() and path.suffix in {
+                    ".py",
+                    ".md",
+                    ".json",
+                    ".js",
+                    ".mjs",
+                    ".sh",
+                }:
                     content = path.read_text(encoding="utf-8", errors="ignore")
                     if any(name in content for name in names):
                         offenders.append(str(path.relative_to(self.root)))

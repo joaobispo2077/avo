@@ -12,7 +12,14 @@ def layer(layer_id, role, order, z, **extra):
         "order": order,
         "zOrder": z,
         "source": {"locator": f"{layer_id}.png", "sha256": "a" * 64, "sizeBytes": 1},
-        "regions": [{"regionId": f"r-{layer_id}", "startTicks": 100, "endTicks": 500, "cueIds": [f"cue-{layer_id}"]}],
+        "regions": [
+            {
+                "regionId": f"r-{layer_id}",
+                "startTicks": 100,
+                "endTicks": 500,
+                "cueIds": [f"cue-{layer_id}"],
+            }
+        ],
         "fit": "contain",
         "faceAvoidance": role == "base" or True,
         "safeZones": ["face", "captions"],
@@ -31,7 +38,13 @@ def test_compiles_all_visual_roles_z_order_and_captions_last():
         layer("captions", "caption", 6, 100),
     ]
     compiled = compile_video_layers(layers)
-    assert [item["layerId"] for item in compiled["overlays"]] == ["clip", "image", "text", "card", "graphic"]
+    assert [item["layerId"] for item in compiled["overlays"]] == [
+        "clip",
+        "image",
+        "text",
+        "card",
+        "graphic",
+    ]
     assert compiled["captions"]["layerId"] == "captions"
     assert compiled["trace"][-1]["role"] == "caption"
 

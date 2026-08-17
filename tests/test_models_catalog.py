@@ -69,7 +69,9 @@ class ModelCatalogTests(unittest.TestCase):
 
         with mock.patch("avo.models.avo_state.load_state", return_value={}):
             pid = resolve_option_id("transcribe", root=ROOT, label="paid")
-        catalog = json.loads((ROOT / "config" / "avo.model-catalog.json").read_text(encoding="utf-8"))
+        catalog = json.loads(
+            (ROOT / "config" / "avo.model-catalog.json").read_text(encoding="utf-8")
+        )
         default_paid = catalog["jobs"]["transcribe_paid"]["default"]
         self.assertEqual(pid, default_paid)
 
@@ -84,13 +86,19 @@ class ModelCatalogTests(unittest.TestCase):
         self.assertIn("bonsai-27b-gguf", ids)
         self.assertIn("ternary-bonsai-27b-gguf", ids)
         self.assertGreater(ids.index("bonsai-27b-gguf"), ids.index("qwen2.5-32b"))
-        self.assertGreater(ids.index("ternary-bonsai-27b-gguf"), ids.index("bonsai-27b-gguf"))
+        self.assertGreater(
+            ids.index("ternary-bonsai-27b-gguf"), ids.index("bonsai-27b-gguf")
+        )
         plan_ids = [o["id"] for o in catalog["jobs"]["plan"]["options"]]
         self.assertNotIn("bonsai-27b-gguf", plan_ids)
         self.assertNotIn("ternary-bonsai-27b-gguf", plan_ids)
         one_bit = next(o for o in understand["options"] if o["id"] == "bonsai-27b-gguf")
-        ternary = next(o for o in understand["options"] if o["id"] == "ternary-bonsai-27b-gguf")
-        self.assertEqual(one_bit["label"], "Bonsai 27B GGUF (1-bit · ~8 GB ≈ Qwen3.6-27B ~54 GB)")
+        ternary = next(
+            o for o in understand["options"] if o["id"] == "ternary-bonsai-27b-gguf"
+        )
+        self.assertEqual(
+            one_bit["label"], "Bonsai 27B GGUF (1-bit · ~8 GB ≈ Qwen3.6-27B ~54 GB)"
+        )
         self.assertEqual(one_bit["vramMB"], 8192)
         self.assertEqual(one_bit["diskMB"], 5000)
         self.assertEqual(one_bit["speed"], "balanced")
@@ -142,7 +150,9 @@ class ModelCatalogTests(unittest.TestCase):
                 with mock.patch("sys.stdout") as out:
                     code = models_cli.main(["show", "--json", "--root", str(ROOT)])
         self.assertEqual(code, 0)
-        payload = json.loads("".join(c.args[0] for c in out.write.call_args_list if c.args))
+        payload = json.loads(
+            "".join(c.args[0] for c in out.write.call_args_list if c.args)
+        )
         self.assertIn("activeModels", payload)
 
     def test_state_pin_understand_bonsai_wins_over_hardware(self) -> None:
@@ -177,8 +187,13 @@ class ModelCatalogTests(unittest.TestCase):
                 with mock.patch("sys.stdout") as out:
                     code = models_cli.main(["show", "--json", "--root", str(ROOT)])
         self.assertEqual(code, 0)
-        payload = json.loads("".join(c.args[0] for c in out.write.call_args_list if c.args))
-        self.assertEqual(payload["activeModels"]["understand"], "Bonsai 27B GGUF (1-bit · ~8 GB ≈ Qwen3.6-27B ~54 GB)")
+        payload = json.loads(
+            "".join(c.args[0] for c in out.write.call_args_list if c.args)
+        )
+        self.assertEqual(
+            payload["activeModels"]["understand"],
+            "Bonsai 27B GGUF (1-bit · ~8 GB ≈ Qwen3.6-27B ~54 GB)",
+        )
 
     def test_unpinned_default_disclosure_names_qwen_7b(self) -> None:
         from helpers import models_cli
@@ -188,10 +203,11 @@ class ModelCatalogTests(unittest.TestCase):
                 with mock.patch("sys.stdout") as out:
                     code = models_cli.main(["show", "--json", "--root", str(ROOT)])
         self.assertEqual(code, 0)
-        payload = json.loads("".join(c.args[0] for c in out.write.call_args_list if c.args))
+        payload = json.loads(
+            "".join(c.args[0] for c in out.write.call_args_list if c.args)
+        )
         self.assertEqual(payload["activeModels"]["understand"], "Qwen 2.5 7B")
 
 
 if __name__ == "__main__":
     unittest.main()
-

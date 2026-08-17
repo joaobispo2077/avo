@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import sys
 import tempfile
 import unittest
 from copy import deepcopy
@@ -10,7 +9,6 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 
 from avo import validate_edl
-
 
 SCHEMA = ROOT / "specs/003-switch-comparison-video/contracts/edl.schema.json"
 
@@ -160,9 +158,13 @@ class SwitchComparisonEdlContractTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         if not SCHEMA.is_file():
-            raise unittest.SkipTest(f"missing local project spec (not in public repo): {SCHEMA}")
+            raise unittest.SkipTest(
+                f"missing local project spec (not in public repo): {SCHEMA}"
+            )
 
-    def test_valid_comparison_edl_allows_many_overlays_optional_sfx_no_burn_in(self) -> None:
+    def test_valid_comparison_edl_allows_many_overlays_optional_sfx_no_burn_in(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             edl = valid_edl(root)
@@ -171,7 +173,9 @@ class SwitchComparisonEdlContractTests(unittest.TestCase):
             loaded = validate_edl.load_and_validate(path, schema_path=SCHEMA)
             self.assertEqual(len(loaded["overlays"]), 6)
 
-    def test_v004_review_package_gate_blocks_full_render_without_creator_approval(self) -> None:
+    def test_v004_review_package_gate_blocks_full_render_without_creator_approval(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             edl = valid_edl(root)
@@ -199,7 +203,9 @@ class SwitchComparisonEdlContractTests(unittest.TestCase):
             edl["review_package"]["approval_status"] = "draft"
             path = root / "edl.json"
             path.write_text(json.dumps(edl), encoding="utf-8")
-            with self.assertRaisesRegex(validate_edl.EdlValidationError, "review package approval"):
+            with self.assertRaisesRegex(
+                validate_edl.EdlValidationError, "review package approval"
+            ):
                 validate_edl.load_and_validate(path, schema_path=SCHEMA)
 
     def test_blocked_source_range_must_cover_minimum_belly_range(self) -> None:
@@ -209,7 +215,9 @@ class SwitchComparisonEdlContractTests(unittest.TestCase):
             edl["blocked_source_ranges"][0]["final_cut_start"] = 970.0
             path = root / "edl.json"
             path.write_text(json.dumps(edl), encoding="utf-8")
-            with self.assertRaisesRegex(validate_edl.EdlValidationError, "minimum excluded"):
+            with self.assertRaisesRegex(
+                validate_edl.EdlValidationError, "minimum excluded"
+            ):
                 validate_edl.load_and_validate(path, schema_path=SCHEMA)
 
     def test_visual_subtitle_asset_is_rejected_for_comparison_edl(self) -> None:
@@ -222,14 +230,18 @@ class SwitchComparisonEdlContractTests(unittest.TestCase):
             with self.assertRaises(validate_edl.EdlValidationError):
                 validate_edl.load_and_validate(path, schema_path=SCHEMA)
 
-    def test_sfx_must_reference_existing_overlay_but_overlay_sfx_is_optional(self) -> None:
+    def test_sfx_must_reference_existing_overlay_but_overlay_sfx_is_optional(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             edl = valid_edl(root)
             edl["sound_effects"][0]["motion_brief_id"] = "missing-slot"
             path = root / "edl.json"
             path.write_text(json.dumps(edl), encoding="utf-8")
-            with self.assertRaisesRegex(validate_edl.EdlValidationError, "matching overlay"):
+            with self.assertRaisesRegex(
+                validate_edl.EdlValidationError, "matching overlay"
+            ):
                 validate_edl.load_and_validate(path, schema_path=SCHEMA)
 
     def test_duplicate_or_out_of_bounds_overlay_fails_semantics(self) -> None:
@@ -237,17 +249,23 @@ class SwitchComparisonEdlContractTests(unittest.TestCase):
             root = Path(tmp)
             edl = valid_edl(root)
             bad = deepcopy(edl)
-            bad["overlays"][1]["motion_brief_id"] = bad["overlays"][0]["motion_brief_id"]
+            bad["overlays"][1]["motion_brief_id"] = bad["overlays"][0][
+                "motion_brief_id"
+            ]
             path = root / "duplicate.json"
             path.write_text(json.dumps(bad), encoding="utf-8")
-            with self.assertRaisesRegex(validate_edl.EdlValidationError, "duplicate overlay"):
+            with self.assertRaisesRegex(
+                validate_edl.EdlValidationError, "duplicate overlay"
+            ):
                 validate_edl.load_and_validate(path, schema_path=SCHEMA)
 
             bad = deepcopy(edl)
             bad["overlays"][0]["start_in_output"] = 99.0
             path = root / "bounds.json"
             path.write_text(json.dumps(bad), encoding="utf-8")
-            with self.assertRaisesRegex(validate_edl.EdlValidationError, "beyond output"):
+            with self.assertRaisesRegex(
+                validate_edl.EdlValidationError, "beyond output"
+            ):
                 validate_edl.load_and_validate(path, schema_path=SCHEMA)
 
     def test_missing_approved_ad_asset_fails(self) -> None:
@@ -257,7 +275,9 @@ class SwitchComparisonEdlContractTests(unittest.TestCase):
             edl["ad_segment"]["approved_asset"] = "missing-ad.mp4"
             path = root / "edl.json"
             path.write_text(json.dumps(edl), encoding="utf-8")
-            with self.assertRaisesRegex(validate_edl.EdlValidationError, "approved_asset"):
+            with self.assertRaisesRegex(
+                validate_edl.EdlValidationError, "approved_asset"
+            ):
                 validate_edl.load_and_validate(path, schema_path=SCHEMA)
 
 

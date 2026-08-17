@@ -3,15 +3,16 @@
 This is a Python test-data flow, not a per-video repair helper. It always creates
 new synthetic raw sources and never edits project footage.
 """
+
 from __future__ import annotations
 
 import argparse
 import hashlib
 import json
-from pathlib import Path
 import shutil
 import subprocess
-from typing import Iterable
+from collections.abc import Iterable
+from pathlib import Path
 
 
 def sha256(path: Path) -> str:
@@ -23,26 +24,71 @@ def sha256(path: Path) -> str:
 
 
 def _run(args: Iterable[str]) -> None:
-    subprocess.run(list(args), check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    subprocess.run(list(args), check=True, capture_output=True)
 
 
 def _base_command(ffmpeg: str, duration: float, frequency: int) -> list[str]:
     return [
-        ffmpeg, "-hide_banner", "-loglevel", "error", "-y",
-        "-f", "lavfi", "-i", f"testsrc2=size=320x180:rate=30:duration={duration}",
-        "-f", "lavfi", "-i", f"sine=frequency={frequency}:sample_rate=48000:duration={duration}",
+        ffmpeg,
+        "-hide_banner",
+        "-loglevel",
+        "error",
+        "-y",
+        "-f",
+        "lavfi",
+        "-i",
+        f"testsrc2=size=320x180:rate=30:duration={duration}",
+        "-f",
+        "lavfi",
+        "-i",
+        f"sine=frequency={frequency}:sample_rate=48000:duration={duration}",
     ]
 
 
-def _encode(ffmpeg: str, output: Path, *, duration: float, frequency: int, audio_filter: str = "anull") -> None:
+def _encode(
+    ffmpeg: str,
+    output: Path,
+    *,
+    duration: float,
+    frequency: int,
+    audio_filter: str = "anull",
+) -> None:
     command = _base_command(ffmpeg, duration, frequency)
     command += [
-        "-map", "0:v:0", "-map", "1:a:0", "-af", audio_filter,
-        "-c:v", "libx264", "-preset", "ultrafast", "-crf", "28",
-        "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "96k", "-ar", "48000",
-        "-map_metadata", "-1", "-metadata", "creation_time=1970-01-01T00:00:00Z",
-        "-fflags", "+bitexact", "-flags:v", "+bitexact", "-flags:a", "+bitexact",
-        "-movflags", "+faststart", "-shortest", str(output),
+        "-map",
+        "0:v:0",
+        "-map",
+        "1:a:0",
+        "-af",
+        audio_filter,
+        "-c:v",
+        "libx264",
+        "-preset",
+        "ultrafast",
+        "-crf",
+        "28",
+        "-pix_fmt",
+        "yuv420p",
+        "-c:a",
+        "aac",
+        "-b:a",
+        "96k",
+        "-ar",
+        "48000",
+        "-map_metadata",
+        "-1",
+        "-metadata",
+        "creation_time=1970-01-01T00:00:00Z",
+        "-fflags",
+        "+bitexact",
+        "-flags:v",
+        "+bitexact",
+        "-flags:a",
+        "+bitexact",
+        "-movflags",
+        "+faststart",
+        "-shortest",
+        str(output),
     ]
     _run(command)
 
@@ -62,7 +108,13 @@ def build_fixture_set(output_dir: Path, *, ffmpeg: str = "ffmpeg") -> dict[str, 
     outputs: dict[str, dict[str, object]] = {}
     for name, (duration, frequency, audio_filter) in definitions.items():
         path = output_dir / name
-        _encode(ffmpeg, path, duration=duration, frequency=frequency, audio_filter=audio_filter)
+        _encode(
+            ffmpeg,
+            path,
+            duration=duration,
+            frequency=frequency,
+            audio_filter=audio_filter,
+        )
         outputs[name] = {"sha256": sha256(path), "byteSize": path.stat().st_size}
     manifest = {"schemaVersion": "1.0.0", "files": outputs}
     (output_dir / "generated-manifest.json").write_text(

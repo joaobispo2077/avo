@@ -1,14 +1,12 @@
 from __future__ import annotations
 
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
-from avo import build_captions
-from avo import render
+from avo import build_captions, render
 
 
 class CaptionPlanTests(unittest.TestCase):
@@ -67,4 +65,3 @@ class CaptionPlanTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

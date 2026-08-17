@@ -1,4 +1,5 @@
 """Command file parity tests for /avo.* slash commands."""
+
 from __future__ import annotations
 
 import unittest
@@ -43,38 +44,44 @@ WAVE6_COMMANDS = {
     "voiceover.md",
 }
 
-EXPECTED_COMMANDS = {
-    "help.md",
-    "guidelines.md",
-    "docs.md",
-    "pipeline.md",
-    "trim.md",
-    "transcribe.md",
-    "sound.md",
-    "audit.md",
-    "watch.md",
-    "motion.md",
-    "captions.md",
-    "rights.md",
-    "audio-qc.md",
-    "chapters.md",
-    "thumbnail.md",
-    "deliver.md",
-    "shorts.md",
-    "reframe.md",
-    "podcast-clip.md",
-    "trailer.md",
-    "pr-video.md",
-    "changelog-video.md",
-    "explainer.md",
-    "slideshow.md",
-    "retention.md",
-    "animation-qc.md",
-    "telemetry.md",
-    "learndown.md",
-    "cleanup.md",
-    "stats.md",
-} | WAVE3_COMMANDS | WAVE4_COMMANDS | WAVE5_COMMANDS | WAVE6_COMMANDS
+EXPECTED_COMMANDS = (
+    {
+        "help.md",
+        "guidelines.md",
+        "docs.md",
+        "pipeline.md",
+        "trim.md",
+        "transcribe.md",
+        "sound.md",
+        "audit.md",
+        "watch.md",
+        "motion.md",
+        "captions.md",
+        "rights.md",
+        "audio-qc.md",
+        "chapters.md",
+        "thumbnail.md",
+        "deliver.md",
+        "shorts.md",
+        "reframe.md",
+        "podcast-clip.md",
+        "trailer.md",
+        "pr-video.md",
+        "changelog-video.md",
+        "explainer.md",
+        "slideshow.md",
+        "retention.md",
+        "animation-qc.md",
+        "telemetry.md",
+        "learndown.md",
+        "cleanup.md",
+        "stats.md",
+    }
+    | WAVE3_COMMANDS
+    | WAVE4_COMMANDS
+    | WAVE5_COMMANDS
+    | WAVE6_COMMANDS
+)
 
 EXPECTED_UTILITY_REFS = {
     "help.md",
@@ -276,7 +283,9 @@ class AvoCommandParityTests(unittest.TestCase):
 
     def test_review_templates_exist(self) -> None:
         found = {p.name for p in REVIEW_TEMPLATES.glob("*.md")}
-        self.assertTrue(EXPECTED_REVIEW_TEMPLATES.issubset(found), found - EXPECTED_REVIEW_TEMPLATES)
+        self.assertTrue(
+            EXPECTED_REVIEW_TEMPLATES.issubset(found), found - EXPECTED_REVIEW_TEMPLATES
+        )
 
     def test_skills_json_still_three_entries(self) -> None:
         import json
@@ -289,7 +298,6 @@ class AvoCommandParityTests(unittest.TestCase):
         text = LOCALE_STUB.read_text(encoding="utf-8")
         self.assertIn("do not implement", text)
         self.assertFalse((ROOT / "agent-skills" / "avo-locale").exists())
-
 
     def test_every_command_declares_timeline_integration_mode(self) -> None:
         allowed = {"Owns", "Evidence", "Consumes", "Profile", "Admin"}
@@ -305,7 +313,6 @@ class AvoCommandParityTests(unittest.TestCase):
             if len(declarations) != 1 or declarations[0] not in allowed:
                 failures.append((command.name, declarations))
         self.assertEqual(failures, [])
-
 
 
 if __name__ == "__main__":

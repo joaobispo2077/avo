@@ -19,13 +19,17 @@ def _ensure_import_path() -> None:
 
 class AvoConfigTests(unittest.TestCase):
     def test_avo_config_has_required_jobs(self) -> None:
-        data = json.loads((ROOT / "config" / "avo.config.json").read_text(encoding="utf-8"))
+        data = json.loads(
+            (ROOT / "config" / "avo.config.json").read_text(encoding="utf-8")
+        )
         jobs = data["jobs"]
         for key in ("plan", "transcribe", "understand", "motion", "render", "cleanup"):
             self.assertIn(key, jobs, f"missing job {key}")
 
     def test_avo_dependencies_manifest_loads(self) -> None:
-        data = json.loads((ROOT / "config" / "avo.dependencies.json").read_text(encoding="utf-8"))
+        data = json.loads(
+            (ROOT / "config" / "avo.dependencies.json").read_text(encoding="utf-8")
+        )
         self.assertIn("tools", data)
         for required in ("speckit", "avo-engine", "watch-skill", "hyperframes"):
             self.assertIn(required, data["tools"])

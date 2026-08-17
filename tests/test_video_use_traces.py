@@ -33,12 +33,12 @@ ALLOWLIST_GLOBS = [
 ]
 
 STALE_PATTERNS = [
-    re.compile(r"# Video Use Constitution", re.I),
-    re.compile(r"video-use-hyperframes-tooling", re.I),
-    re.compile(r">Video Use<", re.I),
-    re.compile(r"custom video-use workflow", re.I),
-    re.compile(r"video-use EDL", re.I),
-    re.compile(r"`video-use` session outputs", re.I),
+    re.compile(r"# Video Use Constitution", re.IGNORECASE),
+    re.compile(r"video-use-hyperframes-tooling", re.IGNORECASE),
+    re.compile(r">Video Use<", re.IGNORECASE),
+    re.compile(r"custom video-use workflow", re.IGNORECASE),
+    re.compile(r"video-use EDL", re.IGNORECASE),
+    re.compile(r"`video-use` session outputs", re.IGNORECASE),
 ]
 
 
@@ -68,7 +68,9 @@ class VideoUseTraceTests(unittest.TestCase):
 
     def test_workflow_svg_not_labeled_video_use(self) -> None:
         svg = (ROOT / "static/avo-workflow.svg").read_text(encoding="utf-8")
-        self.assertNotRegex(svg, r">Video Use<", msg="workflow SVG should not label product Video Use")
+        self.assertNotRegex(
+            svg, r">Video Use<", msg="workflow SVG should not label product Video Use"
+        )
         self.assertIn("AVO engine", svg)
 
     def test_no_stale_product_traces_outside_allowlist(self) -> None:
@@ -97,7 +99,17 @@ class VideoUseTraceTests(unittest.TestCase):
                 if path.is_file():
                     paths.append(path)
         for path in paths:
-            if path.suffix not in {".md", ".json", ".py", ".svg", ".sh", ".ps1", ".cjs", ".yml", ".yaml"}:
+            if path.suffix not in {
+                ".md",
+                ".json",
+                ".py",
+                ".svg",
+                ".sh",
+                ".ps1",
+                ".cjs",
+                ".yml",
+                ".yaml",
+            }:
                 continue
             try:
                 text = path.read_text(encoding="utf-8")
@@ -105,8 +117,12 @@ class VideoUseTraceTests(unittest.TestCase):
                 continue
             for pat in STALE_PATTERNS:
                 if pat.search(text) and not _allowed(path):
-                    offenders.append(f"{rel}: {pat.pattern}")
-        self.assertEqual(offenders, [], msg="Stale video-use product traces:\n" + "\n".join(offenders))
+                    offenders.append(f"{path.relative_to(ROOT)}: {pat.pattern}")
+        self.assertEqual(
+            offenders,
+            [],
+            msg="Stale video-use product traces:\n" + "\n".join(offenders),
+        )
 
 
 if __name__ == "__main__":

@@ -4,11 +4,10 @@ from pathlib import Path
 
 import pytest
 
+from avo.timeline.bmap_service import BMapService
 from avo.timeline.contracts import file_fingerprint
 from avo.timeline.tracks import TrackError, TracksService
-
 from tests.test_timeline_bmap_service import approved_workspace, cue
-from avo.timeline.bmap_service import BMapService
 
 
 def canonical_tracks(workspace, source: Path) -> dict:

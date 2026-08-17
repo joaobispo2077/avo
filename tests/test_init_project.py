@@ -10,7 +10,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
 
-from avo import init_project  # noqa: E402
+from avo import init_project
 
 
 class InitProjectTests(unittest.TestCase):
@@ -58,17 +58,20 @@ class InitProjectTests(unittest.TestCase):
                 "not-generated",
             )
 
-
     def test_initialize_with_identity_creates_valid_empty_indexes(self) -> None:
         import tempfile
+
         from avo.timeline.store import ArtifactStore
+
         with tempfile.TemporaryDirectory() as tmp:
-            timeline=init_project.initialize_timeline_layout(tmp,video_id="demo",provider="bishop")
+            timeline = init_project.initialize_timeline_layout(
+                tmp, video_id="demo", provider="bishop"
+            )
             for artifact in init_project.TIMELINE_ARTIFACTS:
-                index=ArtifactStore(timeline/f"{artifact}.json").load_index()
+                index = ArtifactStore(timeline / f"{artifact}.json").load_index()
                 self.assertIsNone(index["headRevisionId"])
                 self.assertIsNone(index["approvedRevisionId"])
-                self.assertEqual(index["revisionRefs"],[])
+                self.assertEqual(index["revisionRefs"], [])
 
     def test_help_exits_zero(self) -> None:
         proc = subprocess.run(

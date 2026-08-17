@@ -1,4 +1,5 @@
 """Voiceover mux command construction tests."""
+
 from __future__ import annotations
 
 import json
@@ -14,7 +15,7 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 FIXTURE = ROOT / "tests" / "fixtures" / "edl_voiceover_minimal.json"
 
-from avo import render, voiceover
+from avo import render
 
 
 class VoiceoverMuxTests(unittest.TestCase):

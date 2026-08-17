@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import copy
 import unittest
 
 from avo.timeline.contracts import ContractError, validate_document
@@ -53,7 +52,10 @@ def document():
                             "intent": "clarify",
                             "reason": "spoken point",
                             "reviewState": "pending",
-                            "rebaseHints": {"rawAnchors": [], "transcriptSpanSha256": "c" * 64},
+                            "rebaseHints": {
+                                "rawAnchors": [],
+                                "transcriptSpanSha256": "c" * 64,
+                            },
                         }
                     ],
                 },

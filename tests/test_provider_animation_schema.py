@@ -87,7 +87,9 @@ def _kit_pattern() -> dict:
                     "questionPlaque": {"anchor": "chest"},
                 },
             },
-            "sfxRelationships": {"trembleEntry": {"role": "pop", "sync": "first-frame"}},
+            "sfxRelationships": {
+                "trembleEntry": {"role": "pop", "sync": "first-frame"}
+            },
             "hyperframesKit": {
                 "root": "hyperframes/playful-chapter-support",
                 "css": "playful.css",
@@ -115,9 +117,11 @@ def test_promoted_pattern_can_link_tmp_hyperframes_kit(tmp_path: Path):
     kit_root = tmp_path / "hyperframes" / "playful-chapter-support"
     (kit_root / "slots").mkdir(parents=True)
     (kit_root / "playful.css").write_text(".panel{}", encoding="utf-8")
-    (kit_root / "playful-motion.js").write_text("globalThis.PlayfulMotion={};", encoding="utf-8")
+    (kit_root / "playful-motion.js").write_text(
+        "globalThis.PlayfulMotion={};", encoding="utf-8"
+    )
     (kit_root / "slots" / "comic-beat.html").write_text(
-        "<div class=\"comic\">{{QUESTION}}</div>",
+        '<div class="comic">{{QUESTION}}</div>',
         encoding="utf-8",
     )
     (kit_root / "MANIFEST.json").write_text(
@@ -143,7 +147,9 @@ def test_promoted_pattern_can_link_tmp_hyperframes_kit(tmp_path: Path):
     )
 
     catalog = service.load()
-    validate_document(catalog, "avo.animation-library.schema.json", root=Path("providers"))
+    validate_document(
+        catalog, "avo.animation-library.schema.json", root=Path("providers")
+    )
     item = catalog["patterns"][0]
 
     assert item["patternId"] == "playful-chapter-support"

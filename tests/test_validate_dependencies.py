@@ -10,9 +10,13 @@ ROOT = Path(__file__).resolve().parents[1]
 
 class ValidateDependenciesManifestTests(unittest.TestCase):
     def test_manifest_required_tools(self) -> None:
-        data = json.loads((ROOT / "config" / "avo.dependencies.json").read_text(encoding="utf-8"))
+        data = json.loads(
+            (ROOT / "config" / "avo.dependencies.json").read_text(encoding="utf-8")
+        )
         tools = data["tools"]
-        self.assertEqual(tools["watch-skill"]["repo"], "https://github.com/oxbshw/watch-skill")
+        self.assertEqual(
+            tools["watch-skill"]["repo"], "https://github.com/oxbshw/watch-skill"
+        )
         self.assertEqual(tools["watch-skill"]["path"], "tools/watch-skill")
 
     def test_routing_alignment(self) -> None:
@@ -47,7 +51,9 @@ class ValidateDependenciesManifestTests(unittest.TestCase):
         self.assertEqual(result.status, "OK")
 
     def test_avo_engine_has_legacy_alias(self) -> None:
-        data = json.loads((ROOT / "config" / "avo.dependencies.json").read_text(encoding="utf-8"))
+        data = json.loads(
+            (ROOT / "config" / "avo.dependencies.json").read_text(encoding="utf-8")
+        )
         engine = data["tools"]["avo-engine"]
         self.assertIn("video-use-engine", engine.get("aliases", []))
 
@@ -68,7 +74,9 @@ class ValidateDependenciesManifestTests(unittest.TestCase):
 
     @mock.patch("avo.validate_dependencies.repo_reachable", return_value=True)
     @mock.patch("avo.validate_dependencies.shallow_clone", return_value=True)
-    def test_watch_skill_shallow_clone_ci(self, _clone: mock.Mock, _reachable: mock.Mock) -> None:
+    def test_watch_skill_shallow_clone_ci(
+        self, _clone: mock.Mock, _reachable: mock.Mock
+    ) -> None:
         import sys
 
         sys.path.insert(0, str(ROOT))
@@ -95,7 +103,9 @@ class OptionalToolHealthTests(unittest.TestCase):
         sys.path.insert(0, str(ROOT))
         from avo.validate_dependencies import CheckResult, check_ai_memory_optional
 
-        clone.return_value = CheckResult("ai-memory", "OK", "present at tools/ai-memory")
+        clone.return_value = CheckResult(
+            "ai-memory", "OK", "present at tools/ai-memory"
+        )
         result = check_ai_memory_optional(
             ROOT,
             "ai-memory",
@@ -125,7 +135,6 @@ class OptionalToolHealthTests(unittest.TestCase):
             )
         self.assertEqual(result.status, "WARN")
         self.assertIn("bwrap", result.note)
-
 
 
 if __name__ == "__main__":

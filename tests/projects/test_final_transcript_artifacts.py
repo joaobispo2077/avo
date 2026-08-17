@@ -24,9 +24,24 @@ class FinalTranscriptArtifactTests(unittest.TestCase):
                     {
                         "text": "primeira frase. segunda frase",
                         "words": [
-                            {"type": "word", "text": "primeira", "start": 0.0, "end": 0.4},
-                            {"type": "word", "text": "frase.", "start": 0.4, "end": 0.8},
-                            {"type": "word", "text": "segunda", "start": 1.2, "end": 1.7},
+                            {
+                                "type": "word",
+                                "text": "primeira",
+                                "start": 0.0,
+                                "end": 0.4,
+                            },
+                            {
+                                "type": "word",
+                                "text": "frase.",
+                                "start": 0.4,
+                                "end": 0.8,
+                            },
+                            {
+                                "type": "word",
+                                "text": "segunda",
+                                "start": 1.2,
+                                "end": 1.7,
+                            },
                             {"type": "word", "text": "frase", "start": 1.7, "end": 2.2},
                         ],
                     }
@@ -34,13 +49,21 @@ class FinalTranscriptArtifactTests(unittest.TestCase):
                 encoding="utf-8",
             )
             outputs = final_transcript_artifacts.write_artifacts(transcript)
-            self.assertEqual(outputs["txt"].name, "20260721-switch-comparison-master-v001.txt")
+            self.assertEqual(
+                outputs["txt"].name, "20260721-switch-comparison-master-v001.txt"
+            )
             self.assertTrue(outputs["txt"].exists())
             self.assertTrue(outputs["md"].exists())
             self.assertTrue(outputs["srt"].exists())
             self.assertIn("primeira frase", outputs["txt"].read_text(encoding="utf-8"))
-            self.assertIn("# 20260721-switch-comparison-master-v001", outputs["md"].read_text(encoding="utf-8"))
-            self.assertIn("00:00:00,000 --> 00:00:00,800", outputs["srt"].read_text(encoding="utf-8"))
+            self.assertIn(
+                "# 20260721-switch-comparison-master-v001",
+                outputs["md"].read_text(encoding="utf-8"),
+            )
+            self.assertIn(
+                "00:00:00,000 --> 00:00:00,800",
+                outputs["srt"].read_text(encoding="utf-8"),
+            )
 
 
 if __name__ == "__main__":
