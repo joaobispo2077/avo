@@ -1,0 +1,10 @@
+{
+  "light": {
+    "min_killed_percent": 40,
+    "notes": "PR/ci.yml scoped critical packages; cache mutants/ for speed. Ubuntu-only (mutmut)."
+  },
+  "full": {
+    "min_killed_percent": 50,
+    "notes": "Weekly backstop; delete mutants/ so cache is not source of truth."
+  }
+}
