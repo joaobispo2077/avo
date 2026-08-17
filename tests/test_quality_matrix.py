@@ -70,7 +70,7 @@ class QualityMatrixTests(unittest.TestCase):
         self.assertNotIn(
             'pip install -e ".[dev]"',
             ci,
-            msg="quality/unit CI must not use unlocked pip install -e \".[dev]\"",
+            msg='quality/unit CI must not use unlocked pip install -e ".[dev]"',
         )
         # Gate 2 may still use unlocked editable install without extras.
         self.assertIn("pip install -e .", ci)
@@ -245,7 +245,7 @@ class QualityMatrixTests(unittest.TestCase):
         runner = (ROOT / "scripts/ci/run-coverage.sh").read_text(encoding="utf-8")
         self.assertIn("set -euo pipefail", runner)
         self.assertIn("--cov-fail-under", runner)
-        self.assertIn('COV_FAIL_UNDER:-68', runner)
+        self.assertIn("COV_FAIL_UNDER:-68", runner)
 
         audit = (ROOT / "docs/software-quality-audit.md").read_text(encoding="utf-8")
         self.assertIn("68", audit)
@@ -271,7 +271,7 @@ class QualityMatrixTests(unittest.TestCase):
         self.assertIn("check_complexity.py", runner)
 
         checker = (ROOT / "scripts/ci/check_complexity.py").read_text(encoding="utf-8")
-        self.assertIn("MAX_ABSOLUTE = \"B\"", checker)
+        self.assertIn('MAX_ABSOLUTE = "B"', checker)
         self.assertIn("complexity-allowlist.json", checker)
 
         allowlist_path = ROOT / "scripts/ci/complexity-allowlist.json"
@@ -350,8 +350,13 @@ class QualityMatrixTests(unittest.TestCase):
         self.assertTrue(stub.is_file())
         overrides = pkg.get("overrides") or {}
         self.assertIn("@semantic-release/npm", overrides)
-        self.assertIn("semantic-release-npm-stub", str(overrides["@semantic-release/npm"]))
-        self.assertNotIn("@semantic-release/npm", (ROOT / "release.config.mjs").read_text(encoding="utf-8"))
+        self.assertIn(
+            "semantic-release-npm-stub", str(overrides["@semantic-release/npm"])
+        )
+        self.assertNotIn(
+            "@semantic-release/npm",
+            (ROOT / "release.config.mjs").read_text(encoding="utf-8"),
+        )
         self.assertIn(
             "semantic-release-package-version.mjs",
             (ROOT / "release.config.mjs").read_text(encoding="utf-8"),
@@ -386,7 +391,9 @@ class QualityMatrixTests(unittest.TestCase):
             "needs: [prerequisites-gate, repo-unit-tests, software-quality]",
             ci,
         )
-        quality_block = ci.split("software-quality:", 1)[1].split("usability-gate:", 1)[0]
+        quality_block = ci.split("software-quality:", 1)[1].split("usability-gate:", 1)[
+            0
+        ]
         # Fail-immediately: no soft/continue-on-error escape hatch on the umbrella.
         self.assertNotIn("continue-on-error:", quality_block)
         quality_lower = quality_block.lower()
@@ -500,7 +507,9 @@ class QualityMatrixTests(unittest.TestCase):
         self.assertIn("jscpd", duplication)
         self.assertIn(".jscpd.json", duplication)
 
-        runner = (ROOT / "scripts/ci/quality-duplication.sh").read_text(encoding="utf-8")
+        runner = (ROOT / "scripts/ci/quality-duplication.sh").read_text(
+            encoding="utf-8"
+        )
         self.assertIn("set -euo pipefail", runner)
         self.assertIn("jscpd", runner)
         self.assertIn(".jscpd.json", runner)
@@ -529,7 +538,9 @@ class QualityMatrixTests(unittest.TestCase):
         self.assertIn(".importlinter", architecture)
         self.assertIn("quality:architecture", pkg["scripts"]["quality"])
 
-        runner = (ROOT / "scripts/ci/quality-architecture.sh").read_text(encoding="utf-8")
+        runner = (ROOT / "scripts/ci/quality-architecture.sh").read_text(
+            encoding="utf-8"
+        )
         self.assertIn("set -euo pipefail", runner)
         self.assertIn("lint-imports", runner)
         self.assertIn(".importlinter", runner)
@@ -608,7 +619,9 @@ class QualityMatrixTests(unittest.TestCase):
         self.assertIn("Mutation tests (light)", ci)
         self.assertNotIn("continue-on-error:", ci.split("mutation-light:", 1)[1][:800])
 
-        full = (ROOT / ".github/workflows/mutation-full.yml").read_text(encoding="utf-8")
+        full = (ROOT / ".github/workflows/mutation-full.yml").read_text(
+            encoding="utf-8"
+        )
         self.assertIn("run-mutation.sh", full)
         self.assertIn("uv sync --frozen --extra dev", full)
         self.assertNotIn("soft stub", full.lower())

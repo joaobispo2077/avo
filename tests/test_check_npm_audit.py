@@ -123,7 +123,9 @@ class TestCheckNpmAudit(unittest.TestCase):
         }
         with (
             mock.patch.object(self.mod, "_load_allowlist", return_value=allow),
-            mock.patch.object(self.mod, "_run_npm_audit", return_value={"vulnerabilities": {}}),
+            mock.patch.object(
+                self.mod, "_run_npm_audit", return_value={"vulnerabilities": {}}
+            ),
         ):
             self.assertEqual(self.mod.main(), 1)
 
