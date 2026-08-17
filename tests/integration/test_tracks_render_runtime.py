@@ -6,7 +6,6 @@ import subprocess
 from pathlib import Path
 
 import pytest
-
 from tests.fixtures.timeline.build_fixtures import build_fixture_set
 from tests.integration.test_cmap_cut_review_runtime import _snapshot, _workspace
 from tests.test_timeline_review_integration import FakeQc, FakeTranscript, FakeWatch

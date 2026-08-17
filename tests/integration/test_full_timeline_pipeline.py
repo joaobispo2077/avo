@@ -5,7 +5,6 @@ import subprocess
 from pathlib import Path
 
 import pytest
-
 from tests.test_timeline_animation_service import strategy
 from tests.test_timeline_bmap_service import approved_workspace, cue
 from tests.test_timeline_tracks_service import canonical_tracks
