@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "description": "Documented high+ dependency audit exemptions (task-011 / FR-6). Unexpected high/critical findings still fail immediately. Prefer fixing or overriding over adding entries. Keep empty when @semantic-release/npm stub/overrides remove nested npm CLI bundles from the audit tree.",
+  "npm": {
+    "advisory_ids": []
+  },
+  "pip": {
+    "ignore_vulns": []
+  }
+}
