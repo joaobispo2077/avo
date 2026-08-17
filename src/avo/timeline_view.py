@@ -30,15 +30,15 @@ from pathlib import Path
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
-
 # -------- Frame extraction ---------------------------------------------------
 
 
-def extract_frames(video: Path, start: float, end: float, n: int, dest_dir: Path) -> list[Path]:
+def extract_frames(
+    video: Path, start: float, end: float, n: int, dest_dir: Path
+) -> list[Path]:
     """Extract N frames evenly spaced across [start, end]. Returns paths in order."""
     dest_dir.mkdir(parents=True, exist_ok=True)
-    if n < 1:
-        n = 1
+    n = max(n, 1)
     if n == 1:
         times = [(start + end) / 2.0]
     else:
@@ -49,15 +49,23 @@ def extract_frames(video: Path, start: float, end: float, n: int, dest_dir: Path
     for i, t in enumerate(times):
         out = dest_dir / f"f_{i:03d}.jpg"
         cmd = [
-            "ffmpeg", "-y",
-            "-ss", f"{t:.3f}",
-            "-i", str(video),
-            "-frames:v", "1",
-            "-q:v", "4",
-            "-vf", "scale=320:-2",
+            "ffmpeg",
+            "-y",
+            "-ss",
+            f"{t:.3f}",
+            "-i",
+            str(video),
+            "-frames:v",
+            "1",
+            "-q:v",
+            "4",
+            "-vf",
+            "scale=320:-2",
             str(out),
         ]
-        subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        subprocess.run(
+            cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+        )
         paths.append(out)
     return paths
 
@@ -65,7 +73,9 @@ def extract_frames(video: Path, start: float, end: float, n: int, dest_dir: Path
 # -------- Audio envelope (librosa if available, ffmpeg fallback) ------------
 
 
-def compute_envelope(video: Path, start: float, end: float, samples: int = 2000) -> np.ndarray:
+def compute_envelope(
+    video: Path, start: float, end: float, samples: int = 2000
+) -> np.ndarray:
     """Extract the audio segment and return an RMS envelope of length `samples`.
 
     Uses ffmpeg to dump mono 16kHz PCM to a temp wav, then computes a
@@ -75,11 +85,21 @@ def compute_envelope(video: Path, start: float, end: float, samples: int = 2000)
         wav = Path(f.name)
     try:
         cmd = [
-            "ffmpeg", "-y",
-            "-ss", f"{start:.3f}",
-            "-i", str(video),
-            "-t", f"{(end - start):.3f}",
-            "-vn", "-ac", "1", "-ar", "16000", "-c:a", "pcm_s16le",
+            "ffmpeg",
+            "-y",
+            "-ss",
+            f"{start:.3f}",
+            "-i",
+            str(video),
+            "-t",
+            f"{(end - start):.3f}",
+            "-vn",
+            "-ac",
+            "1",
+            "-ar",
+            "16000",
+            "-c:a",
+            "pcm_s16le",
             str(wav),
         ]
         r = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -88,6 +108,7 @@ def compute_envelope(video: Path, start: float, end: float, samples: int = 2000)
 
         # Read the WAV manually — avoid librosa as a hard dep
         import wave
+
         with wave.open(str(wav), "rb") as w:
             frames = w.readframes(w.getnframes())
         pcm = np.frombuffer(frames, dtype=np.int16).astype(np.float32) / 32768.0
@@ -99,7 +120,7 @@ def compute_envelope(video: Path, start: float, end: float, samples: int = 2000)
         window = max(1, n // samples)
         usable = (n // window) * window
         reshaped = pcm[:usable].reshape(-1, window)
-        env = np.sqrt(np.mean(reshaped ** 2, axis=1))
+        env = np.sqrt(np.mean(reshaped**2, axis=1))
         if env.size < samples:
             env = np.pad(env, (0, samples - env.size))
         elif env.size > samples:
@@ -121,7 +142,7 @@ def words_in_range(transcript_path: Path, start: float, end: float) -> list[dict
     data = json.loads(transcript_path.read_text(encoding="utf-8"))
     out: list[dict] = []
     for w in data.get("words", []):
-        t = w.get("type", "word")
+        w.get("type", "word")
         ws = w.get("start")
         we = w.get("end")
         if ws is None or we is None:
@@ -132,7 +153,9 @@ def words_in_range(transcript_path: Path, start: float, end: float) -> list[dict
     return out
 
 
-def find_silences(words: list[dict], start: float, end: float, threshold: float = 0.4) -> list[tuple[float, float]]:
+def find_silences(
+    words: list[dict], start: float, end: float, threshold: float = 0.4
+) -> list[tuple[float, float]]:
     """Find gaps >= threshold seconds inside [start, end] between kept tokens."""
     gaps: list[tuple[float, float]] = []
     prev_end = start
@@ -233,7 +256,6 @@ def render_timeline(
         )
 
         # Filmstrip
-        x = 50
         strip_width = canvas_width - 100
         if total_frame_w <= strip_width:
             cursor = 50
@@ -331,18 +353,25 @@ def render_timeline(
 
 
 def main() -> None:
-    ap = argparse.ArgumentParser(description="Filmstrip + waveform composite for a video range")
+    ap = argparse.ArgumentParser(
+        description="Filmstrip + waveform composite for a video range"
+    )
     ap.add_argument("video", type=Path, nargs="?", help="Source video")
     ap.add_argument("start", type=float, nargs="?", help="Start time in seconds")
     ap.add_argument("end", type=float, nargs="?", help="End time in seconds")
     ap.add_argument("-o", "--output", type=Path, default=None, help="Output PNG path")
-    ap.add_argument("--n-frames", type=int, default=10, help="Number of frames in the filmstrip (default 10)")
+    ap.add_argument(
+        "--n-frames",
+        type=int,
+        default=10,
+        help="Number of frames in the filmstrip (default 10)",
+    )
     ap.add_argument(
         "--transcript",
         type=Path,
         default=None,
         help="Path to transcript.json for word labels + silence shading. "
-             "If omitted, will auto-resolve to <video_parent>/edit/transcripts/<video_stem>.json",
+        "If omitted, will auto-resolve to <video_parent>/edit/transcripts/<video_stem>.json",
     )
     ap.add_argument(
         "--edl",

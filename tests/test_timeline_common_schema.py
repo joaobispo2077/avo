@@ -27,8 +27,15 @@ class TimelineCommonSchemaTests(unittest.TestCase):
         )
         self.assertFalse(schema["additionalProperties"])
         for name in (
-            "sha256", "fingerprint", "timebase", "timeValue", "dependencyRef",
-            "diffOperation", "evidenceRef", "approval", "revision",
+            "sha256",
+            "fingerprint",
+            "timebase",
+            "timeValue",
+            "dependencyRef",
+            "diffOperation",
+            "evidenceRef",
+            "approval",
+            "revision",
         ):
             self.assertIn(name, schema["$defs"])
 

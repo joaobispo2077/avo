@@ -62,12 +62,17 @@ def transcript_generator(master: Path, edit_dir: Path, **options):
 
 def workspace(tmp_path: Path) -> TimelineWorkspace:
     project = tmp_path / "avo.project.json"
-    project.write_text(json.dumps({
-        "schemaVersion": "1.0.0",
-        "provider": "bishop",
-        "videoId": "delivery",
-        "rawDir": str(tmp_path),
-    }), encoding="utf-8")
+    project.write_text(
+        json.dumps(
+            {
+                "schemaVersion": "1.0.0",
+                "provider": "bishop",
+                "videoId": "delivery",
+                "rawDir": str(tmp_path),
+            }
+        ),
+        encoding="utf-8",
+    )
     return TimelineWorkspace.from_project(project)
 
 

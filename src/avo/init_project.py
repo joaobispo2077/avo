@@ -18,15 +18,18 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from avo.paths import config_path, providers_dir as _providers_dir, repo_root
-
+from avo.paths import config_path, repo_root
+from avo.paths import providers_dir as _providers_dir
 
 ASSET_KEYS = ("sfx", "music", "inserts", "graphics", "logos")
 TIMELINE_ARTIFACTS = ("cmap", "bmap", "tracks", "animation", "sync-map")
 
 
 def initialize_timeline_layout(
-    raw_dir: str | Path, *, video_id: str = "", provider: str = "",
+    raw_dir: str | Path,
+    *,
+    video_id: str = "",
+    provider: str = "",
 ) -> Path:
     """Create additive canonical directories and projection metadata.
 
@@ -42,12 +45,16 @@ def initialize_timeline_layout(
     (raw_path / "edit" / "review").mkdir(parents=True, exist_ok=True)
     (raw_path / "edit" / "transcripts").mkdir(parents=True, exist_ok=True)
     if video_id and provider:
-        from avo.timeline.workspace import ARTIFACTS
         from avo.timeline.store import ArtifactStore
+        from avo.timeline.workspace import ARTIFACTS
+
         for artifact, domain in ARTIFACTS.items():
             ArtifactStore(timeline / f"{artifact}.json").initialize(
-                artifact_type=artifact, artifact_id=f"{video_id}:{artifact}",
-                video_id=video_id, provider=provider, timeline_domain=domain,
+                artifact_type=artifact,
+                artifact_id=f"{video_id}:{artifact}",
+                video_id=video_id,
+                provider=provider,
+                timeline_domain=domain,
             )
     projection = timeline / "projection.json"
     if not projection.exists():
@@ -131,8 +138,8 @@ def build_project(
     if not assets["logos"]:
         assets["logos"] = f"providers/{provider_slug}/logo"
 
-    reg_transcription = (registry_defaults.get("transcription") or {})
-    reg_models = (registry_defaults.get("models") or {})
+    reg_transcription = registry_defaults.get("transcription") or {}
+    reg_models = registry_defaults.get("models") or {}
     resolved_language = (
         language.strip()
         or reg_transcription.get("language", "")
@@ -186,8 +193,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Bootstrap a per-video AVO project (avo.project.json)."
     )
-    parser.add_argument("--provider", default="", help="Provider slug (must exist under providers/).")
-    parser.add_argument("--raw-dir", default="", help="External raw-files folder (workflow root).")
+    parser.add_argument(
+        "--provider", default="", help="Provider slug (must exist under providers/)."
+    )
+    parser.add_argument(
+        "--raw-dir", default="", help="External raw-files folder (workflow root)."
+    )
     parser.add_argument("--title", default="", help="Optional working title.")
     parser.add_argument("--sfx", default="")
     parser.add_argument("--music", default="")
@@ -195,10 +206,23 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--graphics", default="")
     parser.add_argument("--logos", default="")
     parser.add_argument("--lang", default="", help="Transcription language override.")
-    parser.add_argument("--video-id", default="", help="Registry slug under providers/<provider>/videos/.")
-    parser.add_argument("--print", action="store_true", dest="print_only",
-                        help="Print the project JSON to stdout instead of writing it.")
-    parser.add_argument("--yes", "-y", action="store_true", help="Non-interactive; use provided/defaults only.")
+    parser.add_argument(
+        "--video-id",
+        default="",
+        help="Registry slug under providers/<provider>/videos/.",
+    )
+    parser.add_argument(
+        "--print",
+        action="store_true",
+        dest="print_only",
+        help="Print the project JSON to stdout instead of writing it.",
+    )
+    parser.add_argument(
+        "--yes",
+        "-y",
+        action="store_true",
+        help="Non-interactive; use provided/defaults only.",
+    )
     return parser
 
 
@@ -206,9 +230,7 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     interactive = sys.stdin.isatty() and not args.yes
 
-    provider_slug = args.provider or _prompt(
-        "Provider slug", "", interactive
-    )
+    provider_slug = args.provider or _prompt("Provider slug", "", interactive)
     if not provider_slug:
         available = ", ".join(list_providers()) or "(none)"
         print(f"error: --provider is required. Available: {available}", file=sys.stderr)
@@ -239,7 +261,9 @@ def main(argv: list[str] | None = None) -> int:
     if interactive:
         for key in ("sfx", "music", "inserts", "graphics"):
             if not asset_overrides[key]:
-                asset_overrides[key] = _prompt(f"{key} path (optional)", "", interactive)
+                asset_overrides[key] = _prompt(
+                    f"{key} path (optional)", "", interactive
+                )
 
     registry_defaults: dict[str, Any] = {}
     video_id = (args.video_id or "").strip()
@@ -281,7 +305,9 @@ def main(argv: list[str] | None = None) -> int:
         return 1
     out.write_text(text, encoding="utf-8")
     resolved_video_id = video_id or target.name.lower().replace(" ", "-")
-    initialize_timeline_layout(target, video_id=resolved_video_id, provider=provider_slug)
+    initialize_timeline_layout(
+        target, video_id=resolved_video_id, provider=provider_slug
+    )
     print(f"Created project: {out}")
     print(f"  provider : {provider_slug} ({provider_manifest.get('kind', '?')})")
     print(f"  rawDir   : {raw_dir}")
@@ -298,7 +324,9 @@ def main(argv: list[str] | None = None) -> int:
                 root=repo_root(),
             )
         except video_registry.VideoRegistryError as exc:
-            print(f"warning: project created but registry failed: {exc}", file=sys.stderr)
+            print(
+                f"warning: project created but registry failed: {exc}", file=sys.stderr
+            )
             return 0
         print(f"  registry : {reg_path}")
 

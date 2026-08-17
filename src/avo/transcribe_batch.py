@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import argparse
 import time
+from collections.abc import Callable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable
 
 from avo.transcribe import (
     DEFAULT_MODEL,
@@ -15,11 +15,10 @@ from avo.transcribe import (
     PTBRArgumentParser,
     inspect_cache,
     source_fingerprint,
-    transcript_path,
     transcribe_one,
+    transcript_path,
     validate_model_name,
 )
-
 
 VIDEO_EXTS = {".mp4", ".MP4", ".mov", ".MOV", ".mkv", ".MKV", ".avi", ".AVI", ".m4v"}
 RuntimeFactory = Callable[..., LocalTranscriber]
@@ -172,7 +171,9 @@ def main(argv: list[str] | None = None) -> None:
     if result.found == 0:
         raise SystemExit(f"no videos found in {args.videos_dir.resolve()}")
     if result.failures:
-        summary = "\n".join(f"  {video.name}: {error}" for video, error in result.failures)
+        summary = "\n".join(
+            f"  {video.name}: {error}" for video, error in result.failures
+        )
         raise SystemExit(f"{len(result.failures)} transcription failures:\n{summary}")
 
 

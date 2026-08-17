@@ -42,7 +42,9 @@ def file_fingerprint(path: Path) -> dict[str, Any]:
     return {"sha256": digest.hexdigest(), "sizeBytes": size, "locator": str(path)}
 
 
-def _schema_and_fragment(name: str, root: Path | None = None) -> tuple[dict[str, Any], str]:
+def _schema_and_fragment(
+    name: str, root: Path | None = None
+) -> tuple[dict[str, Any], str]:
     filename, separator, fragment = name.partition("#")
     path = (Path(root) / filename) if root else schema_path(filename)
     try:
@@ -81,6 +83,7 @@ def validate_document(
     schema = load_schema(schema_name, root)
     try:
         import jsonschema
+
         validator_cls = jsonschema.validators.validator_for(schema)
         validator_cls.check_schema(schema)
         errors = sorted(
@@ -100,10 +103,10 @@ def validate_document(
     return document
 
 
-
 def dependency_lock_hash(dependencies: dict[str, str]) -> str:
     """Hash a sorted exact dependency map after strict SHA-256 validation."""
     import re
+
     normalized: dict[str, str] = {}
     for key, value in sorted(dependencies.items()):
         if not re.fullmatch(r"[a-f0-9]{64}", str(value)):

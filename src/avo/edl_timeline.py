@@ -75,7 +75,7 @@ def output_to_source(ranges: list[Range], output_time: float) -> float | None:
 
 def format_mmss(seconds: float) -> str:
     whole = max(0, int(seconds))
-    millis = int(round((seconds - whole) * 1000))
+    millis = round((seconds - whole) * 1000)
     minutes, secs = divmod(whole, 60)
     if millis:
         return f"{minutes:02d}:{secs:02d}.{millis:03d}"
@@ -109,7 +109,8 @@ def remap_timed_items(
                     "multi-source EDL"
                 )
             mapped = source_to_output(
-                ranges, float(anchor),
+                ranges,
+                float(anchor),
                 source=str(anchor_source) if anchor_source is not None else None,
             )
             if mapped is None:
@@ -180,8 +181,12 @@ def cut_map_rows(edl: dict) -> list[dict[str, str]]:
                 "source_in": f"{format_mmss(cut_start)}–{format_mmss(cut_end)}",
                 "source_seconds": f"{cut_start:.2f}–{cut_end:.2f}",
                 "removed_seconds": f"{cut_end - cut_start:.2f}",
-                "b_time_if_kept_start": format_mmss(b_start) if b_start is not None else "cut",
-                "b_time_if_kept_end": format_mmss(b_end) if b_end is not None else "cut",
+                "b_time_if_kept_start": format_mmss(b_start)
+                if b_start is not None
+                else "cut",
+                "b_time_if_kept_end": format_mmss(b_end)
+                if b_end is not None
+                else "cut",
                 "user_note": str(item.get("user_note") or ""),
             }
         )
@@ -233,7 +238,8 @@ def render_beat_map_markdown(edl: dict) -> str:
         "| --- | --- | --- | --- |",
     ]
     sfx_by_slot = {
-        str(item.get("motion_brief_id")): item for item in edl.get("sound_effects") or []
+        str(item.get("motion_brief_id")): item
+        for item in edl.get("sound_effects") or []
     }
     for overlay in edl.get("overlays") or []:
         slot = str(overlay.get("motion_brief_id") or overlay.get("file"))
@@ -241,12 +247,16 @@ def render_beat_map_markdown(edl: dict) -> str:
         anchor = overlay.get("anchor_in_source")
         anchor_source = overlay.get("anchor_source")
         anchor_text = (
-            f"{anchor_source}:{format_mmss(float(anchor))}" if anchor is not None else "—"
+            f"{anchor_source}:{format_mmss(float(anchor))}"
+            if anchor is not None
+            else "—"
         )
         sfx = sfx_by_slot.get(slot)
         sfx_text = "—"
         if sfx:
-            sfx_text = f"`{sfx.get('file')}` @ {format_mmss(float(sfx['start_in_output']))}"
+            sfx_text = (
+                f"`{sfx.get('file')}` @ {format_mmss(float(sfx['start_in_output']))}"
+            )
         lines.append(
             f"| **{format_mmss(start)}** | {anchor_text} | {slot} | {sfx_text} |"
         )
@@ -260,7 +270,9 @@ def main() -> None:
     verify_parser = sub.add_parser("verify", help="Check anchor/output consistency")
     verify_parser.add_argument("edl", type=Path)
 
-    map_parser = sub.add_parser("map", help="Print source↔output mapping for a timestamp")
+    map_parser = sub.add_parser(
+        "map", help="Print source↔output mapping for a timestamp"
+    )
     map_parser.add_argument("edl", type=Path)
     map_parser.add_argument("time", type=float)
     map_parser.add_argument(

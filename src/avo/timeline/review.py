@@ -3,11 +3,16 @@
 from __future__ import annotations
 
 from collections import Counter
+from collections.abc import Callable
 from copy import deepcopy
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
-from .contracts import content_hash, dependency_lock_hash, file_fingerprint, validate_document
+from .contracts import (
+    content_hash,
+    file_fingerprint,
+    validate_document,
+)
 from .store import atomic_write_json
 
 
@@ -38,8 +43,16 @@ CHECKPOINT_POLICIES = {
     "motion-proof": {
         "version": "1.0.0",
         "required": {
-            "lineage", "technical-qc", "transcript-analysis", "watch", "bmap",
-            "tracks", "animation", "visual-qc", "audio-qc", "rights",
+            "lineage",
+            "technical-qc",
+            "transcript-analysis",
+            "watch",
+            "bmap",
+            "tracks",
+            "animation",
+            "visual-qc",
+            "audio-qc",
+            "rights",
         },
         "fullWatch": True,
         "allowNotApplicable": {"animation"},
@@ -47,8 +60,15 @@ CHECKPOINT_POLICIES = {
     "pre-master": {
         "version": "1.0.0",
         "required": {
-            "lineage", "technical-qc", "transcript-analysis", "watch", "sync",
-            "audio-qc", "visual-qc", "accessibility", "rights",
+            "lineage",
+            "technical-qc",
+            "transcript-analysis",
+            "watch",
+            "sync",
+            "audio-qc",
+            "visual-qc",
+            "accessibility",
+            "rights",
         },
         "fullWatch": True,
         "allowNotApplicable": set(),
@@ -56,8 +76,15 @@ CHECKPOINT_POLICIES = {
     "deliver": {
         "version": "1.0.0",
         "required": {
-            "lineage", "technical-qc", "transcript-analysis", "watch", "audio-qc",
-            "visual-qc", "accessibility", "rights", "final-transcript",
+            "lineage",
+            "technical-qc",
+            "transcript-analysis",
+            "watch",
+            "audio-qc",
+            "visual-qc",
+            "accessibility",
+            "rights",
+            "final-transcript",
         },
         "fullWatch": True,
         "allowNotApplicable": set(),
@@ -68,7 +95,9 @@ GATE_REQUIREMENTS = {
 }
 
 
-def candidate_identity(path: Path, dependencies: dict[str, str], render_profile: str) -> dict[str, Any]:
+def candidate_identity(
+    path: Path, dependencies: dict[str, str], render_profile: str
+) -> dict[str, Any]:
     fingerprint = file_fingerprint(path)
     normalized = dict(sorted(dependencies.items()))
     identity = {
@@ -108,17 +137,28 @@ def evidence_is_fresh(
             return False
         if recorded != current:
             return False
-        if candidate_identity_hash is not None and evidence.get("candidateIdentityHash") != candidate_identity_hash:
+        if (
+            candidate_identity_hash is not None
+            and evidence.get("candidateIdentityHash") != candidate_identity_hash
+        ):
             return False
-        if dependency_lock_sha256 is not None and evidence.get("dependencyLockSha256") != dependency_lock_sha256:
+        if (
+            dependency_lock_sha256 is not None
+            and evidence.get("dependencyLockSha256") != dependency_lock_sha256
+        ):
             return False
     elif profile == "raw-sync":
-        keys = [key for key in ("raw", "rawInventory", "sync-map", "syncMap") if key in recorded]
+        keys = [
+            key
+            for key in ("raw", "rawInventory", "sync-map", "syncMap")
+            if key in recorded
+        ]
         if not keys or any(current.get(key) != recorded.get(key) for key in keys):
             return False
     elif profile == "source-rights":
         keys = [
-            key for key in ("raw", "rawInventory", "sourceUsage", "rightsPolicy")
+            key
+            for key in ("raw", "rawInventory", "sourceUsage", "rightsPolicy")
             if key in recorded
         ]
         if not keys or any(current.get(key) != recorded.get(key) for key in keys):
@@ -164,9 +204,12 @@ def evaluate_gate(
     if policy is None:
         raise GateError(f"unknown checkpoint: {checkpoint}")
     current = [
-        item for item in evidence
+        item
+        for item in evidence
         if evidence_is_fresh(
-            item, candidate_hash, dependencies,
+            item,
+            candidate_hash,
+            dependencies,
             candidate_identity_hash=candidate_identity_hash,
             dependency_lock_sha256=dependency_lock_sha256,
         )
@@ -174,7 +217,9 @@ def evaluate_gate(
     counts = Counter(item.get("kind") for item in current)
     duplicates = sorted(kind for kind, count in counts.items() if count > 1)
     if duplicates:
-        raise GateError("human gate blocked; duplicate current evidence: " + ", ".join(duplicates))
+        raise GateError(
+            "human gate blocked; duplicate current evidence: " + ", ".join(duplicates)
+        )
     passing = set()
     for item in current:
         kind = item.get("kind")
@@ -183,21 +228,33 @@ def evaluate_gate(
         reviewed_windows = int(coverage.get("reviewedWindows") or 0)
         if reviewed_windows < required_windows:
             continue
-        if kind == "watch" and policy["fullWatch"] and (item.get("scope") or {}).get("mode") != "full":
+        if (
+            kind == "watch"
+            and policy["fullWatch"]
+            and (item.get("scope") or {}).get("mode") != "full"
+        ):
             continue
         if item.get("status") == "pass":
             passing.add(kind)
-        elif item.get("status") == "not-applicable" and kind in policy["allowNotApplicable"]:
+        elif (
+            item.get("status") == "not-applicable"
+            and kind in policy["allowNotApplicable"]
+        ):
             waiver = item.get("notApplicable") or {}
             actor = waiver.get("actor") or {}
             if (
-                waiver.get("policy") and waiver.get("rationale")
-                and actor.get("id") and waiver.get("basisSha256")
+                waiver.get("policy")
+                and waiver.get("rationale")
+                and actor.get("id")
+                and waiver.get("basisSha256")
             ):
                 passing.add(kind)
     missing = set(policy["required"]) - passing
     if missing:
-        raise GateError("human gate blocked; missing current evidence: " + ", ".join(sorted(missing)))
+        raise GateError(
+            "human gate blocked; missing current evidence: "
+            + ", ".join(sorted(missing))
+        )
     return "ai-passed"
 
 
@@ -222,7 +279,15 @@ def approval_is_current(
 
 def classify_findings(findings: list[dict[str, Any]]) -> str:
     classes = {str(finding.get("classification")) for finding in findings}
-    if classes & {"meaning", "rights", "privacy", "policy", "safety", "factual", "ambiguous-rebase"}:
+    if classes & {
+        "meaning",
+        "rights",
+        "privacy",
+        "policy",
+        "safety",
+        "factual",
+        "ambiguous-rebase",
+    }:
         return "needs-human-judgment"
     if classes & {"tool-error", "missing-watch", "missing-transcript"}:
         return "blocked"
@@ -252,7 +317,9 @@ def run_fix_loop(
             }
         previous = signature
         revision = fix(findings)
-        attempts.append({"attempt": number, "findingHash": signature, "fixRevision": revision})
+        attempts.append(
+            {"attempt": number, "findingHash": signature, "fixRevision": revision}
+        )
         if not revision:
             return {
                 "state": "blocked",
@@ -268,7 +335,9 @@ def run_fix_loop(
     }
 
 
-def write_review_package(directory: Path, manifest: dict[str, Any]) -> tuple[Path, Path | None]:
+def write_review_package(
+    directory: Path, manifest: dict[str, Any]
+) -> tuple[Path, Path | None]:
     directory.mkdir(parents=True, exist_ok=True)
     validate_document(manifest, "avo.review-evidence.schema.json")
     json_path = atomic_write_json(directory / "review.json", manifest)
@@ -319,7 +388,9 @@ def write_review_package(directory: Path, manifest: dict[str, Any]) -> tuple[Pat
                     windows.append(window)
     if windows:
         for window in windows:
-            lines.append(f"- {window['start']:.3f}-{window['end']:.3f}s: {window['reason']}")
+            lines.append(
+                f"- {window['start']:.3f}-{window['end']:.3f}s: {window['reason']}"
+            )
     else:
         lines.append("- Full-program checkpoint review; no isolated changed window.")
     lines.extend(["", "## Evidence matrix", ""])
@@ -339,7 +410,9 @@ def write_review_package(directory: Path, manifest: dict[str, Any]) -> tuple[Pat
     risks = manifest.get("unresolvedRisks") or []
     if risks:
         for risk in risks:
-            lines.append(f"- {risk.get('classification', 'risk')}: {risk.get('message', risk.get('id', 'unresolved'))}")
+            lines.append(
+                f"- {risk.get('classification', 'risk')}: {risk.get('message', risk.get('id', 'unresolved'))}"
+            )
     else:
         lines.append("- None reported by the current evidence bundle.")
     if manifest["state"] == "ai-passed":

@@ -1,10 +1,8 @@
 from __future__ import annotations
 
-import sys
 import tempfile
 import unittest
 from pathlib import Path
-
 
 from avo import prepare_transcription
 
@@ -47,6 +45,7 @@ class PrepareTranscriptionTests(unittest.TestCase):
 
     def test_surfaces_download_failure(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
+
             def fail(*_args, **_kwargs):
                 raise OSError("network unavailable")
 

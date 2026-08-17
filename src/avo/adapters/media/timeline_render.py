@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 import sys
+from pathlib import Path
 from typing import Any
 
 from avo.timeline.contracts import file_fingerprint
@@ -17,7 +17,9 @@ class TimelineRenderAdapter:
 
         projection = Path(projection)
         output = Path(output)
-        profile = str(request.get("profile") or request.get("render_profile") or "draft")
+        profile = str(
+            request.get("profile") or request.get("render_profile") or "draft"
+        )
         output.parent.mkdir(parents=True, exist_ok=True)
         argv = [
             "avo.render",

@@ -12,7 +12,6 @@ from jsonschema import Draft202012Validator
 
 from avo import shorts_contract
 
-
 HASH = "a" * 64
 
 
@@ -73,7 +72,13 @@ def valid_request() -> dict:
                 "editorialApprovalReference": "review://candidate-01",
             }
         ],
-        "approvalGates": ["batch-plan", "motion-proof", "picture-lock", "rights", "pre-master"],
+        "approvalGates": [
+            "batch-plan",
+            "motion-proof",
+            "picture-lock",
+            "rights",
+            "pre-master",
+        ],
     }
 
 
@@ -161,8 +166,12 @@ class ShortsInvariantTests(unittest.TestCase):
     def test_canonical_hash_ignores_mapping_order(self) -> None:
         left = {"b": 2, "a": {"d": 4, "c": 3}}
         right = {"a": {"c": 3, "d": 4}, "b": 2}
-        self.assertEqual(shorts_contract.canonical_json(left), shorts_contract.canonical_json(right))
-        self.assertEqual(shorts_contract.content_hash(left), shorts_contract.content_hash(right))
+        self.assertEqual(
+            shorts_contract.canonical_json(left), shorts_contract.canonical_json(right)
+        )
+        self.assertEqual(
+            shorts_contract.content_hash(left), shorts_contract.content_hash(right)
+        )
 
     def test_request_rejects_count_mismatch_and_duplicate_ids(self) -> None:
         request = valid_request()
@@ -202,7 +211,10 @@ class ShortsInvariantTests(unittest.TestCase):
             path = Path(tmp) / "shorts.status.json"
             shorts_contract.atomic_write_json(path, {"revision": 1})
             shorts_contract.atomic_write_json(path, {"revision": 2, "ok": True})
-            self.assertEqual(json.loads(path.read_text(encoding="utf-8")), {"ok": True, "revision": 2})
+            self.assertEqual(
+                json.loads(path.read_text(encoding="utf-8")),
+                {"ok": True, "revision": 2},
+            )
             self.assertEqual(list(path.parent.glob(f".{path.name}.*.tmp")), [])
 
 

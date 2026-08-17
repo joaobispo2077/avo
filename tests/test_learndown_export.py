@@ -15,9 +15,11 @@ MASTER = "20260801-demo-master-v001"
 
 sys.path.insert(0, str(SRC))
 
-from avo import learndown_export  # noqa: E402
-from avo import project_inventory  # noqa: E402
-from avo import wrap  # noqa: E402
+from avo import (
+    learndown_export,
+    project_inventory,
+    wrap,
+)
 
 
 class LearndownExportTests(unittest.TestCase):
@@ -132,10 +134,14 @@ class LearndownExportTests(unittest.TestCase):
             wrap_payload["rawDir"] = str(raw_dir)
             (raw_dir / "avo.wrap.draft.json").write_text("{}", encoding="utf-8")
             (raw_dir / "avo.wrap.json").write_text("{}", encoding="utf-8")
-            entry_dir = learndown_export.export_provider_learndown(wrap_payload, root=root)
+            entry_dir = learndown_export.export_provider_learndown(
+                wrap_payload, root=root
+            )
             assert entry_dir is not None
             self.assertTrue((entry_dir / "wrap.json").is_file())
-            payload = json.loads((entry_dir / "learndown.json").read_text(encoding="utf-8"))
+            payload = json.loads(
+                (entry_dir / "learndown.json").read_text(encoding="utf-8")
+            )
             self.assertEqual(payload["status"], "final")
 
 

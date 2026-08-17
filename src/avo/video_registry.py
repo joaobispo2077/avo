@@ -66,12 +66,12 @@ def is_under_repo(path: Path, *, root: Path | None = None) -> bool:
 def validate_external_raw_dir(raw_dir: str | Path, *, root: Path | None = None) -> Path:
     path = Path(str(raw_dir)).expanduser()
     if not path.is_absolute():
-        raise VideoRegistryError(f"rawDir must be an absolute external path: {raw_dir!r}")
+        raise VideoRegistryError(
+            f"rawDir must be an absolute external path: {raw_dir!r}"
+        )
     resolved = path.resolve()
     if is_under_repo(resolved, root=root):
-        raise VideoRegistryError(
-            f"rawDir must not be inside the AVO repo: {resolved}"
-        )
+        raise VideoRegistryError(f"rawDir must not be inside the AVO repo: {resolved}")
     return resolved
 
 
@@ -121,12 +121,16 @@ def write_registry(
 
     payload = build_registry(provider, video_id, raw_dir, title=title, status=status)
     entry_dir.mkdir(parents=True, exist_ok=True)
-    out.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    out.write_text(
+        json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+    )
     rebuild_index(provider, root=root)
     return out
 
 
-def load_registry(provider: str, video_id: str, *, root: Path | None = None) -> dict[str, Any]:
+def load_registry(
+    provider: str, video_id: str, *, root: Path | None = None
+) -> dict[str, Any]:
     path = registry_path(provider, video_id, root=root)
     if not path.is_file():
         raise FileNotFoundError(f"video registry not found: {path}")
@@ -135,7 +139,9 @@ def load_registry(provider: str, video_id: str, *, root: Path | None = None) -> 
     return payload
 
 
-def _validate_registry_payload(payload: dict[str, Any], provider: str, video_id: str) -> None:
+def _validate_registry_payload(
+    payload: dict[str, Any], provider: str, video_id: str
+) -> None:
     if payload.get("provider") != provider:
         raise VideoRegistryError(
             f"registry provider mismatch: expected {provider!r}, got {payload.get('provider')!r}"
@@ -195,7 +201,9 @@ def rebuild_index(provider: str, *, root: Path | None = None) -> Path:
             for item in entries
         ],
     }
-    index_path.write_text(json.dumps(index, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    index_path.write_text(
+        json.dumps(index, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+    )
     return index_path
 
 
@@ -212,7 +220,9 @@ def update_status(
         raise VideoRegistryError(f"invalid status: {status!r}")
     payload["status"] = status
     payload["updatedAt"] = avo_state.now_iso()
-    path.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    path.write_text(
+        json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+    )
     rebuild_index(provider, root=root)
     return payload
 

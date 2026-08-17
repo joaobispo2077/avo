@@ -2,8 +2,7 @@ from __future__ import annotations
 
 import unittest
 
-from avo import audio_restoration
-from avo import render
+from avo import audio_restoration, render
 
 
 class AudioRestorationIntegrationTests(unittest.TestCase):

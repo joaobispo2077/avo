@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 import subprocess
+from pathlib import Path
 from typing import Any
 
 from avo.timeline.contracts import file_fingerprint
@@ -49,8 +49,14 @@ class CutProofQcAdapter:
             probe = json.loads(
                 subprocess.run(
                     [
-                        "ffprobe", "-v", "error", "-show_streams", "-show_format",
-                        "-of", "json", str(candidate),
+                        "ffprobe",
+                        "-v",
+                        "error",
+                        "-show_streams",
+                        "-show_format",
+                        "-of",
+                        "json",
+                        str(candidate),
                     ],
                     check=True,
                     capture_output=True,
@@ -66,7 +72,9 @@ class CutProofQcAdapter:
                         "message": "candidate duration is invalid",
                     }
                 )
-            if not any(item.get("codec_type") == "video" for item in probe.get("streams") or []):
+            if not any(
+                item.get("codec_type") == "video" for item in probe.get("streams") or []
+            ):
                 findings.append(
                     {
                         "id": "video-stream",
@@ -105,14 +113,21 @@ class CutProofQcAdapter:
             if dependencies.get("sync-map") != sync_event["subject"]["contentSha256"]:
                 raise ProjectionError("candidate Sync dependency is not current")
             candidate_hash = file_fingerprint(candidate)["sha256"]
-            if dependencies.get("cutOutput") and dependencies["cutOutput"] != candidate_hash:
-                raise ProjectionError("cut-output dependency does not match candidate bytes")
+            if (
+                dependencies.get("cutOutput")
+                and dependencies["cutOutput"] != candidate_hash
+            ):
+                raise ProjectionError(
+                    "cut-output dependency does not match candidate bytes"
+                )
         except (ProjectionError, StopIteration, KeyError, ValueError) as error:
             findings.append(
                 {"id": "lineage", "classification": "lineage", "message": str(error)}
             )
 
-        if not dependencies or any(len(str(value)) != 64 for value in dependencies.values()):
+        if not dependencies or any(
+            len(str(value)) != 64 for value in dependencies.values()
+        ):
             findings.append(
                 {
                     "id": "dependency-lock",

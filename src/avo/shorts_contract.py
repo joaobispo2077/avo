@@ -6,9 +6,10 @@ import hashlib
 import json
 import os
 import tempfile
+from collections.abc import Mapping
 from copy import deepcopy
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any
 
 from jsonschema import Draft202012Validator
 
@@ -167,7 +168,9 @@ def load_document(path: Path | str, kind: str) -> dict[str, Any]:
     try:
         document = json.loads(resolved.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
-        raise ContractValidationError(f"cannot read {kind} document {resolved}: {exc}") from exc
+        raise ContractValidationError(
+            f"cannot read {kind} document {resolved}: {exc}"
+        ) from exc
     validate_document(document, kind)
     return document
 
@@ -242,15 +245,22 @@ _ITEM_TRANSITIONS = {
 }
 
 
-def transition_item(item: Mapping[str, Any], state: str, *, reason: str | None = None) -> dict[str, Any]:
+def transition_item(
+    item: Mapping[str, Any], state: str, *, reason: str | None = None
+) -> dict[str, Any]:
     current = str(item["state"])
     if state not in _ITEM_TRANSITIONS.get(current, set()):
-        raise ContractValidationError(f"invalid Shorts item transition: {current} -> {state}")
+        raise ContractValidationError(
+            f"invalid Shorts item transition: {current} -> {state}"
+        )
     updated = dict(item)
     updated["state"] = state
     if state == "dirty":
         updated["dirty"] = True
-        updated["dirtyReasons"] = [*(item.get("dirtyReasons") or []), reason or "superseded-input"]
+        updated["dirtyReasons"] = [
+            *(item.get("dirtyReasons") or []),
+            reason or "superseded-input",
+        ]
     return updated
 
 
@@ -264,14 +274,17 @@ def validate_promotion_evidence(
     if not approvals:
         raise ContractValidationError("promotion requires exact approvals")
     required_hashes = (
-        "candidateHash", "candidateIdentityHash",
-        "dependencyLockSha256", "evidenceBundleSha256",
+        "candidateHash",
+        "candidateIdentityHash",
+        "dependencyLockSha256",
+        "evidenceBundleSha256",
     )
     for item in status.get("items") or []:
         short_id = item.get("shortId")
         proof = next(
             (
-                artifact for artifact in reversed(item.get("artifacts") or [])
+                artifact
+                for artifact in reversed(item.get("artifacts") or [])
                 if artifact.get("kind") == "proof"
                 and artifact.get("revision") == item.get("proofRevision")
             ),
@@ -283,9 +296,13 @@ def validate_promotion_evidence(
                 f"promotion requires current proof and Watch evidence for {short_id}"
             )
         if review.get("candidateHash") != proof.get("hash"):
-            raise ContractValidationError(f"Watch candidate hash is stale for {short_id}")
+            raise ContractValidationError(
+                f"Watch candidate hash is stale for {short_id}"
+            )
         if review.get("proofRevision") != item.get("proofRevision"):
-            raise ContractValidationError(f"Watch proof revision is stale for {short_id}")
+            raise ContractValidationError(
+                f"Watch proof revision is stale for {short_id}"
+            )
         if not review.get("reference"):
             raise ContractValidationError(f"Watch reference is required for {short_id}")
         for field in required_hashes[1:]:

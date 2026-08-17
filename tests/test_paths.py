@@ -26,7 +26,9 @@ class PathsTests(unittest.TestCase):
         self.assertEqual(repo_root(), self.root.resolve())
 
     def test_repo_root_explicit_start(self) -> None:
-        self.assertEqual(repo_root(self.root / "tests"), (self.root / "tests").resolve())
+        self.assertEqual(
+            repo_root(self.root / "tests"), (self.root / "tests").resolve()
+        )
 
     def test_repo_root_env_override(self) -> None:
         with unittest.mock.patch.dict(os.environ, {"AVO_ROOT": str(self.root)}):
@@ -43,7 +45,9 @@ class PathsTests(unittest.TestCase):
     def test_schema_paths_relocated_layout(self) -> None:
         self.assertEqual(schemas_dir(), self.root / "schemas")
         project_schema = schema_path("avo.project.schema.json")
-        self.assertEqual(project_schema, self.root / "schemas" / "avo.project.schema.json")
+        self.assertEqual(
+            project_schema, self.root / "schemas" / "avo.project.schema.json"
+        )
         self.assertTrue(project_schema.is_file())
         edl_schema = schema_path("edl.schema.json")
         self.assertEqual(edl_schema, self.root / "schemas" / "edl.schema.json")

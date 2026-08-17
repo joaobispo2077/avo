@@ -39,19 +39,25 @@ def test_unchanged_materialization_skips_renderer_and_mutation_forces_it(tmp_pat
     output = ws.raw_dir / "edit" / "proof.mp4"
     renderer = FakeRender()
     first = materialize_cut_proof(
-        workspace=ws, cmap_revision_id=revision["revisionId"],
-        output_path=output, render_port=renderer,
+        workspace=ws,
+        cmap_revision_id=revision["revisionId"],
+        output_path=output,
+        render_port=renderer,
     )
     second = materialize_cut_proof(
-        workspace=ws, cmap_revision_id=revision["revisionId"],
-        output_path=output, render_port=renderer,
+        workspace=ws,
+        cmap_revision_id=revision["revisionId"],
+        output_path=output,
+        render_port=renderer,
     )
     assert first == second
     assert len(renderer.calls) == 1
 
     output.write_bytes(b"other")
     materialize_cut_proof(
-        workspace=ws, cmap_revision_id=revision["revisionId"],
-        output_path=output, render_port=renderer,
+        workspace=ws,
+        cmap_revision_id=revision["revisionId"],
+        output_path=output,
+        render_port=renderer,
     )
     assert len(renderer.calls) == 2

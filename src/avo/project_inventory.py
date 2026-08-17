@@ -13,10 +13,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from avo import avo_state
 from avo.session import diff_inventories as _session_diff_inventories
 from avo.session import scan_inventory as _session_scan_inventory
 from avo.telemetry import dir_size
-from avo import avo_state
 
 FINAL_TRANSCRIPT_SUFFIXES = (".json", ".txt", ".md", ".srt")
 RAW_SUBDIR = "raw"
@@ -99,7 +99,9 @@ class InventoryReport:
             "degradedMode": self.degraded_mode,
         }
         if self.file_diff is not None:
-            files["addedThenRemoved"] = [entry.__dict__ for entry in self.file_diff.added]
+            files["addedThenRemoved"] = [
+                entry.__dict__ for entry in self.file_diff.added
+            ]
             files["modified"] = [entry.__dict__ for entry in self.file_diff.modified]
             files["removed"] = [entry.__dict__ for entry in self.file_diff.removed]
         else:
@@ -182,12 +184,10 @@ def diff_inventories(pre: dict[str, int], post: dict[str, int]) -> FileDiff:
     pre_keys = set(pre)
     post_keys = set(post)
     added = [
-        FileEntry(path=path, bytes=post[path])
-        for path in sorted(post_keys - pre_keys)
+        FileEntry(path=path, bytes=post[path]) for path in sorted(post_keys - pre_keys)
     ]
     removed = [
-        FileEntry(path=path, bytes=pre[path])
-        for path in sorted(pre_keys - post_keys)
+        FileEntry(path=path, bytes=pre[path]) for path in sorted(pre_keys - post_keys)
     ]
     modified: list[FileEntry] = []
     unchanged: list[FileEntry] = []
@@ -196,7 +196,9 @@ def diff_inventories(pre: dict[str, int], post: dict[str, int]) -> FileDiff:
             modified.append(FileEntry(path=path, bytes=post[path]))
         else:
             unchanged.append(FileEntry(path=path, bytes=post[path]))
-    return FileDiff(added=added, removed=removed, modified=modified, unchanged=unchanged)
+    return FileDiff(
+        added=added, removed=removed, modified=modified, unchanged=unchanged
+    )
 
 
 def _resolve_raw_sources(raw_dir: Path) -> list[Path]:
@@ -283,11 +285,14 @@ def _resolve_reconstruction_metadata(raw_dir: Path) -> list[Path]:
     if bundle_path.is_file():
         try:
             from avo.timeline.reconstruction import verify_reconstruction_bundle
+
             bundle = verify_reconstruction_bundle(raw_dir, bundle_path)
-            return sorted({
-                bundle_path,
-                *(raw_dir / item["path"] for item in bundle["files"]),
-            })
+            return sorted(
+                {
+                    bundle_path,
+                    *(raw_dir / item["path"] for item in bundle["files"]),
+                }
+            )
         except Exception:
             return [bundle_path]
     roots = (raw_dir / "edit" / "timeline", raw_dir / "edit" / "review")
@@ -295,13 +300,19 @@ def _resolve_reconstruction_metadata(raw_dir: Path) -> list[Path]:
     for root in roots:
         if root.is_dir():
             paths.extend(
-                path for path in root.rglob("*")
-                if path.is_file() and not path.is_symlink()
+                path
+                for path in root.rglob("*")
+                if path.is_file()
+                and not path.is_symlink()
                 and path.suffix.lower() in {".json", ".md"}
             )
     for name in (
-        "EDITLOG.md", "SOURCE-LOG.md", "AUDIO-EDITLOG.md",
-        "AUDIO-SOURCE-LOG.md", "ANIMATION-EDITLOG.md", "ANIMATION-SOURCE-LOG.md",
+        "EDITLOG.md",
+        "SOURCE-LOG.md",
+        "AUDIO-EDITLOG.md",
+        "AUDIO-SOURCE-LOG.md",
+        "ANIMATION-EDITLOG.md",
+        "ANIMATION-SOURCE-LOG.md",
     ):
         path = raw_dir / name
         if path.is_file() and not path.is_symlink():
@@ -371,15 +382,17 @@ def verify_preserved_complete(
     else:
         for path in preserved.final_master:
             if not path.is_file():
-                errors.append(
-                    f"missing final master: {_relative_posix(raw_dir, path)}"
-                )
+                errors.append(f"missing final master: {_relative_posix(raw_dir, path)}")
 
     timeline = raw_dir / "edit" / "timeline"
-    canonical = [timeline / f"{name}.json" for name in ("cmap", "bmap", "tracks", "animation", "sync-map")]
+    canonical = [
+        timeline / f"{name}.json"
+        for name in ("cmap", "bmap", "tracks", "animation", "sync-map")
+    ]
     if all(path.is_file() for path in canonical):
         try:
             from avo.timeline.reconstruction import verify_reconstruction_bundle
+
             verify_reconstruction_bundle(raw_dir)
         except Exception as error:
             errors.append(f"invalid or missing reconstruction bundle: {error}")
@@ -403,12 +416,12 @@ def list_delete_candidates(raw_dir: Path, preserved: PreservedSetResult) -> list
     for path in sorted(edit_dir.rglob("*")):
         try:
             resolved = str(path.resolve())
+            if resolved in preserved_set:
+                continue
+            if path.is_file() and not path.is_symlink():
+                candidates.append(path)
         except OSError:
             continue
-        if resolved in preserved_set:
-            continue
-        if path.is_file() and not path.is_symlink():
-            candidates.append(path)
 
     return candidates
 
@@ -434,7 +447,9 @@ def measure_footprint(paths: list[Path]) -> int:
     return total
 
 
-def _load_pre_inventory(pre_json_path: Path | None) -> tuple[dict[str, int] | None, bool]:
+def _load_pre_inventory(
+    pre_json_path: Path | None,
+) -> tuple[dict[str, int] | None, bool]:
     if pre_json_path is None or not pre_json_path.is_file():
         return None, True
 
@@ -530,15 +545,18 @@ def execute_cleanup(
 def _default_rimraf_runner(path: Path) -> None:
     import shutil
 
-    if path.is_file() or path.is_symlink():
-        path.unlink(missing_ok=True)
+    try:
+        if path.is_file() or path.is_symlink():
+            path.unlink(missing_ok=True)
+            return
+        if path.is_dir():
+            npx = "npx.cmd" if sys.platform == "win32" else "npx"
+            try:
+                subprocess.run([npx, "rimraf", str(path)], check=True)
+            except (FileNotFoundError, subprocess.CalledProcessError):
+                shutil.rmtree(path, ignore_errors=True)
+    except OSError:
         return
-    if path.is_dir():
-        npx = "npx.cmd" if sys.platform == "win32" else "npx"
-        try:
-            subprocess.run([npx, "rimraf", str(path)], check=True)
-        except (FileNotFoundError, subprocess.CalledProcessError):
-            shutil.rmtree(path, ignore_errors=True)
 
 
 def _print_json(payload: Any) -> None:
@@ -662,7 +680,9 @@ def build_parser() -> argparse.ArgumentParser:
     p_delete.add_argument("--json", action="store_true")
     p_delete.set_defaults(func=_cmd_delete_list)
 
-    p_report = sub.add_parser("report", parents=[parent], help="Build inventory report.")
+    p_report = sub.add_parser(
+        "report", parents=[parent], help="Build inventory report."
+    )
     p_report.add_argument("--pre", type=Path, default=None, help="Path to pre.json.")
     p_report.add_argument("--json", action="store_true")
     p_report.add_argument(

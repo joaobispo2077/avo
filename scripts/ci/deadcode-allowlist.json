@@ -1,0 +1,911 @@
+{
+  "version": 1,
+  "description": "Vulture exemptions for src/avo (task-014 / FR-8). min_confidence=60 matches vulture unused function/class/method/variable signal. Prefer deleting dead code over adding entries. Each item needs path, name, reason.",
+  "min_confidence": 60,
+  "items": [
+    {
+      "path": "src/avo/adapters/stubs/memory_ai_memory.py",
+      "name": "AiMemoryStubAdapter",
+      "kind": "class",
+      "lineno": 8,
+      "confidence": 60,
+      "reason": "Stub adapter registered dynamically via adapter registry"
+    },
+    {
+      "path": "src/avo/adapters/stubs/motion_hyperframes.py",
+      "name": "HyperframesStubAdapter",
+      "kind": "class",
+      "lineno": 10,
+      "confidence": 60,
+      "reason": "Stub adapter registered dynamically via adapter registry"
+    },
+    {
+      "path": "src/avo/adapters/stubs/motion_remotion.py",
+      "name": "RemotionStubAdapter",
+      "kind": "class",
+      "lineno": 8,
+      "confidence": 60,
+      "reason": "Stub adapter registered dynamically via adapter registry"
+    },
+    {
+      "path": "src/avo/adapters/stubs/plan_speckit.py",
+      "name": "SpeckitStubAdapter",
+      "kind": "class",
+      "lineno": 8,
+      "confidence": 60,
+      "reason": "Stub adapter registered dynamically via adapter registry"
+    },
+    {
+      "path": "src/avo/adapters/stubs/understand_watch_skill.py",
+      "name": "WatchSkillStubAdapter",
+      "kind": "class",
+      "lineno": 8,
+      "confidence": 60,
+      "reason": "Stub adapter registered dynamically via adapter registry"
+    },
+    {
+      "path": "src/avo/adapters/transcribe/elevenlabs.py",
+      "name": "ElevenLabsAdapter",
+      "kind": "class",
+      "lineno": 10,
+      "confidence": 60,
+      "reason": "Adapter class/method loaded dynamically via adapter registry"
+    },
+    {
+      "path": "src/avo/adapters/transcribe/faster_whisper.py",
+      "name": "FasterWhisperAdapter",
+      "kind": "class",
+      "lineno": 20,
+      "confidence": 60,
+      "reason": "Adapter class/method loaded dynamically via adapter registry"
+    },
+    {
+      "path": "src/avo/adapters/motion/hyperframes.py",
+      "name": "render_timeline_instance",
+      "kind": "method",
+      "lineno": 309,
+      "confidence": 60,
+      "reason": "public HyperFrames adapter method for BMap/Tracks instance renders; callers live in tests, not src/avo"
+    },
+    {
+      "path": "src/avo/audio_eq.py",
+      "name": "severity",
+      "kind": "variable",
+      "lineno": 30,
+      "confidence": 60,
+      "reason": "Deferred or dynamic surface; keep until callers land"
+    },
+    {
+      "path": "src/avo/audio_eq.py",
+      "name": "recommendation",
+      "kind": "variable",
+      "lineno": 33,
+      "confidence": 60,
+      "reason": "Deferred or dynamic surface; keep until callers land"
+    },
+    {
+      "path": "src/avo/audio_gain.py",
+      "name": "suggested_boost_pct",
+      "kind": "variable",
+      "lineno": 42,
+      "confidence": 60,
+      "reason": "Deferred or dynamic surface; keep until callers land"
+    },
+    {
+      "path": "src/avo/audio_restoration.py",
+      "name": "preset_to_pct",
+      "kind": "function",
+      "lineno": 41,
+      "confidence": 60,
+      "reason": "Public API / CLI surface not referenced inside src/avo scan"
+    },
+    {
+      "path": "src/avo/audio_restoration.py",
+      "name": "label_for_pct",
+      "kind": "function",
+      "lineno": 46,
+      "confidence": 60,
+      "reason": "Public API / CLI surface not referenced inside src/avo scan"
+    },
+    {
+      "path": "src/avo/avo_state.py",
+      "name": "set_video_state",
+      "kind": "function",
+      "lineno": 88,
+      "confidence": 60,
+      "reason": "Public API / CLI surface not referenced inside src/avo scan"
+    },
+    {
+      "path": "src/avo/build_captions.py",
+      "name": "build_selectable_only",
+      "kind": "function",
+      "lineno": 186,
+      "confidence": 60,
+      "reason": "Public API / CLI surface not referenced inside src/avo scan"
+    },
+    {
+      "path": "src/avo/edl_timeline.py",
+      "name": "output_to_source",
+      "kind": "function",
+      "lineno": 70,
+      "confidence": 60,
+      "reason": "Public API / CLI surface not referenced inside src/avo scan"
+    },
+    {
+      "path": "src/avo/edl_timeline.py",
+      "name": "remap_timed_items",
+      "kind": "function",
+      "lineno": 85,
+      "confidence": 60,
+      "reason": "Public API / CLI surface not referenced inside src/avo scan"
+    },
+    {
+      "path": "src/avo/mcp/bridge.py",
+      "name": "parsed_json",
+      "kind": "variable",
+      "lineno": 44,
+      "confidence": 60,
+      "reason": "MCP bridge/registry/CLI surface (dynamic tool registration)"
+    },
+    {
+      "path": "src/avo/mcp/bridge.py",
+      "name": "argv_from_parts",
+      "kind": "function",
+      "lineno": 160,
+      "confidence": 60,
+      "reason": "MCP bridge/registry/CLI surface (dynamic tool registration)"
+    },
+    {
+      "path": "src/avo/mcp/registry.py",
+      "name": "cli_argv_template",
+      "kind": "variable",
+      "lineno": 54,
+      "confidence": 60,
+      "reason": "MCP bridge/registry/CLI surface (dynamic tool registration)"
+    },
+    {
+      "path": "src/avo/mcp/registry.py",
+      "name": "tool_names",
+      "kind": "function",
+      "lineno": 99,
+      "confidence": 60,
+      "reason": "MCP bridge/registry/CLI surface (dynamic tool registration)"
+    },
+    {
+      "path": "src/avo/mcp/registry.py",
+      "name": "get_tool",
+      "kind": "function",
+      "lineno": 105,
+      "confidence": 60,
+      "reason": "MCP bridge/registry/CLI surface (dynamic tool registration)"
+    },
+    {
+      "path": "src/avo/mcp/registry.py",
+      "name": "tools_by_group",
+      "kind": "function",
+      "lineno": 114,
+      "confidence": 60,
+      "reason": "MCP bridge/registry/CLI surface (dynamic tool registration)"
+    },
+    {
+      "path": "src/avo/mcp/tools/cli_tools.py",
+      "name": "ALL_CLI_GROUPS",
+      "kind": "variable",
+      "lineno": 47,
+      "confidence": 60,
+      "reason": "MCP bridge/registry/CLI surface (dynamic tool registration)"
+    },
+    {
+      "path": "src/avo/mcp/tools/cli_tools.py",
+      "name": "core_bridge_defs",
+      "kind": "function",
+      "lineno": 603,
+      "confidence": 60,
+      "reason": "MCP bridge/registry/CLI surface (dynamic tool registration)"
+    },
+    {
+      "path": "src/avo/mcp/tools/cli_tools.py",
+      "name": "remaining_bridge_defs",
+      "kind": "function",
+      "lineno": 608,
+      "confidence": 60,
+      "reason": "MCP bridge/registry/CLI surface (dynamic tool registration)"
+    },
+    {
+      "path": "src/avo/mcp/tools/cli_tools.py",
+      "name": "all_bridge_defs",
+      "kind": "function",
+      "lineno": 613,
+      "confidence": 60,
+      "reason": "MCP bridge/registry/CLI surface (dynamic tool registration)"
+    },
+    {
+      "path": "src/avo/mcp/tools/cli_tools.py",
+      "name": "__qualname__",
+      "kind": "attribute",
+      "lineno": 733,
+      "confidence": 60,
+      "reason": "MCP bridge/registry/CLI surface (dynamic tool registration)"
+    },
+    {
+      "path": "src/avo/mcp/tools/cli_tools.py",
+      "name": "__annotations__",
+      "kind": "attribute",
+      "lineno": 735,
+      "confidence": 60,
+      "reason": "MCP bridge/registry/CLI surface (dynamic tool registration)"
+    },
+    {
+      "path": "src/avo/mcp/tools/cli_tools.py",
+      "name": "__signature__",
+      "kind": "attribute",
+      "lineno": 736,
+      "confidence": 60,
+      "reason": "MCP bridge/registry/CLI surface (dynamic tool registration)"
+    },
+    {
+      "path": "src/avo/models.py",
+      "name": "all_options",
+      "kind": "variable",
+      "lineno": 93,
+      "confidence": 60,
+      "reason": "Deferred or dynamic surface; keep until callers land"
+    },
+    {
+      "path": "src/avo/paths.py",
+      "name": "config_dir",
+      "kind": "function",
+      "lineno": 24,
+      "confidence": 60,
+      "reason": "Public API / CLI surface not referenced inside src/avo scan"
+    },
+    {
+      "path": "src/avo/paths.py",
+      "name": "schemas_dir",
+      "kind": "function",
+      "lineno": 40,
+      "confidence": 60,
+      "reason": "Public API / CLI surface not referenced inside src/avo scan"
+    },
+    {
+      "path": "src/avo/paths.py",
+      "name": "assert_layout",
+      "kind": "function",
+      "lineno": 60,
+      "confidence": 60,
+      "reason": "Public API / CLI surface not referenced inside src/avo scan"
+    },
+    {
+      "path": "src/avo/render.py",
+      "name": "output_audio_channels",
+      "kind": "function",
+      "lineno": 218,
+      "confidence": 60,
+      "reason": "Public API / CLI surface not referenced inside src/avo scan"
+    },
+    {
+      "path": "src/avo/render.py",
+      "name": "output_sample_rate",
+      "kind": "function",
+      "lineno": 222,
+      "confidence": 60,
+      "reason": "Public API / CLI surface not referenced inside src/avo scan"
+    },
+    {
+      "path": "src/avo/scratch.py",
+      "name": "purge_scratch",
+      "kind": "function",
+      "lineno": 126,
+      "confidence": 60,
+      "reason": "Public API / CLI surface not referenced inside src/avo scan"
+    },
+    {
+      "path": "src/avo/scratch.py",
+      "name": "scratch_exists",
+      "kind": "function",
+      "lineno": 134,
+      "confidence": 60,
+      "reason": "Public API / CLI surface not referenced inside src/avo scan"
+    },
+    {
+      "path": "src/avo/shorts.py",
+      "name": "EXIT_NOT_IMPLEMENTED",
+      "kind": "variable",
+      "lineno": 25,
+      "confidence": 60,
+      "reason": "Public constant / enum-like value kept for API and templates"
+    },
+    {
+      "path": "src/avo/shorts_captions.py",
+      "name": "active_word_at",
+      "kind": "function",
+      "lineno": 293,
+      "confidence": 60,
+      "reason": "Public API / CLI surface not referenced inside src/avo scan"
+    },
+    {
+      "path": "src/avo/shorts_contract.py",
+      "name": "ensure_plan_status_match",
+      "kind": "function",
+      "lineno": 187,
+      "confidence": 60,
+      "reason": "Public API / CLI surface not referenced inside src/avo scan"
+    },
+    {
+      "path": "src/avo/shorts_contract.py",
+      "name": "transition_item",
+      "kind": "function",
+      "lineno": 248,
+      "confidence": 60,
+      "reason": "Public API / CLI surface not referenced inside src/avo scan"
+    },
+    {
+      "path": "src/avo/shorts_qc.py",
+      "name": "write_qc_report",
+      "kind": "function",
+      "lineno": 114,
+      "confidence": 60,
+      "reason": "Public API / CLI surface not referenced inside src/avo scan"
+    },
+    {
+      "path": "src/avo/shorts_qc.py",
+      "name": "collect_visual_evidence",
+      "kind": "function",
+      "lineno": 118,
+      "confidence": 60,
+      "reason": "Public API / CLI surface not referenced inside src/avo scan"
+    },
+    {
+      "path": "src/avo/timeline/animation.py",
+      "name": "promote_pattern",
+      "kind": "function",
+      "lineno": 41,
+      "confidence": 60,
+      "reason": "Timeline domain/API surface (dynamic CLI and future stages)"
+    },
+    {
+      "path": "src/avo/timeline/command_handlers.py",
+      "name": "CommandHandlers",
+      "kind": "class",
+      "lineno": 13,
+      "confidence": 60,
+      "reason": "Timeline domain/API surface (dynamic CLI and future stages)"
+    },
+    {
+      "path": "src/avo/timeline/contracts.py",
+      "name": "document_hash_excluding",
+      "kind": "function",
+      "lineno": 120,
+      "confidence": 60,
+      "reason": "Timeline domain/API surface (dynamic CLI and future stages)"
+    },
+    {
+      "path": "src/avo/timeline/lifecycle.py",
+      "name": "required_qc_passed",
+      "kind": "variable",
+      "lineno": 63,
+      "confidence": 60,
+      "reason": "Timeline domain/API surface (dynamic CLI and future stages)"
+    },
+    {
+      "path": "src/avo/timeline/lineage.py",
+      "name": "create_cmap_revision",
+      "kind": "function",
+      "lineno": 59,
+      "confidence": 60,
+      "reason": "Timeline domain/API surface (dynamic CLI and future stages)"
+    },
+    {
+      "path": "src/avo/timeline/lineage.py",
+      "name": "approve_cmap_revision",
+      "kind": "function",
+      "lineno": 76,
+      "confidence": 60,
+      "reason": "Timeline domain/API surface (dynamic CLI and future stages)"
+    },
+    {
+      "path": "src/avo/timeline/lineage.py",
+      "name": "rebase_bmap",
+      "kind": "function",
+      "lineno": 151,
+      "confidence": 60,
+      "reason": "Timeline domain/API surface (dynamic CLI and future stages)"
+    },
+    {
+      "path": "src/avo/timeline/mapping.py",
+      "name": "cmap_raw_to_output",
+      "kind": "function",
+      "lineno": 44,
+      "confidence": 60,
+      "reason": "Timeline domain/API surface (dynamic CLI and future stages)"
+    },
+    {
+      "path": "src/avo/timeline/mapping.py",
+      "name": "cmap_output_to_raw",
+      "kind": "function",
+      "lineno": 67,
+      "confidence": 60,
+      "reason": "Timeline domain/API surface (dynamic CLI and future stages)"
+    },
+    {
+      "path": "src/avo/timeline/materialize.py",
+      "name": "materialize_synced_raw",
+      "kind": "function",
+      "lineno": 122,
+      "confidence": 60,
+      "reason": "Timeline domain/API surface (dynamic CLI and future stages)"
+    },
+    {
+      "path": "src/avo/timeline/migration.py",
+      "name": "migrate_legacy_edl",
+      "kind": "function",
+      "lineno": 95,
+      "confidence": 60,
+      "reason": "Timeline domain/API surface (dynamic CLI and future stages)"
+    },
+    {
+      "path": "src/avo/timeline/migration.py",
+      "name": "import_legacy_sync_map",
+      "kind": "function",
+      "lineno": 133,
+      "confidence": 60,
+      "reason": "Timeline domain/API surface (dynamic CLI and future stages)"
+    },
+    {
+      "path": "src/avo/timeline/models.py",
+      "name": "CMAP_OUTPUT",
+      "kind": "variable",
+      "lineno": 17,
+      "confidence": 60,
+      "reason": "Timeline domain/API surface (dynamic CLI and future stages)"
+    },
+    {
+      "path": "src/avo/timeline/models.py",
+      "name": "RevisionState",
+      "kind": "class",
+      "lineno": 27,
+      "confidence": 60,
+      "reason": "Timeline domain/API surface (dynamic CLI and future stages)"
+    },
+    {
+      "path": "src/avo/timeline/models.py",
+      "name": "DRAFT",
+      "kind": "variable",
+      "lineno": 28,
+      "confidence": 60,
+      "reason": "Timeline domain/API surface (dynamic CLI and future stages)"
+    },
+    {
+      "path": "src/avo/timeline/models.py",
+      "name": "REVIEW_READY",
+      "kind": "variable",
+      "lineno": 29,
+      "confidence": 60,
+      "reason": "Timeline domain/API surface (dynamic CLI and future stages)"
+    },
+    {
+      "path": "src/avo/timeline/models.py",
+      "name": "APPROVED",
+      "kind": "variable",
+      "lineno": 30,
+      "confidence": 60,
+      "reason": "Timeline domain/API surface (dynamic CLI and future stages)"
+    },
+    {
+      "path": "src/avo/timeline/models.py",
+      "name": "REJECTED",
+      "kind": "variable",
+      "lineno": 31,
+      "confidence": 60,
+      "reason": "Timeline domain/API surface (dynamic CLI and future stages)"
+    },
+    {
+      "path": "src/avo/timeline/models.py",
+      "name": "UNKNOWN",
+      "kind": "variable",
+      "lineno": 35,
+      "confidence": 60,
+      "reason": "Timeline domain/API surface (dynamic CLI and future stages)"
+    },
+    {
+      "path": "src/avo/timeline/models.py",
+      "name": "Fingerprint",
+      "kind": "class",
+      "lineno": 75,
+      "confidence": 60,
+      "reason": "Timeline domain/API surface (dynamic CLI and future stages)"
+    },
+    {
+      "path": "src/avo/timeline/models.py",
+      "name": "media_signature",
+      "kind": "variable",
+      "lineno": 79,
+      "confidence": 60,
+      "reason": "Timeline domain/API surface (dynamic CLI and future stages)"
+    },
+    {
+      "path": "src/avo/timeline/models.py",
+      "name": "DependencyRef",
+      "kind": "class",
+      "lineno": 89,
+      "confidence": 60,
+      "reason": "Timeline domain/API surface (dynamic CLI and future stages)"
+    },
+    {
+      "path": "src/avo/timeline/models.py",
+      "name": "Actor",
+      "kind": "class",
+      "lineno": 110,
+      "confidence": 60,
+      "reason": "Timeline domain/API surface (dynamic CLI and future stages)"
+    },
+    {
+      "path": "src/avo/timeline/models.py",
+      "name": "TimeRange",
+      "kind": "class",
+      "lineno": 123,
+      "confidence": 60,
+      "reason": "Timeline domain/API surface (dynamic CLI and future stages)"
+    },
+    {
+      "path": "src/avo/timeline/models.py",
+      "name": "validate_stable_id",
+      "kind": "function",
+      "lineno": 139,
+      "confidence": 60,
+      "reason": "Timeline domain/API surface (dynamic CLI and future stages)"
+    },
+    {
+      "path": "src/avo/timeline/models.py",
+      "name": "StructuredTimelineError",
+      "kind": "class",
+      "lineno": 145,
+      "confidence": 60,
+      "reason": "Timeline domain/API surface (dynamic CLI and future stages)"
+    },
+    {
+      "path": "src/avo/timeline/pipeline.py",
+      "name": "enter_blocked",
+      "kind": "method",
+      "lineno": 183,
+      "confidence": 60,
+      "reason": "Timeline domain/API surface (dynamic CLI and future stages)"
+    },
+    {
+      "path": "src/avo/timeline/pipeline.py",
+      "name": "sound",
+      "kind": "method",
+      "lineno": 229,
+      "confidence": 60,
+      "reason": "Timeline domain/API surface (dynamic CLI and future stages)"
+    },
+    {
+      "path": "src/avo/timeline/pipeline.py",
+      "name": "color",
+      "kind": "method",
+      "lineno": 238,
+      "confidence": 60,
+      "reason": "Timeline domain/API surface (dynamic CLI and future stages)"
+    },
+    {
+      "path": "src/avo/timeline/pipeline.py",
+      "name": "grade",
+      "kind": "method",
+      "lineno": 241,
+      "confidence": 60,
+      "reason": "Timeline domain/API surface (dynamic CLI and future stages)"
+    },
+    {
+      "path": "src/avo/timeline/pipeline.py",
+      "name": "end_screen",
+      "kind": "method",
+      "lineno": 244,
+      "confidence": 60,
+      "reason": "Timeline domain/API surface (dynamic CLI and future stages)"
+    },
+    {
+      "path": "src/avo/timeline/ports.py",
+      "name": "MediaIdentityPort",
+      "kind": "class",
+      "lineno": 29,
+      "confidence": 60,
+      "reason": "Timeline port Protocol surface for hexagonal adapters"
+    },
+    {
+      "path": "src/avo/timeline/ports.py",
+      "name": "RawInventoryPort",
+      "kind": "class",
+      "lineno": 34,
+      "confidence": 60,
+      "reason": "Timeline port Protocol surface for hexagonal adapters"
+    },
+    {
+      "path": "src/avo/timeline/ports.py",
+      "name": "TranscriptionPort",
+      "kind": "class",
+      "lineno": 39,
+      "confidence": 60,
+      "reason": "Timeline port Protocol surface for hexagonal adapters"
+    },
+    {
+      "path": "src/avo/timeline/ports.py",
+      "name": "WatchReviewPort",
+      "kind": "class",
+      "lineno": 44,
+      "confidence": 60,
+      "reason": "Timeline port Protocol surface for hexagonal adapters"
+    },
+    {
+      "path": "src/avo/timeline/ports.py",
+      "name": "TimelineRenderPort",
+      "kind": "class",
+      "lineno": 49,
+      "confidence": 60,
+      "reason": "Timeline port Protocol surface for hexagonal adapters"
+    },
+    {
+      "path": "src/avo/timeline/ports.py",
+      "name": "DeterministicQcPort",
+      "kind": "class",
+      "lineno": 56,
+      "confidence": 60,
+      "reason": "Timeline port Protocol surface for hexagonal adapters"
+    },
+    {
+      "path": "src/avo/timeline/ports.py",
+      "name": "AudioQcPort",
+      "kind": "class",
+      "lineno": 61,
+      "confidence": 60,
+      "reason": "Timeline port Protocol surface for hexagonal adapters"
+    },
+    {
+      "path": "src/avo/timeline/ports.py",
+      "name": "check_audio",
+      "kind": "method",
+      "lineno": 63,
+      "confidence": 60,
+      "reason": "Timeline port Protocol surface for hexagonal adapters"
+    },
+    {
+      "path": "src/avo/timeline/ports.py",
+      "name": "VisualQcPort",
+      "kind": "class",
+      "lineno": 66,
+      "confidence": 60,
+      "reason": "Timeline port Protocol surface for hexagonal adapters"
+    },
+    {
+      "path": "src/avo/timeline/ports.py",
+      "name": "check_visual",
+      "kind": "method",
+      "lineno": 68,
+      "confidence": 60,
+      "reason": "Timeline port Protocol surface for hexagonal adapters"
+    },
+    {
+      "path": "src/avo/timeline/ports.py",
+      "name": "AccessibilityQcPort",
+      "kind": "class",
+      "lineno": 71,
+      "confidence": 60,
+      "reason": "Timeline port Protocol surface for hexagonal adapters"
+    },
+    {
+      "path": "src/avo/timeline/ports.py",
+      "name": "check_accessibility",
+      "kind": "method",
+      "lineno": 73,
+      "confidence": 60,
+      "reason": "Timeline port Protocol surface for hexagonal adapters"
+    },
+    {
+      "path": "src/avo/timeline/ports.py",
+      "name": "RightsPolicyPort",
+      "kind": "class",
+      "lineno": 78,
+      "confidence": 60,
+      "reason": "Timeline port Protocol surface for hexagonal adapters"
+    },
+    {
+      "path": "src/avo/timeline/ports.py",
+      "name": "check_rights",
+      "kind": "method",
+      "lineno": 80,
+      "confidence": 60,
+      "reason": "Timeline port Protocol surface for hexagonal adapters"
+    },
+    {
+      "path": "src/avo/timeline/ports.py",
+      "name": "SyncValidationPort",
+      "kind": "class",
+      "lineno": 83,
+      "confidence": 60,
+      "reason": "Timeline port Protocol surface for hexagonal adapters"
+    },
+    {
+      "path": "src/avo/timeline/ports.py",
+      "name": "FixExecutorPort",
+      "kind": "class",
+      "lineno": 88,
+      "confidence": 60,
+      "reason": "Timeline port Protocol surface for hexagonal adapters"
+    },
+    {
+      "path": "src/avo/timeline/ports.py",
+      "name": "ApprovalPort",
+      "kind": "class",
+      "lineno": 95,
+      "confidence": 60,
+      "reason": "Timeline port Protocol surface for hexagonal adapters"
+    },
+    {
+      "path": "src/avo/timeline/ports.py",
+      "name": "ClockPort",
+      "kind": "class",
+      "lineno": 100,
+      "confidence": 60,
+      "reason": "Timeline port Protocol surface for hexagonal adapters"
+    },
+    {
+      "path": "src/avo/timeline/ports.py",
+      "name": "ArtifactStorePort",
+      "kind": "class",
+      "lineno": 105,
+      "confidence": 60,
+      "reason": "Timeline port Protocol surface for hexagonal adapters"
+    },
+    {
+      "path": "src/avo/timeline/projection.py",
+      "name": "approved_sync_transform",
+      "kind": "function",
+      "lineno": 141,
+      "confidence": 60,
+      "reason": "Timeline domain/API surface (dynamic CLI and future stages)"
+    },
+    {
+      "path": "src/avo/timeline/review.py",
+      "name": "GATE_REQUIREMENTS",
+      "kind": "variable",
+      "lineno": 93,
+      "confidence": 60,
+      "reason": "Timeline domain/API surface (dynamic CLI and future stages)"
+    },
+    {
+      "path": "src/avo/timeline/review.py",
+      "name": "stale_evidence",
+      "kind": "function",
+      "lineno": 171,
+      "confidence": 60,
+      "reason": "Timeline domain/API surface (dynamic CLI and future stages)"
+    },
+    {
+      "path": "src/avo/timeline/review.py",
+      "name": "run_fix_loop",
+      "kind": "function",
+      "lineno": 297,
+      "confidence": 60,
+      "reason": "Timeline domain/API surface (dynamic CLI and future stages)"
+    },
+    {
+      "path": "src/avo/timeline/sync.py",
+      "name": "ConstantOffset",
+      "kind": "class",
+      "lineno": 15,
+      "confidence": 60,
+      "reason": "Timeline domain/API surface (dynamic CLI and future stages)"
+    },
+    {
+      "path": "src/avo/timeline/sync.py",
+      "name": "timebase_num",
+      "kind": "variable",
+      "lineno": 18,
+      "confidence": 60,
+      "reason": "Timeline domain/API surface (dynamic CLI and future stages)"
+    },
+    {
+      "path": "src/avo/timeline/sync.py",
+      "name": "timebase_den",
+      "kind": "variable",
+      "lineno": 19,
+      "confidence": 60,
+      "reason": "Timeline domain/API surface (dynamic CLI and future stages)"
+    },
+    {
+      "path": "src/avo/timeline/sync.py",
+      "name": "audio_to_picture",
+      "kind": "method",
+      "lineno": 21,
+      "confidence": 60,
+      "reason": "Timeline domain/API surface (dynamic CLI and future stages)"
+    },
+    {
+      "path": "src/avo/timeline/sync.py",
+      "name": "picture_to_audio",
+      "kind": "method",
+      "lineno": 24,
+      "confidence": 60,
+      "reason": "Timeline domain/API surface (dynamic CLI and future stages)"
+    },
+    {
+      "path": "src/avo/timeline/sync.py",
+      "name": "PiecewiseTransform",
+      "kind": "class",
+      "lineno": 46,
+      "confidence": 60,
+      "reason": "Timeline domain/API surface (dynamic CLI and future stages)"
+    },
+    {
+      "path": "src/avo/timeline/tracks.py",
+      "name": "audit_contributions",
+      "kind": "function",
+      "lineno": 178,
+      "confidence": 60,
+      "reason": "Timeline domain/API surface (dynamic CLI and future stages)"
+    },
+    {
+      "path": "src/avo/timeline_view.py",
+      "name": "ACCENT",
+      "kind": "variable",
+      "lineno": 202,
+      "confidence": 60,
+      "reason": "Public constant / enum-like value kept for API and templates"
+    },
+    {
+      "path": "src/avo/transcribe.py",
+      "name": "transcript_review_evidence",
+      "kind": "function",
+      "lineno": 407,
+      "confidence": 60,
+      "reason": "Public API / CLI surface not referenced inside src/avo scan"
+    },
+    {
+      "path": "src/avo/transcribe_batch.py",
+      "name": "transcribed",
+      "kind": "variable",
+      "lineno": 31,
+      "confidence": 60,
+      "reason": "Deferred or dynamic surface; keep until callers land"
+    },
+    {
+      "path": "src/avo/video_context.py",
+      "name": "legacy_fallback_allowed",
+      "kind": "variable",
+      "lineno": 42,
+      "confidence": 60,
+      "reason": "Deferred or dynamic surface; keep until callers land"
+    },
+    {
+      "path": "src/avo/video_context.py",
+      "name": "warn_on_derived_mismatch",
+      "kind": "variable",
+      "lineno": 43,
+      "confidence": 60,
+      "reason": "Deferred or dynamic surface; keep until callers land"
+    },
+    {
+      "path": "src/avo/video_context.py",
+      "name": "canonical_timeline_available",
+      "kind": "function",
+      "lineno": 67,
+      "confidence": 60,
+      "reason": "Public API / CLI surface not referenced inside src/avo scan"
+    },
+    {
+      "path": "src/avo/video_registry.py",
+      "name": "VIDEO_SCHEMA",
+      "kind": "variable",
+      "lineno": 17,
+      "confidence": 60,
+      "reason": "Public constant / enum-like value kept for API and templates"
+    },
+    {
+      "path": "src/avo/video_registry.py",
+      "name": "update_status",
+      "kind": "function",
+      "lineno": 210,
+      "confidence": 60,
+      "reason": "Public API / CLI surface not referenced inside src/avo scan"
+    }
+  ]
+}

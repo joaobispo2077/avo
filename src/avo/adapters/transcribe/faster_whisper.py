@@ -6,7 +6,7 @@ import os
 import subprocess
 import sys
 
-from avo.adapters.base import JobAdapter, JobRequest, JobResult
+from avo.adapters.base import JobRequest, JobResult
 
 
 def _argv_with_model(argv: list[str], model: str) -> list[str]:
@@ -29,7 +29,9 @@ class FasterWhisperAdapter:
                 exit_code=1,
                 stderr=f"missing bundled engine script: {script}",
             )
-        model_id = resolve_option_id("transcribe", root=request.root, label=request.label)
+        model_id = resolve_option_id(
+            "transcribe", root=request.root, label=request.label
+        )
         catalog = load_catalog(request.root)
         model_label = format_active_model(catalog, "transcribe", model_id)
         argv = _argv_with_model(request.argv, model_id)

@@ -84,16 +84,24 @@ def _samples(effect: str) -> list[tuple[float, float]]:
         if effect in {"transfer_whoosh", "soft_whoosh"}:
             sweep = math.sin(2.0 * math.pi * (170.0 * t + 720.0 * t * t))
             noise = (rng.random() * 2.0 - 1.0) * 0.35
-            mono = (0.18 * sweep + 0.25 * noise) * (math.sin(math.pi * t / duration) ** 1.8) * env
+            mono = (
+                (0.18 * sweep + 0.25 * noise)
+                * (math.sin(math.pi * t / duration) ** 1.8)
+                * env
+            )
             if effect == "soft_whoosh":
                 mono *= 0.55
             pan = -0.65 + 1.3 * (i / max(1, count - 1))
         elif effect in {"warning_hit", "transition_hit"}:
             mono = (
-                0.78 * math.sin(2.0 * math.pi * 92.0 * t)
-                + 0.24 * math.sin(2.0 * math.pi * 184.0 * t)
-                + 0.08 * (rng.random() * 2.0 - 1.0) * math.exp(-70.0 * t)
-            ) * math.exp(-9.5 * t) * env
+                (
+                    0.78 * math.sin(2.0 * math.pi * 92.0 * t)
+                    + 0.24 * math.sin(2.0 * math.pi * 184.0 * t)
+                    + 0.08 * (rng.random() * 2.0 - 1.0) * math.exp(-70.0 * t)
+                )
+                * math.exp(-9.5 * t)
+                * env
+            )
             if effect == "transition_hit":
                 mono *= 0.62
             pan = 0.0
@@ -108,14 +116,18 @@ def _samples(effect: str) -> list[tuple[float, float]]:
             pan = -0.2 + 0.4 * (i / max(1, count - 1))
         elif effect == "cash_register_money":
             bell = math.sin(2.0 * math.pi * 1180.0 * t) * math.exp(-11.0 * t)
-            drawer = math.sin(2.0 * math.pi * 115.0 * max(0.0, t - 0.08)) * math.exp(-7.0 * max(0.0, t - 0.08))
+            drawer = math.sin(2.0 * math.pi * 115.0 * max(0.0, t - 0.08)) * math.exp(
+                -7.0 * max(0.0, t - 0.08)
+            )
             click = (1.0 if 0.045 < t < 0.058 else 0.0) * (rng.random() * 2.0 - 1.0)
             mono = (0.48 * bell + 0.42 * drawer + 0.12 * click) * env
             pan = -0.18 + 0.36 * (i / max(1, count - 1))
         elif effect == "coin_tick":
             mono = (
                 math.sin(2.0 * math.pi * 2450.0 * t) * math.exp(-55.0 * t)
-                + 0.4 * math.sin(2.0 * math.pi * 3200.0 * max(0.0, t - 0.035)) * math.exp(-65.0 * max(0.0, t - 0.035))
+                + 0.4
+                * math.sin(2.0 * math.pi * 3200.0 * max(0.0, t - 0.035))
+                * math.exp(-65.0 * max(0.0, t - 0.035))
             ) * env
             pan = 0.15
         elif effect == "receipt_print":
@@ -129,16 +141,31 @@ def _samples(effect: str) -> list[tuple[float, float]]:
         elif effect == "card_confirm":
             first = math.sin(2.0 * math.pi * 740.0 * t) * math.exp(-12.0 * t)
             tt = max(0.0, t - 0.13)
-            second = math.sin(2.0 * math.pi * 1046.5 * tt) * math.exp(-12.0 * tt) if t >= 0.13 else 0.0
+            second = (
+                math.sin(2.0 * math.pi * 1046.5 * tt) * math.exp(-12.0 * tt)
+                if t >= 0.13
+                else 0.0
+            )
             mono = (0.42 * first + 0.5 * second) * env
             pan = 0.0
         elif effect == "switch_ui_click":
-            mono = (math.sin(2.0 * math.pi * 1650.0 * t) + 0.18 * math.sin(2.0 * math.pi * 3300.0 * t)) * math.exp(-75.0 * t) * env
+            mono = (
+                (
+                    math.sin(2.0 * math.pi * 1650.0 * t)
+                    + 0.18 * math.sin(2.0 * math.pi * 3300.0 * t)
+                )
+                * math.exp(-75.0 * t)
+                * env
+            )
             pan = 0.0
         elif effect == "switch_ui_chime":
             first = math.sin(2.0 * math.pi * 587.33 * t) * math.exp(-9.0 * t)
             tt = max(0.0, t - 0.09)
-            second = math.sin(2.0 * math.pi * 783.99 * tt) * math.exp(-8.0 * tt) if t >= 0.09 else 0.0
+            second = (
+                math.sin(2.0 * math.pi * 783.99 * tt) * math.exp(-8.0 * tt)
+                if t >= 0.09
+                else 0.0
+            )
             mono = (0.36 * first + 0.48 * second) * env
             pan = 0.0
         elif effect == "soft_transition":
@@ -171,7 +198,9 @@ def _to_pcm16(samples: list[tuple[float, float]]) -> bytes:
     frames = bytearray()
     for left, right in samples:
         frames.extend(struct.pack("<h", int(max(-1.0, min(1.0, left * scale)) * 32767)))
-        frames.extend(struct.pack("<h", int(max(-1.0, min(1.0, right * scale)) * 32767)))
+        frames.extend(
+            struct.pack("<h", int(max(-1.0, min(1.0, right * scale)) * 32767))
+        )
     return bytes(frames)
 
 

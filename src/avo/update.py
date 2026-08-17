@@ -6,9 +6,10 @@ import argparse
 import json
 import subprocess
 import sys
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 from avo import avo_state
 from avo.paths import providers_dir, repo_root
@@ -247,7 +248,9 @@ def run_toolchain_setup(
 
 def _has_command(name: str) -> bool:
     probe = subprocess.run(
-        ["where", name] if sys.platform == "win32" else ["sh", "-c", f"command -v {name}"],
+        ["where", name]
+        if sys.platform == "win32"
+        else ["sh", "-c", f"command -v {name}"],
         capture_output=True,
         check=False,
         shell=sys.platform == "win32",
@@ -521,19 +524,29 @@ def _cmd_apply(args: argparse.Namespace) -> int:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--root", type=Path, default=None, help="AVO repo root override")
-    parser.add_argument("--json", action="store_true", help="Emit machine-readable report")
+    parser.add_argument(
+        "--root", type=Path, default=None, help="AVO repo root override"
+    )
+    parser.add_argument(
+        "--json", action="store_true", help="Emit machine-readable report"
+    )
     sub = parser.add_subparsers(dest="command", required=True)
 
     parent = argparse.ArgumentParser(add_help=False)
     parent.add_argument("--dry-run", action="store_true")
     parent.add_argument("--no-fetch", action="store_true")
 
-    p_check = sub.add_parser("check", parents=[parent], help="Fetch/compare only; no pull/sync")
+    p_check = sub.add_parser(
+        "check", parents=[parent], help="Fetch/compare only; no pull/sync"
+    )
     p_check.set_defaults(func=_cmd_check)
 
-    p_apply = sub.add_parser("apply", parents=[parent], help="Pull (ff-only) and full sync")
-    p_apply.add_argument("--yes", "-y", action="store_true", help="Pull and sync without prompt")
+    p_apply = sub.add_parser(
+        "apply", parents=[parent], help="Pull (ff-only) and full sync"
+    )
+    p_apply.add_argument(
+        "--yes", "-y", action="store_true", help="Pull and sync without prompt"
+    )
     p_apply.add_argument(
         "--skip-sync",
         action="store_true",

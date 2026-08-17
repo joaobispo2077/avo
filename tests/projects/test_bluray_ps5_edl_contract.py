@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import sys
 import tempfile
 import unittest
 from copy import deepcopy
@@ -11,12 +10,16 @@ ROOT = Path(__file__).resolve().parents[2]
 
 from avo import validate_edl
 
-
 SCHEMA = ROOT / "specs/005-bluray-ps5-gamevlog/contracts/edl.schema.json"
 
 
 def valid_edl(root: Path) -> dict:
-    for name in ["DJI_20260506201325_0444_D.MP4", "overlay.webm", "sfx.wav", "captions.srt"]:
+    for name in [
+        "DJI_20260506201325_0444_D.MP4",
+        "overlay.webm",
+        "sfx.wav",
+        "captions.srt",
+    ]:
         (root / name).write_text("asset", encoding="utf-8")
 
     return {
@@ -116,7 +119,9 @@ class BlurayPs5EdlContractTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         if not SCHEMA.is_file():
-            raise unittest.SkipTest(f"missing local project spec (not in public repo): {SCHEMA}")
+            raise unittest.SkipTest(
+                f"missing local project spec (not in public repo): {SCHEMA}"
+            )
 
     def test_valid_bluray_ps5_edl_passes_semantics(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -131,7 +136,9 @@ class BlurayPs5EdlContractTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             edl = valid_edl(root)
-            (root / "DJI_20260506201325_0444_D.LRF").write_text("proxy", encoding="utf-8")
+            (root / "DJI_20260506201325_0444_D.LRF").write_text(
+                "proxy", encoding="utf-8"
+            )
             edl["sources"]["main"]["path"] = str(root / "DJI_20260506201325_0444_D.LRF")
             path = root / "edl.json"
             path.write_text(json.dumps(edl), encoding="utf-8")
@@ -145,18 +152,25 @@ class BlurayPs5EdlContractTests(unittest.TestCase):
             edl["ranges"][0]["source"] = "overlay-1"
             path = root / "edl.json"
             path.write_text(json.dumps(edl), encoding="utf-8")
-            with self.assertRaisesRegex(validate_edl.EdlValidationError, "authoritative_master"):
+            with self.assertRaisesRegex(
+                validate_edl.EdlValidationError, "authoritative_master"
+            ):
                 validate_edl.load_and_validate(path, schema_path=SCHEMA)
 
     def test_master_stage_requires_motion_and_multiple_release_approvals(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             edl = valid_edl(root)
-            edl["render_gate"] = {"stage": "master", "approval_references": ["picture lock"]}
+            edl["render_gate"] = {
+                "stage": "master",
+                "approval_references": ["picture lock"],
+            }
             edl["motion_policy"]["review_package_approval"] = None
             path = root / "edl.json"
             path.write_text(json.dumps(edl), encoding="utf-8")
-            with self.assertRaisesRegex(validate_edl.EdlValidationError, "master render"):
+            with self.assertRaisesRegex(
+                validate_edl.EdlValidationError, "master render"
+            ):
                 validate_edl.load_and_validate(path, schema_path=SCHEMA)
 
     def test_overlay_and_sfx_asset_paths_must_exist_and_sfx_gain_negative(self) -> None:
@@ -185,7 +199,9 @@ class BlurayPs5EdlContractTests(unittest.TestCase):
             edl["overlays"][0]["duration"] = 3.0
             path = root / "bounds.json"
             path.write_text(json.dumps(edl), encoding="utf-8")
-            with self.assertRaisesRegex(validate_edl.EdlValidationError, "beyond output"):
+            with self.assertRaisesRegex(
+                validate_edl.EdlValidationError, "beyond output"
+            ):
                 validate_edl.load_and_validate(path, schema_path=SCHEMA)
 
 

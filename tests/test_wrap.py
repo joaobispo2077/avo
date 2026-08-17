@@ -15,8 +15,10 @@ MASTER = "20260801-demo-master-v001"
 
 sys.path.insert(0, str(SRC))
 
-from avo import project_inventory  # noqa: E402
-from avo import wrap  # noqa: E402
+from avo import (
+    project_inventory,
+    wrap,
+)
 
 
 class WrapTests(unittest.TestCase):

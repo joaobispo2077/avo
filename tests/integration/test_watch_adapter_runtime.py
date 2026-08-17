@@ -13,11 +13,15 @@ def test_bundled_watch_skill_executable_contract():
     adapter = WatchSkillAdapter()
     result = adapter.run(
         JobRequest(
-            job="understand", label="version", argv=["version"],
+            job="understand",
+            label="version",
+            argv=["version"],
             root=Path(__file__).resolve().parents[2],
         )
     )
-    if result.exit_code == 2 and str(result.stderr).startswith("watch-skill unavailable"):
+    if result.exit_code == 2 and str(result.stderr).startswith(
+        "watch-skill unavailable"
+    ):
         pytest.skip(result.stderr)
     assert result.exit_code == 0, result.stderr
     assert "tools/watch-skill" in adapter.executable.replace(chr(92), "/")

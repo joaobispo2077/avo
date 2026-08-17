@@ -22,7 +22,7 @@ MASTER_BASENAME = "20260801-demo-master-v001"
 
 sys.path.insert(0, str(SRC))
 
-from avo import project_inventory  # noqa: E402
+from avo import project_inventory
 
 
 class ProjectInventoryTests(unittest.TestCase):
@@ -32,7 +32,9 @@ class ProjectInventoryTests(unittest.TestCase):
 
     def test_resolve_preserved_set_fixture(self) -> None:
         preserved = project_inventory.resolve_preserved_set(self.raw_dir, self.master)
-        self.assertTrue(any(path.name == "source.mp4" for path in preserved.raw_sources))
+        self.assertTrue(
+            any(path.name == "source.mp4" for path in preserved.raw_sources)
+        )
         self.assertIsNotNone(preserved.initial_transcript)
         assert preserved.initial_transcript is not None
         self.assertEqual(preserved.initial_transcript.name, "initial-whisper.json")
@@ -55,18 +57,37 @@ class ProjectInventoryTests(unittest.TestCase):
     def test_preserved_never_in_delete_list(self) -> None:
         preserved = project_inventory.resolve_preserved_set(self.raw_dir, self.master)
         delete_list = project_inventory.list_delete_candidates(self.raw_dir, preserved)
-        preserved_resolved = {
-            str(path.resolve()) for path in preserved.all_paths
-        }
+        preserved_resolved = {str(path.resolve()) for path in preserved.all_paths}
         delete_resolved = {str(path.resolve()) for path in delete_list}
         self.assertFalse(preserved_resolved & delete_resolved)
         rel_paths = {
-            project_inventory._relative_posix(self.raw_dir, path) for path in delete_list
+            project_inventory._relative_posix(self.raw_dir, path)
+            for path in delete_list
         }
         self.assertIn("edit/preview/edit-proof.mp4", rel_paths)
         self.assertIn("edit/clips_graded/intermediate.mov", rel_paths)
         self.assertNotIn(f"edit/masters/{self.master}.mp4", rel_paths)
         self.assertNotIn("edit/transcripts/initial-whisper.json", rel_paths)
+
+    def test_delete_candidates_skip_inaccessible_paths(self) -> None:
+        preserved = project_inventory.resolve_preserved_set(self.raw_dir, self.master)
+        original_is_file = Path.is_file
+
+        def fake_is_file(self: Path) -> bool:
+            if self.name == "edit-proof.mp4":
+                raise OSError(1920, "unavailable")
+            return original_is_file(self)
+
+        with mock.patch.object(Path, "is_file", fake_is_file):
+            delete_list = project_inventory.list_delete_candidates(
+                self.raw_dir, preserved
+            )
+        rel_paths = {
+            project_inventory._relative_posix(self.raw_dir, path)
+            for path in delete_list
+        }
+        self.assertNotIn("edit/preview/edit-proof.mp4", rel_paths)
+        self.assertIn("edit/clips_graded/intermediate.mov", rel_paths)
 
     def test_assert_no_preserved_in_delete_list_raises(self) -> None:
         preserved = project_inventory.resolve_preserved_set(self.raw_dir, self.master)
@@ -109,7 +130,10 @@ class ProjectInventoryTests(unittest.TestCase):
         self.assertFalse(report.degraded_mode)
         assert report.file_diff is not None
         self.assertTrue(
-            any(entry.path == "edit/clips_graded/intermediate.mov" for entry in report.file_diff.added)
+            any(
+                entry.path == "edit/clips_graded/intermediate.mov"
+                for entry in report.file_diff.added
+            )
         )
 
     def test_empty_edit_dir_delete_list(self) -> None:
@@ -181,7 +205,9 @@ class ProjectInventoryTests(unittest.TestCase):
             )
             self.assertEqual(len(deleted), 2)
             self.assertFalse((raw_dir / "edit" / "preview" / "edit-proof.mp4").exists())
-            self.assertFalse((raw_dir / "edit" / "clips_graded" / "intermediate.mov").exists())
+            self.assertFalse(
+                (raw_dir / "edit" / "clips_graded" / "intermediate.mov").exists()
+            )
             self.assertTrue(
                 (raw_dir / "edit" / "masters" / f"{self.master}.mp4").exists()
             )
@@ -290,7 +316,9 @@ class ProjectInventoryTests(unittest.TestCase):
                     self.assertTrue(marker.is_file())
 
     def test_scan_inventory_local_fallback(self) -> None:
-        inventory = project_inventory.scan_inventory(self.raw_dir, relative_to=self.raw_dir)
+        inventory = project_inventory.scan_inventory(
+            self.raw_dir, relative_to=self.raw_dir
+        )
         self.assertIn("source.mp4", inventory)
         self.assertIn("edit/preview/edit-proof.mp4", inventory)
 

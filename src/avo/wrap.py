@@ -134,9 +134,7 @@ def build_wrap_payload(
             "modified": modified,
             "deletedOnCleanup": deleted_on_cleanup if status == "final" else [],
             "deletedCount": deleted_count if status == "final" else len(scheduled),
-            "deletedSample": [
-                _entry_path(entry) for entry in deleted_sample
-            ],
+            "deletedSample": [_entry_path(entry) for entry in deleted_sample],
             "degradedMode": degraded,
         },
         "learning": {
@@ -249,7 +247,9 @@ def render_markdown(payload: dict[str, Any]) -> str:
     return "\n".join(lines).rstrip() + "\n"
 
 
-def _write_sidecar(raw_dir: Path, json_name: str, md_name: str, payload: dict[str, Any]) -> tuple[Path, Path]:
+def _write_sidecar(
+    raw_dir: Path, json_name: str, md_name: str, payload: dict[str, Any]
+) -> tuple[Path, Path]:
     raw_dir = raw_dir.resolve()
     json_path = raw_dir / json_name
     md_path = raw_dir / md_name
@@ -271,7 +271,9 @@ def write_wrap_final(raw_dir: Path, payload: dict[str, Any]) -> tuple[Path, Path
     return _write_sidecar(raw_dir, FINAL_JSON, FINAL_MD, payload)
 
 
-def _resolve_session_id(raw_dir: Path, master_basename: str, session_id: str | None) -> str:
+def _resolve_session_id(
+    raw_dir: Path, master_basename: str, session_id: str | None
+) -> str:
     if session_id:
         return session_id
     if final_session_id is not None:
@@ -401,7 +403,9 @@ def build_parser() -> argparse.ArgumentParser:
     parent.add_argument("--summary-file", type=Path, required=True)
     parent.add_argument("--session-id", default=None)
     parent.add_argument("--title", default="")
-    parent.add_argument("--pre", type=Path, default=None, help="Path to pre.json baseline.")
+    parent.add_argument(
+        "--pre", type=Path, default=None, help="Path to pre.json baseline."
+    )
     parent.add_argument("--learning-note", default="")
     parent.add_argument(
         "--provider",
@@ -420,10 +424,14 @@ def build_parser() -> argparse.ArgumentParser:
         help="ai-memory learndown status.",
     )
 
-    p_draft = sub.add_parser("draft", parents=[parent], help="Write draft wrap sidecars.")
+    p_draft = sub.add_parser(
+        "draft", parents=[parent], help="Write draft wrap sidecars."
+    )
     p_draft.set_defaults(func=_cmd_draft)
 
-    p_final = sub.add_parser("final", parents=[parent], help="Write final wrap sidecars.")
+    p_final = sub.add_parser(
+        "final", parents=[parent], help="Write final wrap sidecars."
+    )
     p_final.add_argument(
         "--freed-bytes",
         type=int,

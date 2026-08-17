@@ -1,4 +1,5 @@
 """Tests for src/avo/session.py — path normalization, scan, diff, start/finalize."""
+
 from __future__ import annotations
 
 import json
@@ -15,8 +16,7 @@ SRC = ROOT / "src"
 
 sys.path.insert(0, str(SRC))
 
-from avo import session  # noqa: E402
-
+from avo import session
 
 SHA256_HEX = re.compile(r"^[0-9a-f]{64}$")
 
@@ -50,7 +50,9 @@ class SessionHelperTests(unittest.TestCase):
         file_b = self.tmp_path / "project" / "clip.mp4"
 
         with mock.patch.object(session.sys, "platform", "win32"):
-            self.assertEqual(session.normalize_path(file_a), session.normalize_path(file_b))
+            self.assertEqual(
+                session.normalize_path(file_a), session.normalize_path(file_b)
+            )
 
     def test_session_ids_are_sha256_hex(self) -> None:
         raw = self.tmp_path / "footage"
@@ -97,7 +99,12 @@ class SessionHelperTests(unittest.TestCase):
         (raw / "edit").mkdir(parents=True)
         (raw / "edit" / "scratch.txt").write_text("temp")
 
-        with self._patch_sessions(), mock.patch.object(avo_state, "now_iso", return_value="2026-08-01T20:00:00Z"):
+        with (
+            self._patch_sessions(),
+            mock.patch.object(
+                avo_state, "now_iso", return_value="2026-08-01T20:00:00Z"
+            ),
+        ):
             ctx = session.start_session(raw, "bishop", title="Demo run")
 
         sessions_root = self.tmp_path / ".avo" / "sessions"
@@ -124,7 +131,12 @@ class SessionHelperTests(unittest.TestCase):
         raw.mkdir()
         master = "20260801-footage-master-v001"
 
-        with self._patch_sessions(), mock.patch.object(avo_state, "now_iso", return_value="2026-08-01T20:00:00Z"):
+        with (
+            self._patch_sessions(),
+            mock.patch.object(
+                avo_state, "now_iso", return_value="2026-08-01T20:00:00Z"
+            ),
+        ):
             ctx = session.start_session(raw, "bishop")
             final_ctx = session.finalize_session(ctx.id, master)
 
@@ -148,10 +160,17 @@ class SessionHelperTests(unittest.TestCase):
         raw = self.tmp_path / "footage"
         raw.mkdir()
 
-        with self._patch_sessions(), mock.patch.object(avo_state, "now_iso", return_value="2026-08-01T20:00:00Z"):
+        with (
+            self._patch_sessions(),
+            mock.patch.object(
+                avo_state, "now_iso", return_value="2026-08-01T20:00:00Z"
+            ),
+        ):
             out = StringIO()
             with mock.patch("sys.stdout", out):
-                code = session.main(["start", "--raw-dir", str(raw), "--provider", "bishop"])
+                code = session.main(
+                    ["start", "--raw-dir", str(raw), "--provider", "bishop"]
+                )
 
         self.assertEqual(code, 0)
         payload = json.loads(out.getvalue())

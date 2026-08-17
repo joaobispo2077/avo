@@ -1,4 +1,5 @@
 """Compatibility shim — remove in v0.2.0. Use `avo.stats`."""
+
 import warnings
 
 warnings.warn(
@@ -6,7 +7,7 @@ warnings.warn(
     DeprecationWarning,
     stacklevel=2,
 )
-from avo.stats import *  # noqa: F403
+from avo.stats import *
 
 if __name__ == "__main__":
     from avo.stats import main

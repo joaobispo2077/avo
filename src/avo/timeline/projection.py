@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 from fractions import Fraction
+from pathlib import Path
 from typing import Any
 
 from .contracts import content_hash
@@ -14,7 +15,11 @@ class ProjectionError(ValueError):
 
 
 def _revision(artifact: dict[str, Any], revision_id: str | None) -> dict[str, Any]:
-    selected = revision_id or artifact.get("approvedRevisionId") or artifact.get("currentRevisionId")
+    selected = (
+        revision_id
+        or artifact.get("approvedRevisionId")
+        or artifact.get("currentRevisionId")
+    )
     for revision in artifact.get("revisions") or []:
         if revision.get("revisionId") == selected:
             return revision
@@ -54,7 +59,9 @@ def project_cmap_to_edl(
     edl: dict[str, Any] = {
         "version": 1,
         "story_map_approval": (
-            "approved" if cmap.get("approvedRevisionId") == revision["revisionId"] else "pending"
+            "approved"
+            if cmap.get("approvedRevisionId") == revision["revisionId"]
+            else "pending"
         ),
         "sources": sources,
         "ranges": ranges,
@@ -87,7 +94,9 @@ def project_cmap_to_edl(
                         "music cues require resolved Tracks; they cannot be projected as one-shot SFX"
                     )
                 if cue["kind"] == "sfx":
-                    item["gain_db"] = float((cue.get("audio") or {}).get("gainDb", -12.0))
+                    item["gain_db"] = float(
+                        (cue.get("audio") or {}).get("gainDb", -12.0)
+                    )
                     effects.append(item)
                 else:
                     overlays.append(item)
@@ -101,16 +110,29 @@ def project_cmap_to_edl(
         track_revision = _revision(tracks, None)
         assembly = track_revision["snapshot"]
         from .tracks import resolve_tracks
+
         cue_ids = {
             cue["cueId"]
-            for cue in ((_revision(bmap, None)["snapshot"].get("cues") or []) if bmap is not None else [])
+            for cue in (
+                (_revision(bmap, None)["snapshot"].get("cues") or [])
+                if bmap is not None
+                else []
+            )
         }
-        assembly = resolve_tracks(assembly, cue_ids) if bmap is not None else deepcopy(assembly)
+        assembly = (
+            resolve_tracks(assembly, cue_ids)
+            if bmap is not None
+            else deepcopy(assembly)
+        )
         edl["timeline_projection"]["tracksRevisionId"] = track_revision["revisionId"]
         edl["timeline_projection"]["tracksRevisionHash"] = track_revision["contentHash"]
         edl["timeline_tracks"] = deepcopy(assembly)
         edl["timeline_projection"]["capabilities"] = [
-            "audio-tracks", "video-tracks", "z-order", "music-beds", "captions-last"
+            "audio-tracks",
+            "video-tracks",
+            "z-order",
+            "music-beds",
+            "captions-last",
         ]
     edl["timeline_projection"]["projectionHash"] = content_hash(edl)
     return edl
@@ -127,30 +149,50 @@ def approved_sync_transform(sync_map: dict[str, Any]) -> dict[str, Any]:
     return deepcopy(revision["snapshot"]["transform"])
 
 
-
-def write_cmap_projection(workspace, cmap: dict[str, Any], *, revision_id: str | None = None) -> tuple[Path, dict[str, Any]]:
+def write_cmap_projection(
+    workspace, cmap: dict[str, Any], *, revision_id: str | None = None
+) -> tuple[Path, dict[str, Any]]:
     """Atomically write generated EDL and a hash-bound projection manifest."""
-    from pathlib import Path
     from avo.paths import schema_path
     from avo.validate_edl import load_and_validate
+
     from .contracts import file_fingerprint
     from .store import atomic_write_json, now_iso
-    edl=project_cmap_to_edl(cmap,revision_id=revision_id)
-    edl_path=workspace.generated_edl;atomic_write_json(edl_path,edl)
-    load_and_validate(edl_path,schema_path=schema_path("edl.schema.json"))
-    edl_fp=file_fingerprint(edl_path)
-    manifest={"schemaVersion":"1.0.0","canonicalDirectory":"edit/timeline","generatedEdlPath":"edit/edl.json","canonicalFirst":True,"status":"generated","cmapRevisionId":edl["timeline_projection"]["cmapRevisionId"],"cmapRevisionHash":edl["timeline_projection"]["cmapRevisionHash"],"projectionHash":edl["timeline_projection"]["projectionHash"],"edlSha256":edl_fp["sha256"],"generatedAt":now_iso(),"capabilities":["cmap-ranges"]}
-    atomic_write_json(workspace.timeline_dir/"projection.json",manifest)
-    return edl_path,manifest
+
+    edl = project_cmap_to_edl(cmap, revision_id=revision_id)
+    edl_path = workspace.generated_edl
+    atomic_write_json(edl_path, edl)
+    load_and_validate(edl_path, schema_path=schema_path("edl.schema.json"))
+    edl_fp = file_fingerprint(edl_path)
+    manifest = {
+        "schemaVersion": "1.0.0",
+        "canonicalDirectory": "edit/timeline",
+        "generatedEdlPath": "edit/edl.json",
+        "canonicalFirst": True,
+        "status": "generated",
+        "cmapRevisionId": edl["timeline_projection"]["cmapRevisionId"],
+        "cmapRevisionHash": edl["timeline_projection"]["cmapRevisionHash"],
+        "projectionHash": edl["timeline_projection"]["projectionHash"],
+        "edlSha256": edl_fp["sha256"],
+        "generatedAt": now_iso(),
+        "capabilities": ["cmap-ranges"],
+    }
+    atomic_write_json(workspace.timeline_dir / "projection.json", manifest)
+    return edl_path, manifest
 
 
 def verify_projection(workspace) -> dict[str, Any]:
     import json
+
     from .contracts import file_fingerprint
-    manifest_path=workspace.timeline_dir/"projection.json"
-    if not manifest_path.is_file() or not workspace.generated_edl.is_file():raise ProjectionError("projection or generated EDL is missing")
-    manifest=json.loads(manifest_path.read_text(encoding="utf-8"));actual=file_fingerprint(workspace.generated_edl)["sha256"]
-    if actual!=manifest.get("edlSha256"):raise ProjectionError("derived EDL modified outside canonical projection")
+
+    manifest_path = workspace.timeline_dir / "projection.json"
+    if not manifest_path.is_file() or not workspace.generated_edl.is_file():
+        raise ProjectionError("projection or generated EDL is missing")
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    actual = file_fingerprint(workspace.generated_edl)["sha256"]
+    if actual != manifest.get("edlSha256"):
+        raise ProjectionError("derived EDL modified outside canonical projection")
     return manifest
 
 
@@ -170,7 +212,9 @@ def write_assembly_projection(workspace: Any) -> tuple[Path, dict[str, Any]]:
     tracks = workspace.store("tracks").load()
     edl = project_cmap_to_edl(cmap, bmap=bmap, tracks=tracks)
     atomic_write_json(workspace.generated_edl, edl)
-    load_and_validate(workspace.generated_edl, schema_path=schema_path("edl.schema.json"))
+    load_and_validate(
+        workspace.generated_edl, schema_path=schema_path("edl.schema.json")
+    )
     fingerprint = file_fingerprint(workspace.generated_edl)
     projection = edl["timeline_projection"]
     manifest = {

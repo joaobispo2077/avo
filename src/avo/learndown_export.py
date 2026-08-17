@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from avo import avo_state
-from avo.paths import providers_dir, repo_root
+from avo.paths import repo_root
 from avo.project_inventory import load_project
 
 SCHEMA_VERSION = 1

@@ -74,8 +74,15 @@ class ApprovalService:
             dependency_lock_sha256=review["dependencyLockSha256"],
         )
         expected_materialization_hash = materialization.get("materializationHash")
-        body = {key: value for key, value in materialization.items() if key != "materializationHash"}
-        if expected_materialization_hash and expected_materialization_hash != content_hash(body):
+        body = {
+            key: value
+            for key, value in materialization.items()
+            if key != "materializationHash"
+        }
+        if (
+            expected_materialization_hash
+            and expected_materialization_hash != content_hash(body)
+        ):
             raise ValueError("cut materialization record hash mismatch")
         event = self.store.record_decision(
             decision=decision,

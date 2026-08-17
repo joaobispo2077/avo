@@ -14,10 +14,16 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("master", type=Path, help="Approved master video or audio file")
     parser.add_argument("--project", type=Path, help="Path to avo.project.json")
-    parser.add_argument("--edl", type=Path, help="Optional edl.json for EDL audio overrides")
-    parser.add_argument("--upload-candidate", type=Path, help="Re-encoded upload file for TP re-check")
+    parser.add_argument(
+        "--edl", type=Path, help="Optional edl.json for EDL audio overrides"
+    )
+    parser.add_argument(
+        "--upload-candidate", type=Path, help="Re-encoded upload file for TP re-check"
+    )
     parser.add_argument("--out", type=Path, help="Write JSON QC report to this path")
-    parser.add_argument("--loudness-preset", dest="loudness_preset", help="Override preset for this run")
+    parser.add_argument(
+        "--loudness-preset", dest="loudness_preset", help="Override preset for this run"
+    )
     args = parser.parse_args(argv)
 
     if not args.master.exists():
@@ -62,9 +68,14 @@ def main(argv: list[str] | None = None) -> int:
     upload_measurement = None
     if args.upload_candidate:
         if not args.upload_candidate.exists():
-            print(f"error: upload candidate not found: {args.upload_candidate}", file=sys.stderr)
+            print(
+                f"error: upload candidate not found: {args.upload_candidate}",
+                file=sys.stderr,
+            )
             return 1
-        upload_measurement = loudness_profiles.measure_loudness(args.upload_candidate, profile)
+        upload_measurement = loudness_profiles.measure_loudness(
+            args.upload_candidate, profile
+        )
 
     report = loudness_profiles.evaluate_qc(
         measurement,

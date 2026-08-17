@@ -9,8 +9,16 @@ from avo.timeline.mapping import classify_cue_rebase
 def cue(cue_id: str) -> dict:
     return {
         "cueId": cue_id,
-        "start": {"ticks": 100, "timebase": {"num": 1, "den": 1000}, "domain": "cmap-output"},
-        "end": {"ticks": 200, "timebase": {"num": 1, "den": 1000}, "domain": "cmap-output"},
+        "start": {
+            "ticks": 100,
+            "timebase": {"num": 1, "den": 1000},
+            "domain": "cmap-output",
+        },
+        "end": {
+            "ticks": 200,
+            "timebase": {"num": 1, "den": 1000},
+            "domain": "cmap-output",
+        },
         "reviewState": "pending",
     }
 
@@ -37,9 +45,21 @@ class RebaseTests(unittest.TestCase):
         self.assertEqual(classify_cue_rebase([], [(1, 2)]), "unsupported")
 
     def test_proposal_accounts_for_every_cue_and_only_moves_safe_outcomes(self):
-        cues = [cue(name) for name in ("preserved", "shifted", "split", "removed", "ambiguous", "unsupported")]
+        cues = [
+            cue(name)
+            for name in (
+                "preserved",
+                "shifted",
+                "split",
+                "removed",
+                "ambiguous",
+                "unsupported",
+            )
+        ]
         for item in cues:
-            item["rawAnchorRanges"] = [] if item["cueId"] == "unsupported" else [[100, 200]]
+            item["rawAnchorRanges"] = (
+                [] if item["cueId"] == "unsupported" else [[100, 200]]
+            )
         mapped = {
             "preserved": [[100, 200]],
             "shifted": [[200, 300]],

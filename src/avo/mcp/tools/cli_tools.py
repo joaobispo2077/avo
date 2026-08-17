@@ -9,21 +9,21 @@ Destructive tools (``ToolSpec.destructive``) are gated via MRTR
 ``InputRequiredResult`` before the CLI bridge (FR-15 / task-004). Client
 capabilities from MCP ``Context`` filter ``inputRequests`` (task-005).
 """
+
 from __future__ import annotations
 
 import inspect
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass
-from typing import Any, Callable, Sequence
+from typing import Any
 
-from avo.mcp.bridge import run_bridged
 from avo.mcp import mrtr
+from avo.mcp.bridge import run_bridged
 from avo.mcp.registry import ToolSpec
 
 _MUTATE_WARN = "WARNING: Mutates project/timeline state. "
 _RENDER_WARN = "WARNING: May write render/output files under the project. "
-_DESTRUCTIVE_WARN = (
-    "DESTRUCTIVE: Irreversible or high-impact operation — confirm intent before calling. "
-)
+_DESTRUCTIVE_WARN = "DESTRUCTIVE: Irreversible or high-impact operation — confirm intent before calling. "
 
 # Groups bridged in task-007.
 CORE_CLI_GROUPS: tuple[str, ...] = (
@@ -92,7 +92,11 @@ def _tool(
     registry ``group`` tag (unused today; keep for hyphenated CLI groups).
     """
     cli_prefix = (cli_group or group, subcommand)
-    params = (_project_params() + tuple(extra_params)) if include_project else tuple(extra_params)
+    params = (
+        (_project_params() + tuple(extra_params))
+        if include_project
+        else tuple(extra_params)
+    )
     return BridgeToolDef(
         spec=ToolSpec(
             name=name,
@@ -114,7 +118,8 @@ def _core_bridge_defs() -> list[BridgeToolDef]:
             "avo_pipeline_run",
             "pipeline",
             "run",
-            _MUTATE_WARN + "Initialize / run pipeline for a project (CLI: avo pipeline run).",
+            _MUTATE_WARN
+            + "Initialize / run pipeline for a project (CLI: avo pipeline run).",
             destructive=True,
         ),
         _tool(
@@ -133,7 +138,8 @@ def _core_bridge_defs() -> list[BridgeToolDef]:
             "avo_pipeline_resume",
             "pipeline",
             "resume",
-            _MUTATE_WARN + "Resume a paused/failed pipeline (CLI: avo pipeline resume).",
+            _MUTATE_WARN
+            + "Resume a paused/failed pipeline (CLI: avo pipeline resume).",
             destructive=True,
             extra_params=(
                 ParamSpec("actor", str, required=True),
@@ -193,15 +199,14 @@ def _core_bridge_defs() -> list[BridgeToolDef]:
             "inventory",
             _MUTATE_WARN + "Record sync source inventory (CLI: avo sync inventory).",
             destructive=True,
-            extra_params=(
-                ParamSpec("source", list[str], required=True),
-            ),
+            extra_params=(ParamSpec("source", list[str], required=True),),
         ),
         _tool(
             "avo_sync_calibrate",
             "sync",
             "calibrate",
-            _MUTATE_WARN + "Write a sync calibration candidate (CLI: avo sync calibrate).",
+            _MUTATE_WARN
+            + "Write a sync calibration candidate (CLI: avo sync calibrate).",
             destructive=True,
             extra_params=(
                 ParamSpec("kind", str, required=True),
@@ -246,7 +251,8 @@ def _core_bridge_defs() -> list[BridgeToolDef]:
             "avo_animation_author",
             "animation",
             "author",
-            _MUTATE_WARN + "Author animation from a strategy file (CLI: avo animation author).",
+            _MUTATE_WARN
+            + "Author animation from a strategy file (CLI: avo animation author).",
             destructive=True,
             extra_params=(
                 ParamSpec("strategy", str, required=True),
@@ -273,7 +279,8 @@ def _core_bridge_defs() -> list[BridgeToolDef]:
             "avo_animation_decide",
             "animation",
             "decide",
-            _MUTATE_WARN + "Approve or reject an animation proposal (CLI: avo animation decide).",
+            _MUTATE_WARN
+            + "Approve or reject an animation proposal (CLI: avo animation decide).",
             destructive=True,
             include_project=False,
             extra_params=(
@@ -515,7 +522,8 @@ def _remaining_bridge_defs() -> list[BridgeToolDef]:
             "avo_migrate_timeline_apply",
             "migrate-timeline",
             "apply",
-            _MUTATE_WARN + "Apply a timeline migration (CLI: avo migrate-timeline apply).",
+            _MUTATE_WARN
+            + "Apply a timeline migration (CLI: avo migrate-timeline apply).",
             destructive=True,
             extra_params=migrate_edl + migrate_actor_reason,
         ),
@@ -530,8 +538,7 @@ def _remaining_bridge_defs() -> list[BridgeToolDef]:
             "avo_migrate_timeline_activate",
             "migrate-timeline",
             "activate",
-            _DESTRUCTIVE_WARN
-            + "Activate a migrated timeline as the active workspace "
+            _DESTRUCTIVE_WARN + "Activate a migrated timeline as the active workspace "
             "(CLI: avo migrate-timeline activate).",
             destructive=True,
             extra_params=migrate_edl
@@ -577,8 +584,7 @@ def _remaining_bridge_defs() -> list[BridgeToolDef]:
             "avo_cleanup_execute",
             "cleanup",
             "execute",
-            _DESTRUCTIVE_WARN
-            + "Permanently delete non-preserved run artifacts "
+            _DESTRUCTIVE_WARN + "Permanently delete non-preserved run artifacts "
             "(CLI: avo cleanup execute). Prefer dry-run first.",
             destructive=True,
             extra_params=(

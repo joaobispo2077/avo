@@ -16,7 +16,9 @@ SPEC.loader.exec_module(MODULE)
 def test_fixture_contracts_are_machine_readable() -> None:
     fixture_dir = MODULE_PATH.parent
     manifest = json.loads((fixture_dir / "manifest.json").read_text(encoding="utf-8"))
-    legacy = json.loads((fixture_dir / "legacy-edl-parity.json").read_text(encoding="utf-8"))
+    legacy = json.loads(
+        (fixture_dir / "legacy-edl-parity.json").read_text(encoding="utf-8")
+    )
     assert manifest["fixtures"]["constant-plus-128ms"]["transform"]["offsetMs"] == 128
     assert manifest["fixtures"]["multi-source-reorder"]["expectedDurationMs"] == 3000
     assert legacy["approval"]["status"] == "unknown"

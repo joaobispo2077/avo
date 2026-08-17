@@ -5,10 +5,11 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from collections.abc import Callable, Mapping, Sequence
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable, Mapping, Sequence
+from typing import Any
 
 from avo import shorts_contract, shorts_delivery, shorts_media, shorts_plan, shorts_qc
 from avo.adapters.motion.hyperframes import (
@@ -40,7 +41,11 @@ def build_parser() -> argparse.ArgumentParser:
     build.add_argument("--stage", choices=("proof", "master"), required=True)
     build.add_argument("--short", action="append", dest="short_ids")
     build.add_argument("--workers", type=int, default=2)
-    build.add_argument("--preview", action="store_true", help="render proofs at 640x360 for cheap review")
+    build.add_argument(
+        "--preview",
+        action="store_true",
+        help="render proofs at 640x360 for cheap review",
+    )
     build.add_argument("--approval-manifest", type=Path)
     build.add_argument("--delivery-dir", type=Path)
     qc = subparsers.add_parser("qc", help="evaluate proof or master artifacts")
@@ -87,34 +92,59 @@ def _new_status(plan: Mapping[str, Any], plan_path: Path) -> dict[str, Any]:
     approval = plan.get("planApproval") or {}
     approved = approval.get("status") == "approved" and approval.get("reference")
     return {
-        "version": "1.0", "batchId": plan["batchId"],
-        "planPath": str(plan_path), "planHash": plan["planHash"],
+        "version": "1.0",
+        "batchId": plan["batchId"],
+        "planPath": str(plan_path),
+        "planHash": plan["planHash"],
         "batchState": "plan-approved" if approved else "plan-pending",
         "updatedAt": _now(),
-        "items": [{
-            "shortId": item["id"], "inputFingerprint": item["inputFingerprint"],
-            "state": "pending", "dirty": True, "dirtyReasons": ["new-short"],
-            "proofRevision": 0, "masterRevision": 0, "artifacts": [], "errors": [],
-        } for item in plan["items"]],
-        "batchApprovals": ([{
-            "gate": "batch-plan", "status": "approved",
-            "reference": approval["reference"],
-            "timestamp": approval.get("timestamp"),
-        }] if approved else []),
-        "blockingRisks": [], "batchQcSummary": None, "deliveryComplete": False,
+        "items": [
+            {
+                "shortId": item["id"],
+                "inputFingerprint": item["inputFingerprint"],
+                "state": "pending",
+                "dirty": True,
+                "dirtyReasons": ["new-short"],
+                "proofRevision": 0,
+                "masterRevision": 0,
+                "artifacts": [],
+                "errors": [],
+            }
+            for item in plan["items"]
+        ],
+        "batchApprovals": (
+            [
+                {
+                    "gate": "batch-plan",
+                    "status": "approved",
+                    "reference": approval["reference"],
+                    "timestamp": approval.get("timestamp"),
+                }
+            ]
+            if approved
+            else []
+        ),
+        "blockingRisks": [],
+        "batchQcSummary": None,
+        "deliveryComplete": False,
     }
 
 
 def _artifact(kind: str, path: Path, revision: int) -> dict[str, Any]:
     return {
-        "kind": kind, "path": str(path),
-        "hash": shorts_media.sha256_file(path), "revision": revision,
+        "kind": kind,
+        "path": str(path),
+        "hash": shorts_media.sha256_file(path),
+        "revision": revision,
     }
 
 
 def _build_one_proof(
-    plan: Mapping[str, Any], item: Mapping[str, Any], plan_path: Path,
-    prior: Mapping[str, Any], *,
+    plan: Mapping[str, Any],
+    item: Mapping[str, Any],
+    plan_path: Path,
+    prior: Mapping[str, Any],
+    *,
     prepare: Callable[..., Mapping[str, shorts_media.PreparedAsset]],
     adapter_factory: Callable[[], HyperframesAdapter],
     preview: bool = False,
@@ -136,27 +166,45 @@ def _build_one_proof(
             "preview": True,
         }
     master_value = Path(request["source"]["masterPath"])
-    master = master_value.resolve() if master_value.is_absolute() else (request_path.parent / master_value).resolve()
-    crop_mode = str(item["layout"].get("cropMode") or request["defaults"]["layout"].get("cropMode") or "cover")
+    master = (
+        master_value.resolve()
+        if master_value.is_absolute()
+        else (request_path.parent / master_value).resolve()
+    )
+    crop_mode = str(
+        item["layout"].get("cropMode")
+        or request["defaults"]["layout"].get("cropMode")
+        or "cover"
+    )
     prepared = prepare(
-        master, work / "prepared",
-        start_sec=item["sourceRange"]["startSec"], end_sec=item["sourceRange"]["endSec"],
-        speed=item["speed"], fps=output["fps"],
-        width=output["width"], height=output["height"],
+        master,
+        work / "prepared",
+        start_sec=item["sourceRange"]["startSec"],
+        end_sec=item["sourceRange"]["endSec"],
+        speed=item["speed"],
+        fps=output["fps"],
+        width=output["width"],
+        height=output["height"],
         sample_rate=output.get("audioSampleRateHz", 48000),
         channels=output.get("audioChannels", 2),
         crop_mode=crop_mode,
     )
     if item.get("insertion"):
         policy = next(
-            insertion for insertion in request.get("insertions") or []
+            insertion
+            for insertion in request.get("insertions") or []
             if insertion["id"] == item["insertion"]["id"]
         )
         insertion_value = Path(policy["sourcePath"])
-        insertion_source = insertion_value.resolve() if insertion_value.is_absolute() else (request_path.parent / insertion_value).resolve()
+        insertion_source = (
+            insertion_value.resolve()
+            if insertion_value.is_absolute()
+            else (request_path.parent / insertion_value).resolve()
+        )
         shorts_media.validate_insertion_source(insertion_source, policy)
         insertion_assets, _source_map = shorts_media.prepare_insertion_assets(
-            insertion_source, work / "prepared-insertion",
+            insertion_source,
+            work / "prepared-insertion",
             approved_windows=policy["approvedWindows"],
             excluded_windows=policy.get("excludedWindows") or [],
             target_duration=item["editedDurationSec"],
@@ -167,27 +215,41 @@ def _build_one_proof(
         )
         prepared = {**prepared, **insertion_assets}
     assets = {key: value.as_contract() for key, value in prepared.items()}
-    expected = work / "renders" / f"{item['expectedOutputBasename']}-proof-v{revision:03d}.mp4"
+    expected = (
+        work / "renders" / f"{item['expectedOutputBasename']}-proof-v{revision:03d}.mp4"
+    )
     spec = build_composition_spec(
-        batch_id=plan["batchId"], item=item, output=output, assets=assets,
-        proof_revision=revision, expected_output_path=expected,
+        batch_id=plan["batchId"],
+        item=item,
+        output=output,
+        assets=assets,
+        proof_revision=revision,
+        expected_output_path=expected,
         provider_tokens=plan.get("providerTokens"),
     )
     project = compile_project(spec, work / "hyperframes")
     adapter = adapter_factory()
     checked = adapter.execute("check", project, "--snapshots", root=Path.cwd())
     if checked.exit_code:
-        raise RuntimeError(checked.stderr or checked.stdout or "HyperFrames strict check failed")
+        raise RuntimeError(
+            checked.stderr or checked.stdout or "HyperFrames strict check failed"
+        )
     contact_sheet = work / "qc" / "contact-sheet.jpg"
     try:
         shorts_qc.generate_contact_sheet(project, contact_sheet)
     except ValueError:
         contact_sheet = None
-    rendered = adapter.execute("render", project, "--output", str(expected), root=Path.cwd())
+    rendered = adapter.execute(
+        "render", project, "--output", str(expected), root=Path.cwd()
+    )
     if rendered.exit_code:
-        raise RuntimeError(rendered.stderr or rendered.stdout or "HyperFrames render failed")
+        raise RuntimeError(
+            rendered.stderr or rendered.stdout or "HyperFrames render failed"
+        )
     if not expected.is_file():
-        candidates = [path for path in rendered.artifact_paths if path.suffix.lower() == ".mp4"]
+        candidates = [
+            path for path in rendered.artifact_paths if path.suffix.lower() == ".mp4"
+        ]
         if candidates:
             expected = candidates[-1]
         else:
@@ -201,16 +263,31 @@ def _build_one_proof(
     if contact_sheet and contact_sheet.is_file():
         artifacts.append(_artifact("contact-sheet", contact_sheet, revision))
     if "insertionVideo" in prepared:
-        artifacts.insert(2, _artifact("prepared-insertion-video", prepared["insertionVideo"].path, revision))
+        artifacts.insert(
+            2,
+            _artifact(
+                "prepared-insertion-video", prepared["insertionVideo"].path, revision
+            ),
+        )
     if "insertionAudio" in prepared:
-        artifacts.insert(3, _artifact("prepared-insertion-audio", prepared["insertionAudio"].path, revision))
+        artifacts.insert(
+            3,
+            _artifact(
+                "prepared-insertion-audio", prepared["insertionAudio"].path, revision
+            ),
+        )
     render_profile = shorts_plan.target_render_profile(plan, preview=preview)
     return {
-        **dict(prior), "shortId": item["id"],
-        "inputFingerprint": item["inputFingerprint"], "state": "proof-ready",
-        "dirty": False, "dirtyReasons": [], "proofRevision": revision,
+        **dict(prior),
+        "shortId": item["id"],
+        "inputFingerprint": item["inputFingerprint"],
+        "state": "proof-ready",
+        "dirty": False,
+        "dirtyReasons": [],
+        "proofRevision": revision,
         "renderProfile": render_profile,
-        "artifacts": [*(prior.get("artifacts") or []), *artifacts], "errors": [],
+        "artifacts": [*(prior.get("artifacts") or []), *artifacts],
+        "errors": [],
         "hyperframesValidation": {"status": "passed", "strict": True},
     }
 
@@ -221,23 +298,33 @@ def build_proofs(
     short_ids: Sequence[str] | None = None,
     workers: int = 2,
     preview: bool = False,
-    prepare: Callable[..., Mapping[str, shorts_media.PreparedAsset]] = shorts_media.prepare_base_assets,
+    prepare: Callable[
+        ..., Mapping[str, shorts_media.PreparedAsset]
+    ] = shorts_media.prepare_base_assets,
     adapter_factory: Callable[[], HyperframesAdapter] = HyperframesAdapter,
 ) -> tuple[Path, dict[str, Any]]:
     plan_path = plan_path.resolve()
     plan = shorts_contract.load_document(plan_path, "plan")
     shorts_contract.require_plan_approval(plan)
     status_path = _status_path(plan_path)
-    status = shorts_contract.load_document(status_path, "status") if status_path.exists() else _new_status(plan, plan_path)
+    status = (
+        shorts_contract.load_document(status_path, "status")
+        if status_path.exists()
+        else _new_status(plan, plan_path)
+    )
     if status.get("planHash") != plan["planHash"]:
         status = _new_status(plan, plan_path)
     wanted = set(short_ids or [item["id"] for item in plan["items"]])
     unknown = wanted - {item["id"] for item in plan["items"]}
     if unknown:
-        raise shorts_contract.ContractValidationError(f"unknown Short IDs: {', '.join(sorted(unknown))}")
+        raise shorts_contract.ContractValidationError(
+            f"unknown Short IDs: {', '.join(sorted(unknown))}"
+        )
     dirty = shorts_plan.dirty_items(plan, status, preview=preview)
     item_status = {item["shortId"]: item for item in status["items"]}
-    pending = [item for item in plan["items"] if item["id"] in wanted and item["id"] in dirty]
+    pending = [
+        item for item in plan["items"] if item["id"] in wanted and item["id"] in dirty
+    ]
     status["batchState"] = "building-proofs"
     status["updatedAt"] = _now()
     shorts_contract.atomic_write_json(status_path, status)
@@ -247,10 +334,18 @@ def build_proofs(
             prior = item_status[item["id"]]
             prior["state"] = "preparing"
             prior["dirtyReasons"] = dirty[item["id"]]
-            futures[pool.submit(
-                _build_one_proof, plan, item, plan_path, prior,
-                prepare=prepare, adapter_factory=adapter_factory, preview=preview,
-            )] = item["id"]
+            futures[
+                pool.submit(
+                    _build_one_proof,
+                    plan,
+                    item,
+                    plan_path,
+                    prior,
+                    prepare=prepare,
+                    adapter_factory=adapter_factory,
+                    preview=preview,
+                )
+            ] = item["id"]
         for future in as_completed(futures):
             short_id = futures[future]
             try:
@@ -258,7 +353,9 @@ def build_proofs(
             except Exception as exc:
                 prior = item_status[short_id]
                 item_status[short_id] = {
-                    **prior, "state": "failed", "dirty": True,
+                    **prior,
+                    "state": "failed",
+                    "dirty": True,
                     "errors": [*(prior.get("errors") or []), str(exc)],
                 }
             status["items"] = [item_status[item["id"]] for item in plan["items"]]
@@ -281,13 +378,20 @@ def _build(args: argparse.Namespace) -> int:
         return EXIT_APPROVAL_REQUIRED
     if args.stage == "master":
         if not args.approval_manifest:
-            print("--approval-manifest is required for master promotion", file=sys.stderr)
+            print(
+                "--approval-manifest is required for master promotion", file=sys.stderr
+            )
             return EXIT_APPROVAL_REQUIRED
         return _promote(args)
     status_path, status = build_proofs(
-        args.plan, short_ids=args.short_ids, workers=args.workers, preview=args.preview,
+        args.plan,
+        short_ids=args.short_ids,
+        workers=args.workers,
+        preview=args.preview,
     )
-    failures = [item["shortId"] for item in status["items"] if item["state"] == "failed"]
+    failures = [
+        item["shortId"] for item in status["items"] if item["state"] == "failed"
+    ]
     print(f"proof status: {status_path}")
     if failures:
         print(f"proof failures: {', '.join(failures)}", file=sys.stderr)
@@ -308,19 +412,27 @@ def _qc(args: argparse.Namespace) -> int:
         if item_status["shortId"] not in selected:
             continue
         kind = "proof" if args.stage == "proof" else "master"
-        artifact = next((a for a in reversed(item_status["artifacts"]) if a["kind"] == kind), None)
+        artifact = next(
+            (a for a in reversed(item_status["artifacts"]) if a["kind"] == kind), None
+        )
         plan_item = plan_items[item_status["shortId"]]
         output = plan["output"]
         if artifact is None:
-            item_status["qc"] = {"status": "failed", "findings": [{"severity": "error", "code": f"missing-{kind}"}]}
+            item_status["qc"] = {
+                "status": "failed",
+                "findings": [{"severity": "error", "code": f"missing-{kind}"}],
+            }
         else:
             item_status["qc"] = shorts_qc.qc_proof_artifact(
-                plan_item, artifact,
+                plan_item,
+                artifact,
                 watch_reference=item_status.get("watchReviewReference"),
                 output=output,
             )
         if item_status["qc"]["status"] == "passed":
-            item_status["state"] = "proof-approved" if args.stage == "proof" else "master-qc"
+            item_status["state"] = (
+                "proof-approved" if args.stage == "proof" else "master-qc"
+            )
             passed.append(item_status["shortId"])
         else:
             failed.append(item_status["shortId"])
@@ -354,16 +466,24 @@ def _promote(args: argparse.Namespace) -> int:
     shorts_contract.validate_promotion_evidence(status, approvals)
     status["batchApprovals"] = approvals["approvals"]
     for review in approvals.get("watchReviews") or []:
-        match = next(item for item in status["items"] if item["shortId"] == review["shortId"])
+        match = next(
+            item for item in status["items"] if item["shortId"] == review["shortId"]
+        )
         match["watchReviewReference"] = review["reference"]
         match["watchReview"] = {
             key: review[key]
             for key in (
-                "reference", "candidateHash", "candidateIdentityHash",
-                "dependencyLockSha256", "evidenceBundleSha256", "proofRevision",
+                "reference",
+                "candidateHash",
+                "candidateIdentityHash",
+                "dependencyLockSha256",
+                "evidenceBundleSha256",
+                "proofRevision",
             )
         }
-    delivery_dir = (args.delivery_dir or plan_path.parent / "delivery" / plan["batchId"]).resolve()
+    delivery_dir = (
+        args.delivery_dir or plan_path.parent / "delivery" / plan["batchId"]
+    ).resolve()
     result = shorts_delivery.promote_batch(plan, status, delivery_dir)
     result["status"]["updatedAt"] = _now()
     shorts_contract.validate_document(result["status"], "status")
@@ -390,7 +510,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     except shorts_plan.TranscriptRequiredError as exc:
         print(str(exc), file=sys.stderr)
         return EXIT_TRANSCRIPT_REQUIRED
-    except (shorts_contract.ContractValidationError, shorts_delivery.DeliveryError, OSError, ValueError) as exc:
+    except (
+        shorts_contract.ContractValidationError,
+        shorts_delivery.DeliveryError,
+        OSError,
+        ValueError,
+    ) as exc:
         print(str(exc), file=sys.stderr)
         return EXIT_INVALID
     return EXIT_INVALID

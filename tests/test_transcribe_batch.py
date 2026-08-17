@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -8,8 +7,7 @@ from types import SimpleNamespace
 
 ROOT = Path(__file__).resolve().parents[1]
 
-from avo import transcribe
-from avo import transcribe_batch
+from avo import transcribe, transcribe_batch
 
 
 class FakeRuntime:
@@ -58,9 +56,7 @@ class BatchTests(unittest.TestCase):
             edit = root / "edit"
             runtime = FakeRuntime()
             for video in transcribe_batch.find_videos(root):
-                transcribe.transcribe_one(
-                    video, edit, runtime=runtime, verbose=False
-                )
+                transcribe.transcribe_one(video, edit, runtime=runtime, verbose=False)
             result = transcribe_batch.transcribe_directory(
                 root,
                 edit,

@@ -57,14 +57,22 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Sync Python deps (frozen)
+        run: uv sync --frozen --extra dev
+
+      - name: Expose venv on PATH
+        run: echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
+
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
-
-      - name: Install Python package
-        run: pip install -e ".[dev]"
 
       - name: Install Node dependencies
         run: npm ci
@@ -84,10 +92,80 @@ jobs:
       - name: Lint HyperFrames exemplars
         run: bash scripts/ci/lint-hyperframes-exemplars.sh
 
+  software-quality:
+    # GitHub check name for branch protection: "Software quality"
+    # Phase-1 Must Have fast gates (task-013) — blocking on PR/push via needs into Gate 2.
+    name: Software quality
+    runs-on: ubuntu-latest
+    needs: prerequisites-gate
+    # Coverage re-runs the full unit suite (~few min) plus lint/format/complexity/deps.
+    timeout-minutes: 35
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Sync Python deps (frozen)
+        run: uv sync --frozen --extra dev
+
+      - name: Expose venv on PATH
+        run: echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      - name: Install ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      # Spec v1.4 / task-013: Phase-1 fast gates — all fail-immediately (no soft stubs).
+      # Umbrella scripts match local `npm run quality` / scripts/ci/quality.sh.
+      - name: Software quality — lint
+        run: bash scripts/ci/quality-lint.sh
+
+      - name: Software quality — format
+        run: bash scripts/ci/quality-format.sh
+
+      - name: Software quality — coverage
+        run: bash scripts/ci/run-coverage.sh
+
+      - name: Software quality — complexity
+        run: bash scripts/ci/quality-complexity.sh
+
+      - name: Software quality — deps
+        run: bash scripts/ci/quality-deps.sh
+
+      - name: Software quality — deadcode
+        run: bash scripts/ci/quality-deadcode.sh
+
+      - name: Software quality — duplication
+        run: bash scripts/ci/quality-duplication.sh
+
+      - name: Software quality — architecture
+        run: bash scripts/ci/quality-architecture.sh
+
+      - name: Software quality — tree
+        run: bash scripts/ci/quality-tree.sh
+
   usability-gate:
     name: Gate 2 — Project usability
     runs-on: ubuntu-latest
-    needs: [prerequisites-gate, repo-unit-tests]
+    # Blocks merge readiness when Software quality fails (required check below).
+    needs: [prerequisites-gate, repo-unit-tests, software-quality]
     timeout-minutes: 15
     steps:
       - name: Checkout
@@ -103,3 +181,53 @@ jobs:
 
       - name: Run Gate 2
         run: bash scripts/validate-usability.sh --ci
+
+  mutation-light:
+    # Spec FR-7: light/PR mutation after unit tests. Ubuntu-only. Fails below
+    # scripts/ci/mutation-config.json light floor. Not part of Software quality
+    # fast gates (coverage already re-runs pytest).
+    name: Mutation tests (light)
+    runs-on: ubuntu-latest
+    needs: [prerequisites-gate, repo-unit-tests]
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Sync Python deps (frozen)
+        run: uv sync --frozen --extra dev
+
+      - name: Expose venv on PATH
+        run: echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
+
+      - name: Cache mutmut light results
+        uses: actions/cache@v4
+        with:
+          path: mutants
+          key: mutmut-light-${{ hashFiles('uv.lock', 'pyproject.toml', 'scripts/ci/mutation-config.json') }}-${{ github.ref }}
+          restore-keys: |
+            mutmut-light-${{ hashFiles('uv.lock', 'pyproject.toml', 'scripts/ci/mutation-config.json') }}-
+
+      - name: Run light mutation
+        env:
+          AVO_MUTATION_PROFILE: light
+        run: bash scripts/ci/run-mutation-light.sh
+
+      - name: Upload light mutation reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: mutation-reports-light
+          path: reports/mutation
+          if-no-files-found: warn
+          retention-days: 14

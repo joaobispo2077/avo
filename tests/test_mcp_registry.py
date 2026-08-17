@@ -1,4 +1,5 @@
 """Unit tests for avo.mcp tool registry (no providers / footage)."""
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -21,7 +22,11 @@ from avo.mcp.registry import (
     tool_names,
     tools_by_group,
 )
-from avo.mcp.tools.cli_tools import ALL_CLI_GROUPS, CORE_CLI_GROUPS, REMAINING_CLI_GROUPS
+from avo.mcp.tools.cli_tools import (
+    ALL_CLI_GROUPS,
+    CORE_CLI_GROUPS,
+    REMAINING_CLI_GROUPS,
+)
 
 
 def test_transport_is_stdio() -> None:

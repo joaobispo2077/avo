@@ -34,7 +34,6 @@ from avo.grade import auto_grade_for_clip, get_preset
 from avo.paths import repo_root
 from avo.validate_edl import DEFAULT_SCHEMA, EdlValidationError, load_and_validate
 
-
 COMPARISON_SCHEMA = (
     repo_root()
     / "specs"
@@ -43,11 +42,7 @@ COMPARISON_SCHEMA = (
     / "edl.schema.json"
 )
 BLURAY_PS5_SCHEMA = (
-    repo_root()
-    / "specs"
-    / "005-bluray-ps5-gamevlog"
-    / "contracts"
-    / "edl.schema.json"
+    repo_root() / "specs" / "005-bluray-ps5-gamevlog" / "contracts" / "edl.schema.json"
 )
 
 
@@ -68,7 +63,9 @@ SUB_FORCE_STYLE = (
 
 def run(cmd: list[str], quiet: bool = False) -> None:
     if not quiet:
-        print(f"  $ {' '.join(str(c) for c in cmd[:6])}{' ...' if len(cmd) > 6 else ''}")
+        print(
+            f"  $ {' '.join(str(c) for c in cmd[:6])}{' ...' if len(cmd) > 6 else ''}"
+        )
     subprocess.run(cmd, check=True)
 
 
@@ -87,7 +84,7 @@ def _parse_ffmpeg_time(value: str) -> float | None:
 def _format_seconds(seconds: float | None) -> str:
     if seconds is None:
         return "?:??"
-    seconds = max(0, int(round(seconds)))
+    seconds = max(0, round(seconds))
     h, rem = divmod(seconds, 3600)
     m, s = divmod(rem, 60)
     if h:
@@ -147,12 +144,18 @@ def media_duration(path: Path) -> float | None:
     try:
         out = subprocess.run(
             [
-                "ffprobe", "-v", "error",
-                "-show_entries", "format=duration",
-                "-of", "default=noprint_wrappers=1:nokey=1",
+                "ffprobe",
+                "-v",
+                "error",
+                "-show_entries",
+                "format=duration",
+                "-of",
+                "default=noprint_wrappers=1:nokey=1",
                 str(path),
             ],
-            capture_output=True, text=True, check=True,
+            capture_output=True,
+            text=True,
+            check=True,
         )
         return float(out.stdout.strip())
     except Exception:
@@ -266,7 +269,9 @@ def visual_subtitles_enabled(edl: dict) -> bool:
     policy = edl.get("caption_policy") or {}
     if policy.get("visual_subtitles") is False:
         if edl.get("caption_burn_in") is not None:
-            raise ValueError("visual subtitles are disabled but caption_burn_in is present")
+            raise ValueError(
+                "visual subtitles are disabled but caption_burn_in is present"
+            )
         return False
     return True
 
@@ -300,10 +305,21 @@ def is_hdr_source(video: Path) -> bool:
     """Return True if the source uses a PQ or HLG transfer function."""
     try:
         out = subprocess.run(
-            ["ffprobe", "-v", "error", "-select_streams", "v:0",
-             "-show_entries", "stream=color_transfer",
-             "-of", "default=noprint_wrappers=1:nokey=1", str(video)],
-            capture_output=True, text=True, check=True,
+            [
+                "ffprobe",
+                "-v",
+                "error",
+                "-select_streams",
+                "v:0",
+                "-show_entries",
+                "stream=color_transfer",
+                "-of",
+                "default=noprint_wrappers=1:nokey=1",
+                str(video),
+            ],
+            capture_output=True,
+            text=True,
+            check=True,
         )
         return out.stdout.strip() in HDR_TRANSFERS
     except subprocess.CalledProcessError:
@@ -314,10 +330,21 @@ def is_portrait_source(video: Path) -> bool:
     """Return True if the video's height > width (portrait / vertical)."""
     try:
         out = subprocess.run(
-            ["ffprobe", "-v", "error", "-select_streams", "v:0",
-             "-show_entries", "stream=width,height",
-             "-of", "csv=p=0", str(video)],
-            capture_output=True, text=True, check=True,
+            [
+                "ffprobe",
+                "-v",
+                "error",
+                "-select_streams",
+                "v:0",
+                "-show_entries",
+                "stream=width,height",
+                "-of",
+                "csv=p=0",
+                str(video),
+            ],
+            capture_output=True,
+            text=True,
+            check=True,
         )
         w, h = map(int, out.stdout.strip().split(","))
         return h > w
@@ -384,27 +411,51 @@ def extract_segment(
     audio_bitrate = "384k" if youtube_4k else "192k"
 
     cmd = [
-        "ffmpeg", "-y",
-        "-ss", f"{seg_start:.3f}",
-        "-i", str(source),
-        "-t", f"{duration:.3f}",
-        "-vf", vf,
-        "-map", "0:v:0",
-        "-c:v", "libx264", "-preset", preset, "-crf", crf,
-        "-pix_fmt", "yuv420p",
-        "-profile:v", "high",
+        "ffmpeg",
+        "-y",
+        "-ss",
+        f"{seg_start:.3f}",
+        "-i",
+        str(source),
+        "-t",
+        f"{duration:.3f}",
+        "-vf",
+        vf,
+        "-map",
+        "0:v:0",
+        "-c:v",
+        "libx264",
+        "-preset",
+        preset,
+        "-crf",
+        crf,
+        "-pix_fmt",
+        "yuv420p",
+        "-profile:v",
+        "high",
     ]
     if include_source_audio:
         fade_out_start = max(0.0, duration - 0.03)
         af_parts = []
         if audio_repair_filter:
             af_parts.append(audio_repair_filter)
-        af_parts.append(f"afade=t=in:st=0:d=0.03,afade=t=out:st={fade_out_start:.3f}:d=0.03")
+        af_parts.append(
+            f"afade=t=in:st=0:d=0.03,afade=t=out:st={fade_out_start:.3f}:d=0.03"
+        )
         af = ",".join(af_parts)
         cmd += [
-            "-af", af,
-            "-map", f"0:{audio_stream}",
-            "-c:a", "aac", "-b:a", audio_bitrate, "-ar", "48000", "-ac", "2",
+            "-af",
+            af,
+            "-map",
+            f"0:{audio_stream}",
+            "-c:a",
+            "aac",
+            "-b:a",
+            audio_bitrate,
+            "-ar",
+            "48000",
+            "-ac",
+            "2",
         ]
     else:
         cmd += ["-an"]
@@ -435,7 +486,11 @@ def extract_all_segments(
     clips_dir = edit_dir / (
         "clips_draft"
         if draft
-        else ("clips_preview" if preview else ("clips_youtube_4k" if youtube_4k else "clips_graded"))
+        else (
+            "clips_preview"
+            if preview
+            else ("clips_youtube_4k" if youtube_4k else "clips_graded")
+        )
     )
     clips_dir.mkdir(parents=True, exist_ok=True)
 
@@ -458,21 +513,29 @@ def extract_all_segments(
         out_path = clips_dir / f"seg_{i:02d}_{src_name}.mp4"
 
         if is_auto:
-            seg_filter, _stats = auto_grade_for_clip(src_path, start=start, duration=duration, verbose=False)
+            seg_filter, _stats = auto_grade_for_clip(
+                src_path, start=start, duration=duration, verbose=False
+            )
         else:
             seg_filter = resolved
 
         note = r.get("beat") or r.get("note") or ""
-        print(f"  [{i:02d}] {src_name}  {start:7.2f}-{end:7.2f}  ({duration:5.2f}s)  {note}")
+        print(
+            f"  [{i:02d}] {src_name}  {start:7.2f}-{end:7.2f}  ({duration:5.2f}s)  {note}"
+        )
         if is_auto:
             print(f"        grade: {seg_filter or '(none)'}")
-        existing_duration = media_duration(out_path) if resume_existing and out_path.exists() else None
+        existing_duration = (
+            media_duration(out_path) if resume_existing and out_path.exists() else None
+        )
         if (
             resume_existing
             and existing_duration is not None
             and abs(existing_duration - duration) <= 0.25
         ):
-            print(f"        resume: reusing existing {out_path.name} ({existing_duration:.2f}s)")
+            print(
+                f"        resume: reusing existing {out_path.name} ({existing_duration:.2f}s)"
+            )
             seg_paths.append(out_path)
             continue
         extract_segment(
@@ -507,11 +570,18 @@ def concat_segments(segment_paths: list[Path], out_path: Path, edit_dir: Path) -
     )
 
     cmd = [
-        "ffmpeg", "-y",
-        "-f", "concat", "-safe", "0",
-        "-i", str(concat_list),
-        "-c", "copy",
-        "-movflags", "+faststart",
+        "ffmpeg",
+        "-y",
+        "-f",
+        "concat",
+        "-safe",
+        "0",
+        "-i",
+        str(concat_list),
+        "-c",
+        "copy",
+        "-movflags",
+        "+faststart",
         str(out_path),
     ]
     print(f"concat -> {out_path.name}")
@@ -526,7 +596,7 @@ PUNCT_BREAK = set(".,!?;:")
 
 
 def _srt_timestamp(seconds: float) -> str:
-    total_ms = int(round(seconds * 1000))
+    total_ms = round(seconds * 1000)
     h, rem = divmod(total_ms, 3600_000)
     m, rem = divmod(rem, 60_000)
     s, ms = divmod(rem, 1000)
@@ -556,7 +626,7 @@ def build_master_srt(edl: dict, edit_dir: Path, out_path: Path) -> None:
     - Output times computed as word.start - segment_start + segment_offset
     """
     transcripts_dir = edit_dir / "transcripts"
-    sources = edl["sources"]
+    edl["sources"]
 
     entries: list[tuple[float, float, str]] = []
     seg_offset = 0.0
@@ -626,11 +696,15 @@ from avo.loudness_profiles import (
     ResolvedLoudnessProfile,
     limiter_filter_for,
     load_context_for_edit_dir,
-    measure_loudness as measure_loudness_profile,
     nr_loudness_warning,
     preset_stale_advisory,
     resolve_loudness_profile,
-    get_preset,
+)
+from avo.loudness_profiles import (
+    get_preset as get_loudness_preset,
+)
+from avo.loudness_profiles import (
+    measure_loudness as measure_loudness_profile,
 )
 
 
@@ -671,16 +745,32 @@ def apply_loudnorm_two_pass(
             f"{limiter}"
         )
         cmd = [
-            "ffmpeg", "-y", "-hide_banner", "-nostats",
-            "-i", str(input_path),
-            "-c:v", "copy",
-            "-af", filter_str,
-            "-c:a", "aac", "-b:a", audio_bitrate, "-ar", "48000",
-            "-movflags", "+faststart",
+            "ffmpeg",
+            "-y",
+            "-hide_banner",
+            "-nostats",
+            "-i",
+            str(input_path),
+            "-c:v",
+            "copy",
+            "-af",
+            filter_str,
+            "-c:a",
+            "aac",
+            "-b:a",
+            audio_bitrate,
+            "-ar",
+            "48000",
+            "-movflags",
+            "+faststart",
             str(output_path),
         ]
         print(f"  loudnorm (1-pass preview) -> {output_path.name}")
-        run_ffmpeg_progress(cmd, f"loudnorm {output_path.name}", expected_duration=media_duration(input_path))
+        run_ffmpeg_progress(
+            cmd,
+            f"loudnorm {output_path.name}",
+            expected_duration=media_duration(input_path),
+        )
         return True
 
     # Full two-pass
@@ -696,8 +786,10 @@ def apply_loudnorm_two_pass(
             profile=profile,
         )
 
-    print(f"    measured: I={measurement['input_i']} LUFS  "
-          f"TP={measurement['input_tp']}  LRA={measurement['input_lra']}")
+    print(
+        f"    measured: I={measurement['input_i']} LUFS  "
+        f"TP={measurement['input_tp']}  LRA={measurement['input_lra']}"
+    )
 
     loudnorm_filter = (
         f"loudnorm=I={profile.integrated_lufs}:TP={profile.true_peak_dbtp}:LRA={profile.lra_lu}"
@@ -710,16 +802,32 @@ def apply_loudnorm_two_pass(
     )
     filter_str = f"{loudnorm_filter},{limiter}"
     cmd = [
-        "ffmpeg", "-y", "-hide_banner", "-nostats",
-        "-i", str(input_path),
-        "-c:v", "copy",
-        "-af", filter_str,
-        "-c:a", "aac", "-b:a", audio_bitrate, "-ar", "48000",
-        "-movflags", "+faststart",
+        "ffmpeg",
+        "-y",
+        "-hide_banner",
+        "-nostats",
+        "-i",
+        str(input_path),
+        "-c:v",
+        "copy",
+        "-af",
+        filter_str,
+        "-c:a",
+        "aac",
+        "-b:a",
+        audio_bitrate,
+        "-ar",
+        "48000",
+        "-movflags",
+        "+faststart",
         str(output_path),
     ]
     print(f"  loudnorm pass 2: normalizing -> {output_path.name}")
-    run_ffmpeg_progress(cmd, f"loudnorm {output_path.name}", expected_duration=media_duration(input_path))
+    run_ffmpeg_progress(
+        cmd,
+        f"loudnorm {output_path.name}",
+        expected_duration=media_duration(input_path),
+    )
     return True
 
 
@@ -751,7 +859,9 @@ def build_overlay_filter_parts(
         # Limit overlay streams to their approved EDL window. Without this,
         # a longer reusable overlay asset can extend the output timeline even
         # when the overlay filter's enable window has already ended.
-        overlay_chain += f"trim=duration={duration:.3f},setpts=PTS-STARTPTS+{start:g}/TB{shifted}"
+        overlay_chain += (
+            f"trim=duration={duration:.3f},setpts=PTS-STARTPTS+{start:g}/TB{shifted}"
+        )
         parts.append(overlay_chain)
         position = ""
         if "x" in overlay or "y" in overlay:
@@ -766,20 +876,14 @@ def build_overlay_filter_parts(
 
 def _subtitle_filter_path(path: Path) -> str:
     return (
-        str(path.resolve())
-        .replace("\\", "/")
-        .replace(":", r"\:")
-        .replace("'", r"\'")
+        str(path.resolve()).replace("\\", "/").replace(":", r"\:").replace("'", r"\'")
     )
 
 
 def build_subtitle_filter(input_label: str, subtitles_path: Path) -> str:
     """Build the caption-last video filter for the first-minute SRT."""
     escaped = _subtitle_filter_path(subtitles_path)
-    return (
-        f"{input_label}subtitles='{escaped}':"
-        f"force_style='{SUB_FORCE_STYLE}'[outv]"
-    )
+    return f"{input_label}subtitles='{escaped}':force_style='{SUB_FORCE_STYLE}'[outv]"
 
 
 def build_audio_filter_parts(
@@ -790,14 +894,12 @@ def build_audio_filter_parts(
     if not sound_effects:
         return [], "0:a:0"
 
-    parts = [
-        "[0:a:0]aformat=sample_rates=48000:channel_layouts=stereo[basea]"
-    ]
+    parts = ["[0:a:0]aformat=sample_rates=48000:channel_layouts=stereo[basea]"]
     labels = ["[basea]"]
     for offset, effect in enumerate(sound_effects):
         input_index = first_input_index + offset
         sequence = offset + 1
-        delay_ms = int(round(float(effect["start_in_output"]) * 1000))
+        delay_ms = round(float(effect["start_in_output"]) * 1000)
         duration = float(effect["duration"])
         gain = float(effect["gain_db"])
         label = f"[sfx{sequence}]"
@@ -838,6 +940,7 @@ def build_final_composite(
     video_layers = (timeline_tracks.get("videoTracks") or {}).get("layers") or []
     if video_layers:
         from avo.adapters.media.video_tracks import compile_video_layers
+
         compiled_video = compile_video_layers(video_layers)
         overlays = [*overlays, *compiled_video["overlays"]]
         if subtitles_path is None and compiled_video.get("captions"):
@@ -845,17 +948,22 @@ def build_final_composite(
     else:
         compiled_video = {"trace": []}
     if audio_layers and sound_effects:
-        raise ValueError("canonical audio Tracks cannot be mixed with legacy sound_effects")
+        raise ValueError(
+            "canonical audio Tracks cannot be mixed with legacy sound_effects"
+        )
     has_overlays = bool(overlays)
     has_subs = subtitles_path is not None and subtitles_path.exists()
-    has_audio_tracks = any(
+    any(
         not layer.get("mute") and layer.get("role") not in {"dialogue", "source-audio"}
         for layer in audio_layers
     )
     has_sfx = bool(sound_effects) or bool(audio_layers)
 
     if not has_overlays and not has_subs and not has_sfx:
-        run(["ffmpeg", "-y", "-i", str(base_path), "-c", "copy", str(out_path)], quiet=True)
+        run(
+            ["ffmpeg", "-y", "-i", str(base_path), "-c", "copy", str(out_path)],
+            quiet=True,
+        )
         return
 
     inputs: list[str] = ["-i", str(base_path)]
@@ -867,6 +975,7 @@ def build_final_composite(
     audio_compiled = None
     if audio_layers:
         from avo.adapters.media.audio_tracks import compile_audio_layers
+
         audio_compiled = compile_audio_layers(
             audio_layers,
             first_input_index=1 + len(overlays),
@@ -900,24 +1009,33 @@ def build_final_composite(
     filter_parts = video_parts + audio_parts
 
     cmd = [
-        "ffmpeg", "-y",
+        "ffmpeg",
+        "-y",
         *inputs,
     ]
     if filter_parts:
         cmd += ["-filter_complex", ";".join(filter_parts)]
     cmd += [
-        "-map", video_output,
-        "-map", audio_output,
-        "-c:v", "libx264", "-preset", youtube_4k_preset if youtube_4k else "fast",
+        "-map",
+        video_output,
+        "-map",
+        audio_output,
+        "-c:v",
+        "libx264",
+        "-preset",
+        youtube_4k_preset if youtube_4k else "fast",
     ]
     if youtube_4k:
         cmd += ["-b:v", "40M", "-maxrate", "45M", "-bufsize", "90M"]
     else:
         cmd += ["-crf", "18"]
     cmd += [
-        "-pix_fmt", "yuv420p",
-        "-profile:v", "high",
-        "-c:a", "aac" if has_sfx else "copy",
+        "-pix_fmt",
+        "yuv420p",
+        "-profile:v",
+        "high",
+        "-c:a",
+        "aac" if has_sfx else "copy",
     ]
     if has_sfx:
         cmd += ["-b:a", "384k" if youtube_4k else "192k", "-ar", "48000", "-ac", "2"]
@@ -927,7 +1045,9 @@ def build_final_composite(
         f"  overlays: {len(overlays)}, sfx: {len(sound_effects)}, "
         f"burned captions: {'yes' if has_subs else 'no'}"
     )
-    run_ffmpeg_progress(cmd, f"composite {out_path.name}", expected_duration=media_duration(base_path))
+    run_ffmpeg_progress(
+        cmd, f"composite {out_path.name}", expected_duration=media_duration(base_path)
+    )
 
 
 # -------- External voiceover mux ---------------------------------------------
@@ -941,7 +1061,11 @@ def mux_external_voiceover(
     youtube_4k: bool = False,
 ) -> None:
     """Mux video-only concat with external voiceover audio (EQ/NR on VO track)."""
-    from avo.voiceover import output_duration_from_edl, resolve_voiceover_path, voiceover_source_key
+    from avo.voiceover import (
+        output_duration_from_edl,
+        resolve_voiceover_path,
+        voiceover_source_key,
+    )
 
     vo_path = resolve_voiceover_path(edl, edit_dir)
     cut_duration = output_duration_from_edl(edl)
@@ -963,16 +1087,33 @@ def mux_external_voiceover(
     audio_bitrate = "384k" if youtube_4k else "192k"
 
     cmd = [
-        "ffmpeg", "-y", "-hide_banner", "-nostats",
-        "-i", str(base_video_path),
-        "-i", str(vo_path),
-        "-map", "0:v:0",
-        "-map", "1:a:0",
-        "-filter:a:0", af,
-        "-c:v", "copy",
-        "-c:a", "aac", "-b:a", audio_bitrate, "-ar", "48000", "-ac", "2",
+        "ffmpeg",
+        "-y",
+        "-hide_banner",
+        "-nostats",
+        "-i",
+        str(base_video_path),
+        "-i",
+        str(vo_path),
+        "-map",
+        "0:v:0",
+        "-map",
+        "1:a:0",
+        "-filter:a:0",
+        af,
+        "-c:v",
+        "copy",
+        "-c:a",
+        "aac",
+        "-b:a",
+        audio_bitrate,
+        "-ar",
+        "48000",
+        "-ac",
+        "2",
         "-shortest",
-        "-movflags", "+faststart",
+        "-movflags",
+        "+faststart",
         str(out_path),
     ]
     print(f"voiceover mux -> {out_path.name}")
@@ -989,7 +1130,9 @@ def mux_external_voiceover(
 def main() -> None:
     ap = argparse.ArgumentParser(description="Render a video from an EDL")
     ap.add_argument("edl", type=Path, help="Path to edl.json")
-    ap.add_argument("-o", "--output", type=Path, required=True, help="Output video path")
+    ap.add_argument(
+        "-o", "--output", type=Path, required=True, help="Output video path"
+    )
     ap.add_argument(
         "--preview",
         action="store_true",
@@ -1050,7 +1193,9 @@ def main() -> None:
         sys.exit(f"edl not found: {edl_path}")
 
     try:
-        edl = load_and_validate(edl_path, schema_path=schema_for_edl(edl_path, args.schema))
+        edl = load_and_validate(
+            edl_path, schema_path=schema_for_edl(edl_path, args.schema)
+        )
     except (EdlValidationError, json.JSONDecodeError) as exc:
         sys.exit(str(exc))
     edit_dir = edl_path.parent
@@ -1072,13 +1217,14 @@ def main() -> None:
     if nr_warning:
         print(f"warning: {nr_warning}")
 
-    stale = preset_stale_advisory(get_preset(loudness_profile.preset_id))
+    stale = preset_stale_advisory(get_loudness_preset(loudness_profile.preset_id))
     if stale:
         print(f"advisory: {stale}")
 
     skip_loudnorm = args.no_loudnorm or not loudness_profile.loudnorm_enabled
 
-    from avo.voiceover import is_external_voiceover_edl, preflight as voiceover_preflight
+    from avo.voiceover import is_external_voiceover_edl
+    from avo.voiceover import preflight as voiceover_preflight
 
     voiceover_mode = is_external_voiceover_edl(edl)
     if voiceover_mode:
@@ -1134,10 +1280,9 @@ def main() -> None:
             elif "caption_policy" not in edl:
                 subs_path = full_subs_path
 
-        if subs_path is not None:
-            if not subs_path.exists():
-                print(f"warning: subtitles path in EDL does not exist: {subs_path}")
-                subs_path = None
+        if subs_path is not None and not subs_path.exists():
+            print(f"warning: subtitles path in EDL does not exist: {subs_path}")
+            subs_path = None
 
     # 4. Composite overlays and SFX, then burn first-minute captions last.
     #    External voiceover mode muxes VO audio instead of camera program audio.

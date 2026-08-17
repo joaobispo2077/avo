@@ -3,10 +3,10 @@
 Full phase-1 CLI groups are bridged (tasks 007–008). This module holds the
 catalog model, meta-tool entries, and group tags for capability discovery.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-
 
 # Phase-1 transport identity (health / smoke).
 TRANSPORT = "stdio"

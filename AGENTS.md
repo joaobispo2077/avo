@@ -188,7 +188,11 @@ PowerShell, JavaScript, or Python scripts for a single video.
 
 Validate behavior first. Test Trophy mindset: ~90% cheap unit tests when possible, then
 integration, then E2E only for critical flows. Run `pytest -m "not project"` for AVO core
-(also `npm run test:unit`). Footage-project tests live under `tests/projects/` —
+(also `npm run test:unit`). After orchestrator code changes, also run **`npm run quality`**
+(or the listed `quality:*` subset) before claiming the work done. Fast software-quality
+gates live in `.github/workflows/ci.yml` job **Software quality** — not a separate
+`quality.yml`. See [`docs/software-quality-audit.md`](docs/software-quality-audit.md)
+and [`docs/ci.md`](docs/ci.md). Footage-project tests live under `tests/projects/` —
 `npm run test:projects` — and are excluded from CI.
 Do not remove tests without equivalent coverage.
 

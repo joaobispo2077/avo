@@ -1,21 +1,29 @@
 from __future__ import annotations
 
 import json
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
-from avo import pack_transcripts
-from avo import render
+from avo import pack_transcripts, render
 
 
 class WorkflowCompatibilityTests(unittest.TestCase):
     def test_runtime_has_no_bespoke_splatoon_helpers(self) -> None:
-        runtime_roots = (ROOT / "src" / "avo", ROOT / "commands" / "avo", ROOT / "agent-skills" / "avo-pipeline")
-        forbidden = ("splatoon", "sync-map-v017", "rebuild-v010", "audio-plus-128", "resync-calibration")
+        runtime_roots = (
+            ROOT / "src" / "avo",
+            ROOT / "commands" / "avo",
+            ROOT / "agent-skills" / "avo-pipeline",
+        )
+        forbidden = (
+            "splatoon",
+            "sync-map-v017",
+            "rebuild-v010",
+            "audio-plus-128",
+            "resync-calibration",
+        )
         findings = []
         for base in runtime_roots:
             for path in base.rglob("*"):
@@ -33,13 +41,21 @@ class WorkflowCompatibilityTests(unittest.TestCase):
             self.assertEqual(1, text.count("**Timeline integration:**"), path.name)
             self.assertEqual(1, text.count("## Shared timeline gateway"), path.name)
             mode = text.split("**Timeline integration:**", 1)[1].splitlines()[0].strip()
-            self.assertIn(mode, {"Owns", "Evidence", "Consumes", "Profile", "Admin"}, path.name)
+            self.assertIn(
+                mode, {"Owns", "Evidence", "Consumes", "Profile", "Admin"}, path.name
+            )
 
     def test_edl_is_only_a_generated_compatibility_projection(self) -> None:
         workflow = (ROOT / "docs" / "avo-workflow.md").read_text(encoding="utf-8")
-        projection = (ROOT / "src" / "avo" / "timeline" / "projection.py").read_text(encoding="utf-8")
-        self.assertIn("edit/edl.json is generated renderer compatibility output", workflow)
-        self.assertIn("canonical timeline → legacy EDL compatibility projection", projection)
+        projection = (ROOT / "src" / "avo" / "timeline" / "projection.py").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn(
+            "edit/edl.json is generated renderer compatibility output", workflow
+        )
+        self.assertIn(
+            "canonical timeline → legacy EDL compatibility projection", projection
+        )
 
     def test_local_transcript_packs_and_builds_srt(self) -> None:
         fixture = json.loads(

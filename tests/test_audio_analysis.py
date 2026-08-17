@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import json
+import shutil
 import tempfile
 import unittest
 import wave
@@ -26,6 +26,7 @@ def _write_noisy_wav(path: Path, seconds: float = 3.0, sr: int = 16000) -> None:
 
 
 class AudioAnalysisTests(unittest.TestCase):
+    @unittest.skipUnless(shutil.which("ffprobe"), "ffprobe unavailable")
     def test_sliding_window_suggestions_deterministic(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             wav = Path(tmp) / "noisy.wav"
@@ -37,6 +38,7 @@ class AudioAnalysisTests(unittest.TestCase):
                 [s.to_dict() for s in second],
             )
 
+    @unittest.skipUnless(shutil.which("ffprobe"), "ffprobe unavailable")
     def test_suggestion_shape(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             wav = Path(tmp) / "noisy.wav"
@@ -44,7 +46,13 @@ class AudioAnalysisTests(unittest.TestCase):
             suggestions = audio_analysis.suggest_noise_reduction(wav)
             if suggestions:
                 item = suggestions[0].to_dict()
-                for key in ("start", "end", "noise_score", "suggested_strength_pct", "confidence"):
+                for key in (
+                    "start",
+                    "end",
+                    "noise_score",
+                    "suggested_strength_pct",
+                    "confidence",
+                ):
                     self.assertIn(key, item)
 
     def test_score_helpers(self) -> None:

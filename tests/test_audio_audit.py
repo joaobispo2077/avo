@@ -38,7 +38,11 @@ class AudioAuditTests(unittest.TestCase):
         with (
             mock.patch(
                 "avo.audio_audit.loudness_profiles.measure_loudness",
-                return_value={"integrated_lufs": -19.0, "true_peak_dbtp": -2.0, "lra_lu": 8.0},
+                return_value={
+                    "integrated_lufs": -19.0,
+                    "true_peak_dbtp": -2.0,
+                    "lra_lu": 8.0,
+                },
             ),
             mock.patch(
                 "avo.audio_audit.loudness_profiles.compare_measurement",
@@ -48,7 +52,10 @@ class AudioAuditTests(unittest.TestCase):
                     "within_target": False,
                 },
             ),
-            mock.patch("avo.audio_audit.loudness_profiles.nr_loudness_warning", return_value=None),
+            mock.patch(
+                "avo.audio_audit.loudness_profiles.nr_loudness_warning",
+                return_value=None,
+            ),
             mock.patch(
                 "avo.audio_audit.loudness_profiles.resolve_loudness_profile",
                 return_value=profile,

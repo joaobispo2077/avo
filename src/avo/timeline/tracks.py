@@ -38,7 +38,9 @@ def resolve_tracks(
                 actual = file_fingerprint(path)["sha256"]
                 if actual != source.get("sha256"):
                     raise TrackError(f"source fingerprint mismatch: {layer_id}")
-            if source.get("actualSha256") and source.get("actualSha256") != source.get("sha256"):
+            if source.get("actualSha256") and source.get("actualSha256") != source.get(
+                "sha256"
+            ):
                 raise TrackError(f"source fingerprint mismatch: {layer_id}")
             for region in layer.get("regions") or []:
                 linked = set(region.get("cueIds") or [])
@@ -53,7 +55,10 @@ def resolve_tracks(
                         cue = cues[cue_id]
                         cue_start = int(cue["start"]["ticks"])
                         cue_end = int(cue["end"]["ticks"])
-                        if int(region["startTicks"]) > cue_start or int(region["endTicks"]) < cue_end:
+                        if (
+                            int(region["startTicks"]) > cue_start
+                            or int(region["endTicks"]) < cue_end
+                        ):
                             raise TrackError(
                                 f"track region invents/truncates cue timing: {layer_id}/{cue_id}"
                             )
@@ -73,7 +78,8 @@ def inspect_audio_hierarchy(layers: list[dict[str, Any]]) -> list[str]:
     for layer in layers:
         if (
             layer.get("role") == "music"
-            and float(layer.get("gainDb", 0)) >= float((dialogue or {}).get("gainDb", 0)) - 6
+            and float(layer.get("gainDb", 0))
+            >= float((dialogue or {}).get("gainDb", 0)) - 6
             and not layer.get("ducking")
         ):
             findings.append("music-masks-dialogue")
@@ -83,10 +89,14 @@ def inspect_audio_hierarchy(layers: list[dict[str, Any]]) -> list[str]:
 def inspect_visual_hierarchy(layers: list[dict[str, Any]]) -> list[str]:
     findings = []
     for layer in layers:
-        if (
-            layer.get("role") in {"overlay", "text", "card", "graphic", "image", "clip"}
-            and not layer.get("faceAvoidance", False)
-        ):
+        if layer.get("role") in {
+            "overlay",
+            "text",
+            "card",
+            "graphic",
+            "image",
+            "clip",
+        } and not layer.get("faceAvoidance", False):
             findings.append("face-avoidance")
     return sorted(set(findings))
 
@@ -109,14 +119,15 @@ class TracksService:
         }
         return basis, revision
 
-    def author(self, snapshot: dict[str, Any], *, actor: str, reason: str) -> dict[str, Any]:
+    def author(
+        self, snapshot: dict[str, Any], *, actor: str, reason: str
+    ) -> dict[str, Any]:
         basis, bmap_revision = self._basis()
         value = deepcopy(snapshot)
         value["basis"] = basis
         value["cmapBasis"] = deepcopy(bmap_revision["snapshot"]["basis"])
         cue_map = {
-            cue["cueId"]: cue
-            for cue in bmap_revision["snapshot"].get("cues") or []
+            cue["cueId"]: cue for cue in bmap_revision["snapshot"].get("cues") or []
         }
         value = resolve_tracks(value, set(cue_map), cues=cue_map)
         index = self.store.load_index()
@@ -158,7 +169,9 @@ class TracksService:
             "audioLayers": snapshot["audioTracks"]["layers"],
             "videoLayers": snapshot["videoTracks"]["layers"],
             "audioFindings": inspect_audio_hierarchy(snapshot["audioTracks"]["layers"]),
-            "visualFindings": inspect_visual_hierarchy(snapshot["videoTracks"]["layers"]),
+            "visualFindings": inspect_visual_hierarchy(
+                snapshot["videoTracks"]["layers"]
+            ),
         }
 
 
@@ -172,11 +185,7 @@ def audit_contributions(
         for layer in (snapshot.get(group) or {}).get("layers") or []
         if not layer.get("mute") and layer.get("status") != "disabled"
     }
-    rendered = {
-        item["layerId"]
-        for item in rendered_trace
-        if item.get("enabled", True)
-    }
+    rendered = {item["layerId"] for item in rendered_trace if item.get("enabled", True)}
     missing = sorted(declared - rendered)
     unexpected = sorted(rendered - declared)
     return {

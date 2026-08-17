@@ -28,9 +28,7 @@ class ScratchError(ValueError):
 def _session_id(session_id: str) -> str:
     value = str(session_id or "").strip()
     if not value or value in {".", ".."} or "/" in value or "\\" in value:
-        raise ScratchError(
-            f"session_id is invalid: {session_id!r}. {_REMEDIATION}"
-        )
+        raise ScratchError(f"session_id is invalid: {session_id!r}. {_REMEDIATION}")
     return value
 
 

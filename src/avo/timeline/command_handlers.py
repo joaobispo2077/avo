@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 from .command_registry import authorize, command_spec
 from .pipeline import TimelinePipeline
@@ -40,7 +41,9 @@ class CommandHandlers:
 
         if spec.mode in {"Admin", "Consumes"}:
             if operation not in {"status", "inspect", "validate", "deliver"}:
-                raise ValueError(f"{command} is read-only; unsupported operation {operation}")
+                raise ValueError(
+                    f"{command} is read-only; unsupported operation {operation}"
+                )
             return {
                 "command": command,
                 "mode": spec.mode,
@@ -52,12 +55,22 @@ class CommandHandlers:
             if operation != "evidence" or self.evidence_runner is None:
                 raise ValueError(f"{command} requires the shared evidence runner")
             result = self.evidence_runner(command=command, **payload)
-            return {"command": command, "mode": spec.mode, "mutated": False, "evidence": result}
+            return {
+                "command": command,
+                "mode": spec.mode,
+                "mutated": False,
+                "evidence": result,
+            }
         if spec.mode == "Profile":
             child_project = Path(str(payload.get("childProject") or ""))
             if not child_project.is_file():
-                raise ValueError("profile command requires an initialized child project")
-            if child_project.resolve() == self.pipeline.workspace.project_path.resolve():
+                raise ValueError(
+                    "profile command requires an initialized child project"
+                )
+            if (
+                child_project.resolve()
+                == self.pipeline.workspace.project_path.resolve()
+            ):
                 raise ValueError("profile command cannot mutate parent timeline")
             return {
                 "command": command,
@@ -78,4 +91,9 @@ class CommandHandlers:
                 "guarded": True,
                 "timeline": self.pipeline.status(),
             }
-        return {"command": command, "mode": spec.mode, "mutated": True, "result": result}
+        return {
+            "command": command,
+            "mode": spec.mode,
+            "mutated": True,
+            "result": result,
+        }
