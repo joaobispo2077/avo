@@ -7,6 +7,7 @@ import shutil
 import sys
 import tempfile
 import unittest
+from io import StringIO
 from pathlib import Path
 from unittest.mock import patch
 
@@ -39,6 +40,7 @@ class CleanupCliTests(unittest.TestCase):
         self.assertEqual(args.command, "cleanup")
         self.assertEqual(args.cleanup_command, "execute")
         self.assertEqual(args.session_id, "sess-1")
+        self.assertFalse(args.full_paths)
 
         dry = parser.parse_args(
             [
@@ -48,10 +50,22 @@ class CleanupCliTests(unittest.TestCase):
                 "avo.project.json",
                 "--master-basename",
                 MASTER_BASENAME,
+                "--session-id",
+                "sess-dry",
+                "--scratch-out",
             ]
         )
         self.assertEqual(dry.cleanup_command, "dry-run")
-        self.assertFalse(hasattr(dry, "session_id"))
+        self.assertEqual(dry.session_id, "sess-dry")
+        self.assertTrue(dry.scratch_out)
+        self.assertFalse(dry.full_paths)
+
+    def _run_cli(self, argv: list[str]) -> tuple[int, dict]:
+        buf = StringIO()
+        with patch("sys.stdout", buf):
+            code = main(argv)
+        payload = json.loads(buf.getvalue())
+        return code, payload
 
     def test_dry_run_writes_nothing_and_does_not_purge(self) -> None:
         with self._project() as (project, raw_dir, tmp_root):
@@ -59,7 +73,7 @@ class CleanupCliTests(unittest.TestCase):
             with patch.object(scratch, "tmp_dir", return_value=tmp_root):
                 marker = scratch.scratch_path("qc", "sess-dry", "keep.bin")
                 marker.write_bytes(b"keep")
-                code = main(
+                code, payload = self._run_cli(
                     [
                         "cleanup",
                         "dry-run",
@@ -70,8 +84,15 @@ class CleanupCliTests(unittest.TestCase):
                     ]
                 )
                 self.assertEqual(code, 0)
+                self.assertEqual(payload["status"], "dry-run")
+                self.assertIn("candidateCount", payload)
+                self.assertGreaterEqual(payload["candidateCount"], 1)
+                self.assertLessEqual(len(payload["candidateSample"]), 50)
+                self.assertNotIn("deleteCandidates", payload)
                 self.assertTrue(preview.is_file())
                 self.assertTrue(marker.is_file())
+                recon = raw_dir / "edit" / "review" / "legacy-reconstruction"
+                self.assertFalse(recon.exists())
 
     def test_execute_deletes_candidates_and_purges_session_tmp(self) -> None:
         with self._project() as (project, raw_dir, tmp_root):
@@ -96,7 +117,7 @@ class CleanupCliTests(unittest.TestCase):
                     "avo.project_inventory._default_rimraf_runner",
                     side_effect=fake_rimraf,
                 ):
-                    code = main(
+                    code, payload = self._run_cli(
                         [
                             "cleanup",
                             "execute",
@@ -109,6 +130,10 @@ class CleanupCliTests(unittest.TestCase):
                         ]
                     )
                 self.assertEqual(code, 0)
+                self.assertEqual(payload["status"], "executed")
+                self.assertIn("deletedCount", payload)
+                self.assertLessEqual(len(payload["deletedSample"]), 50)
+                self.assertNotIn("deleted", payload)
                 self.assertFalse(preview.exists())
                 self.assertTrue(
                     (raw_dir / "edit" / "masters" / f"{MASTER_BASENAME}.mp4").exists()
@@ -123,7 +148,7 @@ class CleanupCliTests(unittest.TestCase):
             with patch.object(scratch, "tmp_dir", return_value=tmp_root):
                 marker = scratch.scratch_path("learndown", "sess-block", "x.bin")
                 marker.write_bytes(b"x")
-                code = main(
+                code, payload = self._run_cli(
                     [
                         "cleanup",
                         "execute",
@@ -136,7 +161,55 @@ class CleanupCliTests(unittest.TestCase):
                     ]
                 )
                 self.assertEqual(code, 3)
+                self.assertEqual(payload["status"], "blocked")
+                self.assertTrue(payload["verifyErrors"])
+                self.assertNotIn("errors", payload)
                 self.assertTrue(marker.is_file())
+
+    def test_full_paths_opt_in_on_dry_run(self) -> None:
+        with self._project() as (project, _raw_dir, _tmp_root):
+            _code, payload = self._run_cli(
+                [
+                    "cleanup",
+                    "dry-run",
+                    "--project",
+                    str(project),
+                    "--master-basename",
+                    MASTER_BASENAME,
+                    "--full-paths",
+                ]
+            )
+            self.assertIn("deleteCandidates", payload)
+            self.assertIn("edit/preview/edit-proof.mp4", payload["deleteCandidates"])
+
+    def test_dry_run_scratch_out_sets_scratch_paths(self) -> None:
+        with self._project() as (project, _raw_dir, tmp_root):
+            with patch.object(scratch, "tmp_dir", return_value=tmp_root):
+                code, payload = self._run_cli(
+                    [
+                        "cleanup",
+                        "dry-run",
+                        "--project",
+                        str(project),
+                        "--master-basename",
+                        MASTER_BASENAME,
+                        "--session-id",
+                        "sess-scratch",
+                        "--scratch-out",
+                    ]
+                )
+            self.assertEqual(code, 0)
+            self.assertTrue(payload["scratchReport"])
+            self.assertTrue(payload["scratchMeta"])
+            self.assertTrue(Path(payload["scratchReport"]).is_file())
+            full = json.loads(
+                Path(payload["scratchReport"]).read_text(encoding="utf-8")
+            )
+            scheduled = [
+                entry["path"] for entry in full["files"]["scheduledForDeletion"]
+            ]
+            self.assertIn("edit/preview/edit-proof.mp4", scheduled)
+            self.assertNotIn("deleteCandidates", payload)
 
     def _project(self, *, include_master: bool = True):
         class _Ctx:

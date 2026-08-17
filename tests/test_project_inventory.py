@@ -79,7 +79,7 @@ class ProjectInventoryTests(unittest.TestCase):
             return original_is_file(self)
 
         with mock.patch.object(Path, "is_file", fake_is_file):
-            delete_list = project_inventory.list_delete_candidates(
+            delete_list, leftover = project_inventory.scan_delete_candidates(
                 self.raw_dir, preserved
             )
         rel_paths = {
@@ -88,6 +88,25 @@ class ProjectInventoryTests(unittest.TestCase):
         }
         self.assertNotIn("edit/preview/edit-proof.mp4", rel_paths)
         self.assertIn("edit/clips_graded/intermediate.mov", rel_paths)
+        self.assertGreaterEqual(leftover, 1)
+
+    def test_execute_counts_leftover_when_unlink_skipped(self) -> None:
+        def skip_proof(path: Path) -> None:
+            if path.name == "edit-proof.mp4":
+                return
+            if path.is_file():
+                path.unlink()
+
+        with self._temp_project(include_edit=True) as raw_dir:
+            outcome = project_inventory.run_cleanup(
+                raw_dir,
+                self.master,
+                dry_run=False,
+                rimraf_runner=skip_proof,
+                purge_session=False,
+            )
+            self.assertTrue((raw_dir / "edit" / "preview" / "edit-proof.mp4").is_file())
+            self.assertGreaterEqual(outcome.leftover, 1)
 
     def test_assert_no_preserved_in_delete_list_raises(self) -> None:
         preserved = project_inventory.resolve_preserved_set(self.raw_dir, self.master)
@@ -162,8 +181,75 @@ class ProjectInventoryTests(unittest.TestCase):
         )
         self.assertEqual(proc.returncode, 0, msg=proc.stderr)
         payload = json.loads(proc.stdout)
+        self.assertEqual(payload["status"], "dry-run")
+        self.assertNotIn("deleteCandidates", payload)
+        self.assertIn("candidateCount", payload)
+        self.assertGreaterEqual(payload["candidateCount"], 1)
+        self.assertIn("edit/preview/edit-proof.mp4", payload["candidateSample"])
+
+    def test_delete_list_cli_json_full_paths(self) -> None:
+        proc = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "avo.project_inventory",
+                "delete-list",
+                "--raw-dir",
+                str(self.raw_dir),
+                "--master-basename",
+                self.master,
+                "--json",
+                "--full-paths",
+            ],
+            cwd=ROOT,
+            env={**os.environ, "PYTHONPATH": str(SRC)},
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(proc.returncode, 0, msg=proc.stderr)
+        payload = json.loads(proc.stdout)
         self.assertIn("deleteCandidates", payload)
         self.assertIn("edit/preview/edit-proof.mp4", payload["deleteCandidates"])
+
+    def test_report_json_compact_scratch_keeps_full_list(self) -> None:
+        from io import StringIO
+
+        from avo import scratch
+        from avo.project_inventory import main as inventory_main
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            buf = StringIO()
+            with (
+                mock.patch.object(scratch, "tmp_dir", return_value=root),
+                mock.patch("sys.stdout", buf),
+            ):
+                code = inventory_main(
+                    [
+                        "report",
+                        "--raw-dir",
+                        str(self.raw_dir),
+                        "--master-basename",
+                        self.master,
+                        "--json",
+                        "--scratch-out",
+                        "--session-id",
+                        "sess-report",
+                    ]
+                )
+            self.assertEqual(code, 0)
+            start = buf.getvalue().find("{")
+            payload = json.loads(buf.getvalue()[start:])
+            self.assertIn("candidateCount", payload)
+            self.assertNotIn("deleteCandidates", payload)
+            report_path = root / "learndown" / "sess-report" / "inventory.report.json"
+            self.assertTrue(report_path.is_file())
+            full = json.loads(report_path.read_text(encoding="utf-8"))
+            scheduled = [
+                entry["path"] for entry in full["files"]["scheduledForDeletion"]
+            ]
+            self.assertIn("edit/preview/edit-proof.mp4", scheduled)
+            self.assertEqual(len(scheduled), payload["candidateCount"])
 
     def test_cleanup_dry_run_lists_only(self) -> None:
         proc = subprocess.run(
@@ -314,6 +400,63 @@ class ProjectInventoryTests(unittest.TestCase):
                             session_id="sess-fail",
                         )
                     self.assertTrue(marker.is_file())
+
+    def test_legacy_reconstruction_dry_run_writes_nothing(self) -> None:
+        with self._temp_project(include_edit=True) as raw_dir:
+            self._add_legacy_sources(raw_dir)
+            dest = raw_dir / "edit" / "review" / "legacy-reconstruction"
+            dests = project_inventory.promote_legacy_reconstruction(
+                raw_dir, apply=False
+            )
+            self.assertTrue(dests)
+            self.assertFalse(dest.exists())
+            self.assertFalse((raw_dir / "EDITLOG.md").exists())
+            deleted = project_inventory.execute_cleanup(
+                raw_dir, self.master, dry_run=True
+            )
+            self.assertFalse(dest.exists())
+            rel = {project_inventory._relative_posix(raw_dir, path) for path in deleted}
+            self.assertIn("edit/preview/edit-proof.mp4", rel)
+
+    def test_legacy_reconstruction_execute_preserves_content(self) -> None:
+        with self._temp_project(include_edit=True) as raw_dir:
+            edl_text, log_text = self._add_legacy_sources(raw_dir)
+            project_inventory.execute_cleanup(
+                raw_dir,
+                self.master,
+                dry_run=False,
+                rimraf_runner=lambda path: path.unlink() if path.is_file() else None,
+            )
+            copied_edl = (
+                raw_dir / "edit" / "review" / "legacy-reconstruction" / "edl.json"
+            )
+            self.assertTrue(copied_edl.is_file())
+            self.assertEqual(copied_edl.read_text(encoding="utf-8"), edl_text)
+            self.assertTrue((raw_dir / "EDITLOG.md").is_file())
+            self.assertEqual(
+                (raw_dir / "EDITLOG.md").read_text(encoding="utf-8"), log_text
+            )
+            self.assertFalse((raw_dir / "edit" / "preview" / "edit-proof.mp4").exists())
+
+    def test_promote_legacy_skips_when_canonical_indexes_exist(self) -> None:
+        with self._temp_project(include_edit=True) as raw_dir:
+            self._add_legacy_sources(raw_dir)
+            timeline = raw_dir / "edit" / "timeline"
+            timeline.mkdir(parents=True)
+            for name in project_inventory.CANONICAL_INDEX_NAMES:
+                (timeline / f"{name}.json").write_text("{}", encoding="utf-8")
+            dests = project_inventory.promote_legacy_reconstruction(raw_dir, apply=True)
+            self.assertEqual(dests, [])
+            self.assertFalse(
+                (raw_dir / "edit" / "review" / "legacy-reconstruction").exists()
+            )
+
+    def _add_legacy_sources(self, raw_dir: Path) -> tuple[str, str]:
+        edl_text = '{"events":[{"id":"cut-1"}]}'
+        log_text = "# Edit log\nKept decision.\n"
+        (raw_dir / "edit" / "edl.json").write_text(edl_text, encoding="utf-8")
+        (raw_dir / "edit" / "EDITLOG.md").write_text(log_text, encoding="utf-8")
+        return edl_text, log_text
 
     def test_scan_inventory_local_fallback(self) -> None:
         inventory = project_inventory.scan_inventory(
