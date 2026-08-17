@@ -33,6 +33,9 @@ def test_inventory_exposes_hash_stream_clock_channel_and_risk(tmp_path: Path) ->
     assert "multiple-source-clocks" in result["syncRisk"]["reasons"]
 
 
+@pytest.mark.skipif(
+    builder.shutil.which("ffprobe") is None, reason="ffprobe unavailable"
+)
 def test_single_muxed_source_requires_explicit_assessment(tmp_path: Path) -> None:
     builder.build_fixture_set(tmp_path)
     result = FfprobeMediaAdapter().inventory([tmp_path / "clean-clock.mp4"])

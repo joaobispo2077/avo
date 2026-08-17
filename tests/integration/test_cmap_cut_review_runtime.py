@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import shutil
 from pathlib import Path
 
 import pytest
@@ -110,6 +111,7 @@ def _review(
     )
 
 
+@pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="ffmpeg unavailable")
 def test_multi_source_raw_cmap_to_exact_current_approval(tmp_path: Path) -> None:
     raw_dir = tmp_path / "project"
     raw_dir.mkdir()

@@ -7,6 +7,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[2]
 SRC = ROOT / "src"
 BUILDER_PATH = ROOT / "tests" / "fixtures" / "timeline" / "build_fixtures.py"
@@ -26,6 +28,7 @@ def run(*args: str) -> subprocess.CompletedProcess[str]:
     )
 
 
+@pytest.mark.skipif(builder.shutil.which("ffmpeg") is None, reason="ffmpeg unavailable")
 def test_parameter_driven_sync_cli_reaches_sync_ready(tmp_path: Path) -> None:
     media = tmp_path / "media"
     builder.build_fixture_set(media)

@@ -1,8 +1,11 @@
 from __future__ import annotations
 
 import json
+import shutil
 import subprocess
 from pathlib import Path
+
+import pytest
 
 from tests.fixtures.timeline.build_fixtures import build_fixture_set
 from tests.integration.test_cmap_cut_review_runtime import _snapshot, _workspace
@@ -56,6 +59,7 @@ def region(region_id, start, end, cue_id, **extra):
     }
 
 
+@pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="ffmpeg unavailable")
 def test_encoded_multilayer_tracks_render_and_trace(tmp_path: Path) -> None:
     raw_dir = tmp_path / "project"
     raw_dir.mkdir()

@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import shutil
 import subprocess
 from pathlib import Path
+
+import pytest
 
 from tests.test_timeline_animation_service import strategy
 from tests.test_timeline_bmap_service import approved_workspace, cue
@@ -75,6 +78,7 @@ def review_package(checkpoint: str, candidate: Path, dependencies: dict[str, str
     return review, approval
 
 
+@pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="ffmpeg unavailable")
 def test_complete_persisted_ai_first_lifecycle(tmp_path: Path):
     workspace, _, _cut_hash = approved_workspace(tmp_path)
     pipeline = TimelinePipeline(workspace)
