@@ -180,6 +180,7 @@ source_paths = [
     "src/avo/validate_edl.py",
     "src/avo/adapters/registry.py",
 ]
+also_copy = ["src/avo", "schemas", "config"]
 pytest_add_cli_args = [
     "-q",
     "--tb=short",

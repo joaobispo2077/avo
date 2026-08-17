@@ -649,6 +649,10 @@ class QualityMatrixTests(unittest.TestCase):
         self.assertNotIn("--tb=no", mutmut_block)
         self.assertIn("--ignore=mutants", mutmut_block)
         self.assertIn("--ignore=tests/projects", mutmut_block)
+        self.assertIn("also_copy", mutmut_block)
+        self.assertIn("src/avo", mutmut_block)
+        self.assertIn("schemas", mutmut_block)
+        self.assertIn("config", mutmut_block)
 
         audit = (ROOT / "docs/software-quality-audit.md").read_text(encoding="utf-8")
         self.assertIn("light/PR", audit)
