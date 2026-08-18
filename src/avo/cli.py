@@ -234,6 +234,14 @@ def build_parser() -> argparse.ArgumentParser:
 
     cleanup = sub.add_parser("cleanup")
     _add_cleanup_subparsers(cleanup)
+
+    editlog = sub.add_parser("editlog")
+    editlog_sub = editlog.add_subparsers(dest="editlog_command", required=True)
+    refresh = editlog_sub.add_parser("refresh")
+    refresh.add_argument("--project", type=Path, default=None)
+    refresh.add_argument("--raw-dir", type=Path, dest="raw_dir", default=None)
+    refresh.add_argument("--video-id", default="")
+    refresh.add_argument("--json", action="store_true", dest="as_json")
     return parser
 
 
@@ -999,6 +1007,27 @@ def _deliver(args: argparse.Namespace) -> int:
     return 0
 
 
+def _editlog(args: argparse.Namespace) -> int:
+    from avo.editlog import EditlogError, refresh_editlog, resolve_editlog_raw_dir
+
+    if args.editlog_command != "refresh":
+        raise ValueError(f"unhandled editlog command: {args.editlog_command}")
+    try:
+        raw_dir = resolve_editlog_raw_dir(project=args.project, raw_dir=args.raw_dir)
+        result = refresh_editlog(raw_dir)
+    except EditlogError as exc:
+        payload = {
+            "ok": False,
+            "code": exc.code,
+            "message": exc.message,
+            "path": None,
+        }
+        print(json.dumps(payload, indent=2, ensure_ascii=False, sort_keys=True))
+        return 3
+    _emit(result, as_json=True)
+    return 0
+
+
 def _run_cli(args: argparse.Namespace) -> int:
     handlers = {
         "pipeline": _pipeline,
@@ -1012,6 +1041,7 @@ def _run_cli(args: argparse.Namespace) -> int:
         "deliver": _deliver,
         "migrate-timeline": _migrate,
         "cleanup": _cleanup,
+        "editlog": _editlog,
     }
     handler = handlers.get(args.command)
     if handler is None:
