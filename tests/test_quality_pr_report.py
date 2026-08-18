@@ -36,7 +36,10 @@ class QualityPrReportTests(unittest.TestCase):
         self.assertIn("| Lint | **PASS** |", text)
         self.assertIn("| Format | **FAIL** |", text)
         self.assertIn("| Coverage | **SKIPPED** |", text)
-        self.assertIn("floor 68%", text)
+        self.assertIn("What this checks", text)
+        self.assertIn("Ruff", text)
+        self.assertIn("Coverage floor", text)
+        self.assertIn("68%", text)
 
     def test_quality_coverage_detail_from_json(self) -> None:
         mod = _load("write_quality_pr_report", "scripts/ci/write_quality_pr_report.py")
@@ -88,6 +91,28 @@ class QualityPrReportTests(unittest.TestCase):
         )
         self.assertIn("stats JSON was not found", text)
         self.assertIn("20 minutes", text)
+
+    def test_size_signal_summarizes_pack_without_file_dump(self) -> None:
+        mod = _load(
+            "write_size_signal_report", "scripts/ci/write_size_signal_report.py"
+        )
+        summary = mod.summarize(
+            {
+                "filename": "avo-1.4.0.tgz",
+                "version": "1.4.0",
+                "size": 2 * 1024 * 1024,
+                "unpackedSize": 5 * 1024 * 1024,
+                "entryCount": 42,
+            },
+            node_modules_bytes=10 * 1024 * 1024,
+        )
+        text = mod.build_markdown(summary)
+        self.assertIn("## Size signal", text)
+        self.assertIn("2.00 MB", text)
+        self.assertIn("5.00 MB", text)
+        self.assertIn("| Files in pack | 42 |", text)
+        self.assertNotIn("Tarball Contents", text)
+        self.assertNotIn("<details>", text)
 
 
 if __name__ == "__main__":

@@ -648,6 +648,13 @@ class QualityMatrixTests(unittest.TestCase):
             self.assertTrue(paths)
             self.assertNotIn("src/avo/mcp", paths)
             self.assertTrue(all("cli_tools.py" not in item for item in paths))
+        for name in ("light", "full"):
+            tests = cfg[name]["pytest_add_cli_args_test_selection"]
+            self.assertNotIn(
+                "tests/test_avo_config.py",
+                tests,
+                msg="Gate 1/2 live tests fail inside mutmut mutants/ (no hyperframes)",
+            )
 
         pkg = json.loads((ROOT / "package.json").read_text(encoding="utf-8"))
         self.assertIn("quality-mutation.sh", pkg["scripts"]["quality:mutation"])
@@ -680,6 +687,7 @@ class QualityMatrixTests(unittest.TestCase):
         self.assertIn("do_not_mutate", mutmut_block)
         self.assertIn("mutmut-profile-source-paths:start", mutmut_block)
         self.assertNotIn('"src/avo/mcp"', mutmut_block)
+        self.assertIn("test_gate1_passes_in_ci_mode", mutmut_block)
 
         audit = (ROOT / "docs/software-quality-audit.md").read_text(encoding="utf-8")
         self.assertIn("light/PR", audit)
@@ -696,6 +704,8 @@ class QualityMatrixTests(unittest.TestCase):
         self.assertIn("header: quality-gates-report", ci)
         self.assertIn("header: mutation-report", ci)
         self.assertIn("reports/quality/quality-gates.md", ci)
+        self.assertIn("gh pr list", ci)
+        self.assertIn("steps.pr.outputs.number", ci)
         self.assertGreaterEqual(ci.count("continue-on-error: true"), 2)
         coverage = (ROOT / "scripts/ci/run-coverage.sh").read_text(encoding="utf-8")
         self.assertIn("reports/quality/coverage.json", coverage)
@@ -735,9 +745,16 @@ class QualityMatrixTests(unittest.TestCase):
         )
         self.assertIn("scripts/ci/size-signal.sh", workflow)
         self.assertIn("non-blocking", workflow.lower())
+        self.assertNotIn("<details>", workflow)
+        self.assertNotIn("CLI output", workflow)
         script = (ROOT / "scripts/ci/size-signal.sh").read_text(encoding="utf-8")
-        self.assertIn("npm pack --dry-run", script)
+        self.assertIn("write_size_signal_report.py", script)
         self.assertIn("exit 0", script)
+        writer = (ROOT / "scripts/ci/write_size_signal_report.py").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("npm pack", writer)
+        self.assertIn("--json", writer)
 
     def test_weekly_dependency_graph_workflow(self) -> None:
         """task-026 / FR-12: visual graph is a dedicated weekly workflow."""
