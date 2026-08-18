@@ -56,9 +56,12 @@ workflow basenames, **20-minute** mutation timeouts, sticky quality/mutation PR
 comments, and Node 24 / Node 24 action majors.
 
 PRs get two short sticky comments (Maxframe shape): **Software quality** (all
-gates in one table) and **Mutation tests** (score, floor, killed/survived/timeout).
-Size-signal stays its own comment. Publish steps `continue-on-error` so a fork
-without comment permission does not fail the gate.
+gates in one table with the check contract in the detail column) and **Mutation
+tests** (score, floor, killed/survived/timeout). Comments post on `pull_request`
+**and** on `push` to a branch that already has an open PR (`gh pr list --head`).
+Size-signal is a third sticky: packed/unpacked bytes and file count only — no
+`npm pack` file listing. Publish steps `continue-on-error` so a fork without
+comment permission does not fail the gate.
 
 ## Manifests
 
