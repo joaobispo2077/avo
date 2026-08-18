@@ -70,6 +70,18 @@ class MutationGateTests(unittest.TestCase):
                 raw[name]["pytest_add_cli_args_test_selection"],
             )
 
+    def test_runners_export_cicd_stats_before_floor_check(self) -> None:
+        for rel in (
+            "scripts/ci/run-mutation-light.sh",
+            "scripts/ci/quality-mutation.sh",
+        ):
+            text = (ROOT / rel).read_text(encoding="utf-8")
+            self.assertIn("mutmut export-cicd-stats", text)
+            self.assertLess(
+                text.index("mutmut export-cicd-stats"),
+                text.index("check_mutation.py"),
+            )
+
     def test_patch_mutmut_profile_round_trip(self) -> None:
         spec = importlib.util.spec_from_file_location(
             "patch_mutmut_profile",

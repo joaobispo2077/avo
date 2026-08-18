@@ -673,6 +673,8 @@ class QualityMatrixTests(unittest.TestCase):
         self.assertIn("patch_mutmut_profile.py apply", full_runner)
         self.assertIn("patch_mutmut_profile.py restore", light_runner)
         self.assertIn("patch_mutmut_profile.py restore", full_runner)
+        self.assertIn("mutmut export-cicd-stats", light_runner)
+        self.assertIn("mutmut export-cicd-stats", full_runner)
 
         pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
         self.assertIn("[tool.mutmut]", pyproject)
