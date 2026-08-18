@@ -1,10 +1,52 @@
 {
   "light": {
     "min_killed_percent": 40,
-    "notes": "PR/ci.yml scoped critical packages; cache mutants/ for speed. Ubuntu-only (mutmut)."
+    "job_timeout_minutes": 20,
+    "notes": "PR/ci.yml: small critical file set after 30m cancel on full mcp tree (run 32056473825). Ubuntu-only. Cache mutants/ for speed.",
+    "source_paths": [
+      "src/avo/validate_dependencies.py",
+      "src/avo/validate_usability.py",
+      "src/avo/adapters/registry.py",
+      "src/avo/mcp/bridge.py",
+      "src/avo/mcp/registry.py"
+    ],
+    "pytest_add_cli_args_test_selection": [
+      "tests/test_validate_dependencies.py",
+      "tests/test_avo_config.py",
+      "tests/test_gitignore_scope.py",
+      "tests/test_adapters_stubs.py",
+      "tests/test_mcp_bridge.py",
+      "tests/test_mcp_registry.py"
+    ]
   },
   "full": {
     "min_killed_percent": 50,
-    "notes": "Weekly backstop; delete mutants/ so cache is not source of truth."
+    "job_timeout_minutes": 20,
+    "notes": "Weekly backstop; delete mutants/ so cache is not source of truth. Explicit files — excludes mcp/tools/cli_tools.py (~751 lines) so the 20m job can finish.",
+    "source_paths": [
+      "src/avo/validate_dependencies.py",
+      "src/avo/validate_usability.py",
+      "src/avo/validate_edl.py",
+      "src/avo/adapters/registry.py",
+      "src/avo/mcp/bridge.py",
+      "src/avo/mcp/registry.py",
+      "src/avo/mcp/mrtr.py",
+      "src/avo/mcp/request_state.py",
+      "src/avo/mcp/server.py",
+      "src/avo/mcp/tools/meta.py"
+    ],
+    "pytest_add_cli_args_test_selection": [
+      "tests/test_mcp_package.py",
+      "tests/test_mcp_bridge.py",
+      "tests/test_mcp_meta.py",
+      "tests/test_mcp_mrtr.py",
+      "tests/test_mcp_registry.py",
+      "tests/test_mcp_request_state.py",
+      "tests/test_validate_dependencies.py",
+      "tests/test_edl_v3_contract.py",
+      "tests/test_adapters_stubs.py",
+      "tests/test_avo_config.py",
+      "tests/test_gitignore_scope.py"
+    ]
   }
 }
