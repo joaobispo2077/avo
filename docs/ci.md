@@ -30,7 +30,7 @@ On `main` / `release` (and any PR target that uses this workflow), require these
 | `Gate 1 — Orchestrator prerequisites` | `prerequisites-gate` | Toolchain prerequisites |
 | `Unit tests (AVO repo)` | `repo-unit-tests` | AVO core pytest + install/hf smokes |
 | `Software quality` | `software-quality` | **Phase-1 fast gates** (lint, format, coverage, complexity, deps) + deadcode, duplication, architecture, tree — fail-immediately |
-| `Mutation tests (light)` | `mutation-light` | Scoped mutmut after unit tests (**20-minute** timeout); fails below `mutation-config.json` light floor (Ubuntu); posts a Maxframe-style sticky mutation table on PRs |
+| `Mutation tests (light)` | `mutation-light` | Scoped mutmut after unit tests (**20-minute** timeout); `mutmut run` then `mutmut export-cicd-stats` (mutmut 3.x does not write `mutants/mutmut-cicd-stats.json` during `run`); fails below `mutation-config.json` light floor (Ubuntu); posts a sticky mutation table on PRs |
 | `Gate 2 — Project usability` | `usability-gate` | Project usability; `needs` includes `software-quality` |
 
 Do **not** require a separate Gate 3 / quality workflow check — software quality is
