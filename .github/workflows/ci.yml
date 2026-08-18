@@ -188,11 +188,25 @@ jobs:
           Q_TREE: ${{ steps.q-tree.outcome }}
         run: python scripts/ci/write_quality_pr_report.py --out reports/quality/quality-gates.md
 
+      - name: Resolve PR number
+        if: always()
+        id: pr
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ -n "${{ github.event.pull_request.number }}" ]; then
+            echo "number=${{ github.event.pull_request.number }}" >> "$GITHUB_OUTPUT"
+          else
+            NUM="$(gh pr list --repo "${{ github.repository }}" --head "${{ github.ref_name }}" --state open --json number --jq '.[0].number // empty')"
+            echo "number=${NUM}" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Publish quality summary to PR
-        if: always() && github.event_name == 'pull_request'
+        if: always() && steps.pr.outputs.number != ''
         continue-on-error: true
         uses: marocchino/sticky-pull-request-comment@v3
         with:
+          number: ${{ steps.pr.outputs.number }}
           path: reports/quality/quality-gates.md
           header: quality-gates-report
           recreate: true
@@ -277,11 +291,25 @@ jobs:
           AVO_MUTATION_PROFILE: light
         run: python scripts/ci/write_mutation_pr_report.py --out reports/mutation/mutation-report.md
 
+      - name: Resolve PR number
+        if: always()
+        id: pr
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ -n "${{ github.event.pull_request.number }}" ]; then
+            echo "number=${{ github.event.pull_request.number }}" >> "$GITHUB_OUTPUT"
+          else
+            NUM="$(gh pr list --repo "${{ github.repository }}" --head "${{ github.ref_name }}" --state open --json number --jq '.[0].number // empty')"
+            echo "number=${NUM}" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Publish mutation summary to PR
-        if: always() && github.event_name == 'pull_request'
+        if: always() && steps.pr.outputs.number != ''
         continue-on-error: true
         uses: marocchino/sticky-pull-request-comment@v3
         with:
+          number: ${{ steps.pr.outputs.number }}
           path: reports/mutation/mutation-report.md
           header: mutation-report
           recreate: true
