@@ -999,32 +999,30 @@ def _deliver(args: argparse.Namespace) -> int:
     return 0
 
 
+def _run_cli(args: argparse.Namespace) -> int:
+    handlers = {
+        "pipeline": _pipeline,
+        "timeline": _timeline,
+        "sync": _sync,
+        "cmap": _cmap,
+        "bmap": _bmap,
+        "tracks": _tracks,
+        "animation": _animation,
+        "review": _review,
+        "deliver": _deliver,
+        "migrate-timeline": _migrate,
+        "cleanup": _cleanup,
+    }
+    handler = handlers.get(args.command)
+    if handler is None:
+        raise ValueError(f"unhandled command: {args.command}")
+    return handler(args)
+
+
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
-        if args.command == "pipeline":
-            return _pipeline(args)
-        if args.command == "timeline":
-            return _timeline(args)
-        if args.command == "sync":
-            return _sync(args)
-        if args.command == "cmap":
-            return _cmap(args)
-        if args.command == "bmap":
-            return _bmap(args)
-        if args.command == "tracks":
-            return _tracks(args)
-        if args.command == "animation":
-            return _animation(args)
-        if args.command == "review":
-            return _review(args)
-        if args.command == "deliver":
-            return _deliver(args)
-        if args.command == "migrate-timeline":
-            return _migrate(args)
-        if args.command == "cleanup":
-            return _cleanup(args)
-        raise ValueError(f"unhandled command: {args.command}")
+        return _run_cli(args)
     except (
         WorkspaceError,
         StoreError,
