@@ -52,7 +52,7 @@ Local umbrella: `npm run quality` (Phase 1 fast gates). Drift lock: `tests/test_
 | Duplication | AI copy-paste blocked over threshold (**2%**; baseline ~1.09% lines 2026-08-14) | jscpd (`.jscpd.json` + `quality-duplication.sh`) | 2 Should |
 | Architecture / import boundaries | Forbidden imports fail (layer map + grandfathered CLI/render/shorts/timeline→adapter edges) | import-linter (`.importlinter` + `quality-architecture.sh`); `helpers/` shims are outside `root_package = avo` | 2 Should |
 | Visual dependency graph | Weekly picture of `src/avo` coupling (non-blocking for PRs) | `dependency-graph.yml` + `quality:dep-graph` / `avo_dep_graph.py` (HTML+DOT artifact, 14d) | 3 Should |
-| Mutation testing | Tests catch wrong behavior — **light/PR** + **full/weekly** | mutmut Ubuntu; light in `ci.yml` job `Mutation tests (light)` (floor 40%); full in `mutation-full.yml` (floor 50%, no cache as truth) | 3 Must |
+| Mutation testing | Tests catch wrong behavior — **light/PR** + **full/weekly** | mutmut Ubuntu; **20-minute** job timeout on light and full; light mutates a small explicit file set; full mutates the rest of the critical set except `cli_tools.py`; floors 40% / 50% (`mutation-config.json`); per-mutant `timeout_multiplier = 3.0` | 3 Must |
 | Dependency freshness reporting | Staleness visible (report-only v1) | npm/uv outdated | 2–3 Nice |
 | Artifact / install weight | Pack/install footprint signal (informational) | `npm pack --dry-run` / wheel size | 3 Nice |
 
@@ -79,8 +79,8 @@ Local umbrella: `npm run quality` (Phase 1 fast gates). Drift lock: `tests/test_
 
 | Workflow | Trigger | Role |
 | --- | --- | --- |
-| `ci.yml` | PR / push | Standard CI **Software quality** job (**blocking** Phase-1 umbrella; branch-protection check name **`Software quality`**): lint + format **fail-immediately** (includes Ruff C901 ≤ 31), coverage fail-under via `run-coverage.sh` (floor **68%**), complexity via `quality-complexity.sh` (xenon max-absolute **B** + allowlist), deps via `quality-deps.sh` (`pip-audit` + npm high+ via `check_npm_audit.py`, **fail-immediately**; documented GHSA exceptions in `deps-audit-allowlist.json`), deadcode via `quality-deadcode.sh` (vulture min_confidence **60** + `deadcode-allowlist.json`), duplication via `quality-duplication.sh` (jscpd `.jscpd.json` threshold **2%**, baseline ~1.09%), architecture via `quality-architecture.sh` (import-linter `.importlinter`), tree health via `quality-tree.sh` (`npm find-dupes` dry-run). Gate 2 `needs` this job. Unit + quality jobs install via `uv sync --frozen --extra dev`. |
-| `mutation-full.yml` | Weekly + `workflow_dispatch` | Full critical-package mutation; artifacts 14d; floor **50%** (`mutation-config.json`) |
+| `ci.yml` | PR / push | Standard CI **Software quality** job (**blocking** Phase-1 umbrella; branch-protection check name **`Software quality`**): lint + format **fail-immediately** (includes Ruff C901 ≤ 31), coverage fail-under via `run-coverage.sh` (floor **68%**), complexity via `quality-complexity.sh` (xenon max-absolute **B** + allowlist), deps via `quality-deps.sh` (`pip-audit` + npm high+ via `check_npm_audit.py`, **fail-immediately**; documented GHSA exceptions in `deps-audit-allowlist.json`), deadcode via `quality-deadcode.sh` (vulture min_confidence **60** + `deadcode-allowlist.json`), duplication via `quality-duplication.sh` (jscpd `.jscpd.json` threshold **2%**, baseline ~1.09%), architecture via `quality-architecture.sh` (import-linter `.importlinter`), tree health via `quality-tree.sh` (`npm find-dupes` dry-run). On pull requests the job posts a **sticky Software quality table** (one comment, section per gate). Gate 2 `needs` this job. Unit + quality jobs install via `uv sync --frozen --extra dev`. Node **24**; GitHub-owned actions on Node 24 majors. |
+| `mutation-full.yml` | Weekly + `workflow_dispatch` | Full critical-file mutation (**20-minute** timeout); artifacts 14d; floor **50%** (`mutation-config.json`) |
 | `size-signal.yml` | PR (`feature/*`→`develop`, `develop`→`release`) | Informational pack/install weight sticky comment (non-blocking) |
 | `dependency-graph.yml` | Weekly + `workflow_dispatch` | Visual `src/avo` import graph artifact (14d); not on PR fast path |
 | `watch-skill-smoke.yml` | Weekly + `workflow_dispatch` | watch-skill runtime invoke + diagnostics on failure (7d) |
@@ -173,7 +173,7 @@ Run: `npm run test:projects`.
 | Workflow | Trigger | Tests |
 | --- | --- | --- |
 | `ci.yml` | PR + push main/develop/feature | AVO core pytest + software quality job + light mutation |
-| `mutation-full.yml` | weekly + `workflow_dispatch` | mutmut on critical packages (full floor) |
+| `mutation-full.yml` | weekly + `workflow_dispatch` | mutmut on critical files (full floor, 20-minute timeout) |
 | `size-signal.yml` | PR (informational) | Pack / install footprint signal |
 | `dependency-graph.yml` | weekly + `workflow_dispatch` | Visual src/avo import graph |
 | `watch-skill-smoke.yml` | weekly + `workflow_dispatch` | watch-skill runtime smoke |
