@@ -61,6 +61,10 @@ class MutationGateTests(unittest.TestCase):
             self.assertNotIn("src/avo/mcp", paths)
             self.assertTrue(all("cli_tools.py" not in p for p in paths))
             self.assertGreaterEqual(int(raw[name]["job_timeout_minutes"]), 20)
+            self.assertNotIn(
+                "tests/test_avo_config.py",
+                raw[name]["pytest_add_cli_args_test_selection"],
+            )
 
     def test_patch_mutmut_profile_round_trip(self) -> None:
         spec = importlib.util.spec_from_file_location(
