@@ -42,6 +42,7 @@ REMAINING_CLI_GROUPS: tuple[str, ...] = (
     "deliver",
     "migrate-timeline",
     "cleanup",
+    "editlog",
 )
 
 ALL_CLI_GROUPS: tuple[str, ...] = CORE_CLI_GROUPS + REMAINING_CLI_GROUPS
@@ -600,6 +601,21 @@ def _remaining_bridge_defs() -> list[BridgeToolDef]:
             extra_params=(
                 ParamSpec("master_basename", str, required=True),
                 ParamSpec("session_id", str | None, default=None),
+            ),
+        ),
+        _tool(
+            "avo_editlog_refresh",
+            "editlog",
+            "refresh",
+            "Refresh footage-root EDITLOG.md from canonical JSON. Rewrites only "
+            "the marked AVO digest; append rationale under Human notes. Do not "
+            "walk edit/ to hand-write the digest. (CLI: avo editlog refresh).",
+            include_project=False,
+            extra_params=(
+                ParamSpec("project", str | None, default=None),
+                ParamSpec("raw_dir", str | None, default=None),
+                ParamSpec("video_id", str | None, default=None),
+                ParamSpec("as_json", bool, default=True),
             ),
         ),
     ]
