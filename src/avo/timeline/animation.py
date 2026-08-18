@@ -187,6 +187,7 @@ class AnimationService:
                 reason="Animation strategy changed",
                 actor=actor,
             )
+        revision["editlogRefresh"] = self.workspace.notify_editlog()
         return revision
 
     @staticmethod

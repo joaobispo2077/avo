@@ -98,3 +98,20 @@ def test_changed_candidate_or_stale_review_cannot_approve(tmp_path: Path) -> Non
             actor="creator",
             reason="must fail",
         )
+
+
+def test_decide_updates_editlog_approvals(tmp_path: Path) -> None:
+    ws, revision, review, materialization_path = approved_review(tmp_path)
+    event = ApprovalService(ws).decide(
+        decision="approved",
+        revision_id=revision["revisionId"],
+        review_path=review["reviewPath"],
+        materialization_path=materialization_path,
+        actor="creator",
+        reason="approved exact cut",
+    )
+    assert event["editlogRefresh"]["ok"] is True
+    text = (ws.raw_dir / "EDITLOG.md").read_text(encoding="utf-8")
+    assert "## Approvals" in text
+    assert "approved exact cut" in text
+    assert "Approvals: none recorded yet" not in text

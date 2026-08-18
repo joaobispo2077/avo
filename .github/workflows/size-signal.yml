@@ -14,8 +14,10 @@ permissions:
   pull-requests: write
 
 env:
-  NODE_VERSION: '22'
+  PYTHON_VERSION: '3.12'
+  NODE_VERSION: '24'
   AVO_CI: '1'
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
 
 jobs:
   size-signal:
@@ -35,10 +37,15 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
@@ -47,42 +54,13 @@ jobs:
         run: npm ci
 
       - name: Collect size signal (non-blocking)
-        id: run-size-signal
         shell: bash
         env:
           NO_COLOR: '1'
-        run: |
-          bash scripts/ci/size-signal.sh size-signal-raw.txt
-          echo "exit_code=0" >> "$GITHUB_OUTPUT"
-
-      - name: Build size report markdown
-        shell: bash
-        run: |
-          if [ "${{ steps.run-size-signal.outputs.exit_code }}" = "0" ]; then
-            status_text="PASS (signal collected)"
-          else
-            status_text="SIGNAL ERROR (informational only)"
-          fi
-          {
-            echo "## Size Signal Report"
-            echo
-            echo "- Status: **${status_text}**"
-            echo "- Policy: **non-blocking** (PR signal only)"
-            echo "- Scope: \`npm pack --dry-run\` + install footprint proxy"
-            echo
-            echo "<details>"
-            echo "<summary>CLI output</summary>"
-            echo
-            echo '```text'
-            # Strip ANSI if present
-            sed 's/\x1b\[[0-9;]*[a-zA-Z]//g' size-signal-raw.txt 2>/dev/null \
-              || cat size-signal-raw.txt
-            echo '```'
-            echo
-            echo "</details>"
-          } > size-signal-report.md
+        run: bash scripts/ci/size-signal.sh size-signal-report.md
 
       - name: Publish size report to PR (sticky)
+        continue-on-error: true
         uses: marocchino/sticky-pull-request-comment@v3
         with:
           path: size-signal-report.md

@@ -231,6 +231,8 @@ models/
 tmp/
 
 .tmp-*/
+.tmp-*
+.import_linter_cache/
 .codex-qc/
 .codex-tmp/
 .avo-test-sessions/
@@ -309,7 +311,9 @@ video_use.egg-info/
 # -----------------------------------------------------------------------------
 # Mutation + quality report artifacts (CI uploads these; do not commit)
 mutants/
+.pyproject.toml.mutmut.bak
 reports/mutation/
+reports/quality/
 reports/dep-graph/
 reports/toolchain-smoke/
 reports/watch-skill-smoke/
@@ -318,6 +322,10 @@ size-signal-report.md
 
 # Keep the env template tracked so contributors know which optional keys exist.
 !.env.example
+
+# Shipped EDITLOG template (Node baseline `logs` would hide docs/templates/logs/).
+!docs/templates/logs/
+!docs/templates/logs/**
 
 # Committed unit-test fixture trees (override edit/ ignore above).
 !tests/fixtures/stats-project/edit/

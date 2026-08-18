@@ -30,7 +30,7 @@ On `main` / `release` (and any PR target that uses this workflow), require these
 | `Gate 1 — Orchestrator prerequisites` | `prerequisites-gate` | Toolchain prerequisites |
 | `Unit tests (AVO repo)` | `repo-unit-tests` | AVO core pytest + install/hf smokes |
 | `Software quality` | `software-quality` | **Phase-1 fast gates** (lint, format, coverage, complexity, deps) + deadcode, duplication, architecture, tree — fail-immediately |
-| `Mutation tests (light)` | `mutation-light` | Scoped mutmut after unit tests; fails below `mutation-config.json` light floor (Ubuntu) |
+| `Mutation tests (light)` | `mutation-light` | Scoped mutmut after unit tests (**20-minute** timeout); `mutmut run` then `mutmut export-cicd-stats` (mutmut 3.x does not write `mutants/mutmut-cicd-stats.json` during `run`); fails below `mutation-config.json` light floor (Ubuntu); posts a sticky mutation table on PRs |
 | `Gate 2 — Project usability` | `usability-gate` | Project usability; `needs` includes `software-quality` |
 
 Do **not** require a separate Gate 3 / quality workflow check — software quality is
@@ -51,8 +51,17 @@ Drift lock: `tests/test_quality_matrix.py` asserts npm quality script names,
 `ci.yml` quality job + hard lint/format/coverage/complexity/deps steps, coverage
 fail-under 68, `uv sync --frozen --extra dev` on quality/unit jobs, Phase-1
 blocking posture (`usability-gate` `needs` `software-quality` + required check
-name **`Software quality`**), no separate Gate 3 workflow file, and slow-lane
-workflow basenames.
+name **`Software quality`**), no separate Gate 3 workflow file, slow-lane
+workflow basenames, **20-minute** mutation timeouts, sticky quality/mutation PR
+comments, and Node 24 / Node 24 action majors.
+
+PRs get two short sticky comments (Maxframe shape): **Software metrics** (status,
+numeric metric, and what the gate checks) and **Mutation tests** (score, floor,
+killed/survived/timeout). The GitHub check name stays **Software quality**.
+Comments post on `pull_request` **and** on `push` to a branch that already has
+an open PR (`gh pr list --head`). Size-signal is a third sticky: packed/unpacked
+bytes and file count only — no `npm pack` file listing. Publish steps
+`continue-on-error` so a fork without comment permission does not fail the gate.
 
 ## Manifests
 
@@ -146,6 +155,7 @@ npm run validate:usability -- --ci
 | --- | --- |
 | `AVO_CI=1` | Set in workflows; reserved for future setup-script CI behavior |
 | `PY` / `PYTHON` | Override Python binary for gate scripts |
+| `NODE_VERSION` | `24` in all workflows (npm/eslint/jscpd). GitHub-owned actions are Node 24 majors (`checkout@v6`, `setup-node@v6`, `setup-python@v6`, `cache@v5`, `upload-artifact@v7`). `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24` covers leftover third-party JS actions. |
 
 ## Branch protection (block merge until CI passes)
 

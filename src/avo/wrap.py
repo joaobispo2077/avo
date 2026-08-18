@@ -24,6 +24,43 @@ FINAL_JSON = "avo.wrap.json"
 FINAL_MD = "avo.wrap.md"
 
 
+def _load_wrap_draft(raw_dir: Path) -> dict[str, Any] | None:
+    path = Path(raw_dir) / DRAFT_JSON
+    if not path.is_file():
+        return None
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
+def _scratch_meta_for_session(session_id: str) -> tuple[str | None, str | None]:
+    if not session_id:
+        return None, None
+    try:
+        from avo.avo_state import state_dir
+
+        root = state_dir() / "tmp"
+        meta = root / "learndown" / session_id / "inventory.meta.json"
+        report = root / "learndown" / session_id / "inventory.report.json"
+    except Exception:
+        return None, None
+    scratch_meta = str(meta) if meta.is_file() else None
+    scratch_report = str(report) if report.is_file() else None
+    return scratch_meta, scratch_report
+
+
+def resolve_wrap_raw_dir(raw_dir: Path) -> Path:
+    """Map WSL ``/mnt/<letter>/`` on Windows; parent-fallback only with project file."""
+    from avo.timeline.workspace import resolve_project_raw_dir
+
+    raw_dir = Path(raw_dir)
+    project_file = raw_dir / "avo.project.json"
+    project_path = project_file if project_file.is_file() else None
+    return resolve_project_raw_dir(project_path, raw_dir)
+
+
 def truncate_path_list(
     paths: list[Any],
     *,
@@ -60,6 +97,85 @@ def _entry_bytes(entry: Any) -> int:
     return int(getattr(entry, "bytes", getattr(entry, "size", 0)))
 
 
+def _entries_as_path_bytes(entries: list[Any]) -> list[dict[str, Any]]:
+    return [
+        {"path": _entry_path(entry), "bytes": _entry_bytes(entry)} for entry in entries
+    ]
+
+
+def _deleted_on_cleanup_entries(
+    *,
+    status: str,
+    scheduled: list[Any],
+    added_then_removed: list[Any],
+) -> list[dict[str, Any]]:
+    if status != "final":
+        return []
+    if added_then_removed:
+        return _entries_as_path_bytes(added_then_removed)
+    if scheduled:
+        return _entries_as_path_bytes(scheduled)
+    return []
+
+
+def _copy_draft_deletes(
+    draft: dict[str, Any], sample_limit: int
+) -> tuple[list[Any], list[Any], int]:
+    draft_files = draft.get("files") or {}
+    deleted_on_cleanup = list(
+        draft_files.get("deletedOnCleanup")
+        or draft_files.get("scheduledForDeletion")
+        or []
+    )
+    sample, total = truncate_path_list(deleted_on_cleanup, max_items=sample_limit)
+    return deleted_on_cleanup, sample, total
+
+
+def _inherit_draft_space(
+    *,
+    status: str,
+    raw_dir: Path,
+    space: dict[str, Any],
+    freed_bytes: int | None,
+    deleted_on_cleanup: list[Any],
+    sample_limit: int,
+) -> tuple[int | None, int | None, list[Any], list[Any], int]:
+    deleted_cleanup_sample, deleted_cleanup_total = truncate_path_list(
+        deleted_on_cleanup, max_items=sample_limit
+    )
+    if status != "final" or freed_bytes is not None:
+        return (
+            freed_bytes,
+            None,
+            deleted_on_cleanup,
+            deleted_cleanup_sample,
+            deleted_cleanup_total,
+        )
+    current_bytes = int(space.get("deleteCandidateBytes", 0))
+    draft = _load_wrap_draft(raw_dir)
+    if current_bytes != 0 or draft is None:
+        return (
+            current_bytes,
+            None,
+            deleted_on_cleanup,
+            deleted_cleanup_sample,
+            deleted_cleanup_total,
+        )
+    draft_space = draft.get("space") or {}
+    inherited_count = int((draft.get("files") or {}).get("deletedCount", 0))
+    if not deleted_on_cleanup:
+        deleted_on_cleanup, deleted_cleanup_sample, deleted_cleanup_total = (
+            _copy_draft_deletes(draft, sample_limit)
+        )
+    return (
+        int(draft_space.get("deleteCandidateBytes", 0)),
+        inherited_count,
+        deleted_on_cleanup,
+        deleted_cleanup_sample,
+        deleted_cleanup_total,
+    )
+
+
 def build_wrap_payload(
     inventory: InventoryReport | dict[str, Any],
     *,
@@ -84,32 +200,50 @@ def build_wrap_payload(
     modified = list(files.get("modified") or [])
     degraded = bool(files.get("degradedMode", False))
 
-    deleted_on_cleanup: list[dict[str, Any]] = []
-    if status == "final":
-        if added_then_removed:
-            deleted_on_cleanup = [
-                {"path": _entry_path(entry), "bytes": _entry_bytes(entry)}
-                for entry in added_then_removed
-            ]
-        elif scheduled:
-            deleted_on_cleanup = [
-                {"path": _entry_path(entry), "bytes": _entry_bytes(entry)}
-                for entry in scheduled
-            ]
-        if freed_bytes is None:
-            freed_bytes = int(space.get("deleteCandidateBytes", 0))
-
     sample_limit = 50
     if load_stats_config is not None:
         sample_limit = load_stats_config().deleted_path_sample_limit
 
-    deleted_sample, deleted_count = truncate_path_list(
-        deleted_on_cleanup if status == "final" else scheduled,
-        max_items=sample_limit,
+    scheduled_sample, scheduled_total = truncate_path_list(
+        scheduled, max_items=sample_limit
+    )
+    added_sample, _added_total = truncate_path_list(
+        added_then_removed, max_items=sample_limit
+    )
+    modified_sample, _modified_total = truncate_path_list(
+        modified, max_items=sample_limit
     )
 
+    deleted_on_cleanup = _deleted_on_cleanup_entries(
+        status=status,
+        scheduled=scheduled,
+        added_then_removed=added_then_removed,
+    )
     raw_dir = Path(str(inv.get("rawDir", ".")))
+    (
+        freed_bytes,
+        inherited_count,
+        deleted_on_cleanup,
+        deleted_cleanup_sample,
+        deleted_cleanup_total,
+    ) = _inherit_draft_space(
+        status=status,
+        raw_dir=raw_dir,
+        space=space,
+        freed_bytes=freed_bytes,
+        deleted_on_cleanup=deleted_on_cleanup,
+        sample_limit=sample_limit,
+    )
+
+    sample_source = deleted_cleanup_sample if status == "final" else scheduled_sample
+    deleted_count = scheduled_total
+    if status == "final":
+        deleted_count = (
+            inherited_count if inherited_count is not None else deleted_cleanup_total
+        )
+
     editlog = "EDITLOG.md" if (raw_dir / "EDITLOG.md").is_file() else None
+    scratch_meta, _scratch_report = _scratch_meta_for_session(session_id)
 
     payload: dict[str, Any] = {
         "schemaVersion": SCHEMA_VERSION,
@@ -128,13 +262,13 @@ def build_wrap_payload(
             "freedBytes": freed_bytes if status == "final" else None,
         },
         "files": {
-            "scheduledForDeletion": scheduled,
+            "scheduledForDeletion": scheduled_sample,
             "preserved": preserved,
-            "addedThenRemoved": added_then_removed,
-            "modified": modified,
-            "deletedOnCleanup": deleted_on_cleanup if status == "final" else [],
-            "deletedCount": deleted_count if status == "final" else len(scheduled),
-            "deletedSample": [_entry_path(entry) for entry in deleted_sample],
+            "addedThenRemoved": added_sample,
+            "modified": modified_sample,
+            "deletedOnCleanup": deleted_cleanup_sample if status == "final" else [],
+            "deletedCount": deleted_count,
+            "deletedSample": [_entry_path(entry) for entry in sample_source],
             "degradedMode": degraded,
         },
         "learning": {
@@ -145,7 +279,29 @@ def build_wrap_payload(
             "editlog": editlog,
         },
     }
+    if scratch_meta:
+        payload["files"]["scratchMeta"] = scratch_meta
+        payload["links"]["scratchMeta"] = scratch_meta
     return payload
+
+
+def _append_scheduled_for_deletion(
+    lines: list[str], files: dict[str, Any], *, status: str
+) -> None:
+    from avo.telemetry import human_bytes
+
+    scheduled = files.get("scheduledForDeletion") or []
+    if status != "draft" or not scheduled:
+        return
+    scheduled_total = int(files.get("deletedCount") or len(scheduled))
+    lines.append("## Scheduled for deletion")
+    lines.append("")
+    shown = scheduled[:20]
+    for entry in shown:
+        lines.append(f"- `{_entry_path(entry)}` ({human_bytes(_entry_bytes(entry))})")
+    if scheduled_total > len(shown):
+        lines.append(f"- … and {scheduled_total - len(shown)} more")
+    lines.append("")
 
 
 def render_markdown(payload: dict[str, Any]) -> str:
@@ -194,17 +350,7 @@ def render_markdown(payload: dict[str, Any]) -> str:
         lines.append(f"- Freed on cleanup: **{human_bytes(space['freedBytes'])}**")
     lines.append("")
 
-    scheduled = files.get("scheduledForDeletion") or []
-    if status == "draft" and scheduled:
-        lines.append("## Scheduled for deletion")
-        lines.append("")
-        for entry in scheduled[:20]:
-            path = _entry_path(entry)
-            size = _entry_bytes(entry)
-            lines.append(f"- `{path}` ({human_bytes(size)})")
-        if len(scheduled) > 20:
-            lines.append(f"- … and {len(scheduled) - 20} more")
-        lines.append("")
+    _append_scheduled_for_deletion(lines, files, status=status)
 
     preserved = files.get("preserved") or []
     if preserved:
@@ -313,7 +459,7 @@ def _cmd_draft(args: argparse.Namespace) -> int:
     if build_inventory_report is None:
         print("error: project_inventory unavailable", file=sys.stderr)
         return 1
-    raw_dir = Path(args.raw_dir)
+    raw_dir = resolve_wrap_raw_dir(Path(args.raw_dir))
     summary = Path(args.summary_file).read_text(encoding="utf-8")
     session_id = _resolve_session_id(raw_dir, args.master_basename, args.session_id)
     provider, title = _resolve_provider(
@@ -352,7 +498,7 @@ def _cmd_final(args: argparse.Namespace) -> int:
     if build_inventory_report is None:
         print("error: project_inventory unavailable", file=sys.stderr)
         return 1
-    raw_dir = Path(args.raw_dir)
+    raw_dir = resolve_wrap_raw_dir(Path(args.raw_dir))
     summary = Path(args.summary_file).read_text(encoding="utf-8")
     session_id = _resolve_session_id(raw_dir, args.master_basename, args.session_id)
     provider, title = _resolve_provider(
@@ -366,11 +512,6 @@ def _cmd_final(args: argparse.Namespace) -> int:
         args.master_basename,
         pre_json_path=args.pre,
     )
-    inv = report.to_dict()
-    freed = args.freed_bytes
-    if freed is None:
-        freed = int((inv.get("space") or {}).get("deleteCandidateBytes", 0))
-
     payload = build_wrap_payload(
         report,
         session_id=session_id,
@@ -381,7 +522,7 @@ def _cmd_final(args: argparse.Namespace) -> int:
         title=title,
         learning_note=args.learning_note,
         ai_memory=args.ai_memory,
-        freed_bytes=freed,
+        freed_bytes=args.freed_bytes,
     )
     json_path, md_path = write_wrap_final(raw_dir, payload)
     if not args.no_export:

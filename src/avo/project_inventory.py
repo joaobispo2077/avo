@@ -7,9 +7,11 @@ from __future__ import annotations
 
 import argparse
 import json
+import shutil
 import subprocess
 import sys
-from dataclasses import dataclass, field
+from collections.abc import Sequence
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
@@ -29,6 +31,21 @@ TOP_LEVEL_EXCLUDE_NAMES = frozenset(
     }
 )
 TOP_LEVEL_EXCLUDE_PREFIXES = ("avo.wrap.",)
+CANONICAL_INDEX_NAMES = ("cmap", "bmap", "tracks", "animation", "sync-map")
+# Names under edit/ for promote-legacy when the five canonical indexes are
+# absent. EDITLOG.md here means edit/EDITLOG.md — not footage-root EDITLOG.md.
+# When the five indexes exist, promote is a no-op: the root file is a living
+# parallel audit (not obsolete-legacy-only). Canonical cleanup walks only
+# edit/, so <rawDir>/EDITLOG.md is never a delete candidate.
+LEGACY_NAMED_SOURCES = (
+    "edl.json",
+    "EDITLOG.md",
+    "AUDIO-EDITLOG.md",
+    "cut-map.md",
+    "takes_packed.md",
+    "project.md",
+)
+CLEANUP_SAMPLE_DEFAULT = 50
 
 
 class PreservedSetViolation(Exception):
@@ -80,6 +97,7 @@ class InventoryReport:
     pre_cleanup_project_bytes: int
     delete_candidate_bytes: int
     preserved_bytes: int
+    leftover_candidates: int = 0
     file_diff: FileDiff | None = None
 
     def to_dict(self) -> dict[str, Any]:
@@ -128,6 +146,78 @@ def _relative_posix(raw_dir: Path, path: Path) -> str:
         return path.resolve().relative_to(raw_dir.resolve()).as_posix()
     except ValueError:
         return path.as_posix()
+
+
+def _cleanup_sample_limit() -> int:
+    try:
+        from avo.stats import load_stats_config
+
+        return int(load_stats_config().deleted_path_sample_limit)
+    except Exception:
+        return CLEANUP_SAMPLE_DEFAULT
+
+
+def _as_rel_path(item: Path | str, raw_dir: Path | None) -> str:
+    if isinstance(item, Path):
+        if raw_dir is not None:
+            return _relative_posix(raw_dir, item)
+        return item.as_posix()
+    return str(item)
+
+
+def _count_or_len(value: int | None, items: list[str]) -> int:
+    return len(items) if value is None else int(value)
+
+
+def _space_out(space: dict[str, Any] | None) -> dict[str, Any]:
+    data = space or {}
+    return {
+        "preCleanupProjectBytes": int(data.get("preCleanupProjectBytes", 0)),
+        "deleteCandidateBytes": int(data.get("deleteCandidateBytes", 0)),
+        "preservedBytes": int(data.get("preservedBytes", 0)),
+        "freedBytes": data.get("freedBytes"),
+    }
+
+
+def compact_cleanup_result(
+    *,
+    status: str,
+    candidates: Sequence[Path | str] = (),
+    deleted: Sequence[Path | str] = (),
+    preserved_count: int = 0,
+    leftover_candidates: int = 0,
+    space: dict[str, Any] | None = None,
+    verify_errors: list[str] | None = None,
+    session_id: str | None = None,
+    scratch_report: str | None = None,
+    scratch_meta: str | None = None,
+    full_paths: bool = False,
+    raw_dir: Path | None = None,
+    candidate_count: int | None = None,
+    deleted_count: int | None = None,
+) -> dict[str, Any]:
+    """Bounded JSON for inventory/cleanup stdout. Full path arrays only with ``full_paths``."""
+    limit = _cleanup_sample_limit()
+    rel_candidates = [_as_rel_path(item, raw_dir) for item in candidates]
+    rel_deleted = [_as_rel_path(item, raw_dir) for item in deleted]
+    payload: dict[str, Any] = {
+        "status": status,
+        "candidateCount": _count_or_len(candidate_count, rel_candidates),
+        "deletedCount": _count_or_len(deleted_count, rel_deleted),
+        "preservedCount": int(preserved_count),
+        "leftoverCandidates": int(leftover_candidates),
+        "space": _space_out(space),
+        "verifyErrors": list(verify_errors or []),
+        "candidateSample": rel_candidates[:limit],
+        "deletedSample": rel_deleted[:limit],
+        "sessionId": session_id,
+        "scratchReport": scratch_report,
+        "scratchMeta": scratch_meta,
+    }
+    if full_paths:
+        payload["deleteCandidates"] = rel_candidates
+        payload["deleted"] = rel_deleted
+    return payload
 
 
 def _file_size(path: Path) -> int:
@@ -306,6 +396,9 @@ def _resolve_reconstruction_metadata(raw_dir: Path) -> list[Path]:
                 and not path.is_symlink()
                 and path.suffix.lower() in {".json", ".md"}
             )
+    # Living footage-root audits (not reconstruction-bundle graph members).
+    # Listed as preserved metadata when no verified bundle is present so a
+    # later edit/-only cleanup cannot treat them as skippable leftovers.
     for name in (
         "EDITLOG.md",
         "SOURCE-LOG.md",
@@ -385,10 +478,7 @@ def verify_preserved_complete(
                 errors.append(f"missing final master: {_relative_posix(raw_dir, path)}")
 
     timeline = raw_dir / "edit" / "timeline"
-    canonical = [
-        timeline / f"{name}.json"
-        for name in ("cmap", "bmap", "tracks", "animation", "sync-map")
-    ]
+    canonical = [timeline / f"{name}.json" for name in CANONICAL_INDEX_NAMES]
     if all(path.is_file() for path in canonical):
         try:
             from avo.timeline.reconstruction import verify_reconstruction_bundle
@@ -404,14 +494,23 @@ def _normalized_path_set(paths: list[Path]) -> set[str]:
     return {str(path.resolve()) for path in paths}
 
 
-def list_delete_candidates(raw_dir: Path, preserved: PreservedSetResult) -> list[Path]:
+def scan_delete_candidates(
+    raw_dir: Path, preserved: PreservedSetResult
+) -> tuple[list[Path], int]:
+    """Walk ``edit/`` for delete candidates. ``OSError`` skips increment leftover.
+
+    Do not extend this walker to the footage root. ``EDITLOG.md`` at
+    ``<rawDir>/`` is a living audit (and is in ``TOP_LEVEL_EXCLUDE_NAMES``);
+    ``edit/EDITLOG.md`` may still be disposable after migration.
+    """
     raw_dir = raw_dir.resolve()
     edit_dir = raw_dir / "edit"
     if not edit_dir.is_dir():
-        return []
+        return [], 0
 
     preserved_set = _normalized_path_set(preserved.all_paths)
     candidates: list[Path] = []
+    leftover = 0
 
     for path in sorted(edit_dir.rglob("*")):
         try:
@@ -421,8 +520,14 @@ def list_delete_candidates(raw_dir: Path, preserved: PreservedSetResult) -> list
             if path.is_file() and not path.is_symlink():
                 candidates.append(path)
         except OSError:
+            leftover += 1
             continue
 
+    return candidates, leftover
+
+
+def list_delete_candidates(raw_dir: Path, preserved: PreservedSetResult) -> list[Path]:
+    candidates, _leftover = scan_delete_candidates(raw_dir, preserved)
     return candidates
 
 
@@ -475,7 +580,7 @@ def build_inventory_report(
     verify_errors = verify_preserved_complete(
         raw_dir, master_basename, initial_transcript=initial_transcript
     )
-    delete_candidates = list_delete_candidates(raw_dir, preserved)
+    delete_candidates, leftover = scan_delete_candidates(raw_dir, preserved)
 
     pre_inventory, degraded_mode = _load_pre_inventory(pre_json_path)
     current_inventory = scan_inventory(raw_dir, relative_to=raw_dir)
@@ -499,8 +604,183 @@ def build_inventory_report(
         pre_cleanup_project_bytes=pre_cleanup_bytes,
         delete_candidate_bytes=measure_footprint(delete_candidates),
         preserved_bytes=measure_footprint(preserved.all_paths),
+        leftover_candidates=leftover,
         file_diff=file_diff,
     )
+
+
+def _canonical_indexes_complete(raw_dir: Path) -> bool:
+    timeline = Path(raw_dir) / "edit" / "timeline"
+    return all((timeline / f"{name}.json").is_file() for name in CANONICAL_INDEX_NAMES)
+
+
+def _legacy_source_files(raw_dir: Path) -> list[Path]:
+    edit = Path(raw_dir) / "edit"
+    if not edit.is_dir():
+        return []
+    found: list[Path] = []
+    for name in LEGACY_NAMED_SOURCES:
+        path = edit / name
+        if path.is_file() and not path.is_symlink():
+            found.append(path)
+    found.extend(
+        sorted(
+            path
+            for path in edit.glob("edl-v*.json")
+            if path.is_file() and not path.is_symlink()
+        )
+    )
+    # Keep stable unique order
+    seen: set[str] = set()
+    unique: list[Path] = []
+    for path in found:
+        key = str(path.resolve())
+        if key in seen:
+            continue
+        seen.add(key)
+        unique.append(path)
+    return unique
+
+
+def _legacy_destinations(raw_dir: Path, source: Path) -> list[Path]:
+    raw_dir = Path(raw_dir)
+    name = source.name
+    dests = [raw_dir / "edit" / "review" / "legacy-reconstruction" / name]
+    if name == "EDITLOG.md":
+        dests.append(raw_dir / "EDITLOG.md")
+    elif name == "AUDIO-EDITLOG.md":
+        dests.append(raw_dir / "AUDIO-EDITLOG.md")
+    return dests
+
+
+def promote_legacy_reconstruction(raw_dir: Path, *, apply: bool) -> list[Path]:
+    """Copy legacy EDL/log files from ``edit/`` into reconstruction locations.
+
+    ``apply=False`` (dry-run) writes nothing. Skip when all five canonical
+    indexes exist — footage-root ``EDITLOG.md`` is then a living parallel
+    audit, not obsolete-legacy-only. Destinations are returned so callers
+    can treat them as preserved for listing.
+    """
+    raw_dir = Path(raw_dir)
+    if _canonical_indexes_complete(raw_dir):
+        return []
+    sources = _legacy_source_files(raw_dir)
+    dests: list[Path] = []
+    for source in sources:
+        dests.extend(_legacy_destinations(raw_dir, source))
+    if apply:
+        for source in sources:
+            for dest in _legacy_destinations(raw_dir, source):
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                try:
+                    if dest.resolve() == source.resolve():
+                        continue
+                except OSError:
+                    continue
+                shutil.copy2(source, dest)
+    return sorted(set(dests))
+
+
+@dataclass
+class CleanupRunResult:
+    paths: list[Path]
+    leftover: int
+    preserved: PreservedSetResult
+    pre_cleanup_project_bytes: int
+    delete_candidate_bytes: int
+    preserved_bytes: int
+
+
+def _safe_rimraf(runner: Any, path: Path) -> None:
+    try:
+        runner(path)
+    except OSError:
+        return
+
+
+def _path_still_present(path: Path) -> bool:
+    try:
+        return path.exists()
+    except OSError:
+        return True
+
+
+def _merge_legacy_dests(
+    preserved: PreservedSetResult, dests: list[Path]
+) -> PreservedSetResult:
+    if not dests:
+        return preserved
+    return replace(
+        preserved,
+        reconstruction_metadata=list(preserved.reconstruction_metadata) + list(dests),
+    )
+
+
+def _execute_deletes(delete_list: list[Path], runner: Any) -> int:
+    unlink_skip = 0
+    for path in delete_list:
+        _safe_rimraf(runner, path)
+        if _path_still_present(path):
+            unlink_skip += 1
+    return unlink_skip
+
+
+def _maybe_purge_session(session_id: str | None, *, purge_session: bool) -> None:
+    if not session_id or not purge_session:
+        return
+    from avo.scratch import ScratchError, purge_session_tmp
+
+    try:
+        purged = purge_session_tmp(session_id)
+    except ScratchError:
+        purged = False
+    if purged:
+        print(f"scratch purged: session {session_id}")
+
+
+def run_cleanup(
+    raw_dir: Path,
+    master_basename: str,
+    *,
+    dry_run: bool = False,
+    initial_transcript: Path | None = None,
+    rimraf_runner: Any | None = None,
+    session_id: str | None = None,
+    purge_session: bool = True,
+) -> CleanupRunResult:
+    raw_dir = Path(raw_dir).resolve()
+    errors = verify_preserved_complete(
+        raw_dir, master_basename, initial_transcript=initial_transcript
+    )
+    if errors:
+        raise SystemExit("\n".join(errors))
+
+    dests = promote_legacy_reconstruction(raw_dir, apply=not dry_run)
+    preserved = _merge_legacy_dests(
+        resolve_preserved_set(
+            raw_dir, master_basename, initial_transcript=initial_transcript
+        ),
+        dests,
+    )
+    delete_list, leftover = scan_delete_candidates(raw_dir, preserved)
+    assert_no_preserved_in_delete_list(preserved, delete_list)
+
+    result = CleanupRunResult(
+        paths=delete_list,
+        leftover=leftover,
+        preserved=preserved,
+        pre_cleanup_project_bytes=dir_size(raw_dir),
+        delete_candidate_bytes=measure_footprint(delete_list),
+        preserved_bytes=measure_footprint(preserved.all_paths),
+    )
+    if dry_run:
+        return result
+
+    result.leftover += _execute_deletes(
+        delete_list, rimraf_runner or _default_rimraf_runner
+    )
+    _maybe_purge_session(session_id, purge_session=purge_session)
+    return result
 
 
 def execute_cleanup(
@@ -512,34 +792,15 @@ def execute_cleanup(
     rimraf_runner: Any | None = None,
     session_id: str | None = None,
 ) -> list[Path]:
-    errors = verify_preserved_complete(
-        raw_dir, master_basename, initial_transcript=initial_transcript
-    )
-    if errors:
-        raise SystemExit("\n".join(errors))
-
-    preserved = resolve_preserved_set(
-        raw_dir, master_basename, initial_transcript=initial_transcript
-    )
-    delete_list = list_delete_candidates(raw_dir, preserved)
-    assert_no_preserved_in_delete_list(preserved, delete_list)
-
-    if dry_run:
-        return delete_list
-
-    runner = rimraf_runner or _default_rimraf_runner
-    for path in delete_list:
-        runner(path)
-    if session_id:
-        from avo.scratch import ScratchError, purge_session_tmp
-
-        try:
-            purged = purge_session_tmp(session_id)
-        except ScratchError:
-            purged = False
-        if purged:
-            print(f"scratch purged: session {session_id}")
-    return delete_list
+    return run_cleanup(
+        raw_dir,
+        master_basename,
+        dry_run=dry_run,
+        initial_transcript=initial_transcript,
+        rimraf_runner=rimraf_runner,
+        session_id=session_id,
+        purge_session=True,
+    ).paths
 
 
 def _default_rimraf_runner(path: Path) -> None:
@@ -584,12 +845,21 @@ def _cmd_delete_list(args: argparse.Namespace) -> int:
         args.master_basename,
         initial_transcript=args.initial_transcript,
     )
-    delete_list = list_delete_candidates(raw_dir, preserved)
+    delete_list, leftover = scan_delete_candidates(raw_dir, preserved)
     assert_no_preserved_in_delete_list(preserved, delete_list)
 
     rel_paths = [_relative_posix(raw_dir, path) for path in delete_list]
     if args.json:
-        _print_json({"deleteCandidates": rel_paths})
+        _print_json(
+            compact_cleanup_result(
+                status="dry-run",
+                candidates=delete_list,
+                preserved_count=len(preserved.all_paths),
+                leftover_candidates=leftover,
+                raw_dir=raw_dir,
+                full_paths=bool(getattr(args, "full_paths", False)),
+            )
+        )
     else:
         for rel in rel_paths:
             print(rel)
@@ -604,6 +874,8 @@ def _cmd_report(args: argparse.Namespace) -> int:
         initial_transcript=args.initial_transcript,
     )
     payload = report.to_dict()
+    scratch_report = None
+    scratch_meta = None
     if args.scratch_out:
         if not args.session_id:
             print("error: --session-id required with --scratch-out", file=sys.stderr)
@@ -611,6 +883,8 @@ def _cmd_report(args: argparse.Namespace) -> int:
         from avo.scratch import write_inventory_scratch
 
         report_path, meta_path = write_inventory_scratch(args.session_id, payload)
+        scratch_report = str(report_path)
+        scratch_meta = str(meta_path)
         print(f"scratch report: {report_path}")
         print(f"scratch meta: {meta_path}")
         if not args.json:
@@ -619,7 +893,26 @@ def _cmd_report(args: argparse.Namespace) -> int:
             print(f"deleteCandidates: {len(payload['files']['scheduledForDeletion'])}")
             return 0
     if args.json:
-        _print_json(payload)
+        _print_json(
+            compact_cleanup_result(
+                status="blocked" if report.verify_errors else "dry-run",
+                candidates=report.delete_candidates,
+                preserved_count=len(report.preserved.all_paths),
+                leftover_candidates=report.leftover_candidates,
+                space={
+                    "preCleanupProjectBytes": report.pre_cleanup_project_bytes,
+                    "deleteCandidateBytes": report.delete_candidate_bytes,
+                    "preservedBytes": report.preserved_bytes,
+                    "freedBytes": None,
+                },
+                verify_errors=report.verify_errors,
+                session_id=args.session_id,
+                scratch_report=scratch_report,
+                scratch_meta=scratch_meta,
+                full_paths=bool(getattr(args, "full_paths", False)),
+                raw_dir=report.raw_dir,
+            )
+        )
     else:
         print(f"rawDir: {payload['rawDir']}")
         print(f"masterBasename: {payload['masterBasename']}")
@@ -633,26 +926,56 @@ def _cmd_report(args: argparse.Namespace) -> int:
     return 0
 
 
+def _print_inventory_cleanup_json(
+    args: argparse.Namespace, outcome: CleanupRunResult
+) -> None:
+    dry = args.dry_run
+    raw_dir = Path(args.raw_dir)
+    _print_json(
+        compact_cleanup_result(
+            status="dry-run" if dry else "executed",
+            candidates=outcome.paths if dry else (),
+            deleted=() if dry else outcome.paths,
+            preserved_count=len(outcome.preserved.all_paths),
+            leftover_candidates=outcome.leftover,
+            space={
+                "preCleanupProjectBytes": outcome.pre_cleanup_project_bytes,
+                "deleteCandidateBytes": outcome.delete_candidate_bytes,
+                "preservedBytes": outcome.preserved_bytes,
+                "freedBytes": None if dry else outcome.delete_candidate_bytes,
+            },
+            session_id=args.session_id,
+            full_paths=bool(getattr(args, "full_paths", False)),
+            raw_dir=raw_dir,
+        )
+    )
+
+
 def _cmd_cleanup(args: argparse.Namespace) -> int:
     try:
-        delete_list = execute_cleanup(
+        outcome = run_cleanup(
             Path(args.raw_dir),
             args.master_basename,
             dry_run=args.dry_run,
             initial_transcript=args.initial_transcript,
             session_id=args.session_id,
+            purge_session=not args.dry_run,
         )
     except PreservedSetViolation as exc:
         print(str(exc), file=sys.stderr)
         return 1
 
     raw_dir = Path(args.raw_dir)
-    rel_paths = [_relative_posix(raw_dir, path) for path in delete_list]
+    rel_paths = [_relative_posix(raw_dir, path) for path in outcome.paths]
+    if getattr(args, "json", False):
+        _print_inventory_cleanup_json(args, outcome)
+        if not args.dry_run:
+            print(f"Deleted {len(rel_paths)} path(s).")
+        return 0
     if args.dry_run:
         for rel in rel_paths:
             print(rel)
         return 0
-
     print(f"Deleted {len(rel_paths)} path(s).")
     return 0
 
@@ -678,6 +1001,11 @@ def build_parser() -> argparse.ArgumentParser:
         "delete-list", parents=[parent], help="List safe delete candidates."
     )
     p_delete.add_argument("--json", action="store_true")
+    p_delete.add_argument(
+        "--full-paths",
+        action="store_true",
+        help="Include the full relative path list (debug).",
+    )
     p_delete.set_defaults(func=_cmd_delete_list)
 
     p_report = sub.add_parser(
@@ -685,6 +1013,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_report.add_argument("--pre", type=Path, default=None, help="Path to pre.json.")
     p_report.add_argument("--json", action="store_true")
+    p_report.add_argument(
+        "--full-paths",
+        action="store_true",
+        help="Include the full relative path list in JSON (debug).",
+    )
     p_report.add_argument(
         "--scratch-out",
         action="store_true",
@@ -702,6 +1035,12 @@ def build_parser() -> argparse.ArgumentParser:
         "--dry-run",
         action="store_true",
         help="List delete candidates without calling rimraf.",
+    )
+    p_cleanup.add_argument("--json", action="store_true")
+    p_cleanup.add_argument(
+        "--full-paths",
+        action="store_true",
+        help="Include the full relative path list in JSON (debug).",
     )
     p_cleanup.add_argument(
         "--session-id",

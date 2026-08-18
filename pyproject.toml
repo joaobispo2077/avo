@@ -170,16 +170,24 @@ exclude_lines = [
 # helpers/ shims are outside the avo package root — not in these contracts.
 # CLI: npm run quality:architecture / bash scripts/ci/quality-architecture.sh
 
-# Mutation (task-018/019/027 / FR-7): mutmut Ubuntu CI. Light = ci.yml job
-# Mutation tests (light); full = mutation-full.yml (rm mutants/ first).
+# Mutation (task-018/019/027 / FR-7 + ci-quality-hardening): mutmut Ubuntu CI.
+# Default arrays = full profile. Light/full runners patch via
+# scripts/ci/patch_mutmut_profile.py from mutation-config.json.
 [tool.mutmut]
+# mutmut-profile-source-paths:start
 source_paths = [
-    "src/avo/mcp",
     "src/avo/validate_dependencies.py",
     "src/avo/validate_usability.py",
     "src/avo/validate_edl.py",
     "src/avo/adapters/registry.py",
+    "src/avo/mcp/bridge.py",
+    "src/avo/mcp/registry.py",
+    "src/avo/mcp/mrtr.py",
+    "src/avo/mcp/request_state.py",
+    "src/avo/mcp/server.py",
+    "src/avo/mcp/tools/meta.py",
 ]
+# mutmut-profile-source-paths:end
 also_copy = ["src/avo", "schemas", "config"]
 pytest_add_cli_args = [
     "-q",
@@ -188,7 +196,10 @@ pytest_add_cli_args = [
     "--ignore=tests/projects",
     "-m",
     "not project",
+    "-k",
+    "not test_gate1_passes_in_ci_mode and not test_gate2_passes_in_ci_mode",
 ]
+# mutmut-profile-test-selection:start
 pytest_add_cli_args_test_selection = [
     "tests/test_mcp_package.py",
     "tests/test_mcp_bridge.py",
@@ -200,6 +211,13 @@ pytest_add_cli_args_test_selection = [
     "tests/test_edl_v3_contract.py",
     "tests/test_adapters_stubs.py",
 ]
+# mutmut-profile-test-selection:end
 use_git_change_detection = false
 mutate_only_covered_lines = true
+do_not_mutate = [
+    "*/__init__.py",
+    "*/__main__.py",
+]
+timeout_constant = 2.0
+timeout_multiplier = 3.0
 

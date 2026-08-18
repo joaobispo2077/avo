@@ -91,3 +91,15 @@ def test_newer_unapproved_cmap_head_blocks_bmap(tmp_path: Path) -> None:
     )
     with pytest.raises(LineageError, match="latest effective"):
         BMapService(workspace).author({"cues": [cue()]}, actor="avo", reason="blocked")
+
+
+def test_author_refreshes_editlog_for_pipeline_assembly(tmp_path: Path) -> None:
+    workspace, _, _ = approved_workspace(tmp_path)
+    value = cue()
+    value["kind"] = "animation"
+    revision = BMapService(workspace).author(
+        {"cues": [value]}, actor="avo", reason="beat one"
+    )
+    assert revision["editlogRefresh"]["ok"] is True
+    text = (workspace.raw_dir / "EDITLOG.md").read_text(encoding="utf-8")
+    assert "cue-one" in text

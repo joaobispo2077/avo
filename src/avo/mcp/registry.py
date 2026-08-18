@@ -40,6 +40,7 @@ PLANNED_CLI_GROUPS: tuple[str, ...] = (
     "deliver",
     "migrate-timeline",
     "cleanup",
+    "editlog",
 )
 
 

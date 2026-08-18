@@ -179,13 +179,6 @@
       "reason": "CLI/entrypoint branching; extract helpers in follow-up burn-down"
     },
     {
-      "path": "src/avo/cli.py",
-      "name": "main",
-      "complexity": 13,
-      "rank": "C",
-      "reason": "CLI/entrypoint branching; extract helpers in follow-up burn-down"
-    },
-    {
       "path": "src/avo/edl_timeline.py",
       "name": "verify_timed_items",
       "complexity": 11,

@@ -12,7 +12,7 @@ Write for the **correct audience by file** — not by mixing tones in one file.
 | Human visitor | [`../README.md`](../README.md), `package.json` / `pyproject.toml` descriptions | Benefit-first UX: short sentences, scannable headings, concrete verbs. No agent checklists. |
 | Driving agent | Everything under `docs/`, [`../AGENTS.md`](../AGENTS.md), [`../SKILL.md`](../SKILL.md), [`install/README.md`](install/README.md), `.cursor/rules/`, provider manifests | Dense, precise, checklist-friendly. No marketing fluff. |
 | Provider brand | `providers/<name>/` only | Provider-scoped; never repo root. |
-| Session logs | External `<footage>/edit/` | Copy from [`templates/logs/`](templates/logs/); do not commit personal entries to the AVO repo. |
+| Session logs | External `<footage>/EDITLOG.md` | Copy from [`templates/logs/EDITLOG.md`](templates/logs/EDITLOG.md). AVO owns the marked digest; append Human notes. |
 
 **Agent entrypoints:** [`../AGENTS.md`](../AGENTS.md) (canonical rules) →
 [`avo-workflow.md`](avo-workflow.md) (pipeline) → domain docs below.

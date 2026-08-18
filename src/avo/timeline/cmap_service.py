@@ -149,4 +149,5 @@ class CMapService:
                 reason="CMap revision changed",
                 actor=actor,
             )
+        revision["editlogRefresh"] = self.workspace.notify_editlog()
         return revision

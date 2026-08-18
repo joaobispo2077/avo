@@ -64,3 +64,20 @@ def test_strategy_rejects_timing_authority(tmp_path: Path):
     value["components"][0]["startTicks"] = 100
     with pytest.raises(AnimationError, match="timing"):
         AnimationService(workspace).author(value, actor="avo", reason="bad")
+
+
+def test_author_refreshes_editlog_motion(tmp_path: Path) -> None:
+    workspace, _, _ = approved_workspace(tmp_path)
+    BMapService(workspace).author({"cues": [cue()]}, actor="avo", reason="beat")
+    TracksService(workspace).author(
+        canonical_tracks(workspace, workspace.raw_dir / "raw.bin"),
+        actor="avo",
+        reason="tracks",
+    )
+    revision = AnimationService(workspace).author(
+        strategy(), actor="avo", reason="motion strategy"
+    )
+    assert revision["editlogRefresh"]["ok"] is True
+    text = (workspace.raw_dir / "EDITLOG.md").read_text(encoding="utf-8")
+    assert "chapter-pair" in text
+    assert "hyperframes" in text

@@ -233,6 +233,19 @@ def build_parser() -> argparse.ArgumentParser:
             item.add_argument("--confirm-unknown-approvals", action="store_true")
 
     cleanup = sub.add_parser("cleanup")
+    _add_cleanup_subparsers(cleanup)
+
+    editlog = sub.add_parser("editlog")
+    editlog_sub = editlog.add_subparsers(dest="editlog_command", required=True)
+    refresh = editlog_sub.add_parser("refresh")
+    refresh.add_argument("--project", type=Path, default=None)
+    refresh.add_argument("--raw-dir", type=Path, dest="raw_dir", default=None)
+    refresh.add_argument("--video-id", default="")
+    refresh.add_argument("--json", action="store_true", dest="as_json")
+    return parser
+
+
+def _add_cleanup_subparsers(cleanup: argparse.ArgumentParser) -> None:
     cleanup_sub = cleanup.add_subparsers(dest="cleanup_command", required=True)
     for operation in ("verify", "bundle", "dry-run", "execute"):
         item = cleanup_sub.add_parser(operation)
@@ -240,13 +253,29 @@ def build_parser() -> argparse.ArgumentParser:
         item.add_argument("--master-basename", required=True)
         if operation == "bundle":
             item.add_argument("--actor", required=True)
+        if operation in {"dry-run", "execute"}:
+            item.add_argument(
+                "--full-paths",
+                action="store_true",
+                help="Include the full relative path list in JSON (debug).",
+            )
+        if operation == "dry-run":
+            item.add_argument(
+                "--session-id",
+                default=None,
+                help="Session id for optional --scratch-out inventory.",
+            )
+            item.add_argument(
+                "--scratch-out",
+                action="store_true",
+                help="Write full inventory JSON under .avo/tmp/learndown/<session-id>/.",
+            )
         if operation == "execute":
             item.add_argument(
                 "--session-id",
                 default=None,
                 help="After successful cleanup, purge .avo/tmp/<kind>/<session-id>/ for all kinds.",
             )
-    return parser
 
 
 def _emit(value: dict, *, as_json: bool = True) -> None:
@@ -752,10 +781,110 @@ def _migrate(args: argparse.Namespace) -> int:
     return 0
 
 
+def _systemexit_errors(exc: SystemExit) -> list[str]:
+    message = exc.code if isinstance(exc.code, str) else str(exc)
+    return [line for line in str(message).splitlines() if line]
+
+
+def _space_payload(
+    *,
+    pre_cleanup: int = 0,
+    delete_bytes: int = 0,
+    preserved_bytes: int = 0,
+    freed_bytes: int | None = None,
+) -> dict:
+    return {
+        "preCleanupProjectBytes": pre_cleanup,
+        "deleteCandidateBytes": delete_bytes,
+        "preservedBytes": preserved_bytes,
+        "freedBytes": freed_bytes,
+    }
+
+
+def _emit_blocked_cleanup(
+    *,
+    verify_errors: list[str],
+    session_id: str | None,
+    raw_dir: Path,
+    full_paths: bool,
+) -> int:
+    from avo.project_inventory import compact_cleanup_result
+
+    _emit(
+        compact_cleanup_result(
+            status="blocked",
+            verify_errors=verify_errors,
+            session_id=session_id,
+            raw_dir=raw_dir,
+            full_paths=full_paths,
+        )
+    )
+    return 3
+
+
+def _compact_from_outcome(
+    *,
+    status: str,
+    outcome,
+    session_id: str | None,
+    full_paths: bool,
+    raw_dir: Path,
+    scratch_report: str | None = None,
+    scratch_meta: str | None = None,
+) -> dict:
+    from avo.project_inventory import compact_cleanup_result
+
+    dry = status == "dry-run"
+    return compact_cleanup_result(
+        status=status,
+        candidates=outcome.paths if dry else (),
+        deleted=() if dry else outcome.paths,
+        preserved_count=len(outcome.preserved.all_paths),
+        leftover_candidates=outcome.leftover,
+        space=_space_payload(
+            pre_cleanup=outcome.pre_cleanup_project_bytes,
+            delete_bytes=outcome.delete_candidate_bytes,
+            preserved_bytes=outcome.preserved_bytes,
+            freed_bytes=None if dry else outcome.delete_candidate_bytes,
+        ),
+        session_id=session_id,
+        scratch_report=scratch_report,
+        scratch_meta=scratch_meta,
+        full_paths=full_paths,
+        raw_dir=raw_dir,
+    )
+
+
+def _write_dry_run_scratch(
+    raw_dir: Path, master_basename: str, session_id: str
+) -> tuple[str, str]:
+    from avo.project_inventory import build_inventory_report
+    from avo.scratch import write_inventory_scratch
+
+    report = build_inventory_report(raw_dir, master_basename)
+    report_path, meta_path = write_inventory_scratch(session_id, report.to_dict())
+    return str(report_path), str(meta_path)
+
+
+def _purge_session_stderr(session_id: str | None) -> None:
+    if not session_id:
+        return
+    from avo.scratch import ScratchError, purge_session_tmp
+
+    try:
+        purged = purge_session_tmp(session_id)
+    except ScratchError:
+        purged = False
+    if purged:
+        print(f"scratch purged: session {session_id}", file=sys.stderr)
+
+
 def _cleanup(args: argparse.Namespace) -> int:
     from avo.project_inventory import (
         PreservedSetViolation,
-        execute_cleanup,
+        compact_cleanup_result,
+        resolve_preserved_set,
+        run_cleanup,
         verify_preserved_complete,
     )
     from avo.timeline.reconstruction import build_reconstruction_bundle
@@ -763,6 +892,10 @@ def _cleanup(args: argparse.Namespace) -> int:
     workspace = TimelineWorkspace.from_project(
         args.project, video_id=args.video_id or None
     )
+    raw_dir = workspace.raw_dir
+    session_id = getattr(args, "session_id", None)
+    full_paths = bool(getattr(args, "full_paths", False))
+
     if args.cleanup_command == "bundle":
         result = build_reconstruction_bundle(
             workspace,
@@ -771,48 +904,67 @@ def _cleanup(args: argparse.Namespace) -> int:
         )
         _emit(result)
         return 0
-    if args.cleanup_command == "verify":
-        errors = verify_preserved_complete(workspace.raw_dir, args.master_basename)
-        result = {"status": "pass" if not errors else "blocked", "errors": errors}
-        _emit(result)
-        return 0 if not errors else 3
-    if args.cleanup_command == "dry-run":
-        paths = execute_cleanup(
-            workspace.raw_dir,
-            args.master_basename,
-            dry_run=True,
-        )
-        result = {
-            "status": "dry-run",
-            "deleteCandidates": [
-                path.relative_to(workspace.raw_dir).as_posix() for path in paths
-            ],
-        }
-        _emit(result)
-        return 0
 
-    # execute — not dry-run; may purge session scratch after success
+    if args.cleanup_command == "verify":
+        errors = verify_preserved_complete(raw_dir, args.master_basename)
+        preserved = resolve_preserved_set(raw_dir, args.master_basename)
+        _emit(
+            compact_cleanup_result(
+                status="pass" if not errors else "blocked",
+                preserved_count=len(preserved.all_paths),
+                verify_errors=errors,
+                space=_space_payload(preserved_bytes=0),
+                raw_dir=raw_dir,
+            )
+        )
+        return 0 if not errors else 3
+
     try:
-        paths = execute_cleanup(
-            workspace.raw_dir,
+        outcome = run_cleanup(
+            raw_dir,
             args.master_basename,
-            dry_run=False,
-            session_id=args.session_id or None,
+            dry_run=args.cleanup_command == "dry-run",
+            session_id=session_id,
+            purge_session=False,
         )
     except PreservedSetViolation as exc:
-        _emit({"status": "blocked", "error": str(exc)})
-        return 3
+        return _emit_blocked_cleanup(
+            verify_errors=[str(exc)],
+            session_id=session_id,
+            raw_dir=raw_dir,
+            full_paths=full_paths,
+        )
     except SystemExit as exc:
-        message = exc.code if isinstance(exc.code, str) else str(exc)
-        errors = [line for line in str(message).splitlines() if line]
-        _emit({"status": "blocked", "errors": errors})
-        return 3
-    result = {
-        "status": "executed",
-        "deleted": [path.relative_to(workspace.raw_dir).as_posix() for path in paths],
-        "sessionId": args.session_id or None,
-    }
-    _emit(result)
+        return _emit_blocked_cleanup(
+            verify_errors=_systemexit_errors(exc),
+            session_id=session_id,
+            raw_dir=raw_dir,
+            full_paths=full_paths,
+        )
+
+    scratch_report = scratch_meta = None
+    if args.cleanup_command == "dry-run" and getattr(args, "scratch_out", False):
+        if not session_id:
+            print("error: --session-id required with --scratch-out", file=sys.stderr)
+            return 1
+        scratch_report, scratch_meta = _write_dry_run_scratch(
+            raw_dir, args.master_basename, session_id
+        )
+
+    status = "dry-run" if args.cleanup_command == "dry-run" else "executed"
+    _emit(
+        _compact_from_outcome(
+            status=status,
+            outcome=outcome,
+            session_id=session_id,
+            full_paths=full_paths,
+            raw_dir=raw_dir,
+            scratch_report=scratch_report,
+            scratch_meta=scratch_meta,
+        )
+    )
+    if status == "executed":
+        _purge_session_stderr(session_id)
     return 0
 
 
@@ -855,32 +1007,52 @@ def _deliver(args: argparse.Namespace) -> int:
     return 0
 
 
+def _editlog(args: argparse.Namespace) -> int:
+    from avo.editlog import EditlogError, refresh_editlog, resolve_editlog_raw_dir
+
+    if args.editlog_command != "refresh":
+        raise ValueError(f"unhandled editlog command: {args.editlog_command}")
+    try:
+        raw_dir = resolve_editlog_raw_dir(project=args.project, raw_dir=args.raw_dir)
+        result = refresh_editlog(raw_dir)
+    except EditlogError as exc:
+        payload = {
+            "ok": False,
+            "code": exc.code,
+            "message": exc.message,
+            "path": None,
+        }
+        print(json.dumps(payload, indent=2, ensure_ascii=False, sort_keys=True))
+        return 3
+    _emit(result, as_json=True)
+    return 0
+
+
+def _run_cli(args: argparse.Namespace) -> int:
+    handlers = {
+        "pipeline": _pipeline,
+        "timeline": _timeline,
+        "sync": _sync,
+        "cmap": _cmap,
+        "bmap": _bmap,
+        "tracks": _tracks,
+        "animation": _animation,
+        "review": _review,
+        "deliver": _deliver,
+        "migrate-timeline": _migrate,
+        "cleanup": _cleanup,
+        "editlog": _editlog,
+    }
+    handler = handlers.get(args.command)
+    if handler is None:
+        raise ValueError(f"unhandled command: {args.command}")
+    return handler(args)
+
+
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
-        if args.command == "pipeline":
-            return _pipeline(args)
-        if args.command == "timeline":
-            return _timeline(args)
-        if args.command == "sync":
-            return _sync(args)
-        if args.command == "cmap":
-            return _cmap(args)
-        if args.command == "bmap":
-            return _bmap(args)
-        if args.command == "tracks":
-            return _tracks(args)
-        if args.command == "animation":
-            return _animation(args)
-        if args.command == "review":
-            return _review(args)
-        if args.command == "deliver":
-            return _deliver(args)
-        if args.command == "migrate-timeline":
-            return _migrate(args)
-        if args.command == "cleanup":
-            return _cleanup(args)
-        raise ValueError(f"unhandled command: {args.command}")
+        return _run_cli(args)
     except (
         WorkspaceError,
         StoreError,

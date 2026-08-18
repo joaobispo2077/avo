@@ -276,6 +276,22 @@
       "reason": "Public API / CLI surface not referenced inside src/avo scan"
     },
     {
+      "path": "src/avo/project_inventory.py",
+      "name": "list_delete_candidates",
+      "kind": "function",
+      "lineno": 516,
+      "confidence": 60,
+      "reason": "Public API / CLI surface not referenced inside src/avo scan"
+    },
+    {
+      "path": "src/avo/project_inventory.py",
+      "name": "execute_cleanup",
+      "kind": "function",
+      "lineno": 772,
+      "confidence": 60,
+      "reason": "Public API / CLI surface not referenced inside src/avo scan"
+    },
+    {
       "path": "src/avo/render.py",
       "name": "output_audio_channels",
       "kind": "function",

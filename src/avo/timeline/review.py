@@ -432,4 +432,14 @@ def write_review_package(
     lines.extend(["", "## Exact decision question", "", question, ""])
     markdown = directory / "approval-gate.md"
     markdown.write_text("\n".join(lines), encoding="utf-8")
+    _notify_editlog_from_review_dir(directory)
     return json_path, markdown
+
+
+def _notify_editlog_from_review_dir(directory: Path) -> None:
+    raw_dir = directory.parent.parent.parent
+    if not (raw_dir / "edit").is_dir():
+        return
+    from avo.editlog import after_canonical_write
+
+    after_canonical_write(raw_dir)
