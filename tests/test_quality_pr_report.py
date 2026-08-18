@@ -32,13 +32,13 @@ class QualityPrReportTests(unittest.TestCase):
             coverage_json=Path("missing.json"),
             floor=68.0,
         )
-        self.assertIn("## Software quality", text)
+        self.assertIn("## Software metrics", text)
+        self.assertNotIn("## Software quality\n", text)
         self.assertIn("| Lint | **PASS** |", text)
         self.assertIn("| Format | **FAIL** |", text)
         self.assertIn("| Coverage | **SKIPPED** |", text)
-        self.assertIn("What this checks", text)
+        self.assertIn("| Gate | Status | Metric | What this checks |", text)
         self.assertIn("Ruff", text)
-        self.assertIn("Coverage floor", text)
         self.assertIn("68%", text)
 
     def test_quality_coverage_detail_from_json(self) -> None:

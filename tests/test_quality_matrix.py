@@ -650,11 +650,15 @@ class QualityMatrixTests(unittest.TestCase):
             self.assertTrue(all("cli_tools.py" not in item for item in paths))
         for name in ("light", "full"):
             tests = cfg[name]["pytest_add_cli_args_test_selection"]
-            self.assertNotIn(
+            for banned in (
                 "tests/test_avo_config.py",
-                tests,
-                msg="Gate 1/2 live tests fail inside mutmut mutants/ (no hyperframes)",
-            )
+                "tests/test_gitignore_scope.py",
+            ):
+                self.assertNotIn(
+                    banned,
+                    tests,
+                    msg="mutmut mutants/ is a partial tree — skip tests that read extra repo files",
+                )
 
         pkg = json.loads((ROOT / "package.json").read_text(encoding="utf-8"))
         self.assertIn("quality-mutation.sh", pkg["scripts"]["quality:mutation"])
@@ -709,6 +713,11 @@ class QualityMatrixTests(unittest.TestCase):
         self.assertGreaterEqual(ci.count("continue-on-error: true"), 2)
         coverage = (ROOT / "scripts/ci/run-coverage.sh").read_text(encoding="utf-8")
         self.assertIn("reports/quality/coverage.json", coverage)
+        writer = (ROOT / "scripts/ci/write_quality_pr_report.py").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("## Software metrics", writer)
+        self.assertIn("What this checks", writer)
 
     def test_workflows_use_node24_action_runtimes(self) -> None:
         """ci-quality-hardening: Node 24 + Node 24 GitHub-owned action majors."""
