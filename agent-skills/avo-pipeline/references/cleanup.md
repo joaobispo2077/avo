@@ -29,6 +29,7 @@ Cleanup is allowed on **canonical** projects only after `edit/timeline/reconstru
 | Canonical timeline | indexes, immutable revisions/events, projection lineage |
 | Review audit | candidate-bound review JSON and exact approval events |
 | Reconstruction bundle | graph of every preserved file and SHA-256 |
+| Footage-root EDITLOG | `<rawDir>/EDITLOG.md` — living AVO digest + Human notes (not a delete candidate when indexes exist) |
 
 ## Workflow (REQUIRED steps)
 
@@ -65,7 +66,7 @@ the AVO clone.
 
 - Actual freed bytes, preserved bytes, deleted file count
 - File sections: added then removed, produced/preserved, deleted on cleanup
-- Link to `EDITLOG.md` when present
+- Link to footage-root `EDITLOG.md` when present (hybrid digest + Human notes; do not hand-edit the marked digest)
 
 ## Telemetry after cleanup
 

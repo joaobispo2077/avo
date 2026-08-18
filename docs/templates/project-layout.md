@@ -6,8 +6,9 @@ Canonical `edit/` subtree for AVO per-video projects. Paths are relative to
 ```
 <rawDir>/
   <source files, untouched>
+  EDITLOG.md                # PRESERVED audit — AVO digest + Human notes
   edit/
-    project.md              # session memory
+    project.md              # session memory (agent scratch; not the audit)
     timeline/               # PRESERVED — canonical editorial decisions
       cmap.json             # raw-based cut revisions
       bmap.json             # beats on exact approved CMap output
@@ -51,6 +52,7 @@ and [`../review/approval-gate-manifest.md`](review/approval-gate-manifest.md).
 ## Preserved after cleanup
 
 - Raw source files (outside `edit/` or in `raw/`)
+- Footage-root `EDITLOG.md` (AVO digest + Human notes; not a delete candidate)
 - `transcripts/` (initial + final from master)
 - `masters/` final export
 - `timeline/` canonical snapshots, diffs, approvals, and dependency fingerprints

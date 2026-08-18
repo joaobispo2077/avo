@@ -177,9 +177,10 @@ Fix → re-render → repeat. **Only then** open the human approval gate (§4b).
 5. **Wait** for user response. Never assume approval because watch-skill confidence
    is high.
 
-**On approval:** set manifest status to `approved` with ISO date; note in
-`EDITLOG.md` or `edit/project.md`. Then and only then promote resolution or
-advance stage.
+**On approval:** set manifest status to `approved` with ISO date; AVO refreshes
+`<rawDir>/EDITLOG.md` (digest from JSON). Agents append rationale under **Human
+notes** — do not hand-edit the marked digest or treat `edit/project.md` as the
+audit. Then and only then promote resolution or advance stage.
 
 **On changes requested:** loop back through fix → proof → §4 (LOOP + analysis) →
 new approval gate.

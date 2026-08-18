@@ -319,6 +319,10 @@ size-signal-report.md
 # Keep the env template tracked so contributors know which optional keys exist.
 !.env.example
 
+# Shipped EDITLOG template (Node baseline `logs` would hide docs/templates/logs/).
+!docs/templates/logs/
+!docs/templates/logs/**
+
 # Committed unit-test fixture trees (override edit/ ignore above).
 !tests/fixtures/stats-project/edit/
 !tests/fixtures/stats-project/edit/**

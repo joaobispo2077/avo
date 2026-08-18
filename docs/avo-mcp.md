@@ -151,6 +151,8 @@ Keep them distinct from [`templates/ai-memory/cursor-mcp.example.json`](template
 
 Same semantics: bridged tools map to CLI argv (`avo_<group>_<subcommand>` → `avo.cli.main([...])` in-process). Prefer skills/CLI when that fits the workflow; use MCP when the harness should list/call tools directly.
 
+**EDITLOG:** `avo_editlog_refresh` (`group=editlog`, not destructive, `include_project=false`) maps to `python -m avo.cli editlog refresh`. It rewrites only the marked AVO digest on `<rawDir>/EDITLOG.md`. Agents must append rationale under **Human notes** and must not walk `edit/` to hand-write the digest. Pass `--project` and/or `--raw-dir`.
+
 **Out of phase-1 bridge:** other `python -m avo.*` modules (`models_cli`, `transcribe`, `init_project`, …) stay available outside MCP. Scope is `cli.py` groups plus meta tools.
 
 Destructive ops (e.g. `cleanup execute`) stay exposed with **warnings in tool descriptions**. Prefer **MRTR confirmation** (see [Protocol posture](#protocol-posture-mcp-2026-07-28--mrtr)) when the harness supports it — do not call them in smoke tests.

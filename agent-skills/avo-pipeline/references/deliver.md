@@ -11,7 +11,7 @@ Full-program master QC and delivery manifest. **Not** `/avo.audit` — audit is 
 
 - [ ] `provider` + `rawDir` declared
 - [ ] Master export exists (or explicit path via `Footage:`)
-- [ ] `EDITLOG.md` / review gates satisfied for picture and audio
+- [ ] Footage-root `EDITLOG.md` / review gates satisfied for picture and audio (digest from JSON; Human notes for rationale)
 - [ ] **Rights:** `<rawDir>/edit/review/rights-audit.md` **PASS** (or run [`/avo.rights`](rights.md) first — **warn** if missing; rights category **FAIL** if `SOURCE-LOG.md` incomplete)
 - [ ] **Audio delivery QC:** `<rawDir>/edit/review/audio-qc.md` **PASS** recommended (run [`/avo.audio-qc`](audio-qc.md) on master first)
 
@@ -53,7 +53,7 @@ Generate transcript **from the exported master file**, not from rough cut or EDL
    - Template: [`docs/templates/delivery/delivery-manifest.md`](../../../docs/templates/delivery/delivery-manifest.md)
    - Write to: `<rawDir>/edit/delivery/delivery-manifest.md`
 2. **Pass/fail summary** in agent response with explicit blockers
-3. Update `EDITLOG.md` with deliver version, reviewer, status
+3. Refresh `<rawDir>/EDITLOG.md` via `python -m avo.cli editlog refresh` (or `avo_editlog_refresh`); append deliver version, reviewer, and status under **Human notes**. Do not hand-write the marked digest.
 
 ## Shorts profile
 
