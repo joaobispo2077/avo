@@ -451,6 +451,54 @@ class ProjectInventoryTests(unittest.TestCase):
                 (raw_dir / "edit" / "review" / "legacy-reconstruction").exists()
             )
 
+    def test_canonical_cleanup_does_not_list_or_delete_root_editlog(self) -> None:
+        with self._temp_project(include_edit=True) as raw_dir:
+            root_text = self._add_canonical_indexes_and_root_editlog(raw_dir)
+            root_log = raw_dir / "EDITLOG.md"
+            preserved = project_inventory.resolve_preserved_set(raw_dir, self.master)
+            raw_resolved = {str(path.resolve()) for path in preserved.raw_sources}
+            self.assertNotIn(str(root_log.resolve()), raw_resolved)
+            meta_rel = {
+                project_inventory._relative_posix(raw_dir, path)
+                for path in preserved.reconstruction_metadata
+            }
+            self.assertIn("EDITLOG.md", meta_rel)
+
+            delete_list = project_inventory.list_delete_candidates(raw_dir, preserved)
+            rel_delete = {
+                project_inventory._relative_posix(raw_dir, path) for path in delete_list
+            }
+            self.assertNotIn("EDITLOG.md", rel_delete)
+            self.assertIn("edit/EDITLOG.md", rel_delete)
+
+            with mock.patch(
+                "avo.timeline.reconstruction.verify_reconstruction_bundle",
+                return_value={"files": []},
+            ):
+                project_inventory.execute_cleanup(
+                    raw_dir,
+                    self.master,
+                    dry_run=False,
+                    rimraf_runner=lambda path: (
+                        path.unlink() if path.is_file() else None
+                    ),
+                )
+            self.assertTrue(root_log.is_file())
+            self.assertEqual(root_log.read_text(encoding="utf-8"), root_text)
+            self.assertFalse((raw_dir / "edit" / "EDITLOG.md").exists())
+
+    def _add_canonical_indexes_and_root_editlog(self, raw_dir: Path) -> str:
+        timeline = raw_dir / "edit" / "timeline"
+        timeline.mkdir(parents=True, exist_ok=True)
+        for name in project_inventory.CANONICAL_INDEX_NAMES:
+            (timeline / f"{name}.json").write_text("{}", encoding="utf-8")
+        root_text = "# EDITLOG\nLiving footage-root audit.\n"
+        (raw_dir / "EDITLOG.md").write_text(root_text, encoding="utf-8")
+        (raw_dir / "edit" / "EDITLOG.md").write_text(
+            "# Migrated edit copy.\n", encoding="utf-8"
+        )
+        return root_text
+
     def _add_legacy_sources(self, raw_dir: Path) -> tuple[str, str]:
         edl_text = '{"events":[{"id":"cut-1"}]}'
         log_text = "# Edit log\nKept decision.\n"

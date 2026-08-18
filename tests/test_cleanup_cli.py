@@ -20,6 +20,7 @@ sys.path.insert(0, str(SRC))
 
 from avo import scratch
 from avo.cli import build_parser, main
+from avo.project_inventory import CANONICAL_INDEX_NAMES
 
 
 class CleanupCliTests(unittest.TestCase):
@@ -182,6 +183,51 @@ class CleanupCliTests(unittest.TestCase):
             self.assertIn("deleteCandidates", payload)
             self.assertIn("edit/preview/edit-proof.mp4", payload["deleteCandidates"])
 
+    def test_canonical_dry_run_and_execute_preserve_root_editlog(self) -> None:
+        with self._project() as (project, raw_dir, _tmp_root):
+            root_text = self._add_canonical_indexes_and_root_editlog(raw_dir)
+            root_log = raw_dir / "EDITLOG.md"
+            argv_base = [
+                "--project",
+                str(project),
+                "--master-basename",
+                MASTER_BASENAME,
+                "--full-paths",
+            ]
+            with patch(
+                "avo.timeline.reconstruction.verify_reconstruction_bundle",
+                return_value={"files": []},
+            ):
+                dry_code, dry_payload = self._run_cli(
+                    ["cleanup", "dry-run", *argv_base]
+                )
+                self.assertEqual(dry_code, 0)
+                self.assertEqual(dry_payload["status"], "dry-run")
+                candidates = dry_payload["deleteCandidates"]
+                self.assertNotIn("EDITLOG.md", candidates)
+                self.assertIn("edit/EDITLOG.md", candidates)
+                self.assertTrue(root_log.is_file())
+                self.assertEqual(root_log.read_text(encoding="utf-8"), root_text)
+
+                def fake_rimraf(path: Path) -> None:
+                    if path.is_file() or path.is_symlink():
+                        path.unlink(missing_ok=True)
+                    elif path.is_dir():
+                        shutil.rmtree(path, ignore_errors=True)
+
+                with patch(
+                    "avo.project_inventory._default_rimraf_runner",
+                    side_effect=fake_rimraf,
+                ):
+                    exec_code, exec_payload = self._run_cli(
+                        ["cleanup", "execute", *argv_base]
+                    )
+            self.assertEqual(exec_code, 0)
+            self.assertEqual(exec_payload["status"], "executed")
+            self.assertTrue(root_log.is_file())
+            self.assertEqual(root_log.read_text(encoding="utf-8"), root_text)
+            self.assertFalse((raw_dir / "edit" / "EDITLOG.md").exists())
+
     def test_dry_run_scratch_out_sets_scratch_paths(self) -> None:
         with self._project() as (project, _raw_dir, tmp_root):
             with patch.object(scratch, "tmp_dir", return_value=tmp_root):
@@ -240,6 +286,18 @@ class CleanupCliTests(unittest.TestCase):
                 shutil.rmtree(self_inner.tmp, ignore_errors=True)
 
         return _Ctx()
+
+    def _add_canonical_indexes_and_root_editlog(self, raw_dir: Path) -> str:
+        timeline = raw_dir / "edit" / "timeline"
+        timeline.mkdir(parents=True, exist_ok=True)
+        for name in CANONICAL_INDEX_NAMES:
+            (timeline / f"{name}.json").write_text("{}", encoding="utf-8")
+        root_text = "# EDITLOG\nLiving footage-root audit.\n"
+        (raw_dir / "EDITLOG.md").write_text(root_text, encoding="utf-8")
+        (raw_dir / "edit" / "EDITLOG.md").write_text(
+            "# Migrated edit copy.\n", encoding="utf-8"
+        )
+        return root_text
 
 
 if __name__ == "__main__":
