@@ -65,6 +65,10 @@ class MutationGateTests(unittest.TestCase):
                 "tests/test_avo_config.py",
                 raw[name]["pytest_add_cli_args_test_selection"],
             )
+            self.assertNotIn(
+                "tests/test_gitignore_scope.py",
+                raw[name]["pytest_add_cli_args_test_selection"],
+            )
 
     def test_patch_mutmut_profile_round_trip(self) -> None:
         spec = importlib.util.spec_from_file_location(
