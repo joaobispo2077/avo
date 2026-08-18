@@ -14,8 +14,9 @@ permissions:
   pull-requests: write
 
 env:
-  NODE_VERSION: '22'
+  NODE_VERSION: '24'
   AVO_CI: '1'
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
 
 jobs:
   size-signal:
@@ -35,10 +36,10 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Node
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm

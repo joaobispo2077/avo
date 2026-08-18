@@ -13,6 +13,7 @@ permissions:
 env:
   PYTHON_VERSION: '3.12'
   AVO_CI: '1'
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
 
 jobs:
   watch-skill-smoke:
@@ -21,10 +22,10 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
@@ -33,7 +34,7 @@ jobs:
 
       - name: Upload diagnostics on failure
         if: failure()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: watch-skill-smoke-diagnostics
           path: reports/watch-skill-smoke
