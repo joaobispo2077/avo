@@ -8,6 +8,7 @@ ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT"
 
 FAIL_UNDER="${COV_FAIL_UNDER:-68}"
+mkdir -p reports/quality
 
 ARGS=(
   pytest
@@ -15,6 +16,7 @@ ARGS=(
   -m "not project"
   --cov=avo
   --cov-report=term-missing
+  --cov-report=json:reports/quality/coverage.json
   --cov-fail-under="${FAIL_UNDER}"
 )
 
