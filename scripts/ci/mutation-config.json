@@ -12,7 +12,6 @@
     ],
     "pytest_add_cli_args_test_selection": [
       "tests/test_validate_dependencies.py",
-      "tests/test_gitignore_scope.py",
       "tests/test_adapters_stubs.py",
       "tests/test_mcp_bridge.py",
       "tests/test_mcp_registry.py"
@@ -43,8 +42,7 @@
       "tests/test_mcp_request_state.py",
       "tests/test_validate_dependencies.py",
       "tests/test_edl_v3_contract.py",
-      "tests/test_adapters_stubs.py",
-      "tests/test_gitignore_scope.py"
+      "tests/test_adapters_stubs.py"
     ]
   }
 }

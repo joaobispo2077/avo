@@ -210,7 +210,6 @@ pytest_add_cli_args_test_selection = [
     "tests/test_validate_dependencies.py",
     "tests/test_edl_v3_contract.py",
     "tests/test_adapters_stubs.py",
-    "tests/test_gitignore_scope.py",
 ]
 # mutmut-profile-test-selection:end
 use_git_change_detection = false
