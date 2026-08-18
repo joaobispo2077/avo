@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Write a short Software quality sticky-comment markdown (Maxframe-style table)."""
+"""Write a Software metrics sticky-comment (status + numbers + what the gate checks)."""
 
 from __future__ import annotations
 
@@ -33,6 +33,7 @@ OUTCOME_LABEL = {
 GATE_POLICY = {
     "lint": "Ruff (`src/avo`, `tests`, `helpers`) + ESLint",
     "format": "Ruff format --check + Prettier --check",
+    "coverage": "pytest-cov fail-under on `src/avo`",
     "complexity": "xenon max-absolute **B** · Ruff C901 ≤ 31",
     "deps": "pip-audit + npm high+ (`deps-audit-allowlist.json`)",
     "deadcode": "vulture confidence ≥ 60 (`deadcode-allowlist.json`)",
@@ -60,31 +61,41 @@ def _json_count(path: Path, key: str) -> int | None:
 
 def coverage_detail(coverage_json: Path, floor: float) -> str:
     if not coverage_json.is_file():
-        return f"fail-under **{floor:.0f}%** (summary json missing)"
+        return f"— (floor {floor:.0f}%, json missing)"
     payload = json.loads(coverage_json.read_text(encoding="utf-8"))
     totals = payload.get("totals") or {}
     pct = totals.get("percent_covered")
     covered = totals.get("covered_lines")
     statements = totals.get("num_statements")
     if pct is None:
-        return f"fail-under **{floor:.0f}%**"
+        return f"floor {floor:.0f}%"
     extra = ""
     if covered is not None and statements is not None:
         extra = f" · {covered}/{statements} lines"
-    return f"**{float(pct):.2f}%** (floor {floor:.0f}%){extra}"
+    return f"{float(pct):.2f}% (floor {floor:.0f}%){extra}"
 
 
-def gate_detail(key: str, *, coverage_json: Path, floor: float) -> str:
+def gate_metric(key: str, *, coverage_json: Path, floor: float) -> str:
     if key == "coverage":
         return coverage_detail(coverage_json, floor)
     if key == "complexity":
         blocks = _json_count(ROOT / "scripts/ci/complexity-allowlist.json", "blocks")
-        extra = f" · {blocks} allowlisted blocks" if blocks is not None else ""
-        return GATE_POLICY[key] + extra
+        extra = f"{blocks} allowlisted" if blocks is not None else "allowlist n/a"
+        return extra
     if key == "deadcode":
         items = _json_count(ROOT / "scripts/ci/deadcode-allowlist.json", "items")
-        extra = f" · {items} allowlisted names" if items is not None else ""
-        return GATE_POLICY[key] + extra
+        extra = f"{items} allowlisted" if items is not None else "allowlist n/a"
+        return extra
+    if key == "deps":
+        allow = ROOT / "scripts/ci/deps-audit-allowlist.json"
+        npm_n = 0
+        if allow.is_file():
+            npm = (json.loads(allow.read_text(encoding="utf-8")).get("npm") or {}).get(
+                "advisory_ids"
+            )
+            if isinstance(npm, list):
+                npm_n = len(npm)
+        return f"{npm_n} npm GHSA exceptions"
     if key == "duplication":
         threshold = 2
         jscpd = ROOT / ".jscpd.json"
@@ -92,19 +103,14 @@ def gate_detail(key: str, *, coverage_json: Path, floor: float) -> str:
             threshold = int(
                 json.loads(jscpd.read_text(encoding="utf-8")).get("threshold") or 2
             )
-        return f"{GATE_POLICY[key]} · fail if clone rate > **{threshold}%**"
-    if key == "deps":
-        allow = ROOT / "scripts/ci/deps-audit-allowlist.json"
-        npm_n = None
-        if allow.is_file():
-            npm = (json.loads(allow.read_text(encoding="utf-8")).get("npm") or {}).get(
-                "advisory_ids"
-            )
-            if isinstance(npm, list):
-                npm_n = len(npm)
-        extra = f" · {npm_n} npm GHSA exceptions" if npm_n is not None else ""
-        return GATE_POLICY[key] + extra
-    return GATE_POLICY.get(key, "")
+        return f"ceiling {threshold}%"
+    if key == "architecture":
+        config = ROOT / ".importlinter"
+        if not config.is_file():
+            return "—"
+        n = config.read_text(encoding="utf-8").count("[importlinter:contract:")
+        return f"{n} contracts"
+    return "—"
 
 
 def build_markdown(
@@ -114,22 +120,22 @@ def build_markdown(
     floor: float,
 ) -> str:
     lines = [
-        "## Software quality",
+        "## Software metrics",
         "",
         "Fast gates from the **Software quality** job. Later rows are SKIPPED when an earlier gate fails immediately.",
         "",
-        "| Gate | Status | What this checks |",
-        "|---|---|---|",
+        "| Gate | Status | Metric | What this checks |",
+        "|---|---|---|---|",
     ]
     for key, title in GATES:
         outcome = outcomes.get(key, "")
-        detail = gate_detail(key, coverage_json=coverage_json, floor=floor)
-        lines.append(f"| {title} | **{_label(outcome)}** | {detail} |")
+        metric = gate_metric(key, coverage_json=coverage_json, floor=floor)
+        policy = GATE_POLICY.get(key, "")
+        lines.append(f"| {title} | **{_label(outcome)}** | {metric} | {policy} |")
     lines.extend(
         [
             "",
-            f"- Coverage floor: **{floor:.0f}%** (unchanged)",
-            "- Mutation is a separate sticky comment (`Mutation tests`)",
+            f"Coverage fail-under **{floor:.0f}%**. Mutation is a separate comment.",
             "",
             "_Generated from CI Software quality step outcomes_",
             "",
