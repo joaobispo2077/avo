@@ -400,8 +400,10 @@ class QualityMatrixTests(unittest.TestCase):
         quality_block = ci.split("software-quality:", 1)[1].split("usability-gate:", 1)[
             0
         ]
-        # Fail-immediately: no soft/continue-on-error escape hatch on the umbrella.
-        self.assertNotIn("continue-on-error:", quality_block)
+        # Fail-immediately: no soft/continue-on-error escape hatch on the gate steps.
+        # Sticky PR comment publish may continue-on-error so fork PRs still gate.
+        gate_block = quality_block.split("Build quality PR report", 1)[0]
+        self.assertNotIn("continue-on-error:", gate_block)
         quality_lower = quality_block.lower()
         self.assertNotIn("soft until enablement", quality_lower)
         self.assertNotIn("non-failing until enablement", quality_lower)
@@ -623,13 +625,16 @@ class QualityMatrixTests(unittest.TestCase):
         ci = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
         self.assertIn("run-mutation-light.sh", ci)
         self.assertIn("Mutation tests (light)", ci)
-        self.assertNotIn("continue-on-error:", ci.split("mutation-light:", 1)[1][:800])
+        mutation_job = ci.split("mutation-light:", 1)[1]
+        self.assertIn("timeout-minutes: 20", mutation_job.split("steps:", 1)[0])
+        self.assertNotIn("continue-on-error:", mutation_job[:800])
 
         full = (ROOT / ".github/workflows/mutation-full.yml").read_text(
             encoding="utf-8"
         )
         self.assertIn("run-mutation.sh", full)
         self.assertIn("uv sync --frozen --extra dev", full)
+        self.assertIn("timeout-minutes: 20", full)
         self.assertNotIn("soft stub", full.lower())
 
         cfg = json.loads(
@@ -637,13 +642,29 @@ class QualityMatrixTests(unittest.TestCase):
         )
         self.assertIn("light", cfg)
         self.assertIn("full", cfg)
+        self.assertEqual(int(cfg["light"]["job_timeout_minutes"]), 20)
+        self.assertEqual(int(cfg["full"]["job_timeout_minutes"]), 20)
+        for paths in (cfg["light"]["source_paths"], cfg["full"]["source_paths"]):
+            self.assertTrue(paths)
+            self.assertNotIn("src/avo/mcp", paths)
+            self.assertTrue(all("cli_tools.py" not in item for item in paths))
 
         pkg = json.loads((ROOT / "package.json").read_text(encoding="utf-8"))
         self.assertIn("quality-mutation.sh", pkg["scripts"]["quality:mutation"])
 
+        light_runner = (ROOT / "scripts/ci/run-mutation-light.sh").read_text(
+            encoding="utf-8"
+        )
+        full_runner = (ROOT / "scripts/ci/quality-mutation.sh").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("patch_mutmut_profile.py apply", light_runner)
+        self.assertIn("patch_mutmut_profile.py apply", full_runner)
+        self.assertIn("patch_mutmut_profile.py restore", light_runner)
+        self.assertIn("patch_mutmut_profile.py restore", full_runner)
+
         pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
         self.assertIn("[tool.mutmut]", pyproject)
-        self.assertIn("src/avo/mcp", pyproject)
         self.assertIn("norecursedirs", pyproject)
         mutmut_block = pyproject.split("[tool.mutmut]", 1)[1]
         self.assertIn("--tb=short", mutmut_block)
@@ -654,12 +675,58 @@ class QualityMatrixTests(unittest.TestCase):
         self.assertIn("src/avo", mutmut_block)
         self.assertIn("schemas", mutmut_block)
         self.assertIn("config", mutmut_block)
+        self.assertIn("timeout_constant = 2.0", mutmut_block)
+        self.assertIn("timeout_multiplier = 3.0", mutmut_block)
+        self.assertIn("do_not_mutate", mutmut_block)
+        self.assertIn("mutmut-profile-source-paths:start", mutmut_block)
+        self.assertNotIn('"src/avo/mcp"', mutmut_block)
 
         audit = (ROOT / "docs/software-quality-audit.md").read_text(encoding="utf-8")
         self.assertIn("light/PR", audit)
         self.assertIn("full/weekly", audit)
         docs_ci = (ROOT / "docs/ci.md").read_text(encoding="utf-8")
         self.assertIn("Mutation tests (light)", docs_ci)
+
+    def test_ci_posts_quality_and_mutation_pr_comments(self) -> None:
+        """ci-quality-hardening: Maxframe-style sticky summaries, not pack dumps."""
+        ci = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+        self.assertIn("write_quality_pr_report.py", ci)
+        self.assertIn("write_mutation_pr_report.py", ci)
+        self.assertIn("marocchino/sticky-pull-request-comment@v3", ci)
+        self.assertIn("header: quality-gates-report", ci)
+        self.assertIn("header: mutation-report", ci)
+        self.assertIn("reports/quality/quality-gates.md", ci)
+        self.assertGreaterEqual(ci.count("continue-on-error: true"), 2)
+        coverage = (ROOT / "scripts/ci/run-coverage.sh").read_text(encoding="utf-8")
+        self.assertIn("reports/quality/coverage.json", coverage)
+
+    def test_workflows_use_node24_action_runtimes(self) -> None:
+        """ci-quality-hardening: Node 24 + Node 24 GitHub-owned action majors."""
+        workflows = ROOT / ".github/workflows"
+        for path in workflows.glob("*.yml"):
+            text = path.read_text(encoding="utf-8")
+            self.assertNotIn(
+                "actions/checkout@v4",
+                text,
+                msg=f"{path.name} still uses checkout@v4 (Node 20)",
+            )
+            self.assertNotIn("actions/setup-node@v4", text, msg=path.name)
+            self.assertNotIn("actions/setup-python@v5", text, msg=path.name)
+            self.assertNotIn("actions/upload-artifact@v4", text, msg=path.name)
+            self.assertNotIn("actions/cache@v4", text, msg=path.name)
+            self.assertNotIn("NODE_VERSION: '22'", text, msg=path.name)
+            self.assertIn(
+                "FORCE_JAVASCRIPT_ACTIONS_TO_NODE24",
+                text,
+                msg=f"{path.name} missing Node 24 force flag",
+            )
+        ci = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+        self.assertIn("NODE_VERSION: '24'", ci)
+        self.assertIn("actions/checkout@v6", ci)
+        self.assertIn("actions/setup-node@v6", ci)
+        self.assertIn("actions/setup-python@v6", ci)
+        self.assertIn("actions/upload-artifact@v7", ci)
+        self.assertIn("actions/cache@v5", ci)
 
     def test_size_signal_uses_shared_script(self) -> None:
         """task-020: size-signal.yml calls scripts/ci/size-signal.sh."""
