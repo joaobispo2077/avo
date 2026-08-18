@@ -311,7 +311,9 @@ video_use.egg-info/
 # -----------------------------------------------------------------------------
 # Mutation + quality report artifacts (CI uploads these; do not commit)
 mutants/
+.pyproject.toml.mutmut.bak
 reports/mutation/
+reports/quality/
 reports/dep-graph/
 reports/toolchain-smoke/
 reports/watch-skill-smoke/
