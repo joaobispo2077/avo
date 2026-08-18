@@ -231,6 +231,8 @@ models/
 tmp/
 
 .tmp-*/
+.tmp-*
+.import_linter_cache/
 .codex-qc/
 .codex-tmp/
 .avo-test-sessions/

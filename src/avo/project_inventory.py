@@ -32,6 +32,11 @@ TOP_LEVEL_EXCLUDE_NAMES = frozenset(
 )
 TOP_LEVEL_EXCLUDE_PREFIXES = ("avo.wrap.",)
 CANONICAL_INDEX_NAMES = ("cmap", "bmap", "tracks", "animation", "sync-map")
+# Names under edit/ for promote-legacy when the five canonical indexes are
+# absent. EDITLOG.md here means edit/EDITLOG.md — not footage-root EDITLOG.md.
+# When the five indexes exist, promote is a no-op: the root file is a living
+# parallel audit (not obsolete-legacy-only). Canonical cleanup walks only
+# edit/, so <rawDir>/EDITLOG.md is never a delete candidate.
 LEGACY_NAMED_SOURCES = (
     "edl.json",
     "EDITLOG.md",
@@ -391,6 +396,9 @@ def _resolve_reconstruction_metadata(raw_dir: Path) -> list[Path]:
                 and not path.is_symlink()
                 and path.suffix.lower() in {".json", ".md"}
             )
+    # Living footage-root audits (not reconstruction-bundle graph members).
+    # Listed as preserved metadata when no verified bundle is present so a
+    # later edit/-only cleanup cannot treat them as skippable leftovers.
     for name in (
         "EDITLOG.md",
         "SOURCE-LOG.md",
@@ -489,7 +497,12 @@ def _normalized_path_set(paths: list[Path]) -> set[str]:
 def scan_delete_candidates(
     raw_dir: Path, preserved: PreservedSetResult
 ) -> tuple[list[Path], int]:
-    """Walk ``edit/`` for delete candidates. ``OSError`` skips increment leftover."""
+    """Walk ``edit/`` for delete candidates. ``OSError`` skips increment leftover.
+
+    Do not extend this walker to the footage root. ``EDITLOG.md`` at
+    ``<rawDir>/`` is a living audit (and is in ``TOP_LEVEL_EXCLUDE_NAMES``);
+    ``edit/EDITLOG.md`` may still be disposable after migration.
+    """
     raw_dir = raw_dir.resolve()
     edit_dir = raw_dir / "edit"
     if not edit_dir.is_dir():
@@ -641,11 +654,12 @@ def _legacy_destinations(raw_dir: Path, source: Path) -> list[Path]:
 
 
 def promote_legacy_reconstruction(raw_dir: Path, *, apply: bool) -> list[Path]:
-    """Copy legacy EDL/log files into the preserved reconstruction locations.
+    """Copy legacy EDL/log files from ``edit/`` into reconstruction locations.
 
     ``apply=False`` (dry-run) writes nothing. Skip when all five canonical
-    indexes exist. Destinations are returned so callers can treat them as
-    preserved for listing.
+    indexes exist — footage-root ``EDITLOG.md`` is then a living parallel
+    audit, not obsolete-legacy-only. Destinations are returned so callers
+    can treat them as preserved for listing.
     """
     raw_dir = Path(raw_dir)
     if _canonical_indexes_complete(raw_dir):

@@ -9,6 +9,8 @@ htmlcov/
 tmp/
 .avo/
 .mutmut-cache/
+.import_linter_cache/
+.tmp-*
 stryker-tmp/
 reports/
 package-lock.json
