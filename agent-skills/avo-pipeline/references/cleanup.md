@@ -67,6 +67,7 @@ the AVO clone.
 - Actual freed bytes, preserved bytes, deleted file count
 - File sections: added then removed, produced/preserved, deleted on cleanup
 - Link to footage-root `EDITLOG.md` when present (hybrid digest + Human notes; do not hand-edit the marked digest)
+- Re-export the provider learndown entry; do not overwrite an existing `EDITLOG.md` lock copied at draft/backfill
 
 ## Telemetry after cleanup
 

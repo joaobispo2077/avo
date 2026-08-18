@@ -308,7 +308,8 @@ Two steps, in order:
      is the true total), preserved artifacts, space estimates, ai-memory note.
      **Provider export (REQUIRED):** wrap also writes
      `providers/<slug>/learndowns/<entry-id>/` (`learndown.json`, `learndown.md`,
-     wrap copies) and updates `providers/<slug>/learndowns/index.json`. Use
+     wrap copies, and a first-copy `EDITLOG.md` lock when footage-root EDITLOG
+     exists) and updates `providers/<slug>/learndowns/index.json`. Use
      `python -m avo.wrap draft … --no-export` only when debugging.
    - **Scratch inventory (optional):** `project_inventory report --scratch-out
      --session-id <id>` stages full JSON under `.avo/tmp/learndown/<id>/` — never
@@ -347,7 +348,8 @@ Two steps, in order:
      post-delete candidates are empty) and **sample-capped** deleted file lists
      plus `deletedCount`. Draft wrap files are **retained** for audit
      comparison. Re-exports the provider learndown entry with `status: "final"`
-     and final wrap copies when present.
+     and final wrap copies when present. An existing `EDITLOG.md` lock in that
+     entry is not overwritten.
    - **Session record (REQUIRED):** `python -m avo.stats record
      --wrap-json <rawDir>/avo.wrap.json` → `.avo/state.json` → `stats.sessions[]`
      + cumulative `stats.totals`.

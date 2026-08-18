@@ -29,6 +29,8 @@ Each draft/final wrap updates:
 - `providers/<slug>/learndowns/<YYYYMMDD-topic>/learndown.json`
 - `providers/<slug>/learndowns/<YYYYMMDD-topic>/learndown.md`
 - Wrap copies (`wrap.draft.*`, and `wrap.*` when final)
+- `EDITLOG.md` lock — full copy of footage-root EDITLOG when that file exists;
+  first copy wins (later footage-root digest refreshes do not overwrite it)
 - Catalog: `providers/<slug>/learndowns/index.json`
 
 Backfill from an existing wrap: `python -m avo.learndown_export backfill --wrap-json <path>` (resolves provider from `avo.project.json` when wrap JSON says `unknown`).
