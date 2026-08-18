@@ -98,6 +98,7 @@ class DeliveryService:
             "createdAt": self.clock(),
         }
         atomic_write_json(self.manifest_path, manifest)
+        manifest["editlogRefresh"] = self.workspace.notify_editlog()
         return manifest
 
     def validate_current(self) -> dict[str, Any]:
@@ -140,4 +141,5 @@ class DeliveryService:
         manifest["approval"] = approval
         manifest["state"] = "delivered"
         atomic_write_json(self.manifest_path, manifest)
+        manifest["editlogRefresh"] = self.workspace.notify_editlog()
         return manifest

@@ -227,6 +227,7 @@ class BMapService:
                     "cutOutputSha256": cut_hash,
                 },
             )
+        revision["editlogRefresh"] = self.workspace.notify_editlog()
         return revision
 
     def status(self) -> dict[str, Any]:

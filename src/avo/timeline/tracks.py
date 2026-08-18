@@ -156,6 +156,7 @@ class TracksService:
                 reason="Tracks revision changed",
                 actor=actor,
             )
+        revision["editlogRefresh"] = self.workspace.notify_editlog()
         return revision
 
     def inspect(self) -> dict[str, Any]:

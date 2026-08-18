@@ -115,4 +115,5 @@ class ApprovalService:
                     "reviewIdentityHash": review["candidate"]["identityHash"],
                 },
             )
+        event["editlogRefresh"] = self.workspace.notify_editlog()
         return event

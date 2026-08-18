@@ -54,6 +54,7 @@ class SyncService:
                 reason="Sync revision changed",
                 actor=actor,
             )
+        revision["editlogRefresh"] = self.workspace.notify_editlog()
         return revision
 
     def author_constant(
@@ -222,7 +223,7 @@ class SyncService:
         revision = self.store.revision(evidence["revisionId"])
         if evidence_bundle_hash != evidence["sha256"]:
             raise SyncError("Sync decision evidence bundle is stale")
-        return self.store.record_decision(
+        event = self.store.record_decision(
             decision=decision,
             revision_id=revision["revisionId"],
             revision_hash=revision["contentHash"],
@@ -234,3 +235,5 @@ class SyncService:
             reason=reason,
             evidence_bundle_hash=evidence_bundle_hash,
         )
+        event["editlogRefresh"] = self.workspace.notify_editlog()
+        return event

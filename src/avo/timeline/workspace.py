@@ -400,3 +400,9 @@ class TimelineWorkspace:
                 f"{artifact_type} is {index['activeState']}; rebase/revalidate before render or approval"
             )
         return index
+
+    def notify_editlog(self) -> dict[str, Any]:
+        """Refresh footage-root EDITLOG after a successful canonical write."""
+        from avo.editlog import after_canonical_write
+
+        return after_canonical_write(self.raw_dir)
