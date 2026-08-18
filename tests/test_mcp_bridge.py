@@ -233,6 +233,26 @@ def test_cli_tool_specs_cover_all_groups() -> None:
     assert "avo_migrate_timeline_inspect" in names
     assert "avo_cleanup_dry_run" in names
     assert "avo_cleanup_execute" in names
+    assert "avo_editlog_refresh" in names
+
+
+def test_avo_editlog_refresh_bridge_contract() -> None:
+    """Lock dedicated editlog refresh tool: prefix, non-destructive, optional paths."""
+    defs = {defn.spec.name: defn for defn in all_bridge_defs()}
+    assert "avo_editlog_refresh" in defs
+    defn = defs["avo_editlog_refresh"]
+    assert defn.cli_prefix == ("editlog", "refresh")
+    assert defn.spec.cli_argv_template == ("editlog", "refresh")
+    assert defn.spec.group == "editlog"
+    assert defn.spec.destructive is False
+    params = {param.name: param for param in defn.params}
+    assert params["project"].required is False
+    assert params["raw_dir"].required is False
+    description = defn.spec.description
+    assert "AVO digest" in description
+    assert "Rewrites only" in description or "rewrite only" in description.lower()
+    assert "walk edit/" in description
+    assert "hand-write" in description
 
 
 def test_destructive_flags_and_warnings() -> None:

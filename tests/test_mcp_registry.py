@@ -27,6 +27,7 @@ from avo.mcp.tools.cli_tools import (
     CORE_CLI_GROUPS,
     REMAINING_CLI_GROUPS,
 )
+from avo.mcp.tools.meta import capabilities_payload
 
 
 def test_transport_is_stdio() -> None:
@@ -65,6 +66,9 @@ def test_cli_tool_specs_all_planned_groups_registered() -> None:
     assert "cleanup" in groups
     assert "bmap" in groups
     assert "migrate-timeline" in groups
+    assert "editlog" in groups
+    assert "editlog" in PLANNED_CLI_GROUPS
+    assert "editlog" in ALL_CLI_GROUPS
 
 
 def test_build_registry_includes_meta_and_all_cli() -> None:
@@ -155,6 +159,24 @@ def test_destructive_cutover_tools_are_exactly_flagged() -> None:
     assert inspect is not None
     assert inspect.destructive is False
     assert "DESTRUCTIVE" not in inspect.description
+
+
+def test_editlog_group_includes_avo_editlog_refresh_not_mrtr_gated() -> None:
+    assert "editlog" in PLANNED_CLI_GROUPS
+    assert "editlog" in ALL_CLI_GROUPS
+    names = [spec.name for spec in tools_by_group("editlog")]
+    assert "avo_editlog_refresh" in names
+    spec = get_tool("avo_editlog_refresh")
+    assert spec is not None
+    assert spec.group == "editlog"
+    assert spec.destructive is False
+    entry = next(
+        tool
+        for tool in capabilities_payload()["tools"]
+        if tool["name"] == "avo_editlog_refresh"
+    )
+    assert entry["destructive"] is False
+    assert "mrtr_gated" not in entry
 
 
 def test_registry_module_has_no_provider_or_footage_imports() -> None:
