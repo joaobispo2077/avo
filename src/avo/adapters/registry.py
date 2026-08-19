@@ -38,7 +38,7 @@ JOB_REGISTRIES: dict[str, dict[str, str]] = {
 }
 
 
-def adapter_for_routing_suffix(job: str, suffix: str) -> type["JobAdapter"]:
+def adapter_for_routing_suffix(job: str, suffix: str) -> type[JobAdapter]:
     from avo.adapters.base import AdapterError, load_adapter_class
 
     registry = JOB_REGISTRIES.get(job)

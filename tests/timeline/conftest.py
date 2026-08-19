@@ -1,9 +1,9 @@
 """Shared external-project and deterministic port fakes for timeline tests."""
+
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
 import hashlib
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 

@@ -17,39 +17,57 @@ def fixture(tmp_path: Path, *, missing_source=False):
     overlay = tmp_path / "insert.png"
     overlay.write_bytes(b"image")
     edl = tmp_path / "edl.json"
-    edl.write_text(json.dumps({
-        "version": 4,
-        "story_map_approval": "approved",
-        "sources": {"camera": "raw.mp4"},
-        "ranges": [
-            {"source": "camera", "start": 0.0, "end": 2.0},
-            {"source": "camera", "start": 3.0, "end": 5.0},
-        ],
-        "overlays": [{
-            "file": "insert.png", "start_in_output": 1.0,
-            "duration": 0.5, "motion_brief_id": "legacy-insert",
-        }],
-        "sound_effects": [{
-            "file": "pop.mp3", "start_in_output": 2.5, "duration": 0.2,
-        }],
-        "subtitles": "captions.srt",
-        "audio": {"restoration_default_pct": 45},
-        "motion_policy": {"style": "tremble"},
-    }), encoding="utf-8")
+    edl.write_text(
+        json.dumps(
+            {
+                "version": 4,
+                "story_map_approval": "approved",
+                "sources": {"camera": "raw.mp4"},
+                "ranges": [
+                    {"source": "camera", "start": 0.0, "end": 2.0},
+                    {"source": "camera", "start": 3.0, "end": 5.0},
+                ],
+                "overlays": [
+                    {
+                        "file": "insert.png",
+                        "start_in_output": 1.0,
+                        "duration": 0.5,
+                        "motion_brief_id": "legacy-insert",
+                    }
+                ],
+                "sound_effects": [
+                    {
+                        "file": "pop.mp3",
+                        "start_in_output": 2.5,
+                        "duration": 0.2,
+                    }
+                ],
+                "subtitles": "captions.srt",
+                "audio": {"restoration_default_pct": 45},
+                "motion_policy": {"style": "tremble"},
+            }
+        ),
+        encoding="utf-8",
+    )
     project = tmp_path / "avo.project.json"
-    project.write_text(json.dumps({
-        "schemaVersion": "1.0.0",
-        "provider": "bishop",
-        "videoId": "legacy-video",
-        "rawDir": str(tmp_path),
-        "timeline": {
-            "directory": "edit/timeline",
-            "reviewDirectory": "edit/review",
-            "generatedEdlPath": "edit/edl.json",
-            "canonicalFirst": False,
-            "migration": {"allowLegacyEdlFallback": True},
-        },
-    }), encoding="utf-8")
+    project.write_text(
+        json.dumps(
+            {
+                "schemaVersion": "1.0.0",
+                "provider": "bishop",
+                "videoId": "legacy-video",
+                "rawDir": str(tmp_path),
+                "timeline": {
+                    "directory": "edit/timeline",
+                    "reviewDirectory": "edit/review",
+                    "generatedEdlPath": "edit/edl.json",
+                    "canonicalFirst": False,
+                    "migration": {"allowLegacyEdlFallback": True},
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
     return TimelineWorkspace.from_project(project), edl, project
 
 
@@ -64,7 +82,9 @@ def test_dry_run_writes_nothing_and_imports_all_domains(tmp_path: Path):
     assert plan["snapshots"]["bmap"]["cues"]
 
 
-def test_apply_validate_activate_rollback_is_idempotent_and_preserves_legacy(tmp_path: Path):
+def test_apply_validate_activate_rollback_is_idempotent_and_preserves_legacy(
+    tmp_path: Path,
+):
     workspace, edl, project = fixture(tmp_path)
     original = file_fingerprint(edl)["sha256"]
     service = MigrationService(workspace, edl)
@@ -75,9 +95,12 @@ def test_apply_validate_activate_rollback_is_idempotent_and_preserves_legacy(tmp
     validated = service.validate(actor="creator", reason="parity accepted")
     assert validated["parity"]["rangesEqual"] is True
     with pytest.raises(ValueError, match="confirmation"):
-        service.activate(actor="creator", reason="activate", confirm_unknown_approvals=False)
+        service.activate(
+            actor="creator", reason="activate", confirm_unknown_approvals=False
+        )
     active = service.activate(
-        actor="creator", reason="approvals remain pending",
+        actor="creator",
+        reason="approvals remain pending",
         confirm_unknown_approvals=True,
     )
     assert active["authority"] == "canonical"
@@ -86,7 +109,10 @@ def test_apply_validate_activate_rollback_is_idempotent_and_preserves_legacy(tmp
     rolled = service.rollback(actor="creator", reason="test recovery")
     assert rolled["status"] == "rolled-back"
     assert file_fingerprint(edl)["sha256"] == original
-    assert all((workspace.timeline_dir / f"{kind}.json").is_file() for kind in ("cmap","bmap","tracks","animation","sync-map"))
+    assert all(
+        (workspace.timeline_dir / f"{kind}.json").is_file()
+        for kind in ("cmap", "bmap", "tracks", "animation", "sync-map")
+    )
 
 
 def test_unresolved_source_and_target_collision_block(tmp_path: Path):
@@ -101,7 +127,9 @@ def test_unresolved_source_and_target_collision_block(tmp_path: Path):
     workspace2, edl2, _ = fixture(other)
     workspace2.initialize()
     workspace2.store("cmap").append_revision(
-        snapshot={"existing": True}, actor="agent", reason="existing",
+        snapshot={"existing": True},
+        actor="agent",
+        reason="existing",
     )
     with pytest.raises(ValueError, match="collision"):
         MigrationService(workspace2, edl2).apply(actor="creator", reason="collision")

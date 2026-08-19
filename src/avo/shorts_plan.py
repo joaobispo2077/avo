@@ -6,9 +6,10 @@ import hashlib
 import json
 import math
 import re
+from collections.abc import Callable, Mapping
 from copy import deepcopy
 from pathlib import Path
-from typing import Any, Callable, Mapping
+from typing import Any
 
 from avo import shorts_captions, shorts_contract, shorts_media, shorts_provider
 
@@ -187,9 +188,13 @@ def resolve_batch(
     """Resolve one validated request into an immutable exact-count plan."""
     shorts_contract.validate_document(request, "request")
     if provider_tokens is None:
-        provider_tokens = shorts_provider.load_provider_design_tokens(str(request["provider"]))
+        provider_tokens = shorts_provider.load_provider_design_tokens(
+            str(request["provider"])
+        )
     if provider_tokens_fingerprint is None:
-        provider_tokens_fingerprint = shorts_provider.provider_tokens_fingerprint(provider_tokens)
+        provider_tokens_fingerprint = shorts_provider.provider_tokens_fingerprint(
+            provider_tokens
+        )
     candidates = sorted(request["candidates"], key=lambda item: item["order"])
     _validate_candidate_distinctness(candidates)
     words = transcript_words(transcript)
@@ -245,7 +250,8 @@ def resolve_batch(
             protected_regions=layout.get("protectedRegions") or [],
         )
         scoped_corrections = [
-            correction for correction in request.get("corrections") or []
+            correction
+            for correction in request.get("corrections") or []
             if not correction.get("scopeCandidateIds")
             or candidate["id"] in correction["scopeCandidateIds"]
         ]
@@ -281,9 +287,7 @@ def resolve_batch(
             "layout": layout,
             "captions": captions,
             "inputFingerprint": fingerprint,
-            "expectedOutputBasename": (
-                f"{request['batchId']}-short-{candidate['id']}"
-            ),
+            "expectedOutputBasename": (f"{request['batchId']}-short-{candidate['id']}"),
             "rightsReviewReferences": list(candidate.get("rightsNotes") or []),
             "factualReviewReferences": [
                 candidate["editorialApprovalReference"],
@@ -311,20 +315,31 @@ def resolve_batch(
             else:
                 raw = len(items) * float(allocation.get("percentage", 0)) / 100
                 rounding = allocation.get("roundingRule", "nearest")
-                count = math.floor(raw) if rounding == "floor" else math.ceil(raw) if rounding == "ceil" else math.floor(raw + .5)
+                count = (
+                    math.floor(raw)
+                    if rounding == "floor"
+                    else math.ceil(raw)
+                    if rounding == "ceil"
+                    else math.floor(raw + 0.5)
+                )
             rule = str(allocation.get("selectionRule") or "ordered")
             selected = _allocation_candidates(items, candidates, count, rule)
         unknown = set(selected) - set(by_id)
         if unknown:
-            raise PlanningError(f"insertion {insertion['id']} selects unknown candidates: {', '.join(sorted(unknown))}")
+            raise PlanningError(
+                f"insertion {insertion['id']} selects unknown candidates: {', '.join(sorted(unknown))}"
+            )
         for candidate_id in selected:
             item = by_id[candidate_id]
-            item["inputFingerprint"] = shorts_contract.content_hash({
-                "baseFingerprint": item["inputFingerprint"],
-                "insertionPolicy": insertion,
-            })
+            item["inputFingerprint"] = shorts_contract.content_hash(
+                {
+                    "baseFingerprint": item["inputFingerprint"],
+                    "insertionPolicy": insertion,
+                }
+            )
             item["insertion"] = {
-                "id": insertion["id"], "videoStreamIndex": insertion["videoStream"],
+                "id": insertion["id"],
+                "videoStreamIndex": insertion["videoStream"],
                 "audioStreamIndex": insertion.get("audioStream"),
                 "targetDurationSec": item["editedDurationSec"],
                 "supportVolume": insertion["supportVolume"],
@@ -333,10 +348,13 @@ def resolve_batch(
                 ),
                 "rightsReference": insertion["rightsBasis"],
             }
-            allocations.append({
-                "candidateId": candidate_id, "insertionId": insertion["id"],
-                "reason": f"{mode} allocation",
-            })
+            allocations.append(
+                {
+                    "candidateId": candidate_id,
+                    "insertionId": insertion["id"],
+                    "reason": f"{mode} allocation",
+                }
+            )
 
     request_path = Path(request_path)
     plan: dict[str, Any] = {
@@ -389,9 +407,7 @@ def _revision_from_path(path: Path) -> int:
 
 def _next_revision_path(path: Path, revision: int) -> Path:
     if re.search(r"-v\d{3}(?=\.json$)", path.name):
-        name = re.sub(
-            r"-v\d{3}(?=\.json$)", f"-v{revision:03d}", path.name
-        )
+        name = re.sub(r"-v\d{3}(?=\.json$)", f"-v{revision:03d}", path.name)
     else:
         name = f"{path.stem}-v{revision:03d}{path.suffix}"
     return path.with_name(name)

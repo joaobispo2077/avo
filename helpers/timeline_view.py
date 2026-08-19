@@ -1,4 +1,5 @@
 """Compatibility shim — remove in v0.2.0. Use `avo.timeline_view`."""
+
 import warnings
 
 warnings.warn(
@@ -6,4 +7,4 @@ warnings.warn(
     DeprecationWarning,
     stacklevel=2,
 )
-from avo.timeline_view import *  # noqa: F403
+from avo.timeline_view import *

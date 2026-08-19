@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import subprocess
 from dataclasses import asdict, dataclass
-from datetime import date
+from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -139,8 +139,10 @@ def get_preset(preset_id: str) -> LoudnessPreset:
     return LOUDNESS_PRESETS[preset_id]
 
 
-def preset_stale_advisory(preset: LoudnessPreset, *, today: date | None = None) -> str | None:
-    today = today or date.today()
+def preset_stale_advisory(
+    preset: LoudnessPreset, *, today: date | None = None
+) -> str | None:
+    today = today or datetime.now(tz=timezone.utc).date()
     verified = date.fromisoformat(preset.last_verified)
     age_days = (today - verified).days
     if age_days >= 180:
@@ -203,10 +205,14 @@ def validate_creative_custom(custom: dict[str, Any]) -> list[str]:
         integrated = float(custom["integrated_lufs"])
         true_peak = float(custom["true_peak_dbtp"])
     except (KeyError, TypeError, ValueError):
-        return ["audio.loudness_custom requires integrated_lufs and true_peak_dbtp numbers"]
+        return [
+            "audio.loudness_custom requires integrated_lufs and true_peak_dbtp numbers"
+        ]
 
     if true_peak > -0.5:
-        errors.append("audio.loudness_custom.true_peak_dbtp must be <= -0.5 dBTP for lossy encode safety")
+        errors.append(
+            "audio.loudness_custom.true_peak_dbtp must be <= -0.5 dBTP for lossy encode safety"
+        )
 
     nearest = get_preset(nearest_preset_id(integrated))
     deviation = abs(integrated - nearest.integrated_lufs)
@@ -244,7 +250,9 @@ def resolve_loudness_profile(
         or DEFAULT_INTENT
     )
     if intent not in INTENTS:
-        raise ValueError(f"Unknown loudness_intent: {intent}. Valid: {', '.join(sorted(INTENTS))}")
+        raise ValueError(
+            f"Unknown loudness_intent: {intent}. Valid: {', '.join(sorted(INTENTS))}"
+        )
 
     range_preference = str(audio.get("loudness_range_preference") or "balanced")
     if range_preference not in RANGE_PREFERENCES:
@@ -274,7 +282,9 @@ def resolve_loudness_profile(
             raise ValueError("; ".join(errors))
         integrated = float(custom["integrated_lufs"])
         true_peak = float(custom["true_peak_dbtp"])
-        base_lra = float(custom.get("lra_lu") or get_preset(nearest_preset_id(integrated)).lra_lu)
+        base_lra = float(
+            custom.get("lra_lu") or get_preset(nearest_preset_id(integrated)).lra_lu
+        )
         preset = get_preset(nearest_preset_id(integrated))
         source = "edl" if edl.get("audio") else "project"
     elif intent == "channel_standard":
@@ -283,7 +293,9 @@ def resolve_loudness_profile(
             integrated = float(channel["integrated_lufs"])
             true_peak = float(channel.get("true_peak_dbtp", -1.0))
             base_lra = float(channel.get("lra_lu", 9.0))
-            preset_id = str(audio.get("loudness_preset") or nearest_preset_id(integrated))
+            preset_id = str(
+                audio.get("loudness_preset") or nearest_preset_id(integrated)
+            )
             preset = get_preset(preset_id)
             source = "provider.channel_standard"
         else:
@@ -313,7 +325,10 @@ def resolve_loudness_profile(
         else:
             source = "deliverable_default"
 
-    if intent == "creative" and audio.get("loudness_custom", {}).get("lra_lu") is not None:
+    if (
+        intent == "creative"
+        and audio.get("loudness_custom", {}).get("lra_lu") is not None
+    ):
         lra = float(audio["loudness_custom"]["lra_lu"])
     else:
         lra = apply_range_preference(base_lra, range_preference)
@@ -419,7 +434,9 @@ def evaluate_qc(
 ) -> dict[str, Any]:
     measured_i = float(measurement["input_i"])
     measured_tp = float(measurement["input_tp"])
-    integrated_pass = abs(measured_i - profile.integrated_lufs) <= QC_INTEGRATED_TOLERANCE_LU
+    integrated_pass = (
+        abs(measured_i - profile.integrated_lufs) <= QC_INTEGRATED_TOLERANCE_LU
+    )
     tp_pass = measured_tp <= profile.true_peak_dbtp + 0.05
 
     encode_delta: float | None = None
@@ -456,7 +473,9 @@ def evaluate_qc(
     }
 
 
-def nr_loudness_warning(edl: dict[str, Any], profile: ResolvedLoudnessProfile) -> str | None:
+def nr_loudness_warning(
+    edl: dict[str, Any], profile: ResolvedLoudnessProfile
+) -> str | None:
     audio = edl.get("audio") or {}
     hot_segments = [
         seg

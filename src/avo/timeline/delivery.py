@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 import shutil
-from typing import Any, Callable
+from collections.abc import Callable
+from pathlib import Path
+from typing import Any
 from uuid import uuid4
 
 from avo import final_transcript_artifacts
+
 from .contracts import dependency_lock_hash, file_fingerprint
 from .review import approval_is_current
 from .store import atomic_write_json, now_iso
@@ -34,7 +36,9 @@ class DeliveryService:
         master: Path,
         dependencies: dict[str, str],
         review_runner: Any,
-        transcript_generator: Callable[..., dict[str, Path]] = final_transcript_artifacts.generate_from_master,
+        transcript_generator: Callable[
+            ..., dict[str, Path]
+        ] = final_transcript_artifacts.generate_from_master,
         transcript_options: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         candidate = Path(candidate).resolve()
@@ -51,10 +55,14 @@ class DeliveryService:
 
         edit_dir = self.workspace.raw_dir / "edit"
         sidecars = transcript_generator(
-            master, edit_dir, **(transcript_options or {}),
+            master,
+            edit_dir,
+            **(transcript_options or {}),
         )
         json_path = Path(sidecars["json"])
-        transcript = final_transcript_artifacts.validate_master_transcript(master, json_path)
+        transcript = final_transcript_artifacts.validate_master_transcript(
+            master, json_path
+        )
         review = review_runner.run(
             checkpoint="deliver",
             candidate=master,
@@ -90,6 +98,7 @@ class DeliveryService:
             "createdAt": self.clock(),
         }
         atomic_write_json(self.manifest_path, manifest)
+        manifest["editlogRefresh"] = self.workspace.notify_editlog()
         return manifest
 
     def validate_current(self) -> dict[str, Any]:
@@ -99,7 +108,9 @@ class DeliveryService:
         master = Path(manifest["master"]["path"])
         current = file_fingerprint(master)
         if current["sha256"] != manifest["master"]["sha256"]:
-            raise DeliveryError("master bytes changed; transcript, review, and approval are stale")
+            raise DeliveryError(
+                "master bytes changed; transcript, review, and approval are stale"
+            )
         transcript_path = Path(manifest["transcriptArtifacts"]["json"]["path"])
         final_transcript_artifacts.validate_master_transcript(master, transcript_path)
         return manifest
@@ -124,8 +135,11 @@ class DeliveryService:
             candidate_sha256=manifest["master"]["sha256"],
             dependency_lock_sha256=manifest["dependencyLockSha256"],
         ):
-            raise DeliveryError("delivery approval is not bound to the exact master identity")
+            raise DeliveryError(
+                "delivery approval is not bound to the exact master identity"
+            )
         manifest["approval"] = approval
         manifest["state"] = "delivered"
         atomic_write_json(self.manifest_path, manifest)
+        manifest["editlogRefresh"] = self.workspace.notify_editlog()
         return manifest

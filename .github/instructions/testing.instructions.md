@@ -10,7 +10,8 @@ Follow `AGENTS.md` § Software Engineering Foundation and `.cursor/rules/20-test
 
 - **Behavior first:** Tests validate what the code does, not implementation trivia.
 - **Pyramid:** ~90% unit tests in `tests/` when possible.
-- **Runner:** `pytest` or `npm run test:unit` (`pip install -e ".[dev]"` first).
+- **Runner:** `pytest` or `npm run test:unit` (`uv sync --frozen --extra dev` first).
+- **Quality:** `npm run quality` for orchestrator/CI-facing software changes (see `docs/software-quality-audit.md`).
 - **Integration:** When behavior crosses helpers ↔ scripts ↔ config manifests.
 - **E2E:** Sparingly — full setup smoke, critical install path only.
 

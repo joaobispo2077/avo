@@ -8,12 +8,14 @@ never blocks waiting for the client.
 Soft-adapts when the official ``mcp`` SDK types are unavailable: helpers return
 plain JSON-shaped dicts that match the MRTR wire fields.
 """
+
 from __future__ import annotations
 
 import os
+from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import Enum
-from typing import Any, Mapping
+from typing import Any
 
 from avo.mcp.request_state import (
     DEFAULT_TTL_SECONDS,
@@ -72,6 +74,7 @@ MRTR_KWARG_NAMES: frozenset[str] = frozenset(
 # Process-ephemeral HMAC key (stdio default). Env overrides when set.
 _PROCESS_SIGNING_KEY: bytes | None = None
 
+
 def process_signing_key() -> bytes:
     """Return the process-scoped requestState signing key.
 
@@ -91,10 +94,12 @@ def process_signing_key() -> bytes:
         _PROCESS_SIGNING_KEY = generate_key()
     return _PROCESS_SIGNING_KEY
 
+
 def reset_process_signing_key_for_tests() -> None:
     """Clear the process key (unit tests only)."""
     global _PROCESS_SIGNING_KEY
     _PROCESS_SIGNING_KEY = None
+
 
 def build_confirm_request_state(
     *,
@@ -122,6 +127,7 @@ def build_confirm_request_state(
         include_args_digest=True,
     )
 
+
 def verify_confirm_request_state(
     token: str,
     *,
@@ -144,6 +150,7 @@ def verify_confirm_request_state(
         key=key if key is not None else process_signing_key(),
     )
 
+
 def confirm_elicitation_message(tool: str) -> str:
     """Human-facing elicitation message for a destructive tool confirm."""
     return (
@@ -151,6 +158,7 @@ def confirm_elicitation_message(tool: str) -> str:
         "Set confirm=true only if you intend to run this irreversible or "
         "high-impact operation."
     )
+
 
 def confirm_elicitation_schema() -> dict[str, Any]:
     """JSON Schema for the confirm form (spec-primitive boolean property)."""
@@ -166,6 +174,7 @@ def confirm_elicitation_schema() -> dict[str, Any]:
         "required": ["confirm"],
     }
 
+
 def _caps_field(caps: Any, name: str) -> Any:
     """Read a capability field from SDK model or mapping."""
     if caps is None:
@@ -173,6 +182,7 @@ def _caps_field(caps: Any, name: str) -> Any:
     if isinstance(caps, Mapping):
         return caps.get(name)
     return getattr(caps, name, None)
+
 
 def client_supports_elicitation_create(client_capabilities: Any | None) -> bool:
     """True when the client declared form ``elicitation/create``.
@@ -187,13 +197,16 @@ def client_supports_elicitation_create(client_capabilities: Any | None) -> bool:
     url = _caps_field(elicitation, "url")
     return form is not None or url is None
 
+
 def client_supports_sampling_create_message(client_capabilities: Any | None) -> bool:
     """True when the client declared sampling (``sampling/createMessage``)."""
     return _caps_field(client_capabilities, "sampling") is not None
 
+
 def client_supports_roots_list(client_capabilities: Any | None) -> bool:
     """True when the client declared roots (``roots/list``)."""
     return _caps_field(client_capabilities, "roots") is not None
+
 
 def allowed_input_request_methods(
     client_capabilities: Any | None,
@@ -207,6 +220,7 @@ def allowed_input_request_methods(
     if client_supports_roots_list(client_capabilities):
         allowed.add(METHOD_ROOTS_LIST)
     return frozenset(allowed)
+
 
 def input_request_method(entry: Any) -> str | None:
     """Resolve the wire method for an ``inputRequests`` entry."""
@@ -227,6 +241,7 @@ def input_request_method(entry: Any) -> str | None:
     if "ListRoots" in type_name or "Roots" in type_name:
         return METHOD_ROOTS_LIST
     return None
+
 
 def filter_input_requests(
     input_requests: Mapping[str, Any] | None,
@@ -252,6 +267,7 @@ def filter_input_requests(
             out[key] = entry
     return out
 
+
 def extract_client_capabilities(ctx: Any | None) -> Any | None:
     """Pull client capabilities from MCP ``Context`` (or test double)."""
     if ctx is None:
@@ -260,6 +276,7 @@ def extract_client_capabilities(ctx: Any | None) -> Any | None:
     if callable(caps):
         caps = caps()
     return caps
+
 
 def resolve_include_elicitation(
     client_capabilities: Any | None = None,
@@ -282,9 +299,11 @@ def resolve_include_elicitation(
         client_capabilities
     )
 
+
 def capability_degrade_message(tool: str) -> str:
     """Documented failure text when destructive confirm cannot be elicited."""
     return f"{CAPABILITY_DEGRADE_MESSAGE} Tool: {tool}."
+
 
 def build_confirm_input_requests(*, tool: str) -> dict[str, Any]:
     """Build the ``inputRequests`` map for a destructive confirm gate.
@@ -303,6 +322,7 @@ def build_confirm_input_requests(*, tool: str) -> dict[str, Any]:
         }
     }
 
+
 def _try_sdk_input_required(
     *,
     input_requests: Mapping[str, Any],
@@ -310,7 +330,11 @@ def _try_sdk_input_required(
 ) -> Any | None:
     """Return an SDK ``InputRequiredResult`` when ``mcp`` types are available."""
     try:
-        from mcp.types import ElicitRequest, ElicitRequestFormParams, InputRequiredResult
+        from mcp.types import (
+            ElicitRequest,
+            ElicitRequestFormParams,
+            InputRequiredResult,
+        )
     except ImportError:
         return None
 
@@ -332,7 +356,9 @@ def _try_sdk_input_required(
             continue
         form = ElicitRequestFormParams(
             message=str(params.get("message") or ""),
-            requestedSchema=dict(params.get("requestedSchema") or params.get("requested_schema") or {}),
+            requestedSchema=dict(
+                params.get("requestedSchema") or params.get("requested_schema") or {}
+            ),
             mode="form",
         )
         sdk_requests[key] = ElicitRequest(params=form)
@@ -340,6 +366,7 @@ def _try_sdk_input_required(
         input_requests=sdk_requests,
         request_state=request_state,
     )
+
 
 def build_input_required_result(
     *,
@@ -402,6 +429,7 @@ def build_input_required_result(
         payload["inputRequests"] = requests
     return payload
 
+
 def input_required_to_dict(result: Any) -> dict[str, Any]:
     """Normalize SDK or dict InputRequiredResult to a camelCase wire dict."""
     if isinstance(result, Mapping):
@@ -418,6 +446,7 @@ def input_required_to_dict(result: Any) -> dict[str, Any]:
         dumped = result.model_dump(by_alias=True, mode="json", exclude_none=True)
         return dict(dumped)
     raise TypeError(f"unsupported InputRequiredResult type: {type(result)!r}")
+
 
 def extract_mrtr_fields(
     kwargs: Mapping[str, Any] | None = None,
@@ -461,11 +490,15 @@ def extract_mrtr_fields(
 
     return request_state, input_responses
 
+
 def bridge_kwargs_from_tool_kwargs(kwargs: Mapping[str, Any]) -> dict[str, Any]:
     """Strip MRTR / Context keys before forwarding to the CLI bridge."""
     return {k: v for k, v in kwargs.items() if k not in MRTR_KWARG_NAMES}
 
-def _response_action_and_content(entry: Any) -> tuple[str | None, Mapping[str, Any] | None]:
+
+def _response_action_and_content(
+    entry: Any,
+) -> tuple[str | None, Mapping[str, Any] | None]:
     """Normalize an InputResponses entry to (action, content)."""
     if entry is None:
         return None, None
@@ -482,6 +515,7 @@ def _response_action_and_content(entry: Any) -> tuple[str | None, Mapping[str, A
             content = None
         return (str(action) if action is not None else None), content
     return None, None
+
 
 def confirm_response_status(
     input_responses: Mapping[str, Any] | None,
@@ -521,6 +555,7 @@ def confirm_response_status(
         return "declined"
     return "incomplete"
 
+
 class GateOutcome(str, Enum):
     """Destructive MRTR gate decision."""
 
@@ -528,14 +563,15 @@ class GateOutcome(str, Enum):
     INPUT_REQUIRED = "input_required"
     REJECT = "reject"
 
-@dataclass(frozen=True)
 
+@dataclass(frozen=True)
 class GateDecision:
     """Result of evaluating a destructive tool gate (no side effects)."""
 
     outcome: GateOutcome
     result: Any | None = None
     error_message: str | None = None
+
 
 def evaluate_destructive_gate(
     *,
@@ -617,6 +653,7 @@ def evaluate_destructive_gate(
     # Incomplete (or missing responses with valid state): new InputRequiredResult.
     return _pause()
 
+
 def gate_error_envelope(message: str) -> dict[str, Any]:
     """Bridge-shaped failure envelope for MRTR reject (not a hung waiter)."""
     return {
@@ -626,6 +663,7 @@ def gate_error_envelope(message: str) -> dict[str, Any]:
         "stderr": message,
         "parsed_json": None,
     }
+
 
 __all__ = [
     "ALLOWED_INPUT_REQUEST_METHODS",

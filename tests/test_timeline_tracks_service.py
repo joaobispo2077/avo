@@ -4,11 +4,10 @@ from pathlib import Path
 
 import pytest
 
+from avo.timeline.bmap_service import BMapService
 from avo.timeline.contracts import file_fingerprint
 from avo.timeline.tracks import TrackError, TracksService
-
 from tests.test_timeline_bmap_service import approved_workspace, cue
-from avo.timeline.bmap_service import BMapService
 
 
 def canonical_tracks(workspace, source: Path) -> dict:
@@ -80,3 +79,18 @@ def test_tracks_source_and_timing_mismatch_block(tmp_path: Path) -> None:
     source.write_bytes(b"changed")
     with pytest.raises(TrackError, match="fingerprint"):
         TracksService(workspace).author(value, actor="avo", reason="bad")
+
+
+def test_author_refreshes_editlog_audio_layer(tmp_path: Path) -> None:
+    workspace, _, _ = approved_workspace(tmp_path)
+    BMapService(workspace).author({"cues": [cue()]}, actor="avo", reason="beat")
+    source = workspace.raw_dir / "raw.bin"
+    revision = TracksService(workspace).author(
+        canonical_tracks(workspace, source),
+        actor="avo",
+        reason="resolve assembly",
+    )
+    assert revision["editlogRefresh"]["ok"] is True
+    text = (workspace.raw_dir / "EDITLOG.md").read_text(encoding="utf-8")
+    assert "dialogue" in text
+    assert "`dialogue`" in text

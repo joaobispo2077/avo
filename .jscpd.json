@@ -1,0 +1,19 @@
+{
+  "threshold": 2,
+  "minLines": 5,
+  "minTokens": 50,
+  "absolute": true,
+  "gitignore": true,
+  "path": ["src/avo"],
+  "ignore": [
+    "**/__pycache__/**",
+    "**/*.pyc",
+    "**/.venv/**",
+    "**/node_modules/**",
+    "**/.pytest_cache/**",
+    "**/dist/**",
+    "**/build/**"
+  ],
+  "reporters": ["console"],
+  "format": ["python", "javascript", "typescript", "tsx", "jsx"]
+}

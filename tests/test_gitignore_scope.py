@@ -22,7 +22,9 @@ class GitignoreScopeTests(unittest.TestCase):
             capture_output=True,
             text=True,
         )
-        self.assertEqual(r.returncode, 0, msg=f"{path} should be ignored; stderr={r.stderr}")
+        self.assertEqual(
+            r.returncode, 0, msg=f"{path} should be ignored; stderr={r.stderr}"
+        )
 
     def test_template_provider_is_not_gitignored(self) -> None:
         path = "providers/_template/avo.provider.json"
@@ -36,7 +38,9 @@ class GitignoreScopeTests(unittest.TestCase):
 
     def test_example_project_has_no_personal_paths(self) -> None:
         data = json.loads(
-            (ROOT / "docs" / "templates" / "avo.project.example.json").read_text(encoding="utf-8")
+            (ROOT / "docs" / "templates" / "avo.project.example.json").read_text(
+                encoding="utf-8"
+            )
         )
         blob = json.dumps(data)
         self.assertNotIn("bishop", blob.lower())
@@ -44,7 +48,9 @@ class GitignoreScopeTests(unittest.TestCase):
         self.assertNotIn("H:\\", blob)
 
     def test_validate_usability_does_not_require_bishop(self) -> None:
-        src = (ROOT / "src" / "avo" / "validate_usability.py").read_text(encoding="utf-8")
+        src = (ROOT / "src" / "avo" / "validate_usability.py").read_text(
+            encoding="utf-8"
+        )
         self.assertNotIn("providers/bishop", src)
 
 

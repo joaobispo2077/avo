@@ -1,16 +1,13 @@
 from __future__ import annotations
 
 import json
-import sys
 import unittest
 from pathlib import Path
 from types import SimpleNamespace
 
 ROOT = Path(__file__).resolve().parents[1]
 
-from avo import pack_transcripts
-from avo import render
-from avo import transcribe
+from avo import pack_transcripts, render, transcribe
 
 
 class TranscriptContractTests(unittest.TestCase):
@@ -23,7 +20,9 @@ class TranscriptContractTests(unittest.TestCase):
         transcribe.validate_transcript_payload(self.fixture)
         starts = [word["start"] for word in self.fixture["words"]]
         self.assertEqual(starts, sorted(starts))
-        self.assertTrue(all(word["speaker_id"] is None for word in self.fixture["words"]))
+        self.assertTrue(
+            all(word["speaker_id"] is None for word in self.fixture["words"])
+        )
 
     def test_existing_consumers_accept_local_words(self) -> None:
         phrases = pack_transcripts.group_into_phrases(self.fixture["words"])

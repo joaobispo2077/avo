@@ -1,4 +1,5 @@
 """Unit tests for avo.mcp CLI bridge (argv mapping + envelope; tmp_path only)."""
+
 from __future__ import annotations
 
 import io
@@ -81,15 +82,13 @@ def test_strip_mrtr_kwargs_drops_continuity_fields() -> None:
 def test_run_bridged_strips_mrtr_before_argv(monkeypatch: pytest.MonkeyPatch) -> None:
     captured: list[list[str]] = []
 
-    def _fake_run_cli(argv: list[str]):
-        captured.append(argv)
-        from avo.mcp.bridge import BridgeResult
+    def _fake_main(argv: list[str]):
+        captured.append(list(argv))
+        return 0
 
-        return BridgeResult(ok=True, exit_code=0, stdout="{}", stderr="", parsed_json={})
-
-    monkeypatch.setattr("avo.mcp.bridge.run_cli", _fake_run_cli)
+    monkeypatch.setattr("avo.cli.main", _fake_main)
     result = run_bridged(
-        ("cleanup", "status"),
+        ("cleanup", "verify"),
         {
             "project": "/tmp/p.json",
             "as_json": True,
@@ -98,9 +97,10 @@ def test_run_bridged_strips_mrtr_before_argv(monkeypatch: pytest.MonkeyPatch) ->
         },
     )
     assert result.ok is True
-    assert captured == [
-        ["cleanup", "status", "--project", "/tmp/p.json", "--json"]
-    ]
+    assert captured == [["cleanup", "verify", "--project", "/tmp/p.json", "--json"]]
+    joined = " ".join(captured[0])
+    assert "requestState" not in joined
+    assert "inputResponses" not in joined
 
 
 def test_kwargs_to_argv_repeats_list_flags() -> None:
@@ -233,6 +233,26 @@ def test_cli_tool_specs_cover_all_groups() -> None:
     assert "avo_migrate_timeline_inspect" in names
     assert "avo_cleanup_dry_run" in names
     assert "avo_cleanup_execute" in names
+    assert "avo_editlog_refresh" in names
+
+
+def test_avo_editlog_refresh_bridge_contract() -> None:
+    """Lock dedicated editlog refresh tool: prefix, non-destructive, optional paths."""
+    defs = {defn.spec.name: defn for defn in all_bridge_defs()}
+    assert "avo_editlog_refresh" in defs
+    defn = defs["avo_editlog_refresh"]
+    assert defn.cli_prefix == ("editlog", "refresh")
+    assert defn.spec.cli_argv_template == ("editlog", "refresh")
+    assert defn.spec.group == "editlog"
+    assert defn.spec.destructive is False
+    params = {param.name: param for param in defn.params}
+    assert params["project"].required is False
+    assert params["raw_dir"].required is False
+    description = defn.spec.description
+    assert "AVO digest" in description
+    assert "Rewrites only" in description or "rewrite only" in description.lower()
+    assert "walk edit/" in description
+    assert "hand-write" in description
 
 
 def test_destructive_flags_and_warnings() -> None:

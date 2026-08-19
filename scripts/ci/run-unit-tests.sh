@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Canonical unit test entry for local dev and CI. Requires: pip install -e ".[dev]"
+# Canonical unit test entry for local dev and CI.
+# Requires: `uv sync --frozen --extra dev` (CI) or `uv run --frozen --extra dev` (npm).
 # Default: AVO core only (excludes tests/projects — footage-project specs).
 # Run all tests including projects: pytest
 set -euo pipefail

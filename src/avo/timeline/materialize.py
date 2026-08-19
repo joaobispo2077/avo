@@ -28,12 +28,14 @@ def _reuse_key(
 ) -> str:
     from .contracts import content_hash
 
-    return content_hash({
-        "canonicalInputLock": canonical_input_lock,
-        "renderProfile": render_profile,
-        "projectionHash": projection_hash,
-        "outputPath": str(Path(output_path)),
-    })
+    return content_hash(
+        {
+            "canonicalInputLock": canonical_input_lock,
+            "renderProfile": render_profile,
+            "projectionHash": projection_hash,
+            "outputPath": str(Path(output_path)),
+        }
+    )
 
 
 def _reusable_cut_materialization(
@@ -130,7 +132,9 @@ def materialize_synced_raw(
     snapshot = sync_revision.get("snapshot") or {}
     if snapshot.get("status") == "not-applicable":
         raise ValueError("not-applicable Sync has no correction to materialize")
-    revision_hash = str(sync_revision.get("contentHash") or sync_revision.get("contentSha256") or "")
+    revision_hash = str(
+        sync_revision.get("contentHash") or sync_revision.get("contentSha256") or ""
+    )
     if len(revision_hash) != 64:
         raise ValueError("Sync materialization requires exact approved revision hash")
     return (materializer or SyncMaterializer()).materialize(
@@ -229,13 +233,20 @@ def materialize_cut_proof(
         if existing_invariant != invariant:
             raise ValueError(f"immutable materialization collision: {target}")
         expected_hash = content_hash(
-            {key: value for key, value in existing.items() if key != "materializationHash"}
+            {
+                key: value
+                for key, value in existing.items()
+                if key != "materializationHash"
+            }
         )
         if existing.get("materializationHash") != expected_hash:
             raise ValueError(f"immutable materialization hash mismatch: {target}")
         _remember_reusable_cut(
-            directory, record_path=target, output_path=output_path,
-            canonical_input_lock=lock, render_profile=render_profile,
+            directory,
+            record_path=target,
+            output_path=output_path,
+            canonical_input_lock=lock,
+            render_profile=render_profile,
             projection_hash=projection["projectionHash"],
         )
         return existing
@@ -244,8 +255,11 @@ def materialize_cut_proof(
     record["materializationHash"] = content_hash(record)
     atomic_write_json(target, record)
     _remember_reusable_cut(
-        directory, record_path=target, output_path=output_path,
-        canonical_input_lock=lock, render_profile=render_profile,
+        directory,
+        record_path=target,
+        output_path=output_path,
+        canonical_input_lock=lock,
+        render_profile=render_profile,
         projection_hash=projection["projectionHash"],
     )
     return record

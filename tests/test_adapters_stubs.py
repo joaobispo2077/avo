@@ -30,11 +30,13 @@ class AdapterStubTests(unittest.TestCase):
             self.assertIn(job, JOB_REGISTRIES)
 
     def test_hyperframes_is_a_real_adapter_not_a_stub(self) -> None:
-        from avo.adapters.registry import MOTION_ADAPTERS, adapter_for_routing_suffix
         from avo.adapters.motion.hyperframes import HyperframesAdapter
+        from avo.adapters.registry import MOTION_ADAPTERS, adapter_for_routing_suffix
 
         self.assertNotIn(".stubs.", MOTION_ADAPTERS["hyperframes"])
-        self.assertIs(adapter_for_routing_suffix("motion", "hyperframes"), HyperframesAdapter)
+        self.assertIs(
+            adapter_for_routing_suffix("motion", "hyperframes"), HyperframesAdapter
+        )
 
 
 if __name__ == "__main__":

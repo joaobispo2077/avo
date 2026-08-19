@@ -9,7 +9,6 @@ from avo.timeline.approval_service import ApprovalService
 from avo.timeline.cmap_service import CMapService
 from avo.timeline.contracts import content_hash, file_fingerprint
 from avo.timeline.review_runner import ReviewRunner
-
 from tests.test_timeline_cmap_service import snapshot, workspace
 from tests.test_timeline_review_integration import FakeQc, FakeTranscript, FakeWatch
 
@@ -56,7 +55,11 @@ def approved_review(tmp_path: Path):
         },
         "renderProfile": "proof",
         "projectionHash": "9" * 64,
-        "output": {"path": str(candidate), "sha256": candidate_hash, "sizeBytes": candidate.stat().st_size},
+        "output": {
+            "path": str(candidate),
+            "sha256": candidate_hash,
+            "sizeBytes": candidate.stat().st_size,
+        },
         "producer": {"name": "fixture", "version": "1"},
         "createdAt": "2026-08-13T00:00:00Z",
     }
@@ -95,3 +98,20 @@ def test_changed_candidate_or_stale_review_cannot_approve(tmp_path: Path) -> Non
             actor="creator",
             reason="must fail",
         )
+
+
+def test_decide_updates_editlog_approvals(tmp_path: Path) -> None:
+    ws, revision, review, materialization_path = approved_review(tmp_path)
+    event = ApprovalService(ws).decide(
+        decision="approved",
+        revision_id=revision["revisionId"],
+        review_path=review["reviewPath"],
+        materialization_path=materialization_path,
+        actor="creator",
+        reason="approved exact cut",
+    )
+    assert event["editlogRefresh"]["ok"] is True
+    text = (ws.raw_dir / "EDITLOG.md").read_text(encoding="utf-8")
+    assert "## Approvals" in text
+    assert "approved exact cut" in text
+    assert "Approvals: none recorded yet" not in text

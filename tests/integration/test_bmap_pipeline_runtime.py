@@ -3,15 +3,15 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from tests.test_timeline_bmap_service import approved_workspace, cue
+from tests.test_timeline_cmap_service import snapshot
+from tests.test_timeline_review_integration import FakeQc, FakeTranscript, FakeWatch
+
 from avo.timeline.approval_service import ApprovalService
 from avo.timeline.bmap_service import BMapService
 from avo.timeline.cmap_service import CMapService
 from avo.timeline.contracts import content_hash, file_fingerprint
 from avo.timeline.review_runner import ReviewRunner
-
-from tests.test_timeline_bmap_service import approved_workspace, cue
-from tests.test_timeline_cmap_service import snapshot
-from tests.test_timeline_review_integration import FakeQc, FakeTranscript, FakeWatch
 
 
 def approve_current_cmap(workspace, revision, ordinal: int):
@@ -63,7 +63,12 @@ def approve_current_cmap(workspace, revision, ordinal: int):
         "createdAt": "2026-08-13T00:00:00Z",
     }
     materialization["materializationHash"] = content_hash(materialization)
-    path = workspace.timeline_dir / "materializations" / "cut-proof" / f"proof-{ordinal}.json"
+    path = (
+        workspace.timeline_dir
+        / "materializations"
+        / "cut-proof"
+        / f"proof-{ordinal}.json"
+    )
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(materialization), encoding="utf-8")
     ApprovalService(workspace).decide(

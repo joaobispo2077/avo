@@ -15,9 +15,11 @@ MASTER = "20260801-demo-master-v001"
 
 sys.path.insert(0, str(SRC))
 
-from avo import learndown_export  # noqa: E402
-from avo import project_inventory  # noqa: E402
-from avo import wrap  # noqa: E402
+from avo import (
+    learndown_export,
+    project_inventory,
+    wrap,
+)
 
 
 class LearndownExportTests(unittest.TestCase):
@@ -45,6 +47,7 @@ class LearndownExportTests(unittest.TestCase):
         self.assertEqual(payload["schemaVersion"], 1)
         self.assertEqual(payload["provider"], "bishop")
         self.assertEqual(payload["learning"]["aiMemory"], "exported")
+        self.assertIsNone(payload["editlogLock"])
 
     def test_export_writes_provider_entry_and_index(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -132,11 +135,139 @@ class LearndownExportTests(unittest.TestCase):
             wrap_payload["rawDir"] = str(raw_dir)
             (raw_dir / "avo.wrap.draft.json").write_text("{}", encoding="utf-8")
             (raw_dir / "avo.wrap.json").write_text("{}", encoding="utf-8")
-            entry_dir = learndown_export.export_provider_learndown(wrap_payload, root=root)
+            entry_dir = learndown_export.export_provider_learndown(
+                wrap_payload, root=root
+            )
             assert entry_dir is not None
             self.assertTrue((entry_dir / "wrap.json").is_file())
-            payload = json.loads((entry_dir / "learndown.json").read_text(encoding="utf-8"))
+            payload = json.loads(
+                (entry_dir / "learndown.json").read_text(encoding="utf-8")
+            )
             self.assertEqual(payload["status"], "final")
+            self.assertIsNone(payload["editlogLock"])
+            self.assertFalse((entry_dir / "EDITLOG.md").is_file())
+
+    def test_export_copies_footage_editlog_as_lock(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            raw_dir = root / "footage"
+            raw_dir.mkdir()
+            (root / "providers" / "bishop" / "learndowns").mkdir(parents=True)
+            (raw_dir / "EDITLOG.md").write_text(
+                "# EDITLOG lock source\n", encoding="utf-8"
+            )
+            wrap_payload = wrap.build_wrap_payload(
+                self.report,
+                session_id="sess",
+                provider="bishop",
+                master_basename=MASTER,
+                summary="Draft lock.",
+                status="draft",
+            )
+            wrap_payload["rawDir"] = str(raw_dir)
+            entry_dir = learndown_export.export_provider_learndown(
+                wrap_payload, root=root
+            )
+            assert entry_dir is not None
+            lock = entry_dir / "EDITLOG.md"
+            self.assertTrue(lock.is_file())
+            self.assertEqual(
+                lock.read_text(encoding="utf-8"), "# EDITLOG lock source\n"
+            )
+            payload = json.loads(
+                (entry_dir / "learndown.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(payload["editlogLock"], "EDITLOG.md")
+            md = (entry_dir / "learndown.md").read_text(encoding="utf-8")
+            self.assertIn("## EDITLOG lock", md)
+
+    def test_editlog_lock_is_not_overwritten_on_later_export(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            raw_dir = root / "footage"
+            raw_dir.mkdir()
+            (root / "providers" / "bishop" / "learndowns").mkdir(parents=True)
+            (raw_dir / "EDITLOG.md").write_text("first lock\n", encoding="utf-8")
+            wrap_payload = wrap.build_wrap_payload(
+                self.report,
+                session_id="sess",
+                provider="bishop",
+                master_basename=MASTER,
+                summary="Draft lock.",
+                status="draft",
+            )
+            wrap_payload["rawDir"] = str(raw_dir)
+            entry_dir = learndown_export.export_provider_learndown(
+                wrap_payload, root=root
+            )
+            assert entry_dir is not None
+            (raw_dir / "EDITLOG.md").write_text("later refresh\n", encoding="utf-8")
+            wrap_payload["status"] = "final"
+            (raw_dir / "avo.wrap.json").write_text("{}", encoding="utf-8")
+            later = learndown_export.export_provider_learndown(wrap_payload, root=root)
+            assert later is not None
+            self.assertEqual(
+                (later / "EDITLOG.md").read_text(encoding="utf-8"),
+                "first lock\n",
+            )
+            payload = json.loads((later / "learndown.json").read_text(encoding="utf-8"))
+            self.assertEqual(payload["editlogLock"], "EDITLOG.md")
+
+    def test_missing_footage_editlog_does_not_fail_export(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            raw_dir = root / "footage"
+            raw_dir.mkdir()
+            (root / "providers" / "bishop" / "learndowns").mkdir(parents=True)
+            wrap_payload = wrap.build_wrap_payload(
+                self.report,
+                session_id="sess",
+                provider="bishop",
+                master_basename=MASTER,
+                summary="No editlog.",
+                status="draft",
+            )
+            wrap_payload["rawDir"] = str(raw_dir)
+            entry_dir = learndown_export.export_provider_learndown(
+                wrap_payload, root=root
+            )
+            assert entry_dir is not None
+            self.assertFalse((entry_dir / "EDITLOG.md").is_file())
+            payload = json.loads(
+                (entry_dir / "learndown.json").read_text(encoding="utf-8")
+            )
+            self.assertIsNone(payload["editlogLock"])
+
+    def test_later_export_backfills_lock_when_dest_missing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            raw_dir = root / "footage"
+            raw_dir.mkdir()
+            (root / "providers" / "bishop" / "learndowns").mkdir(parents=True)
+            wrap_payload = wrap.build_wrap_payload(
+                self.report,
+                session_id="sess",
+                provider="bishop",
+                master_basename=MASTER,
+                summary="Backfill lock.",
+                status="draft",
+            )
+            wrap_payload["rawDir"] = str(raw_dir)
+            entry_dir = learndown_export.export_provider_learndown(
+                wrap_payload, root=root
+            )
+            assert entry_dir is not None
+            self.assertFalse((entry_dir / "EDITLOG.md").is_file())
+            (raw_dir / "EDITLOG.md").write_text("backfill lock\n", encoding="utf-8")
+            wrap_payload["status"] = "final"
+            later = learndown_export.export_provider_learndown(wrap_payload, root=root)
+            assert later is not None
+            self.assertEqual(
+                (later / "EDITLOG.md").read_text(encoding="utf-8"),
+                "backfill lock\n",
+            )
+            payload = json.loads((later / "learndown.json").read_text(encoding="utf-8"))
+            self.assertEqual(payload["editlogLock"], "EDITLOG.md")
 
 
 if __name__ == "__main__":

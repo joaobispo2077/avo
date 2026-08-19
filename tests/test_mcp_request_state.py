@@ -1,4 +1,5 @@
 """Unit tests for avo.mcp requestState encode/verify (no providers / footage)."""
+
 from __future__ import annotations
 
 import base64
@@ -75,7 +76,9 @@ def test_mrtr_confirm_helpers_roundtrip() -> None:
 def test_evaluate_destructive_gate_first_call_and_retry() -> None:
     key = generate_key()
     args = {"project": "/tmp/gate", "as_json": True}
-    first = mrtr.evaluate_destructive_gate(tool="avo_cleanup_execute", args=args, key=key)
+    first = mrtr.evaluate_destructive_gate(
+        tool="avo_cleanup_execute", args=args, key=key
+    )
     assert first.outcome is mrtr.GateOutcome.INPUT_REQUIRED
     assert first.result is not None
     wire = mrtr.input_required_to_dict(first.result)
@@ -166,9 +169,13 @@ def test_reject_tampered_payload() -> None:
     pad = "=" * (-len(body_b64) % 4)
     raw = json.loads(base64.urlsafe_b64decode(body_b64 + pad))
     raw["tool"] = "avo_other_tool"
-    new_body = base64.urlsafe_b64encode(
-        json.dumps(raw, sort_keys=True, separators=(",", ":")).encode("utf-8")
-    ).rstrip(b"=").decode("ascii")
+    new_body = (
+        base64.urlsafe_b64encode(
+            json.dumps(raw, sort_keys=True, separators=(",", ":")).encode("utf-8")
+        )
+        .rstrip(b"=")
+        .decode("ascii")
+    )
     bad = f"{new_body}.{mac}"
     with pytest.raises(RequestStateError, match="integrity"):
         verify_request_state(bad, tool="avo_other_tool", args={}, key=key)

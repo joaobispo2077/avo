@@ -23,8 +23,19 @@ class ReleasePipelineTests(unittest.TestCase):
             "./scripts/ci/semantic-release-pyproject-version.mjs",
             text,
         )
+        self.assertIn(
+            "./scripts/ci/semantic-release-package-version.mjs",
+            text,
+        )
+        self.assertNotIn("@semantic-release/npm", text)
 
-    def test_semantic_release_pyproject_plugin_module(self) -> None:
+    def test_semantic_release_package_version_plugin_module(self) -> None:
+        plugin = ROOT / "scripts/ci/semantic-release-package-version.mjs"
+        self.assertTrue(plugin.is_file())
+        text = plugin.read_text(encoding="utf-8")
+        self.assertIn("package.json", text)
+        self.assertIn("package-lock.json", text)
+        self.assertIn("prepare", text)
         plugin = ROOT / "scripts/ci/semantic-release-pyproject-version.mjs"
         self.assertTrue(plugin.is_file())
 
@@ -115,7 +126,7 @@ class ReleasePipelineTests(unittest.TestCase):
     def test_sync_pyproject_version_noop_when_already_set(self) -> None:
         script = ROOT / "scripts/ci/sync-pyproject-version.mjs"
         py_original = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
-        match = re.search(r'^version\s*=\s*"([^"]+)"', py_original, re.M)
+        match = re.search(r'^version\s*=\s*"([^"]+)"', py_original, re.MULTILINE)
         self.assertIsNotNone(match)
         current = match.group(1)
         proc = subprocess.run(
@@ -149,7 +160,7 @@ class ReleasePipelineTests(unittest.TestCase):
             f'version = "{version}"',
             py_original,
             count=1,
-            flags=re.M,
+            flags=re.MULTILINE,
         )
         (ROOT / "pyproject.toml").write_text(py_patched, encoding="utf-8")
 
@@ -161,7 +172,7 @@ class ReleasePipelineTests(unittest.TestCase):
         self.addCleanup(restore)
         pkg = json.loads(pkg_path.read_text(encoding="utf-8"))["version"]
         pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
-        match = re.search(r'^version\s*=\s*"([^"]+)"', pyproject, re.M)
+        match = re.search(r'^version\s*=\s*"([^"]+)"', pyproject, re.MULTILINE)
         self.assertIsNotNone(match)
         self.assertEqual(pkg, version)
         self.assertEqual(match.group(1), version)
@@ -188,7 +199,7 @@ class ReleasePipelineTests(unittest.TestCase):
             f'version = "{version}"',
             py_original,
             count=1,
-            flags=re.M,
+            flags=re.MULTILINE,
         )
         (ROOT / "pyproject.toml").write_text(py_patched, encoding="utf-8")
 
@@ -207,7 +218,9 @@ class ReleasePipelineTests(unittest.TestCase):
         self.assertEqual(proc.returncode, 0, msg=proc.stderr or proc.stdout)
         self.assertIn("OK:", proc.stdout)
 
-    def test_verify_release_version_accepts_semantic_release_changelog_heading(self) -> None:
+    def test_verify_release_version_accepts_semantic_release_changelog_heading(
+        self,
+    ) -> None:
         changelog = ROOT / "CHANGELOG.md"
         original = changelog.read_text(encoding="utf-8")
         version = "1.0.0"
@@ -228,7 +241,7 @@ class ReleasePipelineTests(unittest.TestCase):
             f'version = "{version}"',
             py_original,
             count=1,
-            flags=re.M,
+            flags=re.MULTILINE,
         )
         (ROOT / "pyproject.toml").write_text(py_patched, encoding="utf-8")
 

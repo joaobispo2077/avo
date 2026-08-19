@@ -18,15 +18,22 @@ class TimelineStoreTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             store = ArtifactStore(Path(tmp) / "cmap.json")
             store.initialize(
-                artifact_type="cmap", artifact_id="main", video_id="video-1",
-                provider="bishop", timeline_domain="raw-source",
+                artifact_type="cmap",
+                artifact_id="main",
+                video_id="video-1",
+                provider="bishop",
+                timeline_domain="raw-source",
             )
             first = store.append_revision(
-                snapshot={"segments": []}, actor="agent", reason="initial",
+                snapshot={"segments": []},
+                actor="agent",
+                reason="initial",
             )
             second = store.append_revision(
                 snapshot={"segments": [{"segmentId": "s1"}]},
-                actor="agent", reason="keep intro", parent_revision_id=first["revisionId"],
+                actor="agent",
+                reason="keep intro",
+                parent_revision_id=first["revisionId"],
             )
             document = store.load()
             self.assertEqual(document["currentRevisionId"], second["revisionId"])
@@ -38,15 +45,24 @@ class TimelineStoreTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             store = ArtifactStore(Path(tmp) / "cmap.json")
             store.initialize(
-                artifact_type="cmap", artifact_id="main", video_id="video-1",
-                provider="bishop", timeline_domain="raw-source",
+                artifact_type="cmap",
+                artifact_id="main",
+                video_id="video-1",
+                provider="bishop",
+                timeline_domain="raw-source",
             )
             store.append_revision(
-                snapshot={}, actor="agent", reason="one", revision_id="r0001",
+                snapshot={},
+                actor="agent",
+                reason="one",
+                revision_id="r0001",
             )
             with self.assertRaises(StoreError):
                 store.append_revision(
-                    snapshot={}, actor="agent", reason="duplicate", revision_id="r0001",
+                    snapshot={},
+                    actor="agent",
+                    reason="duplicate",
+                    revision_id="r0001",
                 )
 
     def test_atomic_write_keeps_previous_file_when_replace_fails(self) -> None:
@@ -63,8 +79,11 @@ class TimelineStoreTests(unittest.TestCase):
             path = Path(tmp) / "timeline" / "cmap.json"
             store = ArtifactStore(path)
             store.initialize(
-                artifact_type="cmap", artifact_id="video:cmap", video_id="video",
-                provider="bishop", timeline_domain="raw-source",
+                artifact_type="cmap",
+                artifact_id="video:cmap",
+                video_id="video",
+                provider="bishop",
+                timeline_domain="raw-source",
             )
             first = store.append_revision(snapshot={}, actor="agent", reason="one")
             raw_index = json.loads(path.read_text(encoding="utf-8"))
@@ -74,7 +93,9 @@ class TimelineStoreTests(unittest.TestCase):
             self.assertTrue(sidecar.is_file())
             with self.assertRaisesRegex(StoreError, "compare-and-swap"):
                 store.append_revision(
-                    snapshot={}, actor="agent", reason="stale writer",
+                    snapshot={},
+                    actor="agent",
+                    reason="stale writer",
                     expected_head_hash="0" * 64,
                 )
             self.assertEqual(store.load()["currentRevisionId"], first["revisionId"])
@@ -84,13 +105,17 @@ class TimelineStoreTests(unittest.TestCase):
             path = Path(tmp) / "timeline" / "cmap.json"
             store = ArtifactStore(path)
             store.initialize(
-                artifact_type="cmap", artifact_id="video:cmap", video_id="video",
-                provider="bishop", timeline_domain="raw-source",
+                artifact_type="cmap",
+                artifact_id="video:cmap",
+                video_id="video",
+                provider="bishop",
+                timeline_domain="raw-source",
             )
             store.append_revision(snapshot={}, actor="agent", reason="one")
             index = json.loads(path.read_text(encoding="utf-8"))
             sidecar = path.parent / index["revisionRefs"][0]["path"]
-            value = json.loads(sidecar.read_text(encoding="utf-8")); value["reason"] = "tampered"
+            value = json.loads(sidecar.read_text(encoding="utf-8"))
+            value["reason"] = "tampered"
             sidecar.write_text(json.dumps(value), encoding="utf-8")
             with self.assertRaisesRegex(StoreError, "hash mismatch"):
                 store.load_index()

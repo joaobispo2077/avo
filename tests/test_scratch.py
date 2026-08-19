@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import sys
 import tempfile
 import unittest
@@ -13,8 +12,8 @@ ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
 sys.path.insert(0, str(SRC))
 
-from avo import scratch  # noqa: E402
-from avo.scratch import ScratchError  # noqa: E402
+from avo import scratch
+from avo.scratch import ScratchError
 
 
 class ScratchTests(unittest.TestCase):
@@ -24,7 +23,9 @@ class ScratchTests(unittest.TestCase):
             with patch.object(scratch, "tmp_dir", return_value=root):
                 for kind in scratch.SCRATCH_KINDS:
                     path = scratch.scratch_path(kind, "sess-1", "frame.png")
-                    self.assertEqual(path, (root / kind / "sess-1" / "frame.png").resolve())
+                    self.assertEqual(
+                        path, (root / kind / "sess-1" / "frame.png").resolve()
+                    )
                     self.assertTrue(path.parent.is_dir())
 
     def test_scratch_path_rejects_unknown_kind_and_escape(self) -> None:
@@ -44,7 +45,9 @@ class ScratchTests(unittest.TestCase):
                 with self.assertRaises(ScratchError):
                     scratch.scratch_path("qc", "sess-1", str(root / "outside.png"))
 
-    def test_purge_session_tmp_removes_all_kinds_and_leaves_other_sessions(self) -> None:
+    def test_purge_session_tmp_removes_all_kinds_and_leaves_other_sessions(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             with patch.object(scratch, "tmp_dir", return_value=root):
@@ -76,7 +79,9 @@ class ScratchTests(unittest.TestCase):
                         "preserved": [{"path": "edit/masters/a.mp4", "bytes": 60}],
                     },
                 }
-                report_path, meta_path = scratch.write_inventory_scratch("sess-1", report)
+                report_path, meta_path = scratch.write_inventory_scratch(
+                    "sess-1", report
+                )
                 self.assertTrue(report_path.is_file())
                 self.assertTrue(meta_path.is_file())
                 self.assertTrue(scratch.scratch_exists("sess-1"))

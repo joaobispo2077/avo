@@ -1,12 +1,16 @@
 """Resolve canonical timeline authority and active artifact lineage for a project."""
+
 from __future__ import annotations
 
 import json
+import re
+import sys
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from .contracts import file_fingerprint, validate_document, ContractError
-from .store import ArtifactStore, StoreError, atomic_write_json
+from .contracts import file_fingerprint
+from .store import ArtifactStore, atomic_write_json
 
 ARTIFACTS = {
     "cmap": "raw-source",
@@ -21,31 +25,137 @@ class WorkspaceError(RuntimeError):
     pass
 
 
+_WSL_MNT_RE = re.compile(r"^/mnt/([a-zA-Z])/(.*)$")
+
+
+def _wsl_mnt_text(declared: str | Path) -> str:
+    text = str(declared).replace("\\", "/")
+    if not text.startswith("/") and text.lower().startswith("mnt/"):
+        text = "/" + text
+    return text
+
+
+def map_wsl_mnt_path(declared: str | Path, *, platform: str | None = None) -> Path:
+    """Map WSL ``/mnt/<letter>/...`` paths to a Windows drive path when on win32."""
+    platform = platform or sys.platform
+    match = _WSL_MNT_RE.match(_wsl_mnt_text(declared))
+    if platform == "win32" and match:
+        rest = match.group(2).replace("/", "\\")
+        return Path(f"{match.group(1).upper()}:\\{rest}")
+    return Path(declared)
+
+
+def _try_resolve_existing(path: Path, exists_fn: Callable[[Path], bool]) -> Path | None:
+    if not exists_fn(path):
+        return None
+    try:
+        if path.exists():
+            return path.resolve()
+    except OSError:
+        pass
+    return path
+
+
+def _missing_raw_dir_error(
+    candidate: Path, attempted: list[Path], parent_fallback: Path | None
+) -> WorkspaceError:
+    tried = "; ".join(str(path) for path in attempted)
+    parent_note = (
+        f"; project parent {parent_fallback}" if parent_fallback is not None else ""
+    )
+    return WorkspaceError(
+        f"rawDir does not exist: declared/mapped {candidate}{parent_note} (tried: {tried})"
+    )
+
+
+def _declared_candidate(
+    project_path: Path | None,
+    declared: str | Path,
+    *,
+    platform: str,
+) -> Path:
+    candidate = map_wsl_mnt_path(declared, platform=platform)
+    mapping_applied = (
+        platform == "win32" and _WSL_MNT_RE.match(_wsl_mnt_text(declared)) is not None
+    )
+    if project_path is not None and not candidate.is_absolute() and not mapping_applied:
+        return project_path.parent / candidate
+    return candidate
+
+
+def resolve_project_raw_dir(
+    project_path: Path | None,
+    declared: str | Path,
+    *,
+    platform: str | None = None,
+    exists: Callable[[Path], bool] | None = None,
+) -> Path:
+    """Resolve a project ``rawDir`` to a usable footage root.
+
+    On Windows, ``/mnt/<letter>/...`` maps to ``<letter>:\\...``. If the
+    mapped/declared path is missing and ``project_path.parent / "edit"`` exists,
+    the project parent is used. Fail closed naming both attempted paths.
+    """
+    platform = platform or sys.platform
+    exists_fn = exists or (lambda path: Path(path).exists())
+    project_path = Path(project_path).expanduser() if project_path else None
+    candidate = _declared_candidate(project_path, declared, platform=platform)
+    attempted: list[Path] = [candidate]
+    found = _try_resolve_existing(candidate, exists_fn)
+    if found is not None:
+        return found
+
+    parent_fallback: Path | None = None
+    if project_path is not None:
+        parent_fallback = project_path.parent
+        attempted.append(parent_fallback)
+        if exists_fn(parent_fallback / "edit"):
+            found_parent = _try_resolve_existing(parent_fallback, exists_fn)
+            return found_parent if found_parent is not None else parent_fallback
+
+    raise _missing_raw_dir_error(candidate, attempted, parent_fallback)
+
+
 class TimelineWorkspace:
-    def __init__(self, *, project_path: Path, project: dict[str, Any], raw_dir: Path, video_id: str):
+    def __init__(
+        self,
+        *,
+        project_path: Path,
+        project: dict[str, Any],
+        raw_dir: Path,
+        video_id: str,
+    ):
         self.project_path = Path(project_path)
         self.project = project
         self.raw_dir = Path(raw_dir)
         self.video_id = video_id
         policy = project.get("timeline") or {}
-        self.timeline_dir = self.raw_dir / str(policy.get("directory") or "edit/timeline")
-        self.review_dir = self.raw_dir / str(policy.get("reviewDirectory") or "edit/review")
-        self.generated_edl = self.raw_dir / str(policy.get("generatedEdlPath") or "edit/edl.json")
+        self.timeline_dir = self.raw_dir / str(
+            policy.get("directory") or "edit/timeline"
+        )
+        self.review_dir = self.raw_dir / str(
+            policy.get("reviewDirectory") or "edit/review"
+        )
+        self.generated_edl = self.raw_dir / str(
+            policy.get("generatedEdlPath") or "edit/edl.json"
+        )
         self.pipeline_run_path = self.timeline_dir / "pipeline-run.json"
 
     @classmethod
-    def from_project(cls, project_path: Path, *, video_id: str | None = None) -> "TimelineWorkspace":
+    def from_project(
+        cls, project_path: Path, *, video_id: str | None = None
+    ) -> TimelineWorkspace:
         project_path = Path(project_path).expanduser().resolve()
         try:
             project = json.loads(project_path.read_text(encoding="utf-8"))
         except (OSError, ValueError) as exc:
             raise WorkspaceError(f"cannot load project {project_path}: {exc}") from exc
         raw_value = str(project.get("rawDir") or project_path.parent)
-        raw_dir = Path(raw_value).expanduser()
-        if not raw_dir.is_absolute():
-            raw_dir = (project_path.parent / raw_dir).resolve()
+        raw_dir = resolve_project_raw_dir(project_path, raw_value)
         return cls(
-            project_path=project_path, project=project, raw_dir=raw_dir,
+            project_path=project_path,
+            project=project,
+            raw_dir=raw_dir,
             video_id=video_id or str(project.get("videoId") or raw_dir.name),
         )
 
@@ -71,20 +181,31 @@ class TimelineWorkspace:
         self.review_dir.mkdir(parents=True, exist_ok=True)
         for artifact_type, domain in ARTIFACTS.items():
             self.store(artifact_type).initialize(
-                artifact_type=artifact_type, artifact_id=f"{self.video_id}:{artifact_type}",
-                video_id=self.video_id, provider=provider, timeline_domain=domain,
+                artifact_type=artifact_type,
+                artifact_id=f"{self.video_id}:{artifact_type}",
+                video_id=self.video_id,
+                provider=provider,
+                timeline_domain=domain,
             )
         projection = self.timeline_dir / "projection.json"
         if not projection.exists():
-            atomic_write_json(projection, {
-                "schemaVersion": "1.0.0", "canonicalDirectory": "edit/timeline",
-                "generatedEdlPath": "edit/edl.json", "canonicalFirst": True,
-                "status": "not-generated",
-            })
+            atomic_write_json(
+                projection,
+                {
+                    "schemaVersion": "1.0.0",
+                    "canonicalDirectory": "edit/timeline",
+                    "generatedEdlPath": "edit/edl.json",
+                    "canonicalFirst": True,
+                    "status": "not-generated",
+                },
+            )
         from .lifecycle import PipelineRunStore
+
         PipelineRunStore(self.pipeline_run_path).initialize(
-            run_id=f"{self.video_id}-run-0001", video_id=self.video_id,
-            provider=provider, project_path=self.project_path,
+            run_id=f"{self.video_id}-run-0001",
+            video_id=self.video_id,
+            provider=provider,
+            project_path=self.project_path,
         )
         return self.status()
 
@@ -92,7 +213,9 @@ class TimelineWorkspace:
         if self.authority != "canonical":
             migration = (self.project.get("timeline") or {}).get("migration") or {}
             if not migration.get("allowLegacyEdlFallback", True):
-                raise WorkspaceError("canonical timeline is unavailable and legacy fallback is disabled")
+                raise WorkspaceError(
+                    "canonical timeline is unavailable and legacy fallback is disabled"
+                )
             return {"authority": "legacy", "valid": True, "artifacts": {}}
         status = self.status()
         projection_path = self.timeline_dir / "projection.json"
@@ -123,16 +246,22 @@ class TimelineWorkspace:
                 "eventCount": len(index["eventRefs"]),
             }
         result = {
-            "authority": self.authority, "projectPath": str(self.project_path),
-            "rawDir": str(self.raw_dir), "videoId": self.video_id,
-            "provider": str(self.project.get("provider") or ""), "artifacts": artifacts,
+            "authority": self.authority,
+            "projectPath": str(self.project_path),
+            "rawDir": str(self.raw_dir),
+            "videoId": self.video_id,
+            "provider": str(self.project.get("provider") or ""),
+            "artifacts": artifacts,
         }
         if self.pipeline_run_path.is_file():
             from .lifecycle import PipelineRunStore
+
             run = PipelineRunStore(self.pipeline_run_path).load()
             result["pipeline"] = {
-                "runId": run["runId"], "mainState": run["mainState"],
-                "sideState": run["sideState"], "blockers": run["blockers"],
+                "runId": run["runId"],
+                "mainState": run["mainState"],
+                "sideState": run["sideState"],
+                "blockers": run["blockers"],
                 "updatedAt": run["updatedAt"],
             }
         return result
@@ -146,10 +275,11 @@ class TimelineWorkspace:
             index = self.store(artifact_type).load_index()
             head = index["headRevisionId"]
             if head:
-                ref = next(item for item in index["revisionRefs"] if item["revisionId"] == head)
+                ref = next(
+                    item for item in index["revisionRefs"] if item["revisionId"] == head
+                )
                 result[artifact_type] = ref["contentSha256"]
         return dict(sorted(result.items()))
-
 
     def review_change_summary(
         self,
@@ -173,7 +303,8 @@ class TimelineWorkspace:
                 continue
             ref = next(
                 (
-                    item for item in index["revisionRefs"]
+                    item
+                    for item in index["revisionRefs"]
                     if item["contentSha256"] == dependency_hash
                 ),
                 None,
@@ -188,49 +319,52 @@ class TimelineWorkspace:
                 counts[name] = counts.get(name, 0) + 1
                 target = operation.get("target") or {}
                 label = ":".join(
-                    value for value in (
+                    value
+                    for value in (
                         str(target.get("collection") or ""),
                         str(target.get("stableId") or ""),
-                    ) if value
+                    )
+                    if value
                 )
                 if label and label not in targets:
                     targets.append(label)
             if not counts:
                 counts = {"update": 1}
             shown_targets = targets[:target_limit]
-            items.append({
-                "artifactType": artifact_type,
-                "revisionId": revision["revisionId"],
-                "reason": revision["reason"],
-                "operationCounts": dict(sorted(counts.items())),
-                "targets": shown_targets,
-                "truncatedTargets": max(0, len(targets) - len(shown_targets)),
-            })
+            items.append(
+                {
+                    "artifactType": artifact_type,
+                    "revisionId": revision["revisionId"],
+                    "reason": revision["reason"],
+                    "operationCounts": dict(sorted(counts.items())),
+                    "targets": shown_targets,
+                    "truncatedTargets": max(0, len(targets) - len(shown_targets)),
+                }
+            )
         if not items:
             keys = sorted(dependencies)
-            items = [{
-                "artifactType": "candidate",
-                "revisionId": "dependency-lock",
-                "reason": "materialized from the exact declared dependency snapshot",
-                "operationCounts": {"materialize": 1},
-                "targets": keys[:target_limit],
-                "truncatedTargets": max(0, len(keys) - target_limit),
-            }]
+            items = [
+                {
+                    "artifactType": "candidate",
+                    "revisionId": "dependency-lock",
+                    "reason": "materialized from the exact declared dependency snapshot",
+                    "operationCounts": {"materialize": 1},
+                    "targets": keys[:target_limit],
+                    "truncatedTargets": max(0, len(keys) - target_limit),
+                }
+            ]
         phrases = []
         for item in items:
             operations = ", ".join(
                 f"{name} {count}" for name, count in item["operationCounts"].items()
             )
-            phrases.append(
-                f"{item['artifactType']} {item['revisionId']}: {operations}"
-            )
+            phrases.append(f"{item['artifactType']} {item['revisionId']}: {operations}")
         return {
             "headline": "; ".join(phrases),
             "items": items,
             "windows": list(windows or []),
             "staleDependencies": sorted(stale),
         }
-
 
     def invalidate_descendants(
         self,
@@ -266,3 +400,9 @@ class TimelineWorkspace:
                 f"{artifact_type} is {index['activeState']}; rebase/revalidate before render or approval"
             )
         return index
+
+    def notify_editlog(self) -> dict[str, Any]:
+        """Refresh footage-root EDITLOG after a successful canonical write."""
+        from avo.editlog import after_canonical_write
+
+        return after_canonical_write(self.raw_dir)

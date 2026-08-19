@@ -24,13 +24,16 @@ def test_exact_candidate_evidence_requires_exact_bytes_and_lock():
 
 def test_raw_sync_evidence_survives_bmap_change_only():
     evidence = item(
-        "sync", "a" * 64,
+        "sync",
+        "a" * 64,
         {"raw": "b" * 64, "sync-map": "c" * 64, "bmap": "d" * 64},
         "raw-sync",
     )
     current = {
-        "raw": "b" * 64, "sync-map": "c" * 64,
-        "bmap": "e" * 64, "tracks": "f" * 64,
+        "raw": "b" * 64,
+        "sync-map": "c" * 64,
+        "bmap": "e" * 64,
+        "tracks": "f" * 64,
     }
     assert evidence_is_fresh(evidence, "9" * 64, current)
     current["sync-map"] = "0" * 64
@@ -39,16 +42,19 @@ def test_raw_sync_evidence_survives_bmap_change_only():
 
 def test_rights_facts_follow_source_usage_lock():
     evidence = item(
-        "rights", "a" * 64,
+        "rights",
+        "a" * 64,
         {"rawInventory": "b" * 64, "sourceUsage": "c" * 64},
         "source-rights",
     )
     assert evidence_is_fresh(
-        evidence, "9" * 64,
+        evidence,
+        "9" * 64,
         {"rawInventory": "b" * 64, "sourceUsage": "c" * 64, "bmap": "d" * 64},
     )
     assert not evidence_is_fresh(
-        evidence, "9" * 64,
+        evidence,
+        "9" * 64,
         {"rawInventory": "b" * 64, "sourceUsage": "e" * 64},
     )
 

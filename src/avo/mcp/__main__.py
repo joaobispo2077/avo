@@ -1,4 +1,5 @@
 """``python -m avo.mcp`` — start the local stdio MCP server."""
+
 from __future__ import annotations
 
 from avo.mcp.server import run_stdio

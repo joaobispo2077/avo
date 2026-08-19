@@ -105,12 +105,16 @@ def diff_inventories(pre: dict[str, int], post: dict[str, int]) -> FileDiff:
             modified.append(entry)
         else:
             unchanged.append(entry)
-    return FileDiff(added=added, removed=removed, modified=modified, unchanged=unchanged)
+    return FileDiff(
+        added=added, removed=removed, modified=modified, unchanged=unchanged
+    )
 
 
 def _write_json(path: Path, payload: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    path.write_text(
+        json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+    )
 
 
 def load_session_meta(session_id: str) -> dict[str, Any]:
@@ -198,23 +202,37 @@ def _context_to_dict(ctx: SessionContext) -> dict[str, Any]:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="AVO pipeline session lifecycle (local-only).")
+    parser = argparse.ArgumentParser(
+        description="AVO pipeline session lifecycle (local-only)."
+    )
     sub = parser.add_subparsers(dest="cmd", required=True)
 
-    p_start = sub.add_parser("start", help="Begin session and write pre-inventory snapshot.")
-    p_start.add_argument("--raw-dir", required=True, help="Footage workflow root (rawDir).")
+    p_start = sub.add_parser(
+        "start", help="Begin session and write pre-inventory snapshot."
+    )
+    p_start.add_argument(
+        "--raw-dir", required=True, help="Footage workflow root (rawDir)."
+    )
     p_start.add_argument("--provider", required=True, help="Provider slug.")
     p_start.add_argument("--title", default="", help="Optional working title.")
 
-    p_finalize = sub.add_parser("finalize", help="Set master basename and compute final session id.")
-    p_finalize.add_argument("--session-id", required=True, help="Provisional session id from start.")
-    p_finalize.add_argument("--master-basename", required=True, help="Approved master file stem.")
+    p_finalize = sub.add_parser(
+        "finalize", help="Set master basename and compute final session id."
+    )
+    p_finalize.add_argument(
+        "--session-id", required=True, help="Provisional session id from start."
+    )
+    p_finalize.add_argument(
+        "--master-basename", required=True, help="Approved master file stem."
+    )
 
     args = parser.parse_args(argv)
 
     if args.cmd == "start":
         ctx = start_session(Path(args.raw_dir), args.provider, title=args.title)
-        sys.stdout.write(json.dumps(_context_to_dict(ctx), indent=2, ensure_ascii=False) + "\n")
+        sys.stdout.write(
+            json.dumps(_context_to_dict(ctx), indent=2, ensure_ascii=False) + "\n"
+        )
         return 0
 
     if args.cmd == "finalize":
@@ -223,7 +241,9 @@ def main(argv: list[str] | None = None) -> int:
         except (FileNotFoundError, FileExistsError) as exc:
             print(f"error: {exc}", file=sys.stderr)
             return 1
-        sys.stdout.write(json.dumps(_context_to_dict(ctx), indent=2, ensure_ascii=False) + "\n")
+        sys.stdout.write(
+            json.dumps(_context_to_dict(ctx), indent=2, ensure_ascii=False) + "\n"
+        )
         return 0
 
     return 2

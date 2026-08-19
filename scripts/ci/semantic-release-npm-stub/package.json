@@ -1,0 +1,9 @@
+{
+  "name": "@semantic-release/npm",
+  "version": "13.1.5",
+  "private": true,
+  "type": "module",
+  "description": "No-op stub replacing @semantic-release/npm to avoid pulling the vulnerable bundled npm CLI. AVO uses scripts/ci/semantic-release-package-version.mjs instead (npmPublish was already false / plugin unused in release.config.mjs).",
+  "main": "index.js",
+  "exports": "./index.js"
+}

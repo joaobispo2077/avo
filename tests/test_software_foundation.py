@@ -53,10 +53,14 @@ class SoftwareFoundationTests(unittest.TestCase):
             self.assertIn("alwaysApply: true", text)
 
     def test_github_copilot_foundation_instructions(self) -> None:
-        copilot = (ROOT / ".github" / "copilot-instructions.md").read_text(encoding="utf-8")
+        copilot = (ROOT / ".github" / "copilot-instructions.md").read_text(
+            encoding="utf-8"
+        )
         self.assertIn("Software foundation", copilot)
         for name in GITHUB_INSTRUCTIONS:
-            self.assertTrue((ROOT / ".github" / "instructions" / name).is_file(), msg=name)
+            self.assertTrue(
+                (ROOT / ".github" / "instructions" / name).is_file(), msg=name
+            )
 
     @unittest.skipUnless(
         DEV_TOOLING_PRESENT,

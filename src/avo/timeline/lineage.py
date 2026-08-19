@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .store import ArtifactStore, StoreError
+from .store import ArtifactStore
 
 
 class LineageError(ValueError):
@@ -37,12 +37,17 @@ def validate_cmap_snapshot(snapshot: dict[str, Any]) -> None:
             raise LineageError("CMap segment IDs must be stable and unique")
         segment_ids.add(segment_id)
         if source_id not in source_ids:
-            raise LineageError(f"CMap segment references unknown raw source: {source_id}")
+            raise LineageError(
+                f"CMap segment references unknown raw source: {source_id}"
+            )
         if not str(segment.get("reason") or "").strip():
             raise LineageError("CMap segment requires editorial reason")
         start, end = segment.get("in") or {}, segment.get("out") or {}
         for value in (start, end):
-            if value.get("domain") != "raw-source" or value.get("sourceId") != source_id:
+            if (
+                value.get("domain") != "raw-source"
+                or value.get("sourceId") != source_id
+            ):
                 raise LineageError("CMap segment times must use their raw source clock")
             base = value.get("timebase") or {}
             if int(base.get("num") or 0) <= 0 or int(base.get("den") or 0) <= 0:
@@ -61,7 +66,10 @@ def create_cmap_revision(
 ) -> dict[str, Any]:
     validate_cmap_snapshot(snapshot)
     return store.append_revision(
-        snapshot=snapshot, actor=actor, reason=reason, diff=diff or [],
+        snapshot=snapshot,
+        actor=actor,
+        reason=reason,
+        diff=diff or [],
     )
 
 
@@ -79,8 +87,25 @@ def approve_cmap_revision(
 
 
 _DEPENDENCY_DAG = {
-    "raw": {"sync-map", "cmap", "bmap", "tracks", "animation", "candidate", "review", "approval"},
-    "sync-map": {"cmap", "bmap", "tracks", "animation", "candidate", "review", "approval"},
+    "raw": {
+        "sync-map",
+        "cmap",
+        "bmap",
+        "tracks",
+        "animation",
+        "candidate",
+        "review",
+        "approval",
+    },
+    "sync-map": {
+        "cmap",
+        "bmap",
+        "tracks",
+        "animation",
+        "candidate",
+        "review",
+        "approval",
+    },
     "cmap": {"bmap", "tracks", "animation", "candidate", "review", "approval"},
     "bmap": {"tracks", "animation", "candidate", "review", "approval"},
     "tracks": {"candidate", "review", "approval"},
@@ -106,11 +131,15 @@ def validate_bmap_basis(basis: dict[str, Any], cmap: dict[str, Any]) -> None:
         raise LineageError("BMap requires latest approved final CMap")
     if basis.get("revisionId") != approved:
         raise LineageError("BMap basis is not latest approved CMap revision")
-    revision = next((r for r in cmap.get("revisions") or [] if r.get("revisionId") == approved), None)
+    revision = next(
+        (r for r in cmap.get("revisions") or [] if r.get("revisionId") == approved),
+        None,
+    )
     if revision is None or basis.get("sha256") != revision.get("contentHash"):
         raise LineageError("BMap CMap revision fingerprint mismatch")
     decisions = [
-        d for d in cmap.get("decisions") or []
+        d
+        for d in cmap.get("decisions") or []
         if d.get("revisionId") == approved and d.get("decision") == "approved"
     ]
     if not decisions:
@@ -124,12 +153,15 @@ def rebase_bmap(
     mapped_ranges: dict[str, list[list[int]]],
 ) -> list[dict[str, Any]]:
     from copy import deepcopy
+
     from .mapping import classify_cue_rebase
+
     result = []
     for cue in cues:
         item = deepcopy(cue)
         state = classify_cue_rebase(
-            cue.get("rawAnchorRanges") or [], mapped_ranges.get(str(cue.get("cueId")), []),
+            cue.get("rawAnchorRanges") or [],
+            mapped_ranges.get(str(cue.get("cueId")), []),
         )
         item["rebaseState"] = state
         if state in {"ambiguous", "unsupported"}:
@@ -138,7 +170,6 @@ def rebase_bmap(
             item["reviewState"] = "stale"
         result.append(item)
     return result
-
 
 
 def persist_invalidation(
@@ -152,7 +183,9 @@ def persist_invalidation(
 ) -> dict[str, Any]:
     """Persist derived stale state for all currently stored descendants."""
     descendants = stale_descendants(
-        changed_artifact_type, before_hash=before_hash, after_hash=after_hash,
+        changed_artifact_type,
+        before_hash=before_hash,
+        after_hash=after_hash,
     )
     affected: list[dict[str, str]] = []
     for artifact_type in sorted(descendants):
@@ -163,13 +196,17 @@ def persist_invalidation(
         if index["headRevisionId"] is None:
             continue
         updated = store.set_active_state(
-            "stale", reason=f"{reason}; changed {changed_artifact_type}", actor=actor,
+            "stale",
+            reason=f"{reason}; changed {changed_artifact_type}",
+            actor=actor,
         )
-        affected.append({
-            "artifactType": artifact_type,
-            "revisionId": str(updated["headRevisionId"]),
-            "state": "stale",
-        })
+        affected.append(
+            {
+                "artifactType": artifact_type,
+                "revisionId": str(updated["headRevisionId"]),
+                "state": "stale",
+            }
+        )
     return {
         "changedArtifactType": changed_artifact_type,
         "beforeHash": before_hash,
@@ -184,6 +221,7 @@ def propose_bmap_rebase(
 ) -> dict[str, Any]:
     """Classify every cue and move only deterministic preserved/shifted cues."""
     from copy import deepcopy
+
     from .mapping import classify_cue_rebase
 
     outcomes: list[dict[str, Any]] = []
@@ -193,7 +231,7 @@ def propose_bmap_rebase(
         cue_id = str(cue.get("cueId"))
         old_ranges = cue.get("rawAnchorRanges")
         if old_ranges is None:
-            old_ranges = ((cue.get("rebaseHints") or {}).get("rawAnchorRanges") or [])
+            old_ranges = (cue.get("rebaseHints") or {}).get("rawAnchorRanges") or []
         new_ranges = mapped_ranges.get(cue_id, [])
         outcome = classify_cue_rebase(old_ranges, new_ranges)
         record = {

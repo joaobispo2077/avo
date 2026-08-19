@@ -3,7 +3,6 @@ from __future__ import annotations
 import unittest
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[1]
 
 # AVO keeps *runtime* transcription local: the Python helpers must not call a
@@ -40,7 +39,9 @@ class RuntimeStaysLocalTests(unittest.TestCase):
             content = path.read_text(encoding="utf-8")
             for token in FORBIDDEN_IN_RUNTIME:
                 self.assertNotIn(
-                    token, content, f"{token} must not appear in runtime helper {path.name}"
+                    token,
+                    content,
+                    f"{token} must not appear in runtime helper {path.name}",
                 )
 
 

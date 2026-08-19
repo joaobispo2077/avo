@@ -1,4 +1,5 @@
 """Voiceover EDL validation tests."""
+
 from __future__ import annotations
 
 import json
@@ -50,7 +51,9 @@ class VoiceoverEdlTests(unittest.TestCase):
     def test_rejects_missing_voiceover_file(self) -> None:
         path = self._write_valid_edl()
         (self.edit / "voiceover.wav").unlink()
-        with self.assertRaisesRegex(validate_edl.EdlValidationError, "voiceover source"):
+        with self.assertRaisesRegex(
+            validate_edl.EdlValidationError, "voiceover source"
+        ):
             validate_edl.load_and_validate(path)
 
     def test_preflight_flags_short_voiceover(self) -> None:

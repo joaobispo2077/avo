@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import json
+import shutil
 from pathlib import Path
 
 import pytest
+from tests.fixtures.timeline.build_fixtures import build_fixture_set
+from tests.test_timeline_review_integration import FakeTranscript, FakeWatch
 
 from avo.adapters.qc.cut_proof import CutProofQcAdapter
 from avo.timeline.approval_service import ApprovalService
@@ -13,9 +16,6 @@ from avo.timeline.materialize import materialize_cut_proof
 from avo.timeline.review_runner import ReviewRunner
 from avo.timeline.sync_service import SyncService
 from avo.timeline.workspace import TimelineWorkspace
-
-from tests.fixtures.timeline.build_fixtures import build_fixture_set
-from tests.test_timeline_review_integration import FakeTranscript, FakeWatch
 
 
 def _time(ticks: int, source_id: str) -> dict:
@@ -89,7 +89,9 @@ def _workspace(raw_dir: Path) -> TimelineWorkspace:
     return workspace
 
 
-def _review(workspace: TimelineWorkspace, revision: dict, materialization: dict) -> dict:
+def _review(
+    workspace: TimelineWorkspace, revision: dict, materialization: dict
+) -> dict:
     return ReviewRunner(
         review_root=workspace.review_dir,
         transcription=FakeTranscript(),
@@ -109,6 +111,7 @@ def _review(workspace: TimelineWorkspace, revision: dict, materialization: dict)
     )
 
 
+@pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="ffmpeg unavailable")
 def test_multi_source_raw_cmap_to_exact_current_approval(tmp_path: Path) -> None:
     raw_dir = tmp_path / "project"
     raw_dir.mkdir()
@@ -168,7 +171,10 @@ def test_multi_source_raw_cmap_to_exact_current_approval(tmp_path: Path) -> None
             decision="approved",
             revision_id=first["revisionId"],
             review_path=first_review["reviewPath"],
-            materialization_path=workspace.timeline_dir / "materializations" / "cut-proof" / f"{first_materialization['materializationId']}.json",
+            materialization_path=workspace.timeline_dir
+            / "materializations"
+            / "cut-proof"
+            / f"{first_materialization['materializationId']}.json",
             actor="creator",
             reason="old proof must not approve",
         )
@@ -177,7 +183,10 @@ def test_multi_source_raw_cmap_to_exact_current_approval(tmp_path: Path) -> None
         decision="approved",
         revision_id=second["revisionId"],
         review_path=second_review["reviewPath"],
-        materialization_path=workspace.timeline_dir / "materializations" / "cut-proof" / f"{second_materialization['materializationId']}.json",
+        materialization_path=workspace.timeline_dir
+        / "materializations"
+        / "cut-proof"
+        / f"{second_materialization['materializationId']}.json",
         actor="creator",
         reason="approve exact current cut",
     )
@@ -188,7 +197,9 @@ def test_multi_source_raw_cmap_to_exact_current_approval(tmp_path: Path) -> None
         "sourceId": "source-a",
         "kind": "raw",
         "locator": second_materialization["output"]["locator"],
-        "fingerprint": file_fingerprint(Path(second_materialization["output"]["locator"])),
+        "fingerprint": file_fingerprint(
+            Path(second_materialization["output"]["locator"])
+        ),
     }
     with pytest.raises(Exception, match="derived|edit"):
         cmap.author(derived, actor="avo", reason="must reject proof as source")

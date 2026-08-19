@@ -2,11 +2,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from tests.test_animation_promotion import pattern
+
 from avo.adapters.base import JobResult
 from avo.adapters.motion.hyperframes import HyperframesAdapter
 from avo.timeline.animation import AnimationService
 from avo.timeline.provider_animation import ProviderAnimationService
-from tests.test_animation_promotion import pattern
 
 
 class RenderFixture(HyperframesAdapter):

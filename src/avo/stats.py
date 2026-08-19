@@ -17,7 +17,7 @@ from avo import avo_state
 from avo.paths import config_path
 from avo.project_inventory import resolve_preserved_set
 from avo.session import normalize_path
-from avo.telemetry import human_bytes, human_duration
+from avo.telemetry import human_bytes
 
 try:
     from avo.render import media_duration
@@ -72,19 +72,23 @@ def load_stats_config() -> StatsConfig:
                 if "sessionRetention" in override:
                     cfg.session_retention = int(override["sessionRetention"])
                 if "deletedPathSampleLimit" in override:
-                    cfg.deleted_path_sample_limit = int(override["deletedPathSampleLimit"])
+                    cfg.deleted_path_sample_limit = int(
+                        override["deletedPathSampleLimit"]
+                    )
         except (OSError, ValueError, TypeError):
             pass
 
     return cfg
 
 
-def estimate_time_saved(source_duration_seconds: float | None, factor: float) -> int | None:
+def estimate_time_saved(
+    source_duration_seconds: float | None, factor: float
+) -> int | None:
     """Return estimated minutes saved using duration-factor-v1 model."""
     if source_duration_seconds is None or source_duration_seconds <= 0:
         return None
     minutes = source_duration_seconds * factor / 60.0
-    return int(round(minutes))
+    return round(minutes)
 
 
 def _reject_secrets(payload: dict[str, Any]) -> None:
@@ -114,9 +118,13 @@ def _session_contribution(session: dict[str, Any]) -> dict[str, int]:
 
 
 def _subtract_totals(totals: dict[str, int], contribution: dict[str, int]) -> None:
-    totals["videosCompleted"] = max(0, totals["videosCompleted"] - contribution["videosCompleted"])
+    totals["videosCompleted"] = max(
+        0, totals["videosCompleted"] - contribution["videosCompleted"]
+    )
     totals["bytesFreed"] = max(0, totals["bytesFreed"] - contribution["bytesFreed"])
-    totals["preservedBytes"] = max(0, totals["preservedBytes"] - contribution["preservedBytes"])
+    totals["preservedBytes"] = max(
+        0, totals["preservedBytes"] - contribution["preservedBytes"]
+    )
     totals["estimatedMinutesSaved"] = max(
         0, totals["estimatedMinutesSaved"] - contribution["estimatedMinutesSaved"]
     )
@@ -129,7 +137,9 @@ def _add_totals(totals: dict[str, int], contribution: dict[str, int]) -> None:
     totals["estimatedMinutesSaved"] += contribution["estimatedMinutesSaved"]
 
 
-def _rotate_sessions(sessions: list[dict[str, Any]], retention: int) -> list[dict[str, Any]]:
+def _rotate_sessions(
+    sessions: list[dict[str, Any]], retention: int
+) -> list[dict[str, Any]]:
     if len(sessions) <= retention:
         return sessions
     sorted_sessions = sorted(
@@ -152,7 +162,9 @@ def record_session(session_payload: dict[str, Any]) -> dict[str, Any]:
     for key in _default_totals():
         totals.setdefault(key, 0)
 
-    existing_idx = next((i for i, s in enumerate(sessions) if s.get("id") == session_id), None)
+    existing_idx = next(
+        (i for i, s in enumerate(sessions) if s.get("id") == session_id), None
+    )
     if existing_idx is not None:
         old = sessions[existing_idx]
         _subtract_totals(totals, _session_contribution(old))
@@ -210,7 +222,8 @@ def _filter_sessions(
             filtered = [
                 s
                 for s in filtered
-                if normalize_path(Path(str(s.get("rawDir") or ".")).expanduser()) == target
+                if normalize_path(Path(str(s.get("rawDir") or ".")).expanduser())
+                == target
             ]
     elif raw_dir.strip():
         target = normalize_path(Path(raw_dir.strip()).expanduser())
@@ -302,7 +315,9 @@ def compute_display_metrics(
                 gate_counts.append(len(gates))
 
         display["tierB"] = {
-            "avgCutRatio": round(sum(cut_ratios) / len(cut_ratios), 3) if cut_ratios else None,
+            "avgCutRatio": round(sum(cut_ratios) / len(cut_ratios), 3)
+            if cut_ratios
+            else None,
             "avgPhasesPerVideo": round(sum(phase_counts) / len(phase_counts), 1)
             if phase_counts
             else None,
@@ -383,8 +398,12 @@ def format_human(display: dict[str, Any], *, verbose: bool = False) -> str:
         tier_c = display.get("tierC") or {}
         lines.append("")
         lines.append("Tier C (estimation model):")
-        lines.append(f"  Model:                {tier_c.get('estimationModel', ESTIMATION_MODEL)}")
-        lines.append(f"  Edit factor:          {tier_c.get('timeSavedEditFactor', factor)}")
+        lines.append(
+            f"  Model:                {tier_c.get('estimationModel', ESTIMATION_MODEL)}"
+        )
+        lines.append(
+            f"  Edit factor:          {tier_c.get('timeSavedEditFactor', factor)}"
+        )
         if tier_c.get("disclosure"):
             lines.append(f"  {tier_c['disclosure']}")
 
@@ -430,7 +449,9 @@ def _probe_master_duration(raw_dir: Path, master_basename: str) -> float | None:
     return None
 
 
-def session_from_wrap(wrap: dict[str, Any], *, wrap_path: Path | None = None) -> dict[str, Any]:
+def session_from_wrap(
+    wrap: dict[str, Any], *, wrap_path: Path | None = None
+) -> dict[str, Any]:
     """Convert final wrap JSON into a session record payload."""
     cfg = load_stats_config()
     raw_dir = Path(str(wrap.get("rawDir") or "")).expanduser()
@@ -445,7 +466,9 @@ def session_from_wrap(wrap: dict[str, Any], *, wrap_path: Path | None = None) ->
     master_duration = _probe_master_duration(raw_dir, master_basename)
     est_minutes = estimate_time_saved(source_duration, cfg.time_saved_edit_factor)
 
-    deleted_count = int(files.get("deletedCount", len(files.get("deletedOnCleanup") or [])))
+    deleted_count = int(
+        files.get("deletedCount", len(files.get("deletedOnCleanup") or []))
+    )
     preserved_count = len(files.get("preserved") or [])
     deleted_sample = list(files.get("deletedSample") or [])
 
@@ -554,9 +577,15 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_show = sub.add_parser("show", help="Display aggregate local stats.")
     p_show.add_argument("--json", action="store_true")
-    p_show.add_argument("--verbose", action="store_true", help="Include Tier B/C metrics.")
-    p_show.add_argument("--provider", default="", help="Filter sessions to one provider slug.")
-    p_show.add_argument("--raw-dir", default="", help="Filter sessions to one external rawDir.")
+    p_show.add_argument(
+        "--verbose", action="store_true", help="Include Tier B/C metrics."
+    )
+    p_show.add_argument(
+        "--provider", default="", help="Filter sessions to one provider slug."
+    )
+    p_show.add_argument(
+        "--raw-dir", default="", help="Filter sessions to one external rawDir."
+    )
     p_show.add_argument(
         "--video-id",
         default="",

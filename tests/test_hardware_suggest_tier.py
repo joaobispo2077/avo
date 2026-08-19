@@ -9,7 +9,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def _report(*, vram_mb: int | None = None, ram_gb: float = 32.0, cores: int = 16) -> dict:
+def _report(
+    *, vram_mb: int | None = None, ram_gb: float = 32.0, cores: int = 16
+) -> dict:
     """Minimal hardware report for suggest_tier."""
     gpu: list[dict] = []
     if vram_mb is not None and vram_mb > 0:

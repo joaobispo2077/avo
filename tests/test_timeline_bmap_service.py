@@ -6,10 +6,9 @@ import pytest
 
 from avo.timeline.approval_service import ApprovalService
 from avo.timeline.bmap_service import BMapService
-from avo.timeline.contracts import file_fingerprint
 from avo.timeline.cmap_service import CMapService
+from avo.timeline.contracts import file_fingerprint
 from avo.timeline.lineage import LineageError
-
 from tests.test_timeline_approval_service import approved_review
 from tests.test_timeline_cmap_service import snapshot
 
@@ -74,7 +73,11 @@ def test_rejects_invalid_timing_and_assets(tmp_path: Path, mutation: str) -> Non
     elif mutation == "outside":
         value["end"] = time(2000)
     else:
-        value["assetRef"] = {"locator": str(tmp_path / "missing.png"), "sha256": "a" * 64, "sizeBytes": 1}
+        value["assetRef"] = {
+            "locator": str(tmp_path / "missing.png"),
+            "sha256": "a" * 64,
+            "sizeBytes": 1,
+        }
     with pytest.raises(LineageError):
         BMapService(workspace).author({"cues": [value]}, actor="avo", reason="invalid")
 
@@ -83,6 +86,20 @@ def test_newer_unapproved_cmap_head_blocks_bmap(tmp_path: Path) -> None:
     workspace, _, _ = approved_workspace(tmp_path)
     BMapService(workspace).author({"cues": [cue()]}, actor="avo", reason="beat")
     raw = workspace.raw_dir / "raw.bin"
-    CMapService(workspace).author(snapshot(raw, start=50, end=950), actor="avo", reason="new head")
+    CMapService(workspace).author(
+        snapshot(raw, start=50, end=950), actor="avo", reason="new head"
+    )
     with pytest.raises(LineageError, match="latest effective"):
         BMapService(workspace).author({"cues": [cue()]}, actor="avo", reason="blocked")
+
+
+def test_author_refreshes_editlog_for_pipeline_assembly(tmp_path: Path) -> None:
+    workspace, _, _ = approved_workspace(tmp_path)
+    value = cue()
+    value["kind"] = "animation"
+    revision = BMapService(workspace).author(
+        {"cues": [value]}, actor="avo", reason="beat one"
+    )
+    assert revision["editlogRefresh"]["ok"] is True
+    text = (workspace.raw_dir / "EDITLOG.md").read_text(encoding="utf-8")
+    assert "cue-one" in text

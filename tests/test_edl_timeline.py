@@ -150,9 +150,7 @@ class EdlTimelineTests(unittest.TestCase):
                 {"source": "s01", "start": 0.0, "end": 10.0},
                 {"source": "s02", "start": 0.0, "end": 10.0},
             ],
-            "overlays": [
-                {"motion_brief_id": "ambiguous", "anchor_in_source": 5.0}
-            ],
+            "overlays": [{"motion_brief_id": "ambiguous", "anchor_in_source": 5.0}],
         }
         with self.assertRaisesRegex(ValueError, "anchor_source"):
             remap_timed_items(edl)

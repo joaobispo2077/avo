@@ -8,12 +8,17 @@ from avo.cli import main
 
 def project(tmp_path: Path) -> Path:
     path = tmp_path / "avo.project.json"
-    path.write_text(json.dumps({
-        "schemaVersion": "1.0.0",
-        "provider": "bishop",
-        "videoId": "cli-pipeline",
-        "rawDir": str(tmp_path),
-    }), encoding="utf-8")
+    path.write_text(
+        json.dumps(
+            {
+                "schemaVersion": "1.0.0",
+                "provider": "bishop",
+                "videoId": "cli-pipeline",
+                "rawDir": str(tmp_path),
+            }
+        ),
+        encoding="utf-8",
+    )
     return path
 
 
@@ -26,15 +31,31 @@ def test_pipeline_cli_init_status_stage_and_registry(tmp_path: Path, capsys):
     assert status["pipeline"]["mainState"] == "intake"
 
     payload = tmp_path / "sources.json"
-    payload.write_text(json.dumps({
-        "rawInventory": {
-            "sources": [{"sourceId": "raw-one", "sha256": "a" * 64}],
-        }
-    }), encoding="utf-8")
-    assert main([
-        "pipeline", "stage", "--project", str(path),
-        "--stage", "sources-ready", "--payload", str(payload),
-    ]) == 0
+    payload.write_text(
+        json.dumps(
+            {
+                "rawInventory": {
+                    "sources": [{"sourceId": "raw-one", "sha256": "a" * 64}],
+                }
+            }
+        ),
+        encoding="utf-8",
+    )
+    assert (
+        main(
+            [
+                "pipeline",
+                "stage",
+                "--project",
+                str(path),
+                "--stage",
+                "sources-ready",
+                "--payload",
+                str(payload),
+            ]
+        )
+        == 0
+    )
     staged = json.loads(capsys.readouterr().out)
     assert staged["mainState"] == "sources-ready"
 

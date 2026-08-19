@@ -6,7 +6,6 @@ import argparse
 import re
 from pathlib import Path
 
-
 TIMING_RE = re.compile(
     r"(?P<start>\d\d:\d\d:\d\d,\d\d\d)\s+-->\s+"
     r"(?P<end>\d\d:\d\d:\d\d,\d\d\d)"
@@ -16,7 +15,7 @@ TIMING_RE = re.compile(
 def ass_time(srt_time: str) -> str:
     hh, mm, rest = srt_time.split(":")
     ss, ms = rest.split(",")
-    centiseconds = int(round(int(ms) / 10))
+    centiseconds = round(int(ms) / 10)
     return f"{int(hh)}:{mm}:{ss}.{centiseconds:02d}"
 
 
@@ -53,7 +52,7 @@ def write_ass(
     center_y_ratio: float,
 ) -> None:
     x = width // 2
-    y = int(round(height * center_y_ratio))
+    y = round(height * center_y_ratio)
     font_size = 72 if height >= 2160 else 36
     outline = 4 if height >= 2160 else 2
     header = f"""[Script Info]
@@ -72,7 +71,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 """
     lines = [header]
     for start, end, text in cues:
-        positioned = r"{\an5\pos(%d,%d)}%s" % (x, y, escape_ass_text(text))
+        positioned = rf"{{\an5\pos({x},{y})}}{escape_ass_text(text)}"
         lines.append(
             f"Dialogue: 0,{ass_time(start)},{ass_time(end)},CenterSeam,,0,0,0,,{positioned}"
         )
@@ -90,7 +89,9 @@ def main() -> None:
 
     cues = parse_srt(args.input)
     write_ass(cues, args.output, args.width, args.height, args.center_y_ratio)
-    print(f"ASS -> {args.output} ({len(cues)} cues, y={round(args.height * args.center_y_ratio)})")
+    print(
+        f"ASS -> {args.output} ({len(cues)} cues, y={round(args.height * args.center_y_ratio)})"
+    )
 
 
 if __name__ == "__main__":
