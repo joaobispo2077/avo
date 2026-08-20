@@ -9,14 +9,21 @@ from avo.timeline.review import (
     evaluate_gate,
 )
 
-
 CANDIDATE = "a" * 64
 IDENTITY = "b" * 64
 LOCK = "c" * 64
 DEPS = {"cmap": "d" * 64, "sync-map": "e" * 64}
 
 
-def evidence(kind, *, status="pass", mode="full", required=0, reviewed=0, profile="exact-candidate"):
+def evidence(
+    kind,
+    *,
+    status="pass",
+    mode="full",
+    required=0,
+    reviewed=0,
+    profile="exact-candidate",
+):
     return {
         "kind": kind,
         "status": status,
@@ -49,14 +56,23 @@ def test_checkpoint_requires_complete_current_unique_evidence(checkpoint):
     for item in items:
         if item.get("dependencyProfile") == "exact-candidate":
             item["dependencyHashes"] = deps
-    assert evaluate_gate(
-        checkpoint, CANDIDATE, deps, items,
-        candidate_identity_hash=IDENTITY,
-        dependency_lock_sha256=LOCK,
-    ) == "ai-passed"
+    assert (
+        evaluate_gate(
+            checkpoint,
+            CANDIDATE,
+            deps,
+            items,
+            candidate_identity_hash=IDENTITY,
+            dependency_lock_sha256=LOCK,
+        )
+        == "ai-passed"
+    )
     with pytest.raises(GateError, match="missing current evidence"):
         evaluate_gate(
-            checkpoint, CANDIDATE, deps, items[:-1],
+            checkpoint,
+            CANDIDATE,
+            deps,
+            items[:-1],
             candidate_identity_hash=IDENTITY,
             dependency_lock_sha256=LOCK,
         )
@@ -65,13 +81,17 @@ def test_checkpoint_requires_complete_current_unique_evidence(checkpoint):
 def test_duplicate_incomplete_window_and_unjustified_na_block():
     required = CHECKPOINT_POLICIES["cut-proof"]["required"]
     items = [evidence(kind) for kind in required]
-    next(item for item in items if item["kind"] == "sync")["dependencyProfile"] = "raw-sync"
+    next(item for item in items if item["kind"] == "sync")["dependencyProfile"] = (
+        "raw-sync"
+    )
     items.append(evidence("watch"))
     with pytest.raises(GateError, match="duplicate"):
         evaluate_gate("cut-proof", CANDIDATE, DEPS, items)
 
     items = [evidence(kind) for kind in required]
-    next(item for item in items if item["kind"] == "sync")["dependencyProfile"] = "raw-sync"
+    next(item for item in items if item["kind"] == "sync")["dependencyProfile"] = (
+        "raw-sync"
+    )
     watch = next(item for item in items if item["kind"] == "watch")
     watch["coverage"] = {"requiredWindows": 3, "reviewedWindows": 2}
     with pytest.raises(GateError):
@@ -95,13 +115,15 @@ def test_approval_binding_requires_exact_identity():
         "dependencyLockSha256": LOCK,
     }
     assert approval_is_current(
-        approval, checkpoint="pre-master",
+        approval,
+        checkpoint="pre-master",
         candidate_identity_hash=IDENTITY,
         candidate_sha256=CANDIDATE,
         dependency_lock_sha256=LOCK,
     )
     assert not approval_is_current(
-        approval, checkpoint="pre-master",
+        approval,
+        checkpoint="pre-master",
         candidate_identity_hash="0" * 64,
         candidate_sha256=CANDIDATE,
         dependency_lock_sha256=LOCK,

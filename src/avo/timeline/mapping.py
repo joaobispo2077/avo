@@ -26,13 +26,18 @@ def _output_base(snapshot: dict[str, Any]) -> Fraction:
 def _to_output_ticks(seconds: Fraction, base: Fraction) -> int:
     ticks = seconds / base
     if ticks.denominator != 1:
-        raise MappingError("time cannot be represented exactly in the CMap output timebase")
+        raise MappingError(
+            "time cannot be represented exactly in the CMap output timebase"
+        )
     return ticks.numerator
 
 
 def cmap_output_duration(snapshot: dict[str, Any]) -> int:
     base = _output_base(snapshot)
-    duration = sum((_time(item["out"]) - _time(item["in"]) for item in snapshot["segments"]), Fraction())
+    duration = sum(
+        (_time(item["out"]) - _time(item["in"]) for item in snapshot["segments"]),
+        Fraction(),
+    )
     return _to_output_ticks(duration, base)
 
 
@@ -50,14 +55,18 @@ def cmap_raw_to_output(
         end = _time(segment["out"])
         if segment["sourceId"] == source_id:
             source_base = raw_timebase or segment["in"]["timebase"]
-            point = Fraction(raw_ticks * int(source_base["num"]), int(source_base["den"]))
+            point = Fraction(
+                raw_ticks * int(source_base["num"]), int(source_base["den"])
+            )
             if start <= point <= end:
                 return _to_output_ticks(offset + point - start, base)
         offset += end - start
     return None
 
 
-def cmap_output_to_raw(snapshot: dict[str, Any], output_ticks: int) -> tuple[str, int] | None:
+def cmap_output_to_raw(
+    snapshot: dict[str, Any], output_ticks: int
+) -> tuple[str, int] | None:
     base = _output_base(snapshot)
     point = output_ticks * base
     offset = Fraction()
@@ -99,7 +108,10 @@ def legacy_source_to_output(
         source = next(iter(ids), None)
     offset = 0.0
     for item in ranges:
-        if str(item.source) == source and float(item.start) - 1e-6 <= source_time <= float(item.end) + 1e-6:
+        if (
+            str(item.source) == source
+            and float(item.start) - 1e-6 <= source_time <= float(item.end) + 1e-6
+        ):
             return offset + source_time - float(item.start)
         offset += float(item.end) - float(item.start)
     return None

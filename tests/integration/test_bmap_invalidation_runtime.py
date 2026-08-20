@@ -2,14 +2,16 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from avo.timeline.bmap_service import BMapService
-from avo.timeline.cmap_service import CMapService
-
 from tests.test_timeline_bmap_service import approved_workspace, cue
 from tests.test_timeline_cmap_service import snapshot
 
+from avo.timeline.bmap_service import BMapService
+from avo.timeline.cmap_service import CMapService
 
-def test_cmap_change_persists_all_downstream_stale_before_render(tmp_path: Path) -> None:
+
+def test_cmap_change_persists_all_downstream_stale_before_render(
+    tmp_path: Path,
+) -> None:
     workspace, _, _ = approved_workspace(tmp_path)
     bmap = BMapService(workspace).author({"cues": [cue()]}, actor="avo", reason="beat")
     for artifact_type in ("tracks", "animation"):

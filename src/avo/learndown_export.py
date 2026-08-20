@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from avo import avo_state
-from avo.paths import providers_dir, repo_root
+from avo.paths import repo_root
 from avo.project_inventory import load_project
 
 SCHEMA_VERSION = 1
@@ -22,6 +22,7 @@ WRAP_DRAFT_JSON = "wrap.draft.json"
 WRAP_DRAFT_MD = "wrap.draft.md"
 WRAP_FINAL_JSON = "wrap.json"
 WRAP_FINAL_MD = "wrap.md"
+EDITLOG_LOCK = "EDITLOG.md"
 
 
 def _slugify(value: str) -> str:
@@ -104,6 +105,7 @@ def build_learndown_payload(wrap_payload: dict[str, Any]) -> dict[str, Any]:
             "note": str(learning.get("note") or ""),
         },
         "wrapPaths": wrap_paths,
+        "editlogLock": None,
     }
 
 
@@ -125,6 +127,19 @@ def render_learndown_markdown(payload: dict[str, Any]) -> str:
     note = str(learning.get("note") or "").strip()
     if note:
         lines.extend(["## Learning note", "", note, ""])
+    lock = payload.get("editlogLock")
+    if lock:
+        lines.extend(
+            [
+                "## EDITLOG lock",
+                "",
+                (
+                    f"Snapshot `{lock}` in this entry (copied at learndown; "
+                    "footage-root EDITLOG.md may still refresh)."
+                ),
+                "",
+            ]
+        )
     return "\n".join(lines).rstrip() + "\n"
 
 
@@ -167,6 +182,18 @@ def _copy_if_exists(source: Path, dest: Path) -> None:
         shutil.copy2(source, dest)
 
 
+def _copy_editlog_lock_once(raw_dir: Path, entry_dir: Path) -> bool:
+    """Copy footage-root EDITLOG into the entry. First copy is the lock."""
+    dest = entry_dir / EDITLOG_LOCK
+    if dest.is_file():
+        return True
+    source = raw_dir / "EDITLOG.md"
+    if not source.is_file():
+        return False
+    shutil.copy2(source, dest)
+    return True
+
+
 def export_provider_learndown(
     wrap_payload: dict[str, Any],
     *,
@@ -186,6 +213,12 @@ def export_provider_learndown(
     entry_dir = base / payload["entryId"]
     entry_dir.mkdir(parents=True, exist_ok=True)
 
+    raw_dir = Path(payload["rawDir"])
+    status = payload["status"]
+    payload["editlogLock"] = (
+        EDITLOG_LOCK if _copy_editlog_lock_once(raw_dir, entry_dir) else None
+    )
+
     (entry_dir / LEARNDOWN_JSON).write_text(
         json.dumps(payload, indent=2, ensure_ascii=False) + "\n",
         encoding="utf-8",
@@ -195,8 +228,6 @@ def export_provider_learndown(
         encoding="utf-8",
     )
 
-    raw_dir = Path(payload["rawDir"])
-    status = payload["status"]
     _copy_if_exists(raw_dir / "avo.wrap.draft.json", entry_dir / WRAP_DRAFT_JSON)
     _copy_if_exists(raw_dir / "avo.wrap.draft.md", entry_dir / WRAP_DRAFT_MD)
     if status == "final":

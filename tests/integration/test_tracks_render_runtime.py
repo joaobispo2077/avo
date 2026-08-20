@@ -1,8 +1,14 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
+import shutil
 import subprocess
+from pathlib import Path
+
+import pytest
+from tests.fixtures.timeline.build_fixtures import build_fixture_set
+from tests.integration.test_cmap_cut_review_runtime import _snapshot, _workspace
+from tests.test_timeline_review_integration import FakeQc, FakeTranscript, FakeWatch
 
 from avo.adapters.media.timeline_render import TimelineRenderAdapter
 from avo.timeline.approval_service import ApprovalService
@@ -15,13 +21,13 @@ from avo.timeline.review_runner import ReviewRunner
 from avo.timeline.sync_service import SyncService
 from avo.timeline.tracks import TracksService
 
-from tests.fixtures.timeline.build_fixtures import build_fixture_set
-from tests.integration.test_cmap_cut_review_runtime import _snapshot, _workspace
-from tests.test_timeline_review_integration import FakeQc, FakeTranscript, FakeWatch
-
 
 def tv(ticks):
-    return {"ticks": ticks, "timebase": {"num": 1, "den": 1000}, "domain": "cmap-output"}
+    return {
+        "ticks": ticks,
+        "timebase": {"num": 1, "den": 1000},
+        "domain": "cmap-output",
+    }
 
 
 def make_cue(cue_id, kind, start, end, layer):
@@ -43,9 +49,16 @@ def source(path: Path):
 
 
 def region(region_id, start, end, cue_id, **extra):
-    return {"regionId": region_id, "startTicks": start, "endTicks": end, "cueIds": [cue_id], **extra}
+    return {
+        "regionId": region_id,
+        "startTicks": start,
+        "endTicks": end,
+        "cueIds": [cue_id],
+        **extra,
+    }
 
 
+@pytest.mark.skipif(shutil.which("ffmpeg") is None, reason="ffmpeg unavailable")
 def test_encoded_multilayer_tracks_render_and_trace(tmp_path: Path) -> None:
     raw_dir = tmp_path / "project"
     raw_dir.mkdir()
@@ -98,7 +111,12 @@ def test_encoded_multilayer_tracks_render_and_trace(tmp_path: Path) -> None:
         render_profile="draft",
         risk_windows=[{"start": 0.9, "end": 1.1, "reason": "join"}],
     )
-    cut_record = workspace.timeline_dir / "materializations" / "cut-proof" / f"{cut['materializationId']}.json"
+    cut_record = (
+        workspace.timeline_dir
+        / "materializations"
+        / "cut-proof"
+        / f"{cut['materializationId']}.json"
+    )
     ApprovalService(workspace).decide(
         decision="approved",
         revision_id=cmap_revision["revisionId"],
@@ -122,20 +140,80 @@ def test_encoded_multilayer_tracks_render_and_trace(tmp_path: Path) -> None:
         make_cue("cue-graphic", "insert", 1500, 1800, "graphic"),
         make_cue("cue-caption", "caption", 0, 2000, "captions"),
     ]
-    BMapService(workspace).author({"cues": cues}, actor="avo", reason="resolved beat map")
+    BMapService(workspace).author(
+        {"cues": cues}, actor="avo", reason="resolved beat map"
+    )
 
     captions = raw_dir / "captions.srt"
-    captions.write_text("1\n00:00:00,100 --> 00:00:01,900\nTimeline Tracks\n", encoding="utf-8")
+    captions.write_text(
+        "1\n00:00:00,100 --> 00:00:01,900\nTimeline Tracks\n", encoding="utf-8"
+    )
     audio_layers = [
-        {"layerId": "dialogue", "order": 0, "role": "dialogue", "source": source(Path(cut["output"]["locator"])), "regions": [region("region-dialogue", 0, 2000, "cue-dialogue")], "channels": [0, 1], "gainDb": 0, "mute": False},
-        {"layerId": "music-a", "order": 1, "role": "music", "source": source(source_a), "regions": [region("region-music-a", 0, 650, "cue-music-a")], "gainDb": -24, "ducking": {"amountDb": 8}, "fades": {"inTicks": 80, "outTicks": 80}},
-        {"layerId": "music-b", "order": 2, "role": "music", "source": source(source_b), "regions": [region("region-music-b", 650, 1300, "cue-music-b")], "gainDb": -24, "ducking": {"amountDb": 8}},
-        {"layerId": "music-c", "order": 3, "role": "music", "source": source(source_a), "regions": [region("region-music-c", 1300, 2000, "cue-music-c")], "gainDb": -24, "ducking": {"amountDb": 8}},
-        {"layerId": "sfx", "order": 4, "role": "sfx", "source": source(source_b), "regions": [region("region-sfx", 500, 800, "cue-sfx")], "gainDb": -14},
-        {"layerId": "ambience", "order": 5, "role": "ambience", "source": source(source_a), "regions": [region("region-ambience", 0, 2000, "cue-ambience")], "gainDb": -32},
+        {
+            "layerId": "dialogue",
+            "order": 0,
+            "role": "dialogue",
+            "source": source(Path(cut["output"]["locator"])),
+            "regions": [region("region-dialogue", 0, 2000, "cue-dialogue")],
+            "channels": [0, 1],
+            "gainDb": 0,
+            "mute": False,
+        },
+        {
+            "layerId": "music-a",
+            "order": 1,
+            "role": "music",
+            "source": source(source_a),
+            "regions": [region("region-music-a", 0, 650, "cue-music-a")],
+            "gainDb": -24,
+            "ducking": {"amountDb": 8},
+            "fades": {"inTicks": 80, "outTicks": 80},
+        },
+        {
+            "layerId": "music-b",
+            "order": 2,
+            "role": "music",
+            "source": source(source_b),
+            "regions": [region("region-music-b", 650, 1300, "cue-music-b")],
+            "gainDb": -24,
+            "ducking": {"amountDb": 8},
+        },
+        {
+            "layerId": "music-c",
+            "order": 3,
+            "role": "music",
+            "source": source(source_a),
+            "regions": [region("region-music-c", 1300, 2000, "cue-music-c")],
+            "gainDb": -24,
+            "ducking": {"amountDb": 8},
+        },
+        {
+            "layerId": "sfx",
+            "order": 4,
+            "role": "sfx",
+            "source": source(source_b),
+            "regions": [region("region-sfx", 500, 800, "cue-sfx")],
+            "gainDb": -14,
+        },
+        {
+            "layerId": "ambience",
+            "order": 5,
+            "role": "ambience",
+            "source": source(source_a),
+            "regions": [region("region-ambience", 0, 2000, "cue-ambience")],
+            "gainDb": -32,
+        },
     ]
     visual_defs = [
-        ("base-video", "base", 0, 0, 2000, "cue-dialogue", Path(cut["output"]["locator"])),
+        (
+            "base-video",
+            "base",
+            0,
+            0,
+            2000,
+            "cue-dialogue",
+            Path(cut["output"]["locator"]),
+        ),
         ("clip", "clip", 10, 200, 600, "cue-clip", source_b),
         ("image", "image", 20, 600, 900, "cue-image", source_a),
         ("text", "text", 30, 900, 1200, "cue-text", source_b),
@@ -155,10 +233,15 @@ def test_encoded_multilayer_tracks_render_and_trace(tmp_path: Path) -> None:
             "safeZones": ["face", "captions"],
             "faceAvoidance": True,
         }
-        for ordinal, (layer_id, role, z, start, end, cue_id, path) in enumerate(visual_defs)
+        for ordinal, (layer_id, role, z, start, end, cue_id, path) in enumerate(
+            visual_defs
+        )
     ]
     tracks = TracksService(workspace).author(
-        {"audioTracks": {"layers": audio_layers}, "videoTracks": {"layers": video_layers}},
+        {
+            "audioTracks": {"layers": audio_layers},
+            "videoTracks": {"layers": video_layers},
+        },
         actor="avo",
         reason="full inspectable assembly",
     )
@@ -172,7 +255,14 @@ def test_encoded_multilayer_tracks_render_and_trace(tmp_path: Path) -> None:
     output = raw_dir / "edit" / "tracks-preview.mp4"
     rendered = TimelineRenderAdapter().render(projection, output, profile="preview")
     assert output.is_file() and rendered["output"]["sha256"] == source(output)["sha256"]
-    probe = json.loads(subprocess.run(["ffprobe", "-v", "error", "-show_streams", "-of", "json", str(output)], check=True, capture_output=True, text=True).stdout)
+    probe = json.loads(
+        subprocess.run(
+            ["ffprobe", "-v", "error", "-show_streams", "-of", "json", str(output)],
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout
+    )
     assert {item["codec_type"] for item in probe["streams"]} == {"video", "audio"}
     report = TracksService(workspace).inspect()
     assert len(report["audioLayers"]) == 6

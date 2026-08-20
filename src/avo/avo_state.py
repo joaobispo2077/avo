@@ -10,15 +10,14 @@ Cross-platform: pathlib only, no hardcoded separators.
 
 from __future__ import annotations
 
-from avo.paths import repo_root
 import argparse
 import json
 import sys
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-
+from avo.paths import repo_root
 
 
 def state_dir() -> Path:
@@ -53,7 +52,12 @@ def package_version() -> str:
 
 
 def now_iso() -> str:
-    return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    return (
+        datetime.now(timezone.utc)
+        .replace(microsecond=0)
+        .isoformat()
+        .replace("+00:00", "Z")
+    )
 
 
 def default_state() -> dict[str, Any]:
@@ -81,7 +85,9 @@ def get_video_state(state: dict[str, Any], key: str) -> dict[str, Any]:
     return dict(slice_) if isinstance(slice_, dict) else {}
 
 
-def set_video_state(state: dict[str, Any], key: str, patch: dict[str, Any]) -> dict[str, Any]:
+def set_video_state(
+    state: dict[str, Any], key: str, patch: dict[str, Any]
+) -> dict[str, Any]:
     videos = state.setdefault("videos", {})
     current = get_video_state(state, key)
     for part, value in patch.items():
@@ -111,7 +117,9 @@ def save_active_context(payload: dict[str, Any]) -> Path:
     path = active_context_path()
     body = dict(payload)
     body["updatedAt"] = now_iso()
-    path.write_text(json.dumps(body, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    path.write_text(
+        json.dumps(body, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+    )
     return path
 
 
@@ -220,7 +228,9 @@ def _coerce(value: str) -> Any:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Read/write AVO runtime state (.avo/state.json).")
+    parser = argparse.ArgumentParser(
+        description="Read/write AVO runtime state (.avo/state.json)."
+    )
     sub = parser.add_subparsers(dest="cmd", required=True)
 
     p_get = sub.add_parser("get", help="Print a dotted key (or whole state).")
@@ -230,17 +240,26 @@ def main(argv: list[str] | None = None) -> int:
     p_set.add_argument("key")
     p_set.add_argument("value")
 
-    p_init = sub.add_parser("init", help="Ensure state exists; optionally stamp version/language.")
+    p_init = sub.add_parser(
+        "init", help="Ensure state exists; optionally stamp version/language."
+    )
     p_init.add_argument("--version", default="")
     p_init.add_argument("--language", default="")
-    p_init.add_argument("--whisper-model", default="", help="Persist faster-whisper model size (catalog id).")
-    p_init.add_argument("--touch-update", action="store_true",
-                        help="Set lastUpdateCheck to now.")
+    p_init.add_argument(
+        "--whisper-model",
+        default="",
+        help="Persist faster-whisper model size (catalog id).",
+    )
+    p_init.add_argument(
+        "--touch-update", action="store_true", help="Set lastUpdateCheck to now."
+    )
 
-    p_due = sub.add_parser("due", help="Print 'due' or 'recent' based on lastUpdateCheck age.")
+    p_due = sub.add_parser(
+        "due", help="Print 'due' or 'recent' based on lastUpdateCheck age."
+    )
     p_due.add_argument("--days", type=float, default=7.0)
 
-    p_touch = sub.add_parser("touch-update", help="Set lastUpdateCheck to now.")
+    sub.add_parser("touch-update", help="Set lastUpdateCheck to now.")
 
     args = parser.parse_args(argv)
 

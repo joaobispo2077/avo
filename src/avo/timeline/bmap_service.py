@@ -2,18 +2,17 @@
 
 from __future__ import annotations
 
+import re
 from copy import deepcopy
 from fractions import Fraction
 from pathlib import Path
-import re
 from typing import Any
 
 from .contracts import file_fingerprint
-from .lineage import LineageError, persist_invalidation, validate_bmap_basis
-from .mapping import cmap_output_duration
 from .lifecycle import PipelineRunStore, PipelineState, TransitionFacts
+from .lineage import LineageError, validate_bmap_basis
+from .mapping import cmap_output_duration
 from .workspace import TimelineWorkspace
-
 
 _STABLE_ID = re.compile(r"^[a-z][a-z0-9-]{2,63}$")
 
@@ -61,7 +60,9 @@ class BMapService:
         locator = str(asset.get("locator") or "")
         digest = str(asset.get("sha256") or "")
         if not locator or len(digest) != 64:
-            raise LineageError(f"BMap cue {cue.get('cueId')} requires an exact asset reference")
+            raise LineageError(
+                f"BMap cue {cue.get('cueId')} requires an exact asset reference"
+            )
         path = Path(locator)
         if not path.is_file():
             raise LineageError(f"BMap asset is missing: {path}")
@@ -76,14 +77,26 @@ class BMapService:
         cmap_revision: dict[str, Any],
     ) -> None:
         if snapshot.get("basis") != basis:
-            raise LineageError("BMap snapshot basis must equal the current approved CMap/cut")
+            raise LineageError(
+                "BMap snapshot basis must equal the current approved CMap/cut"
+            )
         cues = snapshot.get("cues") or []
         ids: set[str] = set()
         output_base = cmap_revision["snapshot"]["segments"][0]["in"]["timebase"]
         duration = cmap_output_duration(cmap_revision["snapshot"])
         allowed = {
-            "insert", "text", "clip", "music", "sfx", "animation",
-            "caption", "grade", "end-screen", "card", "transition", "ambience",
+            "insert",
+            "text",
+            "clip",
+            "music",
+            "sfx",
+            "animation",
+            "caption",
+            "grade",
+            "end-screen",
+            "card",
+            "transition",
+            "ambience",
         }
         for cue in cues:
             cue_id = str(cue.get("cueId") or "")
@@ -103,11 +116,15 @@ class BMapService:
             start_ticks = _ticks_in_base(start, output_base)
             end_ticks = _ticks_in_base(end, output_base)
             if start_ticks < 0 or end_ticks <= start_ticks or end_ticks > duration:
-                raise LineageError(f"BMap cue {cue_id} is outside the approved cut duration")
+                raise LineageError(
+                    f"BMap cue {cue_id} is outside the approved cut duration"
+                )
             cls._asset(cue)
 
     @staticmethod
-    def _diff(parent: dict[str, Any] | None, child: dict[str, Any], reason: str) -> list[dict[str, Any]]:
+    def _diff(
+        parent: dict[str, Any] | None, child: dict[str, Any], reason: str
+    ) -> list[dict[str, Any]]:
         before = (parent or {}).get("cues") or []
         after = child.get("cues") or []
         before_by = {item["cueId"]: item for item in before}
@@ -150,7 +167,9 @@ class BMapService:
                 )
         return operations
 
-    def author(self, snapshot: dict[str, Any], *, actor: str, reason: str) -> dict[str, Any]:
+    def author(
+        self, snapshot: dict[str, Any], *, actor: str, reason: str
+    ) -> dict[str, Any]:
         snapshot = deepcopy(snapshot)
         basis, cmap_revision, cut_hash = self.current_basis()
         snapshot["basis"] = basis
@@ -193,7 +212,10 @@ class BMapService:
             )
         run_store = PipelineRunStore(self.workspace.pipeline_run_path)
         run = run_store.load()
-        if run["mainState"] == PipelineState.CMAP_APPROVED.value and run["sideState"] is None:
+        if (
+            run["mainState"] == PipelineState.CMAP_APPROVED.value
+            and run["sideState"] is None
+        ):
             run_store.advance(
                 PipelineState.BMAP_DRAFT,
                 TransitionFacts(cmap_approved=True, cut_output_hash=cut_hash),
@@ -205,6 +227,7 @@ class BMapService:
                     "cutOutputSha256": cut_hash,
                 },
             )
+        revision["editlogRefresh"] = self.workspace.notify_editlog()
         return revision
 
     def status(self) -> dict[str, Any]:
@@ -219,7 +242,6 @@ class BMapService:
             }
         index = self.store.load_index()
         return {"activeState": index["activeState"], "basis": basis, "artifact": index}
-
 
     def rebase(
         self,

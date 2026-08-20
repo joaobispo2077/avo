@@ -6,13 +6,15 @@ MRTR continuity fields (``requestState`` / ``inputResponses`` / ``ctx``) must
 never become CLI flags. Callers should strip them before ``run_bridged``;
 ``run_bridged`` also strips them defensively (FR-15).
 """
+
 from __future__ import annotations
 
 import json
+from collections.abc import Mapping, Sequence
 from contextlib import redirect_stderr, redirect_stdout
 from dataclasses import asdict, dataclass
 from io import StringIO
-from typing import Any, Mapping, Sequence
+from typing import Any
 
 # Keep in sync with ``avo.mcp.mrtr.MRTR_KWARG_NAMES`` (no import cycle at module load).
 _MRTR_KWARG_NAMES: frozenset[str] = frozenset(
@@ -120,7 +122,7 @@ def run_cli(argv: list[str]) -> BridgeResult:
             else:
                 exit_code = 1
                 err_buf.write(str(code))
-        except Exception as exc:  # noqa: BLE001 — surface unexpected bridge failures
+        except Exception as exc:
             exit_code = 1
             err_buf.write(f"{type(exc).__name__}: {exc}")
 

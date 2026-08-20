@@ -1,4 +1,5 @@
 """Compatibility shim — remove in v0.2.0. Use `avo.prepare_transcription`."""
+
 import warnings
 
 warnings.warn(
@@ -6,4 +7,4 @@ warnings.warn(
     DeprecationWarning,
     stacklevel=2,
 )
-from avo.prepare_transcription import *  # noqa: F403
+from avo.prepare_transcription import *

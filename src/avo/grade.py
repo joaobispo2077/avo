@@ -34,18 +34,15 @@ import sys
 import tempfile
 from pathlib import Path
 
-
 PRESETS: dict[str, str] = {
     # Subtle baseline — barely perceptible cleanup. No color shift.
     # Use when auto-analysis isn't available or when you want a safe floor.
     "subtle": "eq=contrast=1.03:saturation=0.98",
-
     # Minimal corrective grade: light contrast + subtle S-curve, no color shifts.
     "neutral_punch": (
         "eq=contrast=1.06:brightness=0.0:saturation=1.0,"
         "curves=master='0/0 0.25/0.23 0.75/0.77 1/1'"
     ),
-
     # OPT-IN creative preset for retro/cinematic looks ONLY. Not a default.
     # +12% contrast, crushed blacks, -12% sat, warm shadows + cool highs, filmic curve.
     # Originally from HEURISTICS §6 — too aggressive for standard launch content.
@@ -57,7 +54,6 @@ PRESETS: dict[str, str] = {
         "rh=0.08:gh=0.02:bh=-0.05,"
         "curves=master='0/0 0.25/0.22 0.75/0.78 1/1'"
     ),
-
     # Flat — no grade. Useful as a sentinel for "skip grading this source".
     "none": "",
 }
@@ -102,14 +98,25 @@ def _sample_frame_stats(
 
     try:
         cmd = [
-            "ffmpeg", "-y", "-hide_banner", "-nostats",
-            "-ss", f"{start:.3f}",
-            "-i", str(video),
-            "-t", f"{duration:.3f}",
-            "-vf", f"fps={fps:.2f},signalstats,metadata=print:file={metadata_path}",
-            "-f", "null", "-",
+            "ffmpeg",
+            "-y",
+            "-hide_banner",
+            "-nostats",
+            "-ss",
+            f"{start:.3f}",
+            "-i",
+            str(video),
+            "-t",
+            f"{duration:.3f}",
+            "-vf",
+            f"fps={fps:.2f},signalstats,metadata=print:file={metadata_path}",
+            "-f",
+            "null",
+            "-",
         ]
-        subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        subprocess.run(
+            cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+        )
 
         # Parse signalstats metadata. Signalstats reports values in the NATIVE
         # bit depth of the decoded frame (8-bit → 0-255, 10-bit → 0-1023). We
@@ -156,7 +163,7 @@ def _sample_frame_stats(
             return {"y_mean": 0.5, "y_std": 0.18, "sat_mean": 0.25}
 
         # Normalize by native bit-depth max value
-        max_val = (2 ** bit_depth) - 1
+        max_val = (2**bit_depth) - 1
 
         y_mean = (sum(y_avgs) / len(y_avgs)) / max_val
         y_range = (
@@ -194,9 +201,13 @@ def auto_grade_for_clip(
     if duration is None:
         # Probe duration
         probe_cmd = [
-            "ffprobe", "-v", "error",
-            "-show_entries", "format=duration",
-            "-of", "default=noprint_wrappers=1:nokey=1",
+            "ffprobe",
+            "-v",
+            "error",
+            "-show_entries",
+            "format=duration",
+            "-of",
+            "default=noprint_wrappers=1:nokey=1",
             str(video),
         ]
         try:
@@ -263,9 +274,13 @@ def auto_grade_for_clip(
         filter_string = "eq=" + ":".join(eq_parts)
 
     if verbose:
-        print(f"  auto-grade stats:")
-        print(f"    y_mean={y_mean:.3f}  y_range={y_range:.3f}  sat_mean={sat_mean:.3f}")
-        print(f"    -> contrast={contrast_adj:.3f}  gamma={gamma_adj:.3f}  sat={sat_adj:.3f}")
+        print("  auto-grade stats:")
+        print(
+            f"    y_mean={y_mean:.3f}  y_range={y_range:.3f}  sat_mean={sat_mean:.3f}"
+        )
+        print(
+            f"    -> contrast={contrast_adj:.3f}  gamma={gamma_adj:.3f}  sat={sat_adj:.3f}"
+        )
         print(f"    -> filter: {filter_string or '(empty)'}")
 
     return filter_string, stats
@@ -275,24 +290,43 @@ def apply_grade(input_path: Path, output_path: Path, filter_string: str) -> None
     output_path.parent.mkdir(parents=True, exist_ok=True)
     if not filter_string:
         cmd = [
-            "ffmpeg", "-y", "-i", str(input_path),
-            "-c", "copy", str(output_path),
+            "ffmpeg",
+            "-y",
+            "-i",
+            str(input_path),
+            "-c",
+            "copy",
+            str(output_path),
         ]
     else:
         cmd = [
-            "ffmpeg", "-y", "-i", str(input_path),
-            "-vf", filter_string,
-            "-c:v", "libx264", "-preset", "fast", "-crf", "18",
-            "-pix_fmt", "yuv420p",
-            "-c:a", "copy",
-            "-movflags", "+faststart",
+            "ffmpeg",
+            "-y",
+            "-i",
+            str(input_path),
+            "-vf",
+            filter_string,
+            "-c:v",
+            "libx264",
+            "-preset",
+            "fast",
+            "-crf",
+            "18",
+            "-pix_fmt",
+            "yuv420p",
+            "-c:a",
+            "copy",
+            "-movflags",
+            "+faststart",
             str(output_path),
         ]
     subprocess.run(cmd, check=True)
 
 
 def main() -> None:
-    ap = argparse.ArgumentParser(description="Apply a color grade via ffmpeg filter chain")
+    ap = argparse.ArgumentParser(
+        description="Apply a color grade via ffmpeg filter chain"
+    )
     ap.add_argument("input", type=Path, nargs="?", help="Input video")
     ap.add_argument("-o", "--output", type=Path, help="Output video")
     ap.add_argument(
@@ -347,7 +381,9 @@ def main() -> None:
         return
 
     if not args.input or not args.output:
-        ap.error("input and -o/--output are required unless using --analyze/--print-preset/--list-presets")
+        ap.error(
+            "input and -o/--output are required unless using --analyze/--print-preset/--list-presets"
+        )
 
     if not args.input.exists():
         sys.exit(f"input not found: {args.input}")
@@ -363,7 +399,9 @@ def main() -> None:
 
     print(f"grading {args.input.name} -> {args.output.name}")
     if filter_string:
-        print(f"  filter: {filter_string[:120]}{'...' if len(filter_string) > 120 else ''}")
+        print(
+            f"  filter: {filter_string[:120]}{'...' if len(filter_string) > 120 else ''}"
+        )
     else:
         print("  filter: (none — copy)")
 

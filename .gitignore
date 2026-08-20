@@ -39,6 +39,11 @@ lib-cov
 # Coverage directory used by tools like istanbul
 coverage
 *.lcov
+.coverage
+.coverage.*
+coverage.json
+coverage-*.json
+htmlcov/
 
 # nyc test coverage
 .nyc_output
@@ -226,6 +231,8 @@ models/
 tmp/
 
 .tmp-*/
+.tmp-*
+.import_linter_cache/
 .codex-qc/
 .codex-tmp/
 .avo-test-sessions/
@@ -302,8 +309,23 @@ video_use.egg-info/
 # -----------------------------------------------------------------------------
 # Tracked exceptions (negations must come AFTER the ignores above)
 # -----------------------------------------------------------------------------
+# Mutation + quality report artifacts (CI uploads these; do not commit)
+mutants/
+.pyproject.toml.mutmut.bak
+reports/mutation/
+reports/quality/
+reports/dep-graph/
+reports/toolchain-smoke/
+reports/watch-skill-smoke/
+size-signal-raw.txt
+size-signal-report.md
+
 # Keep the env template tracked so contributors know which optional keys exist.
 !.env.example
+
+# Shipped EDITLOG template (Node baseline `logs` would hide docs/templates/logs/).
+!docs/templates/logs/
+!docs/templates/logs/**
 
 # Committed unit-test fixture trees (override edit/ ignore above).
 !tests/fixtures/stats-project/edit/

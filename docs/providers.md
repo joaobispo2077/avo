@@ -169,7 +169,8 @@ AVO consolidates learndowns **per provider**, not per video. All videos tagged
 
 **Filesystem export:** each wrap (draft or final) also writes under
 `providers/<slug>/learndowns/<YYYYMMDD-topic>/` — `learndown.json`, `learndown.md`,
-wrap copies, and a provider-level `index.json` catalog. ai-memory is optional;
+wrap copies, a first-copy `EDITLOG.md` lock when footage-root EDITLOG exists,
+and a provider-level `index.json` catalog. ai-memory is optional;
 the repo export is the durable catalog agents can grep. Backfill:
 `python -m avo.learndown_export backfill --wrap-json <rawDir>/avo.wrap.draft.json`.
 

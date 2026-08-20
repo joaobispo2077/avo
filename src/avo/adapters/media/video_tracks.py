@@ -23,7 +23,10 @@ def compile_video_layers(layers: list[dict[str, Any]]) -> dict[str, Any]:
     """Compile z-ordered overlays and keep captions last."""
     ordered = sorted(
         layers,
-        key=lambda item: (item.get("zOrder", item.get("order", 0)), item.get("layerId", "")),
+        key=lambda item: (
+            item.get("zOrder", item.get("order", 0)),
+            item.get("layerId", ""),
+        ),
     )
     overlays: list[dict[str, Any]] = []
     captions: dict[str, Any] | None = None
@@ -51,8 +54,16 @@ def compile_video_layers(layers: list[dict[str, Any]]) -> dict[str, Any]:
             captions = item
         elif role != "base":
             overlays.append(item)
-        trace.append({"layerId": layer.get("layerId"), "role": role, "zOrder": item["zOrder"]})
+        trace.append(
+            {"layerId": layer.get("layerId"), "role": role, "zOrder": item["zOrder"]}
+        )
     if captions is not None:
         trace = [item for item in trace if item["role"] != "caption"]
-        trace.append({"layerId": captions["layerId"], "role": "caption", "zOrder": captions["zOrder"]})
+        trace.append(
+            {
+                "layerId": captions["layerId"],
+                "role": "caption",
+                "zOrder": captions["zOrder"],
+            }
+        )
     return {"overlays": overlays, "captions": captions, "trace": trace}

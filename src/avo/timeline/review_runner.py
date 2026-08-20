@@ -2,12 +2,19 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 from .contracts import dependency_lock_hash, file_fingerprint
 from .ports import ToolError
-from .review import EVIDENCE_PROFILES, candidate_identity, classify_findings, evaluate_gate, write_review_package
+from .review import (
+    EVIDENCE_PROFILES,
+    candidate_identity,
+    classify_findings,
+    evaluate_gate,
+    write_review_package,
+)
 
 
 class ReviewRunner:
@@ -34,7 +41,12 @@ class ReviewRunner:
         self.max_tool_attempts = max_tool_attempts
         self.max_fix_attempts = max_fix_attempts
 
-    def _call(self, producer: str, operation: Callable[[], dict[str, Any]], attempts: list[dict[str, Any]]) -> dict[str, Any]:
+    def _call(
+        self,
+        producer: str,
+        operation: Callable[[], dict[str, Any]],
+        attempts: list[dict[str, Any]],
+    ) -> dict[str, Any]:
         for number in range(1, self.max_tool_attempts + 1):
             try:
                 result = operation()
@@ -88,10 +100,16 @@ class ReviewRunner:
         artifacts: list[dict[str, str]] | None = None,
         attempt: int = 1,
     ) -> dict[str, Any]:
-        duration = float(coverage.get("durationSeconds") or coverage.get("duration") or 0)
+        duration = float(
+            coverage.get("durationSeconds") or coverage.get("duration") or 0
+        )
         reviewed = float(
             coverage.get("reviewedSeconds")
-            or (duration if scope_mode == "full" else sum(max(0.0, float(w["end"]) - float(w["start"])) for w in windows))
+            or (
+                duration
+                if scope_mode == "full"
+                else sum(max(0.0, float(w["end"]) - float(w["start"])) for w in windows)
+            )
         )
         normalized_coverage = dict(coverage)
         normalized_coverage.update(
@@ -105,14 +123,22 @@ class ReviewRunner:
         return {
             "evidenceId": f"{kind}-{identity['sha256'][:12]}-{attempt:02d}",
             "kind": kind,
-            "tool": {"name": tool_name, "version": tool_version or "unknown", "model": model},
+            "tool": {
+                "name": tool_name,
+                "version": tool_version or "unknown",
+                "model": model,
+            },
             "runAt": self.clock(),
             "candidateHash": identity["sha256"],
             "candidateIdentityHash": identity["identityHash"],
             "dependencyLockSha256": lock_hash,
             "dependencyHashes": identity["dependencies"],
             "dependencyProfile": EVIDENCE_PROFILES.get(kind, "exact-candidate"),
-            "scope": {"mode": scope_mode, "windows": windows, "rationale": f"{kind} required by checkpoint"},
+            "scope": {
+                "mode": scope_mode,
+                "windows": windows,
+                "rationale": f"{kind} required by checkpoint",
+            },
             "coverage": normalized_coverage,
             "status": status,
             "findings": findings,
@@ -168,7 +194,10 @@ class ReviewRunner:
                 scope="full",
                 windows=review_windows,
                 transcript_ref=transcript.get("transcriptPath") or None,
-                artifact_dir=self.review_root / checkpoint / identity["sha256"][:12] / "watch",
+                artifact_dir=self.review_root
+                / checkpoint
+                / identity["sha256"][:12]
+                / "watch",
             ),
             attempts,
         )
@@ -185,7 +214,7 @@ class ReviewRunner:
                     lock_hash=lock_hash,
                     scope_mode="full",
                     windows=review_windows,
-                    coverage={**(qc.get("coverage") or {}), "windows": review_windows} or {"durationSeconds": qc.get("duration") or 0},
+                    coverage={**(qc.get("coverage") or {}), "windows": review_windows},
                     findings=item.get("findings") or [],
                 )
             )
@@ -200,14 +229,26 @@ class ReviewRunner:
                 lock_hash=lock_hash,
                 scope_mode="full",
                 windows=review_windows,
-                coverage={"durationSeconds": qc.get("duration") or 0, "windows": review_windows},
+                coverage={
+                    "durationSeconds": qc.get("duration") or 0,
+                    "windows": review_windows,
+                },
                 findings=transcript.get("findings") or [],
-                artifacts=self._artifact_refs([transcript.get("transcriptPath")] if transcript.get("transcriptPath") else []),
+                artifacts=self._artifact_refs(
+                    [transcript.get("transcriptPath")]
+                    if transcript.get("transcriptPath")
+                    else []
+                ),
             )
         )
         watch_coverage = watch.get("coverage") or {}
         if watch_coverage.get("mode") not in {"full", "whole"}:
-            raise ToolError("WATCH_SCOPE_INSUFFICIENT", "full Watch evidence required", False, "rerun full Watch")
+            raise ToolError(
+                "WATCH_SCOPE_INSUFFICIENT",
+                "full Watch evidence required",
+                False,
+                "rerun full Watch",
+            )
         reviewed_windows = watch_coverage.get("windows") or []
         if review_windows and len(reviewed_windows) < len(review_windows):
             raise ToolError(
@@ -233,9 +274,7 @@ class ReviewRunner:
             )
         )
         findings = [
-            finding
-            for item in evidence
-            for finding in item.get("findings") or []
+            finding for item in evidence for finding in item.get("findings") or []
         ]
         findings.extend(qc.get("findings") or [])
         return identity, evidence, findings
@@ -255,25 +294,29 @@ class ReviewRunner:
                 }
                 if normalized not in windows:
                     windows.append(normalized)
-        if self.workspace is not None and hasattr(self.workspace, "review_change_summary"):
+        if self.workspace is not None and hasattr(
+            self.workspace, "review_change_summary"
+        ):
             return self.workspace.review_change_summary(
-                identity["dependencies"], windows=windows,
+                identity["dependencies"],
+                windows=windows,
             )
         keys = sorted(identity["dependencies"])
         return {
             "headline": f"Candidate materialized from {len(keys)} exact dependency revisions",
-            "items": [{
-                "artifactType": "candidate",
-                "revisionId": "dependency-lock",
-                "reason": "materialized from the exact declared dependency snapshot",
-                "operationCounts": {"materialize": 1},
-                "targets": keys[:6],
-                "truncatedTargets": max(0, len(keys) - 6),
-            }],
+            "items": [
+                {
+                    "artifactType": "candidate",
+                    "revisionId": "dependency-lock",
+                    "reason": "materialized from the exact declared dependency snapshot",
+                    "operationCounts": {"materialize": 1},
+                    "targets": keys[:6],
+                    "truncatedTargets": max(0, len(keys) - 6),
+                }
+            ],
             "windows": windows,
             "staleDependencies": [],
         }
-
 
     def _write(
         self,
@@ -293,7 +336,8 @@ class ReviewRunner:
             "dependencyLockSha256": dependency_lock_hash(identity["dependencies"]),
             "changeSummary": self._change_summary(identity, evidence),
             "state": state,
-            "evidence": evidence or [
+            "evidence": evidence
+            or [
                 self._evidence(
                     kind="review-runtime",
                     status="error",
@@ -305,7 +349,12 @@ class ReviewRunner:
                     scope_mode="full",
                     windows=[],
                     coverage={},
-                    findings=[{"classification": "tool-error", "message": blocker or "review failed"}],
+                    findings=[
+                        {
+                            "classification": "tool-error",
+                            "message": blocker or "review failed",
+                        }
+                    ],
                 )
             ],
             "attempts": attempts,
@@ -334,11 +383,13 @@ class ReviewRunner:
         attempts: list[dict[str, Any]] = []
         current_candidate = candidate
         current_dependencies = dict(sorted(dependencies.items()))
-        last_identity = candidate_identity(current_candidate, current_dependencies, render_profile)
+        last_identity = candidate_identity(
+            current_candidate, current_dependencies, render_profile
+        )
         last_evidence: list[dict[str, Any]] = []
         last_findings: list[dict[str, Any]] = []
 
-        for fix_number in range(0, self.max_fix_attempts + 1):
+        for fix_number in range(self.max_fix_attempts + 1):
             try:
                 identity, evidence, findings = self._inspect_once(
                     checkpoint=checkpoint,
@@ -370,7 +421,9 @@ class ReviewRunner:
                         identity["dependencies"],
                         evidence,
                         candidate_identity_hash=identity["identityHash"],
-                        dependency_lock_sha256=dependency_lock_hash(identity["dependencies"]),
+                        dependency_lock_sha256=dependency_lock_hash(
+                            identity["dependencies"]
+                        ),
                     )
                 except Exception as error:
                     return self._write(
@@ -426,8 +479,12 @@ class ReviewRunner:
                 dependencies=current_dependencies,
             )
             next_candidate = Path(result.get("candidate") or current_candidate)
-            next_dependencies = dict(sorted((result.get("dependencies") or current_dependencies).items()))
-            next_identity = candidate_identity(next_candidate, next_dependencies, render_profile)
+            next_dependencies = dict(
+                sorted((result.get("dependencies") or current_dependencies).items())
+            )
+            next_identity = candidate_identity(
+                next_candidate, next_dependencies, render_profile
+            )
             attempts.append(
                 {
                     "producer": "safe-fix",

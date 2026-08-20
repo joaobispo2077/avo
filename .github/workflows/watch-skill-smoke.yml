@@ -1,0 +1,42 @@
+# watch-skill runtime smoke beyond Gate 1 clone (task-028 / FR-13).
+
+name: Watch-skill smoke
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 8 * * 1'
+
+permissions:
+  contents: read
+
+env:
+  PYTHON_VERSION: '3.12'
+  AVO_CI: '1'
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
+jobs:
+  watch-skill-smoke:
+    name: Watch-skill smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Invoke watch-skill
+        run: bash scripts/ci/watch-skill-smoke.sh
+
+      - name: Upload diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: watch-skill-smoke-diagnostics
+          path: reports/watch-skill-smoke
+          if-no-files-found: warn
+          retention-days: 7

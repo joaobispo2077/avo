@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
 import json
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -42,10 +42,14 @@ def legacy_edl_to_cmap(
         else:
             unresolved.append(str(source_id))
             fingerprint = {"sha256": "0" * 64, "sizeBytes": 0, "locator": str(locator)}
-        sources.append({
-            "sourceId": str(source_id), "kind": "raw",
-            "fingerprint": fingerprint, "locator": str(locator),
-        })
+        sources.append(
+            {
+                "sourceId": str(source_id),
+                "kind": "raw",
+                "fingerprint": fingerprint,
+                "locator": str(locator),
+            }
+        )
     segments = []
     for index, item in enumerate(edl.get("ranges") or [], start=1):
         source_id = str(item["source"])
@@ -100,7 +104,10 @@ def migrate_legacy_edl(
     target = Path(target)
     edl = json.loads(edl_path.read_text(encoding="utf-8"))
     artifact, unresolved = legacy_edl_to_cmap(
-        edl, edl_path=edl_path, video_id=video_id, provider=provider,
+        edl,
+        edl_path=edl_path,
+        video_id=video_id,
+        provider=provider,
     )
     idempotent = False
     if target.is_file():
@@ -123,32 +130,49 @@ def migrate_legacy_edl(
     }
 
 
-def import_legacy_sync_map(payload: dict[str, Any], *, video_id: str, provider: str) -> dict[str, Any]:
+def import_legacy_sync_map(
+    payload: dict[str, Any], *, video_id: str, provider: str
+) -> dict[str, Any]:
     """Import verifiable calibration facts without helper/script dependency or approval."""
     snapshot = {
         key: payload[key]
         for key in (
-            "picture", "audio", "referenceClock", "signConvention", "transform",
-            "calibrationSamples", "toleranceTicks", "fullProgramValidation",
+            "picture",
+            "audio",
+            "referenceClock",
+            "signConvention",
+            "transform",
+            "calibrationSamples",
+            "toleranceTicks",
+            "fullProgramValidation",
         )
         if key in payload
     }
     revision = {
-        "revisionId": "r0001", "parentRevisionId": None,
+        "revisionId": "r0001",
+        "parentRevisionId": None,
         "createdAt": payload.get("createdAt") or "1970-01-01T00:00:00Z",
         "actor": "avo-migrate-timeline",
         "reason": "Import verified legacy sync facts without inferring approval",
-        "snapshot": snapshot, "diff": [], "dependencies": [], "evidence": [],
+        "snapshot": snapshot,
+        "diff": [],
+        "dependencies": [],
+        "evidence": [],
         "state": "unknown",
     }
     revision["contentHash"] = content_hash(revision)
     return {
-        "schemaVersion": "1.0.0", "artifactType": "sync-map",
-        "artifactId": "sync-main", "videoId": video_id, "provider": provider,
-        "timelineDomain": "raw-source", "currentRevisionId": "r0001",
-        "approvedRevisionId": None, "revisions": [revision], "decisions": [],
+        "schemaVersion": "1.0.0",
+        "artifactType": "sync-map",
+        "artifactId": "sync-main",
+        "videoId": video_id,
+        "provider": provider,
+        "timelineDomain": "raw-source",
+        "currentRevisionId": "r0001",
+        "approvedRevisionId": None,
+        "revisions": [revision],
+        "decisions": [],
     }
-
 
 
 def _output_tv(seconds: float) -> dict[str, Any]:
@@ -159,12 +183,17 @@ def _output_tv(seconds: float) -> dict[str, Any]:
     }
 
 
-def legacy_edl_snapshots(edl: dict[str, Any], *, edl_path: Path) -> tuple[dict[str, dict[str, Any]], list[dict[str, Any]]]:
+def legacy_edl_snapshots(
+    edl: dict[str, Any], *, edl_path: Path
+) -> tuple[dict[str, dict[str, Any]], list[dict[str, Any]]]:
     """Extract every representable legacy domain without inventing approval."""
     from avo.edl_timeline import parse_ranges, source_to_output
 
     cmap, unresolved = legacy_edl_to_cmap(
-        edl, edl_path=edl_path, video_id="migration", provider="migration",
+        edl,
+        edl_path=edl_path,
+        video_id="migration",
+        provider="migration",
     )
     findings = [
         {
@@ -184,16 +213,23 @@ def legacy_edl_snapshots(edl: dict[str, Any], *, edl_path: Path) -> tuple[dict[s
             start = item.get("start_in_output")
             if start is None and item.get("anchor_in_source") is not None:
                 start = source_to_output(
-                    ranges, float(item["anchor_in_source"]),
-                    source=str(item.get("anchor_source")) if item.get("anchor_source") else None,
+                    ranges,
+                    float(item["anchor_in_source"]),
+                    source=str(item.get("anchor_source"))
+                    if item.get("anchor_source")
+                    else None,
                 )
             if start is None:
-                findings.append({
-                    "classification": "unsupported-timing",
-                    "message": f"{collection} item {ordinal} has no resolvable B-time",
-                })
+                findings.append(
+                    {
+                        "classification": "unsupported-timing",
+                        "message": f"{collection} item {ordinal} has no resolvable B-time",
+                    }
+                )
                 continue
-            duration = max(0.05, float(item.get("duration") or item.get("duration_seconds") or 1.0))
+            duration = max(
+                0.05, float(item.get("duration") or item.get("duration_seconds") or 1.0)
+            )
             cue_id = f"legacy-cue-{ordinal:04d}"
             locator = str(item.get("file") or item.get("path") or "")
             cue = {
@@ -215,10 +251,12 @@ def legacy_edl_snapshots(edl: dict[str, Any], *, edl_path: Path) -> tuple[dict[s
                         "sizeBytes": asset.stat().st_size,
                     }
                 else:
-                    findings.append({
-                        "classification": "unresolved-asset",
-                        "message": f"asset missing: {locator}",
-                    })
+                    findings.append(
+                        {
+                            "classification": "unresolved-asset",
+                            "message": f"asset missing: {locator}",
+                        }
+                    )
             cues.append(cue)
             layer = {
                 "layerId": cue["targetLayerId"],
@@ -230,22 +268,27 @@ def legacy_edl_snapshots(edl: dict[str, Any], *, edl_path: Path) -> tuple[dict[s
             (audio_layers if kind == "sfx" else video_layers).append(layer)
     if edl.get("subtitles"):
         ordinal += 1
-        cues.append({
-            "cueId": f"legacy-cue-{ordinal:04d}",
-            "kind": "caption",
-            "start": _output_tv(0),
-            "end": _output_tv(sum(item.duration for item in ranges)),
-            "targetLayerId": "captions",
-            "intent": "Imported subtitle track",
-            "reason": "Legacy EDL migration",
-            "reviewState": "pending",
-            "assetRef": {"locator": str(edl["subtitles"])},
-        })
-        video_layers.append({
-            "layerId": "captions", "role": "caption",
-            "cueIds": [f"legacy-cue-{ordinal:04d}"],
-            "legacy": {"subtitles": edl["subtitles"]},
-        })
+        cues.append(
+            {
+                "cueId": f"legacy-cue-{ordinal:04d}",
+                "kind": "caption",
+                "start": _output_tv(0),
+                "end": _output_tv(sum(item.duration for item in ranges)),
+                "targetLayerId": "captions",
+                "intent": "Imported subtitle track",
+                "reason": "Legacy EDL migration",
+                "reviewState": "pending",
+                "assetRef": {"locator": str(edl["subtitles"])},
+            }
+        )
+        video_layers.append(
+            {
+                "layerId": "captions",
+                "role": "caption",
+                "cueIds": [f"legacy-cue-{ordinal:04d}"],
+                "legacy": {"subtitles": edl["subtitles"]},
+            }
+        )
     snapshots = {
         "cmap": cmap["revisions"][0]["snapshot"],
         "bmap": {
@@ -274,16 +317,32 @@ def legacy_edl_snapshots(edl: dict[str, Any], *, edl_path: Path) -> tuple[dict[s
         },
     }
     known = {
-        "version", "feature_id", "story_map_approval", "sources", "ranges",
-        "grade", "overlays", "sound_effects", "subtitles", "audio",
-        "caption_burn_in", "caption_policy", "motion_policy", "render_gate",
-        "review_package", "blocked_source_ranges", "ad_segment", "sync_map",
+        "version",
+        "feature_id",
+        "story_map_approval",
+        "sources",
+        "ranges",
+        "grade",
+        "overlays",
+        "sound_effects",
+        "subtitles",
+        "audio",
+        "caption_burn_in",
+        "caption_policy",
+        "motion_policy",
+        "render_gate",
+        "review_package",
+        "blocked_source_ranges",
+        "ad_segment",
+        "sync_map",
     }
     for field in sorted(set(edl) - known):
-        findings.append({
-            "classification": "unsupported-field",
-            "message": f"legacy field retained only in source EDL: {field}",
-        })
+        findings.append(
+            {
+                "classification": "unsupported-field",
+                "message": f"legacy field retained only in source EDL: {field}",
+            }
+        )
     return snapshots, findings
 
 
@@ -304,11 +363,13 @@ class MigrationService:
         }
 
     def _config_hash(self) -> str:
-        return content_hash({
-            "videoId": self.workspace.video_id,
-            "provider": self.workspace.project.get("provider"),
-            "toolVersion": self.VERSION,
-        })
+        return content_hash(
+            {
+                "videoId": self.workspace.video_id,
+                "provider": self.workspace.project.get("provider"),
+                "toolVersion": self.VERSION,
+            }
+        )
 
     def plan(self) -> dict[str, Any]:
         edl = json.loads(self.edl_path.read_text(encoding="utf-8"))
@@ -346,10 +407,14 @@ class MigrationService:
                 and existing["tool"]["configSha256"] == plan["tool"]["configSha256"]
             )
             if same and existing["status"] in {
-                "applied-unverified", "validated", "canonical-active",
+                "applied-unverified",
+                "validated",
+                "canonical-active",
             }:
                 return {**existing, "idempotent": True}
-            raise ValueError("migration source/config changed or target collision exists")
+            raise ValueError(
+                "migration source/config changed or target collision exists"
+            )
         original_hash = plan["source"]["sha256"]
         self.workspace.initialize()
         for artifact_type in ("cmap", "bmap", "tracks", "animation", "sync-map"):
@@ -364,11 +429,13 @@ class MigrationService:
                 reason=reason,
                 created_at=now_iso(),
             )
-            outputs.append({
-                "artifactType": artifact_type,
-                "path": str(self.workspace.artifact_path(artifact_type)),
-                "sha256": revision["contentHash"],
-            })
+            outputs.append(
+                {
+                    "artifactType": artifact_type,
+                    "path": str(self.workspace.artifact_path(artifact_type)),
+                    "sha256": revision["contentHash"],
+                }
+            )
         if file_fingerprint(self.edl_path)["sha256"] != original_hash:
             raise ValueError("legacy EDL changed during migration apply")
         timestamp = now_iso()
@@ -381,9 +448,27 @@ class MigrationService:
             "outputs": outputs,
             "findings": plan["findings"],
             "history": [
-                {"from": "not-started", "to": "assessed", "occurredAt": timestamp, "actor": actor, "reason": reason},
-                {"from": "assessed", "to": "dry-run-passed", "occurredAt": timestamp, "actor": actor, "reason": reason},
-                {"from": "dry-run-passed", "to": "applied-unverified", "occurredAt": timestamp, "actor": actor, "reason": reason},
+                {
+                    "from": "not-started",
+                    "to": "assessed",
+                    "occurredAt": timestamp,
+                    "actor": actor,
+                    "reason": reason,
+                },
+                {
+                    "from": "assessed",
+                    "to": "dry-run-passed",
+                    "occurredAt": timestamp,
+                    "actor": actor,
+                    "reason": reason,
+                },
+                {
+                    "from": "dry-run-passed",
+                    "to": "applied-unverified",
+                    "occurredAt": timestamp,
+                    "actor": actor,
+                    "reason": reason,
+                },
             ],
             "authority": "legacy",
             "legacyPreservedSha256": original_hash,
@@ -396,23 +481,43 @@ class MigrationService:
 
     def validate(self, *, actor: str, reason: str) -> dict[str, Any]:
         manifest = self._load_manifest()
-        if manifest is None or manifest["status"] not in {"applied-unverified", "validated"}:
+        if manifest is None or manifest["status"] not in {
+            "applied-unverified",
+            "validated",
+        }:
             raise ValueError("migration must be applied before validation")
-        if file_fingerprint(self.edl_path)["sha256"] != manifest["legacyPreservedSha256"]:
+        if (
+            file_fingerprint(self.edl_path)["sha256"]
+            != manifest["legacyPreservedSha256"]
+        ):
             raise ValueError("legacy EDL bytes changed after migration")
         edl = json.loads(self.edl_path.read_text(encoding="utf-8"))
         cmap = self.workspace.store("cmap").revision(
             self.workspace.store("cmap").load_index()["headRevisionId"]
         )["snapshot"]
         expected = [
-            (str(item["source"]), round(float(item["start"]), 3), round(float(item["end"]), 3))
+            (
+                str(item["source"]),
+                round(float(item["start"]), 3),
+                round(float(item["end"]), 3),
+            )
             for item in edl.get("ranges") or []
         ]
         actual = [
             (
                 str(item["sourceId"]),
-                round(item["in"]["ticks"] * item["in"]["timebase"]["num"] / item["in"]["timebase"]["den"], 3),
-                round(item["out"]["ticks"] * item["out"]["timebase"]["num"] / item["out"]["timebase"]["den"], 3),
+                round(
+                    item["in"]["ticks"]
+                    * item["in"]["timebase"]["num"]
+                    / item["in"]["timebase"]["den"],
+                    3,
+                ),
+                round(
+                    item["out"]["ticks"]
+                    * item["out"]["timebase"]["num"]
+                    / item["out"]["timebase"]["den"],
+                    3,
+                ),
             )
             for item in cmap.get("segments") or []
         ]
@@ -431,7 +536,11 @@ class MigrationService:
             ),
             "unresolvedSources": unresolved,
         }
-        if not parity["rangesEqual"] or parity["durationDeltaSeconds"] > 0.001 or unresolved:
+        if (
+            not parity["rangesEqual"]
+            or parity["durationDeltaSeconds"] > 0.001
+            or unresolved
+        ):
             raise ValueError(f"migration parity validation blocked: {parity}")
         updated = dict(manifest)
         updated["status"] = "validated"
@@ -439,20 +548,29 @@ class MigrationService:
         updated["history"] = [
             *manifest["history"],
             {
-                "from": manifest["status"], "to": "validated",
-                "occurredAt": now_iso(), "actor": actor, "reason": reason,
+                "from": manifest["status"],
+                "to": "validated",
+                "occurredAt": now_iso(),
+                "actor": actor,
+                "reason": reason,
             },
         ]
         validate_document(updated, "avo.timeline-migration.schema.json")
         atomic_write_json(self.path, updated)
         return updated
 
-    def activate(self, *, actor: str, reason: str, confirm_unknown_approvals: bool) -> dict[str, Any]:
+    def activate(
+        self, *, actor: str, reason: str, confirm_unknown_approvals: bool
+    ) -> dict[str, Any]:
         manifest = self._load_manifest()
         if manifest is None or manifest["status"] != "validated":
-            raise ValueError("only a validated migration can activate canonical authority")
+            raise ValueError(
+                "only a validated migration can activate canonical authority"
+            )
         if not confirm_unknown_approvals:
-            raise ValueError("explicit confirmation is required because legacy approvals are unknown")
+            raise ValueError(
+                "explicit confirmation is required because legacy approvals are unknown"
+            )
         project = json.loads(self.workspace.project_path.read_text(encoding="utf-8"))
         timeline = dict(project.get("timeline") or {})
         migration = dict(timeline.get("migration") or {})
@@ -465,14 +583,19 @@ class MigrationService:
         updated["status"] = "canonical-active"
         updated["authority"] = "canonical"
         updated["confirmation"] = {
-            "actor": actor, "reason": reason, "occurredAt": now_iso(),
+            "actor": actor,
+            "reason": reason,
+            "occurredAt": now_iso(),
             "unknownApprovalsAcceptedAsPending": True,
         }
         updated["history"] = [
             *manifest["history"],
             {
-                "from": "validated", "to": "canonical-active",
-                "occurredAt": now_iso(), "actor": actor, "reason": reason,
+                "from": "validated",
+                "to": "canonical-active",
+                "occurredAt": now_iso(),
+                "actor": actor,
+                "reason": reason,
             },
         ]
         validate_document(updated, "avo.timeline-migration.schema.json")
@@ -497,8 +620,11 @@ class MigrationService:
         updated["history"] = [
             *manifest["history"],
             {
-                "from": manifest["status"], "to": "rolled-back",
-                "occurredAt": now_iso(), "actor": actor, "reason": reason,
+                "from": manifest["status"],
+                "to": "rolled-back",
+                "occurredAt": now_iso(),
+                "actor": actor,
+                "reason": reason,
             },
         ]
         validate_document(updated, "avo.timeline-migration.schema.json")

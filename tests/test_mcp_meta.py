@@ -1,4 +1,5 @@
 """Unit tests for avo.mcp meta tools (health / capabilities; no project)."""
+
 from __future__ import annotations
 
 import io

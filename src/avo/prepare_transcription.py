@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import argparse
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable
 
 from avo.transcribe import (
     DEFAULT_MODEL,
@@ -13,7 +13,6 @@ from avo.transcribe import (
     validate_model_dir,
     validate_model_name,
 )
-
 
 Downloader = Callable[..., str]
 

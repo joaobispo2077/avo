@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 
-from avo.adapters.base import JobAdapter, JobRequest, JobResult
+from avo.adapters.base import JobRequest, JobResult
 
 
 class ElevenLabsAdapter:
@@ -16,7 +16,9 @@ class ElevenLabsAdapter:
         catalog = load_catalog(request.root)
         model_id = resolve_option_id("transcribe", root=request.root, label="paid")
         model_label = format_active_model(catalog, "transcribe_paid", model_id)
-        key = request.env.get("ELEVENLABS_API_KEY") or os.environ.get("ELEVENLABS_API_KEY")
+        key = request.env.get("ELEVENLABS_API_KEY") or os.environ.get(
+            "ELEVENLABS_API_KEY"
+        )
         if not key:
             return JobResult(
                 exit_code=2,

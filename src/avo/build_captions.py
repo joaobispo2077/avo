@@ -7,7 +7,6 @@ import json
 import re
 from pathlib import Path
 
-
 SRT_TIMING_RE = re.compile(
     r"^(?P<start>\d{2}:\d{2}:\d{2},\d{3})\s+-->\s+"
     r"(?P<end>\d{2}:\d{2}:\d{2},\d{3})$"
@@ -15,7 +14,7 @@ SRT_TIMING_RE = re.compile(
 
 
 def timestamp(seconds: float) -> str:
-    total_ms = int(round(seconds * 1000))
+    total_ms = round(seconds * 1000)
     hours, rem = divmod(total_ms, 3_600_000)
     minutes, rem = divmod(rem, 60_000)
     secs, millis = divmod(rem, 1000)
@@ -25,12 +24,7 @@ def timestamp(seconds: float) -> str:
 def parse_timestamp(value: str) -> float:
     hours, minutes, rest = value.split(":")
     seconds, millis = rest.split(",")
-    return (
-        int(hours) * 3600
-        + int(minutes) * 60
-        + int(seconds)
-        + int(millis) / 1000.0
-    )
+    return int(hours) * 3600 + int(minutes) * 60 + int(seconds) + int(millis) / 1000.0
 
 
 def strip_terminal_periods(text: str) -> str:

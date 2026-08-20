@@ -57,13 +57,10 @@ def timeline_paths(ctx: VideoContext) -> TimelinePaths:
         sync_map=directory / str(artifacts.get("syncMap") or "sync-map.json"),
         revisions=directory / "revisions",
         review=ctx.raw_dir / str(policy.get("reviewDirectory") or "edit/review"),
-        generated_edl=ctx.raw_dir / str(policy.get("generatedEdlPath") or "edit/edl.json"),
-        legacy_fallback_allowed=bool(
-            migration.get("allowLegacyEdlFallback", True)
-        ),
-        warn_on_derived_mismatch=bool(
-            migration.get("warnOnDerivedEdlMismatch", True)
-        ),
+        generated_edl=ctx.raw_dir
+        / str(policy.get("generatedEdlPath") or "edit/edl.json"),
+        legacy_fallback_allowed=bool(migration.get("allowLegacyEdlFallback", True)),
+        warn_on_derived_mismatch=bool(migration.get("warnOnDerivedEdlMismatch", True)),
     )
 
 
@@ -71,7 +68,13 @@ def canonical_timeline_available(ctx: VideoContext) -> bool:
     paths = timeline_paths(ctx)
     return any(
         path.is_file()
-        for path in (paths.cmap, paths.bmap, paths.tracks, paths.animation, paths.sync_map)
+        for path in (
+            paths.cmap,
+            paths.bmap,
+            paths.tracks,
+            paths.animation,
+            paths.sync_map,
+        )
     )
 
 
@@ -106,7 +109,9 @@ def resolve_context(
             project = load_project(resolved_raw)
             slug = str(project.get("provider") or "").strip()
         if slug and not vid:
-            found = video_registry.find_video_by_raw_dir(resolved_raw, provider=slug, root=root)
+            found = video_registry.find_video_by_raw_dir(
+                resolved_raw, provider=slug, root=root
+            )
             if found:
                 vid = str(found.get("id") or "")
                 registry = found
@@ -159,7 +164,12 @@ def merge_config(ctx: VideoContext, root: Path | None = None) -> dict[str, Any]:
             if defaults.get(key):
                 merged[key] = {**(merged.get(key) or {}), **defaults[key]}
     for key in (
-        "transcription", "models", "assets", "approvalGates", "deliverable", "timeline",
+        "transcription",
+        "models",
+        "assets",
+        "approvalGates",
+        "deliverable",
+        "timeline",
     ):
         if ctx.project.get(key):
             merged[key] = {**(merged.get(key) or {}), **ctx.project[key]}
@@ -201,7 +211,9 @@ def acquire_lock(
         "pid": os.getpid(),
         "acquiredAt": avo_state.now_iso(),
     }
-    path.write_text(json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    path.write_text(
+        json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+    )
     return path
 
 

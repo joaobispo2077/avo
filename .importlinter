@@ -1,0 +1,44 @@
+[importlinter]
+root_package = avo
+
+# helpers/ shims live outside this root_package (src/avo). They are temporary
+# edges until v0.2.0; do not add new helpers→engine imports here.
+
+[importlinter:contract:adapters-not-cli-mcp]
+name = Adapters must not import CLI or MCP
+type = forbidden
+source_modules =
+    avo.adapters
+forbidden_modules =
+    avo.cli
+    avo.mcp
+
+[importlinter:contract:timeline-not-cli-mcp]
+name = Timeline must not import CLI or MCP
+type = forbidden
+source_modules =
+    avo.timeline
+forbidden_modules =
+    avo.cli
+    avo.mcp
+
+[importlinter:contract:core-not-mcp-tools]
+name = Product core must not import MCP tool registration
+type = forbidden
+source_modules =
+    avo.cli
+    avo.timeline
+    avo.adapters
+forbidden_modules =
+    avo.mcp.tools
+
+[importlinter:contract:domain-not-adapters]
+name = Timeline domain must not grow new adapter imports
+type = forbidden
+source_modules =
+    avo.timeline
+forbidden_modules =
+    avo.adapters
+ignore_imports =
+    avo.timeline.materialize -> avo.adapters.media.sync_materializer
+    avo.timeline.materialize -> avo.adapters.media.timeline_render

@@ -12,7 +12,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 
 import numpy as np
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw
 
 from avo import audio_restoration
 from avo.timeline_view import compute_envelope, find_silences, load_font, words_in_range
@@ -56,7 +56,9 @@ def media_duration(path: Path) -> float:
     return float(out.stdout.strip())
 
 
-def extract_pcm_mono(path: Path, start: float = 0.0, duration: float | None = None) -> np.ndarray:
+def extract_pcm_mono(
+    path: Path, start: float = 0.0, duration: float | None = None
+) -> np.ndarray:
     with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as f:
         wav = Path(f.name)
     try:
@@ -82,7 +84,9 @@ def extract_pcm_mono(path: Path, start: float = 0.0, duration: float | None = No
                 str(wav),
             ]
         )
-        result = subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        result = subprocess.run(
+            cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+        )
         if result.returncode != 0 or not wav.exists() or wav.stat().st_size == 0:
             raise RuntimeError(f"Could not read audio from {path}")
         with wave.open(str(wav), "rb") as w:
@@ -93,8 +97,7 @@ def extract_pcm_mono(path: Path, start: float = 0.0, duration: float | None = No
 
 
 def _score_from_rms(rms: float, baseline: float) -> float:
-    if baseline <= 1e-9:
-        baseline = 1e-9
+    baseline = max(1e-9, baseline)
     ratio = rms / baseline
     score = min(1.0, max(0.0, (ratio - 0.35) / 1.2))
     return score
@@ -112,7 +115,9 @@ def suggested_pct_from_score(score: float) -> int:
     return 75
 
 
-def _merge_windows(windows: list[tuple[float, float, float]]) -> list[tuple[float, float, float]]:
+def _merge_windows(
+    windows: list[tuple[float, float, float]],
+) -> list[tuple[float, float, float]]:
     if not windows:
         return []
     windows = sorted(windows, key=lambda w: w[0])
@@ -148,7 +153,7 @@ def score_from_transcript_gaps(
     if speech_samples:
         speech_rms = float(np.sqrt(np.mean(np.concatenate(speech_samples) ** 2)))
     else:
-        speech_rms = float(np.sqrt(np.mean(pcm ** 2))) or 1e-6
+        speech_rms = float(np.sqrt(np.mean(pcm**2))) or 1e-6
 
     windows: list[tuple[float, float, float]] = []
     for gap_start, gap_end in gaps:
@@ -163,15 +168,17 @@ def score_from_transcript_gaps(
     return _merge_windows(windows)
 
 
-def score_sliding_windows(media: Path, duration: float) -> list[tuple[float, float, float]]:
+def score_sliding_windows(
+    media: Path, duration: float
+) -> list[tuple[float, float, float]]:
     pcm = extract_pcm_mono(media, 0.0, duration)
-    overall = float(np.sqrt(np.mean(pcm ** 2))) or 1e-6
+    overall = float(np.sqrt(np.mean(pcm**2))) or 1e-6
     win = int(WINDOW_SEC * ANALYSIS_SAMPLE_RATE)
     step = max(1, int(WINDOW_STEP_SEC * ANALYSIS_SAMPLE_RATE))
     windows: list[tuple[float, float, float]] = []
     for offset in range(0, max(1, len(pcm) - win), step):
         chunk = pcm[offset : offset + win]
-        rms = float(np.sqrt(np.mean(chunk ** 2)))
+        rms = float(np.sqrt(np.mean(chunk**2)))
         score = _score_from_rms(rms, overall * 0.6)
         if score >= SUGGEST_THRESHOLD:
             start = offset / ANALYSIS_SAMPLE_RATE
@@ -202,7 +209,9 @@ def suggest_noise_reduction(
                 end=round(end, 3),
                 noise_score=round(score, 3),
                 suggested_strength_pct=suggested_pct_from_score(score),
-                confidence=confidence if confidence == "high" else ("low" if score < 0.65 else "medium"),
+                confidence=confidence
+                if confidence == "high"
+                else ("low" if score < 0.65 else "medium"),
             )
         )
     suggestions.sort(key=lambda s: s.noise_score, reverse=True)
@@ -238,10 +247,22 @@ def render_heatmap(
         x0 = 20 + int((sug.start / duration) * (width - 40))
         x1 = 20 + int((sug.end / duration) * (width - 40))
         draw.rectangle([x0, 25, x1, 25 + wave_h], fill=(180, 70, 40))
-        draw.text((x0, 8), f"{sug.suggested_strength_pct}%", fill=(255, 200, 160), font=small)
+        draw.text(
+            (x0, 8), f"{sug.suggested_strength_pct}%", fill=(255, 200, 160), font=small
+        )
 
-    draw.text((20, wave_h + 35), "Noise heatmap — warmer = higher score", fill=(200, 200, 210), font=font)
-    draw.text((20, wave_h + 58), "Blue: waveform | Orange bands: suggested NR windows", fill=(140, 140, 150), font=small)
+    draw.text(
+        (20, wave_h + 35),
+        "Noise heatmap — warmer = higher score",
+        fill=(200, 200, 210),
+        font=font,
+    )
+    draw.text(
+        (20, wave_h + 58),
+        "Blue: waveform | Orange bands: suggested NR windows",
+        fill=(140, 140, 150),
+        font=small,
+    )
     out_path.parent.mkdir(parents=True, exist_ok=True)
     img.save(out_path)
 
@@ -299,19 +320,45 @@ def preview_segment(
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("media", type=Path, help="Video or audio file")
-    parser.add_argument("--suggest-nr", action="store_true", help="Emit noise reduction suggestions JSON")
-    parser.add_argument("--suggest-eq", action="store_true", help="Emit EQ suggestions JSON (read-only)")
-    parser.add_argument("--suggest-gain", action="store_true", help="Emit regional gain suggestions JSON (read-only)")
-    parser.add_argument("--measure-loudness", action="store_true", help="Measure loudness vs resolved profile")
-    parser.add_argument("--project", type=Path, help="avo.project.json for loudness profile resolution")
+    parser.add_argument(
+        "--suggest-nr",
+        action="store_true",
+        help="Emit noise reduction suggestions JSON",
+    )
+    parser.add_argument(
+        "--suggest-eq", action="store_true", help="Emit EQ suggestions JSON (read-only)"
+    )
+    parser.add_argument(
+        "--suggest-gain",
+        action="store_true",
+        help="Emit regional gain suggestions JSON (read-only)",
+    )
+    parser.add_argument(
+        "--measure-loudness",
+        action="store_true",
+        help="Measure loudness vs resolved profile",
+    )
+    parser.add_argument(
+        "--project", type=Path, help="avo.project.json for loudness profile resolution"
+    )
     parser.add_argument("--edl", type=Path, help="edl.json for loudness overrides")
-    parser.add_argument("--loudness-preset", dest="loudness_preset", help="Override loudness preset id")
+    parser.add_argument(
+        "--loudness-preset", dest="loudness_preset", help="Override loudness preset id"
+    )
     parser.add_argument("--transcript", type=Path, help="Word-timed transcript JSON")
     parser.add_argument("--out-dir", type=Path, help="Output directory for artifacts")
-    parser.add_argument("--heatmap", action="store_true", help="Write NR heatmap PNG alongside JSON")
-    parser.add_argument("--eq-heatmap", action="store_true", help="Write EQ heatmap PNG alongside JSON")
-    parser.add_argument("--preview-segment", nargs=2, type=float, metavar=("START", "END"))
-    parser.add_argument("--preview-gain-segment", nargs=2, type=float, metavar=("START", "END"))
+    parser.add_argument(
+        "--heatmap", action="store_true", help="Write NR heatmap PNG alongside JSON"
+    )
+    parser.add_argument(
+        "--eq-heatmap", action="store_true", help="Write EQ heatmap PNG alongside JSON"
+    )
+    parser.add_argument(
+        "--preview-segment", nargs=2, type=float, metavar=("START", "END")
+    )
+    parser.add_argument(
+        "--preview-gain-segment", nargs=2, type=float, metavar=("START", "END")
+    )
     parser.add_argument("--strength-pct", type=int, default=70)
     parser.add_argument("--boost-pct", type=int, default=25)
     args = parser.parse_args(argv)
@@ -357,7 +404,9 @@ def main(argv: list[str] | None = None) -> int:
                 except FileNotFoundError:
                     provider = {}
         elif args.edl:
-            project, provider = loudness_profiles.load_context_for_edit_dir(args.edl.parent)
+            project, provider = loudness_profiles.load_context_for_edit_dir(
+                args.edl.parent
+            )
 
         try:
             profile = loudness_profiles.resolve_loudness_profile(

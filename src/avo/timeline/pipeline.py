@@ -12,12 +12,19 @@ from .review import approval_is_current
 from .tracks import TracksService
 from .workspace import TimelineWorkspace
 
-
 TRACK_OWNERS = {"sound", "media", "captions", "color", "grade", "end-screen"}
-_TARGETS = {state.value: state for state in PipelineState if state not in {
-    PipelineState.FIXING, PipelineState.NEEDS_HUMAN_JUDGMENT,
-    PipelineState.BLOCKED, PipelineState.STALE, PipelineState.SUPERSEDED,
-}}
+_TARGETS = {
+    state.value: state
+    for state in PipelineState
+    if state
+    not in {
+        PipelineState.FIXING,
+        PipelineState.NEEDS_HUMAN_JUDGMENT,
+        PipelineState.BLOCKED,
+        PipelineState.STALE,
+        PipelineState.SUPERSEDED,
+    }
+}
 
 
 class TimelinePipeline:
@@ -80,7 +87,9 @@ class TimelinePipeline:
         elif target == PipelineState.SYNC_READY:
             event = self.workspace.store("sync-map").effective_approval()
             if event is None:
-                raise ValueError("sync-ready requires effective approved Sync or explicit N/A")
+                raise ValueError(
+                    "sync-ready requires effective approved Sync or explicit N/A"
+                )
             facts = TransitionFacts(sync_ready=True)
             active_refs["syncRevisionId"] = event["subject"]["revisionId"]
             active_refs["syncRevisionHash"] = event["subject"]["contentSha256"]
@@ -94,13 +103,17 @@ class TimelinePipeline:
             active_refs["candidatePath"] = str(candidate)
         elif target == PipelineState.CMAP_APPROVED:
             facts = self._review_facts(
-                payload.get("review") or {}, payload.get("approval"), "cut-proof",
+                payload.get("review") or {},
+                payload.get("approval"),
+                "cut-proof",
             )
             candidate = payload["review"]["candidate"]
-            active_refs.update({
-                "cutCandidateSha256": candidate["sha256"],
-                "cutCandidateIdentityHash": candidate["identityHash"],
-            })
+            active_refs.update(
+                {
+                    "cutCandidateSha256": candidate["sha256"],
+                    "cutCandidateIdentityHash": candidate["identityHash"],
+                }
+            )
         elif target == PipelineState.BMAP_DRAFT:
             cmap_event = self.workspace.store("cmap").effective_approval()
             cut_hash = str(payload.get("cutOutputSha256") or "")
@@ -108,10 +121,12 @@ class TimelinePipeline:
                 raise ValueError("BMap requires effective approved CMap")
             facts = TransitionFacts(cmap_approved=True, cut_output_hash=cut_hash)
             index = self.workspace.require_active("bmap")
-            active_refs.update({
-                "bmapRevisionId": index["headRevisionId"],
-                "cutOutputSha256": cut_hash,
-            })
+            active_refs.update(
+                {
+                    "bmapRevisionId": index["headRevisionId"],
+                    "cutOutputSha256": cut_hash,
+                }
+            )
         elif target == PipelineState.ASSEMBLY_AI_REVIEW:
             for artifact_type in ("bmap", "tracks", "animation"):
                 index = self.workspace.require_active(artifact_type)
@@ -122,7 +137,9 @@ class TimelinePipeline:
             active_refs["candidatePath"] = str(candidate)
         elif target == PipelineState.PICTURE_LOCKED:
             facts = self._review_facts(
-                payload.get("review") or {}, payload.get("approval"), "motion-proof",
+                payload.get("review") or {},
+                payload.get("approval"),
+                "motion-proof",
             )
         elif target == PipelineState.FINISHING:
             pass
@@ -133,7 +150,9 @@ class TimelinePipeline:
             active_refs["candidatePath"] = str(candidate)
         elif target == PipelineState.MASTER_APPROVED:
             facts = self._review_facts(
-                payload.get("review") or {}, payload.get("approval"), "pre-master",
+                payload.get("review") or {},
+                payload.get("approval"),
+                "pre-master",
             )
         elif target == PipelineState.DELIVERED:
             manifest = payload.get("deliveryManifest") or {}
@@ -153,14 +172,17 @@ class TimelinePipeline:
             pass
 
         result = self.run_store.advance(
-            target, facts,
+            target,
+            facts,
             actor=str(payload.get("actor") or "avo.pipeline"),
             reason=str(payload.get("reason") or f"pipeline advanced to {stage}"),
             active_refs=active_refs,
         )
         return result
 
-    def enter_blocked(self, *, reason: str, blockers: list[dict[str, Any]]) -> dict[str, Any]:
+    def enter_blocked(
+        self, *, reason: str, blockers: list[dict[str, Any]]
+    ) -> dict[str, Any]:
         return self.run_store.enter_side_state(
             PipelineState.BLOCKED,
             actor="avo.pipeline",
@@ -170,7 +192,9 @@ class TimelinePipeline:
 
     def resume(self, *, actor: str, reason: str, recovery_event: str) -> dict[str, Any]:
         return self.run_store.resume(
-            actor=actor, reason=reason, recovery_event=recovery_event,
+            actor=actor,
+            reason=reason,
+            recovery_event=recovery_event,
         )
 
     def apply_assembly_stage(
@@ -185,10 +209,14 @@ class TimelinePipeline:
         if owner not in TRACK_OWNERS:
             raise ValueError(f"operation cannot own Tracks/BMap state: {owner}")
         bmap_revision = BMapService(self.workspace).author(
-            deepcopy(bmap_snapshot), actor=actor, reason=f"{owner}: {reason}",
+            deepcopy(bmap_snapshot),
+            actor=actor,
+            reason=f"{owner}: {reason}",
         )
         tracks_revision = TracksService(self.workspace).author(
-            deepcopy(tracks_snapshot), actor=actor, reason=f"{owner}: {reason}",
+            deepcopy(tracks_snapshot),
+            actor=actor,
+            reason=f"{owner}: {reason}",
         )
         return {
             "owner": owner,

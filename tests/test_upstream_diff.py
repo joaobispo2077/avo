@@ -13,8 +13,8 @@ class UpstreamDiffTests(unittest.TestCase):
         sys.path.insert(0, str(ROOT))
 
     def test_diff_generates_latest_and_summary(self) -> None:
-        import tempfile
         import importlib.util
+        import tempfile
 
         spec = importlib.util.spec_from_file_location(
             "diff_engine_helpers",
@@ -53,7 +53,9 @@ class UpstreamDiffTests(unittest.TestCase):
             summary_path = tmp_path / latest["summaryPath"]
             diff_dir = tmp_path / latest["diffDir"]
             self.assertTrue(summary_path.is_file())
-            manifest = json.loads((diff_dir / "manifest.json").read_text(encoding="utf-8"))
+            manifest = json.loads(
+                (diff_dir / "manifest.json").read_text(encoding="utf-8")
+            )
             self.assertEqual(manifest["changedCount"], 1)
             self.assertEqual(manifest["onlyInAvoCount"], 1)
 

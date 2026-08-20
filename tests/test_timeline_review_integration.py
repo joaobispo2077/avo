@@ -17,7 +17,9 @@ class FakeTranscript:
 
     def transcribe(self, candidate: Path, **options):
         if self.fail:
-            raise ToolError("TRANSCRIPTION_UNAVAILABLE", "offline", True, "install model")
+            raise ToolError(
+                "TRANSCRIPTION_UNAVAILABLE", "offline", True, "install model"
+            )
         digest = hashlib.sha256(candidate.read_bytes()).hexdigest()
         return {
             "status": "pass",
@@ -128,7 +130,9 @@ class ReviewIntegrationTests(unittest.TestCase):
             )
             self.assertEqual(result["state"], "blocked")
             self.assertIsNone(result["approvalGatePath"])
-            self.assertEqual(len([a for a in result["attempts"] if a["producer"] == "watch"]), 3)
+            self.assertEqual(
+                len([a for a in result["attempts"] if a["producer"] == "watch"]), 3
+            )
 
     def test_duplicate_current_evidence_blocks_gate(self):
         evidence = [
@@ -140,7 +144,14 @@ class ReviewIntegrationTests(unittest.TestCase):
                 "dependencyHashes": {"cmap": "b" * 64, "sync-map": "c" * 64},
                 "dependencyLockSha256": "e" * 64,
             }
-            for kind in ("lineage", "technical-qc", "sync", "transcript-analysis", "watch", "watch")
+            for kind in (
+                "lineage",
+                "technical-qc",
+                "sync",
+                "transcript-analysis",
+                "watch",
+                "watch",
+            )
         ]
         with self.assertRaises(GateError):
             evaluate_gate(
@@ -164,7 +175,13 @@ class ReviewIntegrationTests(unittest.TestCase):
                 "scope": {"mode": "full"},
                 "coverage": {"requiredWindows": 0, "reviewedWindows": 0},
             }
-            for kind in ("lineage", "technical-qc", "sync", "transcript-analysis", "watch")
+            for kind in (
+                "lineage",
+                "technical-qc",
+                "sync",
+                "transcript-analysis",
+                "watch",
+            )
         ]
         evaluate_gate(
             "cut-proof",

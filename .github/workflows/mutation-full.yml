@@ -1,0 +1,66 @@
+# Full mutation testing without incremental cache as source of truth (task-018/019).
+# Tool: mutmut (Ubuntu CI). Fails below scripts/ci/mutation-config.json full floor.
+# 20-minute SLA (ci-quality-hardening) — explicit file list, no cli_tools.py.
+
+name: Mutation full
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 6 * * 1'
+
+permissions:
+  contents: read
+
+env:
+  PYTHON_VERSION: '3.12'
+  NODE_VERSION: '24'
+  AVO_CI: '1'
+  AVO_MUTATION_PROFILE: full
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
+jobs:
+  mutation-full:
+    name: Mutation tests (full)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Sync Python deps (frozen)
+        run: uv sync --frozen --extra dev
+
+      - name: Expose venv on PATH
+        run: echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      - name: Run mutation tests (full)
+        run: bash scripts/ci/run-mutation.sh
+
+      - name: Upload mutation reports artifact
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: mutation-reports-full
+          path: reports/mutation
+          if-no-files-found: warn
+          retention-days: 14

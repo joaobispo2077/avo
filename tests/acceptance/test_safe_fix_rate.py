@@ -5,8 +5,7 @@ from avo.timeline.review import classify_findings
 
 def test_labeled_safe_finding_policy_reaches_ninety_percent_without_unsafe_fixes():
     corpus = [
-        {"classification": "technical", "safe": True, "fixed": True}
-        for _ in range(9)
+        {"classification": "technical", "safe": True, "fixed": True} for _ in range(9)
     ] + [
         {"classification": "technical", "safe": True, "fixed": False},
         {"classification": "meaning", "safe": False, "fixed": False},

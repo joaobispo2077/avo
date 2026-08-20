@@ -23,9 +23,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
-
-GB = 1024 ** 3
-MB = 1024 ** 2
+GB = 1024**3
+MB = 1024**2
 
 
 def _run(cmd: list[str], timeout: float = 6.0) -> str:
@@ -46,6 +45,7 @@ def _run(cmd: list[str], timeout: float = 6.0) -> str:
 
 
 # ---- CPU --------------------------------------------------------------------
+
 
 def probe_cpu() -> dict[str, Any]:
     logical = os.cpu_count() or 0
@@ -70,11 +70,17 @@ def probe_cpu() -> dict[str, Any]:
         elif system == "Windows":
             out = _run(["wmic", "cpu", "get", "Name,NumberOfCores", "/format:list"])
             if not out:
-                out = _run([
-                    "powershell", "-NoProfile", "-Command",
-                    "Get-CimInstance Win32_Processor | "
-                    "ForEach-Object { \"Name=$($_.Name)`nNumberOfCores=$($_.NumberOfCores)\" }",
-                ])
+                out = _run(
+                    [
+                        "powershell",
+                        "-NoProfile",
+                        "-Command",
+                        (
+                            "Get-CimInstance Win32_Processor | "
+                            'ForEach-Object { "Name=$($_.Name)`nNumberOfCores=$($_.NumberOfCores)" }'
+                        ),
+                    ]
+                )
             mm = re.search(r"Name=(.+)", out)
             if mm:
                 model = mm.group(1).strip()
@@ -85,17 +91,23 @@ def probe_cpu() -> dict[str, Any]:
         pass
 
     if not model:
-        model = platform.processor() or os.environ.get("PROCESSOR_IDENTIFIER", "") or "unknown"
+        model = (
+            platform.processor()
+            or os.environ.get("PROCESSOR_IDENTIFIER", "")
+            or "unknown"
+        )
 
     return {"model": model, "logicalCores": logical, "physicalCores": physical}
 
 
 # ---- RAM --------------------------------------------------------------------
 
+
 def probe_ram_bytes() -> int:
     system = platform.system()
     try:
         import psutil  # type: ignore
+
         return int(psutil.virtual_memory().total)
     except Exception:
         pass
@@ -108,12 +120,18 @@ def probe_ram_bytes() -> int:
             val = _run(["sysctl", "-n", "hw.memsize"]).strip()
             return int(val) if val.isdigit() else -1
         if system == "Windows":
-            out = _run(["wmic", "computersystem", "get", "TotalPhysicalMemory", "/format:list"])
+            out = _run(
+                ["wmic", "computersystem", "get", "TotalPhysicalMemory", "/format:list"]
+            )
             if not out:
-                out = _run([
-                    "powershell", "-NoProfile", "-Command",
-                    "(Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory",
-                ])
+                out = _run(
+                    [
+                        "powershell",
+                        "-NoProfile",
+                        "-Command",
+                        "(Get-CimInstance Win32_ComputerSystem).TotalPhysicalMemory",
+                    ]
+                )
             m = re.search(r"(\d{6,})", out)
             return int(m.group(1)) if m else -1
     except (OSError, ValueError):
@@ -123,15 +141,18 @@ def probe_ram_bytes() -> int:
 
 # ---- GPU --------------------------------------------------------------------
 
+
 def probe_gpu() -> list[dict[str, Any]]:
     gpus: list[dict[str, Any]] = []
 
     # 1) NVIDIA via nvidia-smi (all OSes)
-    out = _run([
-        "nvidia-smi",
-        "--query-gpu=name,memory.total",
-        "--format=csv,noheader,nounits",
-    ])
+    out = _run(
+        [
+            "nvidia-smi",
+            "--query-gpu=name,memory.total",
+            "--format=csv,noheader,nounits",
+        ]
+    )
     for line in out.splitlines():
         parts = [p.strip() for p in line.split(",")]
         if len(parts) >= 2 and parts[0]:
@@ -146,11 +167,17 @@ def probe_gpu() -> list[dict[str, Any]]:
     system = platform.system()
     try:
         if system == "Windows":
-            out = _run([
-                "powershell", "-NoProfile", "-Command",
-                "Get-CimInstance Win32_VideoController | "
-                "ForEach-Object { \"$($_.Name)|$($_.AdapterRAM)\" }",
-            ])
+            out = _run(
+                [
+                    "powershell",
+                    "-NoProfile",
+                    "-Command",
+                    (
+                        "Get-CimInstance Win32_VideoController | "
+                        'ForEach-Object { "$($_.Name)|$($_.AdapterRAM)" }'
+                    ),
+                ]
+            )
             for line in out.splitlines():
                 if "|" not in line:
                     continue
@@ -172,7 +199,9 @@ def probe_gpu() -> list[dict[str, Any]]:
                 cm = re.match(r"Chipset Model:\s*(.+)", line)
                 if cm:
                     if name:
-                        gpus.append({"name": name, "vendor": "apple", "vramMB": vram_mb})
+                        gpus.append(
+                            {"name": name, "vendor": "apple", "vramMB": vram_mb}
+                        )
                     name = cm.group(1).strip()
                     vram_mb = None
                 vm = re.match(r"VRAM.*:\s*(\d+)\s*(MB|GB)", line)
@@ -189,6 +218,7 @@ def probe_gpu() -> list[dict[str, Any]]:
 
 # ---- disk -------------------------------------------------------------------
 
+
 def probe_disk(path: Path | None = None) -> dict[str, Any]:
     target = Path(path) if path else Path.cwd()
     probe = target if target.exists() else Path(target.anchor or Path.cwd())
@@ -200,6 +230,7 @@ def probe_disk(path: Path | None = None) -> dict[str, Any]:
 
 
 # ---- tier suggestion --------------------------------------------------------
+
 
 def _best_vram_mb(gpus: list[dict[str, Any]]) -> int:
     best = 0
@@ -223,9 +254,7 @@ def suggest_tier(report: dict[str, Any]) -> dict[str, Any]:
         whisper = "large-v3"
     elif vram_mb >= 5 * 1024:
         whisper = "medium"
-    elif vram_mb >= 2 * 1024:
-        whisper = "small"
-    elif ram_gb >= 16 and cores >= 8:
+    elif vram_mb >= 2 * 1024 or ram_gb >= 16 and cores >= 8:
         whisper = "small"
     else:
         whisper = "base"
@@ -237,9 +266,7 @@ def suggest_tier(report: dict[str, Any]) -> dict[str, Any]:
         llm = "qwen2.5-14b"
     elif vram_mb >= 10 * 1024:
         llm = "qwen2.5-7b"
-    elif vram_mb >= 6 * 1024:
-        llm = "qwen2.5-3b"
-    elif ram_gb >= 16:
+    elif vram_mb >= 6 * 1024 or ram_gb >= 16:
         llm = "qwen2.5-3b"
     elif ram_gb >= 8:
         llm = "qwen2.5-1.5b"
@@ -248,7 +275,9 @@ def suggest_tier(report: dict[str, Any]) -> dict[str, Any]:
 
     notes = []
     if not has_gpu:
-        notes.append("no discrete GPU/VRAM detected — CPU-bound; expect slower renders/transcription")
+        notes.append(
+            "no discrete GPU/VRAM detected — CPU-bound; expect slower renders/transcription"
+        )
     if vram_mb and vram_mb < 2 * 1024:
         notes.append("low VRAM — prefer CPU whisper or a smaller model")
     if ram_gb and ram_gb < 8:
@@ -298,7 +327,9 @@ def suggest_tier(report: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def suggest_tier_catalog(report: dict[str, Any], *, root: Path | None = None) -> dict[str, Any]:
+def suggest_tier_catalog(
+    report: dict[str, Any], *, root: Path | None = None
+) -> dict[str, Any]:
     """Return suggest_tier plus catalog-aligned ids (same raw ids; explicit for models.py)."""
     tier = suggest_tier(report)
     return {
@@ -314,7 +345,11 @@ def gather(disk_path: Path | None = None) -> dict[str, Any]:
     gpu = probe_gpu()
     disk = probe_disk(disk_path)
     report = {
-        "os": {"system": platform.system(), "release": platform.release(), "machine": platform.machine()},
+        "os": {
+            "system": platform.system(),
+            "release": platform.release(),
+            "machine": platform.machine(),
+        },
         "cpu": cpu,
         "ram": {"totalBytes": ram},
         "gpu": gpu,
@@ -343,8 +378,11 @@ def print_summary(report: dict[str, Any]) -> None:
     tier = report["suggestedTier"]
 
     print("AVO hardware (advisory)")
-    print(f"  CPU  : {cpu['model']}  ({cpu['logicalCores']} logical"
-          + (f", {cpu['physicalCores']} physical" if cpu.get("physicalCores") else "") + ")")
+    print(
+        f"  CPU  : {cpu['model']}  ({cpu['logicalCores']} logical"
+        + (f", {cpu['physicalCores']} physical" if cpu.get("physicalCores") else "")
+        + ")"
+    )
     print(f"  RAM  : {_fmt_bytes(ram)}")
     if gpus:
         for g in gpus:
@@ -352,16 +390,24 @@ def print_summary(report: dict[str, Any]) -> None:
             print(f"  GPU  : {g['name']} ({vram})")
     else:
         print("  GPU  : none detected (CPU-bound)")
-    print(f"  Disk : {_fmt_bytes(disk.get('freeBytes'))} free of {_fmt_bytes(disk.get('totalBytes'))} ({disk.get('path')})")
+    print(
+        f"  Disk : {_fmt_bytes(disk.get('freeBytes'))} free of {_fmt_bytes(disk.get('totalBytes'))} ({disk.get('path')})"
+    )
     print(f"  Tier : whisper={tier['whisper']}  llm={tier['llm']}")
     for n in tier["notes"]:
         print(f"         note: {n}")
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="AVO hardware capability probe (advisory only).")
-    parser.add_argument("--json", action="store_true", help="Emit the JSON report only.")
-    parser.add_argument("--disk-path", default="", help="Volume to check free space on (default: cwd).")
+    parser = argparse.ArgumentParser(
+        description="AVO hardware capability probe (advisory only)."
+    )
+    parser.add_argument(
+        "--json", action="store_true", help="Emit the JSON report only."
+    )
+    parser.add_argument(
+        "--disk-path", default="", help="Volume to check free space on (default: cwd)."
+    )
     return parser
 
 

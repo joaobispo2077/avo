@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 import json
-from pathlib import Path
 import subprocess
+from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 from avo.timeline.contracts import file_fingerprint
-
 
 SYNC_COMMENT_PREFIX = "avo-sync-materialized:"
 
@@ -25,15 +24,23 @@ class AudioFilterPlan:
 
 
 def _ticks_to_seconds(ticks: int, timebase: dict[str, Any]) -> float:
-    return float(ticks) * float(timebase.get("num", 1)) / float(timebase.get("den", 1000))
+    return (
+        float(ticks) * float(timebase.get("num", 1)) / float(timebase.get("den", 1000))
+    )
 
 
 def _probe(path: Path) -> dict[str, Any]:
     return json.loads(
         subprocess.run(
             [
-                "ffprobe", "-v", "error", "-show_streams", "-show_format",
-                "-of", "json", str(path),
+                "ffprobe",
+                "-v",
+                "error",
+                "-show_streams",
+                "-show_format",
+                "-of",
+                "json",
+                str(path),
             ],
             check=True,
             capture_output=True,
@@ -66,7 +73,9 @@ class SyncMaterializer:
         expected_audio_sha256: str | None = None,
     ) -> None:
         if picture_kind != "raw" or audio_kind != "raw":
-            raise SyncMaterializationError("sync materialization must start from raw sources")
+            raise SyncMaterializationError(
+                "sync materialization must start from raw sources"
+            )
         picture = file_fingerprint(Path(picture_path))
         audio = file_fingerprint(Path(audio_path))
         if expected_picture_sha256 and picture["sha256"] != expected_picture_sha256:
@@ -79,9 +88,11 @@ class SyncMaterializer:
         timebase = transform.get("timebase") or {"num": 1, "den": 1000}
         chain: list[str] = []
         if kind == "constant-offset":
-            seconds = _ticks_to_seconds(int(transform.get("offsetTicks") or 0), timebase)
+            seconds = _ticks_to_seconds(
+                int(transform.get("offsetTicks") or 0), timebase
+            )
             if seconds >= 0:
-                delay_ms = int(round(seconds * 1000))
+                delay_ms = round(seconds * 1000)
                 chain.append(f"adelay={delay_ms}|{delay_ms}")
             else:
                 chain.append(f"atrim=start={-seconds:.3f}")
@@ -123,9 +134,9 @@ class SyncMaterializer:
             expected_picture_sha256=expected_picture_sha256,
             expected_audio_sha256=expected_audio_sha256,
         )
-        if _comment(picture_path).startswith(SYNC_COMMENT_PREFIX) or _comment(audio_path).startswith(
-            SYNC_COMMENT_PREFIX
-        ):
+        if _comment(picture_path).startswith(SYNC_COMMENT_PREFIX) or _comment(
+            audio_path
+        ).startswith(SYNC_COMMENT_PREFIX):
             raise SyncMaterializationError("already sync-materialized")
         plan = self.compile_audio_filter(transform)
         output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -133,18 +144,44 @@ class SyncMaterializer:
         same = picture_path.resolve() == audio_path.resolve()
         audio_ref = "[0:a]" if same else "[1:a]"
         filter_complex = plan.filter_complex.replace("[0:a]", audio_ref)
-        cmd = ["ffmpeg", "-y", "-hide_banner", "-loglevel", "error", "-i", str(picture_path)]
+        cmd = [
+            "ffmpeg",
+            "-y",
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-i",
+            str(picture_path),
+        ]
         if not same:
             cmd += ["-i", str(audio_path)]
         cmd += [
             "-filter_complex",
             f"[0:v]setpts=PTS-STARTPTS[v];{filter_complex}",
-            "-map", "[v]",
-            "-map", f"[{plan.output_label}]",
-            "-c:v", "libx264", "-preset", "ultrafast", "-crf", "28", "-pix_fmt", "yuv420p",
-            "-c:a", "aac", "-b:a", "96k", "-ar", "48000", "-ac", "1",
-            "-metadata", f"comment={SYNC_COMMENT_PREFIX}{sync_revision_hash}",
-            "-movflags", "+faststart",
+            "-map",
+            "[v]",
+            "-map",
+            f"[{plan.output_label}]",
+            "-c:v",
+            "libx264",
+            "-preset",
+            "ultrafast",
+            "-crf",
+            "28",
+            "-pix_fmt",
+            "yuv420p",
+            "-c:a",
+            "aac",
+            "-b:a",
+            "96k",
+            "-ar",
+            "48000",
+            "-ac",
+            "1",
+            "-metadata",
+            f"comment={SYNC_COMMENT_PREFIX}{sync_revision_hash}",
+            "-movflags",
+            "+faststart",
         ]
         if duration > 0:
             cmd += ["-t", f"{duration:.3f}"]

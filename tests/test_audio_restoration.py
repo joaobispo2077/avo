@@ -29,7 +29,7 @@ class AudioRestorationTests(unittest.TestCase):
         self.assertIn("highpass", chain)
 
     def test_cap_at_100(self) -> None:
-        nr, nf = audio_restoration.afftdn_params(100)
+        nr, _nf = audio_restoration.afftdn_params(100)
         assert nr is not None
         self.assertLessEqual(nr, 22.0)
 

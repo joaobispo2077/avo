@@ -1,0 +1,50 @@
+# Weekly visual import graph of src/avo (task-026 / FR-12). Not on the PR fast path.
+
+name: Dependency graph
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 7 * * 1'
+
+permissions:
+  contents: read
+
+env:
+  PYTHON_VERSION: '3.12'
+  AVO_CI: '1'
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
+jobs:
+  dependency-graph:
+    name: Visual dependency graph
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Sync Python deps (frozen)
+        run: uv sync --frozen --extra dev
+
+      - name: Generate src/avo import graph
+        run: bash scripts/ci/run-dep-graph.sh
+
+      - name: Upload graph artifact
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: avo-dependency-graph
+          path: reports/dep-graph
+          if-no-files-found: warn
+          retention-days: 14

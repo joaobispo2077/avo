@@ -16,8 +16,10 @@ MASTER = "20260801-demo-master-v001"
 
 sys.path.insert(0, str(SRC))
 
-from avo import avo_state  # noqa: E402
-from avo import stats  # noqa: E402
+from avo import (
+    avo_state,
+    stats,
+)
 
 
 def _sample_session(session_id: str = "sess-1", *, freed: int = 1000) -> dict:
@@ -29,7 +31,11 @@ def _sample_session(session_id: str = "sess-1", *, freed: int = 1000) -> dict:
         "masterBasename": MASTER,
         "completedAt": "2026-08-01T12:00:00Z",
         "bytes": {"preCleanupProject": 5000, "freed": freed, "preserved": 2000},
-        "files": {"deletedCount": 3, "preservedCount": 5, "deletedSample": ["edit/preview/x.mp4"]},
+        "files": {
+            "deletedCount": 3,
+            "preservedCount": 5,
+            "deletedSample": ["edit/preview/x.mp4"],
+        },
         "estimatedMinutesSaved": 30,
         "estimationModel": stats.ESTIMATION_MODEL,
     }
@@ -40,7 +46,9 @@ class StatsTests(unittest.TestCase):
         self._tmpdir = tempfile.TemporaryDirectory()
         self.addCleanup(self._tmpdir.cleanup)
         self.state_root = Path(self._tmpdir.name)
-        self.repo_patcher = mock.patch.object(avo_state, "repo_root", return_value=self.state_root)
+        self.repo_patcher = mock.patch.object(
+            avo_state, "repo_root", return_value=self.state_root
+        )
         self.repo_patcher.start()
         self.addCleanup(self.repo_patcher.stop)
         avo_state.state_dir().mkdir(parents=True, exist_ok=True)
@@ -110,7 +118,9 @@ class StatsTests(unittest.TestCase):
         with mock.patch("sys.stderr", new_callable=StringIO) as err:
             code = stats.main(["show", "--json"])
         self.assertEqual(code, 0)
-        self.assertTrue(any(line.startswith("AVO_JSON ") for line in err.getvalue().splitlines()))
+        self.assertTrue(
+            any(line.startswith("AVO_JSON ") for line in err.getvalue().splitlines())
+        )
 
     def test_session_from_wrap_probes_durations(self) -> None:
         wrap_payload = {
@@ -157,7 +167,11 @@ class StatsTests(unittest.TestCase):
             "provider": "bishop",
             "masterBasename": MASTER,
             "generatedAt": "2026-08-01T23:00:00Z",
-            "space": {"freedBytes": 0, "preservedBytes": 0, "preCleanupProjectBytes": 0},
+            "space": {
+                "freedBytes": 0,
+                "preservedBytes": 0,
+                "preCleanupProjectBytes": 0,
+            },
             "files": {"deletedCount": 0, "preserved": [], "deletedSample": []},
         }
         with mock.patch.object(stats, "media_duration", lambda _p: None):

@@ -1,6 +1,6 @@
 [project]
 name = "avo"
-version = "1.7.0"
+version = "1.8.0"
 description = "Local-first Python helpers for AVO — transcription, captions, grading, render, and telemetry on your machine."
 license = { file = "LICENSE" }
 requires-python = ">=3.10"
@@ -17,6 +17,12 @@ dependencies = [
 dev = [
     "pytest>=8.0",
     "pytest-cov>=5.0",
+    "ruff>=0.16",
+    "xenon>=0.9",
+    "vulture>=2.14",
+    "pip-audit>=2.9",
+    "import-linter>=2.3",  # FR-9 / task-016 — contracts in .importlinter
+    "mutmut>=3.3",
 ]
 mcp = [
     "mcp>=1.28",
@@ -38,8 +44,180 @@ python_files = ["test_*.py"]
 python_classes = ["Test*", "*Tests", "*TestCase"]
 python_functions = ["test_*"]
 addopts = "-ra"
+norecursedirs = [
+    ".*",
+    "build",
+    "dist",
+    "CVS",
+    "_darcs",
+    "{arch}",
+    "*.egg",
+    "venv",
+    ".venv",
+    "mutants",
+    "node_modules",
+]
 markers = [
     "slow: downloads models or heavy IO (orchestrator-smoke only)",
     "integration: crosses script/subprocess boundaries",
     "project: footage-project or spec-scoped edit tests (excluded from default CI)",
 ]
+
+# ---------------------------------------------------------------------------
+# Ruff (Gate 3 — static lint / format)
+# Scope: src/avo, tests, helpers — same rule set (helpers shims included for
+# Phase 1; prefer new code under src/avo/). Coverage remains --cov=avo only.
+# CLI: `ruff check src/avo tests helpers` / `ruff format --check …`
+# ---------------------------------------------------------------------------
+[tool.ruff]
+target-version = "py310"
+line-length = 88
+src = ["src", "helpers", "tests"]
+extend-exclude = [
+    ".venv",
+    "dist",
+    "build",
+    "node_modules",
+    "providers",
+    "docs/exemplars",
+]
+
+[tool.ruff.lint]
+# Ruff >=0.16 default rule set (~413 rules). Fail-immediately — no warn-only.
+# Complexity: C901 (mccabe) here + xenon max-absolute B via
+# scripts/ci/check_complexity.py + complexity-allowlist.json (FR-5 / task-010).
+extend-select = [
+    "C901", # mccabe — fail-immediately at measured floor (see [tool.ruff.lint.mccabe])
+    "I", # isort — keep imports deterministic beyond the default subset
+]
+ignore = [
+    # Intentional/idiomatic in CLI + orchestration glue:
+    "PLW1510", # subprocess.run without check= — many call sites inspect returncode
+    "BLE001",  # blind except Exception — intentional catch-and-report boundaries
+    "S110",    # try-except-pass — narrow cleanup paths
+    "S112",    # try-except-continue — narrow IO loops
+    "SIM117",  # nested `with` often clearer around mock patches / temp dirs
+    "TRY004",  # AVO validates inputs with ValueError (including type checks)
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Tests may use assert, broad patches, and fixture-driven imports.
+"tests/**" = [
+    "S101",   # assert
+    "F841",   # unused locals often intentional in fixtures/mocks
+    "RUF012", # mutable class defaults on test helpers
+]
+# Package re-exports and dynamic CLI entrypoints.
+"src/avo/__init__.py" = ["F401"]
+"helpers/**/__init__.py" = ["F401"]
+
+[tool.ruff.lint.mccabe]
+# Measured max C901 on src/avo (2026-08-15): 31 (_bluray_ps5_semantic_errors).
+# Floor locks current worst; ratchet down via /evolve — do not raise.
+max-complexity = 31
+
+[tool.ruff.lint.isort]
+known-first-party = ["avo"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "auto"
+skip-magic-trailing-comma = false
+docstring-code-format = false
+
+# ---------------------------------------------------------------------------
+# Coverage (Gate 3 — test coverage floor)
+# Scope: package `avo` under src/ (pytest --cov=avo). Baseline measured 2026-08-14:
+# Line coverage on AVO core (`-m "not project"`, ignore tests/projects) landed
+# ~68.4–68.7% across runs (term display 68% / 69%). Branch coverage (~65%)
+# deferred — `branch = false` until an explicit /evolve ratchet.
+# fail_under = 68 = floor(measured) with −ε for display/rounding flakiness.
+# Raise deliberately via /evolve — do not lower.
+# ---------------------------------------------------------------------------
+[tool.coverage.run]
+source = ["avo"]
+branch = false
+
+[tool.coverage.report]
+fail_under = 68
+show_missing = true
+skip_covered = false
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "\\.\\.\\.",
+]
+
+# ---------------------------------------------------------------------------
+# Complexity (Gate 3 — xenon + Ruff C901 / task-010)
+# xenon: max-absolute B (cc ≤ 10). Known C+ blocks in
+# scripts/ci/complexity-allowlist.json with reasons + complexity ceilings.
+# Runner: scripts/ci/check_complexity.py (quality:complexity / CI).
+# Ruff C901: max-complexity = 31 (measured floor) in quality:lint — fail-immediately.
+# ---------------------------------------------------------------------------
+
+# ---------------------------------------------------------------------------
+# Dead code (Phase 2 / task-014 / FR-8)
+# vulture min_confidence=60 on src/avo (unused-symbol confidence).
+# Exceptions in scripts/ci/deadcode-allowlist.json (items: path + name + reason).
+# Runner: scripts/ci/check_deadcode.py (quality:deadcode / CI software-quality).
+# Prefer delete over allowlist. Do not raise min_confidence without an evolve
+# note — vulture's unused function/class/method/variable signal is 60.
+# ---------------------------------------------------------------------------
+
+# Architecture (task-016 / FR-9): contracts in .importlinter (src/avo only).
+# helpers/ shims are outside the avo package root — not in these contracts.
+# CLI: npm run quality:architecture / bash scripts/ci/quality-architecture.sh
+
+# Mutation (task-018/019/027 / FR-7 + ci-quality-hardening): mutmut Ubuntu CI.
+# Default arrays = full profile. Light/full runners patch via
+# scripts/ci/patch_mutmut_profile.py from mutation-config.json.
+[tool.mutmut]
+# mutmut-profile-source-paths:start
+source_paths = [
+    "src/avo/validate_dependencies.py",
+    "src/avo/validate_usability.py",
+    "src/avo/validate_edl.py",
+    "src/avo/adapters/registry.py",
+    "src/avo/mcp/bridge.py",
+    "src/avo/mcp/registry.py",
+    "src/avo/mcp/mrtr.py",
+    "src/avo/mcp/request_state.py",
+    "src/avo/mcp/server.py",
+    "src/avo/mcp/tools/meta.py",
+]
+# mutmut-profile-source-paths:end
+also_copy = ["src/avo", "schemas", "config"]
+pytest_add_cli_args = [
+    "-q",
+    "--tb=short",
+    "--ignore=mutants",
+    "--ignore=tests/projects",
+    "-m",
+    "not project",
+    "-k",
+    "not test_gate1_passes_in_ci_mode and not test_gate2_passes_in_ci_mode",
+]
+# mutmut-profile-test-selection:start
+pytest_add_cli_args_test_selection = [
+    "tests/test_mcp_package.py",
+    "tests/test_mcp_bridge.py",
+    "tests/test_mcp_meta.py",
+    "tests/test_mcp_mrtr.py",
+    "tests/test_mcp_registry.py",
+    "tests/test_mcp_request_state.py",
+    "tests/test_validate_dependencies.py",
+    "tests/test_edl_v3_contract.py",
+    "tests/test_adapters_stubs.py",
+]
+# mutmut-profile-test-selection:end
+use_git_change_detection = false
+mutate_only_covered_lines = true
+do_not_mutate = [
+    "*/__init__.py",
+    "*/__main__.py",
+]
+timeout_constant = 2.0
+timeout_multiplier = 3.0
+

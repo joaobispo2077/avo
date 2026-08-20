@@ -4,15 +4,17 @@ The JSON file at ``edit/timeline/<artifact>.json`` is a small mutable index.
 Revision and event bodies are immutable sidecars. ``load()`` hydrates a legacy
 view for the existing renderer-policy adapters; ``load_index()`` is canonical.
 """
+
 from __future__ import annotations
 
-from copy import deepcopy
-from datetime import datetime, timezone
 import json
 import os
-from pathlib import Path
 import re
-from typing import Any, Callable
+from collections.abc import Callable
+from copy import deepcopy
+from datetime import datetime, timezone
+from pathlib import Path
+from typing import Any
 from uuid import uuid4
 
 from .contracts import ContractError, content_hash, validate_document
@@ -25,14 +27,30 @@ class StoreError(RuntimeError):
 
 
 def now_iso() -> str:
-    return datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z")
+    return (
+        datetime.now(timezone.utc)
+        .replace(microsecond=0)
+        .isoformat()
+        .replace("+00:00", "Z")
+    )
 
 
-def _actor(value: str | dict[str, Any], *, default_type: str = "agent", tool_version: str = "avo") -> dict[str, str]:
+def _actor(
+    value: str | dict[str, Any],
+    *,
+    default_type: str = "agent",
+    tool_version: str = "avo",
+) -> dict[str, str]:
     if isinstance(value, dict):
-        actor = {key: str(item).strip() for key, item in value.items() if str(item).strip()}
+        actor = {
+            key: str(item).strip() for key, item in value.items() if str(item).strip()
+        }
     else:
-        actor = {"type": default_type, "id": str(value).strip(), "toolVersion": tool_version}
+        actor = {
+            "type": default_type,
+            "id": str(value).strip(),
+            "toolVersion": tool_version,
+        }
     if not actor.get("id"):
         raise StoreError("actor identity is required")
     actor.setdefault("type", default_type)
@@ -94,7 +112,12 @@ class ArtifactStore:
         return self.path.parent
 
     def _revision_dir(self, index: dict[str, Any]) -> Path:
-        return self.timeline_dir / "revisions" / str(index["artifactType"]) / _slug(str(index["artifactId"]))
+        return (
+            self.timeline_dir
+            / "revisions"
+            / str(index["artifactType"])
+            / _slug(str(index["artifactId"]))
+        )
 
     def _event_dir(self, index: dict[str, Any]) -> Path:
         return self.timeline_dir / "events" / _slug(str(index["artifactId"]))
@@ -154,7 +177,10 @@ class ArtifactStore:
             raise StoreError("artifact index contains duplicate revision IDs")
         if index["headRevisionId"] is not None and index["headRevisionId"] not in ids:
             raise StoreError("head revision is not present in revisionRefs")
-        if index["approvedRevisionId"] is not None and index["approvedRevisionId"] not in ids:
+        if (
+            index["approvedRevisionId"] is not None
+            and index["approvedRevisionId"] not in ids
+        ):
             raise StoreError("approved revision is not present in revisionRefs")
 
     def load_index(self) -> dict[str, Any]:
@@ -183,7 +209,9 @@ class ArtifactStore:
             raise StoreError(f"invalid immutable revision: {exc}") from exc
         body = {key: value for key, value in revision.items() if key != "contentSha256"}
         if content_hash(body) != revision["contentSha256"]:
-            raise StoreError(f"immutable revision hash mismatch: {revision.get('revisionId')}")
+            raise StoreError(
+                f"immutable revision hash mismatch: {revision.get('revisionId')}"
+            )
 
     def _validate_event(self, event: dict[str, Any]) -> None:
         try:
@@ -192,7 +220,14 @@ class ArtifactStore:
             raise StoreError(f"invalid immutable event: {exc}") from exc
 
     def _revision_body(self, index: dict[str, Any], revision_id: str) -> dict[str, Any]:
-        ref = next((item for item in index["revisionRefs"] if item["revisionId"] == revision_id), None)
+        ref = next(
+            (
+                item
+                for item in index["revisionRefs"]
+                if item["revisionId"] == revision_id
+            ),
+            None,
+        )
         if ref is None:
             raise StoreError(f"revision does not exist: {revision_id}")
         revision = self._read_json(self.timeline_dir / ref["path"])
@@ -233,11 +268,19 @@ class ArtifactStore:
     def load(self) -> dict[str, Any]:
         """Return a hydrated compatibility view; never write this representation."""
         index = self.load_index()
-        revisions = [self._compat_revision(self._revision_body(index, ref["revisionId"])) for ref in index["revisionRefs"]]
+        revisions = [
+            self._compat_revision(self._revision_body(index, ref["revisionId"]))
+            for ref in index["revisionRefs"]
+        ]
         decisions = []
         for ref in index["eventRefs"]:
             event = self._read_json(self.timeline_dir / ref["path"])
-            if event["type"] in {"approved", "rejected", "changes-requested", "promotion-approved"}:
+            if event["type"] in {
+                "approved",
+                "rejected",
+                "changes-requested",
+                "promotion-approved",
+            }:
                 decisions.append(self._compat_event(event))
         return {
             "schemaVersion": index["schemaVersion"],
@@ -257,7 +300,11 @@ class ArtifactStore:
         head = index["headRevisionId"]
         if head is None:
             return None
-        return next(item["contentSha256"] for item in index["revisionRefs"] if item["revisionId"] == head)
+        return next(
+            item["contentSha256"]
+            for item in index["revisionRefs"]
+            if item["revisionId"] == head
+        )
 
     def append_revision(
         self,
@@ -280,7 +327,9 @@ class ArtifactStore:
         index = self.load_index()
         actual_head_hash = self._head_hash(index)
         if expected_head_hash is not None and actual_head_hash != expected_head_hash:
-            raise StoreError(f"compare-and-swap failed: expected head {expected_head_hash}, actual {actual_head_hash}")
+            raise StoreError(
+                f"compare-and-swap failed: expected head {expected_head_hash}, actual {actual_head_hash}"
+            )
         existing = {item["revisionId"] for item in index["revisionRefs"]}
         revision_id = revision_id or f"{index['artifactType']}-r{len(existing) + 1:04d}"
         if revision_id in existing:
@@ -332,37 +381,69 @@ class ArtifactStore:
         return self._compat_revision(body)
 
     def revision(self, revision_id: str) -> dict[str, Any]:
-        return self._compat_revision(self._revision_body(self.load_index(), revision_id))
+        return self._compat_revision(
+            self._revision_body(self.load_index(), revision_id)
+        )
 
-    def _append_event(self, index: dict[str, Any], event: dict[str, Any]) -> dict[str, Any]:
+    def _append_event(
+        self, index: dict[str, Any], event: dict[str, Any]
+    ) -> dict[str, Any]:
         self._validate_event(event)
         event_path = self._event_dir(index) / f"{event['eventId']}.json"
         if event_path.exists():
             raise StoreError(f"immutable event already exists: {event['eventId']}")
         atomic_write_json(event_path, event)
         updated = deepcopy(index)
-        updated["eventRefs"].append({
-            "eventId": event["eventId"], "path": self._relative(event_path),
-            "sha256": content_hash(event), "type": event["type"], "occurredAt": event["occurredAt"],
-        })
+        updated["eventRefs"].append(
+            {
+                "eventId": event["eventId"],
+                "path": self._relative(event_path),
+                "sha256": content_hash(event),
+                "type": event["type"],
+                "occurredAt": event["occurredAt"],
+            }
+        )
         updated["updatedAt"] = event["occurredAt"]
         return updated
 
     def record_decision(
-        self, *, decision: str, revision_id: str, revision_hash: str,
-        candidate_hash: str, dependency_hashes: dict[str, str], actor: str | dict[str, Any],
-        checkpoint: str, scope: str, reason: str, evidence_bundle_hash: str,
+        self,
+        *,
+        decision: str,
+        revision_id: str,
+        revision_hash: str,
+        candidate_hash: str,
+        dependency_hashes: dict[str, str],
+        actor: str | dict[str, Any],
+        checkpoint: str,
+        scope: str,
+        reason: str,
+        evidence_bundle_hash: str,
         decided_at: str | None = None,
     ) -> dict[str, Any]:
-        if decision not in {"approved", "rejected", "changes-requested", "promotion-approved"}:
+        if decision not in {
+            "approved",
+            "rejected",
+            "changes-requested",
+            "promotion-approved",
+        }:
             raise StoreError(f"unsupported decision: {decision}")
         if not dependency_hashes:
             raise StoreError("decision requires exact dependency hashes")
-        dependency_hashes = {str(k): _require_sha256(v, f"dependency {k}") for k, v in sorted(dependency_hashes.items())}
+        dependency_hashes = {
+            str(k): _require_sha256(v, f"dependency {k}")
+            for k, v in sorted(dependency_hashes.items())
+        }
         revision_hash = _require_sha256(revision_hash, "revision hash")
         candidate_hash = _require_sha256(candidate_hash, "candidate hash")
-        evidence_bundle_hash = _require_sha256(evidence_bundle_hash, "evidence bundle hash")
-        if not str(scope).strip() or not str(checkpoint).strip() or not str(reason).strip():
+        evidence_bundle_hash = _require_sha256(
+            evidence_bundle_hash, "evidence bundle hash"
+        )
+        if (
+            not str(scope).strip()
+            or not str(checkpoint).strip()
+            or not str(reason).strip()
+        ):
             raise StoreError("decision checkpoint, scope, and reason are required")
         index = self.load_index()
         revision = self._revision_body(index, revision_id)
@@ -371,13 +452,23 @@ class ArtifactStore:
         timestamp = decided_at or self.clock()
         event_id = f"event-{decision}-{len(index['eventRefs']) + 1:04d}"
         event = {
-            "schemaVersion": "1.0.0", "eventId": event_id, "type": decision,
-            "occurredAt": timestamp, "actor": _actor(actor, default_type="user"),
-            "subject": {"artifactId": index["artifactId"], "revisionId": revision_id, "contentSha256": revision_hash},
-            "checkpoint": str(checkpoint), "candidateSha256": candidate_hash,
+            "schemaVersion": "1.0.0",
+            "eventId": event_id,
+            "type": decision,
+            "occurredAt": timestamp,
+            "actor": _actor(actor, default_type="user"),
+            "subject": {
+                "artifactId": index["artifactId"],
+                "revisionId": revision_id,
+                "contentSha256": revision_hash,
+            },
+            "checkpoint": str(checkpoint),
+            "candidateSha256": candidate_hash,
             "dependencyHashes": dependency_hashes,
             "dependencyLockSha256": content_hash(dependency_hashes),
-            "scope": str(scope), "reason": str(reason), "evidenceBundleSha256": evidence_bundle_hash,
+            "scope": str(scope),
+            "reason": str(reason),
+            "evidenceBundleSha256": evidence_bundle_hash,
         }
         updated = self._append_event(index, event)
         if decision in {"approved", "promotion-approved"}:
@@ -386,18 +477,29 @@ class ArtifactStore:
         atomic_write_json(self.path, updated)
         return deepcopy(event)
 
-    def approve(self, revision_id: str, *, revision_hash: str, candidate_hash: str) -> dict[str, Any]:
+    def approve(
+        self, revision_id: str, *, revision_hash: str, candidate_hash: str
+    ) -> dict[str, Any]:
         self.record_decision(
-            decision="approved", revision_id=revision_id, revision_hash=revision_hash,
-            candidate_hash=candidate_hash, dependency_hashes={"revision": revision_hash},
-            actor="human", checkpoint="legacy-compatibility", scope="exact-candidate",
-            reason="Explicit exact-revision approval", evidence_bundle_hash=revision_hash,
+            decision="approved",
+            revision_id=revision_id,
+            revision_hash=revision_hash,
+            candidate_hash=candidate_hash,
+            dependency_hashes={"revision": revision_hash},
+            actor="human",
+            checkpoint="legacy-compatibility",
+            scope="exact-candidate",
+            reason="Explicit exact-revision approval",
+            evidence_bundle_hash=revision_hash,
         )
         return self.revision(revision_id)
 
     def effective_approval(self) -> dict[str, Any] | None:
         index = self.load_index()
-        if index["approvedRevisionId"] is None or index["approvedRevisionId"] != index["headRevisionId"]:
+        if (
+            index["approvedRevisionId"] is None
+            or index["approvedRevisionId"] != index["headRevisionId"]
+        ):
             return None
         for ref in reversed(index["eventRefs"]):
             if ref["type"] not in {"approved", "promotion-approved"}:
@@ -407,7 +509,9 @@ class ArtifactStore:
                 return event
         return None
 
-    def set_active_state(self, state: str, *, reason: str, actor: str = "avo-lineage") -> dict[str, Any]:
+    def set_active_state(
+        self, state: str, *, reason: str, actor: str = "avo-lineage"
+    ) -> dict[str, Any]:
         if state not in {"valid", "stale", "blocked", "superseded"}:
             raise StoreError(f"invalid active state: {state}")
         index = self.load_index()
@@ -416,10 +520,18 @@ class ArtifactStore:
         revision = self._revision_body(index, index["headRevisionId"])
         timestamp = self.clock()
         event = {
-            "schemaVersion": "1.0.0", "eventId": f"event-invalidated-{len(index['eventRefs']) + 1:04d}",
-            "type": "invalidated", "occurredAt": timestamp, "actor": _actor(actor),
-            "subject": {"artifactId": index["artifactId"], "revisionId": revision["revisionId"], "contentSha256": revision["contentSha256"]},
-            "reason": reason, "details": {"state": state},
+            "schemaVersion": "1.0.0",
+            "eventId": f"event-invalidated-{len(index['eventRefs']) + 1:04d}",
+            "type": "invalidated",
+            "occurredAt": timestamp,
+            "actor": _actor(actor),
+            "subject": {
+                "artifactId": index["artifactId"],
+                "revisionId": revision["revisionId"],
+                "contentSha256": revision["contentSha256"],
+            },
+            "reason": reason,
+            "details": {"state": state},
         }
         updated = self._append_event(index, event)
         updated["activeState"] = state

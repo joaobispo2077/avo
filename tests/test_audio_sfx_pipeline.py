@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import hashlib
-import sys
 import tempfile
 import unittest
 import wave
@@ -9,9 +8,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
-from avo import generate_sfx
-from avo import loudness_profiles
-from avo import render
+from avo import generate_sfx, loudness_profiles, render
 
 
 class AudioSfxPipelineTests(unittest.TestCase):
@@ -57,7 +54,13 @@ class AudioSfxPipelineTests(unittest.TestCase):
         self.assertIn("amix=inputs=2", graph)
 
     def test_comparison_sfx_names_are_available_but_optional(self) -> None:
-        for name in ["soft_whoosh", "tick", "price_pop", "transition_hit", "verification_chime"]:
+        for name in [
+            "soft_whoosh",
+            "tick",
+            "price_pop",
+            "transition_hit",
+            "verification_chime",
+        ]:
             self.assertIn(name, generate_sfx.EFFECT_NAMES)
         parts, output = render.build_audio_filter_parts([], first_input_index=1)
         self.assertEqual(parts, [])
@@ -88,7 +91,9 @@ class AudioSfxPipelineTests(unittest.TestCase):
         ]:
             self.assertIn(name, generate_sfx.EFFECT_NAMES)
 
-    def test_v004_audio_policy_requires_conservative_denoise_and_stereo_dialogue_qc(self) -> None:
+    def test_v004_audio_policy_requires_conservative_denoise_and_stereo_dialogue_qc(
+        self,
+    ) -> None:
         edl = {
             "audio": {
                 "main_source_stream": "a:0",
@@ -98,8 +103,12 @@ class AudioSfxPipelineTests(unittest.TestCase):
                 "channel_qc": "passed_left_right_dialogue_audible",
             }
         }
-        self.assertEqual(edl["audio"]["noise_reduction_policy"], "conservative_speech_first")
-        self.assertEqual(edl["audio"]["channel_qc"], "passed_left_right_dialogue_audible")
+        self.assertEqual(
+            edl["audio"]["noise_reduction_policy"], "conservative_speech_first"
+        )
+        self.assertEqual(
+            edl["audio"]["channel_qc"], "passed_left_right_dialogue_audible"
+        )
 
     def test_feature_005_main_source_gets_youtube_dialogue_eq(self) -> None:
         edl = {"audio": {"noise_reduction_policy": "conservative_speech_first"}}
@@ -117,4 +126,3 @@ class AudioSfxPipelineTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

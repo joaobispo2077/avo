@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Callable
 
 import numpy as np
 
@@ -37,7 +36,9 @@ class EqSuggestion:
         return asdict(self)
 
 
-def _band_energy(pcm: np.ndarray, sample_rate: int, low_hz: float, high_hz: float) -> float:
+def _band_energy(
+    pcm: np.ndarray, sample_rate: int, low_hz: float, high_hz: float
+) -> float:
     if len(pcm) < 8:
         return 0.0
     spectrum = np.abs(np.fft.rfft(pcm))
@@ -48,7 +49,9 @@ def _band_energy(pcm: np.ndarray, sample_rate: int, low_hz: float, high_hz: floa
     return float(np.mean(spectrum[mask] ** 2))
 
 
-def band_ratios(pcm: np.ndarray, sample_rate: int = ANALYSIS_SAMPLE_RATE) -> dict[str, float]:
+def band_ratios(
+    pcm: np.ndarray, sample_rate: int = ANALYSIS_SAMPLE_RATE
+) -> dict[str, float]:
     rumble = _band_energy(pcm, sample_rate, 20.0, 100.0)
     mud = _band_energy(pcm, sample_rate, 150.0, 400.0)
     speech = _band_energy(pcm, sample_rate, 1000.0, 4000.0)
@@ -110,7 +113,9 @@ def _merge_eq_windows(
     return merged
 
 
-def score_sliding_eq_windows(media: Path, duration: float) -> list[tuple[float, float, str, float]]:
+def score_sliding_eq_windows(
+    media: Path, duration: float
+) -> list[tuple[float, float, str, float]]:
     pcm = audio_analysis.extract_pcm_mono(media, 0.0, duration)
     win = int(WINDOW_SEC * ANALYSIS_SAMPLE_RATE)
     step = max(1, int(WINDOW_STEP_SEC * ANALYSIS_SAMPLE_RATE))

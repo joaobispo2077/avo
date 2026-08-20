@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from enum import Enum
 from fractions import Fraction
 from typing import Any
-import re
 
 _SHA256 = re.compile(r"^[a-f0-9]{64}$")
 
@@ -57,10 +57,14 @@ class TimeValue:
     source_id: str | None = None
 
     def __post_init__(self) -> None:
-        if self.domain in {
-            TimelineDomain.RAW_SOURCE,
-            TimelineDomain.SYNC_CORRECTED_SOURCE,
-        } and not self.source_id:
+        if (
+            self.domain
+            in {
+                TimelineDomain.RAW_SOURCE,
+                TimelineDomain.SYNC_CORRECTED_SOURCE,
+            }
+            and not self.source_id
+        ):
             raise ValueError("source-domain time requires source_id")
 
     @property
@@ -123,7 +127,9 @@ class TimeRange:
 
     def __post_init__(self) -> None:
         if (self.start.domain, self.start.source_id, self.start.timebase) != (
-            self.end.domain, self.end.source_id, self.end.timebase,
+            self.end.domain,
+            self.end.source_id,
+            self.end.timebase,
         ):
             raise ValueError("range endpoints must share domain, source, and timebase")
         if self.end.ticks <= self.start.ticks:
@@ -150,12 +156,17 @@ class StructuredTimelineError:
 
     def to_dict(self) -> dict[str, Any]:
         result = {
-            "code": self.code, "message": self.message,
-            "remediation": self.remediation, "blocking": self.blocking,
+            "code": self.code,
+            "message": self.message,
+            "remediation": self.remediation,
+            "blocking": self.blocking,
         }
         for key, value in (
-            ("artifactRef", self.artifact_ref), ("entityRef", self.entity_ref),
-            ("field", self.field), ("expected", self.expected), ("actual", self.actual),
+            ("artifactRef", self.artifact_ref),
+            ("entityRef", self.entity_ref),
+            ("field", self.field),
+            ("expected", self.expected),
+            ("actual", self.actual),
         ):
             if value is not None:
                 result[key] = value

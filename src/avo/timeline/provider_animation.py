@@ -2,20 +2,29 @@
 
 from __future__ import annotations
 
-from copy import deepcopy
 import json
-from pathlib import Path
 import re
-from typing import Any, Callable
+from collections.abc import Callable
+from copy import deepcopy
+from pathlib import Path
+from typing import Any
 
+from .animation import AnimationError, _keys
 from .contracts import content_hash, validate_document
 from .store import atomic_write_json, now_iso
-from .animation import AnimationError, _keys
-
 
 FORBIDDEN_FIELDS = {
-    "text", "timestamps", "timing", "claims", "screenshots", "footage",
-    "media", "projectPath", "assetPath", "locator", "absolutePath",
+    "text",
+    "timestamps",
+    "timing",
+    "claims",
+    "screenshots",
+    "footage",
+    "media",
+    "projectPath",
+    "assetPath",
+    "locator",
+    "absolutePath",
 }
 
 
@@ -35,7 +44,12 @@ class ProviderAnimationService:
         if not self.path.exists():
             atomic_write_json(
                 self.path,
-                {"schemaVersion": "1.0.0", "provider": self.provider, "patterns": [], "events": []},
+                {
+                    "schemaVersion": "1.0.0",
+                    "provider": self.provider,
+                    "patterns": [],
+                    "events": [],
+                },
             )
         return self.load()
 
@@ -58,18 +72,33 @@ class ProviderAnimationService:
                 + ", ".join(sorted(forbidden))
             )
         for leaf in _string_leaves(value):
-            if Path(leaf).is_absolute() or re.search(r"\.(mp4|mov|mkv|png|jpe?g|webp|avif)$", leaf, re.I):
-                raise AnimationError("provider pattern leaks a project path/media reference")
+            if Path(leaf).is_absolute() or re.search(
+                r"\.(mp4|mov|mkv|png|jpe?g|webp|avif)$", leaf, re.IGNORECASE
+            ):
+                raise AnimationError(
+                    "provider pattern leaks a project path/media reference"
+                )
         required = {
-            "patternId", "name", "version", "behavior", "contexts", "exclusions",
-            "requiredAssets", "accessibility", "provenance",
+            "patternId",
+            "name",
+            "version",
+            "behavior",
+            "contexts",
+            "exclusions",
+            "requiredAssets",
+            "accessibility",
+            "provenance",
         }
         missing = required - set(value)
         if missing:
-            raise AnimationError("pattern missing generalized fields: " + ", ".join(sorted(missing)))
+            raise AnimationError(
+                "pattern missing generalized fields: " + ", ".join(sorted(missing))
+            )
         return value
 
-    def propose(self, pattern: dict[str, Any], *, actor: str, intent_reference: str) -> dict[str, Any]:
+    def propose(
+        self, pattern: dict[str, Any], *, actor: str, intent_reference: str
+    ) -> dict[str, Any]:
         if not actor or not intent_reference:
             raise AnimationError("explicit creator promotion intent is required")
         sanitized = self.sanitize(pattern)
@@ -82,7 +111,11 @@ class ProviderAnimationService:
             "createdAt": self.clock(),
         }
         proposal["proposalSha256"] = content_hash(proposal)
-        path = self.path.parent / "proposals" / f"{sanitized['patternId']}-{proposal['proposalSha256'][:12]}.json"
+        path = (
+            self.path.parent
+            / "proposals"
+            / f"{sanitized['patternId']}-{proposal['proposalSha256'][:12]}.json"
+        )
         atomic_write_json(path, proposal)
         return {**proposal, "path": str(path)}
 
@@ -97,14 +130,22 @@ class ProviderAnimationService:
         if decision not in {"approved", "rejected"}:
             raise AnimationError("promotion decision must be approved or rejected")
         proposal = json.loads(Path(proposal_path).read_text(encoding="utf-8"))
-        expected = content_hash({key: value for key, value in proposal.items() if key not in {"proposalSha256", "path"}})
+        expected = content_hash(
+            {
+                key: value
+                for key, value in proposal.items()
+                if key not in {"proposalSha256", "path"}
+            }
+        )
         if proposal.get("proposalSha256") != expected:
             raise AnimationError("animation proposal hash mismatch")
         pattern = self.sanitize(proposal["pattern"])
         catalog = self.initialize()
         event = {
             "eventId": f"animation-event-{len(catalog['events']) + 1:04d}",
-            "type": "promotion-approved" if decision == "approved" else "promotion-rejected",
+            "type": "promotion-approved"
+            if decision == "approved"
+            else "promotion-rejected",
             "patternId": pattern["patternId"],
             "proposalSha256": proposal["proposalSha256"],
             "actor": actor,
@@ -113,7 +154,10 @@ class ProviderAnimationService:
         }
         catalog["events"].append(event)
         if decision == "approved":
-            if any(item["patternId"] == pattern["patternId"] for item in catalog["patterns"]):
+            if any(
+                item["patternId"] == pattern["patternId"]
+                for item in catalog["patterns"]
+            ):
                 raise AnimationError("provider pattern ID already exists")
             pattern["promotionEventId"] = event["eventId"]
             catalog["patterns"].append(pattern)

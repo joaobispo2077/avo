@@ -4,6 +4,7 @@ Uses the official ``mcp`` SDK ``Client`` against ``create_server()`` over the
 in-memory transport (same tool registration as stdio). Does not spawn a
 blocking ``run_stdio()`` child — avoids hanging CI.
 """
+
 from __future__ import annotations
 
 import asyncio

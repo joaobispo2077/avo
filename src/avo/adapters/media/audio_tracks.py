@@ -17,11 +17,15 @@ def compile_audio_layers(
     first_input_index: int = 1,
 ) -> dict[str, Any]:
     """Compile dialogue, music beds, SFX, and ambience with ducking and fades."""
-    ordered = sorted(layers, key=lambda item: (item.get("order", 0), item.get("layerId", "")))
+    ordered = sorted(
+        layers, key=lambda item: (item.get("order", 0), item.get("layerId", ""))
+    )
     ducking_count = sum(
         1
         for layer in ordered
-        if not layer.get("mute") and layer.get("ducking") and layer.get("role") != "dialogue"
+        if not layer.get("mute")
+        and layer.get("ducking")
+        and layer.get("role") != "dialogue"
     )
     filters: list[str] = []
     inputs: list[str] = []
@@ -55,7 +59,7 @@ def compile_audio_layers(
         if gain:
             parts.append(f"volume={gain:.3f}dB")
         if role != "dialogue":
-            delay_ms = max(0, int(round(start * 1000)))
+            delay_ms = max(0, round(start * 1000))
             parts.append(f"adelay={delay_ms}|{delay_ms}")
         fades = layer.get("fades") or {}
         in_ticks = int(fades.get("inTicks") or 0)
@@ -64,7 +68,9 @@ def compile_audio_layers(
             parts.append(f"afade=t=in:st=0:d={_seconds(in_ticks):.3f}")
         if out_ticks and duration > 0:
             fade_out = _seconds(out_ticks)
-            parts.append(f"afade=t=out:st={max(0.0, duration - fade_out):.3f}:d={fade_out:.3f}")
+            parts.append(
+                f"afade=t=out:st={max(0.0, duration - fade_out):.3f}:d={fade_out:.3f}"
+            )
         filters.append(",".join(parts) + f"[{label}]")
         if role == "dialogue" and ducking_count:
             pads = "".join(f"[dlgsc{index}]" for index in range(ducking_count))

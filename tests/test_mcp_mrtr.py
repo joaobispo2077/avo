@@ -4,6 +4,7 @@ Covers FR-15: InputRequired pause, incomplete retry, accept to proceed, and
 reject on tampered/expired/mismatched requestState (never authorize execute).
 tmp fixtures only; no providers/footage. Soft-adapts when SDK MRTR types lag.
 """
+
 from __future__ import annotations
 
 from types import SimpleNamespace
@@ -41,6 +42,21 @@ def _accept_responses() -> dict[str, Any]:
         }
     }
 
+
+def _tampered_request_state(token: str) -> str:
+    """Corrupt MAC so decoded bytes always change.
+
+    Flipping only the last base64url character is flaky: unused padding bits
+    can make A↔B decode to the same HMAC bytes (~6% in practice), so the gate
+    wrongly proceeds. Flip a middle character instead (same as request_state tests).
+    """
+    body, mac = token.rsplit(".", 1)
+    assert len(mac) > 2
+    mid = len(mac) // 2
+    flipped = "A" if mac[mid] != "A" else "B"
+    return f"{body}.{mac[:mid]}{flipped}{mac[mid + 1 :]}"
+
+
 def _pause_token(
     *,
     key: bytes,
@@ -69,6 +85,7 @@ def _pause_token(
 
 # ---------------------------------------------------------------------------
 
+
 def test_allowed_methods_from_capabilities_mapping() -> None:
     caps = {
         "elicitation": {"form": {}},
@@ -84,11 +101,15 @@ def test_allowed_methods_from_capabilities_mapping() -> None:
         }
     )
 
+
 def test_bare_elicitation_counts_as_form() -> None:
     assert mrtr.client_supports_elicitation_create({"elicitation": {}}) is True
-    assert mrtr.client_supports_elicitation_create({"elicitation": {"url": {}}}) is False
+    assert (
+        mrtr.client_supports_elicitation_create({"elicitation": {"url": {}}}) is False
+    )
     assert mrtr.client_supports_elicitation_create({}) is False
     assert mrtr.client_supports_elicitation_create(None) is False
+
 
 def test_filter_input_requests_drops_unsupported() -> None:
     requests = {
@@ -106,6 +127,7 @@ def test_filter_input_requests_drops_unsupported() -> None:
     assert list(filtered) == ["confirm_destructive"]
     assert filtered["confirm_destructive"]["method"] == mrtr.METHOD_ELICITATION_CREATE
 
+
 def test_no_elicitation_capability_degrades_without_fake_confirm() -> None:
     key = generate_key()
     decision = mrtr.evaluate_destructive_gate(
@@ -119,7 +141,11 @@ def test_no_elicitation_capability_degrades_without_fake_confirm() -> None:
     assert decision.result is None
     assert decision.error_message is not None
     assert "elicitation/create" in decision.error_message
-    assert "faked" in decision.error_message.lower() or "fake" in mrtr.CAPABILITY_DEGRADE_MESSAGE
+    assert (
+        "faked" in decision.error_message.lower()
+        or "fake" in mrtr.CAPABILITY_DEGRADE_MESSAGE
+    )
+
 
 def test_sampling_only_does_not_emit_elicitation() -> None:
     key = generate_key()
@@ -144,6 +170,7 @@ def test_sampling_only_does_not_emit_elicitation() -> None:
     wire = mrtr.input_required_to_dict(built)
     assert "inputRequests" not in wire or not wire.get("inputRequests")
 
+
 def test_elicitation_capability_emits_confirm_request() -> None:
     key = generate_key()
     caps = {"elicitation": {"form": {}}}
@@ -160,8 +187,10 @@ def test_elicitation_capability_emits_confirm_request() -> None:
     req = wire["inputRequests"]["confirm_destructive"]
     assert req["method"] == mrtr.METHOD_ELICITATION_CREATE
 
+
 def test_handler_with_ctx_without_elicitation_rejects() -> None:
     from avo.mcp.tools.cli_tools import _all_bridge_defs, _make_handler
+
     mrtr.reset_process_signing_key_for_tests()
     defn = next(d for d in _all_bridge_defs() if d.spec.name == TOOL)
     handler = _make_handler(defn)
@@ -171,8 +200,10 @@ def test_handler_with_ctx_without_elicitation_rejects() -> None:
     assert result["ok"] is False
     assert "elicitation" in result["stderr"].lower()
 
+
 def test_handler_with_ctx_with_elicitation_pauses() -> None:
     from avo.mcp.tools.cli_tools import _all_bridge_defs, _make_handler
+
     mrtr.reset_process_signing_key_for_tests()
     defn = next(d for d in _all_bridge_defs() if d.spec.name == TOOL)
     handler = _make_handler(defn)
@@ -183,6 +214,7 @@ def test_handler_with_ctx_with_elicitation_pauses() -> None:
     assert wire["inputRequests"]["confirm_destructive"]["method"] == (
         mrtr.METHOD_ELICITATION_CREATE
     )
+
 
 def test_accepted_retry_proceeds_even_if_caps_later_missing() -> None:
     """Once requestState + accept are verified, do not re-block on caps."""
@@ -218,6 +250,7 @@ def test_accepted_retry_proceeds_even_if_caps_later_missing() -> None:
 
 # ---------------------------------------------------------------------------
 
+
 def test_happy_path_first_pause_then_accept_proceeds() -> None:
     """First call → InputRequiredResult; retry with responses + valid state → proceed."""
     key = generate_key()
@@ -251,6 +284,7 @@ def test_happy_path_first_pause_then_accept_proceeds() -> None:
     assert accepted.outcome is mrtr.GateOutcome.PROCEED
     assert accepted.result is None
     assert accepted.error_message is None
+
 
 def test_incomplete_retry_returns_new_input_required() -> None:
     key = generate_key()
@@ -292,12 +326,11 @@ def test_incomplete_retry_returns_new_input_required() -> None:
         # New pause issues a fresh requestState (do not reuse broken continuity).
         previous_tokens.add(new_token)
 
+
 def test_tampered_request_state_rejects_never_proceed() -> None:
     key = generate_key()
     token = _pause_token(key=key)
-    body, mac = token.rsplit(".", 1)
-    flipped = mac[:-1] + ("A" if mac[-1] != "A" else "B")
-    bad = f"{body}.{flipped}"
+    bad = _tampered_request_state(token)
     decision = mrtr.evaluate_destructive_gate(
         tool=TOOL,
         args=TMP_ARGS,
@@ -310,6 +343,7 @@ def test_tampered_request_state_rejects_never_proceed() -> None:
     assert decision.outcome is mrtr.GateOutcome.REJECT
     assert decision.error_message is not None
     assert "requestState" in decision.error_message
+
 
 def test_expired_request_state_rejects() -> None:
     key = generate_key()
@@ -329,6 +363,7 @@ def test_expired_request_state_rejects() -> None:
     assert decision.error_message is not None
     assert "requestState" in decision.error_message
     assert "expired" in decision.error_message.lower()
+
 
 def test_mismatched_tool_request_state_rejects() -> None:
     key = generate_key()
@@ -351,6 +386,7 @@ def test_mismatched_tool_request_state_rejects() -> None:
     assert decision.outcome is mrtr.GateOutcome.REJECT
     assert "requestState" in (decision.error_message or "")
 
+
 def test_mismatched_args_request_state_rejects() -> None:
     key = generate_key()
     token = _pause_token(key=key, args={"project": "/tmp/mrtr-a", "as_json": True})
@@ -365,6 +401,7 @@ def test_mismatched_args_request_state_rejects() -> None:
     )
     assert decision.outcome is mrtr.GateOutcome.REJECT
     assert "requestState" in (decision.error_message or "")
+
 
 def test_wrong_signing_key_rejects() -> None:
     key_a = generate_key()
@@ -381,6 +418,7 @@ def test_wrong_signing_key_rejects() -> None:
     )
     assert decision.outcome is mrtr.GateOutcome.REJECT
 
+
 def test_declined_confirm_rejects() -> None:
     key = generate_key()
     token = _pause_token(key=key)
@@ -395,9 +433,11 @@ def test_declined_confirm_rejects() -> None:
             capabilities_provided=True,
         )
         assert decision.outcome is mrtr.GateOutcome.REJECT
-        assert "declined" in (decision.error_message or "").lower() or "cancelled" in (
-            decision.error_message or ""
-        ).lower()
+        assert (
+            "declined" in (decision.error_message or "").lower()
+            or "cancelled" in (decision.error_message or "").lower()
+        )
+
 
 def test_handler_happy_path_calls_bridge_only_after_accept(
     monkeypatch: pytest.MonkeyPatch,
@@ -405,8 +445,10 @@ def test_handler_happy_path_calls_bridge_only_after_accept(
     """Handler: pause → incomplete → accept proceeds to bridge; never on bad state."""
     from avo.mcp.tools import cli_tools
     from avo.mcp.tools.cli_tools import _all_bridge_defs, _make_handler
+
     mrtr.reset_process_signing_key_for_tests()
     calls: list[tuple[Any, dict[str, Any]]] = []
+
     class _FakeResult:
         def to_dict(self) -> dict[str, Any]:
             return {
@@ -416,9 +458,11 @@ def test_handler_happy_path_calls_bridge_only_after_accept(
                 "stderr": "",
                 "parsed_json": {"ran": True},
             }
+
     def _fake_bridged(prefix: Any, kwargs: dict[str, Any]) -> _FakeResult:
         calls.append((prefix, dict(kwargs)))
         return _FakeResult()
+
     monkeypatch.setattr(cli_tools, "run_bridged", _fake_bridged)
     defn = next(d for d in _all_bridge_defs() if d.spec.name == TOOL)
     handler = _make_handler(defn)
@@ -432,8 +476,7 @@ def test_handler_happy_path_calls_bridge_only_after_accept(
     assert mrtr.input_required_to_dict(incomplete)["resultType"] == "input_required"
     assert calls == []
     # Tampered state must never authorize execute.
-    body, mac = token.rsplit(".", 1)
-    bad = f"{body}.{mac[:-1] + ('A' if mac[-1] != 'A' else 'B')}"
+    bad = _tampered_request_state(token)
     rejected = handler(
         project=project,
         as_json=True,
@@ -456,9 +499,11 @@ def test_handler_happy_path_calls_bridge_only_after_accept(
     assert "inputResponses" not in calls[0][1]
     assert calls[0][1]["project"] == project
 
+
 def test_handler_capability_filter_never_emits_unsupported_elicitation() -> None:
     """Capability filter: no elicitation/create when client lacks it."""
     from avo.mcp.tools.cli_tools import _all_bridge_defs, _make_handler
+
     mrtr.reset_process_signing_key_for_tests()
     defn = next(d for d in _all_bridge_defs() if d.spec.name == TOOL)
     handler = _make_handler(defn)
@@ -470,6 +515,7 @@ def test_handler_capability_filter_never_emits_unsupported_elicitation() -> None
     # Must not soft-return an InputRequired with unsupported methods.
     assert "resultType" not in result
     assert "inputRequests" not in result
+
 
 def test_build_input_required_soft_adapts_without_sdk_types() -> None:
     """Wire shape is usable even when SDK InputRequiredResult is absent."""
@@ -489,7 +535,9 @@ def test_build_input_required_soft_adapts_without_sdk_types() -> None:
     # Optional SDK assertion — soft-adapt covers missing types.
     if _sdk_input_required_available():
         from mcp.types import InputRequiredResult
+
         assert isinstance(result, (dict, InputRequiredResult))
+
 
 def test_verify_confirm_raises_on_tamper_for_gate_helpers() -> None:
     key = generate_key()
@@ -501,6 +549,7 @@ def test_verify_confirm_raises_on_tamper_for_gate_helpers() -> None:
             args=TMP_ARGS,
             key=key,
         )
+
 
 def test_extract_mrtr_fields_from_kwargs_and_ctx() -> None:
     rs, ir = mrtr.extract_mrtr_fields(
@@ -519,6 +568,7 @@ def test_extract_mrtr_fields_from_kwargs_and_ctx() -> None:
     rs2, ir2 = mrtr.extract_mrtr_fields({}, ctx=ctx)
     assert rs2 == "token-b"
     assert ir2 is not None and ir2["confirm_destructive"]["action"] == "decline"
+
 
 def test_tmp_paths_only_no_provider_footage_literals() -> None:
     """Guardrail: this module's gate args stay under /tmp (NFR fixture rule)."""

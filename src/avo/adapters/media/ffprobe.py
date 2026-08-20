@@ -3,8 +3,8 @@
 from __future__ import annotations
 
 import json
-from pathlib import Path
 import subprocess
+from pathlib import Path
 from typing import Any
 
 from avo.timeline.contracts import file_fingerprint
@@ -21,8 +21,12 @@ class FfprobeMediaAdapter:
         clocks = {
             (
                 source["durationSeconds"],
-                source["streams"]["video"][0]["timeBase"] if source["streams"]["video"] else "",
-                source["streams"]["audio"][0]["sampleRate"] if source["streams"]["audio"] else 0,
+                source["streams"]["video"][0]["timeBase"]
+                if source["streams"]["video"]
+                else "",
+                source["streams"]["audio"][0]["sampleRate"]
+                if source["streams"]["audio"]
+                else 0,
             )
             for source in sources
         }
@@ -50,8 +54,14 @@ class FfprobeMediaAdapter:
         probe = json.loads(
             subprocess.run(
                 [
-                    "ffprobe", "-v", "error", "-show_streams", "-show_format",
-                    "-of", "json", str(path),
+                    "ffprobe",
+                    "-v",
+                    "error",
+                    "-show_streams",
+                    "-show_format",
+                    "-of",
+                    "json",
+                    str(path),
                 ],
                 check=True,
                 capture_output=True,

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -53,9 +52,7 @@ class CacheTests(unittest.TestCase):
             video = root / "clip.mp4"
             video.write_bytes(b"one")
             edit = root / "edit"
-            transcribe.transcribe_one(
-                video, edit, runtime=FakeRuntime(), verbose=False
-            )
+            transcribe.transcribe_one(video, edit, runtime=FakeRuntime(), verbose=False)
             video.write_bytes(b"two")
             changed = FakeRuntime()
             transcribe.transcribe_one(video, edit, runtime=changed, verbose=False)

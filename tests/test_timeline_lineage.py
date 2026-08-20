@@ -4,19 +4,37 @@ import unittest
 
 from avo.timeline.lineage import LineageError, validate_cmap_snapshot
 
-
 SHA = "a" * 64
 
 
 def snapshot(kind: str = "raw") -> dict:
     return {
-        "sources": [{"sourceId": "cam", "kind": kind, "fingerprint": {"sha256": SHA, "sizeBytes": 1}}],
-        "segments": [{
-            "segmentId": "s1", "sourceId": "cam",
-            "in": {"ticks": 0, "timebase": {"num": 1, "den": 1000}, "domain": "raw-source", "sourceId": "cam"},
-            "out": {"ticks": 1, "timebase": {"num": 1, "den": 1000}, "domain": "raw-source", "sourceId": "cam"},
-            "reason": "keep",
-        }],
+        "sources": [
+            {
+                "sourceId": "cam",
+                "kind": kind,
+                "fingerprint": {"sha256": SHA, "sizeBytes": 1},
+            }
+        ],
+        "segments": [
+            {
+                "segmentId": "s1",
+                "sourceId": "cam",
+                "in": {
+                    "ticks": 0,
+                    "timebase": {"num": 1, "den": 1000},
+                    "domain": "raw-source",
+                    "sourceId": "cam",
+                },
+                "out": {
+                    "ticks": 1,
+                    "timebase": {"num": 1, "den": 1000},
+                    "domain": "raw-source",
+                    "sourceId": "cam",
+                },
+                "reason": "keep",
+            }
+        ],
     }
 
 

@@ -105,7 +105,9 @@ def validate_voiceover_edl(edl_path: Path, schema_path: Path = DEFAULT_SCHEMA) -
         raise EdlValidationError("EDL is not an external_voiceover program")
     issues = preflight(edl, edl_path.parent)
     if issues:
-        raise EdlValidationError("Voiceover preflight failed:\n- " + "\n- ".join(issues))
+        raise EdlValidationError(
+            "Voiceover preflight failed:\n- " + "\n- ".join(issues)
+        )
     return edl
 
 

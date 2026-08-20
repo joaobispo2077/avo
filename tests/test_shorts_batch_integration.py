@@ -2,9 +2,8 @@
 
 from __future__ import annotations
 
-import json
 import hashlib
-import subprocess
+import json
 import tempfile
 import unittest
 import unittest.mock
@@ -12,7 +11,6 @@ from pathlib import Path
 
 from avo import shorts, shorts_contract, shorts_media, shorts_plan
 from avo.adapters.base import JobResult
-
 
 FIXTURE_DIR = Path(__file__).parent / "fixtures" / "shorts" / "planning"
 
@@ -22,8 +20,12 @@ class ShortsPlanningIntegrationTests(unittest.TestCase):
         master = root / "master.mp4"
         master.write_bytes((FIXTURE_DIR / "master.mp4").read_bytes())
         if with_transcript:
-            (root / "transcript.json").write_bytes((FIXTURE_DIR / "transcript.json").read_bytes())
-        request = json.loads((FIXTURE_DIR / "shorts.request.json").read_text(encoding="utf-8"))
+            (root / "transcript.json").write_bytes(
+                (FIXTURE_DIR / "transcript.json").read_bytes()
+            )
+        request = json.loads(
+            (FIXTURE_DIR / "shorts.request.json").read_text(encoding="utf-8")
+        )
         if not with_transcript:
             request["source"].pop("transcriptPath", None)
         path = root / "shorts.request.json"
@@ -36,7 +38,9 @@ class ShortsPlanningIntegrationTests(unittest.TestCase):
             request_path = self.stage_request(root)
             plan_path = root / "plans" / "shorts.plan-v001.json"
             self.assertEqual(shorts.main(["validate", str(request_path)]), 0)
-            self.assertEqual(shorts.main(["resolve", str(request_path), "-o", str(plan_path)]), 0)
+            self.assertEqual(
+                shorts.main(["resolve", str(request_path), "-o", str(plan_path)]), 0
+            )
             plan = json.loads(plan_path.read_text(encoding="utf-8"))
             self.assertEqual(plan["resolvedCount"], 10)
             self.assertEqual(plan["planApproval"]["status"], "pending")
@@ -83,7 +87,8 @@ class ShortsPlanningIntegrationTests(unittest.TestCase):
     def approve_plan(self, plan_path: Path) -> None:
         plan = json.loads(plan_path.read_text(encoding="utf-8"))
         plan["planApproval"] = {
-            "status": "approved", "reference": "human-review:batch-plan",
+            "status": "approved",
+            "reference": "human-review:batch-plan",
             "timestamp": "2026-08-12T12:00:00Z",
         }
         plan["planHash"] = shorts_contract.plan_hash(plan)
@@ -99,7 +104,9 @@ class ShortsPlanningIntegrationTests(unittest.TestCase):
         ):
             path = output_dir / name
             path.write_bytes(f"{key}:{duration}".encode())
-            result[key] = shorts_media.PreparedAsset(path, hashlib.sha256(path.read_bytes()).hexdigest(), duration, muted)
+            result[key] = shorts_media.PreparedAsset(
+                path, hashlib.sha256(path.read_bytes()).hexdigest(), duration, muted
+            )
         return result
 
     def test_proof_build_is_immutable_selective_and_non_fail_fast(self) -> None:
@@ -121,18 +128,24 @@ class ShortsPlanningIntegrationTests(unittest.TestCase):
                     return JobResult(exit_code=0)
 
             _, first = shorts.build_proofs(
-                plan_path, workers=3, prepare=self.fake_prepare,
+                plan_path,
+                workers=3,
+                prepare=self.fake_prepare,
                 adapter_factory=FakeAdapter,
             )
             self.assertEqual(first["batchState"], "proofs-ready")
             self.assertEqual({item["proofRevision"] for item in first["items"]}, {1})
             first_proof_hashes = {
-                item["shortId"]: next(a["hash"] for a in item["artifacts"] if a["kind"] == "proof")
+                item["shortId"]: next(
+                    a["hash"] for a in item["artifacts"] if a["kind"] == "proof"
+                )
                 for item in first["items"]
             }
             call_count = len(calls)
-            _, unchanged = shorts.build_proofs(
-                plan_path, workers=2, prepare=self.fake_prepare,
+            _, _unchanged = shorts.build_proofs(
+                plan_path,
+                workers=2,
+                prepare=self.fake_prepare,
                 adapter_factory=FakeAdapter,
             )
             self.assertEqual(len(calls), call_count)
@@ -142,13 +155,25 @@ class ShortsPlanningIntegrationTests(unittest.TestCase):
             status["items"][2]["dirtyReasons"] = ["caption-policy-changed"]
             shorts_contract.atomic_write_json(status_path, status)
             _, revised = shorts.build_proofs(
-                plan_path, short_ids=["03"], workers=1, prepare=self.fake_prepare,
+                plan_path,
+                short_ids=["03"],
+                workers=1,
+                prepare=self.fake_prepare,
                 adapter_factory=FakeAdapter,
             )
-            revisions = {item["shortId"]: item["proofRevision"] for item in revised["items"]}
+            revisions = {
+                item["shortId"]: item["proofRevision"] for item in revised["items"]
+            }
             self.assertEqual(revisions["03"], 2)
             self.assertEqual(revisions["01"], 1)
-            self.assertEqual(first_proof_hashes["01"], next(a["hash"] for a in revised["items"][0]["artifacts"] if a["kind"] == "proof"))
+            self.assertEqual(
+                first_proof_hashes["01"],
+                next(
+                    a["hash"]
+                    for a in revised["items"][0]["artifacts"]
+                    if a["kind"] == "proof"
+                ),
+            )
 
     def test_one_render_failure_does_not_cancel_approved_siblings(self) -> None:
         with tempfile.TemporaryDirectory(dir="/tmp") as tmp:
@@ -160,7 +185,9 @@ class ShortsPlanningIntegrationTests(unittest.TestCase):
 
             class PartialAdapter:
                 def execute(self, operation, project, *extra, **kwargs):
-                    if operation == "render" and "05" in str(project).replace("\\", "/"):
+                    if operation == "render" and "05" in str(project).replace(
+                        "\\", "/"
+                    ):
                         return JobResult(exit_code=7, stderr="synthetic render failure")
                     if operation == "render":
                         output = Path(extra[extra.index("--output") + 1])
@@ -169,7 +196,9 @@ class ShortsPlanningIntegrationTests(unittest.TestCase):
                     return JobResult(exit_code=0)
 
             _, status = shorts.build_proofs(
-                plan_path, workers=4, prepare=self.fake_prepare,
+                plan_path,
+                workers=4,
+                prepare=self.fake_prepare,
                 adapter_factory=PartialAdapter,
             )
             states = {item["shortId"]: item["state"] for item in status["items"]}
@@ -196,18 +225,30 @@ class ShortsPlanningIntegrationTests(unittest.TestCase):
                     return JobResult(exit_code=0)
 
             _, preview_status = shorts.build_proofs(
-                plan_path, workers=2, preview=True,
-                prepare=self.fake_prepare, adapter_factory=FakeAdapter,
+                plan_path,
+                workers=2,
+                preview=True,
+                prepare=self.fake_prepare,
+                adapter_factory=FakeAdapter,
             )
-            self.assertTrue(all(item["renderProfile"]["preview"] for item in preview_status["items"]))
+            self.assertTrue(
+                all(
+                    item["renderProfile"]["preview"] for item in preview_status["items"]
+                )
+            )
             dirty = shorts_plan.dirty_items(plan, preview_status, preview=False)
             self.assertEqual(len(dirty), 10)
             self.assertIn("render-profile-changed", dirty["01"])
             _, full_status = shorts.build_proofs(
-                plan_path, workers=2, preview=False,
-                prepare=self.fake_prepare, adapter_factory=FakeAdapter,
+                plan_path,
+                workers=2,
+                preview=False,
+                prepare=self.fake_prepare,
+                adapter_factory=FakeAdapter,
             )
-            self.assertEqual({item["proofRevision"] for item in full_status["items"]}, {2})
+            self.assertEqual(
+                {item["proofRevision"] for item in full_status["items"]}, {2}
+            )
             self.assertFalse(full_status["items"][0]["renderProfile"]["preview"])
             self.assertEqual(full_status["items"][0]["renderProfile"]["width"], 1080)
 
@@ -228,17 +269,23 @@ class ShortsPlanningIntegrationTests(unittest.TestCase):
                     return JobResult(exit_code=0)
 
             shorts.build_proofs(
-                plan_path, workers=1, prepare=self.fake_prepare, adapter_factory=FakeAdapter,
+                plan_path,
+                workers=1,
+                prepare=self.fake_prepare,
+                adapter_factory=FakeAdapter,
             )
             with unittest.mock.patch.object(
-                shorts.shorts_qc, "qc_proof_artifact",
+                shorts.shorts_qc,
+                "qc_proof_artifact",
                 return_value={"status": "passed", "findings": []},
             ):
                 self.assertEqual(
                     shorts.main(["qc", str(plan_path), "--stage", "proof"]),
                     shorts.EXIT_OK,
                 )
-            status = json.loads(plan_path.with_name("shorts.status.json").read_text(encoding="utf-8"))
+            status = json.loads(
+                plan_path.with_name("shorts.status.json").read_text(encoding="utf-8")
+            )
             self.assertEqual(status["batchQcSummary"]["passed"], 10)
             self.assertEqual(status["batchQcSummary"]["failed"], 0)
 
@@ -259,7 +306,10 @@ class ShortsPlanningIntegrationTests(unittest.TestCase):
                     return JobResult(exit_code=0)
 
             shorts.build_proofs(
-                plan_path, workers=1, prepare=self.fake_prepare, adapter_factory=FakeAdapter,
+                plan_path,
+                workers=1,
+                prepare=self.fake_prepare,
+                adapter_factory=FakeAdapter,
             )
             status_path = plan_path.with_name("shorts.status.json")
             status = json.loads(status_path.read_text(encoding="utf-8"))
@@ -270,41 +320,56 @@ class ShortsPlanningIntegrationTests(unittest.TestCase):
             manifest_path = root / "approvals.json"
             current_proofs = {
                 item["shortId"]: next(
-                    artifact for artifact in reversed(item["artifacts"])
-                    if artifact["kind"] == "proof" and artifact["revision"] == item["proofRevision"]
+                    artifact
+                    for artifact in reversed(item["artifacts"])
+                    if artifact["kind"] == "proof"
+                    and artifact["revision"] == item["proofRevision"]
                 )
                 for item in status["items"]
             }
             first_item = status["items"][0]
             first_proof = current_proofs[first_item["shortId"]]
-            manifest_path.write_text(json.dumps({
-                "approvals": [
+            manifest_path.write_text(
+                json.dumps(
                     {
-                        "gate": gate,
-                        "status": "approved",
-                        "reference": f"review://{gate}",
-                        "timestamp": "2026-08-12T12:00:00Z",
-                        "candidateHash": first_proof["hash"],
-                        "candidateIdentityHash": "a" * 64,
-                        "dependencyLockSha256": "b" * 64,
-                        "evidenceBundleSha256": "c" * 64,
-                        "proofRevision": first_item["proofRevision"],
+                        "approvals": [
+                            {
+                                "gate": gate,
+                                "status": "approved",
+                                "reference": f"review://{gate}",
+                                "timestamp": "2026-08-12T12:00:00Z",
+                                "candidateHash": first_proof["hash"],
+                                "candidateIdentityHash": "a" * 64,
+                                "dependencyLockSha256": "b" * 64,
+                                "evidenceBundleSha256": "c" * 64,
+                                "proofRevision": first_item["proofRevision"],
+                            }
+                            for gate in (
+                                "batch-plan",
+                                "motion-proof",
+                                "picture-lock",
+                                "rights",
+                                "pre-master",
+                            )
+                        ],
+                        "watchReviews": [
+                            {
+                                "shortId": item["shortId"],
+                                "candidateHash": current_proofs[item["shortId"]][
+                                    "hash"
+                                ],
+                                "candidateIdentityHash": "d" * 64,
+                                "dependencyLockSha256": "e" * 64,
+                                "evidenceBundleSha256": "f" * 64,
+                                "proofRevision": item["proofRevision"],
+                                "reference": f"watch://{item['shortId']}/proof-v{item['proofRevision']:03d}",
+                            }
+                            for item in status["items"]
+                        ],
                     }
-                    for gate in ("batch-plan", "motion-proof", "picture-lock", "rights", "pre-master")
-                ],
-                "watchReviews": [
-                    {
-                        "shortId": item["shortId"],
-                        "candidateHash": current_proofs[item["shortId"]]["hash"],
-                        "candidateIdentityHash": "d" * 64,
-                        "dependencyLockSha256": "e" * 64,
-                        "evidenceBundleSha256": "f" * 64,
-                        "proofRevision": item["proofRevision"],
-                        "reference": f"watch://{item['shortId']}/proof-v{item['proofRevision']:03d}",
-                    }
-                    for item in status["items"]
-                ],
-            }), encoding="utf-8")
+                ),
+                encoding="utf-8",
+            )
 
             def fake_transcript(master: Path, edit_dir: Path) -> dict[str, Path]:
                 edit_dir.mkdir(parents=True, exist_ok=True)
@@ -320,11 +385,16 @@ class ShortsPlanningIntegrationTests(unittest.TestCase):
                 fake_transcript,
             ):
                 self.assertEqual(
-                    shorts.main([
-                        "promote", str(plan_path),
-                        "--approval-manifest", str(manifest_path),
-                        "--delivery-dir", str(root / "delivery"),
-                    ]),
+                    shorts.main(
+                        [
+                            "promote",
+                            str(plan_path),
+                            "--approval-manifest",
+                            str(manifest_path),
+                            "--delivery-dir",
+                            str(root / "delivery"),
+                        ]
+                    ),
                     shorts.EXIT_OK,
                 )
             self.assertTrue((root / "delivery" / "delivery-manifest.json").is_file())

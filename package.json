@@ -1,6 +1,6 @@
 {
   "name": "avo",
-  "version": "1.7.0",
+  "version": "1.8.0",
   "description": "Edit less, create more — local-first AI video orchestrator. Talk to your agent, drop in footage, mass-produce YouTube-ready videos per channel.",
   "private": true,
   "type": "module",
@@ -16,6 +16,18 @@
     "validate:usability": "uv run --frozen python -m avo.validate_usability",
     "test:unit": "uv run --frozen --extra dev pytest -s --ignore=tests/projects -m \"not project\"",
     "test:projects": "uv run --frozen --extra dev pytest -s tests/projects",
+    "test:coverage": "uv run --frozen --extra dev pytest -s --ignore=tests/projects -m \"not project\" --cov=avo --cov-report=term-missing --cov-fail-under=68",
+    "quality": "npm run quality:lint && npm run quality:format && npm run test:coverage && npm run quality:complexity && npm run quality:deps && npm run quality:deadcode && npm run quality:duplication && npm run quality:architecture && npm run quality:tree",
+    "quality:lint": "uv run --frozen --extra dev ruff check src/avo tests helpers && eslint .",
+    "quality:format": "uv run --frozen --extra dev ruff format --check src/avo tests helpers && prettier --check .",
+    "quality:deps": "uv run --frozen --extra dev pip-audit --skip-editable && uv run --frozen --extra dev python scripts/ci/check_npm_audit.py",
+    "quality:complexity": "uv run --frozen --extra dev python scripts/ci/check_complexity.py",
+    "quality:deadcode": "uv run --frozen --extra dev python scripts/ci/check_deadcode.py",
+    "quality:duplication": "jscpd --config .jscpd.json",
+    "quality:architecture": "uv run --frozen --extra dev lint-imports --config .importlinter",
+    "quality:mutation": "bash scripts/ci/quality-mutation.sh",
+    "quality:tree": "npm find-dupes --ignore-scripts --no-audit --no-fund",
+    "quality:dep-graph": "bash scripts/ci/run-dep-graph.sh",
     "hf": "hyperframes",
     "hf:doctor": "hyperframes doctor",
     "hf:skills": "hyperframes skills",
@@ -32,23 +44,41 @@
     "release:dry-run": "semantic-release --dry-run"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@semantic-release/changelog": "^6.0.3",
     "@semantic-release/commit-analyzer": "^13.0.1",
     "@semantic-release/git": "^10.0.1",
     "@semantic-release/github": "^12.0.6",
-    "@semantic-release/npm": "^13.1.5",
     "@semantic-release/release-notes-generator": "^14.1.0",
     "cross-env": "^7.0.3",
+    "eslint": "^10.5.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-import-resolver-node": "^0.4.0",
+    "eslint-plugin-import-x": "^4.16.2",
+    "eslint-plugin-prettier": "^5.5.6",
+    "eslint-plugin-sonarjs": "^4.1.0",
     "ffmpeg-static": "^5.3.0",
     "ffprobe-static": "^3.1.0",
+    "globals": "^16.0.0",
     "gsap": "^3.14.2",
-    "hyperframes": "^0.7.69",
+    "hyperframes": "^0.7.109",
+    "jscpd": "^4.0.5",
+    "prettier": "^3.8.4",
     "rimraf": "^6.0.0",
     "semantic-release": "^25.0.3",
-    "shx": "^0.3.4"
+    "shx": "^0.3.4",
+    "typescript": "^5.8.0",
+    "typescript-eslint": "^8.61.1",
+    "@semantic-release/npm": "file:scripts/ci/semantic-release-npm-stub"
   },
   "dependencies": {
     "sharp": "^0.35.3"
+  },
+  "overrides": {
+    "brace-expansion": "5.0.9",
+    "ip-address": "10.5.0",
+    "nanoid": "3.3.18",
+    "@semantic-release/npm": "file:scripts/ci/semantic-release-npm-stub"
   },
   "bin": {
     "avo-install": "bin/install.cjs"

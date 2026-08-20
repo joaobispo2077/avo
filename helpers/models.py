@@ -7,7 +7,7 @@ warnings.warn(
     stacklevel=2,
 )
 from avo import models as _avo_models
-from avo.models import *  # noqa: F403
+from avo.models import *
 
 # Private helpers kept for existing test patches (task 2.5 will migrate mocks).
 _hardware_tier = _avo_models._hardware_tier

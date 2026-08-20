@@ -1,4 +1,5 @@
 """Characterize timeline capabilities that have or lack production callers."""
+
 from __future__ import annotations
 
 import ast
@@ -21,18 +22,52 @@ class Capability:
 
 CAPABILITIES = (
     Capability("artifact-store", "src/avo/timeline/store.py", ("ArtifactStore",), True),
-    Capability("lifecycle-policy", "src/avo/timeline/lifecycle.py", ("transition",), True),
-    Capability("sync-policy", "src/avo/timeline/sync.py", ("validate_sync_snapshot",), True),
-    Capability("cmap-policy", "src/avo/timeline/lineage.py", ("create_cmap_revision",), True),
-    Capability("projection-policy", "src/avo/timeline/projection.py", ("project_cmap_to_edl",), True),
-    Capability("tracks-policy", "src/avo/timeline/tracks.py", ("resolve_tracks",), True),
+    Capability(
+        "lifecycle-policy", "src/avo/timeline/lifecycle.py", ("transition",), True
+    ),
+    Capability(
+        "sync-policy", "src/avo/timeline/sync.py", ("validate_sync_snapshot",), True
+    ),
+    Capability(
+        "cmap-policy", "src/avo/timeline/lineage.py", ("create_cmap_revision",), True
+    ),
+    Capability(
+        "projection-policy",
+        "src/avo/timeline/projection.py",
+        ("project_cmap_to_edl",),
+        True,
+    ),
+    Capability(
+        "tracks-policy", "src/avo/timeline/tracks.py", ("resolve_tracks",), True
+    ),
     Capability("review-policy", "src/avo/timeline/review.py", ("evaluate_gate",), True),
-    Capability("watch-adapter", "src/avo/adapters/understand/watch_skill.py", ("WatchSkillAdapter",), True),
-    Capability("workspace-service", "src/avo/timeline/workspace.py", ("TimelineWorkspace",), True),
-    Capability("sync-service", "src/avo/timeline/sync_service.py", ("SyncService",), True),
-    Capability("cmap-service", "src/avo/timeline/cmap_service.py", ("CMapService",), True),
-    Capability("review-runner", "src/avo/timeline/review_runner.py", ("ReviewRunner",), True),
-    Capability("pipeline-coordinator", "src/avo/timeline/pipeline.py", ("TimelinePipeline",), True),
+    Capability(
+        "watch-adapter",
+        "src/avo/adapters/understand/watch_skill.py",
+        ("WatchSkillAdapter",),
+        True,
+    ),
+    Capability(
+        "workspace-service",
+        "src/avo/timeline/workspace.py",
+        ("TimelineWorkspace",),
+        True,
+    ),
+    Capability(
+        "sync-service", "src/avo/timeline/sync_service.py", ("SyncService",), True
+    ),
+    Capability(
+        "cmap-service", "src/avo/timeline/cmap_service.py", ("CMapService",), True
+    ),
+    Capability(
+        "review-runner", "src/avo/timeline/review_runner.py", ("ReviewRunner",), True
+    ),
+    Capability(
+        "pipeline-coordinator",
+        "src/avo/timeline/pipeline.py",
+        ("TimelinePipeline",),
+        True,
+    ),
 )
 
 

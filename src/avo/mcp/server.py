@@ -11,6 +11,7 @@ Client capabilities declared at initialize (elicitation / sampling / roots)
 flow through MCP ``Context.client_capabilities`` into MRTR gating for
 destructive tools — see :mod:`avo.mcp.mrtr`.
 """
+
 from __future__ import annotations
 
 import sys

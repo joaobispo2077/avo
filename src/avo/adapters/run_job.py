@@ -12,7 +12,9 @@ from avo.paths import repo_root
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Run an AVO job through the port/adapter layer")
+    parser = argparse.ArgumentParser(
+        description="Run an AVO job through the port/adapter layer"
+    )
     parser.add_argument("job", help="Job id from avo.config.json (e.g. transcribe)")
     parser.add_argument(
         "--label",

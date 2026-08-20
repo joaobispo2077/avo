@@ -12,7 +12,9 @@ except ImportError:
 
 
 ROOT = Path(__file__).resolve().parents[2]
-SCHEMA_PATH = ROOT / "specs/003-switch-comparison-video/contracts/motion-brief.schema.json"
+SCHEMA_PATH = (
+    ROOT / "specs/003-switch-comparison-video/contracts/motion-brief.schema.json"
+)
 CATEGORIES = [
     "price",
     "value",
@@ -30,7 +32,9 @@ CATEGORIES = [
 
 
 def brief(category: str) -> dict:
-    sfx_cue = "cash_register_money" if category in {"price", "value"} else "switch_ui_chime"
+    sfx_cue = (
+        "cash_register_money" if category in {"price", "value"} else "switch_ui_chime"
+    )
     return {
         "id": f"slot-{category.replace('_', '-')}",
         "revision_strategy": "rebuilt_v004",
@@ -39,11 +43,15 @@ def brief(category: str) -> dict:
         "message": "Compare este ponto com clareza",
         "source_basis": {"type": "story_map", "reference": "story-map.md"},
         "output_window": {"start": 10.0, "duration": 2.5},
-        "hold_policy": "extended_price_hold" if category in {"price", "value"} else "normal_readable",
+        "hold_policy": "extended_price_hold"
+        if category in {"price", "value"}
+        else "normal_readable",
         "safe_area": "center-safe",
         "visual_treatment": "quiet comparison card",
         "motion_lifecycle": "enter, hold, exit",
-        "sfx_policy": "cash_themed_original" if category in {"price", "value"} else "switch_ui_inspired_original",
+        "sfx_policy": "cash_themed_original"
+        if category in {"price", "value"}
+        else "switch_ui_inspired_original",
         "sfx_cue": sfx_cue,
         "sfx_gain_db": -20,
         "visual_subtitles": False,

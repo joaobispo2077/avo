@@ -22,7 +22,7 @@ MASTER_BASENAME = "20260801-demo-master-v001"
 
 sys.path.insert(0, str(SRC))
 
-from avo import project_inventory  # noqa: E402
+from avo import project_inventory
 
 
 class ProjectInventoryTests(unittest.TestCase):
@@ -32,7 +32,9 @@ class ProjectInventoryTests(unittest.TestCase):
 
     def test_resolve_preserved_set_fixture(self) -> None:
         preserved = project_inventory.resolve_preserved_set(self.raw_dir, self.master)
-        self.assertTrue(any(path.name == "source.mp4" for path in preserved.raw_sources))
+        self.assertTrue(
+            any(path.name == "source.mp4" for path in preserved.raw_sources)
+        )
         self.assertIsNotNone(preserved.initial_transcript)
         assert preserved.initial_transcript is not None
         self.assertEqual(preserved.initial_transcript.name, "initial-whisper.json")
@@ -55,18 +57,56 @@ class ProjectInventoryTests(unittest.TestCase):
     def test_preserved_never_in_delete_list(self) -> None:
         preserved = project_inventory.resolve_preserved_set(self.raw_dir, self.master)
         delete_list = project_inventory.list_delete_candidates(self.raw_dir, preserved)
-        preserved_resolved = {
-            str(path.resolve()) for path in preserved.all_paths
-        }
+        preserved_resolved = {str(path.resolve()) for path in preserved.all_paths}
         delete_resolved = {str(path.resolve()) for path in delete_list}
         self.assertFalse(preserved_resolved & delete_resolved)
         rel_paths = {
-            project_inventory._relative_posix(self.raw_dir, path) for path in delete_list
+            project_inventory._relative_posix(self.raw_dir, path)
+            for path in delete_list
         }
         self.assertIn("edit/preview/edit-proof.mp4", rel_paths)
         self.assertIn("edit/clips_graded/intermediate.mov", rel_paths)
         self.assertNotIn(f"edit/masters/{self.master}.mp4", rel_paths)
         self.assertNotIn("edit/transcripts/initial-whisper.json", rel_paths)
+
+    def test_delete_candidates_skip_inaccessible_paths(self) -> None:
+        preserved = project_inventory.resolve_preserved_set(self.raw_dir, self.master)
+        original_is_file = Path.is_file
+
+        def fake_is_file(self: Path) -> bool:
+            if self.name == "edit-proof.mp4":
+                raise OSError(1920, "unavailable")
+            return original_is_file(self)
+
+        with mock.patch.object(Path, "is_file", fake_is_file):
+            delete_list, leftover = project_inventory.scan_delete_candidates(
+                self.raw_dir, preserved
+            )
+        rel_paths = {
+            project_inventory._relative_posix(self.raw_dir, path)
+            for path in delete_list
+        }
+        self.assertNotIn("edit/preview/edit-proof.mp4", rel_paths)
+        self.assertIn("edit/clips_graded/intermediate.mov", rel_paths)
+        self.assertGreaterEqual(leftover, 1)
+
+    def test_execute_counts_leftover_when_unlink_skipped(self) -> None:
+        def skip_proof(path: Path) -> None:
+            if path.name == "edit-proof.mp4":
+                return
+            if path.is_file():
+                path.unlink()
+
+        with self._temp_project(include_edit=True) as raw_dir:
+            outcome = project_inventory.run_cleanup(
+                raw_dir,
+                self.master,
+                dry_run=False,
+                rimraf_runner=skip_proof,
+                purge_session=False,
+            )
+            self.assertTrue((raw_dir / "edit" / "preview" / "edit-proof.mp4").is_file())
+            self.assertGreaterEqual(outcome.leftover, 1)
 
     def test_assert_no_preserved_in_delete_list_raises(self) -> None:
         preserved = project_inventory.resolve_preserved_set(self.raw_dir, self.master)
@@ -109,7 +149,10 @@ class ProjectInventoryTests(unittest.TestCase):
         self.assertFalse(report.degraded_mode)
         assert report.file_diff is not None
         self.assertTrue(
-            any(entry.path == "edit/clips_graded/intermediate.mov" for entry in report.file_diff.added)
+            any(
+                entry.path == "edit/clips_graded/intermediate.mov"
+                for entry in report.file_diff.added
+            )
         )
 
     def test_empty_edit_dir_delete_list(self) -> None:
@@ -138,8 +181,75 @@ class ProjectInventoryTests(unittest.TestCase):
         )
         self.assertEqual(proc.returncode, 0, msg=proc.stderr)
         payload = json.loads(proc.stdout)
+        self.assertEqual(payload["status"], "dry-run")
+        self.assertNotIn("deleteCandidates", payload)
+        self.assertIn("candidateCount", payload)
+        self.assertGreaterEqual(payload["candidateCount"], 1)
+        self.assertIn("edit/preview/edit-proof.mp4", payload["candidateSample"])
+
+    def test_delete_list_cli_json_full_paths(self) -> None:
+        proc = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "avo.project_inventory",
+                "delete-list",
+                "--raw-dir",
+                str(self.raw_dir),
+                "--master-basename",
+                self.master,
+                "--json",
+                "--full-paths",
+            ],
+            cwd=ROOT,
+            env={**os.environ, "PYTHONPATH": str(SRC)},
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(proc.returncode, 0, msg=proc.stderr)
+        payload = json.loads(proc.stdout)
         self.assertIn("deleteCandidates", payload)
         self.assertIn("edit/preview/edit-proof.mp4", payload["deleteCandidates"])
+
+    def test_report_json_compact_scratch_keeps_full_list(self) -> None:
+        from io import StringIO
+
+        from avo import scratch
+        from avo.project_inventory import main as inventory_main
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            buf = StringIO()
+            with (
+                mock.patch.object(scratch, "tmp_dir", return_value=root),
+                mock.patch("sys.stdout", buf),
+            ):
+                code = inventory_main(
+                    [
+                        "report",
+                        "--raw-dir",
+                        str(self.raw_dir),
+                        "--master-basename",
+                        self.master,
+                        "--json",
+                        "--scratch-out",
+                        "--session-id",
+                        "sess-report",
+                    ]
+                )
+            self.assertEqual(code, 0)
+            start = buf.getvalue().find("{")
+            payload = json.loads(buf.getvalue()[start:])
+            self.assertIn("candidateCount", payload)
+            self.assertNotIn("deleteCandidates", payload)
+            report_path = root / "learndown" / "sess-report" / "inventory.report.json"
+            self.assertTrue(report_path.is_file())
+            full = json.loads(report_path.read_text(encoding="utf-8"))
+            scheduled = [
+                entry["path"] for entry in full["files"]["scheduledForDeletion"]
+            ]
+            self.assertIn("edit/preview/edit-proof.mp4", scheduled)
+            self.assertEqual(len(scheduled), payload["candidateCount"])
 
     def test_cleanup_dry_run_lists_only(self) -> None:
         proc = subprocess.run(
@@ -181,7 +291,9 @@ class ProjectInventoryTests(unittest.TestCase):
             )
             self.assertEqual(len(deleted), 2)
             self.assertFalse((raw_dir / "edit" / "preview" / "edit-proof.mp4").exists())
-            self.assertFalse((raw_dir / "edit" / "clips_graded" / "intermediate.mov").exists())
+            self.assertFalse(
+                (raw_dir / "edit" / "clips_graded" / "intermediate.mov").exists()
+            )
             self.assertTrue(
                 (raw_dir / "edit" / "masters" / f"{self.master}.mp4").exists()
             )
@@ -289,8 +401,115 @@ class ProjectInventoryTests(unittest.TestCase):
                         )
                     self.assertTrue(marker.is_file())
 
+    def test_legacy_reconstruction_dry_run_writes_nothing(self) -> None:
+        with self._temp_project(include_edit=True) as raw_dir:
+            self._add_legacy_sources(raw_dir)
+            dest = raw_dir / "edit" / "review" / "legacy-reconstruction"
+            dests = project_inventory.promote_legacy_reconstruction(
+                raw_dir, apply=False
+            )
+            self.assertTrue(dests)
+            self.assertFalse(dest.exists())
+            self.assertFalse((raw_dir / "EDITLOG.md").exists())
+            deleted = project_inventory.execute_cleanup(
+                raw_dir, self.master, dry_run=True
+            )
+            self.assertFalse(dest.exists())
+            rel = {project_inventory._relative_posix(raw_dir, path) for path in deleted}
+            self.assertIn("edit/preview/edit-proof.mp4", rel)
+
+    def test_legacy_reconstruction_execute_preserves_content(self) -> None:
+        with self._temp_project(include_edit=True) as raw_dir:
+            edl_text, log_text = self._add_legacy_sources(raw_dir)
+            project_inventory.execute_cleanup(
+                raw_dir,
+                self.master,
+                dry_run=False,
+                rimraf_runner=lambda path: path.unlink() if path.is_file() else None,
+            )
+            copied_edl = (
+                raw_dir / "edit" / "review" / "legacy-reconstruction" / "edl.json"
+            )
+            self.assertTrue(copied_edl.is_file())
+            self.assertEqual(copied_edl.read_text(encoding="utf-8"), edl_text)
+            self.assertTrue((raw_dir / "EDITLOG.md").is_file())
+            self.assertEqual(
+                (raw_dir / "EDITLOG.md").read_text(encoding="utf-8"), log_text
+            )
+            self.assertFalse((raw_dir / "edit" / "preview" / "edit-proof.mp4").exists())
+
+    def test_promote_legacy_skips_when_canonical_indexes_exist(self) -> None:
+        with self._temp_project(include_edit=True) as raw_dir:
+            self._add_legacy_sources(raw_dir)
+            timeline = raw_dir / "edit" / "timeline"
+            timeline.mkdir(parents=True)
+            for name in project_inventory.CANONICAL_INDEX_NAMES:
+                (timeline / f"{name}.json").write_text("{}", encoding="utf-8")
+            dests = project_inventory.promote_legacy_reconstruction(raw_dir, apply=True)
+            self.assertEqual(dests, [])
+            self.assertFalse(
+                (raw_dir / "edit" / "review" / "legacy-reconstruction").exists()
+            )
+
+    def test_canonical_cleanup_does_not_list_or_delete_root_editlog(self) -> None:
+        with self._temp_project(include_edit=True) as raw_dir:
+            root_text = self._add_canonical_indexes_and_root_editlog(raw_dir)
+            root_log = raw_dir / "EDITLOG.md"
+            preserved = project_inventory.resolve_preserved_set(raw_dir, self.master)
+            raw_resolved = {str(path.resolve()) for path in preserved.raw_sources}
+            self.assertNotIn(str(root_log.resolve()), raw_resolved)
+            meta_rel = {
+                project_inventory._relative_posix(raw_dir, path)
+                for path in preserved.reconstruction_metadata
+            }
+            self.assertIn("EDITLOG.md", meta_rel)
+
+            delete_list = project_inventory.list_delete_candidates(raw_dir, preserved)
+            rel_delete = {
+                project_inventory._relative_posix(raw_dir, path) for path in delete_list
+            }
+            self.assertNotIn("EDITLOG.md", rel_delete)
+            self.assertIn("edit/EDITLOG.md", rel_delete)
+
+            with mock.patch(
+                "avo.timeline.reconstruction.verify_reconstruction_bundle",
+                return_value={"files": []},
+            ):
+                project_inventory.execute_cleanup(
+                    raw_dir,
+                    self.master,
+                    dry_run=False,
+                    rimraf_runner=lambda path: (
+                        path.unlink() if path.is_file() else None
+                    ),
+                )
+            self.assertTrue(root_log.is_file())
+            self.assertEqual(root_log.read_text(encoding="utf-8"), root_text)
+            self.assertFalse((raw_dir / "edit" / "EDITLOG.md").exists())
+
+    def _add_canonical_indexes_and_root_editlog(self, raw_dir: Path) -> str:
+        timeline = raw_dir / "edit" / "timeline"
+        timeline.mkdir(parents=True, exist_ok=True)
+        for name in project_inventory.CANONICAL_INDEX_NAMES:
+            (timeline / f"{name}.json").write_text("{}", encoding="utf-8")
+        root_text = "# EDITLOG\nLiving footage-root audit.\n"
+        (raw_dir / "EDITLOG.md").write_text(root_text, encoding="utf-8")
+        (raw_dir / "edit" / "EDITLOG.md").write_text(
+            "# Migrated edit copy.\n", encoding="utf-8"
+        )
+        return root_text
+
+    def _add_legacy_sources(self, raw_dir: Path) -> tuple[str, str]:
+        edl_text = '{"events":[{"id":"cut-1"}]}'
+        log_text = "# Edit log\nKept decision.\n"
+        (raw_dir / "edit" / "edl.json").write_text(edl_text, encoding="utf-8")
+        (raw_dir / "edit" / "EDITLOG.md").write_text(log_text, encoding="utf-8")
+        return edl_text, log_text
+
     def test_scan_inventory_local_fallback(self) -> None:
-        inventory = project_inventory.scan_inventory(self.raw_dir, relative_to=self.raw_dir)
+        inventory = project_inventory.scan_inventory(
+            self.raw_dir, relative_to=self.raw_dir
+        )
         self.assertIn("source.mp4", inventory)
         self.assertIn("edit/preview/edit-proof.mp4", inventory)
 

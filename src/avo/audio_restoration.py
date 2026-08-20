@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any
+import itertools
 
 ENGINE_DEFAULT_PCT = 35
 MAX_STRENGTH_PCT = 100
@@ -34,8 +34,8 @@ EQ_CHAIN = [
 ]
 
 
-def clamp_strength_pct(value: int | float) -> int:
-    return max(0, min(MAX_STRENGTH_PCT, int(round(value))))
+def clamp_strength_pct(value: float) -> int:
+    return max(0, min(MAX_STRENGTH_PCT, round(value)))
 
 
 def preset_to_pct(name: str) -> int | None:
@@ -68,7 +68,7 @@ def afftdn_params(strength_pct: int) -> tuple[float, float] | None:
         nr, nf = _AFFTDN_KNOTS[0][1], _AFFTDN_KNOTS[0][2]
         scale = pct / _AFFTDN_KNOTS[0][0]
         return nr * scale, nf
-    for (p0, nr0, nf0), (p1, nr1, nf1) in zip(_AFFTDN_KNOTS, _AFFTDN_KNOTS[1:]):
+    for (p0, nr0, nf0), (p1, nr1, nf1) in itertools.pairwise(_AFFTDN_KNOTS):
         if pct <= p1:
             if p1 == p0:
                 return nr1, nf1
@@ -157,7 +157,9 @@ def audio_repair_filter_for(
     if not restoration_enabled(edl, source_name):
         return ""
     if source_start is not None and source_end is not None:
-        pct = strength_for_source_range(edl, source_name, source_start, source_end, provider)
+        pct = strength_for_source_range(
+            edl, source_name, source_start, source_end, provider
+        )
     else:
         pct = resolve_default_pct(edl, provider)
     if pct <= 0:
@@ -199,9 +201,13 @@ def validate_restoration_segments(audio: dict) -> list[str]:
         except (KeyError, TypeError, ValueError):
             continue
         if end <= start:
-            errors.append(f"audio.restoration_segments[{index}] end must be after start")
+            errors.append(
+                f"audio.restoration_segments[{index}] end must be after start"
+            )
         if pct < 0 or pct > MAX_STRENGTH_PCT:
-            errors.append(f"audio.restoration_segments[{index}].strength_pct out of range")
+            errors.append(
+                f"audio.restoration_segments[{index}].strength_pct out of range"
+            )
         if pct > 50 and not seg.get("approved_by_user"):
             errors.append(
                 f"audio.restoration_segments[{index}] above 50% requires approved_by_user"
@@ -211,7 +217,5 @@ def validate_restoration_segments(audio: dict) -> list[str]:
     for i, (s0, e0, idx0) in enumerate(parsed):
         for s1, e1, idx1 in parsed[i + 1 :]:
             if _ranges_overlap(s0, e0, s1, e1):
-                errors.append(
-                    f"audio.restoration_segments[{idx0}] overlaps [{idx1}]"
-                )
+                errors.append(f"audio.restoration_segments[{idx0}] overlaps [{idx1}]")
     return errors

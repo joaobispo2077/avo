@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
+import itertools
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Any
 
 import numpy as np
 
-from avo import audio_analysis
-from avo import audio_restoration
+from avo import audio_analysis, audio_restoration
 
 ENGINE_DEFAULT_BOOST_PCT = 0
 MAX_BOOST_PCT = 100
@@ -23,7 +22,7 @@ PRESET_LABELS: dict[str, int] = {
     "strong": 60,
 }
 
-# boost_pct -> dB (cap +6 dB unless approved segment exceeds via explicit pct)
+# boost_pct -> dB (hard cap MAX_BOOST_DB; approval gates higher pct at call sites)
 _BOOST_KNOTS: list[tuple[int, float]] = [
     (15, 1.5),
     (25, 2.5),
@@ -48,8 +47,8 @@ class GainSuggestion:
         return asdict(self)
 
 
-def clamp_boost_pct(value: int | float) -> int:
-    return max(0, min(MAX_BOOST_PCT, int(round(value))))
+def clamp_boost_pct(value: float) -> int:
+    return max(0, min(MAX_BOOST_PCT, round(value)))
 
 
 def boost_db_from_pct(boost_pct: int, *, approved: bool = False) -> float:
@@ -60,7 +59,7 @@ def boost_db_from_pct(boost_pct: int, *, approved: bool = False) -> float:
         db = _BOOST_KNOTS[0][1] * (pct / _BOOST_KNOTS[0][0])
     else:
         db = _BOOST_KNOTS[-1][1]
-        for (p0, d0), (p1, d1) in zip(_BOOST_KNOTS, _BOOST_KNOTS[1:]):
+        for (p0, d0), (p1, d1) in itertools.pairwise(_BOOST_KNOTS):
             if pct <= p1:
                 if p1 == p0:
                     db = d1
@@ -68,8 +67,7 @@ def boost_db_from_pct(boost_pct: int, *, approved: bool = False) -> float:
                     t = (pct - p0) / (p1 - p0)
                     db = d0 + t * (d1 - d0)
                 break
-    cap = MAX_BOOST_DB if approved or pct <= APPROVAL_THRESHOLD_PCT else MAX_BOOST_DB
-    return min(db, cap)
+    return min(db, MAX_BOOST_DB)
 
 
 def volume_filter(boost_pct: int, *, approved: bool = False) -> str:
@@ -92,8 +90,7 @@ def suggested_boost_pct_from_score(score: float) -> int:
 
 
 def _quiet_score(word_rms: float, reference_rms: float) -> float:
-    if reference_rms <= 1e-9:
-        reference_rms = 1e-9
+    reference_rms = max(1e-9, reference_rms)
     ratio = word_rms / reference_rms
     return min(1.0, max(0.0, (0.85 - ratio) / 0.55))
 
@@ -138,7 +135,7 @@ def suggest_gain_from_transcript(
         if we <= ws:
             continue
         chunk = pcm[ws:we]
-        rms = float(np.sqrt(np.mean(chunk ** 2)))
+        rms = float(np.sqrt(np.mean(chunk**2)))
         speech_rms_samples.append(rms)
         word_rms_values.append((float(w["start"]), float(w["end"]), rms))
 
@@ -181,9 +178,12 @@ def suggest_gain(
 
 def gain_enabled(edl: dict, source_name: str) -> bool:
     audio = edl.get("audio") or {}
-    if audio.get("gain_policy") != "level_match_speech":
-        if not audio.get("gain_segments") and not audio.get("gain_default_pct"):
-            return False
+    if (
+        audio.get("gain_policy") != "level_match_speech"
+        and not audio.get("gain_segments")
+        and not audio.get("gain_default_pct")
+    ):
+        return False
     return str(source_name).startswith("main")
 
 
@@ -213,7 +213,9 @@ def boost_for_source_range(
     for seg in audio.get("gain_segments") or []:
         seg_start = float(seg["start_in_source"])
         seg_end = float(seg["end_in_source"])
-        if audio_restoration._ranges_overlap(source_start, source_end, seg_start, seg_end):
+        if audio_restoration._ranges_overlap(
+            source_start, source_end, seg_start, seg_end
+        ):
             pct = clamp_boost_pct(seg["boost_pct"])
             if pct >= boost:
                 boost = pct
@@ -235,7 +237,9 @@ def gain_filter_for(
     if not gain_enabled(edl, source_name):
         return ""
     if source_start is not None and source_end is not None:
-        pct, approved = boost_for_source_range(edl, source_name, source_start, source_end, provider)
+        pct, approved = boost_for_source_range(
+            edl, source_name, source_start, source_end, provider
+        )
     else:
         pct = resolve_default_boost_pct(edl, provider)
         approved = pct <= APPROVAL_THRESHOLD_PCT

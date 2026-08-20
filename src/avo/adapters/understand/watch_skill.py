@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import json
 import os
-from pathlib import Path
 import re
 import shutil
 import subprocess
+from pathlib import Path
 from typing import Any
 
 from avo.adapters.base import JobRequest, JobResult
@@ -64,7 +64,9 @@ def _bundled_executable() -> str | None:
 
 
 def _extract_json_object(text: str) -> dict[str, Any]:
-    candidates = re.findall(r"```(?:json)?\s*(\{.*?\})\s*```", text, flags=re.DOTALL | re.IGNORECASE)
+    candidates = re.findall(
+        r"```(?:json)?\s*(\{.*?\})\s*```", text, flags=re.DOTALL | re.IGNORECASE
+    )
     candidates.extend(text[index:] for index, char in enumerate(text) if char == "{")
     decoder = json.JSONDecoder()
     for candidate in candidates:
@@ -120,11 +122,19 @@ class WatchSkillAdapter:
         )
 
     def tool_version(self) -> str:
-        result = self.run(JobRequest(
-            job="understand", label="Watch version", argv=["version"],
-            root=_repository_root(),
-        ))
-        return result.stdout.strip().splitlines()[0] if result.exit_code == 0 and result.stdout.strip() else "unknown"
+        result = self.run(
+            JobRequest(
+                job="understand",
+                label="Watch version",
+                argv=["version"],
+                root=_repository_root(),
+            )
+        )
+        return (
+            result.stdout.strip().splitlines()[0]
+            if result.exit_code == 0 and result.stdout.strip()
+            else "unknown"
+        )
 
     @staticmethod
     def _tool_error(result: JobResult, phase: str) -> ToolError:
@@ -160,18 +170,36 @@ class WatchSkillAdapter:
             f"Collect evidence for the exact {checkpoint} candidate: visual continuity, "
             "lip sync, cut edges, face/overlay conflicts, text readability, privacy, and meaning."
         )
-        argv = ["watch", str(candidate), question, "--out-dir", str(artifact_dir), "--index"]
+        argv = [
+            "watch",
+            str(candidate),
+            question,
+            "--out-dir",
+            str(artifact_dir),
+            "--index",
+        ]
         timestamps: list[float] = []
         for window in windows:
-            timestamps.extend([
-                float(window["start"]),
-                (float(window["start"]) + float(window["end"])) / 2,
-                float(window["end"]),
-            ])
+            timestamps.extend(
+                [
+                    float(window["start"]),
+                    (float(window["start"]) + float(window["end"])) / 2,
+                    float(window["end"]),
+                ]
+            )
         if timestamps:
-            argv.extend(["--timestamps", ",".join(f"{value:.3f}" for value in sorted(set(timestamps)))])
+            argv.extend(
+                [
+                    "--timestamps",
+                    ",".join(f"{value:.3f}" for value in sorted(set(timestamps))),
+                ]
+            )
         root = Path(request.get("root") or candidate.parent)
-        watched = self.run(JobRequest(job="understand", label=f"Watch {candidate.name}", argv=argv, root=root))
+        watched = self.run(
+            JobRequest(
+                job="understand", label=f"Watch {candidate.name}", argv=argv, root=root
+            )
+        )
         if watched.exit_code != 0:
             raise self._tool_error(watched, "acquisition")
         match = re.search(r"video_id\s+`([^`]+)`", watched.stdout)
@@ -186,13 +214,15 @@ class WatchSkillAdapter:
         analysis_contract = {
             "status": "pass|fail|needs-human-judgment",
             "confidence": "number 0..1",
-            "findings": [{
-                "classification": "technical|meaning|rights|privacy|policy|safety",
-                "severity": "info|warning|blocker",
-                "message": "specific observation",
-                "start": "seconds or null",
-                "end": "seconds or null",
-            }],
+            "findings": [
+                {
+                    "classification": "technical|meaning|rights|privacy|policy|safety",
+                    "severity": "info|warning|blocker",
+                    "message": "specific observation",
+                    "start": "seconds or null",
+                    "end": "seconds or null",
+                }
+            ],
         }
         prompt = (
             f"Review video evidence for checkpoint {checkpoint}. Required scope={scope}; "
@@ -202,12 +232,14 @@ class WatchSkillAdapter:
             "Use pass only when no blocker exists. Never invent unseen evidence; use "
             "needs-human-judgment for meaning, rights, privacy, policy, or safety ambiguity."
         )
-        analyzed = self.run(JobRequest(
-            job="understand",
-            label=f"Analyze {candidate.name}",
-            argv=["ask", video_id, prompt, "--frames", "--no-cache"],
-            root=root,
-        ))
+        analyzed = self.run(
+            JobRequest(
+                job="understand",
+                label=f"Analyze {candidate.name}",
+                argv=["ask", video_id, prompt, "--frames", "--no-cache"],
+                root=root,
+            )
+        )
         if analyzed.exit_code != 0:
             raise self._tool_error(analyzed, "analysis")
         try:
@@ -228,7 +260,9 @@ class WatchSkillAdapter:
                 "retry the exact candidate with the structured-output contract",
             )
         findings = analysis.get("findings")
-        if not isinstance(findings, list) or not all(isinstance(item, dict) for item in findings):
+        if not isinstance(findings, list) or not all(
+            isinstance(item, dict) for item in findings
+        ):
             raise ToolError(
                 "WATCH_MALFORMED",
                 "Watch analysis findings must be a list of objects",
@@ -244,7 +278,10 @@ class WatchSkillAdapter:
             "status": status,
             "checkpoint": checkpoint,
             "candidate": str(candidate),
-            "coverage": {"mode": "full" if scope in {"full", "whole"} else "windows", "windows": windows},
+            "coverage": {
+                "mode": "full" if scope in {"full", "whole"} else "windows",
+                "windows": windows,
+            },
             "findings": findings,
             "confidence": analysis.get("confidence"),
             "tool": "watch-skill",
@@ -261,7 +298,12 @@ class WatchSkillAdapter:
         return {
             **payload,
             "artifacts": [
-                str(report_path), str(analysis_path), str(evidence_path),
-                *[str(path) for path in watched.artifact_paths + analyzed.artifact_paths],
+                str(report_path),
+                str(analysis_path),
+                str(evidence_path),
+                *[
+                    str(path)
+                    for path in watched.artifact_paths + analyzed.artifact_paths
+                ],
             ],
         }

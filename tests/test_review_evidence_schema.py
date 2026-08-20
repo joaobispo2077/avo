@@ -22,14 +22,16 @@ def valid_manifest() -> dict:
         "dependencyLockSha256": "e" * 64,
         "changeSummary": {
             "headline": "CMap revision trims one idle pause",
-            "items": [{
-                "artifactType": "cmap",
-                "revisionId": "cmap-r0001",
-                "reason": "remove idle pause",
-                "operationCounts": {"replace": 1},
-                "targets": ["segment-one"],
-                "truncatedTargets": 0,
-            }],
+            "items": [
+                {
+                    "artifactType": "cmap",
+                    "revisionId": "cmap-r0001",
+                    "reason": "remove idle pause",
+                    "operationCounts": {"replace": 1},
+                    "targets": ["segment-one"],
+                    "truncatedTargets": 0,
+                }
+            ],
             "windows": [],
             "staleDependencies": [],
         },

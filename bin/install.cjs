@@ -19,20 +19,56 @@ const REPO = process.env.AVO_INSTALL_REPO || 'joaobispo2077/avo';
 const PINNED_REF = process.env.AVO_INSTALL_REF || 'main';
 
 const PROVIDERS = [
-  { id: 'cursor', label: 'Cursor', profile: 'cursor', skills: true, commands: true,
-    detect: ['command:cursor', 'macapp:Cursor', 'dir:~/.cursor'] },
-  { id: 'claude', label: 'Claude Code', profile: 'claude', skills: true,
-    detect: ['command:claude', 'dir:~/.claude'] },
-  { id: 'codex', label: 'Codex CLI', profile: 'codex', skills: true,
-    detect: ['command:codex'] },
-  { id: 'windsurf', label: 'Windsurf', profile: 'windsurf', skills: true,
-    detect: ['command:windsurf', 'macapp:Windsurf'] },
-  { id: 'cline', label: 'Cline', profile: 'cline', skills: true,
-    detect: ['vscode-ext:saoudrizwan.claude-dev', 'vscode-ext:cline'] },
-  { id: 'gemini', label: 'Gemini CLI', profile: 'gemini', skills: true,
-    detect: ['command:gemini'] },
-  { id: 'opencode', label: 'OpenCode', profile: 'opencode', skills: true,
-    detect: ['command:opencode'] },
+  {
+    id: 'cursor',
+    label: 'Cursor',
+    profile: 'cursor',
+    skills: true,
+    commands: true,
+    detect: ['command:cursor', 'macapp:Cursor', 'dir:~/.cursor'],
+  },
+  {
+    id: 'claude',
+    label: 'Claude Code',
+    profile: 'claude',
+    skills: true,
+    detect: ['command:claude', 'dir:~/.claude'],
+  },
+  {
+    id: 'codex',
+    label: 'Codex CLI',
+    profile: 'codex',
+    skills: true,
+    detect: ['command:codex'],
+  },
+  {
+    id: 'windsurf',
+    label: 'Windsurf',
+    profile: 'windsurf',
+    skills: true,
+    detect: ['command:windsurf', 'macapp:Windsurf'],
+  },
+  {
+    id: 'cline',
+    label: 'Cline',
+    profile: 'cline',
+    skills: true,
+    detect: ['vscode-ext:saoudrizwan.claude-dev', 'vscode-ext:cline'],
+  },
+  {
+    id: 'gemini',
+    label: 'Gemini CLI',
+    profile: 'gemini',
+    skills: true,
+    detect: ['command:gemini'],
+  },
+  {
+    id: 'opencode',
+    label: 'OpenCode',
+    profile: 'opencode',
+    skills: true,
+    detect: ['command:opencode'],
+  },
 ];
 
 function die(msg) {
@@ -47,6 +83,18 @@ function expandHome(p) {
   return p;
 }
 
+const BOOL_FLAGS = {
+  '--dry-run': 'dryRun',
+  '--full': 'full',
+  '--yes': 'yes',
+  '-y': 'yes',
+  '--list': 'listOnly',
+  '--uninstall': 'uninstall',
+  '-u': 'uninstall',
+  '-h': 'help',
+  '--help': 'help',
+};
+
 function parseArgs(argv) {
   const opts = {
     dryRun: false,
@@ -60,33 +108,34 @@ function parseArgs(argv) {
   };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
-    switch (a) {
-      case '--dry-run': opts.dryRun = true; break;
-      case '--full': opts.full = true; break;
-      case '--yes': case '-y': opts.yes = true; break;
-      case '--list': opts.listOnly = true; break;
-      case '--uninstall': case '-u': opts.uninstall = true; break;
-      case '-h': case '--help': opts.help = true; break;
-      case '--lang': opts.lang = argv[++i] || ''; break;
-      case '--only': {
-        const v = argv[++i];
-        if (!v) die('error: --only requires an agent id');
-        opts.only.push(v);
-        break;
-      }
-      case '--': break;
-      default:
-        die(`error: unknown flag: ${a}\nrun 'node bin/install.cjs --help'`);
+    if (a === '--') continue;
+    if (a === '--lang') {
+      opts.lang = argv[++i] || '';
+      continue;
     }
+    if (a === '--only') {
+      const v = argv[++i];
+      if (!v) die('error: --only requires an agent id');
+      opts.only.push(v);
+      continue;
+    }
+    const key = BOOL_FLAGS[a];
+    if (!key) {
+      die(`error: unknown flag: ${a}\nrun 'node bin/install.cjs --help'`);
+    }
+    opts[key] = true;
   }
   return opts;
 }
 
 function hasCommand(name) {
+  // Installer must probe PATH for agent CLIs (where / command -v).
   try {
     if (process.platform === 'win32') {
+      // eslint-disable-next-line sonarjs/no-os-command-from-path -- intentional PATH probe
       cp.execFileSync('where', [name], { stdio: 'ignore', shell: true });
     } else {
+      // eslint-disable-next-line sonarjs/no-os-command-from-path -- intentional PATH probe
       cp.execFileSync('sh', ['-c', `command -v ${name}`], { stdio: 'ignore' });
     }
     return true;
@@ -122,11 +171,16 @@ function hasVSCodeExt(fragment) {
 function probeDetect(rule) {
   const [kind, value] = rule.split(':');
   switch (kind) {
-    case 'command': return hasCommand(value);
-    case 'macapp': return hasMacApp(value);
-    case 'dir': return hasDir(value);
-    case 'vscode-ext': return hasVSCodeExt(value);
-    default: return false;
+    case 'command':
+      return hasCommand(value);
+    case 'macapp':
+      return hasMacApp(value);
+    case 'dir':
+      return hasDir(value);
+    case 'vscode-ext':
+      return hasVSCodeExt(value);
+    default:
+      return false;
   }
 }
 
@@ -136,7 +190,10 @@ function detectProvider(provider) {
 
 function repoRoot() {
   const here = path.dirname(path.dirname(__filename));
-  if (fs.existsSync(path.join(here, 'SKILL.md')) && fs.existsSync(path.join(here, 'bin', 'install.cjs'))) {
+  if (
+    fs.existsSync(path.join(here, 'SKILL.md')) &&
+    fs.existsSync(path.join(here, 'bin', 'install.cjs'))
+  ) {
     return here;
   }
   return null;
@@ -153,7 +210,10 @@ function run(cmd, args, opts = {}) {
     log(line, { dry: true });
     return { status: 0 };
   }
-  return cp.spawnSync(cmd, args, { stdio: 'inherit', shell: process.platform === 'win32' });
+  return cp.spawnSync(cmd, args, {
+    stdio: 'inherit',
+    shell: process.platform === 'win32',
+  });
 }
 
 function copyRecursive(src, dest, dryRun) {
@@ -273,7 +333,18 @@ function runFullSetup(opts) {
   if (opts.dryRun) args.push('--dry-run');
   if (isWin) {
     const shell = hasCommand('pwsh') ? 'pwsh' : 'powershell';
-    run(shell, ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', scriptPath, ...args], opts);
+    run(
+      shell,
+      [
+        '-NoProfile',
+        '-ExecutionPolicy',
+        'Bypass',
+        '-File',
+        scriptPath,
+        ...args,
+      ],
+      opts,
+    );
   } else {
     run('bash', [scriptPath, ...args], opts);
   }
@@ -306,15 +377,56 @@ Env:
 `);
 }
 
+function ensureNodeVersion() {
+  if (!hasCommand('node')) {
+    die('AVO: Node.js required (≥18). Install from https://nodejs.org');
+  }
+  const major = parseInt(process.versions.node.split('.')[0], 10);
+  if (major < 18) {
+    die(`AVO: Node ${process.versions.node} too old. Need ≥18.`);
+  }
+}
+
+/** @returns {typeof PROVIDERS | null} null when nothing to install */
+function resolveTargets(opts) {
+  if (opts.only.length) {
+    const targets = PROVIDERS.filter((p) => opts.only.includes(p.id));
+    if (!targets.length) {
+      die(`error: unknown agent(s): ${opts.only.join(', ')}\nuse --list`);
+    }
+    return targets;
+  }
+  const detected = PROVIDERS.filter(detectProvider);
+  if (!detected.length) {
+    log(
+      'No supported agents detected. Use --only AGENT or install an agent first.',
+    );
+    log('Supported: ' + PROVIDERS.map((p) => p.id).join(', '));
+    return null;
+  }
+  return detected;
+}
+
+function finishInstall(opts, failed) {
+  if (opts.full) {
+    log('\n→ Full toolchain (setup.sh)');
+    runFullSetup(opts);
+  } else {
+    log(
+      '\nAgent brain installed. For ffmpeg + whisper + watch-skill, re-run with --full or see docs/install/README.md.',
+    );
+  }
+  if (failed) die(`\n${failed} agent(s) failed. See docs/install/README.md.`);
+  log('\nDone.');
+}
+
 function main() {
   const opts = parseArgs(process.argv.slice(2));
   if (opts.help) {
     printHelp();
     return;
   }
-  if (!hasCommand('node')) die('AVO: Node.js required (≥18). Install from https://nodejs.org');
-  const major = parseInt(process.versions.node.split('.')[0], 10);
-  if (major < 18) die(`AVO: Node ${process.versions.node} too old. Need ≥18.`);
+  ensureNodeVersion();
 
   if (opts.listOnly) {
     for (const p of PROVIDERS) console.log(`${p.id.padEnd(12)} ${p.label}`);
@@ -325,34 +437,15 @@ function main() {
   if (root) log(`AVO repo: ${root}`);
   else log(`AVO: remote install (${REPO}@${PINNED_REF})`);
 
-  let targets = PROVIDERS;
-  if (opts.only.length) {
-    targets = PROVIDERS.filter(p => opts.only.includes(p.id));
-    if (!targets.length) die(`error: unknown agent(s): ${opts.only.join(', ')}\nuse --list`);
-  } else {
-    targets = PROVIDERS.filter(detectProvider);
-    if (!targets.length) {
-      log('No supported agents detected. Use --only AGENT or install an agent first.');
-      log('Supported: ' + PROVIDERS.map(p => p.id).join(', '));
-      return;
-    }
-  }
+  const targets = resolveTargets(opts);
+  if (!targets) return;
 
-  log(`Installing for: ${targets.map(t => t.label).join(', ')}`);
+  log(`Installing for: ${targets.map((t) => t.label).join(', ')}`);
   let failed = 0;
   for (const p of targets) {
     if (!installProvider(p, root, opts)) failed++;
   }
-
-  if (opts.full) {
-    log('\n→ Full toolchain (setup.sh)');
-    runFullSetup(opts);
-  } else {
-    log('\nAgent brain installed. For ffmpeg + whisper + watch-skill, re-run with --full or see docs/install/README.md.');
-  }
-
-  if (failed) die(`\n${failed} agent(s) failed. See docs/install/README.md.`);
-  log('\nDone.');
+  finishInstall(opts, failed);
 }
 
 main();

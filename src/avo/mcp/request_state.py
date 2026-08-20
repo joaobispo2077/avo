@@ -7,6 +7,7 @@ time-bounded (TTL), and bound to MCP method + tool (+ optional args digest).
 Treat every decoded token as attacker-controlled until ``verify_request_state``
 succeeds. No process-global map keyed by JSON-RPC id; no Redis/DB.
 """
+
 from __future__ import annotations
 
 import base64
@@ -16,8 +17,9 @@ import json
 import os
 import secrets
 import time
+from collections.abc import Mapping, MutableMapping
 from dataclasses import dataclass
-from typing import Any, Mapping, MutableMapping
+from typing import Any
 
 # Wire format version for the integrity-protected payload.
 PAYLOAD_VERSION = 1
@@ -70,17 +72,23 @@ class RequestStatePayload:
             exp = int(raw["exp"])
             intent = str(raw["intent"])
         except (KeyError, TypeError, ValueError) as exc:
-            raise RequestStateError("requestState payload missing required fields") from exc
+            raise RequestStateError(
+                "requestState payload missing required fields"
+            ) from exc
         if v != PAYLOAD_VERSION:
             raise RequestStateError(f"unsupported requestState version: {v}")
         if not tool or not method or not intent:
             raise RequestStateError("requestState tool/method/intent must be non-empty")
         if exp <= 0:
-            raise RequestStateError("requestState exp must be a positive unix timestamp")
+            raise RequestStateError(
+                "requestState exp must be a positive unix timestamp"
+            )
         args_digest = raw.get("args_digest")
         if args_digest is not None:
             args_digest = str(args_digest)
-            if len(args_digest) != 64 or any(c not in "0123456789abcdef" for c in args_digest):
+            if len(args_digest) != 64 or any(
+                c not in "0123456789abcdef" for c in args_digest
+            ):
                 raise RequestStateError("requestState args_digest must be sha256 hex")
         return cls(
             v=v,

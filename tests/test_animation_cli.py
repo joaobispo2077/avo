@@ -16,23 +16,66 @@ def test_provider_animation_cli_propose_decide_recommend(tmp_path: Path, capsys)
         json.dumps({"format": "talking-head-review", "constraints": []}),
         encoding="utf-8",
     )
-    assert main([
-        "animation", "propose", "--catalog", str(catalog), "--provider", "bishop",
-        "--pattern", str(pattern_path), "--actor", "creator",
-        "--intent-reference", "creator requested reusable C01+C02",
-    ]) == 0
+    assert (
+        main(
+            [
+                "animation",
+                "propose",
+                "--catalog",
+                str(catalog),
+                "--provider",
+                "bishop",
+                "--pattern",
+                str(pattern_path),
+                "--actor",
+                "creator",
+                "--intent-reference",
+                "creator requested reusable C01+C02",
+            ]
+        )
+        == 0
+    )
     proposal = json.loads(capsys.readouterr().out)
     assert not catalog.exists()
-    assert main([
-        "animation", "decide", "--catalog", str(catalog), "--provider", "bishop",
-        "--proposal", proposal["path"], "--decision", "approved",
-        "--actor", "creator", "--reason", "sanitized abstraction approved",
-    ]) == 0
+    assert (
+        main(
+            [
+                "animation",
+                "decide",
+                "--catalog",
+                str(catalog),
+                "--provider",
+                "bishop",
+                "--proposal",
+                proposal["path"],
+                "--decision",
+                "approved",
+                "--actor",
+                "creator",
+                "--reason",
+                "sanitized abstraction approved",
+            ]
+        )
+        == 0
+    )
     capsys.readouterr()
-    assert main([
-        "animation", "recommend", "--catalog", str(catalog), "--provider", "bishop",
-        "--diagnosis", str(diagnosis_path), "--evidence-sha256", "b" * 64,
-    ]) == 0
+    assert (
+        main(
+            [
+                "animation",
+                "recommend",
+                "--catalog",
+                str(catalog),
+                "--provider",
+                "bishop",
+                "--diagnosis",
+                str(diagnosis_path),
+                "--evidence-sha256",
+                "b" * 64,
+            ]
+        )
+        == 0
+    )
     result = json.loads(capsys.readouterr().out)
     assert result["applied"] is False
     assert [item["patternId"] for item in result["recommendations"]] == ["c01-c02"]

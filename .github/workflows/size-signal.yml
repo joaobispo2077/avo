@@ -1,0 +1,68 @@
+# Informational pack/install footprint on release-flow PRs (Maxframe size-limit shape).
+# Non-blocking forever unless explicitly evolved to fail.
+
+name: Size signal (PR)
+
+on:
+  pull_request:
+    branches:
+      - develop
+      - release
+
+permissions:
+  contents: read
+  pull-requests: write
+
+env:
+  PYTHON_VERSION: '3.12'
+  NODE_VERSION: '24'
+  AVO_CI: '1'
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
+jobs:
+  size-signal:
+    name: Size signal (informational)
+    # Release flow only:
+    # - feature/* -> develop
+    # - develop -> release
+    if: >-
+      ${{
+        github.event_name == 'pull_request' &&
+        (
+          (github.base_ref == 'develop' && startsWith(github.head_ref, 'feature/')) ||
+          (github.base_ref == 'release' && github.head_ref == 'develop')
+        )
+      }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Collect size signal (non-blocking)
+        shell: bash
+        env:
+          NO_COLOR: '1'
+        run: bash scripts/ci/size-signal.sh size-signal-report.md
+
+      - name: Publish size report to PR (sticky)
+        continue-on-error: true
+        uses: marocchino/sticky-pull-request-comment@v3
+        with:
+          path: size-signal-report.md
+          header: size-signal-report
+          recreate: true
