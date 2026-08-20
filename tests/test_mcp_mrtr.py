@@ -43,6 +43,20 @@ def _accept_responses() -> dict[str, Any]:
     }
 
 
+def _tampered_request_state(token: str) -> str:
+    """Corrupt MAC so decoded bytes always change.
+
+    Flipping only the last base64url character is flaky: unused padding bits
+    can make A↔B decode to the same HMAC bytes (~6% in practice), so the gate
+    wrongly proceeds. Flip a middle character instead (same as request_state tests).
+    """
+    body, mac = token.rsplit(".", 1)
+    assert len(mac) > 2
+    mid = len(mac) // 2
+    flipped = "A" if mac[mid] != "A" else "B"
+    return f"{body}.{mac[:mid]}{flipped}{mac[mid + 1 :]}"
+
+
 def _pause_token(
     *,
     key: bytes,
@@ -316,9 +330,7 @@ def test_incomplete_retry_returns_new_input_required() -> None:
 def test_tampered_request_state_rejects_never_proceed() -> None:
     key = generate_key()
     token = _pause_token(key=key)
-    body, mac = token.rsplit(".", 1)
-    flipped = mac[:-1] + ("A" if mac[-1] != "A" else "B")
-    bad = f"{body}.{flipped}"
+    bad = _tampered_request_state(token)
     decision = mrtr.evaluate_destructive_gate(
         tool=TOOL,
         args=TMP_ARGS,
@@ -464,8 +476,7 @@ def test_handler_happy_path_calls_bridge_only_after_accept(
     assert mrtr.input_required_to_dict(incomplete)["resultType"] == "input_required"
     assert calls == []
     # Tampered state must never authorize execute.
-    body, mac = token.rsplit(".", 1)
-    bad = f"{body}.{mac[:-1] + ('A' if mac[-1] != 'A' else 'B')}"
+    bad = _tampered_request_state(token)
     rejected = handler(
         project=project,
         as_json=True,
