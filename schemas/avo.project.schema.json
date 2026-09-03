@@ -51,6 +51,24 @@
         "plan": { "type": "string", "description": "Qwen tier for planning agent." }
       }
     },
+    "watch": {
+      "type": "object",
+      "description": "Optional Watch execution and review-policy overrides.",
+      "additionalProperties": false,
+      "properties": {
+        "whisperModel": { "type": "string", "minLength": 1 },
+        "device": { "type": "string", "pattern": "^(auto|cpu|cuda(:[0-9]+)?)$" },
+        "maxFrames": { "type": "integer", "minimum": 1, "maximum": 64 },
+        "repairMaxFrames": { "type": "integer", "minimum": 1, "maximum": 64 },
+        "analysisAttempts": { "type": "integer", "minimum": 1, "maximum": 3 },
+        "toolAttempts": { "type": "integer", "minimum": 1, "maximum": 3 },
+        "workingDirectory": { "type": ["string", "null"] },
+        "format": { "type": ["string", "null"] },
+        "language": { "type": ["string", "null"] },
+        "acceptanceCriteria": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "riskNotes": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+      }
+    },
     "timeline": {
       "type": "object",
       "description": "Canonical timeline locations and additive migration policy. Runtime revisions and approvals live in external artifacts, never here.",

@@ -44,6 +44,20 @@ class ShortsProjectSchemaTests(unittest.TestCase):
         self.assertTrue(errors)
         self.assertIn("Additional properties", errors[0].message)
 
+    def test_optional_watch_policy_is_strict_and_backward_compatible(self) -> None:
+        self.assertEqual(list(self.validator.iter_errors(self.base)), [])
+        valid = {
+            **self.base,
+            "watch": {
+                "device": "cpu",
+                "analysisAttempts": 2,
+                "acceptanceCriteria": ["captions remain readable"],
+            },
+        }
+        self.assertEqual(list(self.validator.iter_errors(valid)), [])
+        invalid = {**self.base, "watch": {"device": "metal", "topic": "private"}}
+        self.assertTrue(list(self.validator.iter_errors(invalid)))
+
 
 if __name__ == "__main__":
     unittest.main()
