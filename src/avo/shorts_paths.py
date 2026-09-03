@@ -78,9 +78,7 @@ def _resolve_declared_batch_root(shorts_root: Path, batch_dir: Path | str) -> Pa
         return declared.resolve()
     # Windows-style separators in relative overrides must resolve the same on
     # every platform (campaign\batch-one == campaign/batch-one).
-    parts = [
-        part for part in re.split(r"[\\/]+", str(batch_dir).strip()) if part
-    ]
+    parts = [part for part in re.split(r"[\\/]+", str(batch_dir).strip()) if part]
     return (shorts_root / Path(*parts)).resolve()
 
 
