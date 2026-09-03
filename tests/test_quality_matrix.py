@@ -55,6 +55,8 @@ class QualityMatrixTests(unittest.TestCase):
     def test_ci_uses_shared_test_runner(self) -> None:
         ci = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
         self.assertIn("run-unit-tests.sh", ci)
+        self.assertIn("run-integration-tests.sh", ci)
+        self.assertIn("repo-integration-tests", ci)
         self.assertIn("uv sync --frozen --extra dev", ci)
         self.assertIn("astral-sh/setup-uv", ci)
 
@@ -117,13 +119,21 @@ class QualityMatrixTests(unittest.TestCase):
         self.assertIn("pytest", instructions)
         self.assertIn("npm run quality", instructions)
 
-    def test_run_unit_tests_excludes_project_marker(self) -> None:
+    def test_run_unit_tests_excludes_project_and_integration_markers(self) -> None:
         script = (ROOT / "scripts/ci/run-unit-tests.sh").read_text(encoding="utf-8")
         self.assertIn("not project", script)
+        self.assertIn("not integration", script)
+        integration = (ROOT / "scripts/ci/run-integration-tests.sh").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("tests/integration", integration)
+        self.assertIn("integration and not project", integration)
 
     def test_package_json_core_vs_projects(self) -> None:
         pkg = json.loads((ROOT / "package.json").read_text(encoding="utf-8"))
         self.assertIn("not project", pkg["scripts"]["test:unit"])
+        self.assertIn("not integration", pkg["scripts"]["test:unit"])
+        self.assertIn("test:integration", pkg["scripts"])
         self.assertIn("pytest", pkg["scripts"]["test:projects"])
         self.assertIn("tests/projects", pkg["scripts"]["test:projects"])
         self.assertIn("uv run --frozen --extra dev", pkg["scripts"]["test:projects"])
@@ -394,7 +404,7 @@ class QualityMatrixTests(unittest.TestCase):
         )
         # Gate 2 must wait on software-quality (same pattern as unit tests → merge readiness).
         self.assertIn(
-            "needs: [prerequisites-gate, repo-unit-tests, software-quality]",
+            "needs: [prerequisites-gate, repo-unit-tests, repo-integration-tests, software-quality]",
             ci,
         )
         quality_block = ci.split("software-quality:", 1)[1].split("usability-gate:", 1)[

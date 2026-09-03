@@ -14,11 +14,15 @@ separate workflow. Local umbrella: `npm run quality`. See
 | Lane | Script / job | What it checks |
 | --- | --- | --- |
 | **Gate 1** | `scripts/validate-prerequisites.sh --ci` | GitHub Spec Kit (`.specify`), video-use engine, ffmpeg (warn in CI), watch-skill, HyperFrames, optional clones — see `avo.dependencies.json` |
-| **Unit tests** | `scripts/ci/run-unit-tests.sh` | AVO core pytest; Python via `uv sync --frozen --extra dev` |
+| **Unit tests** | `scripts/ci/run-unit-tests.sh` | AVO core unit pytest (`not project and not integration`); Python via `uv sync --frozen --extra dev` |
+| **Integration tests** | `scripts/ci/run-integration-tests.sh` | `tests/integration` runtime/subprocess boundaries; requires ffmpeg in CI |
 | **Software quality** | `quality-lint.sh` + `quality-format.sh` + `run-coverage.sh` + `quality-complexity.sh` + `quality-deps.sh` + `quality-deadcode.sh` + `quality-duplication.sh` + `quality-architecture.sh` + `quality-tree.sh` (job `Software quality` in `ci.yml`) | Lint/format **fail-immediately** (Ruff C901 ≤ **31**); coverage fail-under **68%** (job installs ffmpeg like unit tests before `run-coverage.sh`); complexity xenon max-absolute **B** + `complexity-allowlist.json`; deps **fail-immediately** (`pip-audit` + npm high+ via `check_npm_audit.py` / `deps-audit-allowlist.json`); deadcode vulture min_confidence **60** + `deadcode-allowlist.json`; duplication jscpd threshold **2%** (`.jscpd.json`); architecture import-linter `.importlinter`; tree health `npm find-dupes` (command failure fails; hoist plan report-only). Python via `uv sync --frozen --extra dev`. Local: `npm run quality:*` / `test:coverage` |
 | **Gate 2** | `scripts/validate-usability.sh --ci` | `avo.config.json`, provider scaffolds, `setup.sh --dry-run`, scaffold scripts — after Gate 1 + unit tests + software quality |
 
 Order in `.github/workflows/ci.yml` is enforced via job `needs:`.
+
+Unit and integration lanes run in parallel after Gate 1. Software quality runs
+coverage on the unit lane only so the fast gate stays under a few minutes.
 
 ### Branch protection — required checks (task-013)
 
@@ -28,7 +32,8 @@ On `main` / `release` (and any PR target that uses this workflow), require these
 | Required check name | Job id | Role |
 | --- | --- | --- |
 | `Gate 1 — Orchestrator prerequisites` | `prerequisites-gate` | Toolchain prerequisites |
-| `Unit tests (AVO repo)` | `repo-unit-tests` | AVO core pytest + install/hf smokes |
+| `Unit tests (AVO repo)` | `repo-unit-tests` | AVO core unit pytest + install/hf smokes |
+| `Integration tests (AVO repo)` | `repo-integration-tests` | `tests/integration` subprocess/runtime lane |
 | `Software quality` | `software-quality` | **Phase-1 fast gates** (lint, format, coverage, complexity, deps) + deadcode, duplication, architecture, tree — fail-immediately |
 | `Mutation tests (light)` | `mutation-light` | Scoped mutmut after unit tests (**20-minute** timeout); `mutmut run` then `mutmut export-cicd-stats` (mutmut 3.x does not write `mutants/mutmut-cicd-stats.json` during `run`); fails below `mutation-config.json` light floor (Ubuntu); posts a sticky mutation table on PRs |
 | `Gate 2 — Project usability` | `usability-gate` | Project usability; `needs` includes `software-quality` |

@@ -13,7 +13,7 @@ mkdir -p reports/quality
 ARGS=(
   pytest
   --ignore=tests/projects
-  -m "not project"
+  -m "not project and not integration"
   --cov=avo
   --cov-report=term-missing
   --cov-report=json:reports/quality/coverage.json
