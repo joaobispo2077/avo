@@ -225,6 +225,174 @@ def prepare_base_assets(
     }
 
 
+def prepare_ordered_base_assets(
+    source: Path,
+    output_dir: Path,
+    *,
+    source_segments: Sequence[Mapping[str, Any]],
+    speed: float,
+    fps: float = 30,
+    width: int = 1080,
+    height: int = 1920,
+    sample_rate: int = 48000,
+    channels: int = 2,
+    crop_mode: str = "cover",
+    seam_safety_sec: float = 0.03,
+    runner: CommandRunner = _default_runner,
+) -> dict[str, Any]:
+    """Prepare declared-order picture/dialogue with no chronological re-sort."""
+    if not source_segments:
+        raise MediaPreparationError("ordered source segments cannot be empty")
+    source = source.resolve()
+    output_dir.mkdir(parents=True, exist_ok=True)
+    prepared = _prepare_ordered_segments(
+        source,
+        output_dir,
+        source_segments,
+        speed=speed,
+        fps=fps,
+        width=width,
+        height=height,
+        sample_rate=sample_rate,
+        channels=channels,
+        crop_mode=crop_mode,
+        runner=runner,
+    )
+    video = output_dir / "base-video.mp4"
+    audio = output_dir / "dialogue-audio.m4a"
+    video_inputs = [part["baseVideo"].path for part in prepared]
+    audio_inputs = [part["dialogueAudio"].path for part in prepared]
+    _run(_concat_video_command(video_inputs, video), runner)
+    _run(
+        _concat_audio_command(
+            audio_inputs,
+            prepared,
+            audio,
+            sample_rate=sample_rate,
+            channels=channels,
+            seam_safety_sec=seam_safety_sec,
+        ),
+        runner,
+    )
+    if not video.is_file() or not audio.is_file():
+        raise MediaPreparationError(
+            "ordered concat did not create both expected assets"
+        )
+    total = sum(part["baseVideo"].duration_sec for part in prepared)
+    windows = _join_windows(source_segments, prepared, total, seam_safety_sec)
+    return {
+        "baseVideo": PreparedAsset(video, sha256_file(video), total, True),
+        "dialogueAudio": PreparedAsset(audio, sha256_file(audio), total, False),
+        "joinWindows": windows,
+    }
+
+
+def _prepare_ordered_segments(
+    source: Path,
+    output_dir: Path,
+    segments: Sequence[Mapping[str, Any]],
+    **options: Any,
+) -> list[dict[str, PreparedAsset]]:
+    prepared = []
+    for position, segment in enumerate(segments, 1):
+        if int(segment.get("order") or 0) != position:
+            raise MediaPreparationError(
+                "source segment order must equal array position; no auto-sort is allowed"
+            )
+        prepared.append(
+            prepare_base_assets(
+                source,
+                output_dir / f"segment-{position:03d}",
+                start_sec=float(segment["startSec"]),
+                end_sec=float(segment["endSec"]),
+                **options,
+            )
+        )
+    return prepared
+
+
+def _concat_video_command(inputs: list[Path], output: Path) -> list[str]:
+    command = ["ffmpeg", "-hide_banner", "-nostdin", "-y"]
+    for path in inputs:
+        command.extend(["-i", str(path)])
+    labels = "".join(f"[{index}:v:0]" for index in range(len(inputs)))
+    command.extend(
+        [
+            "-filter_complex",
+            f"{labels}concat=n={len(inputs)}:v=1:a=0[v]",
+            "-map",
+            "[v]",
+            "-an",
+            "-c:v",
+            "libx264",
+            "-pix_fmt",
+            "yuv420p",
+            str(output),
+        ]
+    )
+    return command
+
+
+def _concat_audio_command(
+    inputs: list[Path],
+    prepared: list[dict[str, PreparedAsset]],
+    output: Path,
+    *,
+    sample_rate: int,
+    channels: int,
+    seam_safety_sec: float,
+) -> list[str]:
+    command = ["ffmpeg", "-hide_banner", "-nostdin", "-y"]
+    for path in inputs:
+        command.extend(["-i", str(path)])
+    filters = []
+    for index, part in enumerate(prepared):
+        duration = part["dialogueAudio"].duration_sec
+        fade_out = max(0.0, duration - seam_safety_sec)
+        filters.append(
+            f"[{index}:a:0]afade=t=in:st=0:d={seam_safety_sec:.3f},"
+            f"afade=t=out:st={fade_out:.6f}:d={seam_safety_sec:.3f}[a{index}]"
+        )
+    labels = "".join(f"[a{index}]" for index in range(len(inputs)))
+    command.extend(
+        [
+            "-filter_complex",
+            ";".join(filters) + ";" + labels + f"concat=n={len(inputs)}:v=0:a=1[a]",
+            "-map",
+            "[a]",
+            "-vn",
+            "-ar",
+            str(sample_rate),
+            "-ac",
+            str(channels),
+            "-c:a",
+            "aac",
+            str(output),
+        ]
+    )
+    return command
+
+
+def _join_windows(
+    segments: Sequence[Mapping[str, Any]],
+    prepared: list[dict[str, PreparedAsset]],
+    total: float,
+    seam_safety_sec: float,
+) -> list[dict[str, Any]]:
+    windows = []
+    cursor = 0.0
+    for left, right, part in zip(segments, segments[1:], prepared[:-1]):
+        cursor += part["baseVideo"].duration_sec
+        windows.append(
+            {
+                "start": round(max(0.0, cursor - seam_safety_sec / 2), 6),
+                "end": round(min(total, cursor + seam_safety_sec / 2), 6),
+                "reason": f"ordered segment seam {left.get('segmentId')} -> {right.get('segmentId')}",
+            }
+        )
+    return windows
+
+
 def probe_media(path: Path, runner: CommandRunner = _default_runner) -> dict[str, Any]:
     command = [
         "ffprobe",
