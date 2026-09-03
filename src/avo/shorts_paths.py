@@ -88,11 +88,13 @@ def resolve_shorts_batch_paths(
     source = "canonical-default"
     if batch_dir is not None:
         declared = Path(batch_dir).expanduser()
-        batch_root = (
-            declared.resolve()
-            if declared.is_absolute()
-            else (shorts_root / declared).resolve()
-        )
+        if declared.is_absolute():
+            batch_root = declared.resolve()
+        else:
+            # Windows-style separators in relative overrides must resolve the
+            # same on every platform (campaign\batch-one == campaign/batch-one).
+            parts = [part for part in re.split(r"[\\/]+", str(batch_dir).strip()) if part]
+            batch_root = (shorts_root / Path(*parts)).resolve()
         source = "invocation"
     elif legacy_output is not None:
         legacy = Path(legacy_output).expanduser().resolve()
