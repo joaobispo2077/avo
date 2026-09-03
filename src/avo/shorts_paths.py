@@ -72,6 +72,18 @@ def _require_contained(path: Path, root: Path, label: str) -> None:
         raise ShortsPathError(f"{label} must remain inside {root}") from exc
 
 
+def _resolve_declared_batch_root(shorts_root: Path, batch_dir: Path | str) -> Path:
+    declared = Path(batch_dir).expanduser()
+    if declared.is_absolute():
+        return declared.resolve()
+    # Windows-style separators in relative overrides must resolve the same on
+    # every platform (campaign\batch-one == campaign/batch-one).
+    parts = [
+        part for part in re.split(r"[\\/]+", str(batch_dir).strip()) if part
+    ]
+    return (shorts_root / Path(*parts)).resolve()
+
+
 def resolve_shorts_batch_paths(
     raw_dir: Path | str,
     batch_id: str,
@@ -87,14 +99,7 @@ def resolve_shorts_batch_paths(
     shorts_root = (raw / "edit" / "shorts").resolve()
     source = "canonical-default"
     if batch_dir is not None:
-        declared = Path(batch_dir).expanduser()
-        if declared.is_absolute():
-            batch_root = declared.resolve()
-        else:
-            # Windows-style separators in relative overrides must resolve the
-            # same on every platform (campaign\batch-one == campaign/batch-one).
-            parts = [part for part in re.split(r"[\\/]+", str(batch_dir).strip()) if part]
-            batch_root = (shorts_root / Path(*parts)).resolve()
+        batch_root = _resolve_declared_batch_root(shorts_root, batch_dir)
         source = "invocation"
     elif legacy_output is not None:
         legacy = Path(legacy_output).expanduser().resolve()
