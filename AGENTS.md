@@ -144,9 +144,16 @@ and flag the conflict for a human.
 
 ## Token Efficiency Tools
 
-This repository supports Caveman and RTK for agents that can load repo-local
-instructions.
+This repository supports Ponytail, Caveman, and RTK for agents that can load
+repo-local instructions.
 
+- Ponytail controls what you build (always-on for orchestrator code). Before
+  writing code, climb the ladder: YAGNI → reuse existing code → stdlib → native
+  platform → installed dependency → one line → minimum that works. Read and trace
+  the real flow first. Never cut trust-boundary validation, data-loss handling,
+  security, or accessibility. Pair with Caveman for terse prose. Skills:
+  `/ponytail`, `/ponytail-review`, `/ponytail-audit`, `/ponytail-debt`,
+  `/ponytail-gain`, `/ponytail-help`. Stop with "stop ponytail" or "normal mode".
 - Caveman controls response style only. Use it when the user asks for
   `/caveman`, "caveman mode", "talk like caveman", "be brief", or fewer output
   tokens. Preserve technical accuracy, exact code, commands, paths, API names,
@@ -717,6 +724,12 @@ can affect peaks. Treat `LUFS`/`LKFS`, `LU`, and `dBTP` as different units.
   accessibility, determinism, snapshots, render parity, and delivery.
 - `caveman`: compressed response style for lower output tokens while preserving
   exact technical content.
+- `ponytail`: lazy senior dev mode — simplest solution that works for coding tasks.
+- `ponytail-review`: review the current diff for over-engineering.
+- `ponytail-audit`: audit the repo for over-engineering beyond the diff.
+- `ponytail-debt`: harvest deferred `ponytail:` shortcuts into a ledger.
+- `ponytail-gain`: show measured benchmark impact.
+- `ponytail-help`: quick reference for ponytail commands.
 
 **Software foundation skills** (on-demand, orchestrator code):
 
