@@ -14,6 +14,91 @@ class TrackError(ValueError):
     pass
 
 
+class VideoTrackError(ValueError):
+    """Raised when a visual layer cannot be compiled safely."""
+
+
+_OVERLAY_ROLES = {"clip", "image", "text", "card", "graphic", "overlay"}
+_ALLOWED_COMPOSITE = {None, "normal", "over", "alpha"}
+
+
+def _seconds(ticks: int, timebase: dict[str, int] | None = None) -> float:
+    num = int((timebase or {}).get("num", 1))
+    den = int((timebase or {}).get("den", 1000))
+    return float(ticks) * num / den
+
+
+def _validated_video_role(layer: dict[str, Any]) -> str:
+    role = str(layer.get("role") or "")
+    composite = (layer.get("composite") or {}).get("mode")
+    if composite not in _ALLOWED_COMPOSITE:
+        raise VideoTrackError(f"unsupported composite mode: {composite}")
+    if role in _OVERLAY_ROLES and not layer.get("faceAvoidance", False):
+        raise VideoTrackError(f"face avoidance required for {layer.get('layerId')}")
+    return role
+
+
+def _compile_video_layer(
+    layer: dict[str, Any],
+) -> tuple[str, dict[str, Any], dict[str, Any]]:
+    role = _validated_video_role(layer)
+    region = (layer.get("regions") or [{}])[0]
+    start = _seconds(int(region.get("startTicks") or 0), region.get("timebase"))
+    end = _seconds(int(region.get("endTicks") or 0), region.get("timebase"))
+    item = {
+        "layerId": layer.get("layerId"),
+        "role": role,
+        "file": str((layer.get("source") or {}).get("locator") or ""),
+        "start_in_output": start,
+        "duration": max(0.0, end - start),
+        "zOrder": layer.get("zOrder", 0),
+    }
+    trace = {"layerId": item["layerId"], "role": role, "zOrder": item["zOrder"]}
+    return role, item, trace
+
+
+def _captions_last(
+    trace: list[dict[str, Any]], captions: dict[str, Any] | None
+) -> list[dict[str, Any]]:
+    if captions is None:
+        return trace
+    without_captions = [item for item in trace if item["role"] != "caption"]
+    without_captions.append(
+        {
+            "layerId": captions["layerId"],
+            "role": "caption",
+            "zOrder": captions["zOrder"],
+        }
+    )
+    return without_captions
+
+
+def compile_video_layers(layers: list[dict[str, Any]]) -> dict[str, Any]:
+    """Compile z-ordered overlays and keep captions last."""
+    ordered = sorted(
+        layers,
+        key=lambda item: (
+            item.get("zOrder", item.get("order", 0)),
+            item.get("layerId", ""),
+        ),
+    )
+    overlays: list[dict[str, Any]] = []
+    captions: dict[str, Any] | None = None
+    trace: list[dict[str, Any]] = []
+    for layer in ordered:
+        role, item, trace_item = _compile_video_layer(layer)
+        if role == "caption":
+            captions = item
+        elif role != "base":
+            overlays.append(item)
+        trace.append(trace_item)
+    return {
+        "overlays": overlays,
+        "captions": captions,
+        "trace": _captions_last(trace, captions),
+    }
+
+
 def resolve_tracks(
     snapshot: dict[str, Any],
     cue_ids: set[str],

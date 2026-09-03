@@ -67,6 +67,7 @@ CHECKPOINT_POLICIES = {
             "sync",
             "audio-qc",
             "visual-qc",
+            "source-fidelity",
             "accessibility",
             "rights",
         },
@@ -82,6 +83,7 @@ CHECKPOINT_POLICIES = {
             "watch",
             "audio-qc",
             "visual-qc",
+            "source-fidelity",
             "accessibility",
             "rights",
             "final-transcript",
@@ -289,7 +291,12 @@ def classify_findings(findings: list[dict[str, Any]]) -> str:
         "ambiguous-rebase",
     }:
         return "needs-human-judgment"
-    if classes & {"tool-error", "missing-watch", "missing-transcript"}:
+    if classes & {
+        "tool-error",
+        "missing-watch",
+        "missing-transcript",
+        "prerequisite",
+    }:
         return "blocked"
     return "fixing" if findings else "ai-passed"
 

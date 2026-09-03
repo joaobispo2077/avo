@@ -1,0 +1,285 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/joaobispo2077/avo/schemas/avo.materialization.schema.json",
+  "title": "AVO Immutable Timeline Materialization",
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "fingerprint": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sha256", "sizeBytes", "locator"],
+      "properties": {
+        "sha256": { "$ref": "#/$defs/sha256" },
+        "sizeBytes": { "type": "integer", "minimum": 0 },
+        "locator": { "type": "string", "minLength": 1 }
+      }
+    },
+    "lock": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "cmapRevisionId",
+        "cmapRevisionHash",
+        "syncRevisionId",
+        "syncRevisionHash",
+        "bmapRevisionId",
+        "bmapRevisionHash",
+        "tracksRevisionId",
+        "tracksRevisionHash",
+        "rawFingerprints"
+      ],
+      "properties": {
+        "cmapRevisionId": { "type": "string", "minLength": 1 },
+        "cmapRevisionHash": { "$ref": "#/$defs/sha256" },
+        "syncRevisionId": { "type": "string", "minLength": 1 },
+        "syncRevisionHash": { "$ref": "#/$defs/sha256" },
+        "bmapRevisionId": { "type": "string", "minLength": 1 },
+        "bmapRevisionHash": { "$ref": "#/$defs/sha256" },
+        "tracksRevisionId": { "type": "string", "minLength": 1 },
+        "tracksRevisionHash": { "$ref": "#/$defs/sha256" },
+        "rawFingerprints": {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": { "$ref": "#/$defs/sha256" }
+        }
+      }
+    },
+    "lineageNode": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "nodeId",
+        "kind",
+        "role",
+        "mediaClass",
+        "locator",
+        "sha256",
+        "pictureCarrying",
+        "media"
+      ],
+      "properties": {
+        "nodeId": { "type": "string", "minLength": 1 },
+        "kind": {
+          "enum": ["source", "generated", "intermediate", "output"]
+        },
+        "role": { "type": "string", "minLength": 1 },
+        "mediaClass": { "type": "string", "minLength": 1 },
+        "locator": { "type": "string", "minLength": 1 },
+        "sha256": { "$ref": "#/$defs/sha256" },
+        "pictureCarrying": { "type": "boolean" },
+        "media": { "type": "object" },
+        "sourceId": { "type": "string", "minLength": 1 },
+        "segmentId": { "type": "string", "minLength": 1 },
+        "layerId": { "type": "string", "minLength": 1 },
+        "generator": { "type": "object" }
+      }
+    },
+    "lineageEdge": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "edgeId",
+        "from",
+        "to",
+        "operation",
+        "order",
+        "parameters"
+      ],
+      "properties": {
+        "edgeId": { "type": "string", "minLength": 1 },
+        "from": { "type": "string", "minLength": 1 },
+        "to": { "type": "string", "minLength": 1 },
+        "operation": {
+          "enum": [
+            "trim",
+            "concat",
+            "crop",
+            "reframe",
+            "rotate",
+            "scale",
+            "scale-down",
+            "grade/color",
+            "place/composite",
+            "captions",
+            "encode"
+          ]
+        },
+        "order": { "type": "integer", "minimum": 0 },
+        "parameters": { "type": "object" },
+        "approvalReference": { "type": "string", "minLength": 1 }
+      }
+    },
+    "pictureLineage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "canonicalInputLock",
+        "projectionHash",
+        "nodes",
+        "edges",
+        "rootIds",
+        "pictureLineageHash"
+      ],
+      "properties": {
+        "schemaVersion": { "const": "1.0.0" },
+        "canonicalInputLock": { "$ref": "#/$defs/lock" },
+        "projectionHash": { "$ref": "#/$defs/sha256" },
+        "nodes": {
+          "type": "array",
+          "minItems": 2,
+          "items": { "$ref": "#/$defs/lineageNode" }
+        },
+        "edges": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/lineageEdge" }
+        },
+        "rootIds": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "pictureLineageHash": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "renderContract": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": ["width", "height", "frameRate", "allowedTransformations"],
+      "properties": {
+        "width": { "type": "integer", "minimum": 1 },
+        "height": { "type": "integer", "minimum": 1 },
+        "frameRate": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["num", "den", "tolerance"],
+          "properties": {
+            "num": { "type": "integer", "minimum": 1 },
+            "den": { "type": "integer", "minimum": 1 },
+            "tolerance": { "type": "number", "minimum": 0 }
+          }
+        },
+        "allowedTransformations": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "policyId",
+        "profileId",
+        "settingSources",
+        "renderContract",
+        "prohibitedBaseClasses",
+        "roleRules",
+        "policyHash"
+      ],
+      "properties": {
+        "policyId": { "type": "string", "minLength": 1 },
+        "profileId": { "type": "string", "minLength": 1 },
+        "settingSources": { "type": "object" },
+        "renderContract": { "$ref": "#/$defs/renderContract" },
+        "prohibitedBaseClasses": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "roleRules": { "type": "object" },
+        "policyHash": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "legacyCutProof": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "kind",
+        "materializationId",
+        "cmapRevisionId",
+        "canonicalInputLock",
+        "renderProfile",
+        "projectionHash",
+        "output",
+        "producer",
+        "createdAt",
+        "materializationHash"
+      ],
+      "properties": {
+        "schemaVersion": { "const": "1.0.0" },
+        "kind": { "const": "cut-proof" },
+        "materializationId": { "type": "string", "minLength": 1 },
+        "cmapRevisionId": { "type": "string", "minLength": 1 },
+        "canonicalInputLock": { "type": "object" },
+        "renderProfile": { "type": "string", "minLength": 1 },
+        "projectionHash": { "$ref": "#/$defs/sha256" },
+        "output": { "$ref": "#/$defs/fingerprint" },
+        "producer": { "type": "object" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "materializationHash": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "assembly": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "kind",
+        "materializationId",
+        "canonicalInputLock",
+        "projectionHash",
+        "renderProfile",
+        "renderContract",
+        "renderContractHash",
+        "renderHash",
+        "pictureLineage",
+        "pictureLineageHash",
+        "deliveryFidelityPolicy",
+        "deliveryFidelityPolicyHash",
+        "output",
+        "producer",
+        "createdAt",
+        "materializationHash"
+      ],
+      "properties": {
+        "schemaVersion": { "const": "1.1.0" },
+        "kind": { "const": "assembly" },
+        "materializationId": { "type": "string", "minLength": 1 },
+        "canonicalInputLock": { "$ref": "#/$defs/lock" },
+        "projectionHash": { "$ref": "#/$defs/sha256" },
+        "renderProfile": { "type": "string", "minLength": 1 },
+        "renderContract": { "$ref": "#/$defs/renderContract" },
+        "renderContractHash": { "$ref": "#/$defs/sha256" },
+        "renderHash": { "$ref": "#/$defs/sha256" },
+        "pictureLineage": { "$ref": "#/$defs/pictureLineage" },
+        "pictureLineageHash": { "$ref": "#/$defs/sha256" },
+        "deliveryFidelityPolicy": { "$ref": "#/$defs/policy" },
+        "deliveryFidelityPolicyHash": { "$ref": "#/$defs/sha256" },
+        "output": { "$ref": "#/$defs/fingerprint" },
+        "producer": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["name", "version"],
+          "properties": {
+            "name": { "type": "string", "minLength": 1 },
+            "version": { "type": "string", "minLength": 1 }
+          }
+        },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "materializationHash": { "$ref": "#/$defs/sha256" }
+      }
+    }
+  },
+  "oneOf": [
+    { "$ref": "#/$defs/legacyCutProof" },
+    { "$ref": "#/$defs/assembly" }
+  ]
+}

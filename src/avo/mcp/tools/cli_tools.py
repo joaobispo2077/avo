@@ -351,6 +351,8 @@ def _core_bridge_defs() -> list[BridgeToolDef]:
             extra_params=(
                 ParamSpec("output", str, required=True),
                 ParamSpec("profile", str | None, default=None),
+                ParamSpec("render_contract", str, required=True),
+                ParamSpec("fidelity_policy", str | None, default=None),
             ),
         ),
     ]
@@ -481,7 +483,8 @@ def _remaining_bridge_defs() -> list[BridgeToolDef]:
             _MUTATE_WARN + "Prepare delivery artifacts (CLI: avo deliver prepare).",
             destructive=True,
             extra_params=(
-                ParamSpec("candidate", str, required=True),
+                ParamSpec("candidate", str | None, default=None),
+                ParamSpec("materialization", str, required=True),
                 ParamSpec("master", str, required=True),
                 ParamSpec("dependency", list[str] | None, default=None),
                 ParamSpec("model", str | None, default=None),
