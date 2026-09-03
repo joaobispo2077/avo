@@ -2,6 +2,15 @@
 
 **Timeline integration:** Evidence
 
+## Workflow guidance
+
+**Workflow steps:** Validate rights prerequisites → Run rights → Verify and report the rights result
+**Step state source:** current review.json and candidate-bound evidence
+**Stopping conditions:** Missing required input, a failed or stale gate, a required human decision, or verified rights completion
+**Valid next commands:** /avo.deliver
+
+Follow the shared [step-status response contract](../../agent-skills/avo-pipeline/references/step-status.md) for every progress, input, blocker, and completion response.
+
 Rights and source audit stage before deliver. Wraps `rights-source-audit` — inventories SOURCE-LOG, disclosure, reused content, privacy, and AI assets.
 
 **Skill:** [`agent-skills/avo-pipeline/references/rights.md`](../../agent-skills/avo-pipeline/references/rights.md)

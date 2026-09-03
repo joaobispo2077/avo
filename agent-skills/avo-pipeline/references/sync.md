@@ -1,5 +1,17 @@
 # /avo.sync reference
 
+## Step/state mapping
+
+**Durable state:** pipeline-run.json plus the current canonical timeline revision
+
+**Workflow steps:** Validate sync prerequisites → Run sync → Verify and report the sync result
+
+**Approval or input gate:** Pause whenever required input or a human decision prevents the next declared step; report the exact reply or artifact needed.
+
+**Stop when:** Missing required input, a failed or stale gate, a required human decision, or verified sync completion
+
+**Valid next commands:** /avo.transcribe or /avo.trim
+
 **Audio sync diagnosis** — run early on external recorder, multicam, podcast, gameplay, or screen captures.
 
 ## Preconditions
@@ -41,4 +53,3 @@ separated control points; piecewise correction requires strictly increasing
 points. Validate start, middle, end, every join, and risk window. Missing or
 over-tolerance full-program evidence blocks approval. Resync always reprojects
 from raw—never stack correction on a corrected proof or delivery.
-

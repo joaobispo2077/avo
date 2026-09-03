@@ -2,6 +2,15 @@
 
 **Timeline integration:** Profile
 
+## Workflow guidance
+
+**Workflow steps:** Validate reframe prerequisites → Run reframe → Verify and report the reframe result
+**Step state source:** the child pipeline-run.json and its parent timeline lineage
+**Stopping conditions:** Missing required input, a failed or stale gate, a required human decision, or verified reframe completion
+**Valid next commands:** /avo.watch
+
+Follow the shared [step-status response contract](../../agent-skills/avo-pipeline/references/step-status.md) for every progress, input, blocker, and completion response.
+
 Extract a vertical (9:16) clip from an approved long-form master for Shorts repurposing.
 
 **Skill:** [`agent-skills/avo-pipeline/references/reframe.md`](../../agent-skills/avo-pipeline/references/reframe.md)

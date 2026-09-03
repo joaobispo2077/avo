@@ -2,6 +2,15 @@
 
 **Timeline integration:** Owns
 
+## Workflow guidance
+
+**Workflow steps:** Validate end screen prerequisites → Run end screen → Verify and report the end screen result
+**Step state source:** pipeline-run.json plus the current canonical timeline revision
+**Stopping conditions:** Missing required input, a failed or stale gate, a required human decision, or verified end screen completion
+**Valid next commands:** /avo.deliver
+
+Follow the shared [step-status response contract](../../agent-skills/avo-pipeline/references/step-status.md) for every progress, input, blocker, and completion response.
+
 YouTube end-screen safe zone and asset checklist from approved master.
 
 **Skill:** [`agent-skills/avo-pipeline/references/end-screen.md`](../../agent-skills/avo-pipeline/references/end-screen.md)

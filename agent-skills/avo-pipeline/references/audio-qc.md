@@ -1,5 +1,17 @@
 # /avo.audio-qc reference
 
+## Step/state mapping
+
+**Durable state:** current review.json and candidate-bound evidence
+
+**Workflow steps:** Validate audio qc prerequisites → Run audio qc → Verify and report the audio qc result
+
+**Approval or input gate:** Pause whenever required input or a human decision prevents the next declared step; report the exact reply or artifact needed.
+
+**Stop when:** Missing required input, a failed or stale gate, a required human decision, or verified audio qc completion
+
+**Valid next commands:** /avo.deliver
+
 Delivery loudness and true-peak QC on the **approved master export**. Distinct from `/avo.sound` (mix, NR, restoration, hierarchy).
 
 ## Preconditions

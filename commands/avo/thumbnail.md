@@ -2,6 +2,15 @@
 
 **Timeline integration:** Consumes
 
+## Workflow guidance
+
+**Workflow steps:** Validate thumbnail prerequisites → Run thumbnail → Verify and report the thumbnail result
+**Step state source:** the consumed approved artifact, delivery-manifest.json when present, and the observed result
+**Stopping conditions:** Missing required input, a failed or stale gate, a required human decision, or verified thumbnail completion
+**Valid next commands:** /avo.deliver
+
+Follow the shared [step-status response contract](../../agent-skills/avo-pipeline/references/step-status.md) for every progress, input, blocker, and completion response.
+
 Frame candidates and safe-zone checklist from the approved master (ffmpeg stills v1).
 
 **Skill:** [`agent-skills/avo-pipeline/references/thumbnail.md`](../../agent-skills/avo-pipeline/references/thumbnail.md)

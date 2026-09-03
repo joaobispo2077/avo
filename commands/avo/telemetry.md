@@ -2,6 +2,15 @@
 
 **Timeline integration:** Admin
 
+## Workflow guidance
+
+**Workflow steps:** Validate telemetry prerequisites → Run telemetry → Verify and report the telemetry result
+**Step state source:** the observed invocation result and any command-owned manifest
+**Stopping conditions:** Missing required input, a failed or stale gate, a required human decision, or verified telemetry completion
+**Valid next commands:** resume the active /avo.* stage
+
+Follow the shared [step-status response contract](../../agent-skills/avo-pipeline/references/step-status.md) for every progress, input, blocker, and completion response.
+
 Emit phase-boundary telemetry for the current project.
 
 **Skill:** [`agent-skills/avo-pipeline/references/telemetry.md`](../../agent-skills/avo-pipeline/references/telemetry.md)

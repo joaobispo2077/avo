@@ -1,5 +1,17 @@
 # /avo.voiceover reference
 
+## Step/state mapping
+
+**Durable state:** the child pipeline-run.json and its parent timeline lineage
+
+**Workflow steps:** Validate voiceover prerequisites → Run voiceover → Verify and report the voiceover result
+
+**Approval or input gate:** Pause whenever required input or a human decision prevents the next declared step; report the exact reply or artifact needed.
+
+**Stop when:** Missing required input, a failed or stale gate, a required human decision, or verified voiceover completion
+
+**Valid next commands:** /avo.watch
+
 **Lite voiceover path** — concat B-roll or A-roll clips under an external narration track. Skips HyperFrames/motion by default.
 
 ## Preconditions

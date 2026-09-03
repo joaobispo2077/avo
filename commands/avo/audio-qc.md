@@ -2,6 +2,15 @@
 
 **Timeline integration:** Evidence
 
+## Workflow guidance
+
+**Workflow steps:** Validate audio qc prerequisites → Run audio qc → Verify and report the audio qc result
+**Step state source:** current review.json and candidate-bound evidence
+**Stopping conditions:** Missing required input, a failed or stale gate, a required human decision, or verified audio qc completion
+**Valid next commands:** /avo.deliver
+
+Follow the shared [step-status response contract](../../agent-skills/avo-pipeline/references/step-status.md) for every progress, input, blocker, and completion response.
+
 Loudness and delivery audio QC on the **approved master export**. Distinct from `/avo.sound` (mix/restoration).
 
 **Skill:** [`agent-skills/avo-pipeline/references/audio-qc.md`](../../agent-skills/avo-pipeline/references/audio-qc.md)

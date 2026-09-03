@@ -2,6 +2,15 @@
 
 **Timeline integration:** Evidence
 
+## Workflow guidance
+
+**Workflow steps:** Validate transcribe prerequisites → Run transcribe → Verify and report the transcribe result
+**Step state source:** current review.json and candidate-bound evidence
+**Stopping conditions:** Missing required input, a failed or stale gate, a required human decision, or verified transcribe completion
+**Valid next commands:** /avo.trim or /avo.pipeline
+
+Follow the shared [step-status response contract](../../agent-skills/avo-pipeline/references/step-status.md) for every progress, input, blocker, and completion response.
+
 Transcribe only. No cut, no motion, no deliver.
 
 **Skill:** [`agent-skills/avo-pipeline/references/transcribe.md`](../../agent-skills/avo-pipeline/references/transcribe.md)

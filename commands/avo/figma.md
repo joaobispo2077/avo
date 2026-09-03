@@ -2,6 +2,15 @@
 
 **Timeline integration:** Owns
 
+## Workflow guidance
+
+**Workflow steps:** Validate figma prerequisites → Run figma → Verify and report the figma result
+**Step state source:** pipeline-run.json plus the current canonical timeline revision
+**Stopping conditions:** Missing required input, a failed or stale gate, a required human decision, or verified figma completion
+**Valid next commands:** /avo.motion
+
+Follow the shared [step-status response contract](../../agent-skills/avo-pipeline/references/step-status.md) for every progress, input, blocker, and completion response.
+
 Router to Figma → HyperFrames import workflow.
 
 **Skill:** [`agent-skills/avo-pipeline/references/figma.md`](../../agent-skills/avo-pipeline/references/figma.md)

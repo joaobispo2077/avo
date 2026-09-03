@@ -2,6 +2,15 @@
 
 **Timeline integration:** Owns
 
+## Workflow guidance
+
+**Workflow steps:** Validate sound prerequisites → Run sound → Verify and report the sound result
+**Step state source:** pipeline-run.json plus the current canonical timeline revision
+**Stopping conditions:** Missing required input, a failed or stale gate, a required human decision, or verified sound completion
+**Valid next commands:** /avo.watch or /avo.audio-qc
+
+Follow the shared [step-status response contract](../../agent-skills/avo-pipeline/references/step-status.md) for every progress, input, blocker, and completion response.
+
 Audio post: read-only audit, noise reduction, regional gain, dialogue cleanup, SFX/music mix hierarchy.
 
 **Skill:** [`agent-skills/avo-pipeline/references/sound.md`](../../agent-skills/avo-pipeline/references/sound.md)

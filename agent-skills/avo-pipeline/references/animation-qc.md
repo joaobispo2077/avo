@@ -1,5 +1,17 @@
 # /avo.animation-qc reference
 
+## Step/state mapping
+
+**Durable state:** current review.json and candidate-bound evidence
+
+**Workflow steps:** Validate animation qc prerequisites → Run animation qc → Verify and report the animation qc result
+
+**Approval or input gate:** Pause whenever required input or a human decision prevents the next declared step; report the exact reply or artifact needed.
+
+**Stop when:** Missing required input, a failed or stale gate, a required human decision, or verified animation qc completion
+
+**Valid next commands:** /avo.motion or /avo.deliver
+
 HyperFrames / motion **render QC** — after motion slots, before final composite master.
 
 ## Preconditions

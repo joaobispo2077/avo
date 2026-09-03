@@ -2,6 +2,15 @@
 
 **Timeline integration:** Owns
 
+## Workflow guidance
+
+**Workflow steps:** Validate motion prerequisites → Run motion → Verify and report the motion result
+**Step state source:** pipeline-run.json plus the current canonical timeline revision
+**Stopping conditions:** Missing required input, a failed or stale gate, a required human decision, or verified motion completion
+**Valid next commands:** /avo.animation-qc or /avo.watch
+
+Follow the shared [step-status response contract](../../agent-skills/avo-pipeline/references/step-status.md) for every progress, input, blocker, and completion response.
+
 Add motion graphics or overlays on an approved cut (HyperFrames default).
 
 **Skill:** [`agent-skills/avo-pipeline/references/motion.md`](../../agent-skills/avo-pipeline/references/motion.md)

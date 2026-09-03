@@ -1,5 +1,17 @@
 # /avo.telemetry reference
 
+## Step/state mapping
+
+**Durable state:** the observed invocation result and any command-owned manifest
+
+**Workflow steps:** Validate telemetry prerequisites → Run telemetry → Verify and report the telemetry result
+
+**Approval or input gate:** Pause whenever required input or a human decision prevents the next declared step; report the exact reply or artifact needed.
+
+**Stop when:** Missing required input, a failed or stale gate, a required human decision, or verified telemetry completion
+
+**Valid next commands:** resume the active /avo.* stage
+
 Implements [`docs/avo-workflow.md`](../../avo-workflow.md) §5.
 
 ## Required fields

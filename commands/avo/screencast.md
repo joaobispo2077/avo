@@ -2,6 +2,15 @@
 
 **Timeline integration:** Profile
 
+## Workflow guidance
+
+**Workflow steps:** Validate screencast prerequisites → Run screencast → Verify and report the screencast result
+**Step state source:** the child pipeline-run.json and its parent timeline lineage
+**Stopping conditions:** Missing required input, a failed or stale gate, a required human decision, or verified screencast completion
+**Valid next commands:** /avo.watch
+
+Follow the shared [step-status response contract](../../agent-skills/avo-pipeline/references/step-status.md) for every progress, input, blocker, and completion response.
+
 Screencast / tutorial technique router (oversized cursor house style).
 
 **Skill:** [`agent-skills/avo-pipeline/references/screencast.md`](../../agent-skills/avo-pipeline/references/screencast.md)

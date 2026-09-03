@@ -1,5 +1,17 @@
 # /avo.format reference
 
+## Step/state mapping
+
+**Durable state:** the consumed approved artifact, delivery-manifest.json when present, and the observed result
+
+**Workflow steps:** Validate format prerequisites → Run format → Verify and report the format result
+
+**Approval or input gate:** Pause whenever required input or a human decision prevents the next declared step; report the exact reply or artifact needed.
+
+**Stop when:** Missing required input, a failed or stale gate, a required human decision, or verified format completion
+
+**Valid next commands:** /avo.framework or /avo.pipeline
+
 **Format diagnosis stage** — structured playbook selection before pacing or style decisions.
 
 Distinct from [`guidelines.md`](guidelines.md) (rules reference). Produces a per-project artifact.

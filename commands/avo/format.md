@@ -2,6 +2,15 @@
 
 **Timeline integration:** Consumes
 
+## Workflow guidance
+
+**Workflow steps:** Validate format prerequisites → Run format → Verify and report the format result
+**Step state source:** the consumed approved artifact, delivery-manifest.json when present, and the observed result
+**Stopping conditions:** Missing required input, a failed or stale gate, a required human decision, or verified format completion
+**Valid next commands:** /avo.framework or /avo.pipeline
+
+Follow the shared [step-status response contract](../../agent-skills/avo-pipeline/references/step-status.md) for every progress, input, blocker, and completion response.
+
 YouTube format diagnosis stage before editing.
 
 **Skill:** [`agent-skills/avo-pipeline/references/format.md`](../../agent-skills/avo-pipeline/references/format.md)
