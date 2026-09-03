@@ -10,7 +10,8 @@ cd "$ROOT"
 if [[ $# -eq 0 ]]; then
   # Ignore tests/projects so pytest never imports footage-project modules
   # (specs/ is gitignored; some project tests read spec files at import time).
-  exec pytest --ignore=tests/projects -m "not project and not integration" "$@"
+  # Ignore tests/integration so the unit lane stays fast (own CI job).
+  exec pytest --ignore=tests/projects --ignore=tests/integration -m "not project and not integration" "$@"
 else
   exec pytest "$@"
 fi

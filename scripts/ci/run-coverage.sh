@@ -13,6 +13,7 @@ mkdir -p reports/quality
 ARGS=(
   pytest
   --ignore=tests/projects
+  --ignore=tests/integration
   -m "not project and not integration"
   --cov=avo
   --cov-report=term-missing

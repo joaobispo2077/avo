@@ -3,7 +3,7 @@ $ErrorActionPreference = "Stop"
 $Root = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
 Set-Location $Root
 if ($args.Count -eq 0) {
-  pytest -m "not project and not integration" @args
+  pytest --ignore=tests/projects --ignore=tests/integration -m "not project and not integration" @args
 } else {
   pytest @args
 }

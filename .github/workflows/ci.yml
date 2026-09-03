@@ -133,7 +133,7 @@ jobs:
     permissions:
       contents: read
       pull-requests: write
-    # Coverage re-runs the full unit suite (~few min) plus lint/format/complexity/deps.
+    # Coverage re-runs the unit suite only (tests/integration has its own job).
     timeout-minutes: 35
     steps:
       - name: Checkout

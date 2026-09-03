@@ -123,17 +123,20 @@ class QualityMatrixTests(unittest.TestCase):
         script = (ROOT / "scripts/ci/run-unit-tests.sh").read_text(encoding="utf-8")
         self.assertIn("not project", script)
         self.assertIn("not integration", script)
+        self.assertIn("--ignore=tests/integration", script)
         integration = (ROOT / "scripts/ci/run-integration-tests.sh").read_text(
             encoding="utf-8"
         )
         self.assertIn("tests/integration", integration)
-        self.assertIn("integration and not project", integration)
+        self.assertIn("exec pytest tests/integration", integration)
 
     def test_package_json_core_vs_projects(self) -> None:
         pkg = json.loads((ROOT / "package.json").read_text(encoding="utf-8"))
         self.assertIn("not project", pkg["scripts"]["test:unit"])
         self.assertIn("not integration", pkg["scripts"]["test:unit"])
+        self.assertIn("--ignore=tests/integration", pkg["scripts"]["test:unit"])
         self.assertIn("test:integration", pkg["scripts"])
+        self.assertIn("tests/integration", pkg["scripts"]["test:integration"])
         self.assertIn("pytest", pkg["scripts"]["test:projects"])
         self.assertIn("tests/projects", pkg["scripts"]["test:projects"])
         self.assertIn("uv run --frozen --extra dev", pkg["scripts"]["test:projects"])
@@ -261,6 +264,9 @@ class QualityMatrixTests(unittest.TestCase):
         self.assertIn("set -euo pipefail", runner)
         self.assertIn("--cov-fail-under", runner)
         self.assertIn("COV_FAIL_UNDER:-68", runner)
+        self.assertIn("--ignore=tests/integration", runner)
+        self.assertIn("not integration", runner)
+        self.assertIn("--ignore=tests/integration", coverage_script)
 
         audit = (ROOT / "docs/software-quality-audit.md").read_text(encoding="utf-8")
         self.assertIn("68", audit)
