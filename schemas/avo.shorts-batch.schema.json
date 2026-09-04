@@ -19,7 +19,11 @@
   ],
   "properties": {
     "version": {
-      "const": "1.0"
+      "enum": ["1.0", "1.1"]
+    },
+    "batchRoot": { "type": "string", "minLength": 1 },
+    "batchRootSource": {
+      "enum": ["canonical-default", "invocation", "legacy-output"]
     },
     "batchId": {
       "type": "string",
@@ -36,6 +40,7 @@
         "masterPath"
       ],
       "properties": {
+        "sourceId": { "type": "string", "minLength": 1 },
         "masterPath": {
           "type": "string",
           "minLength": 1
@@ -46,6 +51,7 @@
             "null"
           ]
         },
+        "durationSec": { "type": "number", "exclusiveMinimum": 0 },
         "expectedFingerprint": {
           "type": [
             "string",
@@ -113,6 +119,11 @@
           "type": "integer",
           "minimum": 1,
           "default": 2
+        },
+        "loudnessPreset": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Optional AVO loudness preset applied to the rendered proof before artifact hashing."
         }
       }
     },
@@ -468,7 +479,6 @@
         "viewerPromise",
         "postingTitle",
         "sourceEvidence",
-        "sourceRange",
         "editorialApprovalReference"
       ],
       "properties": {
@@ -498,6 +508,11 @@
         },
         "sourceRange": {
           "$ref": "#/$defs/timeRange"
+        },
+        "sourceSegments": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/sourceSegment" }
         },
         "requestedSpeed": {
           "type": "number",
@@ -718,6 +733,20 @@
         }
       }
     },
+    "sourceSegment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["order", "sourceId", "startSec", "endSec", "rationale", "evidenceReference"],
+      "properties": {
+        "order": { "type": "integer", "minimum": 1 },
+        "sourceId": { "type": "string", "minLength": 1 },
+        "startSec": { "type": "number", "minimum": 0 },
+        "endSec": { "type": "number", "exclusiveMinimum": 0 },
+        "rationale": { "type": "string", "minLength": 1 },
+        "evidenceReference": { "type": "string", "minLength": 1 },
+        "overlapApprovalReference": { "type": ["string", "null"], "minLength": 1 }
+      }
+    },
     "point": {
       "type": "object",
       "additionalProperties": false,
@@ -798,5 +827,25 @@
         }
       }
     }
-  }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "version": { "const": "1.0" } }, "required": ["version"] },
+      "then": {
+        "properties": {
+          "candidates": { "items": { "required": ["sourceRange"], "not": { "required": ["sourceSegments"] } } }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "version": { "const": "1.1" } }, "required": ["version"] },
+      "then": {
+        "required": ["batchRoot", "batchRootSource"],
+        "properties": {
+          "source": { "required": ["sourceId"] },
+          "candidates": { "items": { "required": ["sourceSegments"], "not": { "required": ["sourceRange"] } } }
+        }
+      }
+    }
+  ]
 }

@@ -2,6 +2,15 @@
 
 **Timeline integration:** Profile
 
+## Workflow guidance
+
+**Workflow steps:** Validate talking head prerequisites → Run talking head → Verify and report the talking head result
+**Step state source:** the child pipeline-run.json and its parent timeline lineage
+**Stopping conditions:** Missing required input, a failed or stale gate, a required human decision, or verified talking head completion
+**Valid next commands:** /avo.watch
+
+Follow the shared [step-status response contract](../../agent-skills/avo-pipeline/references/step-status.md) for every progress, input, blocker, and completion response.
+
 Orchestrator for talking-head graphic overlay packaging (not plain captions).
 
 **Skill:** [`agent-skills/avo-pipeline/references/talking-head.md`](../../agent-skills/avo-pipeline/references/talking-head.md)

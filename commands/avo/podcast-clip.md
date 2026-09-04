@@ -2,6 +2,15 @@
 
 **Timeline integration:** Profile
 
+## Workflow guidance
+
+**Workflow steps:** Validate podcast clip prerequisites → Run podcast clip → Verify and report the podcast clip result
+**Step state source:** the child pipeline-run.json and its parent timeline lineage
+**Stopping conditions:** Missing required input, a failed or stale gate, a required human decision, or verified podcast clip completion
+**Valid next commands:** /avo.watch
+
+Follow the shared [step-status response contract](../../agent-skills/avo-pipeline/references/step-status.md) for every progress, input, blocker, and completion response.
+
 Orchestrated podcast / interview clip extraction with rights, audio QC, and deliver.
 
 **Skill:** [`agent-skills/avo-pipeline/references/podcast-clip.md`](../../agent-skills/avo-pipeline/references/podcast-clip.md)

@@ -15,8 +15,12 @@
   ],
   "properties": {
     "version": {
-      "const": "1.0"
+      "enum": ["1.0", "1.1"]
     },
+    "planVersion": { "enum": ["1.0", "1.1"] },
+    "batchRoot": { "type": "string", "minLength": 1 },
+    "batchRootSource": { "enum": ["canonical-default", "invocation", "legacy-output"] },
+    "legacyExternalDelivery": { "type": ["string", "null"] },
     "batchId": {
       "type": "string"
     },
@@ -168,6 +172,7 @@
           "enum": [
             "prepared-base",
             "prepared-dialogue",
+            "prepared-lineage",
             "prepared-insertion-video",
             "prepared-insertion-audio",
             "composition",
@@ -350,5 +355,11 @@
         }
       }
     }
-  }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "version": { "const": "1.1" } }, "required": ["version"] },
+      "then": { "required": ["planVersion", "batchRoot", "batchRootSource"] }
+    }
+  ]
 }

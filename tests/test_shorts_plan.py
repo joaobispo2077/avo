@@ -10,6 +10,7 @@ from pathlib import Path
 from avo import shorts_contract, shorts_plan
 
 FIXTURE_DIR = Path(__file__).parent / "fixtures" / "shorts" / "planning"
+V11_FIXTURE_DIR = Path(__file__).parent / "fixtures" / "shorts" / "planning-v11"
 
 
 def load_request() -> dict:
@@ -20,7 +21,197 @@ def load_transcript() -> dict:
     return json.loads((FIXTURE_DIR / "transcript.json").read_text(encoding="utf-8"))
 
 
+def load_v11_fixture(name: str) -> dict:
+    return json.loads((V11_FIXTURE_DIR / name).read_text(encoding="utf-8"))
+
+
 class ShortsPlanTests(unittest.TestCase):
+    def test_v11_fixture_preserves_exact_order_without_enclosing_range(self) -> None:
+        request = load_v11_fixture("shorts.request.json")
+        transcript = load_v11_fixture("transcript.json")
+        media = load_v11_fixture("media.json")
+        cases = load_v11_fixture("cases.json")
+        self.assertEqual(request["candidates"][0]["sourceSegments"], cases["reordered"])
+        plan = shorts_plan.resolve_batch(
+            request,
+            transcript,
+            request_path=V11_FIXTURE_DIR / "shorts.request.json",
+            source_fingerprint=media["mediaFingerprint"],
+            provider_tokens={},
+        )
+        item = plan["items"][0]
+        self.assertNotIn("sourceRange", item)
+        self.assertEqual(
+            [(row["startSec"], row["endSec"]) for row in item["sourceSegments"]],
+            [(10.0, 12.0), (30.0, 32.0), (20.0, 22.0)],
+        )
+        self.assertEqual(
+            [row["outputStartSec"] for row in item["sourceSegments"]],
+            [0.0, 2.0, 4.0],
+        )
+        self.assertEqual(item["editedDurationSec"], 6.0)
+        self.assertEqual(
+            [word["text"] for phrase in item["captions"] for word in phrase["words"]],
+            ["first", "second", "third"],
+        )
+        self.assertEqual(shorts_contract.plan_hash(plan), plan["planHash"])
+
+    def test_v11_fixture_approved_overlap_and_changed_fingerprint(self) -> None:
+        request = load_v11_fixture("shorts.request.json")
+        transcript = load_v11_fixture("transcript.json")
+        media = load_v11_fixture("media.json")
+        cases = load_v11_fixture("cases.json")
+        request["source"]["expectedFingerprint"] = media["mediaFingerprint"]
+        candidate = request["candidates"][0]
+        candidate["sourceSegments"] = cases["overlappingApproved"]
+        candidate["sourceEvidence"] = "first"
+        plan = shorts_plan.resolve_batch(
+            request,
+            transcript,
+            request_path=V11_FIXTURE_DIR / "shorts.request.json",
+            source_fingerprint=media["mediaFingerprint"],
+            provider_tokens={},
+        )
+        self.assertEqual(
+            plan["items"][0]["sourceSegments"][1]["overlapApprovalReference"],
+            "approval://repeat",
+        )
+        with self.assertRaisesRegex(shorts_plan.PlanningError, "fingerprint"):
+            shorts_plan.resolve_batch(
+                request,
+                transcript,
+                request_path=V11_FIXTURE_DIR / "shorts.request.json",
+                source_fingerprint=media["changedMediaFingerprint"],
+                provider_tokens={},
+            )
+
+    def test_v11_fixture_invalid_overlap_and_zero_duration_fail(self) -> None:
+        for case in ("invalidOverlap", "zeroDuration"):
+            request = load_v11_fixture("shorts.request.json")
+            request["candidates"][0]["sourceSegments"] = load_v11_fixture("cases.json")[
+                case
+            ]
+            with (
+                self.subTest(case=case),
+                self.assertRaises(shorts_contract.ContractValidationError),
+            ):
+                shorts_plan.resolve_batch(
+                    request,
+                    load_v11_fixture("transcript.json"),
+                    request_path=V11_FIXTURE_DIR / "shorts.request.json",
+                    source_fingerprint="a" * 64,
+                    provider_tokens={},
+                )
+
+    def test_v11_preserves_declared_segment_order_and_output_mapping(self) -> None:
+        request = load_request()
+        request["version"] = "1.1"
+        request["batchRoot"] = str(FIXTURE_DIR / "batch")
+        request["batchRootSource"] = "canonical-default"
+        request["source"].update({"sourceId": "master", "durationSec": 100})
+        request["candidates"] = [request["candidates"][0]]
+        request["requestedCount"] = 1
+        candidate = request["candidates"][0]
+        candidate.pop("sourceRange")
+        candidate["sourceEvidence"] = "ideia dois"
+        candidate["sourceSegments"] = [
+            {
+                "order": 1,
+                "sourceId": "master",
+                "startSec": 10,
+                "endSec": 15,
+                "rationale": "payoff",
+                "evidenceReference": "review://2",
+            },
+            {
+                "order": 2,
+                "sourceId": "master",
+                "startSec": 0,
+                "endSec": 5,
+                "rationale": "context",
+                "evidenceReference": "review://1",
+            },
+        ]
+        plan = shorts_plan.resolve_batch(
+            request,
+            load_transcript(),
+            request_path=FIXTURE_DIR / "shorts.request-v11.json",
+            source_fingerprint="a" * 64,
+            provider_tokens={},
+        )
+        segments = plan["items"][0]["sourceSegments"]
+        self.assertEqual([row["startSec"] for row in segments], [10.0, 0.0])
+        self.assertEqual(segments[0]["outputStartSec"], 0)
+        self.assertEqual(segments[1]["outputStartSec"], segments[0]["outputEndSec"])
+        words = [
+            word["text"]
+            for phrase in plan["items"][0]["captions"]
+            for word in phrase["words"]
+        ]
+        self.assertEqual(words[:2], ["ideia dois", "ideia um"])
+        self.assertEqual(
+            len(
+                {
+                    word["id"]
+                    for phrase in plan["items"][0]["captions"]
+                    for word in phrase["words"]
+                }
+            ),
+            len(words),
+        )
+
+    def test_v11_rejects_unapproved_overlap_zero_duration_bounds_and_changed_fingerprint(
+        self,
+    ) -> None:
+        request = load_request()
+        request["version"] = "1.1"
+        request["batchRoot"] = str(FIXTURE_DIR / "batch")
+        request["batchRootSource"] = "canonical-default"
+        request["source"].update(
+            {"sourceId": "master", "durationSec": 100, "expectedFingerprint": "a" * 64}
+        )
+        request["candidates"] = [request["candidates"][0]]
+        request["requestedCount"] = 1
+        candidate = request["candidates"][0]
+        candidate.pop("sourceRange")
+        base = {
+            "sourceId": "master",
+            "rationale": "reason",
+            "evidenceReference": "review://evidence",
+        }
+        for segments, message in (
+            (
+                [
+                    {**base, "order": 1, "startSec": 1, "endSec": 4},
+                    {**base, "order": 2, "startSec": 3, "endSec": 5},
+                ],
+                "overlap",
+            ),
+            ([{**base, "order": 1, "startSec": 4, "endSec": 4}], "endSec"),
+            ([{**base, "order": 1, "startSec": 99, "endSec": 101}], "duration"),
+        ):
+            candidate["sourceSegments"] = segments
+            with (
+                self.subTest(message=message),
+                self.assertRaises(shorts_contract.ContractValidationError),
+            ):
+                shorts_plan.resolve_batch(
+                    request,
+                    load_transcript(),
+                    request_path="request.json",
+                    source_fingerprint="a" * 64,
+                    provider_tokens={},
+                )
+        candidate["sourceSegments"] = [{**base, "order": 1, "startSec": 0, "endSec": 5}]
+        with self.assertRaisesRegex(shorts_plan.PlanningError, "fingerprint"):
+            shorts_plan.resolve_batch(
+                request,
+                load_transcript(),
+                request_path="request.json",
+                source_fingerprint="b" * 64,
+                provider_tokens={},
+            )
+
     def test_exact_count_order_duration_defaults_and_hash_are_deterministic(
         self,
     ) -> None:

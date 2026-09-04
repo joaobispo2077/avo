@@ -1,5 +1,17 @@
 # /avo.issues reference
 
+## Step/state mapping
+
+**Durable state:** the observed invocation result and any command-owned manifest
+
+**Workflow steps:** Validate issues prerequisites → Run issues → Verify and report the issues result
+
+**Approval or input gate:** Pause whenever required input or a human decision prevents the next declared step; report the exact reply or artifact needed.
+
+**Stop when:** Missing required input, a failed or stale gate, a required human decision, or verified issues completion
+
+**Valid next commands:** /avo.help
+
 Agent-guided GitHub issue preparation. User submits manually on GitHub.
 
 ## When to use

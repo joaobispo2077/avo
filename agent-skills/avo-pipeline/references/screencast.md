@@ -1,5 +1,17 @@
 # /avo.screencast reference
 
+## Step/state mapping
+
+**Durable state:** the child pipeline-run.json and its parent timeline lineage
+
+**Workflow steps:** Validate screencast prerequisites → Run screencast → Verify and report the screencast result
+
+**Approval or input gate:** Pause whenever required input or a human decision prevents the next declared step; report the exact reply or artifact needed.
+
+**Stop when:** Missing required input, a failed or stale gate, a required human decision, or verified screencast completion
+
+**Valid next commands:** /avo.watch
+
 Router to **oversized-cursor** screencast technique + tutorial format notes.
 
 ## Required args

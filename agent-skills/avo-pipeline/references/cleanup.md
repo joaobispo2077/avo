@@ -1,5 +1,17 @@
 # /avo.cleanup reference
 
+## Step/state mapping
+
+**Durable state:** the reconstruction verification and cleanup result
+
+**Workflow steps:** Validate cleanup prerequisites → Run cleanup → Verify and report the cleanup result
+
+**Approval or input gate:** Pause whenever required input or a human decision prevents the next declared step; report the exact reply or artifact needed.
+
+**Stop when:** Missing required input, a failed or stale gate, a required human decision, or verified cleanup completion
+
+**Valid next commands:** /avo.stats
+
 Implements [`docs/avo-workflow.md`](../../docs/avo-workflow.md) §7 step 2. Owning tools: `python -m avo.cli cleanup`, `wrap.py`, `stats.py`, rimraf (cross-platform).
 
 ## Scratch roots

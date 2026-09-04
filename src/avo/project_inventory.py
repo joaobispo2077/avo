@@ -420,6 +420,10 @@ def resolve_preserved_set(
     initial_transcript: Path | None = None,
 ) -> PreservedSetResult:
     raw_dir = raw_dir.resolve()
+    from avo.shorts_delivery import preserved_shorts_paths
+
+    reconstruction = list(_resolve_reconstruction_metadata(raw_dir))
+    reconstruction.extend(preserved_shorts_paths(raw_dir))
     return PreservedSetResult(
         raw_sources=_resolve_raw_sources(raw_dir),
         initial_transcript=_resolve_initial_transcript(
@@ -427,7 +431,7 @@ def resolve_preserved_set(
         ),
         final_transcripts=_resolve_final_transcripts(raw_dir, master_basename),
         final_master=_resolve_final_master(raw_dir, master_basename),
-        reconstruction_metadata=_resolve_reconstruction_metadata(raw_dir),
+        reconstruction_metadata=sorted(set(reconstruction)),
     )
 
 

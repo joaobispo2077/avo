@@ -1,5 +1,17 @@
 # /avo.update reference
 
+## Step/state mapping
+
+**Durable state:** the observed invocation result and any command-owned manifest
+
+**Workflow steps:** Validate update prerequisites → Run update → Verify and report the update result
+
+**Approval or input gate:** Pause whenever required input or a human decision prevents the next declared step; report the exact reply or artifact needed.
+
+**Stop when:** Missing required input, a failed or stale gate, a required human decision, or verified update completion
+
+**Valid next commands:** /avo.help
+
 **Audience:** end users running AVO inside an agent — YouTube creators, editors, not AVO repo contributors.
 
 ## When the user should run it

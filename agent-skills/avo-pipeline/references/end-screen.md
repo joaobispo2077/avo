@@ -1,5 +1,17 @@
 # /avo.end-screen reference
 
+## Step/state mapping
+
+**Durable state:** pipeline-run.json plus the current canonical timeline revision
+
+**Workflow steps:** Validate end screen prerequisites → Run end screen → Verify and report the end screen result
+
+**Approval or input gate:** Pause whenever required input or a human decision prevents the next declared step; report the exact reply or artifact needed.
+
+**Stop when:** Missing required input, a failed or stale gate, a required human decision, or verified end screen completion
+
+**Valid next commands:** /avo.deliver
+
 Upload prep: **YouTube end-screen** safe zone and asset checklist.
 
 ## Preconditions

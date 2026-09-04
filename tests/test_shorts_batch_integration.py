@@ -32,8 +32,61 @@ class ShortsPlanningIntegrationTests(unittest.TestCase):
         path.write_text(json.dumps(request), encoding="utf-8")
         return path
 
+    def test_v11_resolve_snapshots_external_request_into_canonical_root(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            raw_dir = root / "footage"
+            external = root / "incoming"
+            raw_dir.mkdir()
+            external.mkdir()
+            request_path = self.stage_request(external)
+            request = json.loads(request_path.read_text(encoding="utf-8"))
+            request["version"] = "1.1"
+            request["batchId"] = "canonical-demo"
+            request["batchRoot"] = str(raw_dir / "edit" / "shorts" / "canonical-demo")
+            request["batchRootSource"] = "canonical-default"
+            request["source"].update({"sourceId": "master", "durationSec": 100})
+            request["requestedCount"] = 1
+            request["candidates"] = [request["candidates"][0]]
+            candidate = request["candidates"][0]
+            source_range = candidate.pop("sourceRange")
+            candidate["sourceSegments"] = [
+                {
+                    "order": 1,
+                    "sourceId": "master",
+                    **source_range,
+                    "rationale": "approved excerpt",
+                    "evidenceReference": "review://segment-1",
+                }
+            ]
+            request_path.write_text(json.dumps(request), encoding="utf-8")
+
+            self.assertEqual(
+                shorts.main(["resolve", str(request_path), "--raw-dir", str(raw_dir)]),
+                shorts.EXIT_OK,
+            )
+            batch_root = raw_dir / "edit" / "shorts" / "canonical-demo"
+            snapshot = batch_root / "shorts.request-v001.json"
+            plan_path = batch_root / "plans" / "shorts.plan-v001.json"
+            status_path = batch_root / "plans" / "shorts.status.json"
+            self.assertTrue(snapshot.is_file())
+            self.assertTrue(plan_path.is_file())
+            self.assertTrue(status_path.is_file())
+            snapped = json.loads(snapshot.read_text(encoding="utf-8"))
+            self.assertTrue(Path(snapped["source"]["masterPath"]).is_absolute())
+            self.assertEqual(
+                json.loads(plan_path.read_text(encoding="utf-8"))["batchRoot"],
+                str(batch_root.resolve()),
+            )
+            index = json.loads(
+                (raw_dir / "edit" / "shorts" / "shorts.index.json").read_text(
+                    encoding="utf-8"
+                )
+            )
+            self.assertEqual(index["batches"][0]["batchId"], "canonical-demo")
+
     def test_validate_and_resolve_create_only_an_immutable_pending_plan(self) -> None:
-        with tempfile.TemporaryDirectory(dir="/tmp") as tmp:
+        with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             request_path = self.stage_request(root)
             plan_path = root / "plans" / "shorts.plan-v001.json"
@@ -52,7 +105,7 @@ class ShortsPlanningIntegrationTests(unittest.TestCase):
             )
 
     def test_unchanged_resolve_reuses_same_plan_revision(self) -> None:
-        with tempfile.TemporaryDirectory(dir="/tmp") as tmp:
+        with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             request_path = self.stage_request(root)
             plan_path = root / "plans" / "shorts.plan-v001.json"
@@ -62,7 +115,7 @@ class ShortsPlanningIntegrationTests(unittest.TestCase):
             self.assertEqual(list(plan_path.parent.glob("*.json")), [plan_path])
 
     def test_missing_transcript_routes_through_injected_transcriber(self) -> None:
-        with tempfile.TemporaryDirectory(dir="/tmp") as tmp:
+        with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             request_path = self.stage_request(root, with_transcript=False)
             calls: list[Path] = []
@@ -110,7 +163,7 @@ class ShortsPlanningIntegrationTests(unittest.TestCase):
         return result
 
     def test_proof_build_is_immutable_selective_and_non_fail_fast(self) -> None:
-        with tempfile.TemporaryDirectory(dir="/tmp") as tmp:
+        with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             request_path = self.stage_request(root)
             plan_path = root / "plans" / "shorts.plan-v001.json"
@@ -175,8 +228,53 @@ class ShortsPlanningIntegrationTests(unittest.TestCase):
                 ),
             )
 
+    def test_explicit_loudness_preset_normalizes_before_artifact_hashing(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            request_path = self.stage_request(root)
+            request = json.loads(request_path.read_text(encoding="utf-8"))
+            request["candidates"] = request["candidates"][:1]
+            request["requestedCount"] = 1
+            request["output"]["loudnessPreset"] = "youtube_shorts"
+            request_path.write_text(json.dumps(request), encoding="utf-8")
+            plan_path = root / "plans" / "shorts.plan-v001.json"
+            shorts_plan.resolve_request_file(request_path, plan_path)
+            self.approve_plan(plan_path)
+
+            class FakeAdapter:
+                def execute(self, operation, project, *extra, **kwargs):
+                    if operation == "render":
+                        output = Path(extra[extra.index("--output") + 1])
+                        output.parent.mkdir(parents=True, exist_ok=True)
+                        output.write_bytes(b"unnormalized")
+                    return JobResult(exit_code=0)
+
+            def fake_normalize(input_path, output_path, **kwargs):
+                self.assertEqual(input_path.read_bytes(), b"unnormalized")
+                self.assertEqual(kwargs["preset_id"], "youtube_shorts")
+                output_path.write_bytes(b"normalized")
+                return True
+
+            with unittest.mock.patch.object(
+                shorts, "_apply_loudness_preset", side_effect=fake_normalize
+            ):
+                _, status = shorts.build_proofs(
+                    plan_path,
+                    workers=1,
+                    prepare=self.fake_prepare,
+                    adapter_factory=FakeAdapter,
+                )
+
+            proof = next(
+                artifact
+                for artifact in status["items"][0]["artifacts"]
+                if artifact["kind"] == "proof"
+            )
+            self.assertEqual(Path(proof["path"]).read_bytes(), b"normalized")
+            self.assertEqual(proof["hash"], hashlib.sha256(b"normalized").hexdigest())
+
     def test_one_render_failure_does_not_cancel_approved_siblings(self) -> None:
-        with tempfile.TemporaryDirectory(dir="/tmp") as tmp:
+        with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             request_path = self.stage_request(root)
             plan_path = root / "plans" / "shorts.plan-v001.json"
@@ -208,7 +306,7 @@ class ShortsPlanningIntegrationTests(unittest.TestCase):
             self.assertEqual(states["06"], "proof-ready")
 
     def test_preview_build_marks_dirty_for_full_resolution_rebuild(self) -> None:
-        with tempfile.TemporaryDirectory(dir="/tmp") as tmp:
+        with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             request_path = self.stage_request(root)
             plan_path = root / "plans" / "shorts.plan-v001.json"
@@ -253,7 +351,7 @@ class ShortsPlanningIntegrationTests(unittest.TestCase):
             self.assertEqual(full_status["items"][0]["renderProfile"]["width"], 1080)
 
     def test_qc_cli_populates_batch_qc_summary(self) -> None:
-        with tempfile.TemporaryDirectory(dir="/tmp") as tmp:
+        with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             request_path = self.stage_request(root)
             plan_path = root / "plans" / "shorts.plan-v001.json"
@@ -290,7 +388,7 @@ class ShortsPlanningIntegrationTests(unittest.TestCase):
             self.assertEqual(status["batchQcSummary"]["failed"], 0)
 
     def test_promote_cli_writes_delivery_manifest(self) -> None:
-        with tempfile.TemporaryDirectory(dir="/tmp") as tmp:
+        with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             request_path = self.stage_request(root)
             plan_path = root / "plans" / "shorts.plan-v001.json"
@@ -372,10 +470,11 @@ class ShortsPlanningIntegrationTests(unittest.TestCase):
             )
 
             def fake_transcript(master: Path, edit_dir: Path) -> dict[str, Path]:
-                edit_dir.mkdir(parents=True, exist_ok=True)
+                transcript_dir = edit_dir / "transcripts"
+                transcript_dir.mkdir(parents=True, exist_ok=True)
                 outputs = {}
                 for kind in ("json", "srt", "txt", "md"):
-                    path = edit_dir / f"{master.stem}.{kind}"
+                    path = transcript_dir / f"{master.stem}.{kind}"
                     path.write_text(f"{master.name}:{kind}", encoding="utf-8")
                     outputs[kind] = path
                 return outputs
@@ -398,6 +497,21 @@ class ShortsPlanningIntegrationTests(unittest.TestCase):
                     shorts.EXIT_OK,
                 )
             self.assertTrue((root / "delivery" / "delivery-manifest.json").is_file())
+            with unittest.mock.patch.object(
+                shorts.shorts_qc,
+                "qc_proof_artifact",
+                return_value={"status": "passed", "findings": []},
+            ):
+                self.assertEqual(
+                    shorts.main(["qc", str(plan_path), "--stage", "master"]),
+                    shorts.EXIT_OK,
+                )
+            delivered = json.loads(status_path.read_text(encoding="utf-8"))
+            self.assertTrue(delivered["deliveryComplete"])
+            self.assertEqual(delivered["batchState"], "delivered")
+            self.assertTrue(
+                all(item["state"] == "delivered" for item in delivered["items"])
+            )
 
 
 if __name__ == "__main__":

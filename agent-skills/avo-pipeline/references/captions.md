@@ -1,5 +1,17 @@
 # /avo.captions reference
 
+## Step/state mapping
+
+**Durable state:** pipeline-run.json plus the current canonical timeline revision
+
+**Workflow steps:** Validate captions prerequisites → Run captions → Verify and report the captions result
+
+**Approval or input gate:** Pause whenever required input or a human decision prevents the next declared step; report the exact reply or artifact needed.
+
+**Stop when:** Missing required input, a failed or stale gate, a required human decision, or verified captions completion
+
+**Valid next commands:** /avo.watch or /avo.deliver
+
 Dedicated caption stage. Distinct from `/avo.motion` (graphics cards, lower-thirds, slots).
 
 ## Preconditions

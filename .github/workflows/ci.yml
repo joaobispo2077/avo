@@ -48,7 +48,7 @@ jobs:
     name: Unit tests (AVO repo)
     runs-on: ubuntu-latest
     needs: prerequisites-gate
-    timeout-minutes: 20
+    timeout-minutes: 12
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -93,6 +93,37 @@ jobs:
       - name: Lint HyperFrames exemplars
         run: bash scripts/ci/lint-hyperframes-exemplars.sh
 
+  repo-integration-tests:
+    name: Integration tests (AVO repo)
+    runs-on: ubuntu-latest
+    needs: prerequisites-gate
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Sync Python deps (frozen)
+        run: uv sync --frozen --extra dev
+
+      - name: Expose venv on PATH
+        run: echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
+
+      - name: Install ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      - name: Run integration tests
+        run: bash scripts/ci/run-integration-tests.sh
+
   software-quality:
     # GitHub check name for branch protection: "Software quality"
     # Phase-1 Must Have fast gates (task-013) — blocking on PR/push via needs into Gate 2.
@@ -102,7 +133,7 @@ jobs:
     permissions:
       contents: read
       pull-requests: write
-    # Coverage re-runs the full unit suite (~few min) plus lint/format/complexity/deps.
+    # Coverage re-runs the unit suite only (tests/integration has its own job).
     timeout-minutes: 35
     steps:
       - name: Checkout
@@ -215,7 +246,7 @@ jobs:
     name: Gate 2 — Project usability
     runs-on: ubuntu-latest
     # Blocks merge readiness when Software quality fails (required check below).
-    needs: [prerequisites-gate, repo-unit-tests, software-quality]
+    needs: [prerequisites-gate, repo-unit-tests, repo-integration-tests, software-quality]
     timeout-minutes: 15
     steps:
       - name: Checkout

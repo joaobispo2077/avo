@@ -1,5 +1,17 @@
 # /avo.watch reference
 
+## Step/state mapping
+
+**Durable state:** current review.json and approval record
+
+**Workflow steps:** Validate watch prerequisites → Run watch → Verify and report the watch result
+
+**Approval or input gate:** Pause whenever required input or a human decision prevents the next declared step; report the exact reply or artifact needed.
+
+**Stop when:** Missing required input, a failed or stale gate, a required human decision, or verified watch completion
+
+**Valid next commands:** the declared human approval gate
+
 Full **THE LOOP** via watch-skill. See [`docs/avo-workflow.md`](../../avo-workflow.md) §4.
 
 **Blocking:** Do not open the human approval gate until watch-skill **and** transcript
@@ -57,3 +69,13 @@ conflict, and ambiguous rebase become `needs-human-judgment`. Persist attempts,
 blockers, coverage, and recovery commands in `review.json`; generate
 `approval-gate.md` only as its human-readable projection.
 
+## Configurable execution policy
+
+Before invoking Watch, resolve the shared policy field-by-field and validate it.
+Use `avo review policy --project <avo.project.json>` for read-only inspection.
+Forward only declared format, language, acceptance criteria, risk notes,
+transcript reference, validated terms/names, and required windows. Never infer a
+project topic or language. Only explicit `device=cpu` forces CPU. Preserve raw
+attempts and outcome kind; uncertainty/refusal routes to human judgment, while
+tool, malformed, or coverage errors block. Full controls and examples:
+[`docs/watch-review-policy.md`](../../../docs/watch-review-policy.md).

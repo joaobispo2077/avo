@@ -41,6 +41,87 @@ def _raw_sources(raw_dir: Path) -> list[Path]:
     )
 
 
+def _final_artifacts(raw_dir: Path, master_basename: str) -> tuple[Path, Path]:
+    candidates = sorted((raw_dir / "edit" / "masters").glob(f"{master_basename}.*"))
+    masters = [path for path in candidates if path.is_file()]
+    if not masters:
+        raise ReconstructionError("final master is missing")
+    master = masters[0]
+    transcript = raw_dir / "edit" / "transcripts" / f"{master_basename}.json"
+    if not transcript.is_file():
+        raise ReconstructionError("final master JSON transcript is missing")
+    payload = json.loads(transcript.read_text(encoding="utf-8"))
+    if (payload.get("source") or {}).get("sha256") != file_fingerprint(master)[
+        "sha256"
+    ]:
+        raise ReconstructionError("final transcript is not bound to exact master bytes")
+    return master, transcript
+
+
+def _artifact_graph(
+    workspace: Any, raw_dir: Path
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    canonical = []
+    graph = []
+    for artifact_type in ("cmap", "bmap", "tracks", "animation", "sync-map"):
+        store = workspace.store(artifact_type)
+        index = store.load_index()
+        index_entry = _entry(raw_dir, store.path, f"{artifact_type}-index")
+        canonical.append(index_entry)
+        graph.append(index_entry)
+        graph.extend(
+            _entry(
+                raw_dir,
+                workspace.timeline_dir / ref["path"],
+                f"{artifact_type}-revision",
+            )
+            for ref in index["revisionRefs"]
+        )
+        graph.extend(
+            _entry(
+                raw_dir,
+                workspace.timeline_dir / ref["path"],
+                f"{artifact_type}-event",
+            )
+            for ref in index["eventRefs"]
+        )
+    return canonical, graph
+
+
+def _optional_state_entries(workspace: Any, raw_dir: Path) -> list[dict[str, Any]]:
+    paths = (
+        workspace.timeline_dir / "pipeline-run.json",
+        workspace.timeline_dir / "projection.json",
+        workspace.timeline_dir / "migration.json",
+        workspace.raw_dir / "edit" / "delivery-manifest.json",
+    )
+    return [_entry(raw_dir, path, "timeline-state") for path in paths if path.is_file()]
+
+
+def _review_entries(workspace: Any, raw_dir: Path) -> list[dict[str, Any]]:
+    if not workspace.review_dir.is_dir():
+        return []
+    roles = {
+        "review.json": "review-evidence",
+        "approval-gate.md": "review-projection",
+        "approval-manifest.json": "review-projection",
+    }
+    return [
+        _entry(raw_dir, path, role)
+        for filename, role in roles.items()
+        for path in sorted(workspace.review_dir.rglob(filename))
+    ]
+
+
+def _shorts_entries(raw_dir: Path) -> list[dict[str, Any]]:
+    from avo.shorts_delivery import preserved_shorts_paths
+
+    return [
+        _entry(raw_dir, path, "shorts-preservation")
+        for path in preserved_shorts_paths(raw_dir)
+    ]
+
+
 def build_reconstruction_bundle(
     workspace: Any,
     *,
@@ -48,62 +129,12 @@ def build_reconstruction_bundle(
     actor: str,
 ) -> dict[str, Any]:
     raw_dir = workspace.raw_dir.resolve()
-    master_candidates = sorted(
-        (raw_dir / "edit" / "masters").glob(f"{master_basename}.*")
-    )
-    master_candidates = [path for path in master_candidates if path.is_file()]
-    if not master_candidates:
-        raise ReconstructionError("final master is missing")
-    master = master_candidates[0]
-    transcript = raw_dir / "edit" / "transcripts" / f"{master_basename}.json"
-    if not transcript.is_file():
-        raise ReconstructionError("final master JSON transcript is missing")
-    transcript_payload = json.loads(transcript.read_text(encoding="utf-8"))
-    master_hash = file_fingerprint(master)["sha256"]
-    if (transcript_payload.get("source") or {}).get("sha256") != master_hash:
-        raise ReconstructionError("final transcript is not bound to exact master bytes")
-
-    canonical = []
-    graph_files: list[dict[str, Any]] = []
-    for artifact_type in ("cmap", "bmap", "tracks", "animation", "sync-map"):
-        store = workspace.store(artifact_type)
-        index = store.load_index()
-        index_entry = _entry(raw_dir, store.path, f"{artifact_type}-index")
-        canonical.append(index_entry)
-        graph_files.append(index_entry)
-        for ref in index["revisionRefs"]:
-            graph_files.append(
-                _entry(
-                    raw_dir,
-                    workspace.timeline_dir / ref["path"],
-                    f"{artifact_type}-revision",
-                )
-            )
-        for ref in index["eventRefs"]:
-            graph_files.append(
-                _entry(
-                    raw_dir,
-                    workspace.timeline_dir / ref["path"],
-                    f"{artifact_type}-event",
-                )
-            )
-
-    for optional in (
-        workspace.timeline_dir / "pipeline-run.json",
-        workspace.timeline_dir / "projection.json",
-        workspace.timeline_dir / "migration.json",
-        workspace.raw_dir / "edit" / "delivery-manifest.json",
-    ):
-        if optional.is_file():
-            graph_files.append(_entry(raw_dir, optional, "timeline-state"))
-
-    review_entries = []
-    if workspace.review_dir.is_dir():
-        for path in sorted(workspace.review_dir.rglob("review.json")):
-            review_entries.append(_entry(raw_dir, path, "review-evidence"))
-        for path in sorted(workspace.review_dir.rglob("approval-gate.md")):
-            review_entries.append(_entry(raw_dir, path, "review-projection"))
+    master, transcript = _final_artifacts(raw_dir, master_basename)
+    canonical, graph_files = _artifact_graph(workspace, raw_dir)
+    graph_files.extend(_optional_state_entries(workspace, raw_dir))
+    review_entries = _review_entries(workspace, raw_dir)
     graph_files.extend(review_entries)
+    graph_files.extend(_shorts_entries(raw_dir))
 
     raw_entries = [
         _entry(raw_dir, path, "raw-source") for path in _raw_sources(raw_dir)

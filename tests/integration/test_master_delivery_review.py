@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from avo.timeline.contracts import dependency_lock_hash
+from avo.timeline.contracts import content_hash, dependency_lock_hash, file_fingerprint
 from avo.timeline.delivery import DeliveryError, DeliveryService
 from avo.timeline.review import candidate_identity
 from avo.timeline.workspace import TimelineWorkspace
@@ -13,7 +13,17 @@ from avo.transcribe import source_fingerprint
 
 
 class Review:
-    def run(self, *, checkpoint, candidate, dependencies, render_profile, risk_windows):
+    def run(
+        self,
+        *,
+        checkpoint,
+        candidate,
+        dependencies,
+        render_profile,
+        risk_windows,
+        materialization=None,
+        materialization_path=None,
+    ):
         identity = candidate_identity(candidate, dependencies, render_profile)
         path = candidate.parent / "review.json"
         path.write_text("{}", encoding="utf-8")
@@ -66,7 +76,7 @@ def workspace(tmp_path: Path) -> TimelineWorkspace:
         json.dumps(
             {
                 "schemaVersion": "1.0.0",
-                "provider": "bishop",
+                "provider": "fixture-provider",
                 "videoId": "delivery",
                 "rawDir": str(tmp_path),
             }
@@ -79,6 +89,26 @@ def workspace(tmp_path: Path) -> TimelineWorkspace:
 def test_master_transcript_and_delivery_are_exact_byte_bound(tmp_path: Path):
     candidate = tmp_path / "candidate.mp4"
     candidate.write_bytes(b"frozen-master-candidate")
+    materialization_body = {
+        "schemaVersion": "1.1.0",
+        "kind": "assembly",
+        "materializationId": "assembly-test",
+        "output": file_fingerprint(candidate),
+        "deliveryFidelityPolicy": {
+            "policyId": "avo.delivery-fidelity",
+            "profileId": "fixture-master",
+            "settingSources": {"profileId": "project"},
+        },
+        "deliveryFidelityPolicyHash": "d" * 64,
+        "pictureLineageHash": "e" * 64,
+        "pictureLineage": {"rootIds": ["output"]},
+    }
+    materialization = {
+        **materialization_body,
+        "materializationHash": content_hash(materialization_body),
+    }
+    materialization_path = tmp_path / "assembly.json"
+    materialization_path.write_text(json.dumps(materialization), encoding="utf-8")
     service = DeliveryService(workspace(tmp_path), clock=lambda: "2026-08-14T00:00:00Z")
     master = tmp_path / "edit" / "masters" / "delivery-master-v001.mp4"
     deps = {"cmap": "a" * 64, "tracks": "b" * 64, "sourceUsage": "c" * 64}
@@ -86,10 +116,29 @@ def test_master_transcript_and_delivery_are_exact_byte_bound(tmp_path: Path):
         candidate=candidate,
         master=master,
         dependencies=deps,
+        materialization=materialization,
+        materialization_path=materialization_path,
         review_runner=Review(),
         transcript_generator=transcript_generator,
     )
     assert manifest["transcript"]["sourceSha256"] == manifest["master"]["sha256"]
+    assert (
+        manifest["materialization"]["materializationHash"]
+        == materialization["materializationHash"]
+    )
+    assert (
+        manifest["dependencyLockSha256"] == manifest["review"]["dependencyLockSha256"]
+    )
+    assert manifest["materialization"]["policy"] == {
+        "policyId": "avo.delivery-fidelity",
+        "profileId": "fixture-master",
+        "policyHash": "d" * 64,
+        "settingSources": {"profileId": "project"},
+    }
+    assert manifest["materialization"]["lineage"] == {
+        "pictureLineageHash": "e" * 64,
+        "rootIds": ["output"],
+    }
     delivered = service.approve(actor="creator", reason="exact master approved")
     assert delivered["state"] == "delivered"
 
@@ -98,3 +147,37 @@ def test_master_transcript_and_delivery_are_exact_byte_bound(tmp_path: Path):
         service.validate_current()
     with pytest.raises(DeliveryError):
         service.approve(actor="creator", reason="old approval cannot survive")
+
+
+def test_prepare_rejects_changed_copy_before_publishing_master(tmp_path, monkeypatch):
+    candidate = tmp_path / "candidate.mp4"
+    candidate.write_bytes(b"canonical-candidate")
+    body = {
+        "schemaVersion": "1.1.0",
+        "kind": "assembly",
+        "materializationId": "assembly-copy-check",
+        "output": file_fingerprint(candidate),
+        "deliveryFidelityPolicyHash": "d" * 64,
+        "pictureLineageHash": "e" * 64,
+        "pictureLineage": {"rootIds": ["output"]},
+    }
+    materialization = {**body, "materializationHash": content_hash(body)}
+    materialization_path = tmp_path / "assembly.json"
+    materialization_path.write_text(json.dumps(materialization), encoding="utf-8")
+
+    def corrupt_copy(_source, target):
+        Path(target).write_bytes(b"not-the-candidate")
+
+    monkeypatch.setattr("avo.timeline.delivery.shutil.copyfile", corrupt_copy)
+    master = tmp_path / "edit" / "masters" / "master.mp4"
+    with pytest.raises(DeliveryError, match="copied master bytes differ"):
+        DeliveryService(workspace(tmp_path)).prepare(
+            candidate=candidate,
+            master=master,
+            dependencies={},
+            materialization=materialization,
+            materialization_path=materialization_path,
+            review_runner=Review(),
+            transcript_generator=transcript_generator,
+        )
+    assert not master.exists()

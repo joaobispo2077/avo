@@ -1,5 +1,17 @@
 # /avo.pipeline reference
 
+## Step/state mapping
+
+**Durable state:** pipeline-run.json main/side state
+
+**Workflow steps:** Validate pipeline prerequisites → Run pipeline → Verify and report the pipeline result
+
+**Approval or input gate:** Pause whenever required input or a human decision prevents the next declared step; report the exact reply or artifact needed.
+
+**Stop when:** Missing required input, a failed or stale gate, a required human decision, or verified pipeline completion
+
+**Valid next commands:** /avo.transcribe
+
 Load [`arguments.md`](arguments.md) first.
 
 ## Stages executed

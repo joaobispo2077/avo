@@ -23,6 +23,57 @@ POLICY = {
 
 
 class ShortsCaptionTests(unittest.TestCase):
+    def test_segmented_mapping_forces_seams_unique_ids_and_scoped_audit(self) -> None:
+        policy = POLICY
+        words = [
+            {"text": "first", "start": 1.0, "end": 2.0, "type": "word"},
+            {"text": "second", "start": 6.0, "end": 7.0, "type": "word"},
+        ]
+        segments = [
+            {
+                "segmentId": "s1",
+                "order": 1,
+                "startSec": 6,
+                "endSec": 9,
+                "outputStartSec": 0,
+                "outputEndSec": 3,
+            },
+            {
+                "segmentId": "s2",
+                "order": 2,
+                "startSec": 0,
+                "endSec": 3,
+                "outputStartSec": 3,
+                "outputEndSec": 6,
+            },
+        ]
+        phrases, audit = shorts_captions.plan_segmented_captions(
+            words,
+            segments,
+            [
+                {
+                    "operation": "replace",
+                    "match": ["first"],
+                    "replacement": ["FIRST"],
+                    "reason": "approved spelling",
+                    "approved": True,
+                }
+            ],
+            policy,
+            candidate_id="01",
+            speed=1,
+        )
+        self.assertEqual(
+            [word["text"] for phrase in phrases for word in phrase["words"]],
+            ["second", "FIRST"],
+        )
+        self.assertLessEqual(phrases[0]["endSec"], 3)
+        self.assertGreaterEqual(phrases[1]["startSec"], 3)
+        ids = [word["id"] for phrase in phrases for word in phrase["words"]]
+        self.assertEqual(len(ids), len(set(ids)))
+        self.assertEqual(audit[0]["segmentId"], "s2")
+        self.assertEqual(audit[0]["segmentOrder"], 2)
+
     def test_maps_source_clock_and_normalizes_pt_br(self) -> None:
         words = [
             {"text": "R$", "start": 10, "end": 10.2},
@@ -140,6 +191,27 @@ class ShortsCaptionTests(unittest.TestCase):
                 )
         self.assertIsNone(shorts_captions.active_word_at(phrases, phrases[0]["endSec"]))
         self.assertEqual(shorts_captions.active_word_at(phrases, 0.1), "p1-w1")
+
+    def test_overlapping_zero_duration_word_collapses_to_phrase_boundary(self) -> None:
+        words = [
+            {"text": "então", "start": 0.0, "end": 0.3},
+            {"text": "gente", "start": 0.6, "end": 0.6},
+            {"text": "bota", "start": 0.6, "end": 0.9},
+        ]
+        policy = {
+            **POLICY,
+            "grouping": {
+                **POLICY["grouping"],
+                "maxWords": 2,
+                "mergeOrphans": False,
+            },
+        }
+        phrases = shorts_captions.build_phrases(words, policy, duration=1.0)
+        boundary_word = phrases[0]["words"][-1]
+        self.assertEqual(boundary_word["startSec"], phrases[0]["endSec"])
+        self.assertEqual(boundary_word["endSec"], phrases[0]["endSec"])
+        self.assertEqual(boundary_word["highlightEnterSec"], phrases[0]["endSec"])
+        self.assertEqual(boundary_word["highlightExitSec"], phrases[0]["endSec"])
 
     def test_anchor_rejects_seam_on_full_frame_and_protected_overlap(self) -> None:
         with self.assertRaises(shorts_captions.CaptionError):

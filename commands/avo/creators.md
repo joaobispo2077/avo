@@ -2,6 +2,15 @@
 
 **Timeline integration:** Admin
 
+## Workflow guidance
+
+**Workflow steps:** Validate creators prerequisites → Run creators → Verify and report the creators result
+**Step state source:** the observed invocation result and any command-owned manifest
+**Stopping conditions:** Missing required input, a failed or stale gate, a required human decision, or verified creators completion
+**Valid next commands:** /avo.help
+
+Follow the shared [step-status response contract](../../agent-skills/avo-pipeline/references/step-status.md) for every progress, input, blocker, and completion response.
+
 Curated opt-in list of channels and sites using AVO.
 
 **Skill:** [`agent-skills/avo-pipeline/references/creators.md`](../../agent-skills/avo-pipeline/references/creators.md)

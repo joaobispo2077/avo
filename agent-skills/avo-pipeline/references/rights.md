@@ -1,5 +1,17 @@
 # /avo.rights reference
 
+## Step/state mapping
+
+**Durable state:** current review.json and candidate-bound evidence
+
+**Workflow steps:** Validate rights prerequisites → Run rights → Verify and report the rights result
+
+**Approval or input gate:** Pause whenever required input or a human decision prevents the next declared step; report the exact reply or artifact needed.
+
+**Stop when:** Missing required input, a failed or stale gate, a required human decision, or verified rights completion
+
+**Valid next commands:** /avo.deliver
+
 Rights and source audit stage. Distinct from `/avo.deliver` rights row — this command runs **before** deliver with a dedicated artifact.
 
 ## Preconditions

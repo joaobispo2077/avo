@@ -26,7 +26,7 @@ instructions live**. See also [software-foundation.md](./software-foundation.md)
 | **Gate 2** | `scripts/validate-usability.sh --ci` | `avo.config.json`, provider scaffold, setup dry-run, core helpers |
 | **Software quality** | `npm run quality` (job in `ci.yml`) | Software-metric quality — lint/format, coverage floor, complexity, audits, structure (see concept table) |
 
-**CI order (`ci.yml`):** Gate 1 → software quality ∥ pytest **AVO core** (`-m "not project"`) + install smoke + hf:doctor → Gate 2.
+**CI order (`ci.yml`):** Gate 1 → software quality ∥ unit tests (`not project`, ignore `tests/integration`) ∥ integration tests (`tests/integration`) → Gate 2.
 
 **Release order:** Gate 1 → Gate 2 → pytest (AVO core) → version check → GitHub Release.
 
@@ -98,7 +98,8 @@ check name in branch protection). HyperFrames exemplar lint stays a **domain** g
 | Command | Purpose |
 | --- | --- |
 | `uv sync --frozen --extra dev` | Locked install for quality/unit CI + local quality tools |
-| `npm run test:unit` | **AVO core** — `pytest -m "not project"` |
+| `npm run test:unit` | **AVO core units** — ignore `tests/projects` and `tests/integration` |
+| `npm run test:integration` | Runtime/subprocess tests under `tests/integration` |
 | `npm run test:projects` | Footage-project / spec-scoped tests only |
 | `pytest` | Everything (core + projects) |
 | `bash scripts/ci/run-unit-tests.sh` | Canonical CI entry (core only; needs frozen sync on PATH) |

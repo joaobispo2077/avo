@@ -1,5 +1,17 @@
 # /avo.chapters reference
 
+## Step/state mapping
+
+**Durable state:** the consumed approved artifact, delivery-manifest.json when present, and the observed result
+
+**Workflow steps:** Validate chapters prerequisites → Run chapters → Verify and report the chapters result
+
+**Approval or input gate:** Pause whenever required input or a human decision prevents the next declared step; report the exact reply or artifact needed.
+
+**Stop when:** Missing required input, a failed or stale gate, a required human decision, or verified chapters completion
+
+**Valid next commands:** /avo.deliver
+
 YouTube chapter markers from the **final-file transcript** and user-approved structure.
 
 ## Preconditions

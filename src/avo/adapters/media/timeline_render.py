@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from avo.timeline.contracts import file_fingerprint
+from avo.timeline.contracts import content_hash, file_fingerprint
 
 
 class TimelineRenderAdapter:
@@ -43,10 +43,14 @@ class TimelineRenderAdapter:
         finally:
             sys.argv = previous
         fingerprint = file_fingerprint(output)
+        render_contract = request.get("render_contract")
         return {
             "status": "pass",
             "output": {**fingerprint, "locator": str(output)},
             "path": str(output),
             "renderProfile": profile,
+            "renderContractHash": (
+                content_hash(render_contract) if render_contract is not None else None
+            ),
             "producer": {"name": "avo.render", "version": "1"},
         }

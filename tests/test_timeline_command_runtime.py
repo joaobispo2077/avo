@@ -27,6 +27,16 @@ def test_all_command_wrappers_have_exactly_one_runtime_mode():
         assert "Shared timeline gateway" in text or name in {"pipeline"}
 
 
+def test_runtime_wrappers_declare_state_stops_and_next_command():
+    for name in COMMANDS:
+        text = (Path("commands/avo") / f"{name}.md").read_text(encoding="utf-8")
+        assert text.count("**Workflow steps:**") == 1, name
+        assert text.count("**Step state source:**") == 1, name
+        assert text.count("**Stopping conditions:**") == 1, name
+        assert text.count("**Valid next commands:**") == 1, name
+        assert text.count("step-status.md") == 1, name
+
+
 @pytest.mark.parametrize(
     "name", ["chapters", "deliver", "retention", "thumbnail", "cleanup", "stats"]
 )

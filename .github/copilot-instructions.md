@@ -17,6 +17,11 @@ contradict it.
 
 ## Token tools
 
+- Ponytail (always-on for orchestrator code): pick the simplest solution that
+  works. YAGNI → reuse → stdlib → native → installed dep → one line → minimum
+  code. Never cut validation, security, accessibility, or error handling. Skills:
+  `/ponytail`, `/ponytail-review`, `/ponytail-audit`, `/ponytail-debt`,
+  `/ponytail-gain`, `/ponytail-help`. See `.github/instructions/ponytail.instructions.md`.
 - Use Caveman mode when the user explicitly asks for `/caveman`, "caveman mode",
   "talk like caveman", "less tokens", or "be brief". Keep technical content,
   code, commands, paths, API names, and quoted errors exact.

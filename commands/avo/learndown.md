@@ -2,6 +2,15 @@
 
 **Timeline integration:** Admin
 
+## Workflow guidance
+
+**Workflow steps:** Validate learndown prerequisites → Run learndown → Verify and report the learndown result
+**Step state source:** the approved-master record and learning-wrap artifact
+**Stopping conditions:** Missing required input, a failed or stale gate, a required human decision, or verified learndown completion
+**Valid next commands:** /avo.cleanup
+
+Follow the shared [step-status response contract](../../agent-skills/avo-pipeline/references/step-status.md) for every progress, input, blocker, and completion response.
+
 Post-master provider-scoped learning consolidation and **draft wrap** preview. **ai-memory is optional** — without it, only MCP wiki consolidation is skipped; all other steps below remain **REQUIRED**.
 
 **Skill:** [`agent-skills/avo-pipeline/references/learndown.md`](../../agent-skills/avo-pipeline/references/learndown.md) · **Optional tools:** [`docs/ai-memory-and-ai-jail.md`](../../docs/ai-memory-and-ai-jail.md)

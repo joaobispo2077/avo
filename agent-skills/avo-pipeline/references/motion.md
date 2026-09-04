@@ -1,5 +1,17 @@
 # /avo.motion reference
 
+## Step/state mapping
+
+**Durable state:** pipeline-run.json plus the current canonical timeline revision
+
+**Workflow steps:** Validate motion prerequisites → Run motion → Verify and report the motion result
+
+**Approval or input gate:** Pause whenever required input or a human decision prevents the next declared step; report the exact reply or artifact needed.
+
+**Stop when:** Missing required input, a failed or stale gate, a required human decision, or verified motion completion
+
+**Valid next commands:** /avo.animation-qc or /avo.watch
+
 HyperFrames-first. Load [`hyperframes`](../../../.claude/skills/hyperframes/SKILL.md) entry + [`motion-doctrine`](../../../.claude/skills/motion-doctrine/SKILL.md) when building slots.
 
 **Product promo / SaaS launch:** load [`product-promo-knowledge.md`](product-promo-knowledge.md) first — curated technique index, render contract, and starter exemplar under `docs/exemplars/hyperframes-product-promo/`.
@@ -63,4 +75,3 @@ tracks, timed animation, candidates, Watch/transcript/QC evidence, and approvals
 Rebase classifies each cue as preserved, shifted, split, removed, ambiguous, or
 unsupported. Only unambiguous shifts auto-apply; ambiguity stops for human
 judgment.
-
