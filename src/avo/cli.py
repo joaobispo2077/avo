@@ -6,6 +6,7 @@ import argparse
 import json
 import sys
 from pathlib import Path
+from typing import Any
 
 from avo.timeline.lifecycle import (
     LifecycleError,
@@ -21,6 +22,20 @@ def _project_arg(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--project", type=Path, required=True)
     parser.add_argument("--video-id", default="")
     parser.add_argument("--json", action="store_true", dest="as_json")
+
+
+def _watch_policy_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument("--watch-whisper-model")
+    parser.add_argument("--watch-device")
+    parser.add_argument("--watch-max-frames", type=int)
+    parser.add_argument("--watch-repair-max-frames", type=int)
+    parser.add_argument("--watch-analysis-attempts", type=int)
+    parser.add_argument("--watch-tool-attempts", type=int)
+    parser.add_argument("--watch-working-directory")
+    parser.add_argument("--watch-format")
+    parser.add_argument("--watch-language")
+    parser.add_argument("--watch-acceptance-criterion", action="append")
+    parser.add_argument("--watch-risk-note", action="append")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -143,6 +158,8 @@ def build_parser() -> argparse.ArgumentParser:
     _project_arg(render_tracks)
     render_tracks.add_argument("--output", type=Path, required=True)
     render_tracks.add_argument("--profile", default="preview")
+    render_tracks.add_argument("--render-contract", type=Path, required=True)
+    render_tracks.add_argument("--fidelity-policy", type=Path)
 
     bmap = sub.add_parser("bmap")
     bmap_sub = bmap.add_subparsers(dest="bmap_command", required=True)
@@ -192,6 +209,10 @@ def build_parser() -> argparse.ArgumentParser:
     run_review.add_argument("--term", action="append", default=[])
     run_review.add_argument("--name", action="append", default=[])
     run_review.add_argument("--profile", default="draft")
+    _watch_policy_args(run_review)
+    policy_review = review_sub.add_parser("policy")
+    _project_arg(policy_review)
+    _watch_policy_args(policy_review)
     decide_review = review_sub.add_parser("decide")
     _project_arg(decide_review)
     decide_review.add_argument(
@@ -209,7 +230,8 @@ def build_parser() -> argparse.ArgumentParser:
     deliver_sub = deliver.add_subparsers(dest="deliver_command", required=True)
     prepare_delivery = deliver_sub.add_parser("prepare")
     _project_arg(prepare_delivery)
-    prepare_delivery.add_argument("--candidate", type=Path, required=True)
+    prepare_delivery.add_argument("--candidate", type=Path)
+    prepare_delivery.add_argument("--materialization", type=Path, required=True)
     prepare_delivery.add_argument("--master", type=Path, required=True)
     prepare_delivery.add_argument("--dependency", action="append", default=[])
     prepare_delivery.add_argument("--model", default="small")
@@ -481,6 +503,31 @@ def _load_json(path: Path) -> dict:
     return value
 
 
+def _materialization_dependencies(materialization: dict) -> dict[str, str]:
+    from avo.timeline.contracts import content_hash
+
+    lock = materialization.get("canonicalInputLock") or {}
+    required = {
+        "cmap": lock.get("cmapRevisionHash"),
+        "sync-map": lock.get("syncRevisionHash"),
+        "bmap": lock.get("bmapRevisionHash"),
+        "tracks": lock.get("tracksRevisionHash"),
+        "assembly-output": (materialization.get("output") or {}).get("sha256"),
+        "materialization": materialization.get("materializationHash"),
+        "delivery-fidelity-policy": materialization.get("deliveryFidelityPolicyHash"),
+        "picture-lineage": materialization.get("pictureLineageHash"),
+    }
+    raw = lock.get("rawFingerprints")
+    if raw:
+        required["raw"] = content_hash(raw)
+    missing = [key for key, value in required.items() if not value]
+    if missing:
+        raise ValueError(
+            "assembly materialization is incomplete: " + ", ".join(sorted(missing))
+        )
+    return {key: str(value) for key, value in required.items()}
+
+
 def _animation(args: argparse.Namespace) -> int:
     from avo.timeline.animation import AnimationService
     from avo.timeline.provider_animation import ProviderAnimationService
@@ -531,8 +578,8 @@ def _animation(args: argparse.Namespace) -> int:
 
 
 def _tracks(args: argparse.Namespace) -> int:
-    from avo.adapters.media.timeline_render import TimelineRenderAdapter
-    from avo.timeline.projection import write_assembly_projection
+    from avo.delivery_fidelity import resolve_delivery_fidelity_policy
+    from avo.timeline.materialize import materialize_assembly
     from avo.timeline.tracks import TracksService
 
     workspace = TimelineWorkspace.from_project(
@@ -548,13 +595,26 @@ def _tracks(args: argparse.Namespace) -> int:
     elif args.tracks_command == "inspect":
         result = service.inspect()
     else:
-        projection_path, manifest = write_assembly_projection(workspace)
-        rendered = TimelineRenderAdapter().render(
-            projection_path,
-            args.output,
-            profile=args.profile,
+        render_contract = _load_json(args.render_contract)
+        overrides = _load_json(args.fidelity_policy) if args.fidelity_policy else {}
+        policy = resolve_delivery_fidelity_policy(
+            profile_id=str(overrides.get("profileId") or args.profile),
+            render_contract=render_contract,
+            prohibited_base_classes=overrides.get("prohibitedBaseClasses"),
+            role_rules=overrides.get("roleRules"),
+            setting_sources={
+                "profileId": "invocation",
+                "renderContract": "invocation",
+                **dict(overrides.get("settingSources") or {}),
+            },
         )
-        result = {"projection": manifest, "render": rendered}
+        result = materialize_assembly(
+            workspace=workspace,
+            output_path=args.output,
+            render_contract=policy["renderContract"],
+            delivery_fidelity_policy=policy,
+            render_profile=args.profile,
+        )
     _emit(result)
     return 0
 
@@ -657,6 +717,145 @@ def _parse_window(value: str) -> dict:
     return {"start": start, "end": end, "reason": parts[2]}
 
 
+def _watch_invocation(args: argparse.Namespace) -> dict[str, object]:
+    mapping = {
+        "whisperModel": "watch_whisper_model",
+        "device": "watch_device",
+        "maxFrames": "watch_max_frames",
+        "repairMaxFrames": "watch_repair_max_frames",
+        "analysisAttempts": "watch_analysis_attempts",
+        "toolAttempts": "watch_tool_attempts",
+        "workingDirectory": "watch_working_directory",
+        "format": "watch_format",
+        "language": "watch_language",
+        "acceptanceCriteria": "watch_acceptance_criterion",
+        "riskNotes": "watch_risk_note",
+    }
+    return {
+        key: value
+        for key, attr in mapping.items()
+        if (value := getattr(args, attr, None)) is not None
+    }
+
+
+def _workspace_watch_policy(
+    workspace: TimelineWorkspace,
+    *,
+    invocation: dict[str, object] | None = None,
+) -> object:
+    from avo.video_context import VideoContext, resolve_context_watch_policy
+
+    context = VideoContext(
+        provider=str(workspace.project.get("provider") or ""),
+        video_id=workspace.video_id,
+        raw_dir=workspace.raw_dir,
+        video_key=None,
+        project=workspace.project,
+    )
+    return resolve_context_watch_policy(context, invocation=invocation)
+
+
+def _review_inputs(
+    args: argparse.Namespace,
+) -> tuple[Path, dict[str, str], dict[str, Any] | None]:
+    dependencies = _parse_dependency(args.dependency)
+    candidate = args.candidate
+    materialization = None
+    if args.materialization:
+        materialization = _load_json(args.materialization)
+        if materialization.get("kind") != "assembly" and args.checkpoint in {
+            "pre-master",
+            "deliver",
+        }:
+            raise ValueError(
+                "pre-master/deliver requires a canonical assembly materialization"
+            )
+        output = materialization["output"]
+        candidate = candidate or Path(
+            str(output.get("locator") or output.get("path") or "")
+        )
+        dependencies = _merge_materialization_dependencies(
+            dependencies, materialization
+        )
+    elif args.checkpoint in {"pre-master", "deliver"}:
+        raise ValueError(
+            f"review run --checkpoint {args.checkpoint} requires --materialization; "
+            "re-materialize the current assembly"
+        )
+    if candidate is None:
+        raise ValueError("review run requires --candidate or --materialization")
+    if not dependencies:
+        raise ValueError(
+            "review run requires exact --dependency values or --materialization"
+        )
+    return Path(candidate), dependencies, materialization
+
+
+def _merge_materialization_dependencies(
+    dependencies: dict[str, str], materialization: dict[str, Any]
+) -> dict[str, str]:
+    derived = _materialization_dependencies(materialization)
+    conflicts = {
+        key
+        for key, value in dependencies.items()
+        if key in derived and derived[key] != value
+    }
+    if conflicts:
+        raise ValueError(
+            "explicit dependencies disagree with materialization: "
+            + ", ".join(sorted(conflicts))
+        )
+    return {**dependencies, **derived}
+
+
+def _start_cut_review(
+    workspace: TimelineWorkspace, args: argparse.Namespace, candidate: Path
+) -> PipelineRunStore:
+    run_store = PipelineRunStore(workspace.pipeline_run_path)
+    state = run_store.load()
+    should_advance = (
+        args.checkpoint == "cut-proof"
+        and state["mainState"] == PipelineState.CMAP_DRAFT.value
+        and state["sideState"] is None
+    )
+    if should_advance:
+        run_store.advance(
+            PipelineState.CUT_AI_REVIEW,
+            TransitionFacts(),
+            actor="avo.review",
+            reason="starting exact cut-proof AI review",
+            active_refs={**state["activeRefs"], "candidatePath": str(candidate)},
+        )
+    return run_store
+
+
+def _record_review_side_state(
+    run_store: PipelineRunStore, result: dict[str, Any]
+) -> None:
+    if result["state"] not in {"blocked", "needs-human-judgment"}:
+        return
+    if run_store.load()["sideState"] is not None:
+        return
+    side = (
+        PipelineState.BLOCKED
+        if result["state"] == "blocked"
+        else PipelineState.NEEDS_HUMAN_JUDGMENT
+    )
+    message = result.get("blocker") or result["state"]
+    run_store.enter_side_state(
+        side,
+        actor="avo.review",
+        reason=message,
+        blockers=[
+            {
+                "code": "AVO-TL-023",
+                "message": message,
+                "remediation": "resolve the review finding and resume explicitly",
+            }
+        ],
+    )
+
+
 def _review(args: argparse.Namespace) -> int:
     from avo.adapters.qc.registry import CheckpointQcRegistry
     from avo.adapters.transcribe.candidate import CandidateTranscriptionAdapter
@@ -668,6 +867,13 @@ def _review(args: argparse.Namespace) -> int:
     workspace = TimelineWorkspace.from_project(
         args.project, video_id=args.video_id or None
     )
+    if args.review_command == "policy":
+        policy = _workspace_watch_policy(
+            workspace,
+            invocation=_watch_invocation(args),
+        )
+        _emit(policy.payload(redact_working_directory=True))
+        return 0
     if args.review_command == "decide":
         result = ApprovalService(workspace).decide(
             decision=args.decision,
@@ -680,42 +886,13 @@ def _review(args: argparse.Namespace) -> int:
         _emit(result)
         return 0
 
-    dependencies = _parse_dependency(args.dependency)
-    candidate = args.candidate
-    if args.materialization:
-        materialization = _load_json(args.materialization)
-        candidate = candidate or Path(materialization["output"]["path"])
-        lock = materialization["canonicalInputLock"]
-        derived = {
-            "cmap": lock["cmapRevisionHash"],
-            "sync-map": lock["syncRevisionHash"],
-            "cutOutput": materialization["output"]["sha256"],
-        }
-        if dependencies and dependencies != derived:
-            raise ValueError("explicit dependencies disagree with materialization")
-        dependencies = derived
-    if candidate is None:
-        raise ValueError("review run requires --candidate or --materialization")
-    if not dependencies:
-        raise ValueError(
-            "review run requires exact --dependency values or --materialization"
-        )
+    candidate, dependencies, materialization = _review_inputs(args)
+    run_store = _start_cut_review(workspace, args, candidate)
 
-    run_store = PipelineRunStore(workspace.pipeline_run_path)
-    state = run_store.load()
-    if (
-        args.checkpoint == "cut-proof"
-        and state["mainState"] == PipelineState.CMAP_DRAFT.value
-        and state["sideState"] is None
-    ):
-        state = run_store.advance(
-            PipelineState.CUT_AI_REVIEW,
-            TransitionFacts(),
-            actor="avo.review",
-            reason="starting exact cut-proof AI review",
-            active_refs={**state["activeRefs"], "candidatePath": str(candidate)},
-        )
-
+    watch_policy = _workspace_watch_policy(
+        workspace,
+        invocation=_watch_invocation(args),
+    )
     result = ReviewRunner(
         review_root=workspace.review_dir,
         transcription=CandidateTranscriptionAdapter(),
@@ -723,6 +900,7 @@ def _review(args: argparse.Namespace) -> int:
         deterministic_qc=CheckpointQcRegistry(),
         workspace=workspace,
         clock=now_iso,
+        watch_policy=watch_policy,
     ).run(
         checkpoint=args.checkpoint,
         candidate=candidate,
@@ -731,27 +909,10 @@ def _review(args: argparse.Namespace) -> int:
         risk_windows=[_parse_window(value) for value in args.window],
         terms=args.term,
         names=args.name,
+        materialization=materialization,
+        materialization_path=args.materialization,
     )
-    if result["state"] in {"blocked", "needs-human-judgment"}:
-        current = run_store.load()
-        if current["sideState"] is None:
-            side = (
-                PipelineState.BLOCKED
-                if result["state"] == "blocked"
-                else PipelineState.NEEDS_HUMAN_JUDGMENT
-            )
-            run_store.enter_side_state(
-                side,
-                actor="avo.review",
-                reason=result.get("blocker") or result["state"],
-                blockers=[
-                    {
-                        "code": "AVO-TL-023",
-                        "message": result.get("blocker") or result["state"],
-                        "remediation": "resolve the review finding and resume explicitly",
-                    }
-                ],
-            )
+    _record_review_side_state(run_store, result)
     _emit(result)
     return 4 if result["state"] == "blocked" else 0
 
@@ -968,13 +1129,48 @@ def _cleanup(args: argparse.Namespace) -> int:
     return 0
 
 
-def _deliver(args: argparse.Namespace) -> int:
+def _prepare_delivery(args: argparse.Namespace, workspace: TimelineWorkspace) -> dict:
     from avo.adapters.qc.registry import CheckpointQcRegistry
     from avo.adapters.transcribe.candidate import CandidateTranscriptionAdapter
     from avo.adapters.understand.watch_skill import WatchSkillAdapter
     from avo.timeline.delivery import DeliveryService
     from avo.timeline.review_runner import ReviewRunner
     from avo.timeline.store import now_iso
+
+    materialization = _load_json(args.materialization)
+    if materialization.get("kind") != "assembly":
+        raise ValueError(
+            "deliver prepare requires a canonical assembly materialization"
+        )
+    output = materialization.get("output") or {}
+    candidate = args.candidate or Path(
+        str(output.get("locator") or output.get("path") or "")
+    )
+    dependencies = _merge_materialization_dependencies(
+        _parse_dependency(args.dependency), materialization
+    )
+    runner = ReviewRunner(
+        review_root=workspace.review_dir,
+        transcription=CandidateTranscriptionAdapter(),
+        watch=WatchSkillAdapter(),
+        deterministic_qc=CheckpointQcRegistry(),
+        workspace=workspace,
+        clock=now_iso,
+        watch_policy=_workspace_watch_policy(workspace),
+    )
+    return DeliveryService(workspace).prepare(
+        candidate=candidate,
+        master=args.master,
+        dependencies=dependencies,
+        materialization=materialization,
+        materialization_path=args.materialization,
+        review_runner=runner,
+        transcript_options={"model": args.model},
+    )
+
+
+def _deliver(args: argparse.Namespace) -> int:
+    from avo.timeline.delivery import DeliveryService
 
     workspace = TimelineWorkspace.from_project(
         args.project, video_id=args.video_id or None
@@ -985,24 +1181,7 @@ def _deliver(args: argparse.Namespace) -> int:
     elif args.deliver_command == "approve":
         result = service.approve(actor=args.actor, reason=args.reason)
     else:
-        dependencies = _parse_dependency(args.dependency)
-        if not dependencies:
-            dependencies = workspace.active_dependency_snapshot()
-        runner = ReviewRunner(
-            review_root=workspace.review_dir,
-            transcription=CandidateTranscriptionAdapter(),
-            watch=WatchSkillAdapter(),
-            deterministic_qc=CheckpointQcRegistry(),
-            workspace=workspace,
-            clock=now_iso,
-        )
-        result = service.prepare(
-            candidate=args.candidate,
-            master=args.master,
-            dependencies=dependencies,
-            review_runner=runner,
-            transcript_options={"model": args.model},
-        )
+        result = _prepare_delivery(args, workspace)
     _emit(result)
     return 0
 

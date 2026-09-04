@@ -1,5 +1,17 @@
 # /avo.grade reference
 
+## Step/state mapping
+
+**Durable state:** pipeline-run.json plus the current canonical timeline revision
+
+**Workflow steps:** Validate grade prerequisites → Run grade → Verify and report the grade result
+
+**Approval or input gate:** Pause whenever required input or a human decision prevents the next declared step; report the exact reply or artifact needed.
+
+**Stop when:** Missing required input, a failed or stale gate, a required human decision, or verified grade completion
+
+**Valid next commands:** /avo.color or /avo.watch
+
 **Creative grade pass** using repo `grade.py` — ffmpeg presets per segment.
 
 ## Boundary vs `/avo.color`

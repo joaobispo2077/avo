@@ -2,6 +2,15 @@
 
 **Timeline integration:** Profile
 
+## Workflow guidance
+
+**Workflow steps:** Validate motion graphics prerequisites → Run motion graphics → Verify and report the motion graphics result
+**Step state source:** the child pipeline-run.json and its parent timeline lineage
+**Stopping conditions:** Missing required input, a failed or stale gate, a required human decision, or verified motion graphics completion
+**Valid next commands:** /avo.animation-qc
+
+Follow the shared [step-status response contract](../../agent-skills/avo-pipeline/references/step-status.md) for every progress, input, blocker, and completion response.
+
 Router to short design-led motion graphic skill.
 
 **Skill:** [`agent-skills/avo-pipeline/references/motion-graphics.md`](../../agent-skills/avo-pipeline/references/motion-graphics.md)

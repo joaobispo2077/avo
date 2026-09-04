@@ -25,13 +25,6 @@
       "reason": "Adapter orchestration with many format/capability branches"
     },
     {
-      "path": "src/avo/adapters/media/video_tracks.py",
-      "name": "compile_video_layers",
-      "complexity": 17,
-      "rank": "C",
-      "reason": "Adapter orchestration with many format/capability branches"
-    },
-    {
       "path": "src/avo/adapters/motion/hyperframes.py",
       "name": "render_timeline_instance",
       "complexity": 13,
@@ -60,13 +53,6 @@
       "reason": "Adapter orchestration with many format/capability branches"
     },
     {
-      "path": "src/avo/adapters/qc/registry.py",
-      "name": "check",
-      "complexity": 25,
-      "rank": "D",
-      "reason": "Adapter orchestration with many format/capability branches"
-    },
-    {
       "path": "src/avo/adapters/transcribe/candidate.py",
       "name": "transcribe",
       "complexity": 16,
@@ -85,13 +71,6 @@
       "name": "CandidateTranscriptionAdapter",
       "complexity": 12,
       "rank": "C",
-      "reason": "Adapter orchestration with many format/capability branches"
-    },
-    {
-      "path": "src/avo/adapters/understand/watch_skill.py",
-      "name": "review",
-      "complexity": 24,
-      "rank": "D",
       "reason": "Adapter orchestration with many format/capability branches"
     },
     {
@@ -162,13 +141,6 @@
       "name": "_sync",
       "complexity": 21,
       "rank": "D",
-      "reason": "CLI/entrypoint branching; extract helpers in follow-up burn-down"
-    },
-    {
-      "path": "src/avo/cli.py",
-      "name": "_review",
-      "complexity": 19,
-      "rank": "C",
       "reason": "CLI/entrypoint branching; extract helpers in follow-up burn-down"
     },
     {
@@ -438,13 +410,6 @@
       "reason": "Media/render pipeline with ffmpeg/qc branches"
     },
     {
-      "path": "src/avo/shorts_contract.py",
-      "name": "_validate_request_invariants",
-      "complexity": 13,
-      "rank": "C",
-      "reason": "Media/render pipeline with ffmpeg/qc branches"
-    },
-    {
       "path": "src/avo/shorts_delivery.py",
       "name": "promote_batch",
       "complexity": 11,
@@ -656,13 +621,6 @@
     },
     {
       "path": "src/avo/timeline/reconstruction.py",
-      "name": "build_reconstruction_bundle",
-      "complexity": 19,
-      "rank": "C",
-      "reason": "Timeline state machine / review gate branching; planned decomposition"
-    },
-    {
-      "path": "src/avo/timeline/reconstruction.py",
       "name": "verify_reconstruction_bundle",
       "complexity": 12,
       "rank": "C",
@@ -687,20 +645,6 @@
       "name": "evidence_is_fresh",
       "complexity": 22,
       "rank": "D",
-      "reason": "Timeline state machine / review gate branching; planned decomposition"
-    },
-    {
-      "path": "src/avo/timeline/review_runner.py",
-      "name": "_inspect_once",
-      "complexity": 33,
-      "rank": "E",
-      "reason": "Timeline state machine / review gate branching; planned decomposition"
-    },
-    {
-      "path": "src/avo/timeline/review_runner.py",
-      "name": "run",
-      "complexity": 14,
-      "rank": "C",
       "reason": "Timeline state machine / review gate branching; planned decomposition"
     },
     {
@@ -862,13 +806,6 @@
       "name": "resolve_context",
       "complexity": 21,
       "rank": "D",
-      "reason": "Reporting/inventory/validation aggregation with many optional fields"
-    },
-    {
-      "path": "src/avo/video_context.py",
-      "name": "merge_config",
-      "complexity": 14,
-      "rank": "C",
       "reason": "Reporting/inventory/validation aggregation with many optional fields"
     },
     {

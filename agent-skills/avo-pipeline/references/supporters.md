@@ -1,5 +1,17 @@
 # /avo.supporters reference
 
+## Step/state mapping
+
+**Durable state:** the observed invocation result and any command-owned manifest
+
+**Workflow steps:** Validate supporters prerequisites → Run supporters → Verify and report the supporters result
+
+**Approval or input gate:** Pause whenever required input or a human decision prevents the next declared step; report the exact reply or artifact needed.
+
+**Stop when:** Missing required input, a failed or stale gate, a required human decision, or verified supporters completion
+
+**Valid next commands:** /avo.issues or /avo.help
+
 Read-only sponsorship and prioritization surface.
 
 ## When to use

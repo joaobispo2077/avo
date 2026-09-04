@@ -254,3 +254,12 @@ The footage is at C:/Videos/review
 ---
 
 Pipeline detail: [`avo-workflow.md`](avo-workflow.md) · Canonical rules: [`../AGENTS.md`](../AGENTS.md)
+
+## Knowing where you are
+
+Every `/avo.*` response ends with the same compact orientation block: active
+workflow, current declared step and status, next declared step, and the next
+expected update or exact user action. Durable project artifacts—not chat
+memory—decide the reported state. See
+[`avo-agent-step-status.md`](avo-agent-step-status.md) for resume, approval,
+blocker, completion, and prompt-authoring rules.

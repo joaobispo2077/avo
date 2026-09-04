@@ -161,3 +161,11 @@ Always load before executing:
 - [`docs/avo-workflow.md`](../../../docs/avo-workflow.md)
 
 **Note:** `/avo.deliver` covers the full master. Use `/avo.audit` with `from`/`to` for window QC only.
+
+## Invocation versus persistent settings
+
+Resolve optional controls per field: global → provider → registry → project → invocation.
+Arrays replace earlier arrays. Use an invocation flag for one run; persist only
+stable policy at the narrowest reusable scope. Inspect Watch resolution with
+`avo review policy --project <avo.project.json>` before expensive work. See
+[`docs/optional-capabilities.md`](../../../docs/optional-capabilities.md).

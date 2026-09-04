@@ -2,6 +2,15 @@
 
 **Timeline integration:** Profile
 
+## Workflow guidance
+
+**Workflow steps:** Validate pr video prerequisites → Run pr video → Verify and report the pr video result
+**Step state source:** the child pipeline-run.json and its parent timeline lineage
+**Stopping conditions:** Missing required input, a failed or stale gate, a required human decision, or verified pr video completion
+**Valid next commands:** /avo.watch
+
+Follow the shared [step-status response contract](../../agent-skills/avo-pipeline/references/step-status.md) for every progress, input, blocker, and completion response.
+
 Router to the PR → video content skill. Link-only — do not duplicate skill body.
 
 **Skill:** [`agent-skills/avo-pipeline/references/pr-video.md`](../../agent-skills/avo-pipeline/references/pr-video.md)

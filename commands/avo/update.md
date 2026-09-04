@@ -2,6 +2,15 @@
 
 **Timeline integration:** Admin
 
+## Workflow guidance
+
+**Workflow steps:** Validate update prerequisites → Run update → Verify and report the update result
+**Step state source:** the observed invocation result and any command-owned manifest
+**Stopping conditions:** Missing required input, a failed or stale gate, a required human decision, or verified update completion
+**Valid next commands:** /avo.help
+
+Follow the shared [step-status response contract](../../agent-skills/avo-pipeline/references/step-status.md) for every progress, input, blocker, and completion response.
+
 Refresh your AVO install from GitHub — new features, updated agent skills, and toolchain — **without losing the providers you already set up** (e.g. `bishop`).
 
 **Skill:** [`agent-skills/avo-pipeline/references/update.md`](../../agent-skills/avo-pipeline/references/update.md)

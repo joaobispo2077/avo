@@ -184,7 +184,8 @@ def gain_enabled(edl: dict, source_name: str) -> bool:
         and not audio.get("gain_default_pct")
     ):
         return False
-    return str(source_name).startswith("main")
+    camera_sources = {str(key) for key in audio.get("camera_source_keys") or []}
+    return str(source_name).startswith("main") or str(source_name) in camera_sources
 
 
 def resolve_default_boost_pct(edl: dict, provider: dict | None = None) -> int:

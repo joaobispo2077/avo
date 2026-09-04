@@ -2,6 +2,15 @@
 
 **Timeline integration:** Owns
 
+## Workflow guidance
+
+**Workflow steps:** Validate sync prerequisites → Run sync → Verify and report the sync result
+**Step state source:** pipeline-run.json plus the current canonical timeline revision
+**Stopping conditions:** Missing required input, a failed or stale gate, a required human decision, or verified sync completion
+**Valid next commands:** /avo.transcribe or /avo.trim
+
+Follow the shared [step-status response contract](../../agent-skills/avo-pipeline/references/step-status.md) for every progress, input, blocker, and completion response.
+
 Audio sync diagnosis before creative cutting (external recorder, multicam, drift).
 
 **Skill:** [`agent-skills/avo-pipeline/references/sync.md`](../../agent-skills/avo-pipeline/references/sync.md)

@@ -11,11 +11,12 @@ from tests.integration.test_cmap_cut_review_runtime import _snapshot, _workspace
 from tests.test_timeline_review_integration import FakeQc, FakeTranscript, FakeWatch
 
 from avo.adapters.media.timeline_render import TimelineRenderAdapter
+from avo.delivery_fidelity import resolve_delivery_fidelity_policy
 from avo.timeline.approval_service import ApprovalService
 from avo.timeline.bmap_service import BMapService
 from avo.timeline.cmap_service import CMapService
 from avo.timeline.contracts import file_fingerprint
-from avo.timeline.materialize import materialize_cut_proof
+from avo.timeline.materialize import materialize_assembly, materialize_cut_proof
 from avo.timeline.projection import write_assembly_projection
 from avo.timeline.review_runner import ReviewRunner
 from avo.timeline.sync_service import SyncService
@@ -267,3 +268,35 @@ def test_encoded_multilayer_tracks_render_and_trace(tmp_path: Path) -> None:
     report = TracksService(workspace).inspect()
     assert len(report["audioLayers"]) == 6
     assert len(report["videoLayers"]) == 7
+
+    contract = {
+        "width": 1280,
+        "height": 720,
+        "frameRate": {"num": 30, "den": 1, "tolerance": 0.01},
+        "allowedTransformations": [
+            "trim",
+            "concat",
+            "place/composite",
+            "captions",
+            "encode",
+        ],
+    }
+    policy = resolve_delivery_fidelity_policy(
+        profile_id="integration-preview", render_contract=contract
+    )
+    assembly_output = raw_dir / "edit" / "tracks-assembly.mp4"
+    assembly = materialize_assembly(
+        workspace=workspace,
+        output_path=assembly_output,
+        render_contract=policy["renderContract"],
+        delivery_fidelity_policy=policy,
+        render_profile="preview",
+    )
+    assert assembly_output.is_file()
+    assert assembly["output"] == source(assembly_output)
+    assert assembly["canonicalInputLock"]["tracksRevisionId"] == tracks["revisionId"]
+    assert assembly["deliveryFidelityPolicyHash"] == policy["policyHash"]
+    assert (
+        assembly["pictureLineageHash"]
+        == assembly["pictureLineage"]["pictureLineageHash"]
+    )

@@ -2,6 +2,15 @@
 
 **Timeline integration:** Admin
 
+## Workflow guidance
+
+**Workflow steps:** Validate supporters prerequisites → Run supporters → Verify and report the supporters result
+**Step state source:** the observed invocation result and any command-owned manifest
+**Stopping conditions:** Missing required input, a failed or stale gate, a required human decision, or verified supporters completion
+**Valid next commands:** /avo.issues or /avo.help
+
+Follow the shared [step-status response contract](../../agent-skills/avo-pipeline/references/step-status.md) for every progress, input, blocker, and completion response.
+
 Sponsorship links and roadmap prioritization policy.
 
 **Skill:** [`agent-skills/avo-pipeline/references/supporters.md`](../../agent-skills/avo-pipeline/references/supporters.md)

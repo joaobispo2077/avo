@@ -258,8 +258,12 @@ def build_phrases(
         phrase_start = float(group[0]["start"])
         caption_words = []
         for word_index, word in enumerate(group):
-            word_start = max(phrase_start, float(word["start"]))
-            word_end = min(end, float(word["end"]))
+            # ASR can emit a zero-duration or overlapping word exactly where the
+            # next phrase begins. Keep its highlight seek-safe by collapsing the
+            # interval onto this phrase's clamped boundary instead of allowing
+            # highlightEnterSec to escape past phrase.endSec.
+            word_start = min(end, max(phrase_start, float(word["start"])))
+            word_end = min(end, max(word_start, float(word["end"])))
             following = (
                 float(group[word_index + 1]["start"])
                 if word_index + 1 < len(group)
@@ -271,7 +275,7 @@ def build_phrases(
                     "id": f"p{phrase_index + 1}-w{word_index + 1}",
                     "text": html.escape(str(word["text"]), quote=True),
                     "startSec": round(word_start, 6),
-                    "endSec": round(max(word_start, word_end), 6),
+                    "endSec": round(word_end, 6),
                     "punch": bool(word.get("punch", False)),
                     "highlightEnterSec": round(word_start, 6),
                     "highlightExitSec": round(highlight_exit, 6),
@@ -328,3 +332,134 @@ def plan_captions(
         duration=duration,
     )
     return build_phrases(mapped, policy, duration=duration), audit
+
+
+def plan_segmented_captions(
+    source_words: Iterable[Mapping[str, Any]],
+    segments: Iterable[Mapping[str, Any]],
+    corrections: Iterable[Mapping[str, Any]],
+    policy: Mapping[str, Any],
+    *,
+    candidate_id: str,
+    speed: float,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Map captions per declared segment so phrases can never bridge a seam."""
+    words = [dict(word) for word in source_words]
+    segment_rows = [dict(segment) for segment in segments]
+    correction_rows = [dict(row) for row in corrections]
+    apply_corrections([], correction_rows, candidate_id=candidate_id)
+    active_correction_indexes = _active_correction_indexes(
+        correction_rows, candidate_id
+    )
+    matched_correction_indexes: set[int] = set()
+    phrases: list[dict[str, Any]] = []
+    audits: list[dict[str, Any]] = []
+    for segment in segment_rows:
+        segment_phrases, segment_audit = _plan_caption_segment(
+            words,
+            segment,
+            correction_rows,
+            policy,
+            candidate_id=candidate_id,
+            speed=speed,
+        )
+        phrases.extend(segment_phrases)
+        _append_segment_audits(
+            audits, matched_correction_indexes, segment_audit, segment
+        )
+    for correction_index in sorted(
+        active_correction_indexes - matched_correction_indexes
+    ):
+        audits.append(
+            {
+                "correctionIndex": correction_index,
+                "operation": correction_rows[correction_index]["operation"],
+                "status": "not-matched",
+                "candidateId": candidate_id,
+            }
+        )
+    _reindex_phrases(phrases)
+    return phrases, audits
+
+
+def _active_correction_indexes(
+    corrections: list[dict[str, Any]], candidate_id: str
+) -> set[int]:
+    return {
+        index
+        for index, correction in enumerate(corrections)
+        if not correction.get("scopeCandidateIds")
+        or candidate_id in correction["scopeCandidateIds"]
+    }
+
+
+def _append_segment_audits(
+    target: list[dict[str, Any]],
+    matched: set[int],
+    audits: list[dict[str, Any]],
+    segment: Mapping[str, Any],
+) -> None:
+    for audit in audits:
+        if audit.get("status") == "not-matched":
+            continue
+        matched.add(int(audit["correctionIndex"]))
+        target.append(
+            {
+                **audit,
+                "segmentId": str(segment.get("segmentId") or ""),
+                "segmentOrder": int(segment["order"]),
+            }
+        )
+
+
+def _plan_caption_segment(
+    words: list[dict[str, Any]],
+    segment: Mapping[str, Any],
+    corrections: list[dict[str, Any]],
+    policy: Mapping[str, Any],
+    *,
+    candidate_id: str,
+    speed: float,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    start = float(segment["startSec"])
+    end = float(segment["endSec"])
+    selected = [
+        word
+        for word in words
+        if float(word["end"]) > start and float(word["start"]) < end
+    ]
+    phrases, audit = plan_captions(
+        selected,
+        corrections,
+        policy,
+        candidate_id=candidate_id,
+        source_start=start,
+        source_end=end,
+        speed=speed,
+        duration=(end - start) / speed,
+    )
+    offset = float(segment["outputStartSec"])
+    return [_offset_phrase(phrase, offset) for phrase in phrases], audit
+
+
+def _offset_phrase(phrase: Mapping[str, Any], offset: float) -> dict[str, Any]:
+    item = dict(phrase)
+    item["words"] = [dict(word) for word in phrase["words"]]
+    for field in ("startSec", "endSec"):
+        item[field] = round(float(item[field]) + offset, 6)
+    for word in item["words"]:
+        for field in (
+            "startSec",
+            "endSec",
+            "highlightEnterSec",
+            "highlightExitSec",
+        ):
+            word[field] = round(float(word[field]) + offset, 6)
+    return item
+
+
+def _reindex_phrases(phrases: list[dict[str, Any]]) -> None:
+    for phrase_index, phrase in enumerate(phrases, 1):
+        phrase["id"] = f"p{phrase_index}"
+        for word_index, word in enumerate(phrase["words"], 1):
+            word["id"] = f"p{phrase_index}-w{word_index}"

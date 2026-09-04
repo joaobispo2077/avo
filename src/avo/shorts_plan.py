@@ -81,13 +81,12 @@ def words_for_range(
 
 
 def _validate_candidate_distinctness(candidates: list[Mapping[str, Any]]) -> None:
-    seen: dict[tuple[str, float, float], str] = {}
+    seen: dict[tuple[Any, ...], str] = {}
     for candidate in candidates:
-        source_range = candidate["sourceRange"]
+        ranges = candidate.get("sourceSegments") or [candidate["sourceRange"]]
         key = (
             _normalized_text(candidate["viewerPromise"]),
-            float(source_range["startSec"]),
-            float(source_range["endSec"]),
+            tuple((float(item["startSec"]), float(item["endSec"])) for item in ranges),
         )
         previous = seen.get(key)
         if previous is not None:
@@ -96,6 +95,87 @@ def _validate_candidate_distinctness(candidates: list[Mapping[str, Any]]) -> Non
                 "same viewer promise and source range"
             )
         seen[key] = str(candidate["id"])
+
+
+def _resolved_source_segments(
+    candidate: Mapping[str, Any],
+    *,
+    source_id: str,
+    source_fingerprint: str,
+    speed: float,
+    source_duration: float,
+) -> list[dict[str, Any]]:
+    declared = candidate.get("sourceSegments")
+    if declared is None:
+        source_range = candidate["sourceRange"]
+        declared = [
+            {
+                "order": 1,
+                "sourceId": source_id,
+                "startSec": source_range["startSec"],
+                "endSec": source_range["endSec"],
+                "rationale": candidate.get("coreIdea") or "legacy source range",
+                "evidenceReference": candidate.get("editorialApprovalReference")
+                or "legacy-v1.0-normalization",
+            }
+        ]
+    output_cursor = 0.0
+    resolved: list[dict[str, Any]] = []
+    prior: list[dict[str, Any]] = []
+    for position, raw in enumerate(declared, 1):
+        segment = deepcopy(dict(raw))
+        start, end = _validate_source_segment(
+            segment,
+            position=position,
+            source_id=source_id,
+            source_duration=source_duration,
+            prior=prior,
+        )
+        duration = (end - start) / speed
+        resolved.append(
+            {
+                **segment,
+                "segmentId": f"{candidate['id']}-s{position:03d}",
+                "sourceFingerprint": source_fingerprint,
+                "outputStartSec": round(output_cursor, 6),
+                "outputEndSec": round(output_cursor + duration, 6),
+            }
+        )
+        output_cursor += duration
+        prior.append(segment)
+    return resolved
+
+
+def _validate_source_segment(
+    segment: Mapping[str, Any],
+    *,
+    position: int,
+    source_id: str,
+    source_duration: float,
+    prior: list[dict[str, Any]],
+) -> tuple[float, float]:
+    if segment.get("order") != position:
+        raise PlanningError(
+            "source segment order must equal array position; segments are never auto-sorted"
+        )
+    if segment.get("sourceId") != source_id:
+        raise PlanningError(f"source segment {position} references unknown sourceId")
+    start, end = float(segment["startSec"]), float(segment["endSec"])
+    if end <= start:
+        raise PlanningError("source segment duration must be positive")
+    if math.isfinite(source_duration) and end > source_duration + 1e-6:
+        raise PlanningError(
+            f"source segment {position} ends beyond source duration {source_duration:.3f}s"
+        )
+    overlaps = any(
+        start < float(item["endSec"]) and end > float(item["startSec"])
+        for item in prior
+    )
+    if overlaps and not segment.get("overlapApprovalReference"):
+        raise PlanningError(
+            f"source segment {position} overlaps an earlier segment without overlap approval"
+        )
+    return start, end
 
 
 def _resolve_layout(defaults: Mapping[str, Any], candidate: Mapping[str, Any]) -> dict:
@@ -175,6 +255,65 @@ def _allocation_candidates(
     return [str(item["id"]) for item in items[:count]]
 
 
+def _source_context(
+    request: Mapping[str, Any],
+    transcript: Mapping[str, Any],
+    supplied_fingerprint: str | None,
+) -> tuple[str, str, float]:
+    source_fingerprint = (
+        supplied_fingerprint
+        or request.get("source", {}).get("expectedFingerprint")
+        or transcript.get("source", {}).get("sha256")
+        or shorts_contract.content_hash(transcript)
+    )
+    if not re.fullmatch(r"[a-f0-9]{64}", str(source_fingerprint)):
+        raise PlanningError("source fingerprint must be a SHA-256 hex digest")
+    expected = request.get("source", {}).get("expectedFingerprint")
+    if expected and expected != source_fingerprint:
+        raise PlanningError("source fingerprint changed after the request was approved")
+    source_id = str(request.get("source", {}).get("sourceId") or "master")
+    declared_duration = request.get("source", {}).get("durationSec")
+    duration = float(declared_duration) if declared_duration is not None else math.inf
+    return str(source_fingerprint), source_id, duration
+
+
+def _caption_plan(
+    request: Mapping[str, Any],
+    candidate: Mapping[str, Any],
+    words: list[dict[str, Any]],
+    segments: list[dict[str, Any]],
+    layout: dict[str, Any],
+    speed: float,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], Mapping[str, Any], list[Any]]:
+    caption_policy = _deep_merge(
+        request["defaults"]["captions"], candidate.get("captionOverride")
+    )
+    caption_anchor = caption_policy.get("anchor", "auto")
+    if caption_anchor == "auto":
+        caption_anchor = layout["captionAnchor"]
+    layout["captionAnchor"] = caption_anchor
+    shorts_captions.validate_anchor(
+        caption_anchor,
+        layout_mode=layout["mode"],
+        protected_regions=layout.get("protectedRegions") or [],
+    )
+    corrections = [
+        correction
+        for correction in request.get("corrections") or []
+        if not correction.get("scopeCandidateIds")
+        or candidate["id"] in correction["scopeCandidateIds"]
+    ]
+    captions, audit = shorts_captions.plan_segmented_captions(
+        words,
+        segments,
+        corrections,
+        policy=caption_policy,
+        candidate_id=str(candidate["id"]),
+        speed=speed,
+    )
+    return captions, audit, caption_policy, corrections
+
+
 def resolve_batch(
     request: Mapping[str, Any],
     transcript: Mapping[str, Any],
@@ -200,24 +339,31 @@ def resolve_batch(
     words = transcript_words(transcript)
     speed_policy = request["defaults"]["speed"]
     max_duration = float(request["output"]["maxDurationSec"])
-    source_fingerprint = (
-        source_fingerprint
-        or request.get("source", {}).get("expectedFingerprint")
-        or transcript.get("source", {}).get("sha256")
-        or shorts_contract.content_hash(transcript)
+    source_fingerprint, source_id, source_duration = _source_context(
+        request, transcript, source_fingerprint
     )
-    if not re.fullmatch(r"[a-f0-9]{64}", str(source_fingerprint)):
-        raise PlanningError("source fingerprint must be a SHA-256 hex digest")
 
     items: list[dict[str, Any]] = []
     required_reviews: list[str] = []
     for candidate in candidates:
-        start = float(candidate["sourceRange"]["startSec"])
-        end = float(candidate["sourceRange"]["endSec"])
-        selected_words = words_for_range(words, start, end)
+        speed, review_speed = _speed_for(speed_policy, candidate)
+        segments = _resolved_source_segments(
+            candidate,
+            source_id=source_id,
+            source_fingerprint=str(source_fingerprint),
+            speed=speed,
+            source_duration=source_duration,
+        )
+        selected_words = [
+            word
+            for segment in segments
+            for word in words_for_range(
+                words, float(segment["startSec"]), float(segment["endSec"])
+            )
+        ]
         if not selected_words:
             raise PlanningError(
-                f"candidate {candidate['id']} source range has no transcript words"
+                f"candidate {candidate['id']} source segments have no transcript words"
             )
         evidence = _normalized_text(candidate["sourceEvidence"])
         selected_text = _normalized_text(
@@ -229,41 +375,18 @@ def resolve_batch(
                 "in its transcript-backed source range"
             )
 
-        speed, review_speed = _speed_for(speed_policy, candidate)
-        edited_duration = (end - start) / speed
+        edited_duration = sum(
+            float(segment["outputEndSec"]) - float(segment["outputStartSec"])
+            for segment in segments
+        )
         if edited_duration > max_duration + 1e-9:
             raise PlanningError(
                 f"candidate {candidate['id']} edited duration "
                 f"{edited_duration:.3f}s exceeds maxDurationSec {max_duration:g}"
             )
         layout = _resolve_layout(request["defaults"]["layout"], candidate)
-        caption_policy = _deep_merge(
-            request["defaults"]["captions"], candidate.get("captionOverride")
-        )
-        caption_anchor = caption_policy.get("anchor", "auto")
-        if caption_anchor == "auto":
-            caption_anchor = layout["captionAnchor"]
-        layout["captionAnchor"] = caption_anchor
-        shorts_captions.validate_anchor(
-            caption_anchor,
-            layout_mode=layout["mode"],
-            protected_regions=layout.get("protectedRegions") or [],
-        )
-        scoped_corrections = [
-            correction
-            for correction in request.get("corrections") or []
-            if not correction.get("scopeCandidateIds")
-            or candidate["id"] in correction["scopeCandidateIds"]
-        ]
-        captions, _correction_audit = shorts_captions.plan_captions(
-            selected_words,
-            scoped_corrections,
-            caption_policy,
-            candidate_id=str(candidate["id"]),
-            source_start=start,
-            source_end=end,
-            speed=speed,
-            duration=edited_duration,
+        captions, correction_audit, caption_policy, scoped_corrections = _caption_plan(
+            request, candidate, words, segments, layout, speed
         )
         fingerprint = _item_fingerprint(
             candidate,
@@ -280,12 +403,12 @@ def resolve_batch(
             "coreIdea": candidate["coreIdea"],
             "viewerPromise": candidate["viewerPromise"],
             "postingTitle": candidate["postingTitle"],
-            "sourceRange": {"startSec": start, "endSec": end},
             "sourceEvidence": candidate["sourceEvidence"],
             "speed": speed,
             "editedDurationSec": round(edited_duration, 6),
             "layout": layout,
             "captions": captions,
+            "captionCorrectionAudit": correction_audit,
             "inputFingerprint": fingerprint,
             "expectedOutputBasename": (f"{request['batchId']}-short-{candidate['id']}"),
             "rightsReviewReferences": list(candidate.get("rightsNotes") or []),
@@ -295,6 +418,10 @@ def resolve_batch(
             ],
             "qcProfile": "shorts-proof",
         }
+        if request.get("version") == "1.1":
+            item["sourceSegments"] = segments
+        else:
+            item["sourceRange"] = deepcopy(candidate["sourceRange"])
         items.append(item)
         if review_speed:
             required_reviews.append(
@@ -358,7 +485,7 @@ def resolve_batch(
 
     request_path = Path(request_path)
     plan: dict[str, Any] = {
-        "version": "1.0",
+        "version": str(request.get("version") or "1.0"),
         "batchId": request["batchId"],
         "planRevision": plan_revision,
         "requestPath": str(request_path),
@@ -374,6 +501,22 @@ def resolve_batch(
         "planApproval": {"status": "pending", "reference": None, "timestamp": None},
         "planHash": "0" * 64,
     }
+    if request.get("version") == "1.1":
+        source = request["source"]
+        plan.update(
+            {
+                "planVersion": "1.1",
+                "batchRoot": request["batchRoot"],
+                "batchRootSource": request["batchRootSource"],
+                "source": {
+                    "sourceId": source_id,
+                    "masterPath": source["masterPath"],
+                    "transcriptPath": source.get("transcriptPath"),
+                    "mediaFingerprint": str(source_fingerprint),
+                    "transcriptFingerprint": shorts_contract.content_hash(transcript),
+                },
+            }
+        )
     if provider_tokens_fingerprint:
         plan["providerTokensFingerprint"] = provider_tokens_fingerprint
     if provider_tokens:

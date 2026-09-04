@@ -37,3 +37,10 @@ description: AVO — AI Video Orchestrator. Agent contract for conversation-driv
 
 Load **avo-pipeline** when the user invokes any `/avo.*` command or pipeline stage.
 Load **avo-provider** when creating or configuring a provider.
+
+## Guided responses
+
+For every AVO-owned response, load and apply the [shared response contract](../avo-pipeline/references/step-status.md),
+the shared response contract. Resolve
+the current step from durable project state, and end with its exact four-line
+workflow footer.

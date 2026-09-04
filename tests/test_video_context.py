@@ -20,6 +20,16 @@ class VideoContextTests(unittest.TestCase):
     def setUp(self) -> None:
         self.tmp = tempfile.TemporaryDirectory()
         self.root = Path(self.tmp.name)
+        (self.root / "config").mkdir()
+        (self.root / "config" / "avo.config.json").write_text(
+            json.dumps(
+                {
+                    "transcription": {"model": "small"},
+                    "watch": {"device": "auto", "acceptanceCriteria": ["global"]},
+                }
+            ),
+            encoding="utf-8",
+        )
         self.raw = self.root / "external-footage"
         self.raw.mkdir()
         (self.raw / "avo.project.json").write_text(
@@ -34,6 +44,9 @@ class VideoContextTests(unittest.TestCase):
                     "name": "_template",
                     "kind": "youtube",
                     "transcription": {"language": "en"},
+                    "routingOverrides": {
+                        "watch": {"device": "cpu", "riskNotes": ["provider"]}
+                    },
                 }
             ),
             encoding="utf-8",
@@ -57,6 +70,45 @@ class VideoContextTests(unittest.TestCase):
         )
         merged = video_context.merge_config(ctx, root=self.root)
         self.assertIn("transcription", merged)
+
+    def test_merge_config_preserves_layer_order(self) -> None:
+        ctx = video_context.resolve_context(
+            provider="_template", video_id="ctx-demo", root=self.root
+        )
+        ctx.registry = {
+            "defaults": {
+                "transcription": {"model": "large", "language": "fr"},
+                "watch": {"device": "cuda"},
+            }
+        }
+        ctx.project["transcription"] = {"language": "es"}
+        ctx.project["watch"] = {"device": "cuda:2"}
+        merged = video_context.merge_config(ctx, root=self.root)
+        self.assertEqual(merged["transcription"], {"model": "large", "language": "es"})
+        self.assertEqual(merged["watch"]["device"], "cuda:2")
+        self.assertEqual(merged["watch"]["riskNotes"], ["provider"])
+
+    def test_watch_policy_resolves_each_scope_without_leaking(self) -> None:
+        ctx = video_context.resolve_context(
+            provider="_template", video_id="ctx-demo", root=self.root
+        )
+        ctx.registry = {
+            "defaults": {
+                "watch": {"language": "en", "acceptanceCriteria": ["registry"]}
+            }
+        }
+        ctx.project["watch"] = {"format": "tutorial"}
+        policy = video_context.resolve_context_watch_policy(
+            ctx,
+            root=self.root,
+            invocation={"device": "cuda:2", "acceptanceCriteria": ["invocation"]},
+        )
+        self.assertEqual(policy.device, "cuda:2")
+        self.assertEqual(policy.context["language"], "en")
+        self.assertEqual(policy.context["format"], "tutorial")
+        self.assertEqual(policy.context["acceptanceCriteria"], ["invocation"])
+        self.assertEqual(policy.context["riskNotes"], ["provider"])
+        self.assertEqual(policy.sources["device"], "invocation")
 
     def test_timeline_paths_use_project_policy_and_canonical_first(self) -> None:
         project = {

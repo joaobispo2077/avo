@@ -1,5 +1,17 @@
 # /avo.deliver reference
 
+## Step/state mapping
+
+**Durable state:** delivery-manifest.json and current review/approval records
+
+**Workflow steps:** Validate deliver prerequisites → Run deliver → Verify and report the deliver result
+
+**Approval or input gate:** Pause whenever required input or a human decision prevents the next declared step; report the exact reply or artifact needed.
+
+**Stop when:** Missing required input, a failed or stale gate, a required human decision, or verified deliver completion
+
+**Valid next commands:** /avo.learndown
+
 Full-program master QC and delivery manifest. **Not** `/avo.audit` — audit is scoped to a `from`/`to` window.
 
 ## Scope
@@ -14,6 +26,21 @@ Full-program master QC and delivery manifest. **Not** `/avo.audit` — audit is 
 - [ ] Footage-root `EDITLOG.md` / review gates satisfied for picture and audio (digest from JSON; Human notes for rationale)
 - [ ] **Rights:** `<rawDir>/edit/review/rights-audit.md` **PASS** (or run [`/avo.rights`](rights.md) first — **warn** if missing; rights category **FAIL** if `SOURCE-LOG.md` incomplete)
 - [ ] **Audio delivery QC:** `<rawDir>/edit/review/audio-qc.md` **PASS** recommended (run [`/avo.audio-qc`](audio-qc.md) on master first)
+- [ ] Strict v1.1 assembly materialization is current and matches the exact candidate bytes
+
+## Canonical fidelity gate
+
+Create final candidates through `avo tracks render --render-contract <json>`.
+Use optional `--fidelity-policy <json>` only for explicit prohibited classes,
+role rules, or policy provenance; no platform resolution or bitrate is implied.
+Then run `avo review run --checkpoint pre-master --materialization <record>` and
+`avo deliver prepare --materialization <record> --master <immutable-path>`.
+
+The graph includes ordered CMap base segments plus only renderer-compiled
+overlays/generators. Declared scale-down can pass; undeclared geometry changes,
+unapproved reframes, or proof/proxy base ancestry fail with the exact node.
+Missing/stale locks or hashes are blocked prerequisites and require
+re-materialization. Details: [`../../../docs/delivery-fidelity.md`](../../../docs/delivery-fidelity.md).
 
 ## Load skill
 

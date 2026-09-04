@@ -1,0 +1,113 @@
+{
+  "version": "1.1",
+  "batchId": "canonical-demo",
+  "batchRoot": "canonical-demo",
+  "batchRootSource": "canonical-default",
+  "provider": "neutral",
+  "source": {
+    "sourceId": "master",
+    "masterPath": "master.bin",
+    "transcriptPath": "transcript.json",
+    "durationSec": 40
+  },
+  "destination": "youtube-shorts",
+  "language": "en",
+  "requestedCount": 1,
+  "output": {
+    "width": 1080,
+    "height": 1920,
+    "fps": 30,
+    "maxDurationSec": 60,
+    "audioSampleRateHz": 48000,
+    "audioChannels": 2
+  },
+  "diagnosis": {
+    "primaryFormat": "explainer",
+    "viewerIntent": "learn",
+    "sourceLimitations": ["synthetic contract fixture"],
+    "rightsNotes": ["first-party fixture"]
+  },
+  "defaults": {
+    "speed": {
+      "default": 1,
+      "minimum": 1,
+      "maximum": 1.2,
+      "preservePitch": true,
+      "perShortAllowed": true,
+      "intelligibilityReviewRequiredAbove": 1.15
+    },
+    "layout": {
+      "mode": "full-frame",
+      "captionAnchor": "bottom",
+      "cropMode": "cover",
+      "focusPoint": {"x": 0.5, "y": 0.5},
+      "labels": []
+    },
+    "captions": {
+      "identity": "anchor-rail",
+      "continuousDuringSpeech": true,
+      "anchor": "bottom",
+      "grouping": {
+        "maxWords": 4,
+        "maxCharacters": 32,
+        "maxDurationSec": 1.35,
+        "maxGapSec": 0.42,
+        "mergeOrphans": true
+      },
+      "timing": {
+        "minimumHoldSec": 0.18,
+        "frameEpsilon": 0.033333,
+        "tailPadSec": 0.18,
+        "autofixPolicy": "report-and-fix"
+      },
+      "highlight": {
+        "mode": "moving-background",
+        "resetAtPhraseBoundary": true
+      }
+    }
+  },
+  "candidates": [
+    {
+      "id": "01",
+      "order": 1,
+      "coreIdea": "Reordered context and payoff",
+      "viewerPromise": "See the selected evidence in approved order",
+      "postingTitle": "Ordered source segments",
+      "sourceEvidence": "first second third",
+      "sourceSegments": [
+        {
+          "order": 1,
+          "sourceId": "master",
+          "startSec": 10,
+          "endSec": 12,
+          "rationale": "opening evidence first",
+          "evidenceReference": "review://opening"
+        },
+        {
+          "order": 2,
+          "sourceId": "master",
+          "startSec": 30,
+          "endSec": 32,
+          "rationale": "payoff evidence second",
+          "evidenceReference": "review://payoff"
+        },
+        {
+          "order": 3,
+          "sourceId": "master",
+          "startSec": 20,
+          "endSec": 22,
+          "rationale": "supporting evidence third",
+          "evidenceReference": "review://support"
+        }
+      ],
+      "editorialApprovalReference": "review://candidate-01"
+    }
+  ],
+  "approvalGates": [
+    "batch-plan",
+    "motion-proof",
+    "picture-lock",
+    "rights",
+    "pre-master"
+  ]
+}

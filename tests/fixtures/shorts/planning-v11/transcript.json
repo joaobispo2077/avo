@@ -1,0 +1,8 @@
+{
+  "source": {"sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"},
+  "words": [
+    {"text": "first", "start": 10.2, "end": 10.8, "type": "word"},
+    {"text": "third", "start": 20.2, "end": 20.8, "type": "word"},
+    {"text": "second", "start": 30.2, "end": 30.8, "type": "word"}
+  ]
+}

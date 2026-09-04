@@ -164,6 +164,13 @@ Present a short summary the user can confirm:
 4. **Do not merge providers** to "simplify" unless format rules and learning scope truly match
 5. Provider identity is **local** by default (gitignored); only `_template` ships publicly
 
+## Guided responses
+
+For provider setup and `/avo.provider`, load and apply the [shared response contract](../avo-pipeline/references/step-status.md),
+the shared response contract. Re-read
+the provider manifest for resumed work and end every response with the exact
+four-line workflow footer.
+
 ## References
 
 - [`docs/providers.md`](../../docs/providers.md) — what a provider is

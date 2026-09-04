@@ -2,6 +2,15 @@
 
 **Timeline integration:** Owns
 
+## Workflow guidance
+
+**Workflow steps:** Validate framework prerequisites → Run framework → Verify and report the framework result
+**Step state source:** pipeline-run.json plus the current canonical timeline revision
+**Stopping conditions:** Missing required input, a failed or stale gate, a required human decision, or verified framework completion
+**Valid next commands:** /avo.motion or /avo.general
+
+Follow the shared [step-status response contract](../../agent-skills/avo-pipeline/references/step-status.md) for every progress, input, blocker, and completion response.
+
 Animation framework intake — HyperFrames vs Remotion diagnosis.
 
 **Skill:** [`agent-skills/avo-pipeline/references/framework.md`](../../agent-skills/avo-pipeline/references/framework.md)

@@ -140,19 +140,119 @@ def valid_status(plan: dict) -> dict:
     }
 
 
+def valid_request_v11() -> dict:
+    request = valid_request()
+    request["version"] = "1.1"
+    request["batchRoot"] = "/media/edit/shorts/demo-batch"
+    request["batchRootSource"] = "canonical-default"
+    request["source"]["sourceId"] = "master"
+    request["source"]["durationSec"] = 20
+    candidate = request["candidates"][0]
+    candidate.pop("sourceRange")
+    candidate["sourceSegments"] = [
+        {
+            "order": 1,
+            "sourceId": "master",
+            "startSec": 6,
+            "endSec": 11,
+            "rationale": "payoff first",
+            "evidenceReference": "review://payoff",
+        },
+        {
+            "order": 2,
+            "sourceId": "master",
+            "startSec": 1,
+            "endSec": 6,
+            "rationale": "context second",
+            "evidenceReference": "review://context",
+        },
+    ]
+    return request
+
+
 class ShortsSchemaTests(unittest.TestCase):
     def test_runtime_schemas_are_valid_draft_2020_12(self) -> None:
-        for kind in ("request", "plan", "status", "composition"):
+        for kind in ("request", "plan", "status", "composition", "index"):
             Draft202012Validator.check_schema(shorts_contract.load_schema(kind))
+
+    def test_index_accepts_plan_identity_and_rejects_invalid_hash(self) -> None:
+        index = {
+            "schemaVersion": "1.0.0",
+            "batches": [
+                {
+                    "batchId": "demo-batch",
+                    "batchRoot": "/media/edit/shorts/demo-batch",
+                    "batchRootSource": "canonical-default",
+                    "planHash": "a" * 64,
+                }
+            ],
+        }
+        self.assertEqual(shorts_contract.validate_document(index, "index"), index)
+        index["batches"][0]["planHash"] = "not-a-hash"
+        with self.assertRaises(shorts_contract.ContractValidationError):
+            shorts_contract.validate_document(index, "index")
 
     def test_valid_request_plan_and_status_pass(self) -> None:
         request = valid_request()
+        request["output"]["loudnessPreset"] = "youtube_shorts"
         plan = valid_plan()
         status = valid_status(plan)
         self.assertEqual(shorts_contract.validate_document(request, "request"), request)
         self.assertEqual(shorts_contract.validate_document(plan, "plan"), plan)
         self.assertEqual(shorts_contract.validate_document(status, "status"), status)
         shorts_contract.ensure_plan_status_match(plan, status)
+
+    def test_v11_requires_segments_and_forbids_contradictory_range(self) -> None:
+        request = valid_request_v11()
+        self.assertEqual(shorts_contract.validate_document(request, "request"), request)
+        request["candidates"][0]["sourceRange"] = {"startSec": 1, "endSec": 11}
+        with self.assertRaises(shorts_contract.ContractValidationError):
+            shorts_contract.validate_document(request, "request")
+
+    def test_v10_compatibility_forbids_v11_segments(self) -> None:
+        request = valid_request()
+        request["candidates"][0]["sourceSegments"] = []
+        with self.assertRaises(shorts_contract.ContractValidationError):
+            shorts_contract.validate_document(request, "request")
+
+    def test_v11_overlap_requires_explicit_approval(self) -> None:
+        request = valid_request_v11()
+        request["candidates"][0]["sourceSegments"][1].update(
+            {"startSec": 10, "endSec": 12}
+        )
+        with self.assertRaisesRegex(
+            shorts_contract.ContractValidationError, "overlapApprovalReference"
+        ):
+            shorts_contract.validate_document(request, "request")
+
+    def test_v11_requires_matching_source_identity_order_and_evidence(self) -> None:
+        for mutate, message in (
+            (
+                lambda request: request["candidates"][0]["sourceSegments"][0].update(
+                    {"sourceId": "unknown"}
+                ),
+                "sourceId",
+            ),
+            (
+                lambda request: request["candidates"][0]["sourceSegments"][0].update(
+                    {"order": 2}
+                ),
+                "order",
+            ),
+            (
+                lambda request: request["candidates"][0]["sourceSegments"][0].update(
+                    {"evidenceReference": ""}
+                ),
+                "evidence",
+            ),
+        ):
+            request = valid_request_v11()
+            mutate(request)
+            with (
+                self.subTest(message=message),
+                self.assertRaises(shorts_contract.ContractValidationError),
+            ):
+                shorts_contract.validate_document(request, "request")
 
     def test_schema_errors_include_actionable_path(self) -> None:
         request = valid_request()
@@ -207,7 +307,7 @@ class ShortsInvariantTests(unittest.TestCase):
             shorts_contract.require_plan_approval(plan)
 
     def test_atomic_json_write_replaces_complete_document(self) -> None:
-        with tempfile.TemporaryDirectory(dir="/tmp") as tmp:
+        with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "shorts.status.json"
             shorts_contract.atomic_write_json(path, {"revision": 1})
             shorts_contract.atomic_write_json(path, {"revision": 2, "ok": True})

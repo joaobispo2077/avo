@@ -1,5 +1,17 @@
 # /avo.shorts reference
 
+## Step/state mapping
+
+**Durable state:** shorts.status.json for the batch/item
+
+**Workflow steps:** Validate shorts prerequisites → Run shorts → Verify and report the shorts result
+
+**Approval or input gate:** Pause whenever required input or a human decision prevents the next declared step; report the exact reply or artifact needed.
+
+**Stop when:** Missing required input, a failed or stale gate, a required human decision, or verified shorts completion
+
+**Valid next commands:** /avo.watch or /avo.deliver
+
 **Orchestrator** for one or many YouTube Shorts (vertical ≤60s shelf intent).
 Distinct from [`guidelines-shorts.md`](guidelines-shorts.md)
 (`/avo.guidelines --shorts` = diagnosis only). Users provide editorial,
@@ -36,6 +48,19 @@ Persist the result as `edit/shorts/<batch-id>/shorts.request.json`. Then run:
 python -m avo.shorts validate <request>
 python -m avo.shorts resolve <request> -o <batch>/plans/shorts.plan-v001.json
 ```
+
+For request v1.1, use the canonical resolver instead of choosing each output
+path independently:
+
+```bash
+python -m avo.shorts resolve <external-request> --raw-dir <rawDir>
+python -m avo.shorts resolve <external-request> --raw-dir <rawDir> --batch-dir campaign/<batch-id>
+```
+
+Every later stage receives the same `--raw-dir`; the recorded `batchRoot` is
+validated before work. v1.1 uses ordered `sourceSegments`, writes and hashes
+`prepared-lineage.json`, and requires Watch coverage around every join. Never
+sort segments by source time or replace them with one enclosing range.
 
 The resolved plan owns exact count, stable order, edited durations, concrete
 defaults/overrides, warnings, fingerprints, and required human reviews.
@@ -81,6 +106,13 @@ python -m avo.shorts promote <plan> --approval-manifest <review.json>
 The approval manifest carries explicit batch gates and Watch references; it is
 review evidence, not a way to infer approval. A failed Short moves the batch to
 partial state while clean siblings and their hashes remain unchanged.
+
+`--delivery-dir` is a deprecated v1.0 compatibility control. Record
+`legacyExternalDelivery` and explain migration to `--raw-dir`/`--batch-dir`.
+Reject split delivery for v1.1. Preserve the index, request/approval snapshots,
+plans, status, delivery tree, final transcript sidecars, ordered base/insertion
+lineage, rights references, disclosures, privacy/safety evidence, and AI-use
+evidence. Full contract: [`../../../docs/shorts-batch-paths-and-lineage.md`](../../../docs/shorts-batch-paths-and-lineage.md).
 
 Insertion safety is constructive: AVO resolves identities before render,
 materializes exact-duration finite repeats only from approved windows, extracts

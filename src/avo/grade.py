@@ -29,6 +29,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -93,9 +94,8 @@ def _sample_frame_stats(
     # Sample fps = n_samples / duration, clamped so we don't over-sample short clips
     fps = max(0.5, min(n_samples / max(duration, 0.1), 10.0))
 
-    with tempfile.NamedTemporaryFile(mode="w+", suffix=".txt", delete=False) as f:
-        metadata_path = f.name
-
+    tmp_dir = tempfile.mkdtemp(prefix="avo-grade-")
+    metadata_path = Path(tmp_dir) / "signalstats.txt"
     try:
         cmd = [
             "ffmpeg",
@@ -108,14 +108,21 @@ def _sample_frame_stats(
             str(video),
             "-t",
             f"{duration:.3f}",
+            "-map",
+            "0:v:0",
+            "-an",
             "-vf",
-            f"fps={fps:.2f},signalstats,metadata=print:file={metadata_path}",
+            f"fps={fps:.2f},signalstats,metadata=print:file=signalstats.txt",
             "-f",
             "null",
             "-",
         ]
         subprocess.run(
-            cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+            cmd,
+            check=True,
+            cwd=tmp_dir,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
         )
 
         # Parse signalstats metadata. Signalstats reports values in the NATIVE
@@ -134,7 +141,7 @@ def _sample_frame_stats(
             except (ValueError, IndexError):
                 return None
 
-        with open(metadata_path) as f:
+        with open(metadata_path, encoding="utf-8") as f:
             for line in f:
                 line = line.strip()
                 if "lavfi.signalstats.YBITDEPTH" in line:
@@ -179,7 +186,7 @@ def _sample_frame_stats(
             "sat_mean": sat_mean,
         }
     finally:
-        Path(metadata_path).unlink(missing_ok=True)
+        shutil.rmtree(tmp_dir, ignore_errors=True)
 
 
 def auto_grade_for_clip(

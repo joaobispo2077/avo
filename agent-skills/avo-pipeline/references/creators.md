@@ -1,5 +1,17 @@
 # /avo.creators reference
 
+## Step/state mapping
+
+**Durable state:** the observed invocation result and any command-owned manifest
+
+**Workflow steps:** Validate creators prerequisites → Run creators → Verify and report the creators result
+
+**Approval or input gate:** Pause whenever required input or a human decision prevents the next declared step; report the exact reply or artifact needed.
+
+**Stop when:** Missing required input, a failed or stale gate, a required human decision, or verified creators completion
+
+**Valid next commands:** /avo.help
+
 Maintainer-curated showcase of channels and sites using AVO.
 
 ## When to use

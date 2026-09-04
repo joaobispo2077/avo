@@ -2,6 +2,15 @@
 
 **Timeline integration:** Profile
 
+## Workflow guidance
+
+**Workflow steps:** Validate shorts prerequisites → Run shorts → Verify and report the shorts result
+**Step state source:** shorts.status.json for the batch/item
+**Stopping conditions:** Missing required input, a failed or stale gate, a required human decision, or verified shorts completion
+**Valid next commands:** /avo.watch or /avo.deliver
+
+Follow the shared [step-status response contract](../../agent-skills/avo-pipeline/references/step-status.md) for every progress, input, blocker, and completion response.
+
 Orchestrated YouTube Shorts workflow (9:16, duration checks, captions, deliver). **Not** the same as `/avo.guidelines --shorts` (diagnosis only).
 
 **Skill:** [`agent-skills/avo-pipeline/references/shorts.md`](../../agent-skills/avo-pipeline/references/shorts.md)
@@ -72,6 +81,17 @@ python -m avo.shorts promote <plan> --approval-manifest approvals.json
 Use repeated `--short 04` filters for targeted rebuild/QC. Proof and master
 revisions are immutable; unchanged clean items are reused, while failed items
 remain retryable without cancelling or overwriting approved siblings.
+
+For canonical v1.1 batches, pass `--raw-dir <footage-project>` to every stage.
+Use optional `--batch-dir campaign/<batch-id>` only for a nested root beneath
+`<rawDir>/edit/shorts`. v1.1 rejects `--delivery-dir`; that deprecated flag is
+available only to v1.0 during the 1.x compatibility window. See
+[`docs/shorts-batch-paths-and-lineage.md`](../../docs/shorts-batch-paths-and-lineage.md).
+
+One Short may declare multiple `sourceSegments`. Their array order is the edit
+order, including discontinuous or reordered source time. Present every segment,
+rationale, evidence reference, overlap approval, cumulative output map, and
+required seam Watch window before asking for plan approval.
 
 ---
 

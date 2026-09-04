@@ -14,6 +14,8 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
+from jsonschema import Draft202012Validator
+
 from avo import stats, video_registry
 from avo.paths import repo_root
 
@@ -84,6 +86,24 @@ class VideoRegistryTests(unittest.TestCase):
         self.assertTrue(index_path.is_file())
         data = json.loads(index_path.read_text(encoding="utf-8"))
         self.assertEqual(len(data["videos"]), 1)
+
+    def test_registry_watch_defaults_validate_without_runtime_state(self) -> None:
+        schema = json.loads(
+            (
+                Path(__file__).resolve().parents[1]
+                / "schemas"
+                / "avo.video.schema.json"
+            ).read_text(encoding="utf-8")
+        )
+        document = {
+            "id": "demo",
+            "provider": "sample",
+            "rawDir": str(_external_raw("demo")),
+            "status": "in-progress",
+            "createdAt": "2026-09-02T00:00:00Z",
+            "defaults": {"watch": {"language": "en", "maxFrames": 12}},
+        }
+        self.assertEqual(list(Draft202012Validator(schema).iter_errors(document)), [])
 
 
 class InitProjectRegistryTests(unittest.TestCase):

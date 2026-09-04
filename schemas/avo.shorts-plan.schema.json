@@ -20,7 +20,22 @@
   ],
   "properties": {
     "version": {
-      "const": "1.0"
+      "enum": ["1.0", "1.1"]
+    },
+    "planVersion": { "enum": ["1.0", "1.1"] },
+    "batchRoot": { "type": "string", "minLength": 1 },
+    "batchRootSource": { "enum": ["canonical-default", "invocation", "legacy-output"] },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sourceId", "masterPath", "mediaFingerprint"],
+      "properties": {
+        "sourceId": { "type": "string", "minLength": 1 },
+        "masterPath": { "type": "string", "minLength": 1 },
+        "transcriptPath": { "type": ["string", "null"] },
+        "mediaFingerprint": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "transcriptFingerprint": { "type": ["string", "null"], "pattern": "^[a-f0-9]{64}$" }
+      }
     },
     "batchId": {
       "type": "string"
@@ -269,6 +284,24 @@
         }
       }
     },
+    "resolvedSourceSegment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["segmentId", "order", "sourceId", "startSec", "endSec", "rationale", "evidenceReference", "sourceFingerprint", "outputStartSec", "outputEndSec"],
+      "properties": {
+        "segmentId": { "type": "string", "minLength": 1 },
+        "order": { "type": "integer", "minimum": 1 },
+        "sourceId": { "type": "string", "minLength": 1 },
+        "startSec": { "type": "number", "minimum": 0 },
+        "endSec": { "type": "number", "exclusiveMinimum": 0 },
+        "rationale": { "type": "string", "minLength": 1 },
+        "evidenceReference": { "type": "string", "minLength": 1 },
+        "overlapApprovalReference": { "type": ["string", "null"], "minLength": 1 },
+        "sourceFingerprint": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "outputStartSec": { "type": "number", "minimum": 0 },
+        "outputEndSec": { "type": "number", "exclusiveMinimum": 0 }
+      }
+    },
     "item": {
       "type": "object",
       "additionalProperties": false,
@@ -278,7 +311,6 @@
         "coreIdea",
         "viewerPromise",
         "postingTitle",
-        "sourceRange",
         "sourceEvidence",
         "speed",
         "editedDurationSec",
@@ -308,6 +340,11 @@
         "sourceRange": {
           "$ref": "#/$defs/range"
         },
+        "sourceSegments": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/resolvedSourceSegment" }
+        },
         "sourceEvidence": {
           "type": "string"
         },
@@ -328,6 +365,10 @@
           "items": {
             "$ref": "#/$defs/phrase"
           }
+        },
+        "captionCorrectionAudit": {
+          "type": "array",
+          "items": { "type": "object" }
         },
         "insertion": {
           "type": [
@@ -406,5 +447,18 @@
         }
       }
     }
-  }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "version": { "const": "1.0" } }, "required": ["version"] },
+      "then": { "properties": { "items": { "items": { "required": ["sourceRange"], "not": { "required": ["sourceSegments"] } } } } }
+    },
+    {
+      "if": { "properties": { "version": { "const": "1.1" } }, "required": ["version"] },
+      "then": {
+        "required": ["planVersion", "batchRoot", "batchRootSource", "source"],
+        "properties": { "items": { "items": { "required": ["sourceSegments"], "not": { "required": ["sourceRange"] } } } }
+      }
+    }
+  ]
 }

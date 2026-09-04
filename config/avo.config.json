@@ -94,6 +94,19 @@
       "description": "Paid transcribe when label=paid"
     }
   },
+  "watch": {
+    "whisperModel": "inherit",
+    "device": "auto",
+    "maxFrames": 18,
+    "repairMaxFrames": 8,
+    "analysisAttempts": 2,
+    "toolAttempts": 3,
+    "workingDirectory": null,
+    "format": null,
+    "language": null,
+    "acceptanceCriteria": [],
+    "riskNotes": []
+  },
   "migration": {
     "legacyRoutingIds": true,
     "legacyGate1Ids": ["video-use-engine"]
