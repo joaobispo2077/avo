@@ -1,5 +1,17 @@
 # /avo.sound create reference
 
+## Step/state mapping
+
+**Durable state:** pipeline-run.json plus the current canonical timeline revision
+
+**Workflow steps:** Validate sound prerequisites → Run sound → Verify and report the sound result
+
+**Approval or input gate:** Pause whenever required input or a human decision prevents the next declared step; report the exact reply or artifact needed.
+
+**Stop when:** Missing required input, a failed or stale gate, a required human decision, or verified sound completion
+
+**Valid next commands:** /avo.watch or /avo.audio-qc
+
 Creative sound design brief. Follow [`cinematic-sound-design`](../../../.claude/skills/cinematic-sound-design/SKILL.md) doctrine when available: support comprehension, never manufacture false emotion or evidence.
 
 ## Usage pattern

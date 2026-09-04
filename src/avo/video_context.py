@@ -143,37 +143,108 @@ def resolve_context(
     )
 
 
+def _provider_manifest(ctx: VideoContext, root: Path) -> dict[str, Any]:
+    if not ctx.provider:
+        return {}
+    try:
+        return load_provider(ctx.provider, root=root)
+    except FileNotFoundError:
+        return {}
+
+
+def _merge_sections(
+    target: dict[str, Any],
+    source: dict[str, Any],
+    keys: tuple[str, ...],
+) -> None:
+    for key in keys:
+        if source.get(key):
+            target[key] = {**(target.get(key) or {}), **source[key]}
+
+
+def _merge_provider_config(
+    merged: dict[str, Any], provider_manifest: dict[str, Any]
+) -> None:
+    _merge_sections(merged, provider_manifest, ("transcription", "models", "assets"))
+    provider_watch = (provider_manifest.get("routingOverrides") or {}).get("watch")
+    if provider_watch:
+        merged["watch"] = {**(merged.get("watch") or {}), **provider_watch}
+
+
 def merge_config(ctx: VideoContext, root: Path | None = None) -> dict[str, Any]:
     """Merge avo.config → provider → registry defaults → project (later wins)."""
     root = repo_root(root)
     merged: dict[str, Any] = dict(load_config(root))
-    if ctx.provider:
-        try:
-            provider_manifest = load_provider(ctx.provider, root=root)
-            for key in ("transcription", "models", "assets"):
-                if provider_manifest.get(key):
-                    merged[key] = {
-                        **(merged.get(key) or {}),
-                        **provider_manifest[key],
-                    }
-        except FileNotFoundError:
-            pass
-    if ctx.registry:
-        defaults = ctx.registry.get("defaults") or {}
-        for key in ("transcription", "models"):
-            if defaults.get(key):
-                merged[key] = {**(merged.get(key) or {}), **defaults[key]}
-    for key in (
-        "transcription",
-        "models",
-        "assets",
-        "approvalGates",
-        "deliverable",
-        "timeline",
-    ):
-        if ctx.project.get(key):
-            merged[key] = {**(merged.get(key) or {}), **ctx.project[key]}
+    _merge_provider_config(merged, _provider_manifest(ctx, root))
+    _merge_sections(
+        merged,
+        (ctx.registry or {}).get("defaults") or {},
+        ("transcription", "models", "watch"),
+    )
+    _merge_sections(
+        merged,
+        ctx.project,
+        (
+            "transcription",
+            "models",
+            "assets",
+            "approvalGates",
+            "deliverable",
+            "timeline",
+            "watch",
+        ),
+    )
     return merged
+
+
+def watch_setting_scopes(
+    ctx: VideoContext,
+    *,
+    root: Path | None = None,
+    invocation: dict[str, Any] | None = None,
+) -> list[tuple[str, dict[str, Any] | None]]:
+    """Return Watch scopes in the documented field-precedence order."""
+    root = repo_root(root)
+    config = load_config(root)
+    manifest = _provider_manifest(ctx, root)
+    provider_watch = (manifest.get("routingOverrides") or {}).get("watch")
+    registry_watch = ((ctx.registry or {}).get("defaults") or {}).get("watch")
+    project_watch = ctx.project.get("watch")
+    return [
+        ("global", config.get("watch")),
+        ("provider", provider_watch),
+        ("registry", registry_watch),
+        ("project", project_watch),
+        ("invocation", invocation),
+    ]
+
+
+def resolve_context_watch_policy(
+    ctx: VideoContext,
+    *,
+    root: Path | None = None,
+    invocation: dict[str, Any] | None = None,
+) -> Any:
+    """Resolve one immutable Watch policy without mutating shared configuration."""
+    from avo.adapters.understand.watch_policy import resolve_watch_policy
+
+    merged = merge_config(ctx, root=root)
+    transcription = merged.get("transcription") or {}
+    model = transcription.get("model")
+    if not model:
+        configured = (merged.get("models") or {}).get("transcribe")
+        model = (
+            configured.get("default") if isinstance(configured, dict) else configured
+        )
+    return resolve_watch_policy(
+        transcription_model=str(model or "small"),
+        raw_dir=ctx.raw_dir,
+        scopes=watch_setting_scopes(
+            ctx,
+            root=root,
+            invocation=invocation,
+        ),
+    )
 
 
 def read_lock(raw_dir: Path) -> dict[str, Any] | None:

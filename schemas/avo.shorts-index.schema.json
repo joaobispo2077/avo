@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://avo.local/contracts/shorts-index.schema.json",
+  "title": "AVO Shorts Batch Index",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "batches"],
+  "properties": {
+    "schemaVersion": { "const": "1.0.0" },
+    "batches": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["batchId", "batchRoot", "batchRootSource"],
+        "properties": {
+          "batchId": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
+          "batchRoot": { "type": "string", "minLength": 1 },
+          "batchRootSource": { "enum": ["canonical-default", "invocation", "legacy-output"] },
+          "planHash": {
+            "type": ["string", "null"],
+            "pattern": "^[a-f0-9]{64}$"
+          }
+        }
+      }
+    }
+  }
+}

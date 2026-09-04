@@ -2,6 +2,15 @@
 
 **Timeline integration:** Admin
 
+## Workflow guidance
+
+**Workflow steps:** Validate cleanup prerequisites → Run cleanup → Verify and report the cleanup result
+**Step state source:** the reconstruction verification and cleanup result
+**Stopping conditions:** Missing required input, a failed or stale gate, a required human decision, or verified cleanup completion
+**Valid next commands:** /avo.stats
+
+Follow the shared [step-status response contract](../../agent-skills/avo-pipeline/references/step-status.md) for every progress, input, blocker, and completion response.
+
 Delete run scratch files after a verified reconstruction bundle; preserve the
 reconstruction graph; write **final wrap** and record session stats.
 

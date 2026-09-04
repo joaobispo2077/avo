@@ -10,6 +10,36 @@ from avo import shorts_media
 
 
 class ShortsMediaTests(unittest.TestCase):
+    def test_ordered_segments_concat_picture_and_dialogue_without_gap(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "source.mp4"
+            source.write_bytes(b"source")
+            commands = []
+
+            def runner(argv):
+                commands.append(list(argv))
+                Path(argv[-1]).parent.mkdir(parents=True, exist_ok=True)
+                Path(argv[-1]).write_bytes(str(len(commands)).encode())
+                return subprocess.CompletedProcess(argv, 0, "", "")
+
+            result = shorts_media.prepare_ordered_base_assets(
+                source,
+                root / "prepared",
+                source_segments=[
+                    {"segmentId": "01-s001", "order": 1, "startSec": 10, "endSec": 12},
+                    {"segmentId": "01-s002", "order": 2, "startSec": 1, "endSec": 4},
+                ],
+                speed=1,
+                runner=runner,
+            )
+            self.assertEqual(result["baseVideo"].duration_sec, 5)
+            self.assertEqual(result["dialogueAudio"].duration_sec, 5)
+            self.assertEqual(len(result["joinWindows"]), 1)
+            self.assertAlmostEqual(result["joinWindows"][0]["start"], 1.985)
+            self.assertIn("concat=n=2:v=1:a=0", " ".join(commands[-2]))
+            self.assertIn("d=0.030", " ".join(commands[-1]))
+
     def test_video_command_trims_retimes_normalizes_cfr_and_has_no_audio(self) -> None:
         command = shorts_media.base_video_command(
             Path("H:/footage/base clip.mp4"),
@@ -61,7 +91,7 @@ class ShortsMediaTests(unittest.TestCase):
         self.assertEqual(shorts_media.atempo_chain(0.25), "atempo=0.5,atempo=0.5")
 
     def test_injected_runner_creates_hashed_separate_assets(self) -> None:
-        with tempfile.TemporaryDirectory(dir="/tmp") as tmp:
+        with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             source = root / "base.mp4"
             source.write_bytes(b"source")
@@ -131,7 +161,7 @@ class ShortsMediaTests(unittest.TestCase):
     def test_real_finite_repeat_excludes_forbidden_tail_and_selects_audio_track(
         self,
     ) -> None:
-        with tempfile.TemporaryDirectory(dir="/tmp") as tmp:
+        with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             source = root / "source.mkv"
             command = [

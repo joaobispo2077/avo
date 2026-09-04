@@ -7,13 +7,20 @@ from pathlib import Path
 from unittest import mock
 
 from avo.adapters.base import JobRequest, JobResult
-from avo.adapters.understand.watch_skill import WatchSkillAdapter
+from avo.adapters.understand.watch_skill import WatchSkillAdapter, _extract_json_object
 from avo.timeline.ports import ToolError
 
 _RESOLVE = "avo.models.resolve_option_id"
 
 
 class WatchAdapterTests(unittest.TestCase):
+    def test_last_schema_valid_object_wins(self):
+        result = _extract_json_object(
+            '{"status":"fail","findings":[]} noise '
+            '{"status":"pass","confidence":1,"findings":[]}'
+        )
+        self.assertEqual(result["status"], "pass")
+
     def test_invokes_cli(self):
         with tempfile.TemporaryDirectory() as tmp:
             completed = mock.Mock(returncode=0, stdout="# report", stderr="")
@@ -64,13 +71,88 @@ class WatchAdapterTests(unittest.TestCase):
             ask_argv = run.call_args_list[1].args[0].argv
             self.assertEqual(watch_argv[0], "watch")
             self.assertIn("--index", watch_argv)
+            self.assertIn("--whisper-model", watch_argv)
             self.assertIn("--timestamps", watch_argv)
             self.assertEqual(ask_argv[:2], ["ask", "vid-1"])
             self.assertIn("--no-cache", ask_argv)
+            self.assertIn("--max-frames", ask_argv)
+            self.assertNotIn("required windows=", ask_argv[2])
             self.assertEqual(result["status"], "pass")
             self.assertEqual(result["coverage"]["windows"][0]["reason"], "join")
             self.assertTrue((root / "review" / "watch-evidence.json").is_file())
             self.assertTrue((root / "review" / "watch-analysis.txt").is_file())
+
+    def test_policy_controls_prompt_frames_model_root_and_cpu_only(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            candidate = root / "proof.mp4"
+            candidate.write_bytes(b"proof")
+            work = root / "watch-work"
+            adapter = WatchSkillAdapter(executable="watch-skill")
+            policy = {
+                "effective": {
+                    "whisperModel": "small",
+                    "device": "cpu",
+                    "maxFrames": 11,
+                    "repairMaxFrames": 4,
+                    "analysisAttempts": 2,
+                    "toolAttempts": 2,
+                    "workingDirectory": str(work),
+                },
+                "sources": {"device": "invocation"},
+                "policyHash": "a" * 64,
+            }
+            with mock.patch.object(
+                adapter,
+                "run",
+                side_effect=[
+                    JobResult(exit_code=0, stdout="video_id `v-1`"),
+                    JobResult(exit_code=0, stdout='{"status":"pass","findings":[]}'),
+                    JobResult(exit_code=0, stdout="1.0"),
+                ],
+            ) as run:
+                result = adapter.review(
+                    candidate,
+                    policy=policy,
+                    context={"format": "tutorial", "language": "en"},
+                    artifact_dir=root / "review",
+                )
+            watch_request = run.call_args_list[0].args[0]
+            ask_request = run.call_args_list[1].args[0]
+            self.assertEqual(watch_request.root, work)
+            self.assertEqual(watch_request.env["CUDA_VISIBLE_DEVICES"], "-1")
+            self.assertEqual(
+                watch_request.argv[watch_request.argv.index("--whisper-model") + 1],
+                "small",
+            )
+            self.assertEqual(
+                ask_request.argv[ask_request.argv.index("--max-frames") + 1], "11"
+            )
+            self.assertIn("Declared format: tutorial", ask_request.argv[2])
+            self.assertIn("Declared language: en", ask_request.argv[2])
+            self.assertNotIn("talking-head", ask_request.argv[2])
+            self.assertNotIn("Nintendo", ask_request.argv[2])
+            self.assertEqual(result["policy"]["policyHash"], "a" * 64)
+            self.assertEqual(result["outcomeKind"], "content")
+            self.assertEqual(len(result["attempts"]), 1)
+
+    def test_auto_device_does_not_force_cpu_environment(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            candidate = root / "proof.mp4"
+            candidate.write_bytes(b"proof")
+            adapter = WatchSkillAdapter(executable="watch-skill")
+            with mock.patch.object(
+                adapter,
+                "run",
+                side_effect=[
+                    JobResult(exit_code=0, stdout="video_id `v-1`"),
+                    JobResult(exit_code=0, stdout='{"status":"pass","findings":[]}'),
+                    JobResult(exit_code=0, stdout="1.0"),
+                ],
+            ) as run:
+                adapter.review(candidate, artifact_dir=root / "review")
+            self.assertNotIn("CUDA_VISIBLE_DEVICES", run.call_args_list[0].args[0].env)
 
     def test_malformed_analysis_blocks_instead_of_empty_pass(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -85,12 +167,103 @@ class WatchAdapterTests(unittest.TestCase):
                     side_effect=[
                         JobResult(exit_code=0, stdout="video_id `vid-1`"),
                         JobResult(exit_code=0, stdout="looks fine"),
+                        JobResult(exit_code=0, stdout="still not json"),
                     ],
                 ),
                 self.assertRaises(ToolError) as raised,
             ):
                 adapter.review(candidate, scope="full", artifact_dir=root / "review")
             self.assertEqual(raised.exception.code, "WATCH_MALFORMED")
+
+    def test_retry_uses_repair_prompt_and_reduced_frame_limit(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            candidate = root / "proof.mp4"
+            candidate.write_bytes(b"proof")
+            adapter = WatchSkillAdapter(executable="watch-skill")
+            policy = {
+                "effective": {
+                    "maxFrames": 12,
+                    "repairMaxFrames": 3,
+                    "analysisAttempts": 2,
+                }
+            }
+            with mock.patch.object(
+                adapter,
+                "run",
+                side_effect=[
+                    JobResult(exit_code=0, stdout="video_id `vid-1`"),
+                    JobResult(exit_code=0, stdout="not structured"),
+                    JobResult(
+                        exit_code=0,
+                        stdout='{"status":"pass","confidence":1,"findings":[]}',
+                    ),
+                    JobResult(exit_code=0, stdout="1.0"),
+                ],
+            ) as run:
+                result = adapter.review(
+                    candidate, policy=policy, artifact_dir=root / "review"
+                )
+            first_ask = run.call_args_list[1].args[0].argv
+            repair_ask = run.call_args_list[2].args[0].argv
+            self.assertEqual(first_ask[-1], "12")
+            self.assertEqual(repair_ask[-1], "3")
+            self.assertIn("Repair the prior answer", repair_ask[2])
+            self.assertEqual(len(result["attempts"]), 2)
+
+    def test_ignores_echoed_window_json_without_analysis_status(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            candidate = root / "proof.mp4"
+            candidate.write_bytes(b"proof")
+            adapter = WatchSkillAdapter(executable="watch-skill")
+            echoed = (
+                "The video does not clearly show an answer to: windows="
+                '[{"start": 33.53, "end": 34.03, "reason": "join"}]. '
+                "No guess is being made."
+            )
+            with mock.patch.object(
+                adapter,
+                "run",
+                side_effect=[
+                    JobResult(exit_code=0, stdout="video_id `vid-1`"),
+                    JobResult(exit_code=0, stdout=echoed),
+                    JobResult(exit_code=0, stdout="0.6.0\n"),
+                ],
+            ):
+                result = adapter.review(
+                    candidate, scope="full", artifact_dir=root / "review"
+                )
+            self.assertEqual(result["status"], "needs-human-judgment")
+            self.assertEqual(result["findings"][0]["classification"], "meaning")
+
+    def test_picks_analysis_json_when_window_objects_are_echoed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            candidate = root / "proof.mp4"
+            candidate.write_bytes(b"proof")
+            adapter = WatchSkillAdapter(executable="watch-skill")
+            with mock.patch.object(
+                adapter,
+                "run",
+                side_effect=[
+                    JobResult(exit_code=0, stdout="video_id `vid-1`"),
+                    JobResult(
+                        exit_code=0,
+                        stdout=(
+                            '{"start":1.0,"end":2.0,"reason":"join"} '
+                            '{"status":"fail","confidence":0.4,'
+                            '"findings":[{"classification":"technical",'
+                            '"message":"flash at join"}]}'
+                        ),
+                    ),
+                    JobResult(exit_code=0, stdout="0.6.0\n"),
+                ],
+            ):
+                result = adapter.review(
+                    candidate, scope="full", artifact_dir=root / "review"
+                )
+            self.assertEqual(result["status"], "fail")
 
     def test_empty_windows_rejected_for_targeted_review(self):
         with self.assertRaises(ValueError):

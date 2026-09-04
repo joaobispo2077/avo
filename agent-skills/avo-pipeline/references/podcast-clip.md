@@ -1,5 +1,17 @@
 # /avo.podcast-clip reference
 
+## Step/state mapping
+
+**Durable state:** the child pipeline-run.json and its parent timeline lineage
+
+**Workflow steps:** Validate podcast clip prerequisites → Run podcast clip → Verify and report the podcast clip result
+
+**Approval or input gate:** Pause whenever required input or a human decision prevents the next declared step; report the exact reply or artifact needed.
+
+**Stop when:** Missing required input, a failed or stale gate, a required human decision, or verified podcast clip completion
+
+**Valid next commands:** /avo.watch
+
 **Orchestrator** for podcast / interview clip extraction. Distinct from [`shorts.md`](shorts.md) (Shorts shelf) and [`guidelines-podcast.md`](guidelines-podcast.md) (Phase 0 diagnosis only).
 
 ## Phase 0 — Diagnosis

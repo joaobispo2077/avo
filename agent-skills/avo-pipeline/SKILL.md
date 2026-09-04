@@ -66,6 +66,14 @@ Entry skill for **`/avo.*`** slash commands. Canonical rules: [`AGENTS.md`](../.
 
 Always parse shared args first: [`references/arguments.md`](references/arguments.md). Full map: [`references/command-map.md`](references/command-map.md).
 
+## Guided responses
+
+For every routed command, load and apply the [shared response contract](references/step-status.md).
+Read the wrapper's
+workflow guidance and the routed reference's step/state mapping, resolve state
+from the declared durable artifact, and end every progress, input, blocker, and
+completion response with exactly one four-line footer.
+
 ## Non-negotiable
 
 1. Declare `provider` + `rawDir` before any stage.

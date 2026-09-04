@@ -1,0 +1,18 @@
+{
+  "reordered": [
+    {"order": 1, "sourceId": "master", "startSec": 10.0, "endSec": 12.0, "rationale": "opening evidence first", "evidenceReference": "review://opening"},
+    {"order": 2, "sourceId": "master", "startSec": 30.0, "endSec": 32.0, "rationale": "payoff evidence second", "evidenceReference": "review://payoff"},
+    {"order": 3, "sourceId": "master", "startSec": 20.0, "endSec": 22.0, "rationale": "supporting evidence third", "evidenceReference": "review://support"}
+  ],
+  "overlappingApproved": [
+    {"order": 1, "sourceId": "master", "startSec": 10.0, "endSec": 13.0, "rationale": "base", "evidenceReference": "review://base"},
+    {"order": 2, "sourceId": "master", "startSec": 12.0, "endSec": 14.0, "rationale": "intentional repeat", "evidenceReference": "review://repeat", "overlapApprovalReference": "approval://repeat"}
+  ],
+  "invalidOverlap": [
+    {"order": 1, "sourceId": "master", "startSec": 10.0, "endSec": 13.0, "rationale": "base", "evidenceReference": "review://base"},
+    {"order": 2, "sourceId": "master", "startSec": 12.0, "endSec": 14.0, "rationale": "unapproved repeat", "evidenceReference": "review://repeat"}
+  ],
+  "zeroDuration": [
+    {"order": 1, "sourceId": "master", "startSec": 4.0, "endSec": 4.0, "rationale": "invalid", "evidenceReference": "review://invalid"}
+  ]
+}

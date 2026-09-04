@@ -88,6 +88,25 @@ class AudioGainTests(unittest.TestCase):
         filt = audio_gain.gain_filter_for(edl, "main_cam_a", 1.0, 2.0)
         self.assertEqual(filt, "")
 
+    def test_gain_filter_honors_camera_source_keys(self) -> None:
+        edl = {
+            "audio": {
+                "gain_policy": "level_match_speech",
+                "gain_default_pct": 0,
+                "camera_source_keys": ["DJI_CAM"],
+                "gain_segments": [
+                    {
+                        "start_in_source": 1.0,
+                        "end_in_source": 3.0,
+                        "boost_pct": 25,
+                        "approved_by_user": True,
+                    }
+                ],
+            }
+        }
+        self.assertIn("volume=", audio_gain.gain_filter_for(edl, "DJI_CAM", 1.5, 2.5))
+        self.assertEqual(audio_gain.gain_filter_for(edl, "broll", 1.5, 2.5), "")
+
 
 if __name__ == "__main__":
     unittest.main()

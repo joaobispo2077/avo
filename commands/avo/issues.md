@@ -2,6 +2,15 @@
 
 **Timeline integration:** Admin
 
+## Workflow guidance
+
+**Workflow steps:** Validate issues prerequisites → Run issues → Verify and report the issues result
+**Step state source:** the observed invocation result and any command-owned manifest
+**Stopping conditions:** Missing required input, a failed or stale gate, a required human decision, or verified issues completion
+**Valid next commands:** /avo.help
+
+Follow the shared [step-status response contract](../../agent-skills/avo-pipeline/references/step-status.md) for every progress, input, blocker, and completion response.
+
 Prepare a GitHub issue with full environment context — user submits manually.
 
 **Skill:** [`agent-skills/avo-pipeline/references/issues.md`](../../agent-skills/avo-pipeline/references/issues.md)

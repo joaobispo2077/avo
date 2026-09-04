@@ -1,5 +1,17 @@
 # /avo.help reference
 
+## Step/state mapping
+
+**Durable state:** the observed invocation result and any command-owned manifest
+
+**Workflow steps:** Validate help prerequisites → Run help → Verify and report the help result
+
+**Approval or input gate:** Pause whenever required input or a human decision prevents the next declared step; report the exact reply or artifact needed.
+
+**Stop when:** Missing required input, a failed or stale gate, a required human decision, or verified help completion
+
+**Valid next commands:** the selected /avo.* command
+
 Spoken alias: **`/avo --help`**. Cursor file: `commands/avo/help.md` → `/avo.help`.
 
 ## Full command index

@@ -2,6 +2,15 @@
 
 **Timeline integration:** Evidence
 
+## Workflow guidance
+
+**Workflow steps:** Validate animation qc prerequisites → Run animation qc → Verify and report the animation qc result
+**Step state source:** current review.json and candidate-bound evidence
+**Stopping conditions:** Missing required input, a failed or stale gate, a required human decision, or verified animation qc completion
+**Valid next commands:** /avo.motion or /avo.deliver
+
+Follow the shared [step-status response contract](../../agent-skills/avo-pipeline/references/step-status.md) for every progress, input, blocker, and completion response.
+
 Animation render QC after motion slots, before final composite. Wraps `animation-validation-and-render-qc`.
 
 **Skill:** [`agent-skills/avo-pipeline/references/animation-qc.md`](../../agent-skills/avo-pipeline/references/animation-qc.md)

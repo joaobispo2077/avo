@@ -172,7 +172,26 @@
     "routingOverrides": {
       "type": "object",
       "description": "Per-provider overrides that patch the shared avo.config.json routing (jobs, confidence, transcription). Same shape as avo.config.json; only the keys to override need to be present.",
-      "additionalProperties": true
+      "additionalProperties": true,
+      "properties": {
+        "watch": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "whisperModel": { "type": "string", "minLength": 1 },
+            "device": { "type": "string", "pattern": "^(auto|cpu|cuda(:[0-9]+)?)$" },
+            "maxFrames": { "type": "integer", "minimum": 1, "maximum": 64 },
+            "repairMaxFrames": { "type": "integer", "minimum": 1, "maximum": 64 },
+            "analysisAttempts": { "type": "integer", "minimum": 1, "maximum": 3 },
+            "toolAttempts": { "type": "integer", "minimum": 1, "maximum": 3 },
+            "workingDirectory": { "type": ["string", "null"] },
+            "format": { "type": ["string", "null"] },
+            "language": { "type": ["string", "null"] },
+            "acceptanceCriteria": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+            "riskNotes": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+          }
+        }
+      }
     },
     "animationLibrary": {
       "type": "string",

@@ -1,3 +1,22 @@
+# [1.9.0](https://github.com/joaobispo2077/avo/compare/v1.8.0...v1.9.0) (2026-09-04)
+
+
+### Bug Fixes
+
+* **shorts:** extract batch root resolver for complexity and formatting ([b0077ec](https://github.com/joaobispo2077/avo/commit/b0077ec000825b81a0b1ddf62626658b68effc92))
+* **shorts:** format batch-root path split for ruff ([75f52aa](https://github.com/joaobispo2077/avo/commit/75f52aa1f9651241915a9c0a6596c00a41ebb6f1))
+* **render:** harden grade signalstats scratch, bound loudnorm to shortest stream, honor camera gain keys ([1fb38ba](https://github.com/joaobispo2077/avo/commit/1fb38bac2cc119f7e06f492e22ae8712f4d97057))
+* **shorts:** normalize Windows path separators in batch_dir overrides on POSIX ([5b6497f](https://github.com/joaobispo2077/avo/commit/5b6497f607bd5c3571a3af595fc026663b02d224))
+
+
+### Features
+
+* **delivery-fidelity:** add assembly materialization, picture lineage, and source-fidelity QC ([eefe6a7](https://github.com/joaobispo2077/avo/commit/eefe6a74fa216f120f0620163441c5380f394331))
+* **step-status:** add guided workflow footer contract for all AVO commands ([4f9a1fa](https://github.com/joaobispo2077/avo/commit/4f9a1fa44114654621bbc6bb54969085f4271e8b))
+* **settings:** add scoped setting resolution with provenance ([45fc6f7](https://github.com/joaobispo2077/avo/commit/45fc6f76e28bd5f6cdb7eac545acbf06e3558673))
+* **watch:** add scoped Watch execution policy and refactor watch-skill ([d396073](https://github.com/joaobispo2077/avo/commit/d39607399d53c771a45a85c4abbcc331503205e6))
+* **shorts:** add v1.1 batch paths, ordered lineage, and planning fixtures ([f84911f](https://github.com/joaobispo2077/avo/commit/f84911f0b5b299f741e8d0680bef618233de65c2))
+
 # [1.8.0](https://github.com/joaobispo2077/avo/compare/v1.7.0...v1.8.0) (2026-08-20)
 
 

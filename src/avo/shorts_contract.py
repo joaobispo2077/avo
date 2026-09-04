@@ -20,6 +20,7 @@ SCHEMA_NAMES = {
     "plan": "avo.shorts-plan.schema.json",
     "status": "avo.shorts-status.schema.json",
     "composition": "avo.shorts-composition.schema.json",
+    "index": "avo.shorts-index.schema.json",
 }
 
 
@@ -90,10 +91,22 @@ def _unique(values: list[Any], label: str) -> None:
 
 def _validate_request_invariants(request: Mapping[str, Any]) -> None:
     candidates = list(request.get("candidates") or [])
-    ids = [candidate.get("id") for candidate in candidates]
-    orders = [candidate.get("order") for candidate in candidates]
-    _unique(ids, "candidate IDs")
-    _unique(orders, "candidate order values")
+    _validate_candidate_identity(request, candidates)
+    _validate_insertion_and_correction_identity(request)
+    if request.get("version") == "1.1":
+        source_id = (request.get("source") or {}).get("sourceId")
+        for candidate in candidates:
+            _validate_requested_segments(candidate, source_id)
+
+
+def _validate_candidate_identity(
+    request: Mapping[str, Any], candidates: list[Mapping[str, Any]]
+) -> None:
+    _unique([candidate.get("id") for candidate in candidates], "candidate IDs")
+    _unique(
+        [candidate.get("order") for candidate in candidates],
+        "candidate order values",
+    )
     requested = request.get("requestedCount")
     if requested != len(candidates):
         raise ContractValidationError(
@@ -101,18 +114,47 @@ def _validate_request_invariants(request: Mapping[str, Any]) -> None:
             f"({requested!r} != {len(candidates)})"
         )
 
+
+def _validate_insertion_and_correction_identity(request: Mapping[str, Any]) -> None:
     insertion_ids = [item.get("id") for item in request.get("insertions") or []]
     _unique(insertion_ids, "insertion IDs")
-    correction_omissions = [
-        correction
-        for correction in request.get("corrections") or []
-        if correction.get("operation") == "omit"
-    ]
-    for correction in correction_omissions:
+    for correction in request.get("corrections") or []:
+        if correction.get("operation") != "omit":
+            continue
         if not correction.get("approved") or not correction.get("reason"):
             raise ContractValidationError(
                 "caption omission corrections require approval and a reason"
             )
+
+
+def _overlaps_prior(start: float, end: float, prior: list[Mapping[str, Any]]) -> bool:
+    return any(
+        start < float(item["endSec"]) and end > float(item["startSec"])
+        for item in prior
+    )
+
+
+def _validate_requested_segments(candidate: Mapping[str, Any], source_id: Any) -> None:
+    prior: list[Mapping[str, Any]] = []
+    for position, segment in enumerate(candidate.get("sourceSegments") or [], 1):
+        if segment.get("order") != position:
+            raise ContractValidationError(
+                f"candidate {candidate.get('id')} source segment order must equal array position"
+            )
+        if segment.get("sourceId") != source_id:
+            raise ContractValidationError(
+                f"candidate {candidate.get('id')} source segment uses an unknown sourceId"
+            )
+        start = float(segment.get("startSec") or 0)
+        end = float(segment.get("endSec") or 0)
+        if end <= start:
+            raise ContractValidationError("source segments require endSec > startSec")
+        overlaps = _overlaps_prior(start, end, prior)
+        if overlaps and not segment.get("overlapApprovalReference"):
+            raise ContractValidationError(
+                "later overlapping source segments require overlapApprovalReference"
+            )
+        prior.append(segment)
 
 
 def _validate_plan_invariants(plan: Mapping[str, Any]) -> None:
@@ -132,6 +174,24 @@ def _validate_plan_invariants(plan: Mapping[str, Any]) -> None:
         raise ContractValidationError(
             f"planHash does not match canonical plan content: expected {expected}"
         )
+    if plan.get("version") == "1.1":
+        for item in items:
+            _validate_resolved_segments(item)
+
+
+def _validate_resolved_segments(item: Mapping[str, Any]) -> None:
+    expected_start = 0.0
+    for position, segment in enumerate(item.get("sourceSegments") or [], 1):
+        if segment.get("order") != position:
+            raise ContractValidationError(
+                "resolved segment order must equal array position"
+            )
+        actual_start = float(segment.get("outputStartSec") or 0)
+        if abs(actual_start - expected_start) > 1e-6:
+            raise ContractValidationError(
+                "resolved segment output mapping has a gap or reorder"
+            )
+        expected_start = float(segment["outputEndSec"])
 
 
 def _validate_status_invariants(status: Mapping[str, Any]) -> None:

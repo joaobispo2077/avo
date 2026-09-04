@@ -1,5 +1,17 @@
 # /avo.general reference
 
+## Step/state mapping
+
+**Durable state:** the child pipeline-run.json and its parent timeline lineage
+
+**Workflow steps:** Validate general prerequisites → Run general → Verify and report the general result
+
+**Approval or input gate:** Pause whenever required input or a human decision prevents the next declared step; report the exact reply or artifact needed.
+
+**Stop when:** Missing required input, a failed or stale gate, a required human decision, or verified general completion
+
+**Valid next commands:** /avo.watch
+
 Router to **custom HyperFrames composition** (`general-video`).
 
 ## Required args

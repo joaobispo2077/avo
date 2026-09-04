@@ -2,6 +2,15 @@
 
 **Timeline integration:** Admin
 
+## Workflow guidance
+
+**Workflow steps:** Validate docs prerequisites → Run docs → Verify and report the docs result
+**Step state source:** the observed invocation result and any command-owned manifest
+**Stopping conditions:** Missing required input, a failed or stale gate, a required human decision, or verified docs completion
+**Valid next commands:** /avo.help
+
+Follow the shared [step-status response contract](../../agent-skills/avo-pipeline/references/step-status.md) for every progress, input, blocker, and completion response.
+
 Route to AVO topic documentation.
 
 **Skill:** [`agent-skills/avo-pipeline/references/docs.md`](../../agent-skills/avo-pipeline/references/docs.md)

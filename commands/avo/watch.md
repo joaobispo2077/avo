@@ -2,6 +2,15 @@
 
 **Timeline integration:** Evidence
 
+## Workflow guidance
+
+**Workflow steps:** Validate watch prerequisites → Run watch → Verify and report the watch result
+**Step state source:** current review.json and approval record
+**Stopping conditions:** Missing required input, a failed or stale gate, a required human decision, or verified watch completion
+**Valid next commands:** the declared human approval gate
+
+Follow the shared [step-status response contract](../../agent-skills/avo-pipeline/references/step-status.md) for every progress, input, blocker, and completion response.
+
 Full watch-skill LOOP review and audit of the current proof scope.
 
 **Skill:** [`agent-skills/avo-pipeline/references/watch.md`](../../agent-skills/avo-pipeline/references/watch.md)
@@ -17,6 +26,15 @@ rawDir: /path/to/footage
 ```
 
 Optional: `Proof: edit/preview/edit-proof.mp4` (default: latest proof in `edit/preview/`)
+
+Inspect the effective execution policy with `avo review policy --project
+<avo.project.json>`. One-run controls are `--watch-whisper-model`,
+`--watch-device`, `--watch-max-frames`, `--watch-repair-max-frames`,
+`--watch-analysis-attempts`, `--watch-tool-attempts`,
+`--watch-working-directory`, `--watch-format`, `--watch-language`, repeatable
+`--watch-acceptance-criterion`, and repeatable `--watch-risk-note`. Full values,
+precedence, failure behavior, and next actions are in
+[`docs/optional-capabilities.md`](../../docs/optional-capabilities.md).
 
 ---
 

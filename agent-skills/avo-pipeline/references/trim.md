@@ -1,5 +1,17 @@
 # /avo.trim reference
 
+## Step/state mapping
+
+**Durable state:** pipeline-run.json plus the current canonical timeline revision
+
+**Workflow steps:** Validate trim prerequisites → Run trim → Verify and report the trim result
+
+**Approval or input gate:** Pause whenever required input or a human decision prevents the next declared step; report the exact reply or artifact needed.
+
+**Stop when:** Missing required input, a failed or stale gate, a required human decision, or verified trim completion
+
+**Valid next commands:** /avo.watch
+
 Edit-only path. See [`SKILL.md`](../../../SKILL.md) Hard Rules for cut correctness.
 Cut workflow detail: [`cuts.md`](cuts.md).
 

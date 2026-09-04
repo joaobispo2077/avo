@@ -290,6 +290,35 @@
             "raw-sync",
             "source-rights"
           ]
+        },
+        "outcomeKind": {
+          "enum": [
+            "content",
+            "uncertainty",
+            "refusal",
+            "malformed",
+            "tool-error",
+            "coverage"
+          ]
+        },
+        "policy": {
+          "type": "object"
+        },
+        "reviewContext": {
+          "type": "object"
+        },
+        "promptSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "attempts": {
+          "type": "array",
+          "items": { "type": "object" }
+        },
+        "fidelityDetails": {
+          "type": "object"
+        },
+        "disposition": {
+          "enum": ["pass", "fail", "blocked", "not-applicable"]
         }
       },
       "allOf": [

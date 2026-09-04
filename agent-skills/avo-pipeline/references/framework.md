@@ -1,5 +1,17 @@
 # /avo.framework reference
 
+## Step/state mapping
+
+**Durable state:** pipeline-run.json plus the current canonical timeline revision
+
+**Workflow steps:** Validate framework prerequisites → Run framework → Verify and report the framework result
+
+**Approval or input gate:** Pause whenever required input or a human decision prevents the next declared step; report the exact reply or artifact needed.
+
+**Stop when:** Missing required input, a failed or stale gate, a required human decision, or verified framework completion
+
+**Valid next commands:** /avo.motion or /avo.general
+
 **Animation framework intake** — HyperFrames vs Remotion before building motion.
 
 ## Preconditions

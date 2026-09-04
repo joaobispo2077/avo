@@ -2,6 +2,15 @@
 
 **Timeline integration:** Admin
 
+## Workflow guidance
+
+**Workflow steps:** Validate help prerequisites → Run help → Verify and report the help result
+**Step state source:** the observed invocation result and any command-owned manifest
+**Stopping conditions:** Missing required input, a failed or stale gate, a required human decision, or verified help completion
+**Valid next commands:** the selected /avo.* command
+
+Follow the shared [step-status response contract](../../agent-skills/avo-pipeline/references/step-status.md) for every progress, input, blocker, and completion response.
+
 Master index of all `/avo.*` slash commands. Spoken alias: **`/avo --help`**.
 
 **Skill:** [`agent-skills/avo-pipeline/references/help.md`](../../agent-skills/avo-pipeline/references/help.md)

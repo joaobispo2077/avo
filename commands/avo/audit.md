@@ -2,6 +2,15 @@
 
 **Timeline integration:** Evidence
 
+## Workflow guidance
+
+**Workflow steps:** Validate audit prerequisites → Run audit → Verify and report the audit result
+**Step state source:** current review.json and candidate-bound evidence
+**Stopping conditions:** Missing required input, a failed or stale gate, a required human decision, or verified audit completion
+**Valid next commands:** /avo.watch or /avo.deliver
+
+Follow the shared [step-status response contract](../../agent-skills/avo-pipeline/references/step-status.md) for every progress, input, blocker, and completion response.
+
 Scoped quality check on a cut, transcript, or time slice.
 
 **Skill:** [`agent-skills/avo-pipeline/references/audit.md`](../../agent-skills/avo-pipeline/references/audit.md)

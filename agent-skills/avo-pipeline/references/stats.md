@@ -1,5 +1,17 @@
 # /avo.stats reference
 
+## Step/state mapping
+
+**Durable state:** the local session state and observed report result
+
+**Workflow steps:** Validate stats prerequisites → Run stats → Verify and report the stats result
+
+**Approval or input gate:** Pause whenever required input or a human decision prevents the next declared step; report the exact reply or artifact needed.
+
+**Stop when:** Missing required input, a failed or stale gate, a required human decision, or verified stats completion
+
+**Valid next commands:** /avo.help
+
 Implements local aggregate metrics from session history. Owning helper: `src/avo/stats.py`.
 
 **Privacy:** Reads `.avo/state.json` on disk only — no phone home. See [`SECURITY.md#privacy--telemetry`](../../../SECURITY.md#privacy--telemetry).

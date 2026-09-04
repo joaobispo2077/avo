@@ -2,12 +2,18 @@
 
 from __future__ import annotations
 
+import re
 import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 COMMANDS = ROOT / "commands" / "avo"
 REFS = ROOT / "agent-skills" / "avo-pipeline" / "references"
+ENTRY_SKILLS = (
+    ROOT / "agent-skills" / "avo" / "SKILL.md",
+    ROOT / "agent-skills" / "avo-pipeline" / "SKILL.md",
+    ROOT / "agent-skills" / "avo-provider" / "SKILL.md",
+)
 DOCS_PIPELINE = ROOT / "docs" / "avo-pipeline"
 REVIEW_TEMPLATES = ROOT / "docs" / "templates" / "review"
 SKILLS_JSON = ROOT / "skills.json"
@@ -312,6 +318,70 @@ class AvoCommandParityTests(unittest.TestCase):
             ]
             if len(declarations) != 1 or declarations[0] not in allowed:
                 failures.append((command.name, declarations))
+        self.assertEqual(failures, [])
+
+    def test_every_command_declares_guided_workflow_metadata_once(self) -> None:
+        required = (
+            "**Workflow steps:**",
+            "**Step state source:**",
+            "**Stopping conditions:**",
+            "**Valid next commands:**",
+        )
+        failures = []
+        found = sorted(COMMANDS.glob("*.md"))
+        self.assertEqual(len(found), 51)
+        for command in found:
+            text = command.read_text(encoding="utf-8")
+            missing_or_repeated = {
+                marker: text.count(marker)
+                for marker in required
+                if text.count(marker) != 1
+            }
+            if (
+                text.count("## Workflow guidance") != 1
+                or text.count("step-status.md") != 1
+                or missing_or_repeated
+            ):
+                failures.append(
+                    (
+                        command.name,
+                        text.count("## Workflow guidance"),
+                        text.count("step-status.md"),
+                        missing_or_repeated,
+                    )
+                )
+        self.assertEqual(failures, [])
+
+    def test_entry_skills_load_and_apply_step_status_contract(self) -> None:
+        failures = []
+        for skill in ENTRY_SKILLS:
+            text = skill.read_text(encoding="utf-8")
+            if (
+                text.count("step-status.md") != 1
+                or "load and apply" not in text.lower()
+            ):
+                failures.append(skill.relative_to(ROOT).as_posix())
+        self.assertEqual(failures, [])
+
+    def test_every_routed_reference_declares_command_specific_step_mapping(
+        self,
+    ) -> None:
+        command_map = (REFS / "command-map.md").read_text(encoding="utf-8")
+        names = sorted(set(re.findall(r"`references/([^`]+\.md)`", command_map)))
+        self.assertGreaterEqual(len(names), 51)
+        required = (
+            "## Step/state mapping",
+            "**Durable state:**",
+            "**Approval or input gate:**",
+            "**Stop when:**",
+            "**Valid next commands:**",
+        )
+        failures = []
+        for name in names:
+            text = (REFS / name).read_text(encoding="utf-8")
+            counts = {marker: text.count(marker) for marker in required}
+            if any(count != 1 for count in counts.values()):
+                failures.append((name, counts))
         self.assertEqual(failures, [])
 
 
