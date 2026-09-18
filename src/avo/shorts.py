@@ -126,9 +126,9 @@ def _request_paths(
     request = _read_json_object(request_path)
     version = str(request.get("version") or "1.0")
     raw_dir = _request_raw_dir(request, args)
-    if raw_dir is None and version == "1.1":
+    if raw_dir is None and shorts_contract.uses_canonical_root(version):
         raise shorts_paths.ShortsPathError(
-            "v1.1 Shorts requests require --raw-dir (and optional --batch-dir) "
+            "canonical Shorts requests require --raw-dir (and optional --batch-dir) "
             "so the canonical batch root can be resolved before work"
         )
     if raw_dir is None:
@@ -141,7 +141,7 @@ def _request_paths(
         batch_dir=batch_dir,
     )
     _normalize_request_media_paths(request, request_path.parent)
-    if version == "1.1":
+    if shorts_contract.uses_canonical_root(version):
         request["batchRoot"] = str(paths.batch_root)
         request["batchRootSource"] = paths.root_source
     shorts_contract.validate_document(request, "request")
@@ -327,6 +327,20 @@ def _status_path(
     )
 
 
+_REVISION_KEYS = ("proofRevision", "proofArtifactRevision", "masterRevision")
+
+
+def _canonical_status_fields(
+    plan: Mapping[str, Any], paths: shorts_paths.ShortsBatchPaths | None
+) -> dict[str, Any]:
+    return {
+        "planVersion": str(plan.get("planVersion") or plan["version"]),
+        "batchRoot": str(paths.batch_root if paths else plan["batchRoot"]),
+        "batchRootSource": str(paths.root_source if paths else plan["batchRootSource"]),
+        "legacyExternalDelivery": None,
+    }
+
+
 def _new_status(
     plan: Mapping[str, Any],
     plan_path: Path,
@@ -350,6 +364,7 @@ def _new_status(
                 "dirty": True,
                 "dirtyReasons": ["new-short"],
                 "proofRevision": 0,
+                "proofArtifactRevision": 0,
                 "masterRevision": 0,
                 "artifacts": [],
                 "errors": [],
@@ -372,18 +387,22 @@ def _new_status(
         "batchQcSummary": None,
         "deliveryComplete": False,
     }
-    if str(plan.get("version")) == "1.1":
-        status.update(
-            {
-                "planVersion": "1.1",
-                "batchRoot": str(paths.batch_root if paths else plan["batchRoot"]),
-                "batchRootSource": str(
-                    paths.root_source if paths else plan["batchRootSource"]
-                ),
-                "legacyExternalDelivery": None,
-            }
-        )
+    if shorts_contract.uses_canonical_root(plan.get("version")):
+        status.update(_canonical_status_fields(plan, paths))
     return status
+
+
+def _carry_revision_watermarks(
+    old_status: Mapping[str, Any], new_status: dict[str, Any]
+) -> None:
+    """Keep proof/master watermarks so a new plan cannot overwrite old renders."""
+    previous = {str(row["shortId"]): row for row in (old_status.get("items") or [])}
+    for row in new_status["items"]:
+        prior = previous.get(str(row["shortId"]))
+        if not prior:
+            continue
+        for key in _REVISION_KEYS:
+            row[key] = max(int(row.get(key) or 0), int(prior.get(key) or 0))
 
 
 def _artifact(kind: str, path: Path, revision: int) -> dict[str, Any]:
@@ -456,6 +475,39 @@ def _add_prepared_insertion(
         fps=fps,
     )
     prepared.update(assets)
+    dialogue = prepared.get("dialogueAudio")
+    insertion_audio = prepared.get("insertionAudio")
+    if isinstance(dialogue, shorts_media.PreparedAsset) and isinstance(
+        insertion_audio, shorts_media.PreparedAsset
+    ):
+        mixed = work / "prepared" / "dialogue-mixed.m4a"
+        prepared["dialogueAudio"] = shorts_media.mix_ducked_bed_into_dialogue(
+            dialogue.path,
+            insertion_audio.path,
+            mixed,
+            duration_sec=dialogue.duration_sec,
+        )
+
+
+def _add_prepared_sfx(
+    prepared: dict[str, Any],
+    request: Mapping[str, Any],
+    request_path: Path,
+    item: Mapping[str, Any],
+    work: Path,
+) -> None:
+    hits = list(item.get("sfxHits") or [])
+    if not hits:
+        return
+    library = ((request.get("defaults") or {}).get("sfx") or {}).get("library") or {}
+    prepared.update(
+        shorts_media.prepare_sfx_assets(
+            hits,
+            library,
+            work / "prepared-sfx",
+            request_path=request_path,
+        )
+    )
 
 
 def _write_prepared_lineage(
@@ -501,6 +553,9 @@ def _prepared_artifacts(
     ):
         if key in prepared:
             artifacts.append(_artifact(kind, prepared[key].path, revision))
+    for key, value in prepared.items():
+        if key.startswith("sfx") and isinstance(value, shorts_media.PreparedAsset):
+            artifacts.append(_artifact("prepared-sfx", value.path, revision))
     artifacts.extend(
         [
             _artifact("composition", project / "composition.json", revision),
@@ -513,7 +568,7 @@ def _prepared_artifacts(
 
 
 def _default_media_preparer(plan: Mapping[str, Any]) -> Callable[..., Any]:
-    if str(plan.get("version")) == "1.1":
+    if shorts_contract.uses_canonical_root(plan.get("version")):
         return shorts_media.prepare_ordered_base_assets
     return shorts_media.prepare_base_assets
 
@@ -523,6 +578,16 @@ def _media_preparer(
     plan: Mapping[str, Any],
 ) -> Callable[..., Mapping[str, Any]]:
     return supplied or _default_media_preparer(plan)
+
+
+def _hyperframes_command_error(result: Any, action: str) -> str:
+    """Prefer stdout — HyperFrames writes layout findings there, GPU probe on stderr."""
+    chunks = [
+        part.strip()
+        for part in (result.stdout, result.stderr)
+        if part and str(part).strip()
+    ]
+    return "\n".join(chunks) or f"HyperFrames {action} failed"
 
 
 def _build_one_proof(
@@ -577,14 +642,21 @@ def _build_one_proof(
         "crop_mode": crop_mode,
     }
     prepared = _prepare_proof_media(prepare, master, work, item, prepare_kwargs)
+    tp_ceiling = (
+        shorts_media.SFX_DIALOGUE_TP_CEILING_DBTP
+        if item.get("sfxHits")
+        else shorts_media.VOICE_TP_CEILING_DBTP
+    )
+    prepared["dialogueAudio"] = shorts_media.apply_dialogue_gain_if_needed(
+        prepared["dialogueAudio"],
+        work / "prepared" / "dialogue-gained.m4a",
+        tp_ceiling=tp_ceiling,
+    )
     _add_prepared_insertion(
         prepared, request, request_path, item, work, plan["output"]["fps"]
     )
-    assets = {
-        key: value.as_contract()
-        for key, value in prepared.items()
-        if isinstance(value, shorts_media.PreparedAsset)
-    }
+    _add_prepared_sfx(prepared, request, request_path, item, work)
+    assets = shorts_media.composition_assets(prepared)
     prepared_lineage_ref, required_watch_windows = _write_prepared_lineage(
         plan, item, prepared, assets, work
     )
@@ -603,7 +675,7 @@ def _build_one_proof(
     if prepared_lineage_ref is not None:
         spec.update(
             {
-                "version": "1.1",
+                "version": str(plan.get("version") or spec.get("version") or "1.1"),
                 "planVersion": str(plan.get("planVersion") or plan["version"]),
                 "sourceSegments": list(item["sourceSegments"]),
                 "preparedLineage": prepared_lineage_ref,
@@ -615,9 +687,7 @@ def _build_one_proof(
     adapter = adapter_factory()
     checked = adapter.execute("check", project, "--snapshots", root=Path.cwd())
     if checked.exit_code:
-        raise RuntimeError(
-            checked.stderr or checked.stdout or "HyperFrames strict check failed"
-        )
+        raise RuntimeError(_hyperframes_command_error(checked, "strict check"))
     contact_sheet = work / "qc" / "contact-sheet.jpg"
     try:
         shorts_qc.generate_contact_sheet(project, contact_sheet)
@@ -627,9 +697,7 @@ def _build_one_proof(
         "render", project, "--output", str(expected), root=Path.cwd()
     )
     if rendered.exit_code:
-        raise RuntimeError(
-            rendered.stderr or rendered.stdout or "HyperFrames render failed"
-        )
+        raise RuntimeError(_hyperframes_command_error(rendered, "render"))
     if not expected.is_file():
         candidates = [
             path for path in rendered.artifact_paths if path.suffix.lower() == ".mp4"
@@ -666,11 +734,31 @@ def _build_one_proof(
         "dirty": False,
         "dirtyReasons": [],
         "proofRevision": revision,
+        "proofArtifactRevision": revision,
         "renderProfile": render_profile,
         "artifacts": [*(prior.get("artifacts") or []), *artifacts],
         "errors": [],
         "hyperframesValidation": {"status": "passed", "strict": True},
     }
+
+
+def _load_or_reset_status(
+    plan: Mapping[str, Any],
+    plan_path: Path,
+    status_path: Path,
+    *,
+    paths: shorts_paths.ShortsBatchPaths | None,
+) -> dict[str, Any]:
+    status = (
+        shorts_contract.load_document(status_path, "status")
+        if status_path.exists()
+        else _new_status(plan, plan_path, paths=paths)
+    )
+    if status.get("planHash") != plan["planHash"]:
+        previous = status
+        status = _new_status(plan, plan_path, paths=paths)
+        _carry_revision_watermarks(previous, status)
+    return status
 
 
 def build_proofs(
@@ -688,13 +776,7 @@ def build_proofs(
     prepare = _media_preparer(prepare, plan)
     shorts_contract.require_plan_approval(plan)
     status_path = _status_path(plan_path, paths)
-    status = (
-        shorts_contract.load_document(status_path, "status")
-        if status_path.exists()
-        else _new_status(plan, plan_path, paths=paths)
-    )
-    if status.get("planHash") != plan["planHash"]:
-        status = _new_status(plan, plan_path, paths=paths)
+    status = _load_or_reset_status(plan, plan_path, status_path, paths=paths)
     wanted = set(short_ids or [item["id"] for item in plan["items"]])
     unknown = wanted - {item["id"] for item in plan["items"]}
     if unknown:
@@ -738,6 +820,10 @@ def build_proofs(
                     **prior,
                     "state": "failed",
                     "dirty": True,
+                    "proofRevision": int(prior.get("proofRevision") or 0) + 1,
+                    "proofArtifactRevision": int(
+                        prior.get("proofArtifactRevision") or 0
+                    ),
                     "errors": [*(prior.get("errors") or []), str(exc)],
                 }
             status["items"] = [item_status[item["id"]] for item in plan["items"]]
@@ -930,7 +1016,7 @@ def _promotion_delivery_target(
     paths: shorts_paths.ShortsBatchPaths | None,
     status: dict[str, Any],
 ) -> tuple[Path, str | None]:
-    if str(plan.get("version")) == "1.1":
+    if shorts_contract.uses_canonical_root(plan.get("version")):
         if paths is None:
             raise shorts_paths.ShortsPathError(
                 "v1.1 promotion requires a canonical batchRoot and --raw-dir"
