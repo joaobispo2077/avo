@@ -7,6 +7,16 @@ from avo.timeline.review_runner import ReviewRunner
 from tests.test_timeline_review_integration import FakeQc, FakeTranscript, FakeWatch
 
 
+class RecordingTranscript(FakeTranscript):
+    def __init__(self) -> None:
+        super().__init__()
+        self.calls: list[dict] = []
+
+    def transcribe(self, candidate: Path, **options):
+        self.calls.append({"candidate": candidate, **options})
+        return super().transcribe(candidate, **options)
+
+
 def _run(tmp_path: Path, policy, watch: FakeWatch) -> dict:
     tmp_path.mkdir(parents=True, exist_ok=True)
     candidate = tmp_path / "proof.mp4"
@@ -27,6 +37,49 @@ def _run(tmp_path: Path, policy, watch: FakeWatch) -> dict:
         terms=["API"],
         names=["Alex"],
     )
+
+
+class SampledWatch(FakeWatch):
+    def review(self, candidate: Path, **request):
+        result = super().review(candidate, **request)
+        result["coverage"] = {
+            "mode": "sampled",
+            "windows": [],
+            "requestedWindows": request["windows"],
+            "maxFrames": 18,
+        }
+        return result
+
+
+def test_sampled_watch_evidence_cannot_satisfy_full_review(tmp_path: Path) -> None:
+    result = _run(tmp_path, None, SampledWatch())
+    assert result["state"] == "blocked"
+    assert "full Watch evidence required" in result["blocker"]
+
+
+def test_review_transcribes_into_edit_dir_not_nested_transcripts(
+    tmp_path: Path,
+) -> None:
+    policy = resolve_watch_policy(scopes=[("project", {"language": "pt-BR"})])
+    tmp_path.mkdir(parents=True, exist_ok=True)
+    candidate = tmp_path / "proof.mp4"
+    candidate.write_bytes(b"candidate")
+    transcription = RecordingTranscript()
+    ReviewRunner(
+        review_root=tmp_path / "review",
+        transcription=transcription,
+        watch=FakeWatch(),
+        deterministic_qc=FakeQc(),
+        clock=lambda: "2026-09-02T00:00:00Z",
+        watch_policy=policy,
+    ).run(
+        checkpoint="cut-proof",
+        candidate=candidate,
+        dependencies={"cmap": "b" * 64, "sync-map": "c" * 64},
+        render_profile="proof",
+        risk_windows=[{"start": 0.2, "end": 0.4, "reason": "join"}],
+    )
+    assert transcription.calls[0]["edit_dir"] == tmp_path
 
 
 def test_policy_context_and_facts_are_forwarded_and_identity_bound(
