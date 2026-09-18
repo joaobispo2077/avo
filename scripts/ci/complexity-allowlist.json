@@ -32,13 +32,6 @@
       "reason": "Adapter orchestration with many format/capability branches"
     },
     {
-      "path": "src/avo/adapters/motion/hyperframes.py",
-      "name": "compile_project",
-      "complexity": 12,
-      "rank": "C",
-      "reason": "Adapter orchestration with many format/capability branches"
-    },
-    {
       "path": "src/avo/adapters/qc/cut_proof.py",
       "name": "CutProofQcAdapter",
       "complexity": 35,
@@ -63,13 +56,6 @@
       "path": "src/avo/adapters/transcribe/candidate.py",
       "name": "analyze",
       "complexity": 15,
-      "rank": "C",
-      "reason": "Adapter orchestration with many format/capability branches"
-    },
-    {
-      "path": "src/avo/adapters/transcribe/candidate.py",
-      "name": "CandidateTranscriptionAdapter",
-      "complexity": 12,
       "rank": "C",
       "reason": "Adapter orchestration with many format/capability branches"
     },
