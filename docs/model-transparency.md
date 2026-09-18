@@ -5,33 +5,44 @@ lighter/heavier alternatives exist — in setup, phase telemetry, and agent pros
 
 ## Sources of truth
 
-> **Backlog proposal:** BL-019 describes possible global → provider → project
-> source overrides (local caches/files, endpoints, projector files, and runtime
-> settings) plus durable resolved-source disclosure. None of this source-resolution
-> behavior is shipped. See
-> [Configurable model sources](../specs/backlog/configurable-model-sources.md).
+Catalog id stays backward compatible. Physical source and runtime merge with
+more-specific-wins (catalog → global → state → provider → registry →
+video-state → project → invocation). Hardware may replace an **id** only when
+the winning id scope is `catalog` or `global`; it never swaps files or
+endpoints.
 
 | Layer | File | Role |
 | --- | --- | --- |
 | Catalog | [`avo.model-catalog.json`](../config/avo.model-catalog.json) | All options + VRAM/RAM/disk/speed/quality |
-| Defaults | [`avo.config.json`](../config/avo.config.json) `models` | Orchestrator defaults |
-| Runtime | `.avo/state.json` | Setup-persisted whisper size + optional LLM tiers |
-| Project | `avo.project.json` | Per-video overrides (`transcription.model`, `models.*`) |
-| Advisory | [`src/avo/hardware.py`](../helpers/hardware.py) | Suggested tiers from CPU/GPU/RAM |
+| Defaults | [`avo.config.json`](../config/avo.config.json) `models` | Orchestrator defaults (`id` via `default`) |
+| Runtime | `.avo/state.json` | Machine pins (`state` / `video-state`, not folded into global) |
+| Provider | `providers/<slug>/avo.provider.json` `models.*` | Channel defaults |
+| Project | `avo.project.json` | Per-video pins (`models.*`; `transcription.model` aliases transcribe **id** only) |
+| Schema | [`avo.model-source.schema.json`](../schemas/avo.model-source.schema.json) | String or `{id,source,runtime}` pin |
+| Advisory | [`src/avo/hardware.py`](../helpers/hardware.py) | Suggested catalog tiers from CPU/GPU/RAM |
+
+To **change** a pin, edit the JSON at the scope you mean. `/avo.models` and
+`python -m avo.models_cli` are inspect/preflight only (no `set` subcommand).
+Secrets are environment **names** (`apiKeyEnv`), never `apiKey` values.
 
 ## Resolver
 
 ```bash
 python -m avo.models_cli show
+python -m avo.models_cli show --json
 python -m avo.models_cli alternatives transcribe
 python -m avo.models_cli disclosure
+python -m avo.models_cli preflight
 ```
 
-Programmatic: `helpers.models.resolve_active_models()`, `list_alternatives(job)`.
+Programmatic: `helpers.models.resolve_active_models()`, `resolve_model_sources()`,
+`list_alternatives(job)`. Implementation: `src/avo/model_sources.py`.
 
 ## Telemetry
 
-Phase JSON (stderr `AVO_JSON`) includes `activeModels`:
+Phase JSON (stderr `AVO_JSON`) includes `activeModels` plus structured
+`resolvedModelSources` (catalog id, winning scopes, artifact paths, redacted
+endpoint origin, device/compute, reuse). `activeModels` stays a label map.
 
 ```json
 {
@@ -40,6 +51,14 @@ Phase JSON (stderr `AVO_JSON`) includes `activeModels`:
     "transcribe": "faster-whisper:small",
     "understand": "Qwen 2.5 7B",
     "plan": "Qwen 2.5 7B"
+  },
+  "resolvedModelSources": {
+    "transcribe": {
+      "id": "small",
+      "scopes": {"id": "global"},
+      "artifactPath": "/home/user/.cache/video-use/models/small",
+      "reuse": "existing"
+    }
   }
 }
 ```

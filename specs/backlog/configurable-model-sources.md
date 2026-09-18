@@ -1,6 +1,6 @@
 # BL-019 — Configurable model sources
 
-**Status:** Backlog (requirements only; runtime/schema work not shipped)  
+**Status:** Implemented — see [`../active/configurable-model-sources/spec.md`](../active/configurable-model-sources/spec.md) (changelog/tag pending user approval)  
 **Surface:** global config + provider manifest + external `avo.project.json` + model disclosure
 
 ## Problem

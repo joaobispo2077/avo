@@ -72,7 +72,7 @@ Use [Sponsor](../README.md#sponsor) to help prioritize.
 | BL-016 | LUT library | `.cube` import/apply + NLE export notes | `/avo.luts` |
 | BL-017 | NLE export pack | JSON EDL → CMX EDL → FCP XML 1.3 interchange | `/avo.exports` |
 | BL-018 | avo.cloud (weak-hardware path) | Optional remote AVO when below local model floor; cloud MCP auth last; never blocks local | remote runtime + cloud `avo.mcp` |
-| BL-019 | Configurable model sources | Select model IDs, local caches/files, endpoints, and runtime settings globally or per provider/project; disclose the resolved source | config + `/avo.models` |
+| BL-019 | Configurable model sources | Select model IDs, local caches/files, endpoints, and runtime settings globally or per provider/project; disclose the resolved source | `/avo.models` _(implemented; SemVer pending)_ |
 
 **Locale (`/avo.locale`):** design stub only — [`locale-stub.md`](../specs/backlog/locale-stub.md). **Do not implement** until BL-003–005 engine jobs ship.
 

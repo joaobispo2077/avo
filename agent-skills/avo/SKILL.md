@@ -7,7 +7,7 @@ description: AVO — AI Video Orchestrator. Agent contract for conversation-driv
 
 **Install full toolchain:** clone the repo and run `bash scripts/install/install.sh --full --lang en`, or see [docs/install/README.md](https://github.com/joaobispo2077/avo/blob/main/docs/install/README.md).
 
-**Slash commands:** `/avo.help`, `/avo.guidelines`, `/avo.pipeline`, `/avo.trim`, `/avo.transcribe`, `/avo.sound`, `/avo.audit`, `/avo.watch`, `/avo.motion`, `/avo.telemetry`, `/avo.learndown`, `/avo.cleanup`, `/avo.stats`, `/avo.provider`, `/avo.docs` (also load skill `avo-pipeline`).
+**Slash commands:** `/avo.help`, `/avo.guidelines`, `/avo.pipeline`, `/avo.trim`, `/avo.transcribe`, `/avo.sound`, `/avo.audit`, `/avo.watch`, `/avo.motion`, `/avo.telemetry`, `/avo.learndown`, `/avo.cleanup`, `/avo.stats`, `/avo.models`, `/avo.provider`, `/avo.docs` (also load skill `avo-pipeline`).
 
 ## Session start
 

@@ -140,8 +140,9 @@ Skill: [`avo-provider`](../agent-skills/avo-provider/SKILL.md) · Concept: [`doc
 | `/avo.learndown` | ai-memory consolidation + draft wrap ([source](../commands/avo/learndown.md)) |
 | `/avo.cleanup` | Preserved-set cleanup + final wrap + stats record ([source](../commands/avo/cleanup.md)) |
 | `/avo.stats` | Local aggregate metrics ([source](../commands/avo/stats.md)) |
+| `/avo.models` | Inspect catalog pins and resolved sources ([source](../commands/avo/models.md)) |
 
-Shipped command files: [`../commands/avo/`](../commands/avo/) (46 commands)
+Shipped command files: [`../commands/avo/`](../commands/avo/) (47 commands)
 
 ---
 

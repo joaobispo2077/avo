@@ -61,4 +61,4 @@ def test_pipeline_cli_init_status_stage_and_registry(tmp_path: Path, capsys):
 
     assert main(["pipeline", "verify-commands", "--project", str(path)]) == 0
     registry = json.loads(capsys.readouterr().out)
-    assert len(registry["commands"]) == 51
+    assert len(registry["commands"]) == 52
