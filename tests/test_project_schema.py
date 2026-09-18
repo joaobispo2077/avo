@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import unittest
 
-from jsonschema import Draft202012Validator
+from jsonschema_support import validator_for
 
 from avo.paths import schema_path
 
@@ -15,7 +15,7 @@ class ShortsProjectSchemaTests(unittest.TestCase):
         self.schema = json.loads(
             schema_path("avo.project.schema.json").read_text(encoding="utf-8")
         )
-        self.validator = Draft202012Validator(self.schema)
+        self.validator = validator_for(self.schema)
         self.base = {"provider": "bishop", "rawDir": "/media/raw"}
 
     def test_optional_shorts_defaults_are_valid(self) -> None:
