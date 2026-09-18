@@ -89,6 +89,21 @@ class ShortsQcTests(unittest.TestCase):
         codes = [finding["code"] for finding in report["findings"]]
         self.assertIn("black-frames", codes)
 
+    def test_true_peak_clip_is_an_error(self) -> None:
+        item = {"editedDurationSec": 2, "captions": []}
+        probe = {
+            "streams": [
+                {"codec_type": "video", "width": 1080, "height": 1920},
+                {"codec_type": "audio"},
+            ],
+            "format": {"duration": "2.0"},
+        }
+        report = shorts_qc.evaluate_item(item, probe, true_peak_dbtp=0.4)
+        self.assertEqual(report["status"], "failed")
+        self.assertIn(
+            "true-peak-clip", [finding["code"] for finding in report["findings"]]
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
