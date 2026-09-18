@@ -35,8 +35,11 @@ class AdapterTranscribeTests(unittest.TestCase):
     def setUp(self) -> None:
         sys.path.insert(0, str(ROOT))
 
+    @mock.patch("avo.model_sources.preflight")
     @mock.patch("subprocess.run")
-    def test_faster_whisper_invokes_subprocess(self, run: mock.Mock) -> None:
+    def test_faster_whisper_invokes_subprocess(
+        self, run: mock.Mock, _preflight: mock.Mock
+    ) -> None:
         run.return_value = mock.Mock(returncode=0, stdout="ok", stderr="")
         from avo.adapters.base import JobRequest
         from avo.adapters.transcribe.faster_whisper import FasterWhisperAdapter

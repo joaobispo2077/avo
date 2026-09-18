@@ -166,6 +166,14 @@ class Telemetry:
                 active_models = {}
         if active_models:
             record["activeModels"] = active_models
+        try:
+            from avo.models import resolve_model_sources
+
+            sources = resolve_model_sources(project=project, video_key=video_key)
+            if sources:
+                record["resolvedModelSources"] = sources
+        except Exception:
+            pass
         if video_key:
             record["videoKey"] = video_key
         if video_id:

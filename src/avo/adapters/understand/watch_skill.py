@@ -26,11 +26,21 @@ def _repository_root() -> Path:
     return Path(__file__).resolve().parents[4]
 
 
-def _require_bonsai_runtime(option_id: str) -> None:
+def _require_bonsai_runtime(option_id: str, pin: dict[str, Any] | None = None) -> None:
     """Fail closed when a Bonsai understand pin lacks GGUF, mmproj, or custom vision."""
     if option_id not in _BONSAI_OPTION_IDS:
         return
-    gguf = (os.environ.get("AVO_UNDERSTAND_GGUF") or "").strip()
+    source = pin.get("source") if isinstance(pin, dict) else None
+    source = source if isinstance(source, dict) else {}
+    companion = (
+        source.get("companion") if isinstance(source.get("companion"), dict) else {}
+    )
+    endpoint = (
+        source.get("endpoint") if isinstance(source.get("endpoint"), dict) else {}
+    )
+    gguf = (
+        source.get("artifactPath") or os.environ.get("AVO_UNDERSTAND_GGUF") or ""
+    ).strip()
     if not gguf or not Path(gguf).is_file():
         raise ToolError(
             "WATCH_UNAVAILABLE",
@@ -39,7 +49,9 @@ def _require_bonsai_runtime(option_id: str) -> None:
             True,
             "download the language GGUF, set AVO_UNDERSTAND_GGUF, then retry",
         )
-    mmproj = (os.environ.get("AVO_UNDERSTAND_MMPROJ") or "").strip()
+    mmproj = (
+        companion.get("mmproj") or os.environ.get("AVO_UNDERSTAND_MMPROJ") or ""
+    ).strip()
     if not mmproj or not Path(mmproj).is_file():
         raise ToolError(
             "WATCH_UNAVAILABLE",
@@ -47,7 +59,9 @@ def _require_bonsai_runtime(option_id: str) -> None:
             True,
             "set AVO_UNDERSTAND_MMPROJ to the vision mmproj path and retry",
         )
-    custom_url = (os.environ.get("WATCHSKILL_CUSTOM_BASE_URL") or "").strip()
+    custom_url = (
+        endpoint.get("baseUrl") or os.environ.get("WATCHSKILL_CUSTOM_BASE_URL") or ""
+    ).strip()
     cheap = (os.environ.get("WATCHSKILL_VISION_CHEAP_PROVIDER") or "").strip()
     strong = (os.environ.get("WATCHSKILL_VISION_STRONG_PROVIDER") or "").strip()
     if not custom_url and cheap != "custom" and strong != "custom":
@@ -514,11 +528,32 @@ class WatchSkillAdapter:
             if line.strip().endswith((".json", ".md", ".html"))
             and Path(line.strip()).exists()
         ]
+        models_used: dict[str, str] = {}
+        model_sources: dict[str, Any] = {}
+        try:
+            from avo.model_sources import (
+                disclosure_for,
+                invocation_from_env,
+                resolve_job,
+            )
+
+            resolved = resolve_job(
+                "understand",
+                root=request.root,
+                invocation=invocation_from_env(environment),
+            )
+            if resolved.id:
+                models_used = {"understand": resolved.catalog_label or resolved.id}
+                model_sources = {"understand": disclosure_for(resolved)}
+        except Exception:
+            pass
         return JobResult(
             exit_code=completed.returncode,
             artifact_paths=artifacts,
             stdout=stdout,
             stderr=completed.stderr or "",
+            models_used=models_used,
+            model_sources=model_sources,
         )
 
     def tool_version(self) -> str:
@@ -551,7 +586,21 @@ class WatchSkillAdapter:
             str(_request_value(request, "scope", "full")),
             list(_request_value(request, "windows", [])),
         )
-        _require_bonsai_runtime(_option_id(request.get("option_id")))
+        option_id = _option_id(request.get("option_id"))
+        pin = None
+        try:
+            from avo.model_sources import invocation_from_env, resolve_job
+
+            resolved = resolve_job(
+                "understand",
+                root=_repository_root(),
+                invocation=invocation_from_env(os.environ),
+            )
+            if resolved.id == option_id:
+                pin = resolved.pin
+        except Exception:
+            pin = None
+        _require_bonsai_runtime(option_id, pin=pin)
         review = _review_request(candidate, request)
         watched, video_id = _acquire_candidate(self, review)
         analysis_run = _analyze_candidate(self, review, video_id)

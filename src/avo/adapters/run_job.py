@@ -57,6 +57,8 @@ def main(argv: list[str] | None = None) -> int:
         }
         if result.models_used:
             payload["modelsUsed"] = result.models_used
+        if result.model_sources:
+            payload["resolvedModelSources"] = result.model_sources
         print(json.dumps(payload))
     return result.exit_code
 

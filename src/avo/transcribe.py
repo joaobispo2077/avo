@@ -276,6 +276,13 @@ class LocalTranscriber:
                 "faster-whisper is not installed; run: python -m pip install -e ."
             ) from exc
 
+        from avo.model_sources import PreflightError, check_runtime
+
+        try:
+            check_runtime(device=device, compute_type=compute_type)
+        except PreflightError as exc:
+            raise RuntimeError(f"{exc.code}: {exc}") from exc
+
         try:
             self.model = WhisperModel(
                 str(self.model_dir),
