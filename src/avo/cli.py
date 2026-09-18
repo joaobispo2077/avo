@@ -503,29 +503,42 @@ def _load_json(path: Path) -> dict:
     return value
 
 
+def _complete_hashes(required: dict[str, Any], label: str) -> dict[str, str]:
+    missing = [key for key, value in required.items() if not value]
+    if missing:
+        raise ValueError(f"{label} is incomplete: " + ", ".join(sorted(missing)))
+    return {key: str(value) for key, value in required.items()}
+
+
 def _materialization_dependencies(materialization: dict) -> dict[str, str]:
     from avo.timeline.contracts import content_hash
 
     lock = materialization.get("canonicalInputLock") or {}
+    kind = str(materialization.get("kind") or "")
+    output_sha = (materialization.get("output") or {}).get("sha256")
     required = {
         "cmap": lock.get("cmapRevisionHash"),
         "sync-map": lock.get("syncRevisionHash"),
-        "bmap": lock.get("bmapRevisionHash"),
-        "tracks": lock.get("tracksRevisionHash"),
-        "assembly-output": (materialization.get("output") or {}).get("sha256"),
         "materialization": materialization.get("materializationHash"),
-        "delivery-fidelity-policy": materialization.get("deliveryFidelityPolicyHash"),
-        "picture-lineage": materialization.get("pictureLineageHash"),
     }
     raw = lock.get("rawFingerprints")
     if raw:
         required["raw"] = content_hash(raw)
-    missing = [key for key, value in required.items() if not value]
-    if missing:
-        raise ValueError(
-            "assembly materialization is incomplete: " + ", ".join(sorted(missing))
-        )
-    return {key: str(value) for key, value in required.items()}
+    if kind == "cut-proof":
+        required["cutOutput"] = output_sha
+        return _complete_hashes(required, "cut-proof materialization")
+    required.update(
+        {
+            "bmap": lock.get("bmapRevisionHash"),
+            "tracks": lock.get("tracksRevisionHash"),
+            "assembly-output": output_sha,
+            "delivery-fidelity-policy": materialization.get(
+                "deliveryFidelityPolicyHash"
+            ),
+            "picture-lineage": materialization.get("pictureLineageHash"),
+        }
+    )
+    return _complete_hashes(required, "assembly materialization")
 
 
 def _animation(args: argparse.Namespace) -> int:
@@ -895,7 +908,7 @@ def _review(args: argparse.Namespace) -> int:
     )
     result = ReviewRunner(
         review_root=workspace.review_dir,
-        transcription=CandidateTranscriptionAdapter(),
+        transcription=CandidateTranscriptionAdapter(model=watch_policy.whisper_model),
         watch=WatchSkillAdapter(),
         deterministic_qc=CheckpointQcRegistry(),
         workspace=workspace,
@@ -1151,7 +1164,9 @@ def _prepare_delivery(args: argparse.Namespace, workspace: TimelineWorkspace) ->
     )
     runner = ReviewRunner(
         review_root=workspace.review_dir,
-        transcription=CandidateTranscriptionAdapter(),
+        transcription=CandidateTranscriptionAdapter(
+            model=_workspace_watch_policy(workspace).whisper_model
+        ),
         watch=WatchSkillAdapter(),
         deterministic_qc=CheckpointQcRegistry(),
         workspace=workspace,

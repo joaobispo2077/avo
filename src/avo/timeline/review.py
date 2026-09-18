@@ -260,6 +260,87 @@ def evaluate_gate(
     return "ai-passed"
 
 
+def _fresh_evidence(
+    evidence: list[dict[str, Any]],
+    candidate_hash: str,
+    dependencies: dict[str, str],
+    *,
+    candidate_identity_hash: str | None,
+    dependency_lock_sha256: str | None,
+) -> list[dict[str, Any]]:
+    return [
+        item
+        for item in evidence
+        if evidence_is_fresh(
+            item,
+            candidate_hash,
+            dependencies,
+            candidate_identity_hash=candidate_identity_hash,
+            dependency_lock_sha256=dependency_lock_sha256,
+        )
+    ]
+
+
+def _require_unique_required(
+    current: list[dict[str, Any]], policy: dict[str, Any]
+) -> None:
+    counts = Counter(item.get("kind") for item in current)
+    duplicates = sorted(kind for kind, count in counts.items() if count > 1)
+    if duplicates:
+        raise GateError(
+            "human gate blocked; duplicate current evidence: " + ", ".join(duplicates)
+        )
+    missing = set(policy["required"]) - {item.get("kind") for item in current}
+    if missing:
+        raise GateError(
+            "human gate blocked; missing current evidence: "
+            + ", ".join(sorted(missing))
+        )
+
+
+def _require_coverage_complete(
+    current: list[dict[str, Any]], policy: dict[str, Any]
+) -> None:
+    for item in current:
+        coverage = item.get("coverage") or {}
+        required_windows = int(coverage.get("requiredWindows") or 0)
+        reviewed_windows = int(coverage.get("reviewedWindows") or 0)
+        if reviewed_windows < required_windows:
+            raise GateError(
+                "human gate blocked; incomplete coverage for " + str(item.get("kind"))
+            )
+        if (
+            item.get("kind") == "watch"
+            and policy["fullWatch"]
+            and (item.get("scope") or {}).get("mode") != "full"
+        ):
+            raise GateError("human gate blocked; full Watch evidence required")
+
+
+def validate_evidence_integrity(
+    checkpoint: str,
+    candidate_hash: str,
+    dependencies: dict[str, str],
+    evidence: list[dict[str, Any]],
+    *,
+    candidate_identity_hash: str | None = None,
+    dependency_lock_sha256: str | None = None,
+) -> None:
+    """Require fresh, unique, coverage-complete evidence regardless of AI pass/fail."""
+    policy = CHECKPOINT_POLICIES.get(checkpoint)
+    if policy is None:
+        raise GateError(f"unknown checkpoint: {checkpoint}")
+    current = _fresh_evidence(
+        evidence,
+        candidate_hash,
+        dependencies,
+        candidate_identity_hash=candidate_identity_hash,
+        dependency_lock_sha256=dependency_lock_sha256,
+    )
+    _require_unique_required(current, policy)
+    _require_coverage_complete(current, policy)
+
+
 def approval_is_current(
     approval: dict[str, Any] | None,
     *,

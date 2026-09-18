@@ -62,10 +62,12 @@ def _require_bonsai_runtime(option_id: str) -> None:
 
 def _bundled_executable() -> str | None:
     root = _repository_root()
-    candidates = [
-        root / "tools" / "watch-skill" / ".venv" / "bin" / "watch-skill",
+    win = [
+        root / "tools" / "watch-skill" / ".venv-win" / "Scripts" / "watch-skill.exe",
         root / "tools" / "watch-skill" / ".venv" / "Scripts" / "watch-skill.exe",
     ]
+    posix = [root / "tools" / "watch-skill" / ".venv" / "bin" / "watch-skill"]
+    candidates = win + posix if os.name == "nt" else posix + win
     return str(next((path for path in candidates if path.is_file()), "")) or None
 
 
@@ -319,7 +321,31 @@ def _analysis_from_output(text: str) -> dict[str, Any] | None:
     try:
         return _extract_json_object(text)
     except ValueError:
-        return _refusal_analysis(text)
+        return None
+
+
+def _coerce_findings(raw: Any) -> list[dict[str, Any]] | None:
+    if raw is None:
+        return []
+    if isinstance(raw, str):
+        raw = [raw] if raw.strip() else []
+    if not isinstance(raw, list):
+        return None
+    findings: list[dict[str, Any]] = []
+    for item in raw:
+        if isinstance(item, dict):
+            findings.append(item)
+        elif isinstance(item, str):
+            findings.append(
+                {
+                    "classification": "technical",
+                    "severity": "warning",
+                    "message": item,
+                }
+            )
+        else:
+            return None
+    return findings
 
 
 def _analyze_candidate(
@@ -327,6 +353,7 @@ def _analyze_candidate(
 ) -> _AnalysisRun:
     attempts: list[dict[str, Any]] = []
     latest = JobResult(exit_code=0)
+    refusal: dict[str, Any] | None = None
     for attempt in range(1, int(review.effective["analysisAttempts"]) + 1):
         latest = adapter.run(
             JobRequest(
@@ -343,6 +370,9 @@ def _analyze_candidate(
         analysis = _analysis_from_output(latest.stdout)
         if analysis is not None:
             return _AnalysisRun(analysis=analysis, result=latest, attempts=attempts)
+        refusal = refusal or _refusal_analysis(latest.stdout)
+    if refusal is not None:
+        return _AnalysisRun(analysis=refusal, result=latest, attempts=attempts)
     raise ToolError(
         "WATCH_MALFORMED",
         "Watch analysis did not return a schema-valid JSON object",
@@ -360,10 +390,8 @@ def _validated_analysis(analysis: dict[str, Any]) -> tuple[str, list[dict[str, A
             True,
             "retry the exact candidate with the structured-output contract",
         )
-    findings = analysis.get("findings")
-    if not isinstance(findings, list) or not all(
-        isinstance(item, dict) for item in findings
-    ):
+    findings = _coerce_findings(analysis.get("findings"))
+    if findings is None:
         raise ToolError(
             "WATCH_MALFORMED",
             "Watch analysis findings must be a list of objects",
@@ -371,6 +399,11 @@ def _validated_analysis(analysis: dict[str, Any]) -> tuple[str, list[dict[str, A
             "retry the exact candidate with the structured-output contract",
         )
     return status, findings
+
+
+def _model_identity(result: JobResult, _analysis: dict[str, Any]) -> str | None:
+    model = str(result.models_used.get("understand") or "").strip()
+    return model or None
 
 
 def _write_raw_artifacts(
@@ -398,20 +431,24 @@ def _evidence_payload(
     analysis_path: Path,
 ) -> dict[str, Any]:
     status, findings = _validated_analysis(analysis_run.analysis)
+    frame_key = "maxFrames" if len(analysis_run.attempts) == 1 else "repairMaxFrames"
     return {
         "schemaVersion": "1.0.0",
         "status": status,
         "checkpoint": review.checkpoint,
         "candidate": str(review.candidate),
         "coverage": {
-            "mode": "full" if review.scope in {"full", "whole"} else "windows",
-            "windows": review.windows,
+            "mode": "sampled",
+            "windows": [],
+            "requestedScope": review.scope,
+            "requestedWindows": review.windows,
+            "maxFrames": int(review.effective[frame_key]),
         },
         "findings": findings,
         "confidence": analysis_run.analysis.get("confidence"),
         "tool": "watch-skill",
         "toolVersion": adapter.tool_version(),
-        "model": analysis_run.analysis.get("model"),
+        "model": _model_identity(analysis_run.result, analysis_run.analysis),
         "outcomeKind": (
             "uncertainty" if status == "needs-human-judgment" else "content"
         ),
