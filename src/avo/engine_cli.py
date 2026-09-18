@@ -90,7 +90,7 @@ def _invoke(verb: str, rest: list[str]) -> int | None:
         return 0
     if _is_help(rest):
         print(f"usage: avo {verb}")
-    fn = getattr(importlib.import_module(_MODULES[verb]), "main")
+    fn = importlib.import_module(_MODULES[verb]).main
     try:
         if inspect.signature(fn).parameters:
             result = fn(rest)

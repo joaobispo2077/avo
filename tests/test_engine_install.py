@@ -13,8 +13,8 @@ import tempfile
 import unittest
 import urllib.request
 import zipfile
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable
 from unittest.mock import patch
 
 
@@ -73,7 +73,7 @@ class MockRelease:
             raise AssertionError("do not hit live GitHub")
         if url.rstrip("/").endswith("SHA256SUMS"):
             return self.sums
-        if url.endswith("/" + self.zip_name) or url.endswith(self.zip_name):
+        if url.endswith(("/" + self.zip_name, self.zip_name)):
             return self.zip_bytes
         raise FileNotFoundError(url)
 
@@ -137,7 +137,7 @@ class EngineInstallTests(unittest.TestCase):
                         system=system,
                         machine=machine,
                         http_get=http.get,
-                        install_skills=lambda: skills.append("ok"),
+                        install_skills=lambda bucket=skills: bucket.append("ok"),
                     )
                     launcher = _launcher(prefix)
                     self.assertTrue(launcher.is_file(), msg=zip_name)
@@ -173,7 +173,7 @@ class EngineInstallTests(unittest.TestCase):
                     system="Windows",
                     machine="AMD64",
                     http_get=http.get,
-                    install_skills=lambda: skills.append("ok"),
+                    install_skills=lambda bucket=skills: bucket.append("ok"),
                 )
             self.assertEqual(previous.read_bytes(), b"PREVIOUS-ENGINE")
             self.assertTrue(http.urls, msg="checksum check must use mock HTTP")
@@ -187,12 +187,12 @@ class EngineInstallTests(unittest.TestCase):
         skills: list[str] = []
         with tempfile.TemporaryDirectory() as tmp:
             prefix = Path(tmp) / ".avo"
-            kwargs = dict(
-                system="Linux",
-                machine="x86_64",
-                http_get=http.get,
-                install_skills=lambda: skills.append("ok"),
-            )
+            kwargs = {
+                "system": "Linux",
+                "machine": "x86_64",
+                "http_get": http.get,
+                "install_skills": lambda bucket=skills: bucket.append("ok"),
+            }
             _install(api, prefix, **kwargs)
             first = _launcher(prefix).read_bytes()
             self.assertEqual(first, payload)
@@ -228,7 +228,7 @@ class EngineInstallTests(unittest.TestCase):
                         system=system,
                         machine=machine,
                         http_get=http.get,
-                        install_skills=lambda: skills.append("ok"),
+                        install_skills=lambda bucket=skills: bucket.append("ok"),
                     )
                     self.assertEqual(skills, ["ok"])
                     self.assertFalse(_launcher(prefix).exists())
