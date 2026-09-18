@@ -127,9 +127,7 @@ def check_in_repo_paths(root: Path, tool_id: str, spec: dict[str, Any]) -> Check
 
 def check_python_project(root: Path, tool_id: str, spec: dict[str, Any]) -> CheckResult:
     if getattr(sys, "frozen", False):
-        return CheckResult(
-            tool_id, "OK", "frozen engine (clone helpers not required)"
-        )
+        return CheckResult(tool_id, "OK", "frozen engine (clone helpers not required)")
     manifest = spec.get("manifest", "pyproject.toml")
     if not (root / manifest).is_file():
         return CheckResult(tool_id, "FAIL", f"missing {manifest}")

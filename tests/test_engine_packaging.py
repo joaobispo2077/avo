@@ -27,18 +27,22 @@ def test_spec_bundles_config_schemas_templates() -> None:
 
 
 def test_spec_cpu_only_ctranslate2() -> None:
-    assert "_collect(\"ctranslate2\")" in SPEC or 'collect_all("ctranslate2")' in SPEC
-    assert "_collect(\"faster_whisper\")" in SPEC or 'collect_all("faster_whisper")' in SPEC
+    assert '_collect("ctranslate2")' in SPEC or 'collect_all("ctranslate2")' in SPEC
+    assert (
+        '_collect("faster_whisper")' in SPEC or 'collect_all("faster_whisper")' in SPEC
+    )
     assert "matplotlib" in SPEC
     assert any(tok in SPEC for tok in ("cublas", "cudart", "cuda"))
     assert "__main__.py" in SPEC
 
 
 def test_spec_does_not_collect_mcp_cli() -> None:
-    assert "_collect(\"mcp\")" not in SPEC
+    assert '_collect("mcp")' not in SPEC
     assert "collect_all" in SPEC
     assert not any(
-        line.strip() and not line.lstrip().startswith("#") and 'collect_all("mcp")' in line
+        line.strip()
+        and not line.lstrip().startswith("#")
+        and 'collect_all("mcp")' in line
         for line in SPEC.splitlines()
     )
     assert "mcp.cli" in SPEC
@@ -47,7 +51,9 @@ def test_spec_does_not_collect_mcp_cli() -> None:
 
 def test_build_scripts_zip_names_and_smoke() -> None:
     for text in (SH, PS1):
-        assert "avo-${VERSION}-${PLATFORM}.zip" in text or "avo-$Version-$Platform" in text
+        assert (
+            "avo-${VERSION}-${PLATFORM}.zip" in text or "avo-$Version-$Platform" in text
+        )
         assert "version" in text
         assert "--help" in text
         assert "pip install avo" not in text

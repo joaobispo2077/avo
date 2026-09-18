@@ -10,7 +10,9 @@ import pytest
 FIXTURE = Path(__file__).resolve().parent / "fixtures" / "engine" / "stub.wav"
 
 
-def test_stub_writes_json_without_whisper(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_stub_writes_json_without_whisper(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     monkeypatch.setenv("AVO_CI_TRANSCRIBE_STUB", "1")
 
     def boom(*_a: object, **_k: object) -> None:

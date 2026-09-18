@@ -61,7 +61,9 @@ V1_ARCH = (
 class MockRelease:
     """In-memory GitHub Releases stand-in. Never opens a socket."""
 
-    def __init__(self, zip_name: str, zip_bytes: bytes, sums: bytes | None = None) -> None:
+    def __init__(
+        self, zip_name: str, zip_bytes: bytes, sums: bytes | None = None
+    ) -> None:
         self.zip_name = zip_name
         self.zip_bytes = zip_bytes
         self.sums = sums if sums is not None else _sums(zip_name, zip_bytes)

@@ -22,9 +22,7 @@ def _resolve(cwd: Path, *, override: str | None = None, home: Path):
 
 def _write_checkout(root: Path) -> Path:
     (root / "src" / "avo").mkdir(parents=True)
-    (root / "pyproject.toml").write_text(
-        '[project]\nname = "avo"\n', encoding="utf-8"
-    )
+    (root / "pyproject.toml").write_text('[project]\nname = "avo"\n', encoding="utf-8")
     (root / "AGENTS.md").write_text(f"{ORCHESTRATOR_MARK}\n", encoding="utf-8")
     return root
 

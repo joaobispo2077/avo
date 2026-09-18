@@ -31,7 +31,11 @@ def resolve_consume_mode(
 def _is_avo_checkout(cwd: Path) -> bool:
     pyproject = cwd / "pyproject.toml"
     agents = cwd / "AGENTS.md"
-    if not pyproject.is_file() or not (cwd / "src" / "avo").is_dir() or not agents.is_file():
+    if (
+        not pyproject.is_file()
+        or not (cwd / "src" / "avo").is_dir()
+        or not agents.is_file()
+    ):
         return False
     try:
         named_avo = 'name = "avo"' in pyproject.read_text(encoding="utf-8")
