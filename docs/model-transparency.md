@@ -5,6 +5,12 @@ lighter/heavier alternatives exist — in setup, phase telemetry, and agent pros
 
 ## Sources of truth
 
+> **Backlog proposal:** BL-019 describes possible global → provider → project
+> source overrides (local caches/files, endpoints, projector files, and runtime
+> settings) plus durable resolved-source disclosure. None of this source-resolution
+> behavior is shipped. See
+> [Configurable model sources](../specs/backlog/configurable-model-sources.md).
+
 | Layer | File | Role |
 | --- | --- | --- |
 | Catalog | [`avo.model-catalog.json`](../config/avo.model-catalog.json) | All options + VRAM/RAM/disk/speed/quality |
