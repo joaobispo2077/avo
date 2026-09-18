@@ -14,6 +14,11 @@ _RESOLVE = "avo.models.resolve_option_id"
 
 
 class WatchAdapterTests(unittest.TestCase):
+    def setUp(self):
+        self.resolve_option = mock.patch(_RESOLVE, return_value="qwen2.5-7b")
+        self.resolve_option.start()
+        self.addCleanup(self.resolve_option.stop)
+
     def test_last_schema_valid_object_wins(self):
         result = _extract_json_object(
             '{"status":"fail","findings":[]} noise '
@@ -54,8 +59,10 @@ class WatchAdapterTests(unittest.TestCase):
                         exit_code=0,
                         stdout=(
                             '{"status":"pass","confidence":0.91,'
-                            '"findings":[]}\n(confidence: 0.91)'
+                            '"findings":[],"model":"untrusted-claim"}\n'
+                            "(confidence: 0.91)"
                         ),
+                        models_used={"understand": "qwen2.5-7b"},
                     ),
                     JobResult(exit_code=0, stdout="0.6.0\n"),
                 ],
@@ -78,7 +85,14 @@ class WatchAdapterTests(unittest.TestCase):
             self.assertIn("--max-frames", ask_argv)
             self.assertNotIn("required windows=", ask_argv[2])
             self.assertEqual(result["status"], "pass")
-            self.assertEqual(result["coverage"]["windows"][0]["reason"], "join")
+            self.assertEqual(result["model"], "qwen2.5-7b")
+            self.assertEqual(result["toolVersion"], "0.6.0")
+            self.assertEqual(result["coverage"]["mode"], "sampled")
+            self.assertEqual(result["coverage"]["maxFrames"], 18)
+            self.assertEqual(result["coverage"]["windows"], [])
+            self.assertEqual(
+                result["coverage"]["requestedWindows"][0]["reason"], "join"
+            )
             self.assertTrue((root / "review" / "watch-evidence.json").is_file())
             self.assertTrue((root / "review" / "watch-analysis.txt").is_file())
 
@@ -135,6 +149,7 @@ class WatchAdapterTests(unittest.TestCase):
             self.assertEqual(result["policy"]["policyHash"], "a" * 64)
             self.assertEqual(result["outcomeKind"], "content")
             self.assertEqual(len(result["attempts"]), 1)
+            self.assertIsNone(result["model"])
 
     def test_auto_device_does_not_force_cpu_environment(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -227,6 +242,7 @@ class WatchAdapterTests(unittest.TestCase):
                 "run",
                 side_effect=[
                     JobResult(exit_code=0, stdout="video_id `vid-1`"),
+                    JobResult(exit_code=0, stdout=echoed),
                     JobResult(exit_code=0, stdout=echoed),
                     JobResult(exit_code=0, stdout="0.6.0\n"),
                 ],
@@ -399,3 +415,45 @@ class WatchAdapterTests(unittest.TestCase):
             self.assertIn("--index", watch_argv)
             self.assertEqual(ask_argv[:2], ["ask", "vid-1"])
             self.assertEqual(result["status"], "pass")
+
+    def test_frame_ask_reports_sampled_coverage_and_ignores_echoed_model(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            candidate = root / "proof.mp4"
+            candidate.write_bytes(b"proof")
+            adapter = WatchSkillAdapter(executable="watch-skill")
+            with mock.patch.object(
+                adapter,
+                "run",
+                side_effect=[
+                    JobResult(exit_code=0, stdout="video_id `vid-1`"),
+                    JobResult(
+                        exit_code=0,
+                        stdout=(
+                            '{"status":"pass","confidence":1,"findings":[],'
+                            '"model":"bonsai-27b-vision"}'
+                        ),
+                    ),
+                    JobResult(exit_code=0, stdout="1.0"),
+                ],
+            ):
+                result = adapter.review(
+                    candidate, scope="full", artifact_dir=root / "review"
+                )
+            self.assertEqual(result["coverage"]["mode"], "sampled")
+            self.assertEqual(result["coverage"]["requestedScope"], "full")
+            self.assertIsNone(result["model"])
+
+    def test_string_findings_are_coerced_to_objects(self):
+        from avo.adapters.understand.watch_skill import _coerce_findings
+
+        self.assertEqual(
+            _coerce_findings(["jump at 12s"]),
+            [
+                {
+                    "classification": "technical",
+                    "severity": "warning",
+                    "message": "jump at 12s",
+                }
+            ],
+        )

@@ -49,6 +49,7 @@
 | `/avo.cleanup` | `commands/avo/cleanup.md` | `references/cleanup.md` |
 | `/avo.update` | `commands/avo/update.md` | `references/update.md` |
 | `/avo.stats` | `commands/avo/stats.md` | `references/stats.md` |
+| `/avo.models` | `commands/avo/models.md` | `references/models.md` |
 | `/avo.provider` | `commands/avo/provider.md` | `references/provider.md` |
 | `/avo.issues` | `commands/avo/issues.md` | `references/issues.md` |
 | `/avo.supporters` | `commands/avo/supporters.md` | `references/supporters.md` |

@@ -72,6 +72,25 @@ def insertion_review_findings(
     return []
 
 
+def _measurement_findings(
+    *,
+    black_frames: int,
+    freeze_seconds: float,
+    integrated_lufs: float | None,
+    true_peak_dbtp: float | None,
+) -> list[dict[str, str]]:
+    findings: list[dict[str, str]] = []
+    if black_frames:
+        findings.append({"severity": "error", "code": "black-frames"})
+    if freeze_seconds > 0.5:
+        findings.append({"severity": "error", "code": "freeze-risk"})
+    if integrated_lufs is not None and not -24 <= integrated_lufs <= -8:
+        findings.append({"severity": "error", "code": "loudness-outlier"})
+    if true_peak_dbtp is not None and true_peak_dbtp > 0:
+        findings.append({"severity": "error", "code": "true-peak-clip"})
+    return findings
+
+
 def evaluate_item(
     item: Mapping[str, Any],
     probe: Mapping[str, Any],
@@ -80,6 +99,7 @@ def evaluate_item(
     black_frames: int = 0,
     freeze_seconds: float = 0,
     integrated_lufs: float | None = None,
+    true_peak_dbtp: float | None = None,
     output: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
     expected = output or {"width": 1080, "height": 1920}
@@ -96,13 +116,13 @@ def evaluate_item(
             item.get("captions") or [], float(item["editedDurationSec"])
         ),
         *insertion_review_findings(item, watch_reference),
+        *_measurement_findings(
+            black_frames=black_frames,
+            freeze_seconds=freeze_seconds,
+            integrated_lufs=integrated_lufs,
+            true_peak_dbtp=true_peak_dbtp,
+        ),
     ]
-    if black_frames:
-        findings.append({"severity": "error", "code": "black-frames"})
-    if freeze_seconds > 0.5:
-        findings.append({"severity": "error", "code": "freeze-risk"})
-    if integrated_lufs is not None and not -24 <= integrated_lufs <= -8:
-        findings.append({"severity": "error", "code": "loudness-outlier"})
     return {
         "status": "failed"
         if any(f["severity"] == "error" for f in findings)
@@ -168,5 +188,6 @@ def qc_proof_artifact(
         black_frames=int(metrics.get("blackFrames") or 0),
         freeze_seconds=float(metrics.get("freezeSeconds") or 0),
         integrated_lufs=metrics.get("integratedLufs"),
+        true_peak_dbtp=metrics.get("truePeakDbtp"),
         output=output,
     )

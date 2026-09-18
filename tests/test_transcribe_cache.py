@@ -98,5 +98,45 @@ class CacheTests(unittest.TestCase):
             self.assertEqual(out.read_bytes(), original)
 
 
+class CandidateAdapterCacheTests(unittest.TestCase):
+    def test_reuses_hash_matching_transcript_even_if_model_differs(self) -> None:
+        from avo.adapters.transcribe.candidate import CandidateTranscriptionAdapter
+        from avo.timeline.contracts import file_fingerprint
+
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            video = root / "clip.mp4"
+            video.write_bytes(b"one")
+            edit = root / "edit" / "transcripts"
+            edit.mkdir(parents=True)
+            digest = file_fingerprint(video)["sha256"]
+            path = edit / "clip.json"
+            path.write_text(
+                json.dumps(
+                    {
+                        "text": "oi",
+                        "words": [
+                            {
+                                "text": "oi",
+                                "start": 0.0,
+                                "end": 0.2,
+                                "probability": 0.9,
+                            }
+                        ],
+                        "engine": "faster-whisper",
+                        "model": "medium",
+                        "language_code": "pt-BR",
+                        "source": {"sha256": digest},
+                    }
+                ),
+                encoding="utf-8",
+            )
+            result = CandidateTranscriptionAdapter(model="medium").transcribe(
+                video, edit_dir=root / "edit"
+            )
+            self.assertEqual(result["model"], "medium")
+            self.assertEqual(result["status"], "pass")
+
+
 if __name__ == "__main__":
     unittest.main()

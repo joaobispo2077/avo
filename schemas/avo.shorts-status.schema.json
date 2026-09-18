@@ -15,9 +15,9 @@
   ],
   "properties": {
     "version": {
-      "enum": ["1.0", "1.1"]
+      "enum": ["1.0", "1.1", "1.2"]
     },
-    "planVersion": { "enum": ["1.0", "1.1"] },
+    "planVersion": { "enum": ["1.0", "1.1", "1.2"] },
     "batchRoot": { "type": "string", "minLength": 1 },
     "batchRootSource": { "enum": ["canonical-default", "invocation", "legacy-output"] },
     "legacyExternalDelivery": { "type": ["string", "null"] },
@@ -175,6 +175,7 @@
             "prepared-lineage",
             "prepared-insertion-video",
             "prepared-insertion-audio",
+            "prepared-sfx",
             "composition",
             "proof",
             "master",
@@ -245,6 +246,10 @@
           }
         },
         "proofRevision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "proofArtifactRevision": {
           "type": "integer",
           "minimum": 0
         },
@@ -358,7 +363,50 @@
   },
   "allOf": [
     {
+      "if": { "properties": { "version": { "const": "1.0" } }, "required": ["version"] },
+      "then": {
+        "properties": {
+          "items": {
+            "items": {
+              "properties": {
+                "artifacts": {
+                  "not": {
+                    "contains": {
+                      "properties": { "kind": { "const": "prepared-sfx" } },
+                      "required": ["kind"]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
       "if": { "properties": { "version": { "const": "1.1" } }, "required": ["version"] },
+      "then": {
+        "required": ["planVersion", "batchRoot", "batchRootSource"],
+        "properties": {
+          "items": {
+            "items": {
+              "properties": {
+                "artifacts": {
+                  "not": {
+                    "contains": {
+                      "properties": { "kind": { "const": "prepared-sfx" } },
+                      "required": ["kind"]
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "version": { "const": "1.2" } }, "required": ["version"] },
       "then": { "required": ["planVersion", "batchRoot", "batchRootSource"] }
     }
   ]

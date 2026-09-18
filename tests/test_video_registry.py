@@ -14,10 +14,9 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
-from jsonschema import Draft202012Validator
-
 from avo import stats, video_registry
 from avo.paths import repo_root
+from jsonschema_support import validator_for
 
 
 def _external_raw(name: str) -> Path:
@@ -103,7 +102,7 @@ class VideoRegistryTests(unittest.TestCase):
             "createdAt": "2026-09-02T00:00:00Z",
             "defaults": {"watch": {"language": "en", "maxFrames": 12}},
         }
-        self.assertEqual(list(Draft202012Validator(schema).iter_errors(document)), [])
+        self.assertEqual(list(validator_for(schema).iter_errors(document)), [])
 
 
 class InitProjectRegistryTests(unittest.TestCase):

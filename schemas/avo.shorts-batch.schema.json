@@ -19,7 +19,7 @@
   ],
   "properties": {
     "version": {
-      "enum": ["1.0", "1.1"]
+      "enum": ["1.0", "1.1", "1.2"]
     },
     "batchRoot": { "type": "string", "minLength": 1 },
     "batchRootSource": {
@@ -194,6 +194,9 @@
         "delivery": {
           "type": "object",
           "additionalProperties": true
+        },
+        "sfx": {
+          "$ref": "#/$defs/sfxLibrary"
         }
       }
     },
@@ -233,7 +236,7 @@
       }
     }
   },
-  "$defs": {
+    "$defs": {
     "timeRange": {
       "type": "object",
       "additionalProperties": false,
@@ -249,6 +252,334 @@
         "endSec": {
           "type": "number",
           "exclusiveMinimum": 0
+        }
+      }
+    },
+    "callout": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "text", "startSec", "endSec", "corner"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_-]*$"
+        },
+        "kind": { "enum": ["chip", "stamp"] },
+        "text": { "type": "string", "minLength": 1, "maxLength": 40 },
+        "startSec": { "type": "number", "minimum": 0 },
+        "endSec": { "type": "number", "exclusiveMinimum": 0 },
+        "corner": { "enum": ["bl", "br", "bc"] }
+      }
+    },
+    "punchIn": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "startSec", "endSec"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_-]*$"
+        },
+        "startSec": { "type": "number", "minimum": 0 },
+        "endSec": { "type": "number", "exclusiveMinimum": 0 },
+        "scale": {
+          "type": "number",
+          "minimum": 1,
+          "maximum": 1.2
+        }
+      }
+    },
+    "graphicSfx": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind"],
+      "properties": {
+        "kind": { "enum": ["chip", "stamp", "punch", "seam", "price"] },
+        "every": {
+          "enum": [
+            "start",
+            "fill",
+            "item",
+            "resolve",
+            "reject",
+            "confirm",
+            "badge",
+            "role",
+            "downbeat",
+            "wipe"
+          ]
+        },
+        "offsetSec": { "type": "number" },
+        "atSec": { "type": "number", "minimum": 0 }
+      }
+    },
+    "graphic": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "widget", "startSec", "endSec", "corner"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_-]*$"
+        },
+        "widget": {
+          "enum": [
+            "stars",
+            "stack-resolve",
+            "vs-reject",
+            "flip-180",
+            "cover-wipe",
+            "ratio-lock",
+            "duration-meter",
+            "two-roles",
+            "badge-pair",
+            "price-duel"
+          ]
+        },
+        "startSec": { "type": "number", "minimum": 0 },
+        "endSec": { "type": "number", "exclusiveMinimum": 0 },
+        "corner": { "enum": ["bl", "br", "bc"] },
+        "params": {
+          "type": "object",
+          "minProperties": 1
+        },
+        "sfx": {
+          "anyOf": [
+            { "$ref": "#/$defs/graphicSfx" },
+            {
+              "type": "array",
+              "minItems": 1,
+              "items": { "$ref": "#/$defs/graphicSfx" }
+            }
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "widget": { "const": "stars" } }, "required": ["widget"] },
+          "then": {
+            "required": ["params"],
+            "properties": {
+              "params": {
+                "additionalProperties": false,
+                "required": ["total", "filled"],
+                "properties": {
+                  "total": { "type": "integer", "minimum": 1 },
+                  "filled": { "type": "integer", "minimum": 0 },
+                  "label": { "type": "string", "minLength": 1 },
+                  "fillStaggerSec": { "type": "number", "exclusiveMinimum": 0 }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "widget": { "const": "stack-resolve" } }, "required": ["widget"] },
+          "then": {
+            "required": ["params"],
+            "properties": {
+              "params": {
+                "additionalProperties": false,
+                "required": ["items", "resolve", "resolveAtSec"],
+                "properties": {
+                  "items": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                      "oneOf": [
+                        { "type": "string", "minLength": 1 },
+                        {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": ["text"],
+                          "properties": {
+                            "text": { "type": "string", "minLength": 1 },
+                            "startSec": { "type": "number", "minimum": 0 }
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  "resolve": { "type": "string", "minLength": 1 },
+                  "resolveAtSec": { "type": "number", "minimum": 0 },
+                  "itemStaggerSec": { "type": "number", "exclusiveMinimum": 0 }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "widget": { "const": "vs-reject" } }, "required": ["widget"] },
+          "then": {
+            "required": ["params"],
+            "properties": {
+              "params": {
+                "additionalProperties": false,
+                "required": ["reject", "confirm", "badge"],
+                "properties": {
+                  "reject": { "$ref": "#/$defs/timedText" },
+                  "confirm": { "$ref": "#/$defs/timedText" },
+                  "badge": { "$ref": "#/$defs/timedText" }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "widget": { "const": "flip-180" } }, "required": ["widget"] },
+          "then": {
+            "required": ["params"],
+            "properties": {
+              "params": {
+                "additionalProperties": false,
+                "required": ["front", "back"],
+                "properties": {
+                  "front": { "type": "string", "minLength": 1 },
+                  "back": { "type": "string", "minLength": 1 }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "widget": { "const": "cover-wipe" } }, "required": ["widget"] },
+          "then": {
+            "required": ["params"],
+            "properties": {
+              "params": {
+                "additionalProperties": false,
+                "required": ["cover", "hidden", "wipeAtSec"],
+                "properties": {
+                  "cover": { "type": "string", "minLength": 1 },
+                  "hidden": { "type": "string", "minLength": 1 },
+                  "wipeAtSec": { "type": "number", "minimum": 0 }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "widget": { "const": "ratio-lock" } }, "required": ["widget"] },
+          "then": {
+            "required": ["params"],
+            "properties": {
+              "params": {
+                "additionalProperties": false,
+                "required": ["ratio"],
+                "properties": { "ratio": { "type": "string", "minLength": 1 } }
+              }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "widget": { "const": "duration-meter" } }, "required": ["widget"] },
+          "then": {
+            "required": ["params"],
+            "properties": {
+              "params": {
+                "additionalProperties": false,
+                "required": ["label", "ticks", "metacritic", "metacriticAtSec"],
+                "properties": {
+                  "label": { "type": "string", "minLength": 1 },
+                  "hours": { "type": ["string", "number"] },
+                  "ticks": { "type": "integer", "minimum": 1 },
+                  "fillStaggerSec": { "type": "number", "exclusiveMinimum": 0 },
+                  "metacritic": { "type": "string", "minLength": 1 },
+                  "metacriticAtSec": { "type": "number", "minimum": 0 },
+                  "meterHoldSec": { "type": "number", "exclusiveMinimum": 0 }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "widget": { "const": "two-roles" } }, "required": ["widget"] },
+          "then": {
+            "required": ["params"],
+            "properties": {
+              "params": {
+                "additionalProperties": false,
+                "required": ["roles", "downbeat", "downbeatAtSec"],
+                "properties": {
+                  "roles": {
+                    "type": "array",
+                    "minItems": 2,
+                    "items": {
+                      "oneOf": [
+                        { "type": "string", "minLength": 1 },
+                        { "$ref": "#/$defs/timedText" }
+                      ]
+                    }
+                  },
+                  "roleStaggerSec": { "type": "number", "exclusiveMinimum": 0 },
+                  "downbeat": { "type": "string", "minLength": 1 },
+                  "downbeatAtSec": { "type": "number", "minimum": 0 }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "widget": { "const": "badge-pair" } }, "required": ["widget"] },
+          "then": {
+            "required": ["params"],
+            "properties": {
+              "params": {
+                "additionalProperties": false,
+                "required": ["badges"],
+                "properties": {
+                  "badges": {
+                    "type": "array",
+                    "minItems": 2,
+                    "items": { "$ref": "#/$defs/timedText" }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "widget": { "const": "price-duel" } }, "required": ["widget"] },
+          "then": {
+            "required": ["params"],
+            "properties": {
+              "params": {
+                "additionalProperties": false,
+                "required": ["physical", "digital"],
+                "properties": {
+                  "physical": { "type": "string", "minLength": 1 },
+                  "digital": { "type": "string", "minLength": 1 }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "timedText": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["text", "atSec"],
+      "properties": {
+        "text": { "type": "string", "minLength": 1 },
+        "atSec": { "type": "number", "minimum": 0 }
+      }
+    },
+    "sfxLibrary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["library"],
+      "properties": {
+        "library": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "chip": { "type": "string", "minLength": 1 },
+            "stamp": { "type": "string", "minLength": 1 },
+            "punch": { "type": "string", "minLength": 1 },
+            "seam": { "type": "string", "minLength": 1 },
+            "price": { "type": "string", "minLength": 1 }
+          }
         }
       }
     },
@@ -523,6 +854,24 @@
         },
         "captionOverride": {
           "$ref": "#/$defs/captionPolicy"
+        },
+        "motionOverride": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "callouts": {
+              "type": "array",
+              "items": { "$ref": "#/$defs/callout" }
+            },
+            "punchIns": {
+              "type": "array",
+              "items": { "$ref": "#/$defs/punchIn" }
+            },
+            "graphics": {
+              "type": "array",
+              "items": { "$ref": "#/$defs/graphic" }
+            }
+          }
         },
         "insertionOverride": {
           "type": [
@@ -833,12 +1182,40 @@
       "if": { "properties": { "version": { "const": "1.0" } }, "required": ["version"] },
       "then": {
         "properties": {
-          "candidates": { "items": { "required": ["sourceRange"], "not": { "required": ["sourceSegments"] } } }
+          "defaults": { "not": { "required": ["sfx"] } },
+          "candidates": {
+            "items": {
+              "required": ["sourceRange"],
+              "allOf": [
+                { "not": { "required": ["sourceSegments"] } },
+                { "not": { "required": ["motionOverride"] } }
+              ]
+            }
+          }
         }
       }
     },
     {
       "if": { "properties": { "version": { "const": "1.1" } }, "required": ["version"] },
+      "then": {
+        "required": ["batchRoot", "batchRootSource"],
+        "properties": {
+          "source": { "required": ["sourceId"] },
+          "defaults": { "not": { "required": ["sfx"] } },
+          "candidates": {
+            "items": {
+              "required": ["sourceSegments"],
+              "allOf": [
+                { "not": { "required": ["sourceRange"] } },
+                { "not": { "required": ["motionOverride"] } }
+              ]
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "version": { "const": "1.2" } }, "required": ["version"] },
       "then": {
         "required": ["batchRoot", "batchRootSource"],
         "properties": {

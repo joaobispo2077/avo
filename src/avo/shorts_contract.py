@@ -23,6 +23,13 @@ SCHEMA_NAMES = {
     "index": "avo.shorts-index.schema.json",
 }
 
+CANONICAL_ROOT_VERSIONS = frozenset({"1.1", "1.2"})
+
+
+def uses_canonical_root(version: Any) -> bool:
+    """True for batch-root contracts that use source segments (1.1+) rather than sourceRange."""
+    return str(version or "") in CANONICAL_ROOT_VERSIONS
+
 
 class ContractValidationError(ValueError):
     """A Shorts contract or cross-document invariant is invalid."""
@@ -93,7 +100,7 @@ def _validate_request_invariants(request: Mapping[str, Any]) -> None:
     candidates = list(request.get("candidates") or [])
     _validate_candidate_identity(request, candidates)
     _validate_insertion_and_correction_identity(request)
-    if request.get("version") == "1.1":
+    if uses_canonical_root(request.get("version")):
         source_id = (request.get("source") or {}).get("sourceId")
         for candidate in candidates:
             _validate_requested_segments(candidate, source_id)
@@ -174,7 +181,7 @@ def _validate_plan_invariants(plan: Mapping[str, Any]) -> None:
         raise ContractValidationError(
             f"planHash does not match canonical plan content: expected {expected}"
         )
-    if plan.get("version") == "1.1":
+    if uses_canonical_root(plan.get("version")):
         for item in items:
             _validate_resolved_segments(item)
 

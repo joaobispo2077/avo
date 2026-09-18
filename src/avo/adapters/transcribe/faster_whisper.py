@@ -9,19 +9,27 @@ import sys
 from avo.adapters.base import JobRequest, JobResult
 
 
+def _argv_with_option(argv: list[str], flag: str, value: str | None) -> list[str]:
+    if not value or flag in argv:
+        return argv
+    return [flag, value, *argv]
+
+
 def _argv_with_model(argv: list[str], model: str) -> list[str]:
-    if not model:
-        return argv
-    if "--model" in argv:
-        return argv
-    return ["--model", model, *argv]
+    return _argv_with_option(argv, "--model", model)
 
 
 class FasterWhisperAdapter:
     routing_id = "faster-whisper"
 
     def run(self, request: JobRequest) -> JobResult:
-        from avo.models import format_active_model, load_catalog, resolve_option_id
+        from avo.model_sources import (
+            PreflightError,
+            disclosure_for,
+            preflight,
+            resolve_job,
+        )
+        from avo.models import format_active_model, load_catalog
 
         script = request.root / "helpers" / "transcribe.py"
         if not script.is_file():
@@ -29,12 +37,32 @@ class FasterWhisperAdapter:
                 exit_code=1,
                 stderr=f"missing bundled engine script: {script}",
             )
-        model_id = resolve_option_id(
-            "transcribe", root=request.root, label=request.label
-        )
+        resolved = resolve_job("transcribe", root=request.root, label=request.label)
+        try:
+            preflight(resolved)
+        except PreflightError as exc:
+            return JobResult(
+                exit_code=1,
+                stderr=f"{exc.code}: {exc}",
+                models_used={"transcribe": resolved.catalog_label or resolved.id},
+                model_sources={"transcribe": disclosure_for(resolved)},
+            )
         catalog = load_catalog(request.root)
-        model_label = format_active_model(catalog, "transcribe", model_id)
-        argv = _argv_with_model(request.argv, model_id)
+        model_label = format_active_model(catalog, resolved.job_key, resolved.id)
+        source = (
+            resolved.pin.get("source")
+            if isinstance(resolved.pin.get("source"), dict)
+            else {}
+        )
+        runtime = (
+            resolved.pin.get("runtime")
+            if isinstance(resolved.pin.get("runtime"), dict)
+            else {}
+        )
+        argv = _argv_with_model(request.argv, resolved.id)
+        argv = _argv_with_option(argv, "--model-dir", source.get("artifactPath"))
+        argv = _argv_with_option(argv, "--device", runtime.get("device"))
+        argv = _argv_with_option(argv, "--compute-type", runtime.get("computeType"))
         cmd = [sys.executable, str(script), *argv]
         env = {**os.environ, **request.env}
         proc = subprocess.run(
@@ -49,4 +77,5 @@ class FasterWhisperAdapter:
             stdout=proc.stdout,
             stderr=proc.stderr,
             models_used={"transcribe": model_label},
+            model_sources={"transcribe": disclosure_for(resolved)},
         )

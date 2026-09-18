@@ -1,7 +1,8 @@
 """Local stdio MCP adapter for AVO (`avo.mcp`).
 
 Additive harness surface over ``avo.cli`` — does not replace skills or the CLI.
-Phase-1 transport is stdio only; install the optional extra with ``pip install 'avo[mcp]'``.
+Phase-1 transport is stdio only; from the AVO checkout root, install the optional
+extra with ``python -m pip install -e '.[mcp]'``.
 
 This package must not print to stdout at import time (stdout is reserved for MCP framing).
 """

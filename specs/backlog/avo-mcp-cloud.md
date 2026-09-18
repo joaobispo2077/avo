@@ -18,9 +18,10 @@ That option is a **future enhancement**, not part of phase-1 `avo.mcp`.
 **Local MCP, skills, and CLI must never be replaced or blocked** by a cloud or
 Docker option.
 
-- Default and documented happy path remains: install optional `avo[mcp]`, run
-  `python -m avo.mcp` over **stdio**, wire the harness locally — **no account /
-  OAuth / IdP required**.
+- Default and documented happy path remains: from the AVO checkout root,
+  `python -m pip install -e ".[mcp]"`, then run `python -m avo.mcp` over
+  **stdio**, wire the harness locally — **no account / OAuth / IdP required**.
+  Do not `pip install avo` from PyPI; that name is a different project.
 - Cloud/Docker, if built later, is **opt-in** and additive.
 - No release may require a remote account, image pull, or network MCP listen
   surface in order to use AVO skills, CLI, or local `avo.mcp`.

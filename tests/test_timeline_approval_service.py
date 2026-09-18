@@ -115,3 +115,73 @@ def test_decide_updates_editlog_approvals(tmp_path: Path) -> None:
     assert "## Approvals" in text
     assert "approved exact cut" in text
     assert "Approvals: none recorded yet" not in text
+
+
+def test_human_cannot_approve_stale_or_sampled_watch_evidence(
+    tmp_path: Path,
+) -> None:
+    ws, revision, review, materialization_path = approved_review(tmp_path)
+    path = Path(review["reviewPath"])
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload["state"] = "needs-human-judgment"
+    for item in payload["evidence"]:
+        if item.get("kind") == "watch":
+            item["candidateHash"] = "0" * 64
+            break
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    with pytest.raises(ValueError, match="missing current evidence"):
+        ApprovalService(ws).decide(
+            decision="approved",
+            revision_id=revision["revisionId"],
+            review_path=path,
+            materialization_path=materialization_path,
+            actor="creator",
+            reason="must fail stale watch",
+        )
+
+
+def test_human_cannot_approve_sampled_watch_as_full(tmp_path: Path) -> None:
+    ws, revision, review, materialization_path = approved_review(tmp_path)
+    path = Path(review["reviewPath"])
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload["state"] = "needs-human-judgment"
+    for item in payload["evidence"]:
+        if item.get("kind") == "watch":
+            scope = dict(item.get("scope") or {})
+            scope["mode"] = "windows"
+            item["scope"] = scope
+            coverage = dict(item.get("coverage") or {})
+            coverage["mode"] = "sampled"
+            item["coverage"] = coverage
+            break
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    with pytest.raises(ValueError, match="full Watch evidence required"):
+        ApprovalService(ws).decide(
+            decision="approved",
+            revision_id=revision["revisionId"],
+            review_path=path,
+            materialization_path=materialization_path,
+            actor="creator",
+            reason="must fail sampled watch",
+        )
+
+
+def test_human_can_approve_needs_human_judgment_review(tmp_path: Path) -> None:
+    ws, revision, review, materialization_path = approved_review(tmp_path)
+    path = Path(review["reviewPath"])
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload["state"] = "needs-human-judgment"
+    payload["unresolvedRisks"] = [
+        {"classification": "factual", "message": "low-confidence word"}
+    ]
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    event = ApprovalService(ws).decide(
+        decision="approved",
+        revision_id=revision["revisionId"],
+        review_path=path,
+        materialization_path=materialization_path,
+        actor="creator",
+        reason="accepted remaining whisper uncertainty",
+    )
+    assert event["type"] == "approved"
+    assert ws.store("cmap").effective_approval()["eventId"] == event["eventId"]

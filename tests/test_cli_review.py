@@ -42,6 +42,28 @@ def test_review_policy_accepts_all_watch_invocation_controls() -> None:
     assert args.watch_acceptance_criterion == ["labels readable"]
 
 
+def test_cut_proof_materialization_does_not_require_assembly_hashes() -> None:
+    from avo.cli import _materialization_dependencies
+
+    deps = _materialization_dependencies(
+        {
+            "kind": "cut-proof",
+            "materializationHash": "m" * 64,
+            "canonicalInputLock": {
+                "cmapRevisionHash": "c" * 64,
+                "syncRevisionHash": "s" * 64,
+                "rawFingerprints": {"camera": "r" * 64},
+            },
+            "output": {"sha256": "o" * 64, "locator": "edit/preview/edit-proof.mp4"},
+        }
+    )
+    assert deps["cmap"] == "c" * 64
+    assert deps["sync-map"] == "s" * 64
+    assert deps["cutOutput"] == "o" * 64
+    assert "bmap" not in deps
+    assert "tracks" not in deps
+
+
 def test_review_run_watch_flags_are_optional() -> None:
     args = build_parser().parse_args(
         [

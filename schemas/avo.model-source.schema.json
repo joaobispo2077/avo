@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/joaobispo2077/avo/avo.model-source.schema.json",
+  "title": "AVO model pin",
+  "description": "Catalog id string or source+runtime object. Secrets are env names only (apiKeyEnv), never apiKey values.",
+  "$defs": {
+    "modelPin": {
+      "oneOf": [
+        { "type": "string", "minLength": 1 },
+        { "$ref": "#/$defs/modelSourceObject" }
+      ]
+    },
+    "modelSourceObject": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "default": {
+          "type": "string",
+          "minLength": 1,
+          "description": "avo.config.json alias for id"
+        },
+        "description": { "type": "string" },
+        "source": { "$ref": "#/$defs/modelSource" },
+        "runtime": { "$ref": "#/$defs/modelRuntime" }
+      }
+    },
+    "modelSource": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kind": { "type": "string", "enum": ["hf-cache", "artifact", "endpoint"] },
+        "cacheDir": { "type": "string" },
+        "repo": { "type": "string" },
+        "revision": { "type": "string" },
+        "artifactPath": { "type": "string" },
+        "companion": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "mmproj": { "type": "string" }
+          }
+        },
+        "endpoint": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "baseUrl": { "type": "string", "minLength": 1 },
+            "servedName": { "type": "string" },
+            "apiKeyEnv": { "type": "string", "minLength": 1 }
+          }
+        }
+      }
+    },
+    "modelRuntime": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "device": {
+          "type": "string",
+          "pattern": "^(auto|cpu|cuda(:[0-9]+)?)$"
+        },
+        "computeType": { "type": "string", "minLength": 1 },
+        "offline": { "type": "boolean" },
+        "allowDownload": { "type": "boolean" },
+        "pythonEnv": { "type": ["string", "null"] }
+      }
+    }
+  },
+  "$ref": "#/$defs/modelPin"
+}

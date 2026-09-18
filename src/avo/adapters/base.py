@@ -31,6 +31,7 @@ class JobResult:
     stdout: str = ""
     stderr: str = ""
     models_used: dict[str, str] = field(default_factory=dict)
+    model_sources: dict[str, Any] = field(default_factory=dict)
 
 
 class JobAdapter(Protocol):

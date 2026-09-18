@@ -10,7 +10,7 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
-from avo.shorts_contract import atomic_write_json
+from avo.shorts_contract import atomic_write_json, uses_canonical_root
 
 _BATCH_ID = re.compile(r"^[a-z0-9][a-z0-9-]*$")
 
@@ -60,8 +60,8 @@ class ShortsBatchPaths:
 
     def validate_plan_path(self, plan_path: Path | str, *, plan_version: str) -> Path:
         resolved = Path(plan_path).expanduser().resolve()
-        if plan_version == "1.1":
-            _require_contained(resolved, self.plans_dir, "v1.1 plan")
+        if uses_canonical_root(plan_version):
+            _require_contained(resolved, self.plans_dir, f"v{plan_version} plan")
         return resolved
 
 

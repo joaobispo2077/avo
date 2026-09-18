@@ -55,8 +55,10 @@
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "understand": { "type": "string" },
-            "plan": { "type": "string" }
+            "transcribe": { "$ref": "avo.model-source.schema.json#/$defs/modelPin" },
+            "understand": { "$ref": "avo.model-source.schema.json#/$defs/modelPin" },
+            "plan": { "$ref": "avo.model-source.schema.json#/$defs/modelPin" },
+            "transcribe_paid": { "$ref": "avo.model-source.schema.json#/$defs/modelPin" }
           }
         },
         "watch": {

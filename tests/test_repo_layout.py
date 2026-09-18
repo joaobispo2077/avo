@@ -37,6 +37,7 @@ class RepoLayoutTests(unittest.TestCase):
             "avo.shorts-plan.schema.json",
             "avo.shorts-status.schema.json",
             "avo.shorts-composition.schema.json",
+            "avo.model-source.schema.json",
         ):
             path = schema_path(name)
             self.assertEqual(path.parent, self.root / "schemas", msg=name)
