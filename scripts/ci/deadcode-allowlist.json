@@ -140,6 +140,14 @@
       "reason": "Public API / CLI surface not referenced inside src/avo scan"
     },
     {
+      "path": "src/avo/engine_install.py",
+      "name": "install_engine",
+      "kind": "function",
+      "lineno": 36,
+      "confidence": 60,
+      "reason": "Public fetch API; Node installer is install.cjs; tests import dynamically"
+    },
+    {
       "path": "src/avo/mcp/bridge.py",
       "name": "parsed_json",
       "kind": "variable",
