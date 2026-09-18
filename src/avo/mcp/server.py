@@ -1,9 +1,9 @@
 """Stdio MCP server for AVO.
 
 Uses the official ``mcp`` Python SDK ``MCPServer`` API (SDK v2+; ``FastMCP`` was
-removed from ``mcp.server.fastmcp``). Install with::
+removed from ``mcp.server.fastmcp``). From the AVO checkout root, install with::
 
-    pip install 'avo[mcp]'
+    python -m pip install -e '.[mcp]'
 
 Stdout is reserved for MCP framing — log only to stderr.
 
@@ -24,8 +24,7 @@ from avo.mcp.tools.meta import register_meta_tools
 
 _MISSING_MCP_MSG = (
     "avo.mcp requires the optional 'mcp' package.\n"
-    "Install with: pip install 'avo[mcp]'\n"
-    "Or: pip install 'mcp>=1.28'"
+    "From the AVO checkout root, run: python -m pip install -e '.[mcp]'"
 )
 
 

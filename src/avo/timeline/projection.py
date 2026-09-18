@@ -31,6 +31,123 @@ def _seconds(value: dict[str, Any]) -> float:
     return float(Fraction(int(value["ticks"]) * int(base["num"]), int(base["den"])))
 
 
+def _source_audio_declaration(
+    source: dict[str, Any],
+) -> tuple[tuple[str, str, str] | None, str | None]:
+    meta = source.get("streamMetadata") or {}
+    if "audioStream" not in meta and "dialogueChannel" not in meta:
+        return None, None
+    source_id = str(source.get("sourceId") or "<unknown>")
+    stream = str(meta.get("audioStream") or "").strip()
+    channel = str(meta.get("dialogueChannel") or "").strip().lower()
+    missing = []
+    if not stream:
+        missing.append("audioStream")
+    if channel not in {"left", "right"}:
+        missing.append("dialogueChannel (must be left or right)")
+    if missing:
+        return None, f"{source_id} missing/invalid {', '.join(missing)}"
+    return (source_id, stream, channel), None
+
+
+def _apply_audio_metadata(snapshot: dict[str, Any], edl: dict[str, Any]) -> None:
+    declarations = []
+    incomplete = []
+    for source in snapshot.get("sources") or []:
+        declaration, error = _source_audio_declaration(source)
+        if error:
+            incomplete.append(error)
+        elif declaration:
+            declarations.append(declaration)
+    if incomplete:
+        raise ProjectionError(
+            "incomplete audio metadata: " + "; ".join(sorted(incomplete))
+        )
+    configs = {(stream, channel) for _, stream, channel in declarations}
+    if len(configs) > 1:
+        details = ", ".join(
+            f"{source_id}=({stream}, {channel})"
+            for source_id, stream, channel in sorted(declarations)
+        )
+        raise ProjectionError(f"conflicting audio metadata: {details}")
+    if not configs:
+        return
+    stream, channel = next(iter(configs))
+    edl["audio"] = {
+        "main_source_stream": stream,
+        "dialogue_channel": channel,
+    }
+
+
+def _apply_bmap_cues(
+    edl: dict[str, Any],
+    bmap: dict[str, Any],
+    tracks: dict[str, Any] | None,
+) -> None:
+    beat_revision = _revision(bmap, None)
+    cues = beat_revision["snapshot"].get("cues") or []
+    if tracks is None:
+        overlays, effects = [], []
+        for cue in cues:
+            start = _seconds(cue["start"])
+            end = _seconds(cue["end"])
+            content = deepcopy(cue.get("contentRef") or {})
+            item = {
+                **content,
+                "start_in_output": start,
+                "duration": max(0.0, end - start),
+                "motion_brief_id": cue["cueId"],
+                "purpose": cue.get("intent"),
+            }
+            if cue["kind"] == "music":
+                raise ProjectionError(
+                    "music cues require resolved Tracks; they cannot be projected as one-shot SFX"
+                )
+            if cue["kind"] == "sfx":
+                item["gain_db"] = float((cue.get("audio") or {}).get("gainDb", -12.0))
+                effects.append(item)
+            else:
+                overlays.append(item)
+        if overlays:
+            edl["overlays"] = overlays
+        if effects:
+            edl["sound_effects"] = effects
+    edl["timeline_projection"]["bmapRevisionId"] = beat_revision["revisionId"]
+    edl["timeline_projection"]["bmapRevisionHash"] = beat_revision["contentHash"]
+
+
+def _apply_tracks(
+    edl: dict[str, Any],
+    bmap: dict[str, Any] | None,
+    tracks: dict[str, Any],
+) -> None:
+    from .tracks import resolve_tracks
+
+    track_revision = _revision(tracks, None)
+    assembly = track_revision["snapshot"]
+    cue_ids = {
+        cue["cueId"]
+        for cue in (
+            (_revision(bmap, None)["snapshot"].get("cues") or [])
+            if bmap is not None
+            else []
+        )
+    }
+    assembly = (
+        resolve_tracks(assembly, cue_ids) if bmap is not None else deepcopy(assembly)
+    )
+    edl["timeline_projection"]["tracksRevisionId"] = track_revision["revisionId"]
+    edl["timeline_projection"]["tracksRevisionHash"] = track_revision["contentHash"]
+    edl["timeline_tracks"] = deepcopy(assembly)
+    edl["timeline_projection"]["capabilities"] = [
+        "audio-tracks",
+        "video-tracks",
+        "z-order",
+        "music-beds",
+        "captions-last",
+    ]
+
+
 def project_cmap_to_edl(
     cmap: dict[str, Any],
     *,
@@ -73,67 +190,11 @@ def project_cmap_to_edl(
             "cmapRevisionHash": revision["contentHash"],
         },
     }
+    _apply_audio_metadata(snapshot, edl)
     if bmap is not None:
-        beat_revision = _revision(bmap, None)
-        cues = beat_revision["snapshot"].get("cues") or []
-        if tracks is None:
-            overlays, effects = [], []
-            for cue in cues:
-                start = _seconds(cue["start"])
-                end = _seconds(cue["end"])
-                content = deepcopy(cue.get("contentRef") or {})
-                item = {
-                    **content,
-                    "start_in_output": start,
-                    "duration": max(0.0, end - start),
-                    "motion_brief_id": cue["cueId"],
-                    "purpose": cue.get("intent"),
-                }
-                if cue["kind"] == "music":
-                    raise ProjectionError(
-                        "music cues require resolved Tracks; they cannot be projected as one-shot SFX"
-                    )
-                if cue["kind"] == "sfx":
-                    item["gain_db"] = float(
-                        (cue.get("audio") or {}).get("gainDb", -12.0)
-                    )
-                    effects.append(item)
-                else:
-                    overlays.append(item)
-            if overlays:
-                edl["overlays"] = overlays
-            if effects:
-                edl["sound_effects"] = effects
-        edl["timeline_projection"]["bmapRevisionId"] = beat_revision["revisionId"]
-        edl["timeline_projection"]["bmapRevisionHash"] = beat_revision["contentHash"]
+        _apply_bmap_cues(edl, bmap, tracks)
     if tracks is not None:
-        track_revision = _revision(tracks, None)
-        assembly = track_revision["snapshot"]
-        from .tracks import resolve_tracks
-
-        cue_ids = {
-            cue["cueId"]
-            for cue in (
-                (_revision(bmap, None)["snapshot"].get("cues") or [])
-                if bmap is not None
-                else []
-            )
-        }
-        assembly = (
-            resolve_tracks(assembly, cue_ids)
-            if bmap is not None
-            else deepcopy(assembly)
-        )
-        edl["timeline_projection"]["tracksRevisionId"] = track_revision["revisionId"]
-        edl["timeline_projection"]["tracksRevisionHash"] = track_revision["contentHash"]
-        edl["timeline_tracks"] = deepcopy(assembly)
-        edl["timeline_projection"]["capabilities"] = [
-            "audio-tracks",
-            "video-tracks",
-            "z-order",
-            "music-beds",
-            "captions-last",
-        ]
+        _apply_tracks(edl, bmap, tracks)
     edl["timeline_projection"]["projectionHash"] = content_hash(edl)
     return edl
 

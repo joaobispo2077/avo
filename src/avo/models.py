@@ -102,62 +102,44 @@ def resolve_option_id(
     hardware_tier: dict[str, Any] | None = None,
     video_key: str | None = None,
 ) -> str:
+    from avo.model_sources import resolve_job
+
     root = repo_root(root)
-    catalog = load_catalog(root)
-    config = load_config(root)
-    job_key = _job_catalog_key(job, label)
-    job_spec = (catalog.get("jobs") or {}).get(job_key)
-    if not job_spec:
-        return ""
-
-    default_id = job_spec.get("default", "")
-    models_cfg = (config.get("models") or {}).get(job_key) or {}
-    if isinstance(models_cfg, str):
-        configured = models_cfg
-    else:
-        configured = models_cfg.get("default") or default_id
-
     state = avo_state.load_state()
-    state_models = state.get("models") or {}
-    video_slice = avo_state.get_video_state(state, video_key) if video_key else {}
-    video_transcription = video_slice.get("transcription") or {}
-    video_models = video_slice.get("models") or {}
+    resolved = resolve_job(
+        job,
+        root=root,
+        label=label,
+        project=project,
+        hardware_tier=hardware_tier,
+        video_key=video_key,
+        state=state,
+    )
+    return resolved.id
 
-    if job_key == "transcribe":
-        project_model = ((project or {}).get("transcription") or {}).get("model")
-        if project_model:
-            return str(project_model)
-        if video_key and video_transcription.get("model"):
-            return str(video_transcription["model"])
-        state_model = (state.get("transcription") or {}).get(
-            "model"
-        ) or state_models.get("transcribe")
-        if state_model and not video_key:
-            return str(state_model)
-        if hardware_tier and hardware_tier.get("whisper"):
-            return str(hardware_tier["whisper"])
-        return str(configured or default_id)
 
-    if job_key in ("understand", "plan"):
-        project_models = (project or {}).get("models") or {}
-        if project_models.get(job_key):
-            return str(project_models[job_key])
-        if video_key and video_models.get(job_key):
-            return str(video_models[job_key])
-        state_llm = state_models.get(job_key) or state_models.get("llm")
-        if state_llm and not video_key:
-            return str(state_llm)
-        if hardware_tier and hardware_tier.get("llm"):
-            llm = str(hardware_tier["llm"])
-            if llm.startswith("cloud/"):
-                return str(configured or default_id)
-            return llm
-        override = (
-            models_cfg.get("default") if isinstance(models_cfg, dict) else configured
-        )
-        return str(override or default_id)
+def resolve_model_sources(
+    root: Path | None = None,
+    *,
+    project: dict[str, Any] | None = None,
+    label: str = "local",
+    hardware_tier: dict[str, Any] | None = None,
+    video_key: str | None = None,
+) -> dict[str, dict[str, Any]]:
+    from avo.model_sources import disclose_jobs
 
-    return str(configured or default_id)
+    root = repo_root(root)
+    state = avo_state.load_state()
+    if hardware_tier is None:
+        hardware_tier = _hardware_tier(root)
+    return disclose_jobs(
+        root=root,
+        project=project,
+        label=label,
+        hardware_tier=hardware_tier,
+        video_key=video_key,
+        state=state,
+    )
 
 
 def resolve_active_models(

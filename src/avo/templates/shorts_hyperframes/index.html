@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="pt-BR">
+<html lang="und">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=__WIDTH__, height=__HEIGHT__" />
@@ -20,16 +20,18 @@
       data-caption-anchor="__CAPTION_ANCHOR__"
       style="--canvas-width: __WIDTH__px; --canvas-height: __HEIGHT__px; __TOKEN_CSS__"
     >
-      <video
-        id="base-video"
-        class="clip media-pane base-pane"
-        src="assets/base-video.mp4"
-        data-start="0"
-        data-duration="__DURATION__"
-        data-track-index="0"
-        muted
-        playsinline
-      ></video>
+      <div id="base-wrap" class="media-wrap base-pane">
+        <video
+          id="base-video"
+          class="clip media-pane"
+          src="assets/base-video.mp4"
+          data-start="0"
+          data-duration="__DURATION__"
+          data-track-index="0"
+          muted
+          playsinline
+        ></video>
+      </div>
 __INSERTION_MEDIA__
       <section
         id="caption-rail"
@@ -37,10 +39,30 @@ __INSERTION_MEDIA__
         data-start="0"
         data-duration="__DURATION__"
         data-track-index="2"
-        aria-label="Legendas em português"
+        aria-label="Captions"
       >
 __CAPTION_MARKUP__
       </section>
+      <div
+        id="callout-layer"
+        class="clip callout-layer"
+        data-start="0"
+        data-duration="__DURATION__"
+        data-track-index="3"
+        aria-hidden="true"
+      >
+__CALLOUT_MARKUP__
+      </div>
+      <div
+        id="graphic-layer"
+        class="clip graphic-layer"
+        data-start="0"
+        data-duration="__DURATION__"
+        data-track-index="4"
+        aria-hidden="true"
+      >
+__GRAPHIC_MARKUP__
+      </div>
       <audio
         id="dialogue-audio"
         src="assets/dialogue-audio.m4a"
@@ -50,6 +72,7 @@ __CAPTION_MARKUP__
         data-volume="1"
       ></audio>
 __INSERTION_AUDIO__
+__SFX_AUDIO__
     </main>
     <script>
       window.__timelines = window.__timelines || {};

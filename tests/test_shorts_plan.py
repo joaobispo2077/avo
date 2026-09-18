@@ -21,6 +21,27 @@ def load_transcript() -> dict:
     return json.loads((FIXTURE_DIR / "transcript.json").read_text(encoding="utf-8"))
 
 
+def load_motion_request() -> dict:
+    request = load_request()
+    request["version"] = "1.2"
+    request["batchRoot"] = str(FIXTURE_DIR / "batch")
+    request["batchRootSource"] = "canonical-default"
+    request["source"]["sourceId"] = "master"
+    for candidate in request["candidates"]:
+        source_range = candidate.pop("sourceRange")
+        candidate["sourceSegments"] = [
+            {
+                "order": 1,
+                "sourceId": "master",
+                "startSec": source_range["startSec"],
+                "endSec": source_range["endSec"],
+                "rationale": "approved motion source",
+                "evidenceReference": candidate["editorialApprovalReference"],
+            }
+        ]
+    return request
+
+
 def load_v11_fixture(name: str) -> dict:
     return json.loads((V11_FIXTURE_DIR / name).read_text(encoding="utf-8"))
 
@@ -403,6 +424,265 @@ class ShortsPlanTests(unittest.TestCase):
         self.assertTrue(
             any("design tokens" in warning for warning in plan.get("warnings") or [])
         )
+
+    def test_motion_override_copies_onto_item_and_rejects_short_stamps(self) -> None:
+        request = load_motion_request()
+        request["candidates"][0]["motionOverride"] = {
+            "callouts": [
+                {
+                    "id": "chip-one",
+                    "kind": "chip",
+                    "text": "US Teen",
+                    "startSec": 0.2,
+                    "endSec": 1.4,
+                    "corner": "bl",
+                }
+            ],
+            "punchIns": [
+                {"id": "punch-one", "startSec": 0.5, "endSec": 1.5, "scale": 1.08}
+            ],
+        }
+        plan = shorts_plan.resolve_batch(
+            request,
+            load_transcript(),
+            request_path=FIXTURE_DIR / "shorts.request.json",
+        )
+        item = plan["items"][0]
+        self.assertEqual(item["callouts"][0]["text"], "US Teen")
+        self.assertEqual(item["punchIns"][0]["id"], "punch-one")
+        self.assertNotIn("sfxHits", item)
+        request["defaults"]["sfx"] = {
+            "library": {
+                "chip": "chip.wav",
+                "stamp": "stamp.wav",
+                "punch": "punch.wav",
+                "seam": "seam.wav",
+                "price": "price.wav",
+            }
+        }
+        plan = shorts_plan.resolve_batch(
+            request,
+            load_transcript(),
+            request_path=FIXTURE_DIR / "shorts.request.json",
+        )
+        hits = {row["id"]: row["kind"] for row in plan["items"][0]["sfxHits"]}
+        self.assertEqual(hits["chip-one-sfx"], "chip")
+        self.assertEqual(hits["punch-one-sfx"], "punch")
+        request["candidates"][0]["motionOverride"]["callouts"].append(
+            {
+                "id": "stamp-short",
+                "kind": "stamp",
+                "text": "STAR FOX",
+                "startSec": 0.2,
+                "endSec": 0.8,
+                "corner": "br",
+            }
+        )
+        with self.assertRaises(shorts_plan.PlanningError):
+            shorts_plan.resolve_batch(
+                request,
+                load_transcript(),
+                request_path=FIXTURE_DIR / "shorts.request.json",
+            )
+
+    def test_sfx_hits_follow_motion_and_skip_same_clock_punch(self) -> None:
+        library = {
+            "library": {
+                "chip": "chip.wav",
+                "stamp": "stamp.wav",
+                "punch": "punch.wav",
+                "seam": "seam.wav",
+                "price": "price.wav",
+            }
+        }
+        hits = shorts_plan._sfx_from_motion(
+            short_id="01",
+            callouts=[
+                {
+                    "id": "s01-chip",
+                    "kind": "chip",
+                    "text": "Orbitals",
+                    "startSec": 1.0,
+                    "endSec": 2.0,
+                    "corner": "bl",
+                },
+                {
+                    "id": "s01-stamp",
+                    "kind": "stamp",
+                    "text": "STAR FOX",
+                    "startSec": 3.0,
+                    "endSec": 4.5,
+                    "corner": "bc",
+                },
+                {
+                    "id": "s01-price",
+                    "kind": "chip",
+                    "text": "R$269",
+                    "startSec": 5.0,
+                    "endSec": 6.0,
+                    "corner": "bc",
+                },
+            ],
+            punch_ins=[
+                {"id": "s01-punch-box", "startSec": 3.0, "endSec": 4.0, "scale": 1.08},
+                {"id": "s01-punch-art", "startSec": 7.0, "endSec": 8.0, "scale": 1.08},
+            ],
+            layout={"mode": "full-frame"},
+            sfx=library,
+        )
+        by_id = {row["id"]: row["kind"] for row in hits}
+        self.assertEqual(by_id["s01-chip-sfx"], "chip")
+        self.assertEqual(by_id["s01-stamp-sfx"], "stamp")
+        self.assertEqual(by_id["s01-price-sfx"], "chip")
+        self.assertEqual(by_id["s01-punch-art-sfx"], "punch")
+        self.assertNotIn("s01-punch-box-sfx", by_id)
+        self.assertEqual(
+            shorts_plan._sfx_from_motion(
+                short_id="06",
+                callouts=[],
+                punch_ins=[],
+                layout={"mode": "split"},
+                sfx=library,
+            ),
+            [{"id": "s06-sfx-seam", "kind": "seam", "startSec": 0.0}],
+        )
+        with self.assertRaises(shorts_plan.PlanningError):
+            shorts_plan._sfx_from_motion(
+                short_id="01",
+                callouts=[
+                    {
+                        "id": "s01-chip",
+                        "kind": "chip",
+                        "text": "Orbitals",
+                        "startSec": 1.0,
+                        "endSec": 2.0,
+                        "corner": "bl",
+                    }
+                ],
+                punch_ins=[],
+                layout={"mode": "full-frame"},
+                sfx={"library": {"stamp": "stamp.wav"}},
+            )
+
+    def test_stars_graphic_emits_one_tick_per_fill(self) -> None:
+        library = {
+            "library": {
+                "chip": "chip.wav",
+                "stamp": "stamp.wav",
+                "punch": "punch.wav",
+                "seam": "seam.wav",
+                "price": "price.wav",
+            }
+        }
+        graphic = {
+            "id": "s05-stars-backlog",
+            "widget": "stars",
+            "startSec": 17.314,
+            "endSec": 21.15,
+            "corner": "br",
+            "params": {
+                "total": 5,
+                "filled": 4,
+                "label": "Backlog 4/5",
+                "fillStaggerSec": 0.12,
+            },
+            "sfx": {"kind": "chip", "every": "fill"},
+        }
+        hits = shorts_plan._sfx_from_motion(
+            short_id="05",
+            callouts=[],
+            punch_ins=[],
+            layout={"mode": "full-frame"},
+            sfx=library,
+            graphics=[graphic],
+        )
+        fill_hits = [row for row in hits if row["kind"] == "chip"]
+        self.assertEqual(len(fill_hits), 4)
+        self.assertEqual(fill_hits[0]["startSec"], 17.314)
+        self.assertAlmostEqual(fill_hits[3]["startSec"], 17.314 + 0.36)
+        self.assertEqual(fill_hits[0]["id"], "s05-stars-backlog-sfx-chip-1")
+        request = load_motion_request()
+        request["defaults"]["sfx"] = library
+        request["candidates"][0]["motionOverride"] = {
+            "graphics": [
+                {
+                    "id": "s01-stars-backlog",
+                    "widget": "stars",
+                    "startSec": 0.5,
+                    "endSec": 3.8,
+                    "corner": "br",
+                    "params": {
+                        "total": 5,
+                        "filled": 4,
+                        "label": "Backlog 4/5",
+                        "fillStaggerSec": 0.12,
+                    },
+                    "sfx": {"kind": "chip", "every": "fill"},
+                }
+            ]
+        }
+        plan = shorts_plan.resolve_batch(
+            request,
+            load_transcript(),
+            request_path=FIXTURE_DIR / "shorts.request.json",
+        )
+        item = plan["items"][0]
+        self.assertEqual(item["graphics"][0]["widget"], "stars")
+        self.assertEqual(len(item["sfxHits"]), 4)
+
+    def test_graphic_parameter_and_event_timing_are_bounded(self) -> None:
+        request = load_motion_request()
+        graphic = {
+            "id": "s01-stars",
+            "widget": "stars",
+            "startSec": 0.5,
+            "endSec": 2.0,
+            "corner": "br",
+            "params": {"total": 5, "filled": 4, "fillStaggerSec": 0.12},
+        }
+        request["candidates"][0]["motionOverride"] = {"graphics": [graphic]}
+
+        graphic["params"]["filled"] = 6
+        with self.assertRaisesRegex(shorts_plan.PlanningError, "filled"):
+            shorts_plan.resolve_batch(
+                request,
+                load_transcript(),
+                request_path=FIXTURE_DIR / "shorts.request.json",
+            )
+
+        graphic["params"]["filled"] = 4
+        graphic["sfx"] = {"kind": "chip", "atSec": 2.0}
+        request["defaults"]["sfx"] = {"library": {"chip": "chip.wav"}}
+        with self.assertRaisesRegex(shorts_plan.PlanningError, "SFX event"):
+            shorts_plan.resolve_batch(
+                request,
+                load_transcript(),
+                request_path=FIXTURE_DIR / "shorts.request.json",
+            )
+
+    def test_motion_ids_must_be_unique(self) -> None:
+        request = load_motion_request()
+        request["candidates"][0]["motionOverride"] = {
+            "callouts": [
+                {
+                    "id": "duplicate",
+                    "kind": "chip",
+                    "text": "Explicit semantics",
+                    "startSec": 0.2,
+                    "endSec": 1.2,
+                    "corner": "bl",
+                }
+            ],
+            "punchIns": [
+                {"id": "duplicate", "startSec": 1.5, "endSec": 2.0, "scale": 1.08}
+            ],
+        }
+        with self.assertRaisesRegex(shorts_plan.PlanningError, "IDs must be unique"):
+            shorts_plan.resolve_batch(
+                request,
+                load_transcript(),
+                request_path=FIXTURE_DIR / "shorts.request.json",
+            )
 
 
 if __name__ == "__main__":

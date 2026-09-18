@@ -31,6 +31,27 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _emit_result(args, adapter, result) -> int:
+    if result.stderr:
+        print(result.stderr, file=sys.stderr)
+    if result.stdout:
+        print(result.stdout, end="" if result.stdout.endswith("\n") else "\n")
+    if result.exit_code != 0:
+        return result.exit_code
+    payload = {
+        "job": args.job,
+        "label": args.label,
+        "adapter": getattr(adapter, "routing_id", "unknown"),
+        "artifacts": [str(p) for p in result.artifact_paths],
+    }
+    if result.models_used:
+        payload["modelsUsed"] = result.models_used
+    if result.model_sources:
+        payload["resolvedModelSources"] = result.model_sources
+    print(json.dumps(payload))
+    return result.exit_code
+
+
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     root = repo_root(args.root)
@@ -44,21 +65,7 @@ def main(argv: list[str] | None = None) -> int:
     except AdapterError as exc:
         print(str(exc), file=sys.stderr)
         return 2
-    if result.stderr:
-        print(result.stderr, file=sys.stderr)
-    if result.stdout:
-        print(result.stdout, end="" if result.stdout.endswith("\n") else "\n")
-    if result.exit_code == 0:
-        payload = {
-            "job": args.job,
-            "label": args.label,
-            "adapter": getattr(adapter, "routing_id", "unknown"),
-            "artifacts": [str(p) for p in result.artifact_paths],
-        }
-        if result.models_used:
-            payload["modelsUsed"] = result.models_used
-        print(json.dumps(payload))
-    return result.exit_code
+    return _emit_result(args, adapter, result)
 
 
 if __name__ == "__main__":

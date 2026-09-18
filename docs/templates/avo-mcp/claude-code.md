@@ -1,6 +1,7 @@
 # Claude Code — wire local `avo.mcp`
 
-Requires `pip install -e ".[mcp]"` (or `pip install "avo[mcp]"`) first. Phase-1 is **stdio** only — no `url` / HTTP server.
+From the AVO checkout root, run `python -m pip install -e ".[mcp]"` first.
+Phase-1 is **stdio** only — no `url` / HTTP server.
 
 ## Add (installed env)
 

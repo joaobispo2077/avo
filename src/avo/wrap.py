@@ -282,6 +282,14 @@ def build_wrap_payload(
     if scratch_meta:
         payload["files"]["scratchMeta"] = scratch_meta
         payload["links"]["scratchMeta"] = scratch_meta
+    try:
+        from avo.models import resolve_active_models, resolve_model_sources
+
+        project = load_project(raw_dir)
+        payload["activeModels"] = resolve_active_models(project=project)
+        payload["resolvedModelSources"] = resolve_model_sources(project=project)
+    except Exception:
+        pass
     return payload
 
 

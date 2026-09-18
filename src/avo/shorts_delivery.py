@@ -141,7 +141,7 @@ def _prepared_lineage_record(
 ) -> dict[str, Any] | None:
     artifact = _artifact_by_kind(item_status, "prepared-lineage")
     if artifact is None:
-        if str(plan.get("version")) == "1.1":
+        if shorts_contract.uses_canonical_root(plan.get("version")):
             raise DeliveryError(
                 f"Short {plan_item['id']} is missing canonical prepared lineage"
             )

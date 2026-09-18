@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import shutil
 import subprocess
 import tempfile
@@ -253,6 +254,103 @@ class ShortsMediaTests(unittest.TestCase):
                 capture_output=True,
             ).stderr
             self.assertNotIn("mean_volume: -inf", audio_stats)
+
+    def test_ducked_mix_uses_sidechain_and_does_not_stack_volume(self) -> None:
+        command = shorts_media.ducked_mix_command(
+            Path("voice.m4a"),
+            Path("bed.m4a"),
+            Path("mix.m4a"),
+        )
+        filters = command[command.index("-filter_complex") + 1]
+        self.assertIn("sidechaincompress=", filters)
+        self.assertIn("attack=20", filters)
+        self.assertIn("release=250", filters)
+        self.assertIn("normalize=0", filters)
+        self.assertNotIn("volume=", filters)
+        self.assertEqual(command[command.index("-ar") + 1], "48000")
+
+    def test_dialogue_gain_filter_only_when_outside_band(self) -> None:
+        self.assertIsNone(shorts_media.dialogue_gain_filter(-16.0, -2.0))
+        self.assertIn("volume=", shorts_media.dialogue_gain_filter(-28.0, -12.0) or "")
+        self.assertIn("volume=", shorts_media.dialogue_gain_filter(-16.0, 1.0) or "")
+        self.assertIn("volume=", shorts_media.dialogue_gain_filter(-35.6, -16.1) or "")
+        self.assertIn(
+            "volume=",
+            shorts_media.dialogue_gain_filter(-13.7, -1.0, tp_ceiling=-5.0) or "",
+        )
+
+    def test_composition_assets_omit_insertion_audio(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            dialogue = root / "dialogue.m4a"
+            bed = root / "bed.m4a"
+            dialogue.write_bytes(b"a")
+            bed.write_bytes(b"b")
+            prepared = {
+                "dialogueAudio": shorts_media.PreparedAsset(
+                    dialogue, "a" * 64, 2.0, False
+                ),
+                "insertionAudio": shorts_media.PreparedAsset(bed, "b" * 64, 2.0, False),
+                "joinWindows": [],
+            }
+            assets = shorts_media.composition_assets(prepared)
+            self.assertIn("dialogueAudio", assets)
+            self.assertNotIn("insertionAudio", assets)
+
+    def test_sfx_command_resamples_to_48k_stereo_aac(self) -> None:
+        command = shorts_media.sfx_audio_command(Path("tick.wav"), Path("sfx-chip.m4a"))
+        self.assertEqual(command[command.index("-ar") + 1], "48000")
+        self.assertEqual(command[command.index("-ac") + 1], "2")
+        self.assertEqual(command[command.index("-c:a") + 1], "aac")
+
+    def test_prepare_sfx_assets_copies_used_kinds_only(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            source = root / "tick.wav"
+            source.write_bytes(b"tick")
+            commands = []
+
+            def runner(argv):
+                commands.append(list(argv))
+                if argv[0] == "ffprobe":
+                    return subprocess.CompletedProcess(
+                        argv,
+                        0,
+                        json.dumps({"format": {"duration": "0.44"}}),
+                        "",
+                    )
+                Path(argv[-1]).parent.mkdir(parents=True, exist_ok=True)
+                Path(argv[-1]).write_bytes(b"sfx")
+                return subprocess.CompletedProcess(argv, 0, "", "")
+
+            assets = shorts_media.prepare_sfx_assets(
+                [{"id": "s01-chip-sfx", "kind": "chip", "startSec": 1.0}],
+                {"chip": str(source), "stamp": str(root / "missing.wav")},
+                root / "prepared-sfx",
+                request_path=root / "shorts.request.json",
+                runner=runner,
+            )
+            self.assertIn("sfxChip", assets)
+            self.assertNotIn("sfxStamp", assets)
+            self.assertEqual(assets["sfxChip"].duration_sec, 0.44)
+
+    def test_composition_assets_include_prepared_sfx(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            dialogue = root / "dialogue.m4a"
+            tick = root / "sfx-chip.m4a"
+            dialogue.write_bytes(b"a")
+            tick.write_bytes(b"s")
+            prepared = {
+                "dialogueAudio": shorts_media.PreparedAsset(
+                    dialogue, "a" * 64, 2.0, False
+                ),
+                "sfxChip": shorts_media.PreparedAsset(tick, "b" * 64, 0.44, False),
+                "joinWindows": [],
+            }
+            assets = shorts_media.composition_assets(prepared)
+            self.assertIn("sfxChip", assets)
+            self.assertNotIn("joinWindows", assets)
 
 
 if __name__ == "__main__":
