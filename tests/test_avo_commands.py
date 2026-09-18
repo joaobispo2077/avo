@@ -82,6 +82,7 @@ EXPECTED_COMMANDS = (
         "learndown.md",
         "cleanup.md",
         "stats.md",
+        "models.md",
     }
     | WAVE3_COMMANDS
     | WAVE4_COMMANDS
@@ -103,6 +104,7 @@ EXPECTED_UTILITY_REFS = {
     "learndown.md",
     "cleanup.md",
     "stats.md",
+    "models.md",
     "captions.md",
     "rights.md",
     "audio-qc.md",
@@ -308,7 +310,7 @@ class AvoCommandParityTests(unittest.TestCase):
     def test_every_command_declares_timeline_integration_mode(self) -> None:
         allowed = {"Owns", "Evidence", "Consumes", "Profile", "Admin"}
         found = sorted(COMMANDS.glob("*.md"))
-        self.assertEqual(len(found), 51)
+        self.assertEqual(len(found), 52)
         failures = []
         for command in found:
             declarations = [
@@ -329,7 +331,7 @@ class AvoCommandParityTests(unittest.TestCase):
         )
         failures = []
         found = sorted(COMMANDS.glob("*.md"))
-        self.assertEqual(len(found), 51)
+        self.assertEqual(len(found), 52)
         for command in found:
             text = command.read_text(encoding="utf-8")
             missing_or_repeated = {

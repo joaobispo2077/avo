@@ -8,8 +8,32 @@ from typing import Any
 
 from .contracts import content_hash, dependency_lock_hash, validate_document
 from .lifecycle import PipelineRunStore, PipelineState, TransitionFacts
-from .review import evaluate_gate
+from .review import GateError, evaluate_gate, validate_evidence_integrity
 from .workspace import TimelineWorkspace
+
+
+def _require_cut_proof_integrity(review: dict[str, Any], candidate_hash: str) -> None:
+    dependencies = review["candidate"]["dependencies"]
+    try:
+        validate_evidence_integrity(
+            "cut-proof",
+            candidate_hash,
+            dependencies,
+            review["evidence"],
+            candidate_identity_hash=review["candidate"]["identityHash"],
+            dependency_lock_sha256=review["dependencyLockSha256"],
+        )
+        if review["state"] == "ai-passed":
+            evaluate_gate(
+                "cut-proof",
+                candidate_hash,
+                dependencies,
+                review["evidence"],
+                candidate_identity_hash=review["candidate"]["identityHash"],
+                dependency_lock_sha256=review["dependencyLockSha256"],
+            )
+    except GateError as error:
+        raise ValueError(str(error)) from error
 
 
 class ApprovalService:
@@ -46,8 +70,11 @@ class ApprovalService:
             raise ValueError("CMap decision requires the current head revision")
         if review["checkpoint"] != "cut-proof":
             raise ValueError("CMap decision requires a cut-proof review")
-        if decision == "approved" and review["state"] != "ai-passed":
-            raise ValueError("CMap approval requires current ai-passed evidence")
+        if decision == "approved" and review["state"] not in {
+            "ai-passed",
+            "needs-human-judgment",
+        }:
+            raise ValueError("CMap approval requires current review evidence")
         if materialization.get("cmapRevisionId") != revision_id:
             raise ValueError("materialization is bound to another CMap revision")
         lock = materialization.get("canonicalInputLock") or {}
@@ -65,14 +92,7 @@ class ApprovalService:
             raise ValueError("review Sync dependency is stale")
         if review["dependencyLockSha256"] != dependency_lock_hash(dependencies):
             raise ValueError("review dependency lock is invalid")
-        evaluate_gate(
-            "cut-proof",
-            candidate_hash,
-            dependencies,
-            review["evidence"],
-            candidate_identity_hash=review["candidate"]["identityHash"],
-            dependency_lock_sha256=review["dependencyLockSha256"],
-        )
+        _require_cut_proof_integrity(review, candidate_hash)
         expected_materialization_hash = materialization.get("materializationHash")
         body = {
             key: value

@@ -60,6 +60,7 @@ _MATRIX = {
     "slideshow": ("Profile", ()),
     "sound": ("Owns", ("bmap", "tracks")),
     "stats": ("Admin", ()),
+    "models": ("Admin", ()),
     "supporters": ("Admin", ()),
     "sync": ("Owns", ("sync-map",)),
     "talking-head": ("Profile", ()),

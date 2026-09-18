@@ -1,6 +1,6 @@
 {
   "name": "avo",
-  "version": "1.9.0",
+  "version": "1.10.0",
   "description": "Edit less, create more — local-first AI video orchestrator. Talk to your agent, drop in footage, mass-produce YouTube-ready videos per channel.",
   "private": true,
   "type": "module",
@@ -73,11 +73,12 @@
     "@semantic-release/npm": "file:scripts/ci/semantic-release-npm-stub"
   },
   "dependencies": {
-    "sharp": "^0.35.3"
+    "sharp": "^0.35.4"
   },
   "overrides": {
     "brace-expansion": "5.0.9",
     "ip-address": "10.5.0",
+    "js-yaml": "4.3.2",
     "nanoid": "3.3.18",
     "@semantic-release/npm": "file:scripts/ci/semantic-release-npm-stub"
   },

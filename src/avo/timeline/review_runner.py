@@ -307,7 +307,9 @@ class ReviewRunner:
             model=watch.get("model"),
             identity=identity,
             lock_hash=lock_hash,
-            scope_mode="full",
+            scope_mode=(
+                "full" if coverage.get("mode") in {"full", "whole"} else "windows"
+            ),
             windows=windows,
             coverage={**coverage, "durationSeconds": qc.get("duration") or 0},
             findings=watch.get("findings") or [],
@@ -356,7 +358,7 @@ class ReviewRunner:
                 risk_windows=review_windows,
                 terms=terms,
                 names=names,
-                edit_dir=self.review_root.parent / "transcripts",
+                edit_dir=self.review_root.parent,
             ),
             attempts,
         )

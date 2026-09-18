@@ -109,6 +109,17 @@
         }
       }
     },
+    "models": {
+      "type": "object",
+      "description": "Optional provider model pins (catalog id string or source object).",
+      "additionalProperties": false,
+      "properties": {
+        "transcribe": { "$ref": "https://github.com/joaobispo2077/avo/avo.model-source.schema.json#/$defs/modelPin" },
+        "understand": { "$ref": "https://github.com/joaobispo2077/avo/avo.model-source.schema.json#/$defs/modelPin" },
+        "plan": { "$ref": "https://github.com/joaobispo2077/avo/avo.model-source.schema.json#/$defs/modelPin" },
+        "transcribe_paid": { "$ref": "https://github.com/joaobispo2077/avo/avo.model-source.schema.json#/$defs/modelPin" }
+      }
+    },
     "restoration_default_pct": {
       "type": "integer",
       "minimum": 0,

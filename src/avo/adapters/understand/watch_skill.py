@@ -26,12 +26,36 @@ def _repository_root() -> Path:
     return Path(__file__).resolve().parents[4]
 
 
-def _require_bonsai_runtime(option_id: str) -> None:
+def _dict_at(node: Any, key: str) -> dict[str, Any]:
+    value = node.get(key) if isinstance(node, dict) else None
+    return value if isinstance(value, dict) else {}
+
+
+def _env_or(pin_value: Any, env_key: str) -> str:
+    return str(pin_value or os.environ.get(env_key) or "").strip()
+
+
+def _bonsai_paths(pin: dict[str, Any] | None) -> tuple[str, str, str]:
+    source = _dict_at(pin, "source")
+    companion = _dict_at(source, "companion")
+    endpoint = _dict_at(source, "endpoint")
+    return (
+        _env_or(source.get("artifactPath"), "AVO_UNDERSTAND_GGUF"),
+        _env_or(companion.get("mmproj"), "AVO_UNDERSTAND_MMPROJ"),
+        _env_or(endpoint.get("baseUrl"), "WATCHSKILL_CUSTOM_BASE_URL"),
+    )
+
+
+def _missing_file(path: str) -> bool:
+    return not path or not Path(path).is_file()
+
+
+def _require_bonsai_runtime(option_id: str, pin: dict[str, Any] | None = None) -> None:
     """Fail closed when a Bonsai understand pin lacks GGUF, mmproj, or custom vision."""
     if option_id not in _BONSAI_OPTION_IDS:
         return
-    gguf = (os.environ.get("AVO_UNDERSTAND_GGUF") or "").strip()
-    if not gguf or not Path(gguf).is_file():
+    gguf, mmproj, custom_url = _bonsai_paths(pin)
+    if _missing_file(gguf):
         raise ToolError(
             "WATCH_UNAVAILABLE",
             "Bonsai GGUF is not ready: set AVO_UNDERSTAND_GGUF to an existing file from "
@@ -39,15 +63,13 @@ def _require_bonsai_runtime(option_id: str) -> None:
             True,
             "download the language GGUF, set AVO_UNDERSTAND_GGUF, then retry",
         )
-    mmproj = (os.environ.get("AVO_UNDERSTAND_MMPROJ") or "").strip()
-    if not mmproj or not Path(mmproj).is_file():
+    if _missing_file(mmproj):
         raise ToolError(
             "WATCH_UNAVAILABLE",
             "Watch needs the Bonsai vision mmproj alongside the language GGUF.",
             True,
             "set AVO_UNDERSTAND_MMPROJ to the vision mmproj path and retry",
         )
-    custom_url = (os.environ.get("WATCHSKILL_CUSTOM_BASE_URL") or "").strip()
     cheap = (os.environ.get("WATCHSKILL_VISION_CHEAP_PROVIDER") or "").strip()
     strong = (os.environ.get("WATCHSKILL_VISION_STRONG_PROVIDER") or "").strip()
     if not custom_url and cheap != "custom" and strong != "custom":
@@ -62,10 +84,12 @@ def _require_bonsai_runtime(option_id: str) -> None:
 
 def _bundled_executable() -> str | None:
     root = _repository_root()
-    candidates = [
-        root / "tools" / "watch-skill" / ".venv" / "bin" / "watch-skill",
+    win = [
+        root / "tools" / "watch-skill" / ".venv-win" / "Scripts" / "watch-skill.exe",
         root / "tools" / "watch-skill" / ".venv" / "Scripts" / "watch-skill.exe",
     ]
+    posix = [root / "tools" / "watch-skill" / ".venv" / "bin" / "watch-skill"]
+    candidates = win + posix if os.name == "nt" else posix + win
     return str(next((path for path in candidates if path.is_file()), "")) or None
 
 
@@ -319,7 +343,31 @@ def _analysis_from_output(text: str) -> dict[str, Any] | None:
     try:
         return _extract_json_object(text)
     except ValueError:
-        return _refusal_analysis(text)
+        return None
+
+
+def _coerce_findings(raw: Any) -> list[dict[str, Any]] | None:
+    if raw is None:
+        return []
+    if isinstance(raw, str):
+        raw = [raw] if raw.strip() else []
+    if not isinstance(raw, list):
+        return None
+    findings: list[dict[str, Any]] = []
+    for item in raw:
+        if isinstance(item, dict):
+            findings.append(item)
+        elif isinstance(item, str):
+            findings.append(
+                {
+                    "classification": "technical",
+                    "severity": "warning",
+                    "message": item,
+                }
+            )
+        else:
+            return None
+    return findings
 
 
 def _analyze_candidate(
@@ -327,6 +375,7 @@ def _analyze_candidate(
 ) -> _AnalysisRun:
     attempts: list[dict[str, Any]] = []
     latest = JobResult(exit_code=0)
+    refusal: dict[str, Any] | None = None
     for attempt in range(1, int(review.effective["analysisAttempts"]) + 1):
         latest = adapter.run(
             JobRequest(
@@ -343,6 +392,9 @@ def _analyze_candidate(
         analysis = _analysis_from_output(latest.stdout)
         if analysis is not None:
             return _AnalysisRun(analysis=analysis, result=latest, attempts=attempts)
+        refusal = refusal or _refusal_analysis(latest.stdout)
+    if refusal is not None:
+        return _AnalysisRun(analysis=refusal, result=latest, attempts=attempts)
     raise ToolError(
         "WATCH_MALFORMED",
         "Watch analysis did not return a schema-valid JSON object",
@@ -360,10 +412,8 @@ def _validated_analysis(analysis: dict[str, Any]) -> tuple[str, list[dict[str, A
             True,
             "retry the exact candidate with the structured-output contract",
         )
-    findings = analysis.get("findings")
-    if not isinstance(findings, list) or not all(
-        isinstance(item, dict) for item in findings
-    ):
+    findings = _coerce_findings(analysis.get("findings"))
+    if findings is None:
         raise ToolError(
             "WATCH_MALFORMED",
             "Watch analysis findings must be a list of objects",
@@ -371,6 +421,11 @@ def _validated_analysis(analysis: dict[str, Any]) -> tuple[str, list[dict[str, A
             "retry the exact candidate with the structured-output contract",
         )
     return status, findings
+
+
+def _model_identity(result: JobResult, _analysis: dict[str, Any]) -> str | None:
+    model = str(result.models_used.get("understand") or "").strip()
+    return model or None
 
 
 def _write_raw_artifacts(
@@ -398,20 +453,24 @@ def _evidence_payload(
     analysis_path: Path,
 ) -> dict[str, Any]:
     status, findings = _validated_analysis(analysis_run.analysis)
+    frame_key = "maxFrames" if len(analysis_run.attempts) == 1 else "repairMaxFrames"
     return {
         "schemaVersion": "1.0.0",
         "status": status,
         "checkpoint": review.checkpoint,
         "candidate": str(review.candidate),
         "coverage": {
-            "mode": "full" if review.scope in {"full", "whole"} else "windows",
-            "windows": review.windows,
+            "mode": "sampled",
+            "windows": [],
+            "requestedScope": review.scope,
+            "requestedWindows": review.windows,
+            "maxFrames": int(review.effective[frame_key]),
         },
         "findings": findings,
         "confidence": analysis_run.analysis.get("confidence"),
         "tool": "watch-skill",
         "toolVersion": adapter.tool_version(),
-        "model": analysis_run.analysis.get("model"),
+        "model": _model_identity(analysis_run.result, analysis_run.analysis),
         "outcomeKind": (
             "uncertainty" if status == "needs-human-judgment" else "content"
         ),
@@ -477,11 +536,32 @@ class WatchSkillAdapter:
             if line.strip().endswith((".json", ".md", ".html"))
             and Path(line.strip()).exists()
         ]
+        models_used: dict[str, str] = {}
+        model_sources: dict[str, Any] = {}
+        try:
+            from avo.model_sources import (
+                disclosure_for,
+                invocation_from_env,
+                resolve_job,
+            )
+
+            resolved = resolve_job(
+                "understand",
+                root=request.root,
+                invocation=invocation_from_env(environment),
+            )
+            if resolved.id:
+                models_used = {"understand": resolved.catalog_label or resolved.id}
+                model_sources = {"understand": disclosure_for(resolved)}
+        except Exception:
+            pass
         return JobResult(
             exit_code=completed.returncode,
             artifact_paths=artifacts,
             stdout=stdout,
             stderr=completed.stderr or "",
+            models_used=models_used,
+            model_sources=model_sources,
         )
 
     def tool_version(self) -> str:
@@ -514,7 +594,21 @@ class WatchSkillAdapter:
             str(_request_value(request, "scope", "full")),
             list(_request_value(request, "windows", [])),
         )
-        _require_bonsai_runtime(_option_id(request.get("option_id")))
+        option_id = _option_id(request.get("option_id"))
+        pin = None
+        try:
+            from avo.model_sources import invocation_from_env, resolve_job
+
+            resolved = resolve_job(
+                "understand",
+                root=_repository_root(),
+                invocation=invocation_from_env(os.environ),
+            )
+            if resolved.id == option_id:
+                pin = resolved.pin
+        except Exception:
+            pin = None
+        _require_bonsai_runtime(option_id, pin=pin)
         review = _review_request(candidate, request)
         watched, video_id = _acquire_candidate(self, review)
         analysis_run = _analyze_candidate(self, review, video_id)

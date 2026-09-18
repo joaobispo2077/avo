@@ -45,6 +45,23 @@ def sha256_file(path: Path) -> str:
     return digest.hexdigest()
 
 
+SFX_VOLUME = {
+    "chip": 0.30,
+    "stamp": 0.34,
+    "punch": 0.22,
+    "seam": 0.20,
+    "price": 0.28,
+}
+SFX_ASSET_KEY = {
+    "chip": "sfxChip",
+    "stamp": "sfxStamp",
+    "punch": "sfxPunch",
+    "seam": "sfxSeam",
+    "price": "sfxPrice",
+}
+SFX_FILE_NAME = {key: f"sfx-{kind}.m4a" for kind, key in SFX_ASSET_KEY.items()}
+
+
 def atempo_chain(speed: float) -> str:
     """Return a pitch-preserving tempo chain within FFmpeg's per-filter range."""
     if speed <= 0:
@@ -429,6 +446,298 @@ def _parse_filter_events(stderr: str, prefix: str) -> list[dict[str, str]]:
     return events
 
 
+def measure_audio_loudness(
+    path: Path, *, runner: CommandRunner = _default_runner
+) -> dict[str, float | None]:
+    """Return integrated LUFS and true-peak dBTP from ffmpeg ebur128."""
+    command = [
+        "ffmpeg",
+        "-hide_banner",
+        "-nostdin",
+        "-v",
+        "info",
+        "-i",
+        str(path.resolve()),
+        "-af",
+        "ebur128=peak=true",
+        "-f",
+        "null",
+        "-",
+    ]
+    result = runner(command)
+    integrated_lufs: float | None = None
+    true_peak_dbtp: float | None = None
+    for line in (result.stderr or "").splitlines():
+        if "TARGET:" in line:
+            continue
+        if "I:" in line and "LUFS" in line:
+            try:
+                integrated_lufs = float(line.split("I:")[1].split("LUFS")[0].strip())
+            except ValueError:
+                continue
+        if "Peak:" in line and "dBFS" in line:
+            try:
+                true_peak_dbtp = float(line.split("Peak:")[1].split("dBFS")[0].strip())
+            except ValueError:
+                continue
+    return {"integratedLufs": integrated_lufs, "truePeakDbtp": true_peak_dbtp}
+
+
+VOICE_QUIET_LUFS = -24.0
+VOICE_HOT_LUFS = -8.0
+VOICE_TARGET_LUFS = -16.0
+VOICE_TP_CEILING_DBTP = -1.0
+SFX_DIALOGUE_TP_CEILING_DBTP = -5.0
+DUCK_RATIO = 8.0
+DUCK_ATTACK_MS = 20.0
+DUCK_RELEASE_MS = 250.0
+
+
+def dialogue_gain_filter(
+    integrated_lufs: float | None,
+    true_peak_dbtp: float | None,
+    *,
+    tp_ceiling: float = VOICE_TP_CEILING_DBTP,
+) -> str | None:
+    """Gain only when dialogue is outside the QC band or true-peak is hot."""
+    if integrated_lufs is None:
+        return None
+    in_band = VOICE_QUIET_LUFS <= integrated_lufs <= VOICE_HOT_LUFS
+    peak_hot = true_peak_dbtp is not None and true_peak_dbtp > tp_ceiling
+    if in_band and not peak_hot:
+        return None
+    gain_db = 0.0 if in_band else VOICE_TARGET_LUFS - integrated_lufs
+    if true_peak_dbtp is not None:
+        gain_db = min(gain_db, tp_ceiling - true_peak_dbtp)
+    if abs(gain_db) < 0.05:
+        return None
+    return f"volume={gain_db:.3f}dB"
+
+
+def ducked_mix_command(
+    dialogue: Path,
+    bed: Path,
+    output: Path,
+    *,
+    gain_filter: str | None = None,
+) -> list[str]:
+    """Duck an already-leveled insert bed under dialogue into one 48 kHz stem."""
+    dialogue_chain = (
+        "[0:a]aformat=sample_fmts=fltp:sample_rates=48000:channel_layouts=stereo"
+    )
+    if gain_filter:
+        dialogue_chain += f",{gain_filter}"
+    dialogue_chain += ",asplit=2[dlg][sc]"
+    filters = [
+        dialogue_chain,
+        "[1:a]aformat=sample_fmts=fltp:sample_rates=48000:channel_layouts=stereo[bedin]",
+        (
+            f"[bedin][sc]sidechaincompress=threshold=0.05:ratio={DUCK_RATIO:g}:"
+            f"attack={DUCK_ATTACK_MS:g}:release={DUCK_RELEASE_MS:g}[bed]"
+        ),
+        "[dlg][bed]amix=inputs=2:duration=first:dropout_transition=0:normalize=0[outa]",
+    ]
+    return [
+        "ffmpeg",
+        "-hide_banner",
+        "-nostdin",
+        "-y",
+        "-i",
+        str(dialogue),
+        "-i",
+        str(bed),
+        "-filter_complex",
+        ";".join(filters),
+        "-map",
+        "[outa]",
+        "-ar",
+        "48000",
+        "-ac",
+        "2",
+        "-c:a",
+        "aac",
+        str(output),
+    ]
+
+
+def mix_ducked_bed_into_dialogue(
+    dialogue: Path,
+    bed: Path,
+    output: Path,
+    *,
+    duration_sec: float,
+    runner: CommandRunner = _default_runner,
+) -> PreparedAsset:
+    """Replace dialogue with a sidechain-ducked mix; do not also play the bed."""
+    measured = measure_audio_loudness(dialogue, runner=runner)
+    gain_filter = dialogue_gain_filter(
+        measured.get("integratedLufs"), measured.get("truePeakDbtp")
+    )
+    output.parent.mkdir(parents=True, exist_ok=True)
+    _run(
+        ducked_mix_command(dialogue, bed, output, gain_filter=gain_filter),
+        runner,
+    )
+    if not output.is_file():
+        raise MediaPreparationError("ducked dialogue mix was not created")
+    return PreparedAsset(output, sha256_file(output), duration_sec, False)
+
+
+def apply_dialogue_gain_if_needed(
+    dialogue: PreparedAsset,
+    output: Path,
+    *,
+    tp_ceiling: float = VOICE_TP_CEILING_DBTP,
+    runner: CommandRunner = _default_runner,
+) -> PreparedAsset:
+    """Raise or lower a quiet/hot dialogue stem; skip when already in band."""
+    measured = measure_audio_loudness(dialogue.path, runner=runner)
+    gain_filter = dialogue_gain_filter(
+        measured.get("integratedLufs"),
+        measured.get("truePeakDbtp"),
+        tp_ceiling=tp_ceiling,
+    )
+    if not gain_filter:
+        return dialogue
+    output.parent.mkdir(parents=True, exist_ok=True)
+    _run(
+        [
+            "ffmpeg",
+            "-hide_banner",
+            "-nostdin",
+            "-y",
+            "-i",
+            str(dialogue.path),
+            "-af",
+            gain_filter,
+            "-ar",
+            "48000",
+            "-ac",
+            "2",
+            "-c:a",
+            "aac",
+            str(output),
+        ],
+        runner,
+    )
+    if not output.is_file():
+        raise MediaPreparationError("gained dialogue stem was not created")
+    gained = PreparedAsset(output, sha256_file(output), dialogue.duration_sec, False)
+    after = measure_audio_loudness(gained.path, runner=runner)
+    integrated = after.get("integratedLufs")
+    if integrated is None or VOICE_QUIET_LUFS <= integrated <= VOICE_HOT_LUFS:
+        return gained
+    normalized = output.with_name("dialogue-loudnorm.m4a")
+    _run(
+        [
+            "ffmpeg",
+            "-hide_banner",
+            "-nostdin",
+            "-y",
+            "-i",
+            str(gained.path),
+            "-af",
+            f"loudnorm=I={VOICE_TARGET_LUFS:g}:TP={tp_ceiling:g}:LRA=11",
+            "-ar",
+            "48000",
+            "-ac",
+            "2",
+            "-c:a",
+            "aac",
+            str(normalized),
+        ],
+        runner,
+    )
+    if not normalized.is_file():
+        raise MediaPreparationError("loudnorm dialogue stem was not created")
+    return PreparedAsset(
+        normalized, sha256_file(normalized), dialogue.duration_sec, False
+    )
+
+
+def probe_duration_sec(probe: Mapping[str, Any]) -> float:
+    raw = (probe.get("format") or {}).get("duration")
+    if raw is None:
+        for stream in probe.get("streams") or []:
+            if stream.get("duration") is not None:
+                raw = stream["duration"]
+                break
+    try:
+        duration = float(raw)
+    except (TypeError, ValueError):
+        duration = 0.0
+    if duration <= 0:
+        raise MediaPreparationError("SFX source has no positive duration")
+    return duration
+
+
+def sfx_audio_command(
+    source: Path,
+    output: Path,
+    *,
+    sample_rate: int = 48000,
+    channels: int = 2,
+) -> list[str]:
+    return [
+        "ffmpeg",
+        "-hide_banner",
+        "-nostdin",
+        "-y",
+        "-i",
+        str(source),
+        "-vn",
+        "-ar",
+        str(sample_rate),
+        "-ac",
+        str(channels),
+        "-c:a",
+        "aac",
+        "-b:a",
+        "192k",
+        str(output),
+    ]
+
+
+def prepare_sfx_assets(
+    hits: Sequence[Mapping[str, Any]],
+    library: Mapping[str, str],
+    output_dir: Path,
+    *,
+    request_path: Path,
+    runner: CommandRunner = _default_runner,
+) -> dict[str, PreparedAsset]:
+    kinds = sorted({str(hit["kind"]) for hit in hits})
+    output_dir.mkdir(parents=True, exist_ok=True)
+    assets: dict[str, PreparedAsset] = {}
+    for kind in kinds:
+        value = Path(library[kind])
+        source = (
+            value.resolve()
+            if value.is_absolute()
+            else (request_path.parent / value).resolve()
+        )
+        if not source.is_file():
+            raise MediaPreparationError(f"SFX {kind} source does not exist: {source}")
+        duration = probe_duration_sec(probe_media(source, runner))
+        output = output_dir / SFX_FILE_NAME[SFX_ASSET_KEY[kind]]
+        _run(sfx_audio_command(source, output), runner)
+        if not output.is_file():
+            raise MediaPreparationError(f"SFX {kind} was not created")
+        assets[SFX_ASSET_KEY[kind]] = PreparedAsset(
+            output, sha256_file(output), duration, False
+        )
+    return assets
+
+
+def composition_assets(prepared: Mapping[str, Any]) -> dict[str, Any]:
+    """Contract assets for HyperFrames; insertion audio is mixed into dialogue."""
+    return {
+        key: value.as_contract()
+        for key, value in prepared.items()
+        if isinstance(value, PreparedAsset) and key != "insertionAudio"
+    }
+
+
 def analyze_video_metrics(
     path: Path,
     *,
@@ -463,39 +772,19 @@ def analyze_video_metrics(
         "null",
         "-",
     ]
-    loudness_command = [
-        "ffmpeg",
-        "-hide_banner",
-        "-nostdin",
-        "-v",
-        "error",
-        "-i",
-        str(path.resolve()),
-        "-af",
-        "ebur128=peak=true",
-        "-f",
-        "null",
-        "-",
-    ]
     black_result = runner(black_command)
     freeze_result = runner(freeze_command)
-    loudness_result = runner(loudness_command)
     black_frames = len(_parse_filter_events(black_result.stderr, "blackdetect"))
     freeze_seconds = 0.0
     for event in _parse_filter_events(freeze_result.stderr, "freezedetect"):
         if "duration" in event:
             freeze_seconds += float(event["duration"])
-    integrated_lufs: float | None = None
-    for line in loudness_result.stderr.splitlines():
-        if "I:" in line and "LUFS" in line:
-            try:
-                integrated_lufs = float(line.split("I:")[1].split("LUFS")[0].strip())
-            except ValueError:
-                continue
+    loudness = measure_audio_loudness(path, runner=runner)
     return {
         "blackFrames": black_frames,
         "freezeSeconds": round(freeze_seconds, 6),
-        "integratedLufs": integrated_lufs,
+        "integratedLufs": loudness["integratedLufs"],
+        "truePeakDbtp": loudness["truePeakDbtp"],
     }
 
 

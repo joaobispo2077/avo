@@ -42,6 +42,7 @@ Implements [`docs/avo-workflow.md`](../../avo-workflow.md) §5.
 | Field | Source |
 | ----- | ------ |
 | `activeModels` | `helpers.models.resolve_active_models()` (catalog + config + state + project) |
+| `resolvedModelSources` | `helpers.models.resolve_model_sources()` (id, scopes, paths, redacted endpoint) |
 
 Human lines may append `| models transcribe=faster-whisper:small, understand=…` when models resolve.
 

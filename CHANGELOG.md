@@ -1,3 +1,26 @@
+# [1.10.0](https://github.com/joaobispo2077/avo/compare/v1.9.0...v1.10.0) (2026-09-18)
+
+
+### Bug Fixes
+
+* **deps:** bump sharp 0.35.4 and pin js-yaml 4.3.2 ([52dec18](https://github.com/joaobispo2077/avo/commit/52dec18f7aeb5749d43422a0e9f736bfd062e261))
+* **ci:** drop model-source xenon debt and command count ([5ba4e38](https://github.com/joaobispo2077/avo/commit/5ba4e38f9a58f1bd1a9cea8e0c5db2186b30eb2c))
+* **timeline:** fail closed on incomplete audio and skip-evidence approvals ([a2f1dd8](https://github.com/joaobispo2077/avo/commit/a2f1dd86c0197c13dd0e9ade11cff934413dd700))
+* **mcp:** point the MCP extra at the checkout ([20df606](https://github.com/joaobispo2077/avo/commit/20df606a74cd473e44289be56a39d4d05cbe70e3))
+* **review:** require truthful Watch coverage and transcript identity ([30bb555](https://github.com/joaobispo2077/avo/commit/30bb55579dbd041dab749512485e313c712d87ac))
+* **models:** stop model_sources importing stats ([9654bce](https://github.com/joaobispo2077/avo/commit/9654bce40444930ddb8966675527ad06b23ec8fc))
+
+
+### Features
+
+* **models:** add /avo.models inspect command ([bcd5739](https://github.com/joaobispo2077/avo/commit/bcd5739ca01a9bfeea6bd2b0d56179a16aa80a39))
+* **schema:** add shared modelPin contract ([5da79ea](https://github.com/joaobispo2077/avo/commit/5da79ea0a0986ebefbe0e6ff30050f4b96b82368))
+* **models:** disclose sources and fail-closed adapter load ([23cbe73](https://github.com/joaobispo2077/avo/commit/23cbe738fe0f51a7bf5ddca3462ca27920c02584))
+* **shorts:** make HyperFrames templates provider-neutral and seek-safe ([88aebcc](https://github.com/joaobispo2077/avo/commit/88aebcc0560c2f648825a4f7cb86c896d5bc499a))
+* **models:** resolve catalog id, source, and preflight ([7eb4bb7](https://github.com/joaobispo2077/avo/commit/7eb4bb78e5a8bfa3074b0ff57e57b8f9c11c9de8))
+* **shorts:** separate proof attempts from artifacts and bind media QC ([4a7d470](https://github.com/joaobispo2077/avo/commit/4a7d47041f2f62d1f00e907f995a78e2dcd37c6f))
+* **shorts:** version 1.2 contracts and canonical-root planning ([fdca86b](https://github.com/joaobispo2077/avo/commit/fdca86bc17637e4f01a4e6f87bdf392c5ae45dcf))
+
 # [1.9.0](https://github.com/joaobispo2077/avo/compare/v1.8.0...v1.9.0) (2026-09-04)
 
 

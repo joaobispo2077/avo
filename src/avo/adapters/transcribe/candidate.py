@@ -10,6 +10,25 @@ from avo.timeline.contracts import file_fingerprint
 from avo.timeline.ports import ToolError
 
 
+def _matching_transcript(
+    path: Path, sha256: str, *, model: str | None = None
+) -> dict[str, Any] | None:
+    if not path.is_file():
+        return None
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    if not isinstance(payload, dict) or not isinstance(payload.get("words"), list):
+        return None
+    source = (payload.get("source") or {}).get("sha256") or payload.get("sourceSha256")
+    if source != sha256:
+        return None
+    if model is not None and payload.get("model") != model:
+        return None
+    return payload
+
+
 class CandidateTranscriptionAdapter:
     def __init__(self, runtime: Any | None = None, *, model: str = "small"):
         self.runtime = runtime
@@ -63,25 +82,40 @@ class CandidateTranscriptionAdapter:
                     )
         return findings
 
+    def _load_transcript_payload(
+        self, candidate: Path, fingerprint: dict[str, Any], options: dict[str, Any]
+    ) -> tuple[dict[str, Any], Any]:
+        if self.runtime is not None:
+            payload = (
+                self.runtime.transcribe(candidate, **options)
+                if hasattr(self.runtime, "transcribe")
+                else self.runtime(candidate, **options)
+            )
+            return payload, options.get("transcript_path")
+        from avo.transcribe import transcribe_one
+        from avo.transcribe import transcript_path as out_path
+
+        edit_dir = Path(options["edit_dir"])
+        path = out_path(candidate, edit_dir)
+        payload = _matching_transcript(path, fingerprint["sha256"], model=self.model)
+        if payload is None:
+            path = transcribe_one(
+                candidate,
+                edit_dir,
+                model=self.model,
+                device=str(options.get("device") or "auto"),
+                verbose=False,
+            )
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        return payload, path
+
     def transcribe(self, candidate: Path, **options: Any) -> dict[str, Any]:
         candidate = Path(candidate)
         fingerprint = file_fingerprint(candidate)
         try:
-            if self.runtime is not None:
-                if hasattr(self.runtime, "transcribe"):
-                    payload = self.runtime.transcribe(candidate, **options)
-                else:
-                    payload = self.runtime(candidate, **options)
-                transcript_path = options.get("transcript_path")
-            else:
-                from avo.transcribe import transcribe_one
-
-                edit_dir = Path(options["edit_dir"])
-                path = transcribe_one(
-                    candidate, edit_dir, model=self.model, verbose=False
-                )
-                payload = json.loads(path.read_text(encoding="utf-8"))
-                transcript_path = path
+            payload, transcript_path = self._load_transcript_payload(
+                candidate, fingerprint, options
+            )
         except Exception as exc:
             raise ToolError(
                 "TRANSCRIPTION_UNAVAILABLE",
@@ -116,7 +150,7 @@ class CandidateTranscriptionAdapter:
             "model": payload.get("model") or self.model,
             "language": payload.get("language_code")
             or payload.get("language")
-            or "pt-BR",
+            or "unknown",
             "words": payload.get("words") or [],
             "findings": findings,
         }

@@ -6,7 +6,7 @@ import hashlib
 import json
 import math
 import re
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from copy import deepcopy
 from pathlib import Path
 from typing import Any
@@ -216,6 +216,333 @@ def _speed_for(
     return speed, speed > threshold
 
 
+def _motion_from_candidate(
+    candidate: Mapping[str, Any], edited_duration: float
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]], list[dict[str, Any]]]:
+    override = candidate.get("motionOverride") or {}
+    callouts = deepcopy(list(override.get("callouts") or []))
+    punch_ins = deepcopy(list(override.get("punchIns") or []))
+    graphics = deepcopy(list(override.get("graphics") or []))
+    short_id = candidate["id"]
+    rows = (*callouts, *punch_ins, *graphics)
+    ids = [str(row["id"]) for row in rows]
+    if len(ids) != len(set(ids)):
+        raise PlanningError(f"candidate {short_id} motion IDs must be unique")
+    for row in rows:
+        _validate_motion_window(short_id, row, edited_duration)
+    for graphic in graphics:
+        _validate_graphic_parameters(graphic)
+    return callouts, punch_ins, graphics
+
+
+def _validate_motion_window(
+    short_id: str, row: Mapping[str, Any], edited_duration: float
+) -> None:
+    start, end = float(row["startSec"]), float(row["endSec"])
+    if end <= start:
+        raise PlanningError(
+            f"candidate {short_id} motion {row.get('id')} must have positive duration"
+        )
+    if end > edited_duration + 1e-6:
+        raise PlanningError(
+            f"candidate {short_id} motion {row.get('id')} ends after edited duration"
+        )
+    if row.get("kind") == "stamp" and (end - start) < 1.0 - 1e-9:
+        raise PlanningError(
+            f"candidate {short_id} stamp {row.get('id')} must hold at least 1s"
+        )
+
+
+def _require_active_clock(
+    graphic_id: str, start: float, end: float, label: str, value: Any
+) -> None:
+    clock = float(value)
+    if clock < start or clock >= end:
+        raise PlanningError(
+            f"graphic {graphic_id} {label} must be within [{start:g}, {end:g})"
+        )
+
+
+def _validate_graphic_clocks(graphic: Mapping[str, Any]) -> None:
+    start = float(graphic["startSec"])
+    end = float(graphic["endSec"])
+    params = graphic["params"]
+    graphic_id = graphic["id"]
+    for key in ("resolveAtSec", "wipeAtSec", "metacriticAtSec", "downbeatAtSec"):
+        if params.get(key) is not None:
+            _require_active_clock(graphic_id, start, end, key, params[key])
+    for key in ("items", "roles", "badges"):
+        for index, value in enumerate(params.get(key) or [], 1):
+            if isinstance(value, Mapping):
+                clock = value.get("startSec", value.get("atSec"))
+                if clock is not None:
+                    _require_active_clock(
+                        graphic_id, start, end, f"{key}[{index}] time", clock
+                    )
+    for key in ("reject", "confirm", "badge"):
+        value = params.get(key)
+        if isinstance(value, Mapping):
+            _require_active_clock(
+                graphic_id, start, end, f"{key}.atSec", value["atSec"]
+            )
+
+
+def _validate_stars_widget(graphic: Mapping[str, Any]) -> None:
+    start = float(graphic["startSec"])
+    end = float(graphic["endSec"])
+    params = graphic["params"]
+    graphic_id = graphic["id"]
+    total = int(params["total"])
+    filled = int(params["filled"])
+    if filled > total:
+        raise PlanningError(f"graphic {graphic_id} filled cannot exceed total")
+    stagger = float(params.get("fillStaggerSec") or 0.12)
+    if start + filled * stagger > end + 1e-9:
+        raise PlanningError(
+            f"graphic {graphic_id} star fill timing exceeds graphic duration"
+        )
+
+
+def _validate_duration_meter_widget(graphic: Mapping[str, Any]) -> None:
+    start = float(graphic["startSec"])
+    end = float(graphic["endSec"])
+    params = graphic["params"]
+    graphic_id = graphic["id"]
+    fill_duration = int(params["ticks"]) * float(params.get("fillStaggerSec") or 0.18)
+    if start + fill_duration > end + 1e-9:
+        raise PlanningError(
+            f"graphic {graphic_id} meter fill timing exceeds graphic duration"
+        )
+    hold = params.get("meterHoldSec")
+    if hold is not None and start + float(hold) >= end:
+        raise PlanningError(
+            f"graphic {graphic_id} meterHoldSec must end before the graphic"
+        )
+
+
+def _validate_graphic_parameters(graphic: Mapping[str, Any]) -> None:
+    _validate_graphic_clocks(graphic)
+    widget = graphic["widget"]
+    if widget == "stars":
+        _validate_stars_widget(graphic)
+    elif widget == "duration-meter":
+        _validate_duration_meter_widget(graphic)
+
+
+def _graphic_sfx_events(graphic: Mapping[str, Any]) -> list[dict[str, Any]]:
+    raw = graphic.get("sfx")
+    if not raw:
+        return []
+    if isinstance(raw, Mapping):
+        return [dict(raw)]
+    return [dict(row) for row in raw]
+
+
+def _graphic_item_times(
+    graphic: Mapping[str, Any], params: Mapping[str, Any]
+) -> list[float]:
+    items = params.get("items") or []
+    start = float(graphic["startSec"])
+    stagger = float(params.get("itemStaggerSec") or 0.4)
+    times: list[float] = []
+    for index, item in enumerate(items):
+        if isinstance(item, Mapping) and item.get("startSec") is not None:
+            times.append(float(item["startSec"]))
+        else:
+            times.append(start + index * stagger)
+    return times
+
+
+def _every_start(graphic: Mapping[str, Any], offset: float) -> list[float]:
+    return [float(graphic["startSec"]) + offset]
+
+
+def _every_fill(graphic: Mapping[str, Any], offset: float) -> list[float]:
+    params = graphic.get("params") or {}
+    count = int(params.get("filled") or params.get("ticks") or 0)
+    stagger = float(params.get("fillStaggerSec") or 0.12)
+    start = float(graphic["startSec"])
+    return [start + offset + index * stagger for index in range(count)]
+
+
+def _every_item(graphic: Mapping[str, Any], offset: float) -> list[float]:
+    return [
+        clock + offset
+        for clock in _graphic_item_times(graphic, graphic.get("params") or {})
+    ]
+
+
+def _every_resolve(graphic: Mapping[str, Any], offset: float) -> list[float]:
+    params = graphic.get("params") or {}
+    return [float(params.get("resolveAtSec") or graphic["endSec"]) + offset]
+
+
+def _every_named_node(
+    graphic: Mapping[str, Any], offset: float, key: str
+) -> list[float]:
+    params = graphic.get("params") or {}
+    node = params.get(key) or {}
+    start = float(graphic["startSec"])
+    clock = float(node.get("atSec") or start) if isinstance(node, Mapping) else start
+    return [clock + offset]
+
+
+def _every_role(graphic: Mapping[str, Any], offset: float) -> list[float]:
+    params = graphic.get("params") or {}
+    roles = params.get("roles") or []
+    stagger = float(params.get("roleStaggerSec") or 0.5)
+    start = float(graphic["startSec"])
+    times: list[float] = []
+    for index, role in enumerate(roles):
+        if isinstance(role, Mapping) and role.get("atSec") is not None:
+            times.append(float(role["atSec"]) + offset)
+        else:
+            times.append(start + offset + index * stagger)
+    return times
+
+
+def _every_downbeat(graphic: Mapping[str, Any], offset: float) -> list[float]:
+    params = graphic.get("params") or {}
+    return [float(params.get("downbeatAtSec") or graphic["endSec"]) + offset]
+
+
+def _every_wipe(graphic: Mapping[str, Any], offset: float) -> list[float]:
+    params = graphic.get("params") or {}
+    return [float(params.get("wipeAtSec") or graphic["startSec"]) + offset]
+
+
+_GRAPHIC_EVERY = {
+    "start": _every_start,
+    "fill": _every_fill,
+    "item": _every_item,
+    "resolve": _every_resolve,
+    "reject": lambda graphic, offset: _every_named_node(graphic, offset, "reject"),
+    "confirm": lambda graphic, offset: _every_named_node(graphic, offset, "confirm"),
+    "badge": lambda graphic, offset: _every_named_node(graphic, offset, "badge"),
+    "role": _every_role,
+    "downbeat": _every_downbeat,
+    "wipe": _every_wipe,
+}
+
+
+def _graphic_event_times(
+    graphic: Mapping[str, Any], event: Mapping[str, Any]
+) -> list[float]:
+    if event.get("atSec") is not None:
+        return [float(event["atSec"])]
+    every = str(event.get("every") or "start")
+    handler = _GRAPHIC_EVERY.get(every)
+    if handler is None:
+        raise PlanningError(
+            f"graphic {graphic.get('id')} has unknown sfx.every {every!r}"
+        )
+    return handler(graphic, float(event.get("offsetSec") or 0))
+
+
+def _sfx_from_graphics(graphics: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
+    hits: list[dict[str, Any]] = []
+    for graphic in graphics:
+        events = _graphic_sfx_events(graphic)
+        graphic_id = str(graphic["id"])
+        for event_index, event in enumerate(events):
+            kind = str(event["kind"])
+            times = _graphic_event_times(graphic, event)
+            for hit_index, clock in enumerate(times):
+                start = float(graphic["startSec"])
+                end = float(graphic["endSec"])
+                if clock < start or clock >= end:
+                    raise PlanningError(
+                        f"graphic {graphic_id} SFX event must be within "
+                        f"[{start:g}, {end:g})"
+                    )
+                suffix = []
+                if len(events) > 1:
+                    suffix.append(str(event_index + 1))
+                if len(times) > 1:
+                    suffix.append(str(hit_index + 1))
+                tail = f"-{'-'.join(suffix)}" if suffix else ""
+                hits.append(
+                    {
+                        "id": f"{graphic_id}-sfx-{kind}{tail}",
+                        "kind": kind,
+                        "startSec": round(clock, 6),
+                    }
+                )
+    return hits
+
+
+def _callout_sfx_hits(
+    callouts: Sequence[Mapping[str, Any]], occupied: set[float]
+) -> list[dict[str, Any]]:
+    hits: list[dict[str, Any]] = []
+    for callout in callouts:
+        start = float(callout["startSec"])
+        kind = str(callout["kind"])
+        hits.append(
+            {
+                "id": f"{callout['id']}-sfx",
+                "kind": kind,
+                "startSec": round(start, 6),
+            }
+        )
+        if kind in {"stamp", "price"}:
+            occupied.add(round(start, 2))
+    return hits
+
+
+def _punch_sfx_hits(
+    punch_ins: Sequence[Mapping[str, Any]], occupied: set[float]
+) -> list[dict[str, Any]]:
+    hits: list[dict[str, Any]] = []
+    for punch in punch_ins:
+        start = float(punch["startSec"])
+        if round(start, 2) in occupied:
+            continue
+        hits.append(
+            {
+                "id": f"{punch['id']}-sfx",
+                "kind": "punch",
+                "startSec": round(start, 6),
+            }
+        )
+    return hits
+
+
+def _require_sfx_library(
+    short_id: str, hits: Sequence[Mapping[str, Any]], library: Mapping[str, Any]
+) -> None:
+    missing = sorted({hit["kind"] for hit in hits if not library.get(hit["kind"])})
+    if missing:
+        raise PlanningError(
+            f"candidate {short_id} needs SFX library keys: {', '.join(missing)}"
+        )
+
+
+def _sfx_from_motion(
+    *,
+    short_id: str,
+    callouts: Sequence[Mapping[str, Any]],
+    punch_ins: Sequence[Mapping[str, Any]],
+    layout: Mapping[str, Any],
+    sfx: Mapping[str, Any] | None,
+    graphics: Sequence[Mapping[str, Any]] | None = None,
+) -> list[dict[str, Any]]:
+    """Derive UI hits from chips/stamps/graphics; punch at the same clock is skipped."""
+    if not sfx:
+        return []
+    hits: list[dict[str, Any]] = []
+    occupied: set[float] = set()
+    if str(layout.get("mode")) == "split":
+        hits.append({"id": f"s{short_id}-sfx-seam", "kind": "seam", "startSec": 0.0})
+    hits.extend(_callout_sfx_hits(callouts, occupied))
+    graphic_hits = _sfx_from_graphics(graphics or [])
+    hits.extend(graphic_hits)
+    occupied.update(round(float(hit["startSec"]), 2) for hit in graphic_hits)
+    hits.extend(_punch_sfx_hits(punch_ins, occupied))
+    _require_sfx_library(short_id, hits, sfx.get("library") or {})
+    return hits
+
+
 def _item_fingerprint(
     candidate: Mapping[str, Any],
     *,
@@ -314,6 +641,44 @@ def _caption_plan(
     return captions, audit, caption_policy, corrections
 
 
+def _bind_source_fields(
+    item: dict[str, Any],
+    request: Mapping[str, Any],
+    candidate: Mapping[str, Any],
+    segments: list[dict[str, Any]],
+) -> None:
+    if shorts_contract.uses_canonical_root(request.get("version")):
+        item["sourceSegments"] = segments
+        return
+    item["sourceRange"] = deepcopy(candidate["sourceRange"])
+
+
+def _apply_canonical_plan_identity(
+    plan: dict[str, Any],
+    request: Mapping[str, Any],
+    source_id: str,
+    source_fingerprint: str,
+    transcript: Mapping[str, Any],
+) -> None:
+    if not shorts_contract.uses_canonical_root(request.get("version")):
+        return
+    source = request["source"]
+    plan.update(
+        {
+            "planVersion": str(request.get("version") or "1.1"),
+            "batchRoot": request["batchRoot"],
+            "batchRootSource": request["batchRootSource"],
+            "source": {
+                "sourceId": source_id,
+                "masterPath": source["masterPath"],
+                "transcriptPath": source.get("transcriptPath"),
+                "mediaFingerprint": source_fingerprint,
+                "transcriptFingerprint": shorts_contract.content_hash(transcript),
+            },
+        }
+    )
+
+
 def resolve_batch(
     request: Mapping[str, Any],
     transcript: Mapping[str, Any],
@@ -397,6 +762,9 @@ def resolve_batch(
             caption_policy=caption_policy,
             corrections=scoped_corrections,
         )
+        callouts, punch_ins, graphics = _motion_from_candidate(
+            candidate, edited_duration
+        )
         item = {
             "id": candidate["id"],
             "order": candidate["order"],
@@ -418,10 +786,23 @@ def resolve_batch(
             ],
             "qcProfile": "shorts-proof",
         }
-        if request.get("version") == "1.1":
-            item["sourceSegments"] = segments
-        else:
-            item["sourceRange"] = deepcopy(candidate["sourceRange"])
+        if callouts:
+            item["callouts"] = callouts
+        if punch_ins:
+            item["punchIns"] = punch_ins
+        if graphics:
+            item["graphics"] = graphics
+        sfx_hits = _sfx_from_motion(
+            short_id=candidate["id"],
+            callouts=callouts,
+            punch_ins=punch_ins,
+            layout=layout,
+            sfx=(request.get("defaults") or {}).get("sfx"),
+            graphics=graphics,
+        )
+        if sfx_hits:
+            item["sfxHits"] = sfx_hits
+        _bind_source_fields(item, request, candidate, segments)
         items.append(item)
         if review_speed:
             required_reviews.append(
@@ -501,22 +882,9 @@ def resolve_batch(
         "planApproval": {"status": "pending", "reference": None, "timestamp": None},
         "planHash": "0" * 64,
     }
-    if request.get("version") == "1.1":
-        source = request["source"]
-        plan.update(
-            {
-                "planVersion": "1.1",
-                "batchRoot": request["batchRoot"],
-                "batchRootSource": request["batchRootSource"],
-                "source": {
-                    "sourceId": source_id,
-                    "masterPath": source["masterPath"],
-                    "transcriptPath": source.get("transcriptPath"),
-                    "mediaFingerprint": str(source_fingerprint),
-                    "transcriptFingerprint": shorts_contract.content_hash(transcript),
-                },
-            }
-        )
+    _apply_canonical_plan_identity(
+        plan, request, source_id, str(source_fingerprint), transcript
+    )
     if provider_tokens_fingerprint:
         plan["providerTokensFingerprint"] = provider_tokens_fingerprint
     if provider_tokens:

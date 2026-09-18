@@ -302,6 +302,11 @@ class ShortsPlanningIntegrationTests(unittest.TestCase):
             states = {item["shortId"]: item["state"] for item in status["items"]}
             self.assertEqual(status["batchState"], "proof-partial")
             self.assertEqual(states["05"], "failed")
+            failed = next(item for item in status["items"] if item["shortId"] == "05")
+            ready = next(item for item in status["items"] if item["shortId"] == "04")
+            self.assertGreater(failed["proofRevision"], 0)
+            self.assertEqual(failed.get("proofArtifactRevision") or 0, 0)
+            self.assertEqual(ready["proofArtifactRevision"], ready["proofRevision"])
             self.assertEqual(states["04"], "proof-ready")
             self.assertEqual(states["06"], "proof-ready")
 
@@ -512,6 +517,30 @@ class ShortsPlanningIntegrationTests(unittest.TestCase):
             self.assertTrue(
                 all(item["state"] == "delivered" for item in delivered["items"])
             )
+
+    def test_carry_revision_watermarks_keeps_existing_proof_numbers(self) -> None:
+        new_status = {
+            "items": [
+                {"shortId": "01", "proofRevision": 0, "masterRevision": 0},
+                {"shortId": "02", "proofRevision": 0, "masterRevision": 0},
+            ]
+        }
+        shorts._carry_revision_watermarks(
+            {
+                "items": [
+                    {
+                        "shortId": "01",
+                        "proofRevision": 1,
+                        "proofArtifactRevision": 1,
+                        "masterRevision": 0,
+                    },
+                ]
+            },
+            new_status,
+        )
+        self.assertEqual(new_status["items"][0]["proofRevision"], 1)
+        self.assertEqual(new_status["items"][0]["proofArtifactRevision"], 1)
+        self.assertEqual(new_status["items"][1]["proofRevision"], 0)
 
 
 if __name__ == "__main__":
