@@ -140,6 +140,49 @@ def valid_status(plan: dict) -> dict:
     }
 
 
+def valid_plan_v11() -> dict:
+    plan = valid_plan()
+    plan.update(
+        {
+            "version": "1.1",
+            "planVersion": "1.1",
+            "batchRoot": "/media/edit/shorts/demo-batch",
+            "batchRootSource": "canonical-default",
+            "source": {
+                "sourceId": "master",
+                "masterPath": "/media/master.mp4",
+                "mediaFingerprint": HASH,
+            },
+        }
+    )
+    item = plan["items"][0]
+    item.pop("sourceRange")
+    item["sourceSegments"] = [
+        {
+            "segmentId": "01-s001",
+            "order": 1,
+            "sourceId": "master",
+            "startSec": 1.0,
+            "endSec": 11.0,
+            "rationale": "approved range",
+            "evidenceReference": "review://candidate-01",
+            "sourceFingerprint": HASH,
+            "outputStartSec": 0.0,
+            "outputEndSec": 10.0,
+        }
+    ]
+    plan["planHash"] = shorts_contract.plan_hash(plan)
+    return plan
+
+
+def valid_plan_v12() -> dict:
+    plan = valid_plan_v11()
+    plan["version"] = "1.2"
+    plan["planVersion"] = "1.2"
+    plan["planHash"] = shorts_contract.plan_hash(plan)
+    return plan
+
+
 def valid_request_v11() -> dict:
     request = valid_request()
     request["version"] = "1.1"
@@ -167,6 +210,12 @@ def valid_request_v11() -> dict:
             "evidenceReference": "review://context",
         },
     ]
+    return request
+
+
+def valid_request_v12() -> dict:
+    request = valid_request_v11()
+    request["version"] = "1.2"
     return request
 
 
@@ -305,6 +354,103 @@ class ShortsInvariantTests(unittest.TestCase):
         plan["planApproval"] = {"status": "pending"}
         with self.assertRaises(shorts_contract.ContractValidationError):
             shorts_contract.require_plan_approval(plan)
+
+    def test_request_and_composition_accept_graphics_widgets(self) -> None:
+        request = valid_request_v12()
+        request["candidates"][0]["motionOverride"] = {
+            "graphics": [
+                {
+                    "id": "s01-stars-backlog",
+                    "widget": "stars",
+                    "startSec": 1.0,
+                    "endSec": 3.0,
+                    "corner": "br",
+                    "params": {"total": 5, "filled": 4, "fillStaggerSec": 0.12},
+                    "sfx": {"kind": "chip", "every": "fill"},
+                }
+            ]
+        }
+        shorts_contract.validate_document(request, "request")
+        plan = valid_plan_v12()
+        plan["items"][0]["graphics"] = request["candidates"][0]["motionOverride"][
+            "graphics"
+        ]
+        plan["planHash"] = shorts_contract.plan_hash(plan)
+        shorts_contract.validate_document(plan, "plan")
+
+    def test_v11_rejects_motion_override(self) -> None:
+        request = valid_request_v11()
+        request["candidates"][0]["motionOverride"] = {"callouts": []}
+        with self.assertRaises(shorts_contract.ContractValidationError):
+            shorts_contract.validate_document(request, "request")
+
+    def test_v10_rejects_incompatible_motion_and_sfx_additions(self) -> None:
+        request = valid_request()
+        request["defaults"]["sfx"] = {"library": {"chip": "chip.wav"}}
+        request["candidates"][0]["motionOverride"] = {"callouts": []}
+        with self.assertRaises(shorts_contract.ContractValidationError):
+            shorts_contract.validate_document(request, "request")
+
+        plan = valid_plan()
+        plan["items"][0]["graphics"] = []
+        plan["planHash"] = shorts_contract.plan_hash(plan)
+        with self.assertRaises(shorts_contract.ContractValidationError):
+            shorts_contract.validate_document(plan, "plan")
+
+        asset = {"path": "asset.mp4", "hash": HASH, "durationSec": 1}
+        composition = {
+            "version": "1.0",
+            "batchId": "demo-batch",
+            "shortId": "01",
+            "proofRevision": 1,
+            "width": 1080,
+            "height": 1920,
+            "fps": 30,
+            "durationSec": 1,
+            "assets": {"baseVideo": asset, "dialogueAudio": asset},
+            "layout": {
+                "mode": "full-frame",
+                "captionAnchor": "bottom",
+                "baseRegion": {"x": 0, "y": 0, "width": 1, "height": 1},
+            },
+            "captions": [],
+            "providerTokens": {},
+            "templateVersion": "test",
+            "expectedOutputPath": "proof.mp4",
+        }
+        shorts_contract.validate_document(composition, "composition")
+        composition["graphics"] = []
+        with self.assertRaises(shorts_contract.ContractValidationError):
+            shorts_contract.validate_document(composition, "composition")
+
+        status = valid_status(valid_plan())
+        status["items"][0]["artifacts"] = [
+            {
+                "kind": "prepared-sfx",
+                "path": "chip.wav",
+                "hash": HASH,
+                "revision": 1,
+            }
+        ]
+        with self.assertRaises(shorts_contract.ContractValidationError):
+            shorts_contract.validate_document(status, "status")
+
+    def test_graphics_require_widget_parameters(self) -> None:
+        request = valid_request_v12()
+        request["candidates"][0]["motionOverride"] = {
+            "graphics": [
+                {
+                    "id": "stars",
+                    "widget": "stars",
+                    "startSec": 1,
+                    "endSec": 2,
+                    "corner": "br",
+                    "params": {"total": 5},
+                }
+            ]
+        }
+        with self.assertRaisesRegex(shorts_contract.ContractValidationError, "filled"):
+            shorts_contract.validate_document(request, "request")
 
     def test_atomic_json_write_replaces_complete_document(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
