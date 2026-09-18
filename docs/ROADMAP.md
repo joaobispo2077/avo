@@ -80,6 +80,25 @@ Brief paths (when checked out): `specs/backlog/<slug>.md`
 
 ---
 
+## Possible technical debt (not scheduled)
+
+Optional follow-ups from `/ponytail-review` on BL-019 after `5ba4e38`. They are **possible** debt, not blockers, not a product row, and not a promise to shrink. Resolve only when already editing the same files. Estimated ceiling if all land: about **−103 lines**.
+
+| Where | Kind | Cut | Replacement |
+| ----- | ---- | --- | ----------- |
+| `watch_skill.py` `_require_bonsai_runtime` + pin `resolve_job` | yagni | Second Bonsai checker (`_dict_at` / `_env_or` / `_bonsai_paths` / `_missing_file`) | `preflight(resolved)` and map `PreflightError` → `ToolError` |
+| `faster_whisper.py` `_argv_with_model` | yagni | One-flag wrapper | `_argv_with_option(argv, "--model", resolved.id)` |
+| `faster_whisper.py` pin unwrap | shrink | Eight-line `isinstance` source/runtime unwrap | `resolved.pin.get("source") or {}` |
+| `models.py` `_job_catalog_key` | delete | Twin of `job_catalog_key` | `from avo.model_sources import job_catalog_key` |
+| `model_sources.py` `_SCOPE_RANK["hardware"]` | delete | Rank never read after `_apply_hardware` | nothing |
+| `model_sources.py` `_copy_source` | stdlib | Hand-copied nested source | `copy.deepcopy(source)` |
+| `model_sources.py` disclosure `servedName` | delete | Top-level copy of `endpoint.servedName` | keep the nested field |
+| `model_sources.py` `_reuse_status` | yagni | `downloaded-approved` though nothing downloads | `"reuse": "existing"` |
+| `model_sources.py` `_missing_or_download` | yagni | Third raise when `allowDownload` and online; still fails | explicit → `missing_artifact`, else → `download_disallowed` |
+| `avo.model-source.schema.json` `repo` / `revision` | yagni | Schema accepts fields the resolver never reads | drop until a reader exists |
+
+---
+
 ## Upstream engine
 
 AVO bundles and adapts the [video-use](https://github.com/browser-use/video-use)

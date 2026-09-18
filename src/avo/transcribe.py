@@ -323,6 +323,24 @@ class LocalTranscriber:
             ) from exc
 
 
+def _maybe_ci_transcript_stub(
+    video: Path,
+    out_path: Path,
+    model: str,
+    fingerprint: dict[str, Any] | None,
+    verbose: bool,
+) -> Path | None:
+    # Zip-smoke only. Do not reuse AVO_CI=1 — that would hide real ASR tests.
+    if os.environ.get("AVO_CI_TRANSCRIBE_STUB") != "1":
+        return None
+    fingerprint = fingerprint or source_fingerprint(video)
+    payload = build_transcript_payload([], fingerprint, model, "ci-stub")
+    atomic_write_json(out_path, payload)
+    if verbose:
+        print(f"  ci-stub: {out_path.name}", flush=True)
+    return out_path
+
+
 def transcribe_one(
     video: Path,
     edit_dir: Path,
@@ -340,6 +358,9 @@ def transcribe_one(
         raise FileNotFoundError(f"video not found: {video}")
     model = validate_model_name(model)
     out_path = transcript_path(video, edit_dir)
+    stub = _maybe_ci_transcript_stub(video, out_path, model, fingerprint, verbose)
+    if stub is not None:
+        return stub
     if not out_path.exists() and runtime is None:
         runtime = LocalTranscriber(
             model=model,

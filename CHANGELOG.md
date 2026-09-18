@@ -1,3 +1,71 @@
+# [1.10.0](https://github.com/joaobispo2077/avo/compare/v1.9.0...v1.10.0) (2026-09-18)
+
+
+### Bug Fixes
+
+* **deps:** bump sharp 0.35.4 and pin js-yaml 4.3.2 ([52dec18](https://github.com/joaobispo2077/avo/commit/52dec18f7aeb5749d43422a0e9f736bfd062e261))
+* **ci:** drop model-source xenon debt and command count ([5ba4e38](https://github.com/joaobispo2077/avo/commit/5ba4e38f9a58f1bd1a9cea8e0c5db2186b30eb2c))
+* **timeline:** fail closed on incomplete audio and skip-evidence approvals ([a2f1dd8](https://github.com/joaobispo2077/avo/commit/a2f1dd86c0197c13dd0e9ade11cff934413dd700))
+* **mcp:** point the MCP extra at the checkout ([20df606](https://github.com/joaobispo2077/avo/commit/20df606a74cd473e44289be56a39d4d05cbe70e3))
+* **review:** require truthful Watch coverage and transcript identity ([30bb555](https://github.com/joaobispo2077/avo/commit/30bb55579dbd041dab749512485e313c712d87ac))
+* **models:** stop model_sources importing stats ([9654bce](https://github.com/joaobispo2077/avo/commit/9654bce40444930ddb8966675527ad06b23ec8fc))
+
+
+### Features
+
+* **models:** add /avo.models inspect command ([bcd5739](https://github.com/joaobispo2077/avo/commit/bcd5739ca01a9bfeea6bd2b0d56179a16aa80a39))
+* **schema:** add shared modelPin contract ([5da79ea](https://github.com/joaobispo2077/avo/commit/5da79ea0a0986ebefbe0e6ff30050f4b96b82368))
+* **models:** disclose sources and fail-closed adapter load ([23cbe73](https://github.com/joaobispo2077/avo/commit/23cbe738fe0f51a7bf5ddca3462ca27920c02584))
+* **shorts:** make HyperFrames templates provider-neutral and seek-safe ([88aebcc](https://github.com/joaobispo2077/avo/commit/88aebcc0560c2f648825a4f7cb86c896d5bc499a))
+* **models:** resolve catalog id, source, and preflight ([7eb4bb7](https://github.com/joaobispo2077/avo/commit/7eb4bb78e5a8bfa3074b0ff57e57b8f9c11c9de8))
+* **shorts:** separate proof attempts from artifacts and bind media QC ([4a7d470](https://github.com/joaobispo2077/avo/commit/4a7d47041f2f62d1f00e907f995a78e2dcd37c6f))
+* **shorts:** version 1.2 contracts and canonical-root planning ([fdca86b](https://github.com/joaobispo2077/avo/commit/fdca86bc17637e4f01a4e6f87bdf392c5ae45dcf))
+
+# [1.9.0](https://github.com/joaobispo2077/avo/compare/v1.8.0...v1.9.0) (2026-09-04)
+
+
+### Bug Fixes
+
+* **shorts:** extract batch root resolver for complexity and formatting ([b0077ec](https://github.com/joaobispo2077/avo/commit/b0077ec000825b81a0b1ddf62626658b68effc92))
+* **shorts:** format batch-root path split for ruff ([75f52aa](https://github.com/joaobispo2077/avo/commit/75f52aa1f9651241915a9c0a6596c00a41ebb6f1))
+* **render:** harden grade signalstats scratch, bound loudnorm to shortest stream, honor camera gain keys ([1fb38ba](https://github.com/joaobispo2077/avo/commit/1fb38bac2cc119f7e06f492e22ae8712f4d97057))
+* **shorts:** normalize Windows path separators in batch_dir overrides on POSIX ([5b6497f](https://github.com/joaobispo2077/avo/commit/5b6497f607bd5c3571a3af595fc026663b02d224))
+
+
+### Features
+
+* **delivery-fidelity:** add assembly materialization, picture lineage, and source-fidelity QC ([eefe6a7](https://github.com/joaobispo2077/avo/commit/eefe6a74fa216f120f0620163441c5380f394331))
+* **step-status:** add guided workflow footer contract for all AVO commands ([4f9a1fa](https://github.com/joaobispo2077/avo/commit/4f9a1fa44114654621bbc6bb54969085f4271e8b))
+* **settings:** add scoped setting resolution with provenance ([45fc6f7](https://github.com/joaobispo2077/avo/commit/45fc6f76e28bd5f6cdb7eac545acbf06e3558673))
+* **watch:** add scoped Watch execution policy and refactor watch-skill ([d396073](https://github.com/joaobispo2077/avo/commit/d39607399d53c771a45a85c4abbcc331503205e6))
+* **shorts:** add v1.1 batch paths, ordered lineage, and planning fixtures ([f84911f](https://github.com/joaobispo2077/avo/commit/f84911f0b5b299f741e8d0680bef618233de65c2))
+
+# [1.8.0](https://github.com/joaobispo2077/avo/compare/v1.7.0...v1.8.0) (2026-08-20)
+
+
+### Features
+
+* **quality:** add complexity deadcode duplication architecture tree and audit gates ([68ea0fe](https://github.com/joaobispo2077/avo/commit/68ea0fe78894fceff132e94896557146ea5a06f9))
+* **cli:** add editlog refresh ([d814fa2](https://github.com/joaobispo2077/avo/commit/d814fa2515b6d855a57da1cc3d12d253f75198cb))
+* **ci:** add Maxframe-style quality PR summaries ([af19f5e](https://github.com/joaobispo2077/avo/commit/af19f5ec911924b538365c09612a904d7ad52989))
+* **quality:** add mutmut floors and src/avo dep-graph generator ([5fcd86a](https://github.com/joaobispo2077/avo/commit/5fcd86a9c4f8dfa5e302f85962b3b07d89f8828a))
+* **ci:** add quality-gate contracts to PR table ([951cc2b](https://github.com/joaobispo2077/avo/commit/951cc2b36f6bd962d20dbf4ec8a0a15d09752d09))
+* **quality:** add Ruff ESLint Prettier coverage runners ([d7bb117](https://github.com/joaobispo2077/avo/commit/d7bb11705398592f605c61afd4d4e7c93985dedb))
+* **learndown:** copy EDITLOG lock once on export ([a65d5aa](https://github.com/joaobispo2077/avo/commit/a65d5aab831ead628a6d0295c630b3ec2babaa13))
+* **mcp:** describe compact cleanup tool responses ([262b58c](https://github.com/joaobispo2077/avo/commit/262b58cc1f5894819d8c453027e7f265089d9651))
+* **cleanup:** emit compact cleanup JSON and promote legacy reconstruction ([90c7222](https://github.com/joaobispo2077/avo/commit/90c722258651af13800d05c653af1d4e00be5594))
+* **mutation:** export mutmut CI stats after run ([f0d6ada](https://github.com/joaobispo2077/avo/commit/f0d6adab349490ef3af30efec0875d5fc8c4779c))
+* **editlog:** project JSON into a hybrid EDITLOG.md ([6ba0c1e](https://github.com/joaobispo2077/avo/commit/6ba0c1e05ade6b8d3ffeae2ed88840ca09962784))
+* **timeline:** refresh EDITLOG after canonical writes ([72bc00f](https://github.com/joaobispo2077/avo/commit/72bc00fe9c98ac1d722d5fa0a2913ada130c354c))
+* **mcp:** register avo_editlog_refresh ([48a0b0f](https://github.com/joaobispo2077/avo/commit/48a0b0f8340df2041dea55104dc63b97b17b6ee6))
+* **workspace:** resolve WSL /mnt rawDir paths on Windows ([14eeae5](https://github.com/joaobispo2077/avo/commit/14eeae57bf809b861b0bb212eeedb6a8deeeb543))
+* **wrap:** sample cleanup files and reuse draft freed bytes ([b4069b6](https://github.com/joaobispo2077/avo/commit/b4069b619d59f96d22194302f311acd7f67d603b))
+* **mutation:** skip Gate 1/2 tests in mutmut ([b8b6b9f](https://github.com/joaobispo2077/avo/commit/b8b6b9fb8182ee2adcc10c5aaf00f74e961dfa9c))
+* **mutation:** skip gitignore tests in mutmut ([bc48369](https://github.com/joaobispo2077/avo/commit/bc483696121f1c28cce4e8f5b05a4d9eba950511))
+* **mutation:** split light/full mutmut profiles ([03f0c32](https://github.com/joaobispo2077/avo/commit/03f0c32d362ed849f6af26f06f3445fe8d81e3d6))
+* **ci:** summarize size signal without pack dump ([c332d35](https://github.com/joaobispo2077/avo/commit/c332d3564cfc01ea110844dae61c992e17a81c76))
+* **ci:** title comment Software metrics with numbers ([f78a148](https://github.com/joaobispo2077/avo/commit/f78a1481d14ccb09c9d870fa97879495ca46e189))
+
 # [1.7.0](https://github.com/joaobispo2077/avo/compare/v1.6.0...v1.7.0) (2026-08-16)
 
 
