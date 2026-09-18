@@ -34,6 +34,17 @@ def test_spec_cpu_only_ctranslate2() -> None:
     assert "__main__.py" in SPEC
 
 
+def test_spec_does_not_collect_mcp_cli() -> None:
+    assert "_collect(\"mcp\")" not in SPEC
+    assert "collect_all" in SPEC
+    assert not any(
+        line.strip() and not line.lstrip().startswith("#") and 'collect_all("mcp")' in line
+        for line in SPEC.splitlines()
+    )
+    assert "mcp.cli" in SPEC
+    assert "typer" in SPEC
+
+
 def test_build_scripts_zip_names_and_smoke() -> None:
     for text in (SH, PS1):
         assert "avo-${VERSION}-${PLATFORM}.zip" in text or "avo-$Version-$Platform" in text

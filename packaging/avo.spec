@@ -103,6 +103,8 @@ hiddenimports: list = [
     "avo.paths",
     "avo.mcp.__main__",
     "avo.mcp.server",
+    "mcp",
+    "mcp.server",
 ]
 
 
@@ -116,7 +118,9 @@ def _collect(package: str) -> None:
 _collect("avo")
 _collect("ctranslate2")
 _collect("faster_whisper")
-_collect("mcp")
+# Skip full MCP package walk: mcp.cli needs typer (optional CLI extra).
+# avo mcp only imports mcp.server.MCPServer.
+datas += collect_data_files("mcp")
 datas += collect_data_files("avo.templates.shorts_hyperframes")
 datas += copy_metadata("avo")
 datas += copy_metadata("faster-whisper")
@@ -132,6 +136,8 @@ excludes = [
     "PyQt6",
     "PySide2",
     "PySide6",
+    "mcp.cli",
+    "typer",
 ]
 
 a = Analysis(
