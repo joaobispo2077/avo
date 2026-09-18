@@ -1,3 +1,110 @@
+# [1.10.0](https://github.com/joaobispo2077/avo/compare/v1.9.0...v1.10.0) (2026-09-18)
+
+
+### Bug Fixes
+
+* **deps:** bump sharp 0.35.4 and pin js-yaml 4.3.2 ([52dec18](https://github.com/joaobispo2077/avo/commit/52dec18f7aeb5749d43422a0e9f736bfd062e261))
+* **ci:** drop model-source xenon debt and command count ([5ba4e38](https://github.com/joaobispo2077/avo/commit/5ba4e38f9a58f1bd1a9cea8e0c5db2186b30eb2c))
+* **timeline:** fail closed on incomplete audio and skip-evidence approvals ([a2f1dd8](https://github.com/joaobispo2077/avo/commit/a2f1dd86c0197c13dd0e9ade11cff934413dd700))
+* **mcp:** point the MCP extra at the checkout ([20df606](https://github.com/joaobispo2077/avo/commit/20df606a74cd473e44289be56a39d4d05cbe70e3))
+* **review:** require truthful Watch coverage and transcript identity ([30bb555](https://github.com/joaobispo2077/avo/commit/30bb55579dbd041dab749512485e313c712d87ac))
+* **models:** stop model_sources importing stats ([9654bce](https://github.com/joaobispo2077/avo/commit/9654bce40444930ddb8966675527ad06b23ec8fc))
+
+
+### Features
+
+* **models:** add /avo.models inspect command ([bcd5739](https://github.com/joaobispo2077/avo/commit/bcd5739ca01a9bfeea6bd2b0d56179a16aa80a39))
+* **schema:** add shared modelPin contract ([5da79ea](https://github.com/joaobispo2077/avo/commit/5da79ea0a0986ebefbe0e6ff30050f4b96b82368))
+* **models:** disclose sources and fail-closed adapter load ([23cbe73](https://github.com/joaobispo2077/avo/commit/23cbe738fe0f51a7bf5ddca3462ca27920c02584))
+* **shorts:** make HyperFrames templates provider-neutral and seek-safe ([88aebcc](https://github.com/joaobispo2077/avo/commit/88aebcc0560c2f648825a4f7cb86c896d5bc499a))
+* **models:** resolve catalog id, source, and preflight ([7eb4bb7](https://github.com/joaobispo2077/avo/commit/7eb4bb78e5a8bfa3074b0ff57e57b8f9c11c9de8))
+* **shorts:** separate proof attempts from artifacts and bind media QC ([4a7d470](https://github.com/joaobispo2077/avo/commit/4a7d47041f2f62d1f00e907f995a78e2dcd37c6f))
+* **shorts:** version 1.2 contracts and canonical-root planning ([fdca86b](https://github.com/joaobispo2077/avo/commit/fdca86bc17637e4f01a4e6f87bdf392c5ae45dcf))
+
+# [1.9.0](https://github.com/joaobispo2077/avo/compare/v1.8.0...v1.9.0) (2026-09-04)
+
+
+### Bug Fixes
+
+* **shorts:** extract batch root resolver for complexity and formatting ([b0077ec](https://github.com/joaobispo2077/avo/commit/b0077ec000825b81a0b1ddf62626658b68effc92))
+* **shorts:** format batch-root path split for ruff ([75f52aa](https://github.com/joaobispo2077/avo/commit/75f52aa1f9651241915a9c0a6596c00a41ebb6f1))
+* **render:** harden grade signalstats scratch, bound loudnorm to shortest stream, honor camera gain keys ([1fb38ba](https://github.com/joaobispo2077/avo/commit/1fb38bac2cc119f7e06f492e22ae8712f4d97057))
+* **shorts:** normalize Windows path separators in batch_dir overrides on POSIX ([5b6497f](https://github.com/joaobispo2077/avo/commit/5b6497f607bd5c3571a3af595fc026663b02d224))
+
+
+### Features
+
+* **delivery-fidelity:** add assembly materialization, picture lineage, and source-fidelity QC ([eefe6a7](https://github.com/joaobispo2077/avo/commit/eefe6a74fa216f120f0620163441c5380f394331))
+* **step-status:** add guided workflow footer contract for all AVO commands ([4f9a1fa](https://github.com/joaobispo2077/avo/commit/4f9a1fa44114654621bbc6bb54969085f4271e8b))
+* **settings:** add scoped setting resolution with provenance ([45fc6f7](https://github.com/joaobispo2077/avo/commit/45fc6f76e28bd5f6cdb7eac545acbf06e3558673))
+* **watch:** add scoped Watch execution policy and refactor watch-skill ([d396073](https://github.com/joaobispo2077/avo/commit/d39607399d53c771a45a85c4abbcc331503205e6))
+* **shorts:** add v1.1 batch paths, ordered lineage, and planning fixtures ([f84911f](https://github.com/joaobispo2077/avo/commit/f84911f0b5b299f741e8d0680bef618233de65c2))
+
+# [1.8.0](https://github.com/joaobispo2077/avo/compare/v1.7.0...v1.8.0) (2026-08-20)
+
+
+### Features
+
+* **quality:** add complexity deadcode duplication architecture tree and audit gates ([68ea0fe](https://github.com/joaobispo2077/avo/commit/68ea0fe78894fceff132e94896557146ea5a06f9))
+* **cli:** add editlog refresh ([d814fa2](https://github.com/joaobispo2077/avo/commit/d814fa2515b6d855a57da1cc3d12d253f75198cb))
+* **ci:** add Maxframe-style quality PR summaries ([af19f5e](https://github.com/joaobispo2077/avo/commit/af19f5ec911924b538365c09612a904d7ad52989))
+* **quality:** add mutmut floors and src/avo dep-graph generator ([5fcd86a](https://github.com/joaobispo2077/avo/commit/5fcd86a9c4f8dfa5e302f85962b3b07d89f8828a))
+* **ci:** add quality-gate contracts to PR table ([951cc2b](https://github.com/joaobispo2077/avo/commit/951cc2b36f6bd962d20dbf4ec8a0a15d09752d09))
+* **quality:** add Ruff ESLint Prettier coverage runners ([d7bb117](https://github.com/joaobispo2077/avo/commit/d7bb11705398592f605c61afd4d4e7c93985dedb))
+* **learndown:** copy EDITLOG lock once on export ([a65d5aa](https://github.com/joaobispo2077/avo/commit/a65d5aab831ead628a6d0295c630b3ec2babaa13))
+* **mcp:** describe compact cleanup tool responses ([262b58c](https://github.com/joaobispo2077/avo/commit/262b58cc1f5894819d8c453027e7f265089d9651))
+* **cleanup:** emit compact cleanup JSON and promote legacy reconstruction ([90c7222](https://github.com/joaobispo2077/avo/commit/90c722258651af13800d05c653af1d4e00be5594))
+* **mutation:** export mutmut CI stats after run ([f0d6ada](https://github.com/joaobispo2077/avo/commit/f0d6adab349490ef3af30efec0875d5fc8c4779c))
+* **editlog:** project JSON into a hybrid EDITLOG.md ([6ba0c1e](https://github.com/joaobispo2077/avo/commit/6ba0c1e05ade6b8d3ffeae2ed88840ca09962784))
+* **timeline:** refresh EDITLOG after canonical writes ([72bc00f](https://github.com/joaobispo2077/avo/commit/72bc00fe9c98ac1d722d5fa0a2913ada130c354c))
+* **mcp:** register avo_editlog_refresh ([48a0b0f](https://github.com/joaobispo2077/avo/commit/48a0b0f8340df2041dea55104dc63b97b17b6ee6))
+* **workspace:** resolve WSL /mnt rawDir paths on Windows ([14eeae5](https://github.com/joaobispo2077/avo/commit/14eeae57bf809b861b0bb212eeedb6a8deeeb543))
+* **wrap:** sample cleanup files and reuse draft freed bytes ([b4069b6](https://github.com/joaobispo2077/avo/commit/b4069b619d59f96d22194302f311acd7f67d603b))
+* **mutation:** skip Gate 1/2 tests in mutmut ([b8b6b9f](https://github.com/joaobispo2077/avo/commit/b8b6b9fb8182ee2adcc10c5aaf00f74e961dfa9c))
+* **mutation:** skip gitignore tests in mutmut ([bc48369](https://github.com/joaobispo2077/avo/commit/bc483696121f1c28cce4e8f5b05a4d9eba950511))
+* **mutation:** split light/full mutmut profiles ([03f0c32](https://github.com/joaobispo2077/avo/commit/03f0c32d362ed849f6af26f06f3445fe8d81e3d6))
+* **ci:** summarize size signal without pack dump ([c332d35](https://github.com/joaobispo2077/avo/commit/c332d3564cfc01ea110844dae61c992e17a81c76))
+* **ci:** title comment Software metrics with numbers ([f78a148](https://github.com/joaobispo2077/avo/commit/f78a1481d14ccb09c9d870fa97879495ca46e189))
+
+# [1.7.0](https://github.com/joaobispo2077/avo/compare/v1.6.0...v1.7.0) (2026-08-16)
+
+
+### Features
+
+* **mcp:** add local avo.mcp stdio server and CLI bridge ([4db81ad](https://github.com/joaobispo2077/avo/commit/4db81ad2fd686531fc27f082710fb904b29ff073))
+
+# [1.6.0](https://github.com/joaobispo2077/avo/compare/v1.5.0...v1.6.0) (2026-08-14)
+
+
+### Features
+
+* **models:** add optional Bonsai understand catalog options ([1e3dd36](https://github.com/joaobispo2077/avo/commit/1e3dd36d3da5fb2b2df03aa4d05ddd70699f14f8))
+* **understand:** fail closed when Bonsai Watch runtime is missing ([9693789](https://github.com/joaobispo2077/avo/commit/96937891c4f759a9087f6630c34c767a03e558e8))
+* **hardware:** note optional Bonsai understand without changing llm ([49e6a92](https://github.com/joaobispo2077/avo/commit/49e6a923d61e1f12b8c13fd41184d716a42bf782))
+
+# [1.5.0](https://github.com/joaobispo2077/avo/compare/v1.4.0...v1.5.0) (2026-08-14)
+
+
+### Bug Fixes
+
+* **audio:** allow camera_source_keys for dialogue restoration ([2fb4f3c](https://github.com/joaobispo2077/avo/commit/2fb4f3cf5ca8dd92bb68c890889f5752fb2c3ec8))
+* **loudness:** let EDL loudness override project and provider ([7b46924](https://github.com/joaobispo2077/avo/commit/7b46924ad24239490c4ce5fb5a8071f871f39f14))
+* **test:** restore original pyproject version after sync-script test ([b17f24b](https://github.com/joaobispo2077/avo/commit/b17f24b51d9ccf91487f5b8a0168348a084f8ef6))
+
+
+### Features
+
+* **timeline:** add canonical artifact JSON schemas ([a996922](https://github.com/joaobispo2077/avo/commit/a996922c96e66075e5970f4bdf9617f86d29f18d))
+* **timeline:** add canonical CMap BMap Sync Tracks Animation stores ([5890a31](https://github.com/joaobispo2077/avo/commit/5890a31f25ba66fab93799218303b21847ab255b))
+* **adapters:** add media inventory sync render and track compilers ([1d72fbd](https://github.com/joaobispo2077/avo/commit/1d72fbdb3ff6dab6e80b6f49424c4a7a925beea4))
+* **timeline:** add review QC and watch adapters ([839a3ff](https://github.com/joaobispo2077/avo/commit/839a3ff7e44e97ac95fa274a4dff950fbabf9ad8))
+* **transcribe:** bind review evidence to transcript candidates ([67af916](https://github.com/joaobispo2077/avo/commit/67af9164d7a2ae460c588f181ed9f5de36e5d790))
+* **cli:** expose timeline sync review migrate cleanup commands ([cac024d](https://github.com/joaobispo2077/avo/commit/cac024ddba1e67e419270cb9d0aa24bf4cbf6dca))
+* **render:** honor dialogue channels and optional track layers ([5e7fda1](https://github.com/joaobispo2077/avo/commit/5e7fda1849b3e6958dfc2a58b7b8c28d3b15b340))
+* **shorts:** require Watch hashes before shorts promotion ([59f62e7](https://github.com/joaobispo2077/avo/commit/59f62e77c0297a36d363f339aa9ce67dd51c47de))
+* **timeline:** resolve canonical map paths from video context ([9b6bb21](https://github.com/joaobispo2077/avo/commit/9b6bb21934c4405f87b0de45fc9510ec52ead3e5))
+* **transcript:** validate master transcript against the export ([dd0e0df](https://github.com/joaobispo2077/avo/commit/dd0e0df32f9b4b965b6e9b063f9610a15a0dcc57))
+
 # [1.4.0](https://github.com/joaobispo2077/avo/compare/v1.3.0...v1.4.0) (2026-08-14)
 
 
