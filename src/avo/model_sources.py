@@ -13,7 +13,6 @@ from urllib.parse import parse_qsl, urlsplit, urlunsplit
 from urllib.request import Request, urlopen
 
 from avo.settings import ResolvedSettings, resolve_path_setting, resolve_scoped_settings
-from avo.stats import SECRET_KEY_MARKERS
 from avo.transcribe import MODEL_FILES, default_model_root, package_version
 
 SCOPE_ORDER = (
@@ -29,7 +28,17 @@ SCOPE_ORDER = (
 _SCOPE_RANK = {name: index for index, name in enumerate(SCOPE_ORDER)}
 _SCOPE_RANK["hardware"] = _SCOPE_RANK["global"]
 _BONSAI_IDS = frozenset({"bonsai-27b-gguf", "ternary-bonsai-27b-gguf"})
-_URL_SECRET_KEYS = SECRET_KEY_MARKERS | {"api_key", "access_token"}
+_URL_SECRET_KEYS = frozenset(
+    {
+        "api_key",
+        "apikey",
+        "secret",
+        "token",
+        "password",
+        "authorization",
+        "access_token",
+    }
+)
 SupportedCompute = Callable[[str], frozenset[str] | None]
 HttpGet = Callable[[str], tuple[int, str]]
 SnapshotOk = Callable[[Path], bool]
