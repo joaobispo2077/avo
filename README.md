@@ -84,7 +84,7 @@ heavier tiers raise quality and VRAM.
 | **GPU** | ~**4 GB** VRAM (Qwen 1.5B path) · ~**8 GB** VRAM (Bonsai 1-bit path) · or CPU-only Whisper + very patient LLM |
 | **System RAM** | ~**8 GB** (Qwen 1.5B) · ~**16 GB** recommended if using Bonsai |
 | **Disk** | Models (~4–8 GB for the light stack) **plus** free space for footage / `edit/` proofs |
-| **Software** | Node ≥ 18 · Python ≥ 3.10 · ffmpeg · optional `avo[mcp]` for local MCP (no account) |
+| **Software** | Node ≥ 18 · Python ≥ 3.10 · ffmpeg · optional MCP SDK installed from an AVO checkout with `pip install -e ".[mcp]"` (no account) |
 
 Weak hardware that cannot hold even this floor may later use optional
 **[avo.cloud](specs/backlog/avo-cloud.md)** ([ROADMAP](#roadmap) **BL-018**) —
@@ -804,6 +804,7 @@ or see [Sponsor](#sponsor) to help prioritize.
 - **BL-014** [Agent cost transparency](specs/backlog/costs-transparency.md): local token/USD estimates and a learning curve so you can budget agent spend.
 - **BL-015** [Concurrent workstreams](specs/backlog/concurrent-workstreams.md): run multiple videos per channel in parallel — separate `rawDir` per project.
 - **BL-018** [avo.cloud (weak-hardware path)](specs/backlog/avo-cloud.md): optional remote AVO for machines below the [local floor](#minimum-requirements-100-local); cloud MCP auth last. Never blocks local skills, CLI, or `avo.mcp`.
+- **BL-019** [Configurable model sources](specs/backlog/configurable-model-sources.md): choose model IDs, local caches/files, endpoints, and runtime settings globally or per provider/project, then disclose the source actually used.
 
 ### NLE escape hatch
 

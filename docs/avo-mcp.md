@@ -47,10 +47,7 @@ Default / Gate 1 installs do **not** pull the MCP SDK. Opt in:
 
 ```bash
 # editable checkout from repo root
-pip install -e ".[mcp]"
-
-# or after a normal install
-pip install "avo[mcp]"
+python -m pip install -e ".[mcp]"
 ```
 
 That installs the official Python `mcp` package (`mcp>=1.28`). Prefer SDK v2 `MCPServer` (stdio). Core `pyproject.toml` runtime deps stay free of `mcp`.
@@ -59,7 +56,7 @@ If you launch without the extra:
 
 ```text
 avo.mcp requires the optional 'mcp' package.
-Install with: pip install 'avo[mcp]'
+From the AVO checkout root, run: python -m pip install -e '.[mcp]'
 ```
 
 (message on **stderr**, non-zero exit)
@@ -71,7 +68,7 @@ Install with: pip install 'avo[mcp]'
 Phase-1 transport is **stdio only** (JSON-RPC on stdin/stdout). No listen port.
 
 ```bash
-# from an installed env with avo[mcp]
+# from the AVO checkout's configured environment
 python -m avo.mcp
 
 # editable layout (src layout) — set PYTHONPATH if needed
@@ -118,7 +115,9 @@ Hosts launch a child process and speak MCP over stdio. Config is a launch comman
 }
 ```
 
-Alternate after `pip install -e ".[mcp]"`: `"command": "python"`, `"args": ["-m", "avo.mcp"]` using the project venv’s Python (prefer absolute path to that interpreter).
+Alternate after `python -m pip install -e ".[mcp]"` from the checkout root:
+`"command": "python"`, `"args": ["-m", "avo.mcp"]` using the project venv’s
+Python (prefer an absolute path to that interpreter).
 
 ### Claude Code one-liner
 
