@@ -44,11 +44,13 @@
     },
     "models": {
       "type": "object",
-      "description": "Optional per-project model overrides (catalog option ids). Falls back to avo.config.json and .avo/state.json.",
+      "description": "Optional per-project model pins (catalog id string or source object). See schemas/avo.model-source.schema.json.",
       "additionalProperties": false,
       "properties": {
-        "understand": { "type": "string", "description": "Qwen tier for watch-skill / THE LOOP (e.g. qwen2.5-7b)." },
-        "plan": { "type": "string", "description": "Qwen tier for planning agent." }
+        "transcribe": { "$ref": "avo.model-source.schema.json#/$defs/modelPin" },
+        "understand": { "$ref": "avo.model-source.schema.json#/$defs/modelPin" },
+        "plan": { "$ref": "avo.model-source.schema.json#/$defs/modelPin" },
+        "transcribe_paid": { "$ref": "avo.model-source.schema.json#/$defs/modelPin" }
       }
     },
     "watch": {
