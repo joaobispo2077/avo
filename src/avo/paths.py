@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import sys
 from pathlib import Path
 
 _ENV_ROOT = "AVO_ROOT"
@@ -17,6 +18,10 @@ def repo_root(start: Path | None = None) -> Path:
         path = Path(override).expanduser().resolve()
         if path.is_dir():
             return path
+    if getattr(sys, "frozen", False):
+        meipass = getattr(sys, "_MEIPASS", "")
+        if meipass:
+            return Path(meipass).resolve()
     # src/avo/paths.py -> avo -> src -> repo root
     return Path(__file__).resolve().parents[2]
 
