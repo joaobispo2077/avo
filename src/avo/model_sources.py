@@ -260,9 +260,7 @@ def preflight(
     _preflight_runtime(runtime, supported_compute_types, device_ok)
     _preflight_python_env(runtime)
     _preflight_secret(source, getenv)
-    _preflight_by_kind(
-        resolved, source, runtime, http_get, snapshot_complete, getenv
-    )
+    _preflight_by_kind(resolved, source, runtime, http_get, snapshot_complete, getenv)
 
 
 def default_supported_compute_types(device: str) -> frozenset[str] | None:
@@ -469,7 +467,9 @@ def _drop_weaker_source_fields(values: dict[str, Any], sources: dict[str, str]) 
     for key in list(sources):
         if key == "id":
             continue
-        if not (key in {"source", "runtime"} or key.startswith(("source.", "runtime."))):
+        if not (
+            key in {"source", "runtime"} or key.startswith(("source.", "runtime."))
+        ):
             continue
         if _SCOPE_RANK.get(sources[key], 0) < id_rank:
             _delete_path(values, key)
@@ -531,11 +531,7 @@ def _infer_transcribe_artifact(
     sources: dict[str, str],
     source: dict[str, Any],
 ) -> None:
-    if (
-        job_key != "transcribe"
-        or source.get("artifactPath")
-        or source.get("cacheDir")
-    ):
+    if job_key != "transcribe" or source.get("artifactPath") or source.get("cacheDir"):
         return
     option_id = str(values.get("id") or "")
     if not option_id:
@@ -746,9 +742,7 @@ def _preflight_transcribe_dir(
         "hardware",
     }
     if not artifact.exists():
-        _missing_or_download(
-            artifact, runtime, "transcribe model", explicit=explicit
-        )
+        _missing_or_download(artifact, runtime, "transcribe model", explicit=explicit)
         return
     missing = [name for name in MODEL_FILES if not (artifact / name).is_file()]
     if missing:

@@ -38,7 +38,8 @@ def test_runtime_wrappers_declare_state_stops_and_next_command():
 
 
 @pytest.mark.parametrize(
-    "name", ["chapters", "deliver", "retention", "thumbnail", "cleanup", "stats", "models"]
+    "name",
+    ["chapters", "deliver", "retention", "thumbnail", "cleanup", "stats", "models"],
 )
 def test_read_only_and_admin_commands_cannot_mutate(name):
     with pytest.raises(CommandPermissionError):
