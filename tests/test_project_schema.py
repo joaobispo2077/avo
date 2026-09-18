@@ -5,9 +5,8 @@ from __future__ import annotations
 import json
 import unittest
 
-from jsonschema_support import validator_for
-
 from avo.paths import schema_path
+from jsonschema_support import validator_for
 
 
 class ShortsProjectSchemaTests(unittest.TestCase):

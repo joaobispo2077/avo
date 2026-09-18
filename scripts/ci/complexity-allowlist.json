@@ -60,13 +60,6 @@
       "reason": "Adapter orchestration with many format/capability branches"
     },
     {
-      "path": "src/avo/adapters/understand/watch_skill.py",
-      "name": "_require_bonsai_runtime",
-      "complexity": 14,
-      "rank": "C",
-      "reason": "Adapter orchestration with many format/capability branches"
-    },
-    {
       "path": "src/avo/audio_analysis.py",
       "name": "main",
       "complexity": 24,
@@ -264,24 +257,10 @@
     },
     {
       "path": "src/avo/models.py",
-      "name": "resolve_option_id",
-      "complexity": 40,
-      "rank": "E",
-      "reason": "Hardware/model/update decision trees with many platform cases"
-    },
-    {
-      "path": "src/avo/models.py",
       "name": "list_alternatives",
       "complexity": 16,
       "rank": "C",
       "reason": "Hardware/model/update decision trees with many platform cases"
-    },
-    {
-      "path": "src/avo/models_cli.py",
-      "name": "main",
-      "complexity": 11,
-      "rank": "C",
-      "reason": "CLI/entrypoint branching; extract helpers in follow-up burn-down"
     },
     {
       "path": "src/avo/pack_transcripts.py",

@@ -12,7 +12,7 @@ from typing import Any
 from urllib.parse import parse_qsl, urlsplit, urlunsplit
 from urllib.request import Request, urlopen
 
-from avo.settings import resolve_path_setting, resolve_scoped_settings
+from avo.settings import ResolvedSettings, resolve_path_setting, resolve_scoped_settings
 from avo.stats import SECRET_KEY_MARKERS
 from avo.transcribe import MODEL_FILES, default_model_root, package_version
 
@@ -30,15 +30,6 @@ _SCOPE_RANK = {name: index for index, name in enumerate(SCOPE_ORDER)}
 _SCOPE_RANK["hardware"] = _SCOPE_RANK["global"]
 _BONSAI_IDS = frozenset({"bonsai-27b-gguf", "ternary-bonsai-27b-gguf"})
 _URL_SECRET_KEYS = SECRET_KEY_MARKERS | {"api_key", "access_token"}
-PREFLIGHT_CODES = (
-    "missing_artifact",
-    "incomplete_snapshot",
-    "unreachable_endpoint",
-    "served_name_mismatch",
-    "incompatible_runtime",
-    "download_disallowed",
-    "secret_env_missing",
-)
 SupportedCompute = Callable[[str], frozenset[str] | None]
 HttpGet = Callable[[str], tuple[int, str]]
 SnapshotOk = Callable[[Path], bool]
@@ -47,7 +38,7 @@ Getenv = Callable[[str], str | None]
 
 
 class PreflightError(RuntimeError):
-    """Fail-closed model-source check. ``code`` is a PREFLIGHT_CODES value."""
+    """Fail-closed model-source check. ``code`` is a free string."""
 
     def __init__(self, code: str, message: str, *, hint: str = "") -> None:
         super().__init__(message)
@@ -97,41 +88,19 @@ def pin_from_document(
 ) -> dict[str, Any] | None:
     if not doc:
         return None
-    models = doc.get("models") if isinstance(doc.get("models"), Mapping) else {}
+    models = _mapping(doc, "models")
     pin = normalize_pin(models.get(job_key) if models else None)
     if pin is not None:
         return pin
     if job_key == "transcribe":
-        transcription = doc.get("transcription")
-        alias = (
-            transcription.get("model") if isinstance(transcription, Mapping) else None
-        )
-        return normalize_pin(alias)
+        return normalize_pin(_mapping(doc, "transcription").get("model"))
     if job_key in {"understand", "plan"} and models:
         return normalize_pin(models.get("llm"))
     return None
 
 
 def invocation_from_env(env: Mapping[str, str] | None = None) -> dict[str, Any] | None:
-    env = env or os.environ
-    source: dict[str, Any] = {}
-    gguf = (env.get("AVO_UNDERSTAND_GGUF") or "").strip()
-    mmproj = (env.get("AVO_UNDERSTAND_MMPROJ") or "").strip()
-    url = (env.get("WATCHSKILL_CUSTOM_BASE_URL") or "").strip()
-    served = (env.get("WATCHSKILL_SERVED_NAME") or "").strip()
-    if gguf:
-        source["kind"] = "artifact"
-        source["artifactPath"] = gguf
-    if mmproj:
-        source.setdefault("companion", {})["mmproj"] = mmproj
-    if url or served:
-        endpoint: dict[str, str] = {}
-        if url:
-            endpoint["baseUrl"] = url
-        if served:
-            endpoint["servedName"] = served
-        source["endpoint"] = endpoint
-        source.setdefault("kind", "endpoint")
+    source = _invocation_source(env or os.environ)
     return {"source": source} if source else None
 
 
@@ -167,12 +136,7 @@ def resolve_job(
     provider: Mapping[str, Any] | None = None,
     registry: Mapping[str, Any] | None = None,
 ) -> ResolvedJob:
-    from avo.models import (
-        catalog_option,
-        format_active_model,
-        load_catalog,
-        load_config,
-    )
+    from avo.models import load_catalog, load_config
     from avo.paths import repo_root
 
     root = repo_root(root)
@@ -186,17 +150,9 @@ def resolve_job(
             job=job, id="", pin={}, sources={}, policy_hash="", job_key=job_key
         )
 
-    if state is None:
-        from avo import avo_state
-
-        state = avo_state.load_state()
-    provider_doc = provider if provider is not None else _load_provider(project, root)
-    registry_doc = (
-        registry if registry is not None else _load_registry(project, video_key, root)
+    state, provider_doc, registry_doc, video_slice, path_base = _scope_bundle(
+        project, root, video_key, state, provider, registry
     )
-    video_slice = _video_slice(state, video_key)
-    path_base = _path_base(project, root)
-
     scoped = resolve_scoped_settings(
         defaults={},
         scopes=[
@@ -215,37 +171,8 @@ def resolve_job(
             ("invocation", normalize_pin(invocation)),
         ],
     )
-    values = dict(scoped.values)
-    sources = dict(scoped.sources)
-    _drop_weaker_source_fields(values, sources)
-    _apply_hardware(job_key, values, sources, hardware_tier)
-    _infer_and_resolve_paths(job_key, values, sources, path_base)
-    option_id = str(values.get("id") or default_id)
-    opt = catalog_option(catalog, job_key, option_id)
-    label_text = (
-        format_active_model(catalog, job_key, option_id) if option_id else option_id
-    )
-    pin = {
-        "id": option_id,
-        **(
-            {"source": values["source"]}
-            if isinstance(values.get("source"), Mapping)
-            else {}
-        ),
-        **(
-            {"runtime": values["runtime"]}
-            if isinstance(values.get("runtime"), Mapping)
-            else {}
-        ),
-    }
-    return ResolvedJob(
-        job=job,
-        id=option_id,
-        pin=pin,
-        sources=dict(sorted(sources.items())),
-        policy_hash=scoped.policy_hash,
-        catalog_label=str((opt or {}).get("label") or label_text or option_id),
-        job_key=job_key,
+    return _finish_resolved_job(
+        job, job_key, default_id, catalog, scoped, hardware_tier, path_base
     )
 
 
@@ -295,23 +222,8 @@ def disclose_jobs(
 
 
 def disclosure_for(resolved: ResolvedJob) -> dict[str, Any]:
-    source = (
-        resolved.pin.get("source")
-        if isinstance(resolved.pin.get("source"), Mapping)
-        else {}
-    )
-    runtime = (
-        resolved.pin.get("runtime")
-        if isinstance(resolved.pin.get("runtime"), Mapping)
-        else {}
-    )
-    endpoint = (
-        source.get("endpoint") if isinstance(source.get("endpoint"), Mapping) else {}
-    )
-    companion = (
-        source.get("companion") if isinstance(source.get("companion"), Mapping) else {}
-    )
-    artifact = source.get("artifactPath")
+    source = _mapping(resolved.pin, "source")
+    runtime = _mapping(resolved.pin, "runtime")
     payload: dict[str, Any] = {
         "job": resolved.job,
         "id": resolved.id,
@@ -324,20 +236,7 @@ def disclosure_for(resolved: ResolvedJob) -> dict[str, Any]:
         "allowDownload": bool(runtime.get("allowDownload", False)),
         "reuse": _reuse_status(resolved),
     }
-    if artifact:
-        payload["artifactPath"] = artifact
-    if source.get("cacheDir"):
-        payload["cacheDir"] = source["cacheDir"]
-    if companion.get("mmproj"):
-        payload["companion"] = {"mmproj": companion["mmproj"]}
-    if endpoint.get("baseUrl"):
-        redacted = redact_endpoint(str(endpoint["baseUrl"]))
-        payload["endpoint"] = {
-            "origin": redacted,
-            "servedName": endpoint.get("servedName") or "",
-            "apiKeyEnv": endpoint.get("apiKeyEnv") or "",
-        }
-        payload["servedName"] = endpoint.get("servedName") or ""
+    _disclosure_source_fields(payload, source)
     if resolved.job_key == "transcribe" or resolved.job == "transcribe":
         payload["python"] = {
             "executable": sys.executable,
@@ -356,35 +255,14 @@ def preflight(
     getenv: Getenv | None = None,
 ) -> None:
     getenv = getenv or os.getenv
-    source = (
-        resolved.pin.get("source")
-        if isinstance(resolved.pin.get("source"), Mapping)
-        else {}
-    )
-    runtime = (
-        resolved.pin.get("runtime")
-        if isinstance(resolved.pin.get("runtime"), Mapping)
-        else {}
-    )
+    source = _mapping(resolved.pin, "source")
+    runtime = _mapping(resolved.pin, "runtime")
     _preflight_runtime(runtime, supported_compute_types, device_ok)
     _preflight_python_env(runtime)
     _preflight_secret(source, getenv)
-    kind = str(source.get("kind") or "")
-    endpoint = (
-        source.get("endpoint") if isinstance(source.get("endpoint"), Mapping) else {}
+    _preflight_by_kind(
+        resolved, source, runtime, http_get, snapshot_complete, getenv
     )
-    if kind == "hf-cache" or source.get("cacheDir"):
-        _preflight_hf_cache(source, runtime, snapshot_complete)
-    needs_artifact = bool(source.get("artifactPath")) or (
-        (kind == "artifact" or resolved.job == "transcribe")
-        and kind not in {"hf-cache", "endpoint"}
-    )
-    if needs_artifact:
-        _preflight_artifact(resolved, source, runtime)
-    if kind == "endpoint" or endpoint.get("baseUrl"):
-        _preflight_endpoint(source, http_get)
-    if resolved.id in _BONSAI_IDS:
-        _preflight_bonsai(source, getenv)
 
 
 def default_supported_compute_types(device: str) -> frozenset[str] | None:
@@ -422,6 +300,37 @@ def check_runtime(
         supported_compute_types,
         device_ok,
     )
+
+
+def _mapping(node: Any, key: str) -> dict[str, Any]:
+    value = node.get(key) if isinstance(node, Mapping) else None
+    return dict(value) if isinstance(value, Mapping) else {}
+
+
+def _env_text(env: Mapping[str, str], key: str) -> str:
+    return (env.get(key) or "").strip()
+
+
+def _invocation_source(env: Mapping[str, str]) -> dict[str, Any]:
+    source: dict[str, Any] = {}
+    gguf = _env_text(env, "AVO_UNDERSTAND_GGUF")
+    mmproj = _env_text(env, "AVO_UNDERSTAND_MMPROJ")
+    url = _env_text(env, "WATCHSKILL_CUSTOM_BASE_URL")
+    served = _env_text(env, "WATCHSKILL_SERVED_NAME")
+    if gguf:
+        source["kind"] = "artifact"
+        source["artifactPath"] = gguf
+    if mmproj:
+        source.setdefault("companion", {})["mmproj"] = mmproj
+    if url or served:
+        endpoint: dict[str, str] = {}
+        if url:
+            endpoint["baseUrl"] = url
+        if served:
+            endpoint["servedName"] = served
+        source["endpoint"] = endpoint
+        source.setdefault("kind", "endpoint")
+    return source
 
 
 def _copy_source(source: Mapping[str, Any]) -> dict[str, Any]:
@@ -479,6 +388,82 @@ def _load_registry(
         return {}
 
 
+def _scope_bundle(
+    project: dict[str, Any] | None,
+    root: Path,
+    video_key: str | None,
+    state: Mapping[str, Any] | None,
+    provider: Mapping[str, Any] | None,
+    registry: Mapping[str, Any] | None,
+) -> tuple[
+    Mapping[str, Any],
+    Mapping[str, Any],
+    Mapping[str, Any],
+    dict[str, Any],
+    Path,
+]:
+    if state is None:
+        from avo import avo_state
+
+        state = avo_state.load_state()
+    provider_doc = provider if provider is not None else _load_provider(project, root)
+    registry_doc = (
+        registry if registry is not None else _load_registry(project, video_key, root)
+    )
+    return (
+        state,
+        provider_doc,
+        registry_doc,
+        _video_slice(state, video_key),
+        _path_base(project, root),
+    )
+
+
+def _finish_resolved_job(
+    job: str,
+    job_key: str,
+    default_id: str,
+    catalog: Mapping[str, Any],
+    scoped: ResolvedSettings,
+    hardware_tier: dict[str, Any] | None,
+    path_base: Path,
+) -> ResolvedJob:
+    from avo.models import catalog_option, format_active_model
+
+    values = dict(scoped.values)
+    sources = dict(scoped.sources)
+    _drop_weaker_source_fields(values, sources)
+    _apply_hardware(job_key, values, sources, hardware_tier)
+    _infer_and_resolve_paths(job_key, values, sources, path_base)
+    option_id = str(values.get("id") or default_id)
+    opt = catalog_option(catalog, job_key, option_id)
+    label_text = (
+        format_active_model(catalog, job_key, option_id) if option_id else option_id
+    )
+    pin = {
+        "id": option_id,
+        **(
+            {"source": values["source"]}
+            if isinstance(values.get("source"), Mapping)
+            else {}
+        ),
+        **(
+            {"runtime": values["runtime"]}
+            if isinstance(values.get("runtime"), Mapping)
+            else {}
+        ),
+    }
+    return ResolvedJob(
+        job=job,
+        id=option_id,
+        pin=pin,
+        sources=dict(sorted(sources.items())),
+        policy_hash=scoped.policy_hash,
+        catalog_label=str((opt or {}).get("label") or label_text or option_id),
+        job_key=job_key,
+    )
+
+
 def _drop_weaker_source_fields(values: dict[str, Any], sources: dict[str, str]) -> None:
     id_rank = _SCOPE_RANK.get(sources.get("id", "catalog"), 0)
     for key in list(sources):
@@ -534,25 +519,39 @@ def _infer_and_resolve_paths(
     source = values.get("source")
     if not isinstance(source, dict):
         source = {}
-    if (
-        job_key == "transcribe"
-        and not source.get("artifactPath")
-        and not source.get("cacheDir")
-    ):
-        option_id = str(values.get("id") or "")
-        if option_id:
-            source = {
-                **source,
-                "kind": source.get("kind") or "artifact",
-                "artifactPath": str((default_model_root() / option_id).resolve()),
-            }
-            values["source"] = source
-            inferred = sources.get("id", "catalog")
-            sources.setdefault("source", inferred)
-            sources.setdefault("source.kind", inferred)
-            sources.setdefault("source.artifactPath", inferred)
+    _infer_transcribe_artifact(job_key, values, sources, source)
     if not isinstance(values.get("source"), dict):
         return
+    _resolve_pin_paths(values, base)
+
+
+def _infer_transcribe_artifact(
+    job_key: str,
+    values: dict[str, Any],
+    sources: dict[str, str],
+    source: dict[str, Any],
+) -> None:
+    if (
+        job_key != "transcribe"
+        or source.get("artifactPath")
+        or source.get("cacheDir")
+    ):
+        return
+    option_id = str(values.get("id") or "")
+    if not option_id:
+        return
+    values["source"] = {
+        **source,
+        "kind": source.get("kind") or "artifact",
+        "artifactPath": str((default_model_root() / option_id).resolve()),
+    }
+    inferred = sources.get("id", "catalog")
+    sources.setdefault("source", inferred)
+    sources.setdefault("source.kind", inferred)
+    sources.setdefault("source.artifactPath", inferred)
+
+
+def _resolve_pin_paths(values: dict[str, Any], base: Path) -> None:
     source = values["source"]
     for key in ("artifactPath", "cacheDir"):
         if source.get(key):
@@ -572,21 +571,36 @@ def _infer_and_resolve_paths(
 
 
 def _reuse_status(resolved: ResolvedJob) -> str:
-    source = (
-        resolved.pin.get("source")
-        if isinstance(resolved.pin.get("source"), Mapping)
-        else {}
-    )
-    runtime = (
-        resolved.pin.get("runtime")
-        if isinstance(resolved.pin.get("runtime"), Mapping)
-        else {}
-    )
+    source = _mapping(resolved.pin, "source")
+    runtime = _mapping(resolved.pin, "runtime")
     path = Path(str(source.get("artifactPath") or source.get("cacheDir") or ""))
     present = path.is_dir() or path.is_file()
     if runtime.get("allowDownload") and present:
         return "downloaded-approved"
     return "existing"
+
+
+def _disclosure_source_fields(
+    payload: dict[str, Any], source: Mapping[str, Any]
+) -> None:
+    companion = _mapping(source, "companion")
+    endpoint = _mapping(source, "endpoint")
+    artifact = source.get("artifactPath")
+    if artifact:
+        payload["artifactPath"] = artifact
+    if source.get("cacheDir"):
+        payload["cacheDir"] = source["cacheDir"]
+    if companion.get("mmproj"):
+        payload["companion"] = {"mmproj": companion["mmproj"]}
+    if not endpoint.get("baseUrl"):
+        return
+    served = endpoint.get("servedName") or ""
+    payload["endpoint"] = {
+        "origin": redact_endpoint(str(endpoint["baseUrl"])),
+        "servedName": served,
+        "apiKeyEnv": endpoint.get("apiKeyEnv") or "",
+    }
+    payload["servedName"] = served
 
 
 def _ct2_device(device: str) -> str:
@@ -634,9 +648,7 @@ def _preflight_python_env(runtime: Mapping[str, Any]) -> None:
 
 
 def _preflight_secret(source: Mapping[str, Any], getenv: Getenv) -> None:
-    endpoint = (
-        source.get("endpoint") if isinstance(source.get("endpoint"), Mapping) else {}
-    )
+    endpoint = _mapping(source, "endpoint")
     name = str(endpoint.get("apiKeyEnv") or "").strip()
     if not name:
         return
@@ -646,6 +658,32 @@ def _preflight_secret(source: Mapping[str, Any], getenv: Getenv) -> None:
             f"Set env {name} (value never printed)",
             hint=f"export {name} before running this job",
         )
+
+
+def _preflight_by_kind(
+    resolved: ResolvedJob,
+    source: Mapping[str, Any],
+    runtime: Mapping[str, Any],
+    http_get: HttpGet | None,
+    snapshot_complete: SnapshotOk | None,
+    getenv: Getenv,
+) -> None:
+    kind = str(source.get("kind") or "")
+    if kind == "hf-cache" or source.get("cacheDir"):
+        _preflight_hf_cache(source, runtime, snapshot_complete)
+    if _needs_artifact(kind, source, resolved.job):
+        _preflight_artifact(resolved, source, runtime)
+    if kind == "endpoint" or _mapping(source, "endpoint").get("baseUrl"):
+        _preflight_endpoint(source, http_get)
+    if resolved.id in _BONSAI_IDS:
+        _preflight_bonsai(source, getenv)
+
+
+def _needs_artifact(kind: str, source: Mapping[str, Any], job: str) -> bool:
+    return bool(source.get("artifactPath")) or (
+        (kind == "artifact" or job == "transcribe")
+        and kind not in {"hf-cache", "endpoint"}
+    )
 
 
 def _preflight_hf_cache(
@@ -679,25 +717,7 @@ def _preflight_artifact(
 ) -> None:
     artifact = Path(str(source.get("artifactPath") or ""))
     if resolved.job == "transcribe" or resolved.job_key == "transcribe":
-        explicit = resolved.sources.get("source.artifactPath") not in {
-            None,
-            "catalog",
-            "global",
-            "hardware",
-        }
-        if not artifact.exists():
-            _missing_or_download(
-                artifact, runtime, "transcribe model", explicit=explicit
-            )
-            return
-        missing = [name for name in MODEL_FILES if not (artifact / name).is_file()]
-        if missing:
-            _missing_or_download(
-                artifact,
-                runtime,
-                f"transcribe model (missing {', '.join(missing)})",
-                explicit=explicit,
-            )
+        _preflight_transcribe_dir(resolved, artifact, runtime)
         return
     if source.get("artifactPath") and not artifact.exists():
         raise PreflightError(
@@ -705,15 +725,38 @@ def _preflight_artifact(
             f"Named path missing: {artifact}",
             hint="fix the pin or prepare the file",
         )
-    companion = (
-        source.get("companion") if isinstance(source.get("companion"), Mapping) else {}
-    )
-    mmproj = companion.get("mmproj")
+    mmproj = _mapping(source, "companion").get("mmproj")
     if mmproj and not Path(str(mmproj)).is_file():
         raise PreflightError(
             "missing_artifact",
             f"Named path missing: {mmproj}",
             hint="set source.companion.mmproj to an existing vision projector",
+        )
+
+
+def _preflight_transcribe_dir(
+    resolved: ResolvedJob,
+    artifact: Path,
+    runtime: Mapping[str, Any],
+) -> None:
+    explicit = resolved.sources.get("source.artifactPath") not in {
+        None,
+        "catalog",
+        "global",
+        "hardware",
+    }
+    if not artifact.exists():
+        _missing_or_download(
+            artifact, runtime, "transcribe model", explicit=explicit
+        )
+        return
+    missing = [name for name in MODEL_FILES if not (artifact / name).is_file()]
+    if missing:
+        _missing_or_download(
+            artifact,
+            runtime,
+            f"transcribe model (missing {', '.join(missing)})",
+            explicit=explicit,
         )
 
 
@@ -746,29 +789,12 @@ def _missing_or_download(
 
 
 def _preflight_endpoint(source: Mapping[str, Any], http_get: HttpGet | None) -> None:
-    endpoint = (
-        source.get("endpoint") if isinstance(source.get("endpoint"), Mapping) else {}
-    )
+    endpoint = _mapping(source, "endpoint")
     base = str(endpoint.get("baseUrl") or "").rstrip("/")
     if not base:
         return
     served = str(endpoint.get("servedName") or "").strip()
-    url = f"{base}/models"
-    getter = http_get or _default_http_get
-    try:
-        status, body = getter(url)
-    except Exception:
-        raise PreflightError(
-            "unreachable_endpoint",
-            f"Cannot reach {redact_endpoint(base)}",
-            hint="start the OpenAI-compatible server and retry",
-        ) from None
-    if status >= 400:
-        raise PreflightError(
-            "unreachable_endpoint",
-            f"Cannot reach {redact_endpoint(base)}",
-            hint="start the OpenAI-compatible server and retry",
-        )
+    _, body = _fetch_models(f"{base}/models", http_get)
     if not served:
         return
     names = _listed_model_ids(body)
@@ -778,6 +804,26 @@ def _preflight_endpoint(source: Mapping[str, Any], http_get: HttpGet | None) -> 
             f"Server has no {served}",
             hint="set source.endpoint.servedName to a name the server lists",
         )
+
+
+def _fetch_models(url: str, http_get: HttpGet | None) -> tuple[int, str]:
+    getter = http_get or _default_http_get
+    origin = redact_endpoint(url.removesuffix("/models"))
+    try:
+        status, body = getter(url)
+    except Exception:
+        raise PreflightError(
+            "unreachable_endpoint",
+            f"Cannot reach {origin}",
+            hint="start the OpenAI-compatible server and retry",
+        ) from None
+    if status >= 400:
+        raise PreflightError(
+            "unreachable_endpoint",
+            f"Cannot reach {origin}",
+            hint="start the OpenAI-compatible server and retry",
+        )
+    return status, body
 
 
 def _listed_model_ids(body: str) -> list[str]:
@@ -802,38 +848,42 @@ def _default_http_get(url: str) -> tuple[int, str]:
 
 
 def _preflight_bonsai(source: Mapping[str, Any], getenv: Getenv) -> None:
-    artifact = str(
-        source.get("artifactPath") or getenv("AVO_UNDERSTAND_GGUF") or ""
-    ).strip()
-    companion = (
-        source.get("companion") if isinstance(source.get("companion"), Mapping) else {}
+    artifact, mmproj, url = _bonsai_paths(source, getenv)
+    _require_existing_file(
+        artifact,
+        "Named path missing: Bonsai GGUF (source.artifactPath or AVO_UNDERSTAND_GGUF)",
+        "download the language GGUF and pin the file",
     )
-    mmproj = str(
-        companion.get("mmproj") or getenv("AVO_UNDERSTAND_MMPROJ") or ""
-    ).strip()
-    endpoint = (
-        source.get("endpoint") if isinstance(source.get("endpoint"), Mapping) else {}
+    _require_existing_file(
+        mmproj,
+        "Named path missing: Bonsai mmproj (source.companion.mmproj or AVO_UNDERSTAND_MMPROJ)",
+        "pin the vision mmproj beside the language GGUF",
     )
-    url = str(
-        endpoint.get("baseUrl") or getenv("WATCHSKILL_CUSTOM_BASE_URL") or ""
-    ).strip()
     cheap = (getenv("WATCHSKILL_VISION_CHEAP_PROVIDER") or "").strip()
     strong = (getenv("WATCHSKILL_VISION_STRONG_PROVIDER") or "").strip()
-    if not artifact or not Path(artifact).is_file():
-        raise PreflightError(
-            "missing_artifact",
-            "Named path missing: Bonsai GGUF (source.artifactPath or AVO_UNDERSTAND_GGUF)",
-            hint="download the language GGUF and pin the file",
-        )
-    if not mmproj or not Path(mmproj).is_file():
-        raise PreflightError(
-            "missing_artifact",
-            "Named path missing: Bonsai mmproj (source.companion.mmproj or AVO_UNDERSTAND_MMPROJ)",
-            hint="pin the vision mmproj beside the language GGUF",
-        )
     if not url and cheap != "custom" and strong != "custom":
         raise PreflightError(
             "unreachable_endpoint",
             "Cannot reach Bonsai vision endpoint (no baseUrl or WATCHSKILL custom provider)",
             hint="start llama-server and set source.endpoint.baseUrl",
         )
+
+
+def _bonsai_paths(source: Mapping[str, Any], getenv: Getenv) -> tuple[str, str, str]:
+    companion = _mapping(source, "companion")
+    endpoint = _mapping(source, "endpoint")
+    artifact = str(
+        source.get("artifactPath") or getenv("AVO_UNDERSTAND_GGUF") or ""
+    ).strip()
+    mmproj = str(
+        companion.get("mmproj") or getenv("AVO_UNDERSTAND_MMPROJ") or ""
+    ).strip()
+    url = str(
+        endpoint.get("baseUrl") or getenv("WATCHSKILL_CUSTOM_BASE_URL") or ""
+    ).strip()
+    return artifact, mmproj, url
+
+
+def _require_existing_file(path: str, message: str, hint: str) -> None:
+    if not path or not Path(path).is_file():
+        raise PreflightError("missing_artifact", message, hint=hint)

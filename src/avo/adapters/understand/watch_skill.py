@@ -26,22 +26,36 @@ def _repository_root() -> Path:
     return Path(__file__).resolve().parents[4]
 
 
+def _dict_at(node: Any, key: str) -> dict[str, Any]:
+    value = node.get(key) if isinstance(node, dict) else None
+    return value if isinstance(value, dict) else {}
+
+
+def _env_or(pin_value: Any, env_key: str) -> str:
+    return str(pin_value or os.environ.get(env_key) or "").strip()
+
+
+def _bonsai_paths(pin: dict[str, Any] | None) -> tuple[str, str, str]:
+    source = _dict_at(pin, "source")
+    companion = _dict_at(source, "companion")
+    endpoint = _dict_at(source, "endpoint")
+    return (
+        _env_or(source.get("artifactPath"), "AVO_UNDERSTAND_GGUF"),
+        _env_or(companion.get("mmproj"), "AVO_UNDERSTAND_MMPROJ"),
+        _env_or(endpoint.get("baseUrl"), "WATCHSKILL_CUSTOM_BASE_URL"),
+    )
+
+
+def _missing_file(path: str) -> bool:
+    return not path or not Path(path).is_file()
+
+
 def _require_bonsai_runtime(option_id: str, pin: dict[str, Any] | None = None) -> None:
     """Fail closed when a Bonsai understand pin lacks GGUF, mmproj, or custom vision."""
     if option_id not in _BONSAI_OPTION_IDS:
         return
-    source = pin.get("source") if isinstance(pin, dict) else None
-    source = source if isinstance(source, dict) else {}
-    companion = (
-        source.get("companion") if isinstance(source.get("companion"), dict) else {}
-    )
-    endpoint = (
-        source.get("endpoint") if isinstance(source.get("endpoint"), dict) else {}
-    )
-    gguf = (
-        source.get("artifactPath") or os.environ.get("AVO_UNDERSTAND_GGUF") or ""
-    ).strip()
-    if not gguf or not Path(gguf).is_file():
+    gguf, mmproj, custom_url = _bonsai_paths(pin)
+    if _missing_file(gguf):
         raise ToolError(
             "WATCH_UNAVAILABLE",
             "Bonsai GGUF is not ready: set AVO_UNDERSTAND_GGUF to an existing file from "
@@ -49,19 +63,13 @@ def _require_bonsai_runtime(option_id: str, pin: dict[str, Any] | None = None) -
             True,
             "download the language GGUF, set AVO_UNDERSTAND_GGUF, then retry",
         )
-    mmproj = (
-        companion.get("mmproj") or os.environ.get("AVO_UNDERSTAND_MMPROJ") or ""
-    ).strip()
-    if not mmproj or not Path(mmproj).is_file():
+    if _missing_file(mmproj):
         raise ToolError(
             "WATCH_UNAVAILABLE",
             "Watch needs the Bonsai vision mmproj alongside the language GGUF.",
             True,
             "set AVO_UNDERSTAND_MMPROJ to the vision mmproj path and retry",
         )
-    custom_url = (
-        endpoint.get("baseUrl") or os.environ.get("WATCHSKILL_CUSTOM_BASE_URL") or ""
-    ).strip()
     cheap = (os.environ.get("WATCHSKILL_VISION_CHEAP_PROVIDER") or "").strip()
     strong = (os.environ.get("WATCHSKILL_VISION_STRONG_PROVIDER") or "").strip()
     if not custom_url and cheap != "custom" and strong != "custom":

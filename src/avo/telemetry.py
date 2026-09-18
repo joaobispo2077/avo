@@ -78,6 +78,50 @@ def disk_free(path: Path) -> int:
         return -1
 
 
+def _resolve_active_models(
+    project: dict[str, Any] | None, video_key: str | None
+) -> dict[str, str]:
+    try:
+        from avo.models import resolve_active_models
+
+        return resolve_active_models(project=project, video_key=video_key)
+    except Exception:
+        return {}
+
+
+def _resolve_model_sources(
+    project: dict[str, Any] | None, video_key: str | None
+) -> dict[str, Any]:
+    try:
+        from avo.models import resolve_model_sources
+
+        return resolve_model_sources(project=project, video_key=video_key) or {}
+    except Exception:
+        return {}
+
+
+def _attach_model_disclosure(
+    record: dict[str, Any],
+    *,
+    active_models: dict[str, str] | None,
+    project: dict[str, Any] | None,
+    video_key: str | None,
+    video_id: str | None,
+) -> dict[str, str]:
+    if active_models is None:
+        active_models = _resolve_active_models(project, video_key)
+    if active_models:
+        record["activeModels"] = active_models
+    sources = _resolve_model_sources(project, video_key)
+    if sources:
+        record["resolvedModelSources"] = sources
+    if video_key:
+        record["videoKey"] = video_key
+    if video_id:
+        record["videoId"] = video_id
+    return active_models or {}
+
+
 class Telemetry:
     """Phase-boundary reporter. One instance per project run."""
 
@@ -154,30 +198,13 @@ class Telemetry:
         percent = (idx / tot * 100.0) if (idx and tot) else None
         record["percent"] = round(percent, 1) if percent is not None else None
         record["etaSeconds"] = round(eta, 1) if eta is not None else None
-
-        if active_models is None:
-            try:
-                from avo.models import resolve_active_models
-
-                active_models = resolve_active_models(
-                    project=project, video_key=video_key
-                )
-            except Exception:
-                active_models = {}
-        if active_models:
-            record["activeModels"] = active_models
-        try:
-            from avo.models import resolve_model_sources
-
-            sources = resolve_model_sources(project=project, video_key=video_key)
-            if sources:
-                record["resolvedModelSources"] = sources
-        except Exception:
-            pass
-        if video_key:
-            record["videoKey"] = video_key
-        if video_id:
-            record["videoId"] = video_id
+        active_models = _attach_model_disclosure(
+            record,
+            active_models=active_models,
+            project=project,
+            video_key=video_key,
+            video_id=video_id,
+        )
 
         if session_id:
             self._append_session_phase(session_id, record)

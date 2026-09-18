@@ -35,7 +35,7 @@ class WorkflowCompatibilityTests(unittest.TestCase):
 
     def test_every_command_uses_shared_timeline_gateway(self) -> None:
         commands = sorted((ROOT / "commands" / "avo").glob("*.md"))
-        self.assertEqual(51, len(commands))
+        self.assertEqual(52, len(commands))
         for path in commands:
             text = path.read_text(encoding="utf-8")
             self.assertEqual(1, text.count("**Timeline integration:**"), path.name)

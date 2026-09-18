@@ -50,102 +50,101 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _print_json(payload: object) -> None:
+    print(json.dumps(payload, indent=2))
+
+
+def _cmd_show(root, as_json: bool) -> int:
+    active = resolve_active_models(root)
+    sources = resolve_model_sources(root)
+    if as_json:
+        _print_json({"activeModels": active, "resolvedModelSources": sources})
+    else:
+        for job, model in active.items():
+            print(f"{job}: {model}")
+    return 0
+
+
+def _cmd_alternatives(args, root) -> int:
+    alt = list_alternatives(args.job, root=root, label=args.label)
+    payload = {
+        "job": alt.job,
+        "current": alt.current,
+        "lighter": alt.lighter,
+        "heavier": alt.heavier,
+    }
+    if args.json:
+        _print_json(payload)
+        return 0
+    print(format_disclosure_line(alt))
+    if alt.lighter:
+        print("Lighter:")
+        for option in alt.lighter:
+            print(
+                f"  - {option.get('label')} ({option.get('speed')}, {option.get('quality')})"
+            )
+    if alt.heavier:
+        print("Heavier:")
+        for option in alt.heavier:
+            print(
+                f"  - {option.get('label')} ({option.get('speed')}, {option.get('quality')})"
+            )
+    return 0
+
+
+def _preflight_entry(job: str, root, label: str) -> dict:
+    from avo.model_sources import PreflightError, preflight, resolve_job
+
+    resolved = resolve_job(job, root=root, label=label)
+    entry: dict = {"job": job, "id": resolved.id, "ok": True}
+    try:
+        preflight(resolved)
+    except PreflightError as exc:
+        entry["ok"] = False
+        entry["code"] = exc.code
+        entry["error"] = str(exc)
+        if exc.hint:
+            entry["hint"] = exc.hint
+    return entry
+
+
+def _cmd_preflight(args, root) -> int:
+    from avo.model_sources import disclose_jobs
+
+    jobs = [args.job] if args.job else ["transcribe", "understand", "plan"]
+    reports = [_preflight_entry(job, root, args.label) for job in jobs]
+    failed = any(not entry["ok"] for entry in reports)
+    if args.json:
+        _print_json(
+            {
+                "preflight": reports,
+                "resolvedModelSources": disclose_jobs(root=root, label=args.label),
+            }
+        )
+        return 1 if failed else 0
+    for entry in reports:
+        if entry["ok"]:
+            print(f"{entry['job']}: ok ({entry['id']})")
+        else:
+            print(
+                f"{entry['job']}: {entry['code']} — {entry['error']}",
+                file=sys.stderr,
+            )
+    return 1 if failed else 0
+
+
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     root = repo_root(args.root)
-
     if args.cmd == "show":
-        active = resolve_active_models(root)
-        sources = resolve_model_sources(root)
-        if args.json:
-            print(
-                json.dumps(
-                    {"activeModels": active, "resolvedModelSources": sources},
-                    indent=2,
-                )
-            )
-        else:
-            for job, model in active.items():
-                print(f"{job}: {model}")
-        return 0
-
+        return _cmd_show(root, args.json)
     if args.cmd == "alternatives":
-        alt = list_alternatives(args.job, root=root, label=args.label)
-        payload = {
-            "job": alt.job,
-            "current": alt.current,
-            "lighter": alt.lighter,
-            "heavier": alt.heavier,
-        }
-        if args.json:
-            print(json.dumps(payload, indent=2))
-        else:
-            print(format_disclosure_line(alt))
-            if alt.lighter:
-                print("Lighter:")
-                for o in alt.lighter:
-                    print(
-                        f"  - {o.get('label')} ({o.get('speed')}, {o.get('quality')})"
-                    )
-            if alt.heavier:
-                print("Heavier:")
-                for o in alt.heavier:
-                    print(
-                        f"  - {o.get('label')} ({o.get('speed')}, {o.get('quality')})"
-                    )
-        return 0
-
+        return _cmd_alternatives(args, root)
     if args.cmd == "disclosure":
         print(disclosure_summary(root))
         return 0
-
     if args.cmd == "preflight":
-        from avo.model_sources import (
-            PreflightError,
-            disclose_jobs,
-            preflight,
-            resolve_job,
-        )
-
-        jobs = [args.job] if args.job else ["transcribe", "understand", "plan"]
-        reports = []
-        failed = False
-        for job in jobs:
-            resolved = resolve_job(job, root=root, label=args.label)
-            entry = {"job": job, "id": resolved.id, "ok": True}
-            try:
-                preflight(resolved)
-            except PreflightError as exc:
-                failed = True
-                entry["ok"] = False
-                entry["code"] = exc.code
-                entry["error"] = str(exc)
-                if exc.hint:
-                    entry["hint"] = exc.hint
-            reports.append(entry)
-        if args.json:
-            print(
-                json.dumps(
-                    {
-                        "preflight": reports,
-                        "resolvedModelSources": disclose_jobs(
-                            root=root, label=args.label
-                        ),
-                    },
-                    indent=2,
-                )
-            )
-        else:
-            for entry in reports:
-                if entry["ok"]:
-                    print(f"{entry['job']}: ok ({entry['id']})")
-                else:
-                    print(
-                        f"{entry['job']}: {entry['code']} — {entry['error']}",
-                        file=sys.stderr,
-                    )
-        return 1 if failed else 0
-
+        return _cmd_preflight(args, root)
     return 2
 
 
