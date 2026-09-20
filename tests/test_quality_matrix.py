@@ -340,6 +340,7 @@ class QualityMatrixTests(unittest.TestCase):
             pkg["overrides"].get("@semantic-release/npm", ""),
         )
         self.assertEqual(pkg["overrides"].get("nanoid"), "3.3.18")
+        self.assertEqual(pkg["overrides"].get("adm-zip"), "0.6.1")
         self.assertTrue(
             (ROOT / "scripts/ci/semantic-release-npm-stub/package.json").is_file(),
             msg="stub package required to avoid nested npm CLI audit failures",
