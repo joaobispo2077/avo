@@ -1,3 +1,21 @@
+# [1.11.0](https://github.com/joaobispo2077/avo/compare/v1.10.0...v1.11.0) (2026-09-20)
+
+
+### Bug Fixes
+
+* **deps:** pin adm-zip 0.6.1 for GHSA-7q85-xj36-vmfc ([a41fbf2](https://github.com/joaobispo2077/avo/commit/a41fbf29f01c1bba6f4cfa5df37ba91322dbdb27))
+* **engine:** skip mcp.cli during PyInstaller collect ([8b7bf3a](https://github.com/joaobispo2077/avo/commit/8b7bf3ad513508185b8ec53b962116359b0da57f))
+
+
+### Features
+
+* **engine:** add unified avo dispatcher ([c8d09a6](https://github.com/joaobispo2077/avo/commit/c8d09a6a0d6ca152f67747e65274875a0363428c))
+* **install:** fetch matching engine zip into ~/.avo ([93d331e](https://github.com/joaobispo2077/avo/commit/93d331ec0b8cea4aad0933d439a628fd3d4ff10e))
+* **engine:** install engine zip with SHA-256 check ([503cf8a](https://github.com/joaobispo2077/avo/commit/503cf8a1b44dca3361f1acd1b7ddd2433f258faf))
+* **engine:** resolve bundled config when frozen ([7d722e4](https://github.com/joaobispo2077/avo/commit/7d722e4214326e459b7b3721e2e51255dc7c6a13))
+* **engine:** resolve checkout vs binary vs override ([91b13dd](https://github.com/joaobispo2077/avo/commit/91b13dd71f635f0741d479151329f0c00db80ae3))
+* **engine:** skip Whisper download under AVO_CI_TRANSCRIBE_STUB ([5fa0a7e](https://github.com/joaobispo2077/avo/commit/5fa0a7efc9f0c61b60dc9992f776af534cbbbe55))
+
 # [1.10.0](https://github.com/joaobispo2077/avo/compare/v1.9.0...v1.10.0) (2026-09-18)
 
 
