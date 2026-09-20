@@ -1,0 +1,144 @@
+# Dedicated zip-smoke for the frozen engine. Do not add this freeze to default pytest CI.
+name: Engine binary
+
+on:
+  push:
+    paths:
+      - packaging/**
+      - src/avo/engine_cli.py
+      - src/avo/__main__.py
+      - src/avo/paths.py
+      - src/avo/transcribe.py
+      - scripts/ci/build-engine.sh
+      - scripts/ci/build-engine.ps1
+      - scripts/ci/engine-binary-smoke.sh
+      - tests/fixtures/engine/**
+      - .github/workflows/engine-binary.yml
+  pull_request:
+    paths:
+      - packaging/**
+      - src/avo/engine_cli.py
+      - src/avo/__main__.py
+      - src/avo/paths.py
+      - src/avo/transcribe.py
+      - scripts/ci/build-engine.sh
+      - scripts/ci/build-engine.ps1
+      - scripts/ci/engine-binary-smoke.sh
+      - tests/fixtures/engine/**
+      - .github/workflows/engine-binary.yml
+  release:
+    types: [published]
+  workflow_dispatch:
+
+concurrency:
+  group: engine-binary-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name != 'release' }}
+
+permissions:
+  contents: read
+
+env:
+  PYTHON_VERSION: '3.12'
+  NODE_VERSION: '24'
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
+
+jobs:
+  zip-smoke:
+    name: Zip smoke (${{ matrix.platform }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            platform: windows-x64
+          - os: macos-14
+            platform: macos-arm64
+          - os: ubuntu-latest
+            platform: linux-x64
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Build engine zip (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ./scripts/ci/build-engine.ps1
+
+      - name: Build engine zip (Unix)
+        if: runner.os != 'Windows'
+        run: bash scripts/ci/build-engine.sh
+
+      - name: Upload engine zip
+        uses: actions/upload-artifact@v7
+        with:
+          name: engine-zip-${{ matrix.platform }}
+          path: dist/engine/avo-*-${{ matrix.platform }}.zip
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Smoke unpacked zip
+        shell: bash
+        env:
+          AVO_ENGINE_PLATFORM: ${{ matrix.platform }}
+          AVO_CI_TRANSCRIBE_STUB: '1'
+        run: bash scripts/ci/engine-binary-smoke.sh
+
+  publish-release:
+    name: Upload engine zips to GitHub Release
+    if: github.event_name == 'release'
+    needs: zip-smoke
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    env:
+      GITHUB_TOKEN: ${{ secrets.GH_TOKEN || github.token }}
+      GH_TOKEN: ${{ secrets.GH_TOKEN || github.token }}
+    steps:
+      - name: Download engine zips
+        uses: actions/download-artifact@v7
+        with:
+          path: artifacts
+          pattern: engine-zip-*
+          merge-multiple: true
+
+      - name: SHA256SUMS and gh release upload
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          set -euo pipefail
+          VERSION="${TAG#v}"
+          mkdir -p release-assets
+          missing=0
+          for slug in windows-x64 macos-arm64 linux-x64; do
+            name="avo-${VERSION}-${slug}.zip"
+            found="$(find artifacts -name "$name" -print | head -n 1)"
+            if [ -z "$found" ]; then
+              echo "error: missing $name" >&2
+              missing=1
+              continue
+            fi
+            cp "$found" "release-assets/$name"
+          done
+          if [ "$missing" -ne 0 ]; then
+            find artifacts -type f || true
+            exit 1
+          fi
+          (cd release-assets && sha256sum avo-*.zip > SHA256SUMS)
+          cat release-assets/SHA256SUMS
+          gh release upload "$TAG" \
+            release-assets/avo-"${VERSION}"-windows-x64.zip \
+            release-assets/avo-"${VERSION}"-macos-arm64.zip \
+            release-assets/avo-"${VERSION}"-linux-x64.zip \
+            release-assets/SHA256SUMS \
+            --clobber \
+            --repo "${{ github.repository }}"

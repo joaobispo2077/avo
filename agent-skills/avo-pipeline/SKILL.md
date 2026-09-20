@@ -5,7 +5,19 @@ description: Gateway for AVO slash commands (/avo.help, /avo.guidelines, /avo.pi
 
 # AVO pipeline commands (gateway)
 
-Entry skill for **`/avo.*`** slash commands. Canonical rules: [`AGENTS.md`](../../AGENTS.md), [`SKILL.md`](../../SKILL.md), [`docs/avo-workflow.md`](../../docs/avo-workflow.md).
+Entry skill for **`/avo.*`** slash commands. Hard rules: this skill’s Non-negotiable section and skill `avo`. Workflow: [docs/avo-workflow.md](https://github.com/joaobispo2077/avo/blob/main/docs/avo-workflow.md). No repo-relative root `SKILL.md`.
+
+## Runtime
+
+Resolve once. Do not ask. Consumers: **skills + binary**. MCP and clone only when the user asks.
+
+Never `pip install avo` — PyPI `avo` is Soteria.
+
+Engine zip is **AVO Python only** — not ffmpeg, HyperFrames, watch-skill, CUDA, or model weights. Unused when this AVO repo is the opened folder.
+
+1. **Override** — user said MCP / self-build / clone-python. Honor it. Do not silently use the zip.
+2. **Opened folder is an AVO checkout** — `pyproject.toml` name `avo` **and** `src/avo/` **and** `AGENTS.md` contains `<!-- avo:orchestrator:start -->` → `python -m avo.*`. Do **not** use `~/.avo/bin/avo`.
+3. **Else** → `~/.avo/bin/avo`. Missing? Run the installer. Do not clone unless asked.
 
 ## Command router
 

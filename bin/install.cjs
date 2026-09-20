@@ -14,6 +14,8 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const cp = require('child_process');
+const crypto = require('crypto');
+const zlib = require('zlib');
 
 const REPO = process.env.AVO_INSTALL_REPO || 'joaobispo2077/avo';
 const PINNED_REF = process.env.AVO_INSTALL_REF || 'main';
@@ -350,8 +352,163 @@ function runFullSetup(opts) {
   }
 }
 
+function detectEngineArch() {
+  const plat = process.platform;
+  const arch = process.arch;
+  if (plat === 'win32' && arch === 'x64') {
+    return { id: 'win-x64', slug: 'windows-x64' };
+  }
+  if (plat === 'darwin' && arch === 'arm64') {
+    return { id: 'macos-arm64', slug: 'macos-arm64' };
+  }
+  if (plat === 'linux' && arch === 'x64') {
+    return { id: 'linux-x64', slug: 'linux-x64' };
+  }
+  return null;
+}
+
+function enginePrefix() {
+  return path.join(os.homedir(), '.avo');
+}
+
+function releaseAssetBase() {
+  const raw = process.env.AVO_ENGINE_VERSION || PINNED_REF;
+  const ver = String(raw).replace(/^v/, '');
+  if (/^\d+\.\d+\.\d+/.test(ver)) {
+    return `https://github.com/${REPO}/releases/download/v${ver}`;
+  }
+  return `https://github.com/${REPO}/releases/latest/download`;
+}
+
+function parseSums(text, slug) {
+  const suffix = `-${slug}.zip`;
+  for (const line of text.split(/\r?\n/)) {
+    const parts = line.trim().split(/\s+/);
+    if (parts.length < 2) continue;
+    const name = parts[parts.length - 1].replace(/^\*/, '');
+    if (name.endsWith(suffix)) {
+      return { hash: parts[0].toLowerCase(), zipName: name };
+    }
+  }
+  return null;
+}
+
+async function httpGetBuffer(url) {
+  const res = await fetch(url, {
+    redirect: 'follow',
+    headers: { 'User-Agent': 'avo-install' },
+  });
+  if (!res.ok) {
+    const err = new Error(`HTTP ${res.status}`);
+    err.status = res.status;
+    throw err;
+  }
+  return Buffer.from(await res.arrayBuffer());
+}
+
+function extractZipBuffer(buf, destRoot) {
+  let offset = 0;
+  const root = path.resolve(destRoot);
+  while (offset + 30 <= buf.length) {
+    if (buf.readUInt32LE(offset) !== 0x04034b50) break;
+    const flags = buf.readUInt16LE(offset + 6);
+    const method = buf.readUInt16LE(offset + 8);
+    const compressedSize = buf.readUInt32LE(offset + 18);
+    const nameLen = buf.readUInt16LE(offset + 26);
+    const extraLen = buf.readUInt16LE(offset + 28);
+    const name = buf
+      .subarray(offset + 30, offset + 30 + nameLen)
+      .toString('utf8');
+    const dataStart = offset + 30 + nameLen + extraLen;
+    if (flags & 8) {
+      throw new Error('zip data descriptor unsupported');
+    }
+    const data = buf.subarray(dataStart, dataStart + compressedSize);
+    offset = dataStart + compressedSize;
+    if (name.endsWith('/')) continue;
+    const target = path.resolve(destRoot, name);
+    if (target !== root && !target.startsWith(root + path.sep)) continue;
+    fs.mkdirSync(path.dirname(target), { recursive: true });
+    if (method === 0) fs.writeFileSync(target, data);
+    else if (method === 8) fs.writeFileSync(target, zlib.inflateRawSync(data));
+    else throw new Error(`unsupported zip method ${method}`);
+  }
+}
+
+function mergeDir(src, dst) {
+  for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
+    const from = path.join(src, entry.name);
+    const to = path.join(dst, entry.name);
+    if (entry.isDirectory()) {
+      fs.mkdirSync(to, { recursive: true });
+      mergeDir(from, to);
+    } else {
+      fs.mkdirSync(path.dirname(to), { recursive: true });
+      fs.copyFileSync(from, to);
+    }
+  }
+}
+
+async function installEngine(opts) {
+  if (opts.uninstall || process.env.AVO_SKIP_ENGINE === '1') return;
+  const detected = detectEngineArch();
+  const prefix = enginePrefix();
+  if (!detected) {
+    log(
+      'Engine zip skipped: this OS/arch is not a v1 target (Windows x64, macOS arm64, Linux x64). Skills still install.',
+      { dry: opts.dryRun },
+    );
+    return;
+  }
+  const launcherHint = path.join(
+    prefix,
+    'bin',
+    process.platform === 'win32' ? 'avo.exe' : 'avo',
+  );
+  log(`engine zip ${detected.slug} → ${launcherHint}`, { dry: opts.dryRun });
+  if (opts.dryRun) return;
+  const base = releaseAssetBase();
+  let sumsBuf;
+  try {
+    sumsBuf = await httpGetBuffer(`${base}/SHA256SUMS`);
+  } catch {
+    log(
+      'Engine zip skipped: no SHA256SUMS on this release (skills installed).',
+    );
+    return;
+  }
+  const parsed = parseSums(sumsBuf.toString('utf8'), detected.slug);
+  if (!parsed) {
+    log(`Engine zip skipped: no asset for ${detected.slug}.`);
+    return;
+  }
+  const zipBuf = await httpGetBuffer(`${base}/${parsed.zipName}`);
+  if (
+    crypto.createHash('sha256').update(zipBuf).digest('hex') !== parsed.hash
+  ) {
+    die(`Engine SHA256 mismatch for ${parsed.zipName}; previous install kept.`);
+  }
+  const staging = path.join(prefix, '.staging');
+  fs.rmSync(staging, { recursive: true, force: true });
+  fs.mkdirSync(staging, { recursive: true });
+  try {
+    extractZipBuffer(zipBuf, staging);
+    mergeDir(staging, prefix);
+  } finally {
+    fs.rmSync(staging, { recursive: true, force: true });
+  }
+  const launcher = fs.existsSync(path.join(prefix, 'bin', 'avo.exe'))
+    ? path.join(prefix, 'bin', 'avo.exe')
+    : path.join(prefix, 'bin', 'avo');
+  if (process.platform !== 'win32' && fs.existsSync(launcher)) {
+    // eslint-disable-next-line sonarjs/file-permissions -- Unix engine launcher must be executable
+    fs.chmodSync(launcher, 0o755);
+  }
+  log(`engine: ${launcher}`);
+}
+
 function printHelp() {
-  console.log(`AVO installer — agent brain + optional full toolchain
+  console.log(`AVO installer — agent skills + engine zip + optional full toolchain
 
 Usage:
   node bin/install.cjs [flags]
@@ -368,12 +525,13 @@ Flags:
   --uninstall     Remove AVO skills (best-effort)
   -h, --help      Show help
 
-Per-agent only:
+Per-agent skills only (does not download the engine zip):
   npx skills add ${REPO} -a cursor
 
 Env:
-  AVO_INSTALL_REPO   GitHub slug (default: ${REPO})
-  AVO_INSTALL_REF    Git ref (default: ${PINNED_REF})
+  AVO_INSTALL_REPO    GitHub slug (default: ${REPO})
+  AVO_INSTALL_REF     Git ref (default: ${PINNED_REF})
+  AVO_ENGINE_VERSION  Release version for the engine zip (default: latest)
 `);
 }
 
@@ -413,14 +571,14 @@ function finishInstall(opts, failed) {
     runFullSetup(opts);
   } else {
     log(
-      '\nAgent brain installed. For ffmpeg + whisper + watch-skill, re-run with --full or see docs/install/README.md.',
+      '\nLauncher: ~/.avo/bin/avo. ffmpeg/HyperFrames/watch-skill stay outside the zip. See docs/install/README.md.',
     );
   }
   if (failed) die(`\n${failed} agent(s) failed. See docs/install/README.md.`);
   log('\nDone.');
 }
 
-function main() {
+async function main() {
   const opts = parseArgs(process.argv.slice(2));
   if (opts.help) {
     printHelp();
@@ -445,7 +603,8 @@ function main() {
   for (const p of targets) {
     if (!installProvider(p, root, opts)) failed++;
   }
+  await installEngine(opts);
   finishInstall(opts, failed);
 }
 
-main();
+main().catch((err) => die(err.message || String(err)));
