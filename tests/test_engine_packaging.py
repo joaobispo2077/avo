@@ -60,6 +60,8 @@ def test_engine_binary_workflow_attaches_on_dispatch_not_only_release_event() ->
     assert "inputs.attach_tag" in wf
     assert "github.event.inputs.attach_tag" in wf
     assert "gh release upload" in wf
+    assert "gh release edit" in wf
+    assert "--draft=false" in wf
 
 
 def test_build_scripts_zip_names_and_smoke() -> None:

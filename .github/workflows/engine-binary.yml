@@ -152,3 +152,4 @@ jobs:
             release-assets/SHA256SUMS \
             --clobber \
             --repo "${{ github.repository }}"
+          gh release edit "$TAG" --draft=false --repo "${{ github.repository }}"

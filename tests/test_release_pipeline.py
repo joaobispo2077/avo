@@ -16,6 +16,7 @@ class ReleasePipelineTests(unittest.TestCase):
     def test_release_config_declares_release_branch_only(self) -> None:
         text = (ROOT / "release.config.mjs").read_text(encoding="utf-8")
         self.assertIn("'release'", text)
+        self.assertIn("draft: true", text)
         self.assertNotIn("prerelease:", text)
         self.assertNotIn("develop", text)
         self.assertIn("firstParent: false", text)
