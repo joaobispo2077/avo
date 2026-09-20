@@ -1,3 +1,10 @@
+## [1.11.2](https://github.com/joaobispo2077/avo/compare/v1.11.1...v1.11.2) (2026-09-20)
+
+
+### Bug Fixes
+
+* **ci:** attach zips to a draft GitHub release before it is immutable ([7225df6](https://github.com/joaobispo2077/avo/commit/7225df62165831f6e6a073a28f79ce4920f5ae53))
+
 ## [1.11.1](https://github.com/joaobispo2077/avo/compare/v1.11.0...v1.11.1) (2026-09-20)
 
 
