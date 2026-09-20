@@ -1,3 +1,10 @@
+## [1.11.3](https://github.com/joaobispo2077/avo/compare/v1.11.2...v1.11.3) (2026-09-20)
+
+
+### Bug Fixes
+
+* **ci:** use draftRelease so GitHub zips can attach ([c00084b](https://github.com/joaobispo2077/avo/commit/c00084b67afc1de48c16ef159b2565fd7ac5de7c))
+
 ## [1.11.2](https://github.com/joaobispo2077/avo/compare/v1.11.1...v1.11.2) (2026-09-20)
 
 
