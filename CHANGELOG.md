@@ -1,3 +1,10 @@
+## [1.11.1](https://github.com/joaobispo2077/avo/compare/v1.11.0...v1.11.1) (2026-09-20)
+
+
+### Bug Fixes
+
+* **ci:** attach engine zips after semantic-release dispatch ([09a6870](https://github.com/joaobispo2077/avo/commit/09a6870548213b6e1b708b62ebbcba56538b8745))
+
 # [1.11.0](https://github.com/joaobispo2077/avo/compare/v1.10.0...v1.11.0) (2026-09-20)
 
 
