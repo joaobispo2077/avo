@@ -49,6 +49,19 @@ def test_spec_does_not_collect_mcp_cli() -> None:
     assert "typer" in SPEC
 
 
+def test_engine_binary_workflow_attaches_on_dispatch_not_only_release_event() -> None:
+    """GITHUB_TOKEN-created releases do not fire on: release; attach via dispatch."""
+    wf = (ROOT / ".github" / "workflows" / "engine-binary.yml").read_text(
+        encoding="utf-8"
+    )
+    assert "workflow_dispatch:" in wf
+    assert "attach_tag:" in wf
+    assert "github.event_name == 'release'" in wf
+    assert "inputs.attach_tag" in wf
+    assert "github.event.inputs.attach_tag" in wf
+    assert "gh release upload" in wf
+
+
 def test_build_scripts_zip_names_and_smoke() -> None:
     for text in (SH, PS1):
         assert (

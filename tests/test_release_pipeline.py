@@ -107,6 +107,13 @@ class ReleasePipelineTests(unittest.TestCase):
         verify_block = release.split("Verify release manifests align", 1)[1]
         self.assertNotIn("needs.determine-version.outputs.next-version", verify_block)
 
+    def test_release_workflow_dispatches_engine_zip_attach(self) -> None:
+        release = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
+        self.assertIn("gh workflow run engine-binary.yml", release)
+        self.assertIn("attach_tag=v", release)
+        self.assertIn("actions: write", release)
+        self.assertIn("github.token", release)
+
     def test_sync_pyproject_version_script(self) -> None:
         script = ROOT / "scripts/ci/sync-pyproject-version.mjs"
         self.assertTrue(script.is_file())
