@@ -28,7 +28,7 @@ export default {
     '@semantic-release/changelog',
     './scripts/ci/semantic-release-package-version.mjs',
     './scripts/ci/semantic-release-pyproject-version.mjs',
-    ['@semantic-release/github', { draft: true }],
+    ['@semantic-release/github', { draftRelease: true }],
     [
       '@semantic-release/git',
       {
