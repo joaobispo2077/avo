@@ -601,6 +601,20 @@ class ShortsPlanTests(unittest.TestCase):
         self.assertEqual(fill_hits[0]["startSec"], 17.314)
         self.assertAlmostEqual(fill_hits[3]["startSec"], 17.314 + 0.36)
         self.assertEqual(fill_hits[0]["id"], "s05-stars-backlog-sfx-chip-1")
+        graphic["params"]["filled"] = 3.5
+        half_hits = [
+            row
+            for row in shorts_plan._sfx_from_motion(
+                short_id="05",
+                callouts=[],
+                punch_ins=[],
+                layout={"mode": "full-frame"},
+                sfx=library,
+                graphics=[graphic],
+            )
+            if row["kind"] == "chip"
+        ]
+        self.assertEqual(len(half_hits), 4)
         request = load_motion_request()
         request["defaults"]["sfx"] = library
         request["candidates"][0]["motionOverride"] = {
@@ -649,6 +663,16 @@ class ShortsPlanTests(unittest.TestCase):
                 load_transcript(),
                 request_path=FIXTURE_DIR / "shorts.request.json",
             )
+
+        graphic["params"]["filled"] = 3.5
+        graphic["endSec"] = 2.0
+        request["candidates"][0]["motionOverride"] = {"graphics": [graphic]}
+        plan = shorts_plan.resolve_batch(
+            request,
+            load_transcript(),
+            request_path=FIXTURE_DIR / "shorts.request.json",
+        )
+        self.assertEqual(plan["items"][0]["graphics"][0]["params"]["filled"], 3.5)
 
         graphic["params"]["filled"] = 4
         graphic["sfx"] = {"kind": "chip", "atSec": 2.0}
