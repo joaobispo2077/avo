@@ -7,6 +7,8 @@
   const punchIns = __PUNCHIN_JSON__;
   const graphics = __GRAPHIC_JSON__;
   const duration = Number(root.dataset.duration);
+  const uiScale =
+    Number.parseFloat(getComputedStyle(root).getPropertyValue("--ui-scale")) || 1;
   const timeline = window.__timelines[root.dataset.compositionId];
   const reducedMotion =
     typeof matchMedia === "function" &&
@@ -16,7 +18,7 @@
   }
 
   document.querySelectorAll(".caption-phrase").forEach((node) => {
-    gsap.set(node, { autoAlpha: 0, y: 10 });
+    gsap.set(node, { autoAlpha: 0, y: 10 * uiScale });
   });
   document.querySelectorAll(".caption-word").forEach((node) => {
     gsap.set(node, { backgroundColor: "transparent", color: "inherit" });
@@ -57,7 +59,7 @@
       timeline.set(node, { backgroundColor: "transparent", color: "inherit" }, word.highlightExitSec);
     }
     timeline.set(wordNodes, { backgroundColor: "transparent", color: "inherit" }, phrase.endSec);
-    timeline.set(phraseNode, { autoAlpha: 0, y: -8 }, phrase.endSec);
+    timeline.set(phraseNode, { autoAlpha: 0, y: -8 * uiScale }, phrase.endSec);
   }
 
   for (const callout of callouts) {
@@ -91,20 +93,31 @@
     const params = graphic.params || {};
     const total = Math.max(1, Number(params.total) || 5);
     const filled = Math.max(0, Number(params.filled) || 0);
+    const whole = Math.floor(filled + 1e-9);
+    const frac = Math.min(1, Math.max(0, filled - whole));
     const stagger = Number(params.fillStaggerSec) || 0.12;
     showGraphic(node, graphic.startSec, graphic.endSec);
     for (let index = 1; index <= total; index += 1) {
       const fill = node.querySelector(`#${graphic.id}-star-${index} .star-fill`);
       if (!fill) continue;
-      gsap.set(fill, { scaleY: 0, transformOrigin: "50% 100%" });
-      if (index <= filled) {
-        const fillAt = graphic.startSec + (index - 1) * (reducedMotion ? 0 : stagger);
-        timeline.to(
-          fill,
-          { scaleY: 1, duration: reducedMotion ? 0 : stagger, ease: "none" },
-          fillAt
-        );
-      }
+      gsap.set(fill, {
+        scaleY: 0,
+        transformOrigin: "50% 100%",
+        clipPath: "inset(0 0% 0 0)",
+      });
+      const amount = index <= whole ? 1 : index === whole + 1 ? frac : 0;
+      if (amount <= 0) continue;
+      const fillAt = graphic.startSec + (index - 1) * (reducedMotion ? 0 : stagger);
+      timeline.to(
+        fill,
+        {
+          scaleY: 1,
+          clipPath: `inset(0 ${(1 - amount) * 100}% 0 0)`,
+          duration: reducedMotion ? 0 : stagger,
+          ease: "none",
+        },
+        fillAt
+      );
     }
   };
 
