@@ -16,6 +16,7 @@ class ReleasePipelineTests(unittest.TestCase):
     def test_release_config_declares_release_branch_only(self) -> None:
         text = (ROOT / "release.config.mjs").read_text(encoding="utf-8")
         self.assertIn("'release'", text)
+        self.assertIn("draftRelease: true", text)
         self.assertNotIn("prerelease:", text)
         self.assertNotIn("develop", text)
         self.assertIn("firstParent: false", text)
@@ -106,6 +107,13 @@ class ReleasePipelineTests(unittest.TestCase):
         self.assertIn("require('./package.json').version", release)
         verify_block = release.split("Verify release manifests align", 1)[1]
         self.assertNotIn("needs.determine-version.outputs.next-version", verify_block)
+
+    def test_release_workflow_dispatches_engine_zip_attach(self) -> None:
+        release = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
+        self.assertIn("gh workflow run engine-binary.yml", release)
+        self.assertIn("attach_tag=v", release)
+        self.assertIn("actions: write", release)
+        self.assertIn("github.token", release)
 
     def test_sync_pyproject_version_script(self) -> None:
         script = ROOT / "scripts/ci/sync-pyproject-version.mjs"

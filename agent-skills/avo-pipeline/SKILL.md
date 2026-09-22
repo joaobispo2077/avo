@@ -1,6 +1,6 @@
 ---
 name: avo-pipeline
-description: Gateway for AVO slash commands (/avo.help, /avo.guidelines, /avo.pipeline, /avo.trim, /avo.transcribe, /avo.sound, /avo.sync, /avo.audit, /avo.watch, /avo.motion, /avo.captions, /avo.talking-head, /avo.rights, /avo.audio-qc, /avo.color, /avo.grade, /avo.format, /avo.framework, /avo.chapters, /avo.thumbnail, /avo.end-screen, /avo.deliver, /avo.shorts, /avo.reframe, /avo.podcast-clip, /avo.trailer, /avo.pr-video, /avo.changelog-video, /avo.explainer, /avo.slideshow, /avo.launch, /avo.music-video, /avo.figma, /avo.media, /avo.motion-graphics, /avo.general, /avo.remotion-port, /avo.screencast, /avo.retention, /avo.animation-qc, /avo.telemetry, /avo.learndown, /avo.cleanup, /avo.update, /avo.stats, /avo.models, /avo.docs). Load when the user invokes any /avo.* command or declares Footage/rawDir asset paths.
+description: Gateway for AVO slash commands (/avo.help, /avo.guidelines, /avo.pipeline, /avo.trim, /avo.transcribe, /avo.sound, /avo.sync, /avo.audit, /avo.watch, /avo.motion, /avo.captions, /avo.talking-head, /avo.rights, /avo.audio-qc, /avo.color, /avo.grade, /avo.format, /avo.framework, /avo.chapters, /avo.thumbnail, /avo.end-screen, /avo.deliver, /avo.shorts, /avo.reframe, /avo.podcast-clip, /avo.trailer, /avo.pr-video, /avo.changelog-video, /avo.explainer, /avo.slideshow, /avo.launch, /avo.music-video, /avo.beat-edit, /avo.figma, /avo.media, /avo.motion-graphics, /avo.general, /avo.remotion-port, /avo.screencast, /avo.retention, /avo.animation-qc, /avo.telemetry, /avo.learndown, /avo.cleanup, /avo.update, /avo.stats, /avo.models, /avo.docs). Load when the user invokes any /avo.* command or declares Footage/rawDir asset paths.
 ---
 
 # AVO pipeline commands (gateway)
@@ -58,6 +58,7 @@ Engine zip is **AVO Python only** — not ffmpeg, HyperFrames, watch-skill, CUDA
 | `/avo.slideshow` | [`references/slideshow.md`](references/slideshow.md) |
 | `/avo.launch` | [`references/launch.md`](references/launch.md) |
 | `/avo.music-video` | [`references/music-video.md`](references/music-video.md) |
+| `/avo.beat-edit` | [`references/beat-edit.md`](references/beat-edit.md) |
 | `/avo.figma` | [`references/figma.md`](references/figma.md) |
 | `/avo.media` | [`references/media.md`](references/media.md) |
 | `/avo.motion-graphics` | [`references/motion-graphics.md`](references/motion-graphics.md) |

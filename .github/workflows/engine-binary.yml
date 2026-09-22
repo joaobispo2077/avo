@@ -29,10 +29,15 @@ on:
   release:
     types: [published]
   workflow_dispatch:
+    inputs:
+      attach_tag:
+        description: GitHub release tag to attach engine zips to (e.g. v1.11.0). Empty runs smoke only.
+        required: false
+        default: ''
 
 concurrency:
   group: engine-binary-${{ github.event_name }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name != 'release' }}
+  cancel-in-progress: ${{ github.event_name != 'release' && github.event_name != 'workflow_dispatch' }}
 
 permissions:
   contents: read
@@ -60,6 +65,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.inputs.attach_tag || github.sha }}
+          fetch-tags: true
 
       - name: Setup Python
         uses: actions/setup-python@v6
@@ -94,7 +102,9 @@ jobs:
 
   publish-release:
     name: Upload engine zips to GitHub Release
-    if: github.event_name == 'release'
+    if: >
+      github.event_name == 'release' ||
+      (github.event_name == 'workflow_dispatch' && inputs.attach_tag != '')
     needs: zip-smoke
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -113,7 +123,7 @@ jobs:
 
       - name: SHA256SUMS and gh release upload
         env:
-          TAG: ${{ github.event.release.tag_name }}
+          TAG: ${{ github.event.release.tag_name || inputs.attach_tag }}
         run: |
           set -euo pipefail
           VERSION="${TAG#v}"
@@ -142,3 +152,4 @@ jobs:
             release-assets/SHA256SUMS \
             --clobber \
             --repo "${{ github.repository }}"
+          gh release edit "$TAG" --draft=false --repo "${{ github.repository }}"

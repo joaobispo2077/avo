@@ -29,6 +29,7 @@
 | `/avo.slideshow` | `commands/avo/slideshow.md` | `references/slideshow.md` |
 | `/avo.launch` | `commands/avo/launch.md` | `references/launch.md` |
 | `/avo.music-video` | `commands/avo/music-video.md` | `references/music-video.md` |
+| `/avo.beat-edit` | `commands/avo/beat-edit.md` | `references/beat-edit.md` |
 | `/avo.talking-head` | `commands/avo/talking-head.md` | `references/talking-head.md` |
 | `/avo.figma` | `commands/avo/figma.md` | `references/figma.md` |
 | `/avo.end-screen` | `commands/avo/end-screen.md` | `references/end-screen.md` |
