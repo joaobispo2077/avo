@@ -20,8 +20,7 @@ Allowed ids: card_carousel, punch_zoom, whip_bump, kinetic_text, flip_3d, styliz
 Use only ids clearly visible. Use [] if none of the six appear.
 Do not invent other ids. Do not score Watch QC or quality."""
 VISION_UNREACHABLE = (
-    "Understand vision endpoint unreachable. "
-    "Do not skip to an empty technique map."
+    "Understand vision endpoint unreachable. Do not skip to an empty technique map."
 )
 ENDPOINT_MISSING = (
     "Understand vision endpoint is unset. Pin models.understand "
