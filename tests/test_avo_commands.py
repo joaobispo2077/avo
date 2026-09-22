@@ -50,6 +50,10 @@ WAVE6_COMMANDS = {
     "voiceover.md",
 }
 
+WAVE7_COMMANDS = {
+    "beat-edit.md",
+}
+
 EXPECTED_COMMANDS = (
     {
         "help.md",
@@ -88,6 +92,7 @@ EXPECTED_COMMANDS = (
     | WAVE4_COMMANDS
     | WAVE5_COMMANDS
     | WAVE6_COMMANDS
+    | WAVE7_COMMANDS
 )
 
 EXPECTED_UTILITY_REFS = {
@@ -140,6 +145,7 @@ EXPECTED_UTILITY_REFS = {
     "supporters.md",
     "creators.md",
     "voiceover.md",
+    "beat-edit.md",
 }
 
 EXPECTED_REVIEW_TEMPLATES = {
@@ -230,9 +236,17 @@ class AvoCommandParityTests(unittest.TestCase):
         text = (REFS / "command-map.md").read_text(encoding="utf-8")
         self.assertIn("/avo.voiceover", text)
 
+    def test_command_map_lists_wave7_commands(self) -> None:
+        text = (REFS / "command-map.md").read_text(encoding="utf-8")
+        self.assertIn("/avo.beat-edit", text)
+
     def test_help_wave6_discovery(self) -> None:
         text = (REFS / "help.md").read_text(encoding="utf-8")
         self.assertIn("/avo.voiceover", text)
+
+    def test_help_wave7_discovery(self) -> None:
+        text = (REFS / "help.md").read_text(encoding="utf-8")
+        self.assertIn("/avo.beat-edit", text)
 
     def test_help_wave5_discovery(self) -> None:
         text = (REFS / "help.md").read_text(encoding="utf-8")
@@ -310,7 +324,7 @@ class AvoCommandParityTests(unittest.TestCase):
     def test_every_command_declares_timeline_integration_mode(self) -> None:
         allowed = {"Owns", "Evidence", "Consumes", "Profile", "Admin"}
         found = sorted(COMMANDS.glob("*.md"))
-        self.assertEqual(len(found), 52)
+        self.assertEqual(len(found), 53)
         failures = []
         for command in found:
             declarations = [
@@ -331,7 +345,7 @@ class AvoCommandParityTests(unittest.TestCase):
         )
         failures = []
         found = sorted(COMMANDS.glob("*.md"))
-        self.assertEqual(len(found), 52)
+        self.assertEqual(len(found), 53)
         for command in found:
             text = command.read_text(encoding="utf-8")
             missing_or_repeated = {

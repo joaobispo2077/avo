@@ -129,8 +129,8 @@
       "properties": {
         "profile": {
           "type": "string",
-          "enum": ["long-form", "shorts", "tiktok", "podcast-clip", "trailer", "music-video"],
-          "description": "Maps to default loudness reference preset when intent is platform_fit."
+          "enum": ["long-form", "shorts", "tiktok", "podcast-clip", "trailer", "music-video", "beat-edit"],
+          "description": "Maps to default loudness reference preset when intent is platform_fit. Use beat-edit for /avo.beat-edit."
         },
         "maxDurationSec": { "type": "number" },
         "aspect": { "type": "string" }

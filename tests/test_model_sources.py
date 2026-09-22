@@ -27,6 +27,48 @@ def _empty_state() -> dict:
 
 
 class ModelSourceUnitTests(unittest.TestCase):
+    def test_stronger_full_pin_keeps_source_and_runtime_over_global(self) -> None:
+        global_config = {
+            "models": {
+                "transcribe": {
+                    "default": "small",
+                    "source": {
+                        "kind": "artifact",
+                        "artifactPath": "D:/global/small",
+                    },
+                    "runtime": {"device": "cpu", "computeType": "int8"},
+                }
+            }
+        }
+        state = {
+            "models": {
+                "transcribe": {
+                    "id": "large-v3",
+                    "source": {
+                        "kind": "artifact",
+                        "artifactPath": "D:/state/large-v3",
+                    },
+                    "runtime": {"device": "cuda", "computeType": "float16"},
+                }
+            }
+        }
+        with mock.patch("avo.models.load_config", return_value=global_config):
+            resolved = resolve_job(
+                "transcribe",
+                root=ROOT,
+                state=state,
+                provider={},
+                registry={},
+            )
+
+        self.assertEqual(resolved.id, "large-v3")
+        self.assertEqual(
+            resolved.pin["source"]["artifactPath"], "D:\\state\\large-v3"
+        )
+        self.assertEqual(resolved.pin["runtime"]["device"], "cuda")
+        self.assertEqual(resolved.sources["source"], "state")
+        self.assertEqual(resolved.sources["runtime"], "state")
+
     def test_normalize_pin_string_and_default_alias(self) -> None:
         self.assertEqual(normalize_pin("medium"), {"id": "medium"})
         self.assertEqual(normalize_pin({"default": "small"}), {"id": "small"})

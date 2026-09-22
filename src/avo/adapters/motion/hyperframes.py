@@ -167,19 +167,40 @@ def _asset_source(spec: Mapping[str, Any], key: str) -> Path | None:
     return Path(value["path"]).resolve() if value else None
 
 
+def _ui_scale(spec: Mapping[str, Any]) -> float:
+    """Overlay tokens are authored at 1080×1920; scale by canvas width / 1080."""
+    width = float(spec.get("width") or 1080)
+    return width / 1080.0 if width else 1.0
+
+
+def _scaled_px(value: Any, scale: float, default: float) -> str:
+    raw = str(value or "").strip().removesuffix("px")
+    try:
+        number = float(raw)
+    except ValueError:
+        number = default
+    return f"{number * scale:.4g}px"
+
+
 def _token_css(spec: Mapping[str, Any]) -> str:
     tokens = spec["providerTokens"]
     layout = spec["layout"]
+    scale = _ui_scale(spec)
+    margins = layout.get("safeMargins") or {}
     focus = layout.get("focusPoint") or {"x": 0.5, "y": 0.5}
     split = float(layout.get("baseRegion", {}).get("height", 0.5)) * 100
     return " ".join(
         (
+            f"--ui-scale:{scale:.6g};",
             f"--short-ink:{tokens['ink']};",
             f"--short-rail:{tokens['rail']};",
             f"--short-accent:{tokens['accent']};",
             f"--short-punch:{tokens['punch']};",
             f"--short-font:{tokens['font']};",
-            f"--short-rail-width:{tokens['railWidth']};",
+            f"--short-rail-width:{_scaled_px(tokens.get('railWidth'), scale, 920)};",
+            f"--short-safe-x:{_scaled_px(margins.get('left'), scale, 54)};",
+            f"--short-safe-top:{_scaled_px(margins.get('top'), scale, 150)};",
+            f"--short-safe-bottom:{_scaled_px(margins.get('bottom'), scale, 260)};",
             f"--focus-x:{float(focus['x']) * 100:.3f}%;",
             f"--focus-y:{float(focus['y']) * 100:.3f}%;",
             f"--split-percent:{split:.3f}%;",

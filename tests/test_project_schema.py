@@ -57,6 +57,13 @@ class ShortsProjectSchemaTests(unittest.TestCase):
         invalid = {**self.base, "watch": {"device": "metal", "topic": "private"}}
         self.assertTrue(list(self.validator.iter_errors(invalid)))
 
+    def test_beat_edit_deliverable_profile_is_valid(self) -> None:
+        document = {
+            **self.base,
+            "deliverable": {"profile": "beat-edit", "aspect": "1:1"},
+        }
+        self.assertEqual(list(self.validator.iter_errors(document)), [])
+
 
 if __name__ == "__main__":
     unittest.main()
