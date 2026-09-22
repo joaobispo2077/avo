@@ -1,11 +1,23 @@
 ---
 name: avo-pipeline
-description: Gateway for AVO slash commands (/avo.help, /avo.guidelines, /avo.pipeline, /avo.trim, /avo.transcribe, /avo.sound, /avo.sync, /avo.audit, /avo.watch, /avo.motion, /avo.captions, /avo.talking-head, /avo.rights, /avo.audio-qc, /avo.color, /avo.grade, /avo.format, /avo.framework, /avo.chapters, /avo.thumbnail, /avo.end-screen, /avo.deliver, /avo.shorts, /avo.reframe, /avo.podcast-clip, /avo.trailer, /avo.pr-video, /avo.changelog-video, /avo.explainer, /avo.slideshow, /avo.launch, /avo.music-video, /avo.figma, /avo.media, /avo.motion-graphics, /avo.general, /avo.remotion-port, /avo.screencast, /avo.retention, /avo.animation-qc, /avo.telemetry, /avo.learndown, /avo.cleanup, /avo.update, /avo.stats, /avo.models, /avo.docs). Load when the user invokes any /avo.* command or declares Footage/rawDir asset paths.
+description: Gateway for AVO slash commands (/avo.help, /avo.guidelines, /avo.pipeline, /avo.trim, /avo.transcribe, /avo.sound, /avo.sync, /avo.audit, /avo.watch, /avo.motion, /avo.captions, /avo.talking-head, /avo.rights, /avo.audio-qc, /avo.color, /avo.grade, /avo.format, /avo.framework, /avo.chapters, /avo.thumbnail, /avo.end-screen, /avo.deliver, /avo.shorts, /avo.reframe, /avo.podcast-clip, /avo.trailer, /avo.pr-video, /avo.changelog-video, /avo.explainer, /avo.slideshow, /avo.launch, /avo.music-video, /avo.beat-edit, /avo.figma, /avo.media, /avo.motion-graphics, /avo.general, /avo.remotion-port, /avo.screencast, /avo.retention, /avo.animation-qc, /avo.telemetry, /avo.learndown, /avo.cleanup, /avo.update, /avo.stats, /avo.models, /avo.docs). Load when the user invokes any /avo.* command or declares Footage/rawDir asset paths.
 ---
 
 # AVO pipeline commands (gateway)
 
-Entry skill for **`/avo.*`** slash commands. Canonical rules: [`AGENTS.md`](../../AGENTS.md), [`SKILL.md`](../../SKILL.md), [`docs/avo-workflow.md`](../../docs/avo-workflow.md).
+Entry skill for **`/avo.*`** slash commands. Hard rules: this skill’s Non-negotiable section and skill `avo`. Workflow: [docs/avo-workflow.md](https://github.com/joaobispo2077/avo/blob/main/docs/avo-workflow.md). No repo-relative root `SKILL.md`.
+
+## Runtime
+
+Resolve once. Do not ask. Consumers: **skills + binary**. MCP and clone only when the user asks.
+
+Never `pip install avo` — PyPI `avo` is Soteria.
+
+Engine zip is **AVO Python only** — not ffmpeg, HyperFrames, watch-skill, CUDA, or model weights. Unused when this AVO repo is the opened folder.
+
+1. **Override** — user said MCP / self-build / clone-python. Honor it. Do not silently use the zip.
+2. **Opened folder is an AVO checkout** — `pyproject.toml` name `avo` **and** `src/avo/` **and** `AGENTS.md` contains `<!-- avo:orchestrator:start -->` → `python -m avo.*`. Do **not** use `~/.avo/bin/avo`.
+3. **Else** → `~/.avo/bin/avo`. Missing? Run the installer. Do not clone unless asked.
 
 ## Command router
 
@@ -46,6 +58,7 @@ Entry skill for **`/avo.*`** slash commands. Canonical rules: [`AGENTS.md`](../.
 | `/avo.slideshow` | [`references/slideshow.md`](references/slideshow.md) |
 | `/avo.launch` | [`references/launch.md`](references/launch.md) |
 | `/avo.music-video` | [`references/music-video.md`](references/music-video.md) |
+| `/avo.beat-edit` | [`references/beat-edit.md`](references/beat-edit.md) |
 | `/avo.figma` | [`references/figma.md`](references/figma.md) |
 | `/avo.media` | [`references/media.md`](references/media.md) |
 | `/avo.motion-graphics` | [`references/motion-graphics.md`](references/motion-graphics.md) |

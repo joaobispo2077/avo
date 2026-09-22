@@ -287,17 +287,23 @@ def _validate_graphic_clocks(graphic: Mapping[str, Any]) -> None:
             )
 
 
+def _star_fill_count(filled: float) -> int:
+    if filled <= 0:
+        return 0
+    return math.ceil(filled - 1e-9)
+
+
 def _validate_stars_widget(graphic: Mapping[str, Any]) -> None:
     start = float(graphic["startSec"])
     end = float(graphic["endSec"])
     params = graphic["params"]
     graphic_id = graphic["id"]
     total = int(params["total"])
-    filled = int(params["filled"])
+    filled = float(params["filled"])
     if filled > total:
         raise PlanningError(f"graphic {graphic_id} filled cannot exceed total")
     stagger = float(params.get("fillStaggerSec") or 0.12)
-    if start + filled * stagger > end + 1e-9:
+    if start + _star_fill_count(filled) * stagger > end + 1e-9:
         raise PlanningError(
             f"graphic {graphic_id} star fill timing exceeds graphic duration"
         )
@@ -359,7 +365,10 @@ def _every_start(graphic: Mapping[str, Any], offset: float) -> list[float]:
 
 def _every_fill(graphic: Mapping[str, Any], offset: float) -> list[float]:
     params = graphic.get("params") or {}
-    count = int(params.get("filled") or params.get("ticks") or 0)
+    if "filled" in params:
+        count = _star_fill_count(float(params.get("filled") or 0))
+    else:
+        count = int(params.get("ticks") or 0)
     stagger = float(params.get("fillStaggerSec") or 0.12)
     start = float(graphic["startSec"])
     return [start + offset + index * stagger for index in range(count)]

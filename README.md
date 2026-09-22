@@ -52,6 +52,20 @@ Talk to your AI agent. Drop raw footage in a folder. Mass-produce high-quality v
 
 ---
 
+## Runtime
+
+Resolve once. Do not ask. Consumers: **skills + binary**. MCP and clone only when the user asks.
+
+Never `pip install avo` — PyPI `avo` is Soteria.
+
+Engine zip is **AVO Python only** — not ffmpeg, HyperFrames, watch-skill, CUDA, or model weights. Unused when this AVO repo is the opened folder.
+
+1. **Override** — user said MCP / self-build / clone-python. Honor it. Do not silently use the zip.
+2. **Opened folder is an AVO checkout** — `pyproject.toml` name `avo` **and** `src/avo/` **and** `AGENTS.md` contains `<!-- avo:orchestrator:start -->` → `python -m avo.*`. Do **not** use `~/.avo/bin/avo`.
+3. **Else** → `~/.avo/bin/avo`. Missing? Run the installer. Do not clone unless asked.
+
+---
+
 ## Minimum requirements (100% local)
 
 To run AVO **fully on your machine** today (no cloud transcription / no paid
@@ -610,7 +624,7 @@ table, not the whole pipeline.
 
 ## Install
 
-**One command. Finds every agent on your machine. Installs for each.**
+**One command.** Finds every agent on your machine. Installs skills (~30 seconds) plus the engine zip (AVO Python only) into `~/.avo`. How the agent runs it: [Runtime](#runtime).
 
 ```bash
 # macOS · Linux · WSL · Git Bash
@@ -622,7 +636,7 @@ curl -fsSL https://raw.githubusercontent.com/joaobispo2077/avo/main/scripts/inst
 irm https://raw.githubusercontent.com/joaobispo2077/avo/main/scripts/install/install.ps1 | iex
 ```
 
-~30 seconds. Needs Node ≥18. Skips agents you do not have. Safe to re-run.
+Skills ~30 seconds; the engine zip is extra (not 30s). Needs Node ≥18. Skips agents you do not have. Safe to re-run.
 
 <details>
 <summary><strong>Install for one agent, or any of 30+ others</strong></summary>

@@ -365,7 +365,7 @@
                 "required": ["total", "filled"],
                 "properties": {
                   "total": { "type": "integer", "minimum": 1 },
-                  "filled": { "type": "integer", "minimum": 0 },
+                  "filled": { "type": "number", "minimum": 0 },
                   "label": { "type": "string", "minLength": 1 },
                   "fillStaggerSec": { "type": "number", "exclusiveMinimum": 0 }
                 }
@@ -415,7 +415,7 @@
             "properties": {
               "params": {
                 "additionalProperties": false,
-                "required": ["reject", "confirm", "badge"],
+                "required": ["reject", "confirm"],
                 "properties": {
                   "reject": { "$ref": "#/$defs/timedText" },
                   "confirm": { "$ref": "#/$defs/timedText" },
@@ -478,7 +478,7 @@
             "properties": {
               "params": {
                 "additionalProperties": false,
-                "required": ["label", "ticks", "metacritic", "metacriticAtSec"],
+                "required": ["label", "ticks"],
                 "properties": {
                   "label": { "type": "string", "minLength": 1 },
                   "hours": { "type": ["string", "number"] },

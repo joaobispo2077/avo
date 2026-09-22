@@ -3,6 +3,18 @@
 **Audience:** driving agents and operators wiring Cursor / Claude Code / VS Code.  
 **Positioning:** AVO’s **orchestrator** MCP adapter over pipeline/CLI helpers — **not** an editor/NLE MCP. See [`why-not-editor-mcp.md`](why-not-editor-mcp.md).
 
+## Runtime
+
+MCP is an **adapter** on the winning runtime (`avo mcp` or `python -m avo.mcp`) — never the default just because the extra is installed. Consumers: **skills + binary**. MCP and clone only when the user asks.
+
+Never `pip install avo` — PyPI `avo` is Soteria. Binary `avo mcp` does not need `pip install -e ".[mcp]"`.
+
+Engine zip is **AVO Python only** — not ffmpeg, HyperFrames, watch-skill, CUDA, or model weights. Unused when this AVO repo is the opened folder.
+
+1. **Override** — user said MCP / self-build / clone-python. Honor it. Do not silently use the zip.
+2. **Opened folder is an AVO checkout** — `pyproject.toml` name `avo` **and** `src/avo/` **and** `AGENTS.md` contains `<!-- avo:orchestrator:start -->` → `python -m avo.*`. Do **not** use `~/.avo/bin/avo`.
+3. **Else** → `~/.avo/bin/avo`. Missing? Run the installer. Do not clone unless asked.
+
 `avo.mcp` is **additive**. Skills, repo clone, and `avo` CLI remain first-class and work without the MCP process. MCP does not replace watch-skill verify (separate MCP/CLI/REST when you use it).
 
 **Cloud / Docker is not required** for phase-1. Remote/container MCP is future backlog only (`specs/backlog/avo-mcp-cloud.md`) and must never gate local install or use.

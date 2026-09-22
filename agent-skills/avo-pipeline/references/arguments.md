@@ -28,7 +28,7 @@ python -m avo.videos resolve --provider <slug> --video-id <id>
 
 ## Non-footage workflows (content routers)
 
-For `/avo.pr-video`, `/avo.changelog-video`, `/avo.explainer`, `/avo.slideshow`, `/avo.launch`, `/avo.music-video`, `/avo.figma`, `/avo.media`, `/avo.motion-graphics`, `/avo.general`, `/avo.remotion-port`, and `/avo.screencast`:
+For `/avo.pr-video`, `/avo.changelog-video`, `/avo.explainer`, `/avo.slideshow`, `/avo.launch`, `/avo.music-video`, `/avo.beat-edit`, `/avo.figma`, `/avo.media`, `/avo.motion-graphics`, `/avo.general`, `/avo.remotion-port`, and `/avo.screencast`:
 
 ```text
 ProjectDir: /path/to/project    # workflow root (= rawDir semantics)
@@ -43,6 +43,7 @@ Source: <url-or-path>         # PR URL, changelog.md, article, slide outline
 | `/avo.slideshow` | `/path/to/slides-outline.md` |
 | `/avo.launch` | `https://example.com/product` or brief path |
 | `/avo.music-video` | `/path/to/track.mp3` |
+| `/avo.beat-edit` | reference edit + music bed + inserts folder |
 | `/avo.figma` | Figma file URL or export folder |
 | `/avo.media` | optional catalog query context in project notes |
 | `/avo.motion-graphics` | brief path or one-line concept |
