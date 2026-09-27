@@ -144,3 +144,36 @@ def test_cleanup_refuses_missing_or_changed_reconstruction_bundle(tmp_path: Path
         verify_reconstruction_bundle(tmp_path)
     with pytest.raises(SystemExit, match="reconstruction"):
         project_inventory.execute_cleanup(tmp_path, basename, dry_run=True)
+
+
+def test_reconstruction_preserves_fingerprinted_raw_review_artifacts(tmp_path: Path):
+    workspace, basename = canonical_project(tmp_path)
+    review_dir = workspace.review_dir / "cut-proof" / "candidate" / "watch"
+    raw = review_dir / "raw" / "attempt-01.stdout.txt"
+    raw.parent.mkdir(parents=True)
+    raw.write_text("provider response", encoding="utf-8")
+    review = review_dir.parent / "review.json"
+    review.write_text(
+        json.dumps(
+            {
+                "evidence": [
+                    {
+                        "kind": "watch",
+                        "artifacts": [
+                            {
+                                "path": str(raw),
+                                "sha256": file_fingerprint(raw)["sha256"],
+                            }
+                        ],
+                    }
+                ]
+            }
+        ),
+        encoding="utf-8",
+    )
+    bundle = build_reconstruction_bundle(
+        workspace, master_basename=basename, actor="creator"
+    )
+    entry = next(item for item in bundle["files"] if item["path"].endswith(raw.name))
+    assert entry["role"] == "review-raw-artifact"
+    assert entry["sha256"] == file_fingerprint(raw)["sha256"]
