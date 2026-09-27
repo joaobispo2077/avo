@@ -75,6 +75,21 @@ hash, declared context, actual tool/model, outcome kind, and raw attempts.
 Changing the resolved policy changes candidate evidence identity and makes old
 evidence stale.
 
+For long-form review, model selection is an exact capability pin rather than a
+preference. The local endpoint must identify the configured model and pass a
+live image probe. The effective context limit and its provenance, output limit,
+image constraints, GPU/VRAM policy, allowed concurrency, and operator-managed
+load/unload behavior enter the capability snapshot. CPU transcription may run
+beside GPU Watch only when the declared CPU, RAM, VRAM, disk-I/O, and endpoint
+policy permits it; competing GPU-heavy work is serialized or rejected.
+
+Context overflow or out-of-memory may trigger only the recorded bounded
+reductions in the review plan. It never authorizes a second vision model,
+silent fallback, model reload, or broader GPU allocation. Raw provider
+responses, stdout/stderr, and sampled-frame bundles are fingerprinted artifacts;
+canonical review evidence retains their hashes and references rather than
+embedding bulky payloads.
+
 ## Valid next workflow action
 
 After `avo review policy`, run `avo review run` with the inspected settings.

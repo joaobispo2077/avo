@@ -34,3 +34,17 @@ python -m avo.cli cleanup dry-run --project <rawDir> --video-id <id> --master-ba
 ```
 
 Cleanup preserves raw identities, the exact master and master-derived transcript, all five canonical indexes, required immutable revisions/events, review evidence, and decisions needed for reconstruction. Bulky proofs are eligible for pruning only after their hashed references are recorded and the bundle verifies.
+
+## Compatibility and migration limits
+
+The legacy EDL and direct cut-proof record remain readable for one documented
+compatibility window. They never regain canonical write authority. Migration
+inventory records old proofs and helper outputs, but proof media stays excluded
+from new render ancestry and footage-specific helper code is not imported.
+
+After migration, create new proofs only from canonical revisions, original
+sources, current generated-asset records, exact implementation references, and
+the current ProofPlan. Preserve iteration ledgers, candidate snapshots,
+regression evidence, final timeline-learning snapshots, selected still records,
+provider-component decisions, and project-local component source required to
+reconstruct an approved candidate before removing bulky working media.

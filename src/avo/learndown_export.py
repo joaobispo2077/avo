@@ -13,6 +13,13 @@ from typing import Any
 from avo import avo_state
 from avo.paths import repo_root
 from avo.project_inventory import load_project
+from avo.timeline.contracts import (
+    content_hash,
+    document_hash_excluding,
+    validate_document,
+)
+from avo.timeline.review_study import build_rework_report
+from avo.timeline.store import atomic_write_json, write_immutable_json
 
 SCHEMA_VERSION = 1
 INDEX_NAME = "index.json"
@@ -23,6 +30,271 @@ WRAP_DRAFT_MD = "wrap.draft.md"
 WRAP_FINAL_JSON = "wrap.json"
 WRAP_FINAL_MD = "wrap.md"
 EDITLOG_LOCK = "EDITLOG.md"
+TIMELINE_LEARNING_DIR = "timeline-learning"
+TIMELINE_LEARNING_INDEX = "index.json"
+
+
+def _sanitize_learning_text(value: Any) -> str:
+    text = str(value or "").strip()
+    text = re.sub(r"(?i)\b[A-Z]:[\\/][^\s]+", "[project-path]", text)
+    text = re.sub(
+        r"(?<!:)\/(?:home|mnt|Users|private|tmp)\/[^\s]+", "[project-path]", text
+    )
+    text = re.sub(
+        r"(?i)\b(api[_-]?key|token|secret|password)\s*[:=]\s*\S+",
+        r"\1=[redacted]",
+        text,
+    )
+    return text or "Unspecified"
+
+
+def _sanitize_learning_value(value: Any) -> Any:
+    if isinstance(value, str):
+        return _sanitize_learning_text(value)
+    if isinstance(value, list):
+        return [_sanitize_learning_value(item) for item in value]
+    if isinstance(value, dict):
+        return {
+            str(key): "[redacted]"
+            if str(key).lower() in {"api_key", "apikey", "token", "secret", "password"}
+            else _sanitize_learning_value(item)
+            for key, item in value.items()
+        }
+    return value
+
+
+def _sanitized_record(
+    *,
+    record_id: str,
+    summary: Any,
+    status: str | None = None,
+    evidence_classes: list[str] | None = None,
+    impact: dict[str, Any] | None = None,
+    recurrence: int = 0,
+) -> dict[str, Any]:
+    record: dict[str, Any] = {
+        "id": record_id,
+        "summary": _sanitize_learning_text(summary),
+        "evidenceClasses": sorted(set(evidence_classes or [])),
+        "impact": _sanitize_learning_value(dict(impact or {})),
+        "recurrence": recurrence,
+    }
+    if status is not None:
+        record["status"] = status
+    return record
+
+
+def build_timeline_learning_snapshot(
+    *,
+    ledger: dict[str, Any],
+    candidate_snapshot_hash: str,
+    status: str,
+    master_fingerprint: dict[str, Any] | None = None,
+    reconstruction_bundle_hash: str | None = None,
+    prevention_rules: list[dict[str, Any]] | None = None,
+    technique_candidates: list[dict[str, Any]] | None = None,
+    created_at: str | None = None,
+) -> dict[str, Any]:
+    """Build one sanitized immutable learning snapshot from complete history."""
+    if status not in {"draft", "final"}:
+        raise ValueError("timeline learning status must be draft or final")
+    if status == "final" and master_fingerprint is None:
+        raise ValueError("final timeline learning requires the approved master")
+    report = build_rework_report(ledger)
+    decisions = [
+        _sanitized_record(
+            record_id=str(item["decisionId"]),
+            summary=item.get("statement"),
+            status=str(item.get("status") or "unknown"),
+            evidence_classes=[
+                str(ref.get("kind") or "unspecified")
+                for ref in item.get("evidenceRefs") or []
+            ],
+            impact={"scope": item.get("scope") or {}},
+        )
+        for item in ledger.get("decisions") or []
+    ]
+    grouped: dict[str, list[dict[str, Any]]] = {}
+    for item in report["items"]:
+        group_id = str(item.get("reworkGroupId") or item.get("reworkId"))
+        grouped.setdefault(group_id, []).append(item)
+    rework_groups = []
+    capability_gaps = []
+    uncertainties = []
+    for group_id, items in sorted(grouped.items()):
+        origins = sorted({str(item.get("origin") or "unknown") for item in items})
+        rework_groups.append(
+            _sanitized_record(
+                record_id=group_id,
+                summary="; ".join(
+                    _sanitize_learning_text(item.get("summary")) for item in items
+                ),
+                status="active",
+                evidence_classes=sorted(
+                    {
+                        str(ref.get("kind") or "unspecified")
+                        for item in items
+                        for ref in item.get("evidenceRefs") or []
+                    }
+                ),
+                impact={"origins": origins},
+                recurrence=len(items),
+            )
+        )
+        for item in items:
+            gap = item.get("capabilityGap")
+            if gap:
+                capability_gaps.append(
+                    _sanitized_record(
+                        record_id=str(item["reworkId"]),
+                        summary=gap.get("desiredBehavior"),
+                        status="candidate",
+                        impact={"operation": gap.get("operation")},
+                        recurrence=1,
+                    )
+                )
+            if item.get("origin") == "unknown":
+                uncertainties.append(
+                    _sanitized_record(
+                        record_id=str(item["reworkId"]),
+                        summary=item.get("summary"),
+                        status="unknown",
+                        recurrence=1,
+                    )
+                )
+    for decision in ledger.get("decisions") or []:
+        if decision.get("status") == "awaiting-human":
+            uncertainties.append(
+                _sanitized_record(
+                    record_id=str(decision["decisionId"]),
+                    summary=decision.get("statement"),
+                    status="awaiting-human",
+                )
+            )
+    rules = [
+        _sanitized_record(
+            record_id=str(item.get("id") or f"rule-{index:04d}"),
+            summary=item.get("summary"),
+            status=str(item.get("status") or "candidate"),
+            evidence_classes=list(item.get("evidenceClasses") or []),
+            impact=dict(item.get("impact") or {}),
+            recurrence=int(item.get("recurrence") or 0),
+        )
+        for index, item in enumerate(prevention_rules or [], start=1)
+    ]
+    techniques = [
+        _sanitized_record(
+            record_id=str(item.get("id") or f"technique-{index:04d}"),
+            summary=item.get("summary"),
+            status=str(item.get("status") or "candidate"),
+            impact=dict(item.get("impact") or {}),
+        )
+        for index, item in enumerate(technique_candidates or [], start=1)
+    ]
+    master = None
+    if master_fingerprint is not None:
+        master = {
+            "sha256": str(master_fingerprint["sha256"]),
+            "sizeBytes": int(master_fingerprint["sizeBytes"]),
+        }
+    identity = content_hash(
+        {
+            "videoId": ledger["videoId"],
+            "ledgerHash": ledger["ledgerHash"],
+            "candidateSnapshotHash": candidate_snapshot_hash,
+            "status": status,
+            "master": master,
+        }
+    )
+    snapshot = {
+        "schemaVersion": "1.0.0",
+        "snapshotId": f"timeline-learning-{identity[:16]}",
+        "videoId": str(ledger["videoId"]),
+        "provider": str(ledger["provider"]),
+        "status": status,
+        "masterFingerprint": master,
+        "candidateSnapshotHash": candidate_snapshot_hash,
+        "iterationLedgerHash": str(ledger["ledgerHash"]),
+        "reconstructionBundleHash": reconstruction_bundle_hash,
+        "decisionOutcomes": decisions,
+        "reworkGroups": rework_groups,
+        "preventionRules": rules,
+        "capabilityGaps": capability_gaps,
+        "costSignals": {
+            "iterations": len(ledger.get("iterations") or []),
+            "reworkGroups": report["reworkGroupCount"],
+            **report["costSignals"],
+        },
+        "techniqueCandidates": techniques,
+        "uncertainties": uncertainties,
+        "createdAt": created_at
+        or str(
+            (ledger.get("iterations") or [{}])[-1].get("createdAt")
+            or "1970-01-01T00:00:00Z"
+        ),
+        "snapshotHash": "",
+    }
+    snapshot["snapshotHash"] = document_hash_excluding(snapshot, "snapshotHash")
+    validate_document(snapshot, "avo.timeline-learning.schema.json")
+    return snapshot
+
+
+def export_timeline_learning_snapshot(
+    entry_dir: Path, snapshot: dict[str, Any]
+) -> Path:
+    """Publish immutable history and atomically advance one lightweight index."""
+    validate_document(snapshot, "avo.timeline-learning.schema.json")
+    directory = Path(entry_dir) / TIMELINE_LEARNING_DIR
+    snapshot_path = directory / f"{snapshot['snapshotId']}.json"
+    write_immutable_json(snapshot_path, snapshot)
+    index_path = directory / TIMELINE_LEARNING_INDEX
+    if index_path.is_file():
+        index = json.loads(index_path.read_text(encoding="utf-8"))
+    else:
+        index = {"schemaVersion": "1.0.0", "snapshots": []}
+    reference = {
+        "snapshotId": snapshot["snapshotId"],
+        "snapshotHash": snapshot["snapshotHash"],
+        "status": snapshot["status"],
+        "path": snapshot_path.name,
+    }
+    existing = {item["snapshotId"]: item for item in index.get("snapshots") or []}
+    if (
+        snapshot["snapshotId"] in existing
+        and existing[snapshot["snapshotId"]] != reference
+    ):
+        raise ValueError("timeline learning snapshot identity collision")
+    existing[snapshot["snapshotId"]] = reference
+    index["snapshots"] = sorted(existing.values(), key=lambda item: item["snapshotId"])
+    index["activeSnapshotId"] = snapshot["snapshotId"]
+    index["activeSnapshotHash"] = snapshot["snapshotHash"]
+    atomic_write_json(index_path, index)
+    return snapshot_path
+
+
+def load_active_timeline_learning(entry_dir: Path) -> dict[str, Any] | None:
+    index_path = Path(entry_dir) / TIMELINE_LEARNING_DIR / TIMELINE_LEARNING_INDEX
+    if not index_path.is_file():
+        return None
+    index = json.loads(index_path.read_text(encoding="utf-8"))
+    active_id = index.get("activeSnapshotId")
+    reference = next(
+        (
+            item
+            for item in index.get("snapshots") or []
+            if item["snapshotId"] == active_id
+        ),
+        None,
+    )
+    if reference is None:
+        raise ValueError("timeline learning index has no active snapshot")
+    snapshot = json.loads(
+        (index_path.parent / reference["path"]).read_text(encoding="utf-8")
+    )
+    validate_document(snapshot, "avo.timeline-learning.schema.json")
+    if snapshot["snapshotHash"] != reference["snapshotHash"]:
+        raise ValueError("timeline learning active snapshot hash mismatch")
+    return snapshot
 
 
 def _slugify(value: str) -> str:

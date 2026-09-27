@@ -264,6 +264,59 @@ def build_parser() -> argparse.ArgumentParser:
     refresh.add_argument("--raw-dir", type=Path, dest="raw_dir", default=None)
     refresh.add_argument("--video-id", default="")
     refresh.add_argument("--json", action="store_true", dest="as_json")
+
+    proof = sub.add_parser("proof")
+    proof_sub = proof.add_subparsers(dest="proof_command", required=True)
+    iteration_record = proof_sub.add_parser("iteration-record")
+    _project_arg(iteration_record)
+    iteration_record.add_argument("--request", type=Path, required=True)
+    for name in ("component-scaffold", "component-register"):
+        item = proof_sub.add_parser(name)
+        _project_arg(item)
+        item.add_argument("--request", type=Path, required=True)
+    proof_plan = proof_sub.add_parser("plan")
+    _project_arg(proof_plan)
+    proof_plan.add_argument("--request", type=Path)
+    proof_plan.add_argument("--iteration-id", required=True)
+    proof_plan.add_argument("--output", type=Path, required=True)
+    proof_plan.add_argument("--profile", required=True)
+    for name in ("microproof", "build", "validate"):
+        item = proof_sub.add_parser(name)
+        _project_arg(item)
+        item.add_argument("--proof-plan", required=True)
+        item.add_argument("--media-input", action="append", default=[])
+        if name == "build":
+            item.add_argument("--microproof-gate")
+    proof_status = proof_sub.add_parser("status")
+    _project_arg(proof_status)
+    proof_status.add_argument("--proof-plan")
+    proof_status.add_argument("--microproof-gate")
+    proof_status.add_argument("--media-input", action="append", default=[])
+
+    still = sub.add_parser("still")
+    still_sub = still.add_subparsers(dest="still_command", required=True)
+    extract_still = still_sub.add_parser("extract")
+    _project_arg(extract_still)
+    extract_still.add_argument(
+        "--purpose",
+        choices=("thumbnail", "review", "reference", "canonical-generated-asset"),
+        required=True,
+    )
+    extract_still.add_argument("--source-id")
+    extract_still.add_argument("--source-time-num", type=int)
+    extract_still.add_argument("--source-time-den", type=int)
+    extract_still.add_argument("--program-frame", type=int)
+    extract_still.add_argument("--frame-rate-num", type=int)
+    extract_still.add_argument("--frame-rate-den", type=int)
+    extract_still.add_argument("--candidate", type=Path)
+    extract_still.add_argument("--candidate-frame", type=int)
+    extract_still.add_argument("--candidate-state", choices=("current", "approved"))
+    extract_still.add_argument("--candidate-sha256")
+    extract_still.add_argument("--side", choices=("incoming", "outgoing"))
+    extract_still.add_argument("--decoded-frame-index", type=int)
+    extract_still.add_argument("--color-policy")
+    extract_still.add_argument("--width", type=int)
+    extract_still.add_argument("--format", choices=("png",), default="png")
     return parser
 
 
@@ -1222,6 +1275,225 @@ def _editlog(args: argparse.Namespace) -> int:
     return 0
 
 
+def _request(path: Path | None) -> dict[str, Any]:
+    if path is None:
+        return {}
+    try:
+        value = json.loads(Path(path).read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise ValueError(f"cannot load proof request {path}: {exc}") from exc
+    if not isinstance(value, dict):
+        raise ValueError("proof request must be a JSON object")
+    return value
+
+
+def _proof(args: argparse.Namespace) -> int:
+    from avo.adapters.registry import default_proof_capability_registry
+    from avo.timeline.component_instances import ComponentInstanceService
+    from avo.timeline.generated_assets import GeneratedAssetService
+    from avo.timeline.iterations import IterationLedgerService
+    from avo.timeline.materialize import (
+        canonical_proof_media_inputs,
+        proof_build_status,
+        render_proof_microproofs,
+    )
+    from avo.timeline.pipeline import TimelinePipeline
+    from avo.timeline.proof_plan import ProofPlanCompiler, ProofPlanError
+
+    workspace = TimelineWorkspace.from_project(
+        args.project, video_id=args.video_id or None
+    )
+    operation = args.proof_command
+    if operation == "iteration-record":
+        request = _request(args.request)
+        result = IterationLedgerService(workspace).record_iteration(
+            request.get("iteration") or request,
+            actor=request.get("actor") or "avo.proof",
+            reason=request.get("reason") or "record proof iteration",
+            expected_head_hash=request.get("expectedHeadHash"),
+        )
+        ledger = result["ledger"]
+        rework_counts = {
+            "scopeChange": 0,
+            "regressionOrCapability": 0,
+            "externalOrSource": 0,
+            "unknown": 0,
+        }
+        for item in ledger["reworkItems"]:
+            origin = item.get("origin")
+            if origin in {"user-scope-change", "creator-preference-refinement"}:
+                rework_counts["scopeChange"] += 1
+            elif origin in {
+                "agent-reasoning-defect",
+                "implementation-defect",
+                "avo-capability-gap",
+            }:
+                rework_counts["regressionOrCapability"] += 1
+            elif origin in {
+                "source-limitation",
+                "external-dependency-failure",
+            }:
+                rework_counts["externalOrSource"] += 1
+            else:
+                rework_counts["unknown"] += 1
+        _emit(
+            {
+                "iterationId": result["iteration"]["iterationId"],
+                "ledgerHash": ledger["ledgerHash"],
+                "activeDecisionCount": sum(
+                    item["status"] in {"active", "awaiting-human", "rejected"}
+                    for item in ledger["decisions"]
+                ),
+                "reworkCount": len(ledger["reworkItems"]),
+                "reworkCounts": rework_counts,
+            }
+        )
+        return 0
+    if operation == "component-scaffold":
+        request = _request(args.request)
+        gap = request.get("capabilityGap") or {}
+        if gap.get("status") != "unsupported":
+            raise ProofPlanError(
+                "PROOF_CUSTOMIZATION_NOT_JUSTIFIED",
+                "component scaffold requires an unsupported capability gap",
+                "run proof plan preflight and attach its unsupported capability result",
+            )
+        _emit(ComponentInstanceService(workspace).scaffold(str(request["componentId"])))
+        return 0
+    if operation == "component-register":
+        request = _request(args.request)
+        if request.get("recordType") == "generated-asset":
+            result = GeneratedAssetService(workspace).register(request["record"])
+        else:
+            service = ComponentInstanceService(workspace)
+            instance = service.register(
+                request.get("instance") or request,
+                parameter_schema=request.get("parameterSchema"),
+            )
+            result = {"instance": instance}
+            if request.get("adapterId"):
+                result["implementationRef"] = service.implementation_reference(
+                    instance["instanceId"],
+                    adapter_id=str(request["adapterId"]),
+                    kind=str(request.get("kind") or "project-component"),
+                )
+        _emit(result)
+        return 0
+    registry = default_proof_capability_registry()
+    if operation == "plan":
+        request = _request(args.request)
+        for record in request.pop("capabilityImplementations", []):
+            registry.register_record(record)
+        request["iterationId"] = args.iteration_id
+        request["renderProfile"] = args.profile
+        output = dict(request.get("output") or {})
+        output.setdefault("path", str(args.output))
+        request["output"] = output
+        _emit(ProofPlanCompiler(workspace, registry).compile(request))
+        return 0
+    compiler = ProofPlanCompiler(workspace, registry)
+    if operation == "status":
+        if not args.proof_plan:
+            _emit({"status": "no-proof-plan-selected", "timeline": workspace.status()})
+        else:
+            plan = compiler.load(args.proof_plan)
+            media_inputs = canonical_proof_media_inputs(workspace, plan)
+            media_inputs.update(_proof_media_inputs(args.media_input))
+            _emit(
+                proof_build_status(
+                    workspace=workspace,
+                    proof_plan=plan,
+                    media_inputs=media_inputs,
+                    microproof_gate=args.microproof_gate,
+                )
+            )
+        return 0
+    plan = compiler.load(args.proof_plan)
+    media_inputs = canonical_proof_media_inputs(workspace, plan)
+    media_inputs.update(_proof_media_inputs(args.media_input))
+    if operation == "microproof":
+        _emit(
+            render_proof_microproofs(
+                workspace=workspace,
+                proof_plan=plan,
+                media_inputs=media_inputs,
+            )
+        )
+        return 0
+    if operation == "build":
+        if not args.microproof_gate:
+            raise ProofPlanError(
+                "PROOF_MICROPROOF_MISSING",
+                "proof build requires an explicit current microproof gate",
+                "run proof microproof and pass its immutable gate path",
+                entity_ref=plan["proofPlanId"],
+            )
+        pipeline = TimelinePipeline(workspace)
+        active = pipeline.active_candidate_snapshot()
+        result = pipeline.build_proof_candidate(
+            proof_plan=plan,
+            microproof_gate=args.microproof_gate,
+            media_inputs=media_inputs,
+            expected_active_snapshot_hash=(
+                active["snapshotHash"] if active is not None else None
+            ),
+        )
+        _emit(result)
+        return 0
+    if operation == "validate":
+        _emit(
+            proof_build_status(
+                workspace=workspace,
+                proof_plan=plan,
+                media_inputs=media_inputs,
+            )
+        )
+        return 0
+    raise ValueError(f"unhandled proof operation: {operation}")
+
+
+def _proof_media_inputs(values: list[str]) -> dict[str, Path]:
+    result: dict[str, Path] = {}
+    for value in values:
+        source_id, separator, locator = str(value).partition("=")
+        if not separator or not source_id or not locator:
+            raise ValueError("--media-input must use SOURCE_ID=PATH")
+        result[source_id] = Path(locator)
+    return result
+
+
+def _still(args: argparse.Namespace) -> int:
+    from avo.adapters.media.still_extract import StillExtractAdapter
+    from avo.timeline.stills import StillExtractionService
+
+    workspace = TimelineWorkspace.from_project(
+        args.project, video_id=args.video_id or None
+    )
+    frame_rate = None
+    if args.frame_rate_num is not None or args.frame_rate_den is not None:
+        if args.frame_rate_num is None or args.frame_rate_den is None:
+            raise ValueError("frame rate requires both numerator and denominator")
+        frame_rate = {"num": args.frame_rate_num, "den": args.frame_rate_den}
+    result = StillExtractionService(workspace, adapter=StillExtractAdapter()).extract(
+        purpose=args.purpose,
+        source_id=args.source_id,
+        source_time_num=args.source_time_num,
+        source_time_den=args.source_time_den,
+        program_frame=args.program_frame,
+        frame_rate=frame_rate,
+        candidate=args.candidate,
+        candidate_frame=args.candidate_frame,
+        candidate_state=args.candidate_state,
+        candidate_sha256=args.candidate_sha256,
+        side=args.side,
+        decoded_frame_index=args.decoded_frame_index,
+        color_policy=args.color_policy,
+        width=args.width,
+    )
+    _emit(result)
+    return 0
+
+
 def _run_cli(args: argparse.Namespace) -> int:
     handlers = {
         "pipeline": _pipeline,
@@ -1236,6 +1508,8 @@ def _run_cli(args: argparse.Namespace) -> int:
         "migrate-timeline": _migrate,
         "cleanup": _cleanup,
         "editlog": _editlog,
+        "proof": _proof,
+        "still": _still,
     }
     handler = handlers.get(args.command)
     if handler is None:
@@ -1247,19 +1521,30 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     try:
         return _run_cli(args)
-    except (
-        WorkspaceError,
-        StoreError,
-        LifecycleError,
-        ValueError,
-        RuntimeError,
-    ) as exc:
+    except Exception as exc:
+        if hasattr(exc, "to_dict") and callable(exc.to_dict):
+            print(json.dumps(exc.to_dict(), ensure_ascii=False), file=sys.stderr)
+            return 3
+        if not isinstance(
+            exc,
+            (
+                WorkspaceError,
+                StoreError,
+                LifecycleError,
+                ValueError,
+                RuntimeError,
+            ),
+        ):
+            raise
         print(
             json.dumps(
                 {
                     "code": "AVO-TL-011",
                     "message": str(exc),
-                    "remediation": "run timeline status/validate and resolve the reported dependency",
+                    "remediation": (
+                        "run timeline status/validate and resolve the reported "
+                        "dependency"
+                    ),
                     "blocking": True,
                 },
                 ensure_ascii=False,

@@ -73,6 +73,22 @@
           "quality": "good"
         },
         {
+          "id": "qwen3.5-4b",
+          "label": "Qwen3.5 4B Vision",
+          "vramMB": 7168,
+          "ramMB": 16384,
+          "diskMB": 5000,
+          "speed": "balanced",
+          "quality": "good",
+          "capabilities": ["vision", "text"],
+          "endpointProtocol": "openai-compatible",
+          "effectiveContext": {
+            "policy": "runtime-probe-required",
+            "declaredTokens": null
+          },
+          "notes": "Local Watch option. Served identity, vision support, effective context, and image behavior must be verified live; the catalog does not assume a context size. Fits the declared 7 GB GPU policy when the active runtime probe confirms it. Not default."
+        },
+        {
           "id": "qwen2.5-7b",
           "label": "Qwen 2.5 7B",
           "vramMB": 10240,

@@ -9,7 +9,9 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from .contracts import file_fingerprint
+from avo.paths import repo_root
+
+from .contracts import file_fingerprint, validate_document
 from .store import ArtifactStore, atomic_write_json
 
 ARTIFACTS = {
@@ -141,6 +143,51 @@ class TimelineWorkspace:
         )
         self.pipeline_run_path = self.timeline_dir / "pipeline-run.json"
 
+    def finalized_provider_learning(self) -> list[dict[str, Any]]:
+        """Load finalized provider learning as non-binding project guidance."""
+        provider = str(self.project.get("provider") or "").strip()
+        if not provider:
+            return []
+        configured = self.project.get("providerLearningDirectory")
+        base = (
+            Path(str(configured)).expanduser()
+            if configured
+            else repo_root() / "providers" / provider / "learndowns"
+        )
+        if not base.is_dir():
+            return []
+        loaded: list[dict[str, Any]] = []
+        for entry in sorted(path for path in base.iterdir() if path.is_dir()):
+            index_path = entry / "timeline-learning" / "index.json"
+            if not index_path.is_file():
+                continue
+            index = json.loads(index_path.read_text(encoding="utf-8"))
+            active_id = index.get("activeSnapshotId")
+            reference = next(
+                (
+                    item
+                    for item in index.get("snapshots") or []
+                    if item.get("snapshotId") == active_id
+                ),
+                None,
+            )
+            if reference is None:
+                raise WorkspaceError(
+                    f"provider learning index has no active snapshot: {index_path}"
+                )
+            snapshot = json.loads(
+                (index_path.parent / reference["path"]).read_text(encoding="utf-8")
+            )
+            validate_document(snapshot, "avo.timeline-learning.schema.json")
+            if snapshot.get("snapshotHash") != reference.get("snapshotHash"):
+                raise WorkspaceError(
+                    f"provider learning snapshot hash mismatch: {index_path}"
+                )
+            if snapshot is None or snapshot.get("status") != "final":
+                continue
+            loaded.append(snapshot)
+        return loaded
+
     @classmethod
     def from_project(
         cls, project_path: Path, *, video_id: str | None = None
@@ -207,7 +254,13 @@ class TimelineWorkspace:
             provider=provider,
             project_path=self.project_path,
         )
-        return self.status()
+        status = self.status()
+        status["providerLearning"] = {
+            "loadedFinalSnapshots": len(self.finalized_provider_learning()),
+            "binding": False,
+            "inheritedApprovals": False,
+        }
+        return status
 
     def validate(self) -> dict[str, Any]:
         if self.authority != "canonical":

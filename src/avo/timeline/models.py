@@ -50,6 +50,61 @@ class Timebase:
 
 
 @dataclass(frozen=True)
+class FrameRate:
+    """Exact video frame rate expressed as frames per second."""
+
+    num: int
+    den: int
+
+    def __post_init__(self) -> None:
+        if self.num <= 0 or self.den <= 0:
+            raise ValueError("frame-rate numerator and denominator must be positive")
+
+    @property
+    def seconds_per_frame(self) -> Fraction:
+        return Fraction(self.den, self.num)
+
+    def to_dict(self) -> dict[str, int]:
+        return {"num": self.num, "den": self.den}
+
+
+@dataclass(frozen=True)
+class ProgramFrame:
+    frame: int
+    frame_rate: FrameRate
+
+    def __post_init__(self) -> None:
+        if self.frame < 0:
+            raise ValueError("program frame must be non-negative")
+
+    @property
+    def seconds(self) -> Fraction:
+        return self.frame * self.frame_rate.seconds_per_frame
+
+    def to_dict(self) -> dict[str, Any]:
+        return {"frame": self.frame, "frameRate": self.frame_rate.to_dict()}
+
+
+@dataclass(frozen=True)
+class AudioSample:
+    sample: int
+    sample_rate: int
+
+    def __post_init__(self) -> None:
+        if self.sample < 0:
+            raise ValueError("audio sample must be non-negative")
+        if self.sample_rate <= 0:
+            raise ValueError("sample rate must be positive")
+
+    @property
+    def seconds(self) -> Fraction:
+        return Fraction(self.sample, self.sample_rate)
+
+    def to_dict(self) -> dict[str, int]:
+        return {"sample": self.sample, "sampleRate": self.sample_rate}
+
+
+@dataclass(frozen=True)
 class TimeValue:
     ticks: int
     timebase: Timebase
@@ -84,6 +139,47 @@ class Fingerprint:
             raise ValueError("sha256 must be 64 lowercase hexadecimal characters")
         if self.size_bytes < 0:
             raise ValueError("size_bytes must be non-negative")
+
+    @property
+    def identity(self) -> tuple[str, int]:
+        """Portable byte identity; locators are deliberately excluded."""
+        return self.sha256, self.size_bytes
+
+    def to_dict(self) -> dict[str, Any]:
+        result: dict[str, Any] = {
+            "sha256": self.sha256,
+            "sizeBytes": self.size_bytes,
+        }
+        if self.media_signature is not None:
+            result["mediaSignature"] = self.media_signature
+        if self.locator is not None:
+            result["locator"] = self.locator
+        return result
+
+
+@dataclass(frozen=True)
+class ArtifactIdentity:
+    artifact_type: str
+    artifact_id: str
+    revision_id: str
+    content_sha256: str
+
+    def __post_init__(self) -> None:
+        if not all(
+            value.strip()
+            for value in (self.artifact_type, self.artifact_id, self.revision_id)
+        ):
+            raise ValueError("artifact identity fields are required")
+        if not _SHA256.fullmatch(self.content_sha256):
+            raise ValueError("artifact content_sha256 is invalid")
+
+    def to_dict(self) -> dict[str, str]:
+        return {
+            "artifactType": self.artifact_type,
+            "artifactId": self.artifact_id,
+            "revisionId": self.revision_id,
+            "contentSha256": self.content_sha256,
+        }
 
 
 @dataclass(frozen=True)
@@ -153,6 +249,14 @@ class StructuredTimelineError:
     field: str | None = None
     expected: Any = None
     actual: Any = None
+
+    def __post_init__(self) -> None:
+        if not self.code.strip():
+            raise ValueError("failure code is required")
+        if not self.message.strip():
+            raise ValueError("failure message is required")
+        if not self.remediation.strip():
+            raise ValueError("failure remediation is required")
 
     def to_dict(self) -> dict[str, Any]:
         result = {

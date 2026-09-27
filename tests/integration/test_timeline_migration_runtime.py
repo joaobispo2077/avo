@@ -5,7 +5,7 @@ from pathlib import Path
 
 import pytest
 
-from avo.timeline.contracts import file_fingerprint
+from avo.timeline.contracts import content_hash, file_fingerprint, validate_document
 from avo.timeline.migration import MigrationService
 from avo.timeline.workspace import TimelineWorkspace
 
@@ -133,3 +133,27 @@ def test_unresolved_source_and_target_collision_block(tmp_path: Path):
     )
     with pytest.raises(ValueError, match="collision"):
         MigrationService(workspace2, edl2).apply(actor="creator", reason="collision")
+
+
+def test_legacy_readers_and_cut_proof_compatibility_window(tmp_path: Path):
+    workspace, edl, _ = fixture(tmp_path)
+    MigrationService(workspace, edl).apply(actor="creator", reason="compatibility")
+
+    legacy_view = workspace.store("cmap").load()
+    assert legacy_view["currentRevisionId"]
+    assert legacy_view["revisions"][0]["contentHash"]
+
+    body = {
+        "schemaVersion": "1.0.0",
+        "kind": "cut-proof",
+        "materializationId": "cut-proof-cmap-r0001-aaaaaaaaaaaa",
+        "cmapRevisionId": "cmap-r0001",
+        "canonicalInputLock": {"cmapRevisionHash": "c" * 64},
+        "renderProfile": "draft",
+        "projectionHash": "1" * 64,
+        "output": {"sha256": "2" * 64, "sizeBytes": 10, "locator": "proof.mp4"},
+        "producer": {"name": "legacy-renderer", "version": "1"},
+        "createdAt": "2026-09-27T00:00:00Z",
+    }
+    legacy_cut = {**body, "materializationHash": content_hash(body)}
+    validate_document(legacy_cut, "avo.materialization.schema.json")

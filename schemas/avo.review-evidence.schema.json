@@ -98,6 +98,31 @@
         }
       }
     },
+    "regressionResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["contractHash", "candidateSha256", "results", "exceptions", "summary"],
+      "properties": {
+        "contractHash": { "$ref": "#/$defs/sha256" },
+        "candidateSha256": { "$ref": "#/$defs/sha256" },
+        "results": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["obligationId", "status", "evidenceRefs"],
+            "properties": {
+              "obligationId": { "type": "string", "minLength": 1 },
+              "status": { "enum": ["preserved", "improved", "regressed", "unresolved", "not-applicable"] },
+              "evidenceRefs": { "type": "array", "items": { "$ref": "#/$defs/artifact" } },
+              "exceptionReference": { "type": "string", "minLength": 1 }
+            }
+          }
+        },
+        "exceptions": { "type": "array", "items": { "$ref": "#/$defs/window" } },
+        "summary": { "type": "object", "additionalProperties": true }
+      }
+    },
     "evidence": {
       "type": "object",
       "additionalProperties": false,
@@ -316,6 +341,18 @@
         },
         "fidelityDetails": {
           "type": "object"
+        },
+        "regressionResult": { "$ref": "#/$defs/regressionResult" },
+        "visionCoverageManifest": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["planHash", "reviewContractHash", "aggregateStatus", "artifact"],
+          "properties": {
+            "planHash": { "$ref": "#/$defs/sha256" },
+            "reviewContractHash": { "$ref": "#/$defs/sha256" },
+            "aggregateStatus": { "enum": ["pass", "fail", "needs-human-judgment", "blocked"] },
+            "artifact": { "$ref": "#/$defs/artifact" }
+          }
         },
         "disposition": {
           "enum": ["pass", "fail", "blocked", "not-applicable"]

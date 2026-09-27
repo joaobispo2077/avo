@@ -1,0 +1,55 @@
+{
+  "schemaVersion": "1.0.0",
+  "provenance": "synthetic-only",
+  "timebase": {"num": 1, "den": 1000},
+  "sampleRate": 48000,
+  "fixtures": {
+    "proof-ancestry": {
+      "generators": ["original-source.mp4", "prior-proof.mp4"],
+      "expectation": "byte-identical files retain different source roles"
+    },
+    "speech-joins": {
+      "generator": "speech-joins.wav",
+      "joinPointsMs": [1000, 2000],
+      "expectation": "all declared joins remain reviewable"
+    },
+    "sfx-transient": {
+      "generator": "sfx-transient.wav",
+      "transientAtMs": 250,
+      "expectation": "short transient is not hidden by aggregate audio checks"
+    },
+    "moving-overlay": {
+      "generator": "moving-overlay.mp4",
+      "reviewWindowsMs": [[0, 3000]],
+      "expectation": "overlay position changes throughout the window"
+    },
+    "vfr-stills": {
+      "generator": "vfr-stills.mp4",
+      "expectation": "irregular presentation timestamps remain sampleable"
+    },
+    "hybrid-pacing": {
+      "generator": "hybrid-pacing.mp4",
+      "sections": [
+        {"kind": "opening", "startMs": 0, "endMs": 3000},
+        {"kind": "explanation", "startMs": 3000, "endMs": 9000},
+        {"kind": "hold", "startMs": 9000, "endMs": 12000}
+      ]
+    },
+    "caption-privacy": {
+      "generator": "caption-privacy.mp4",
+      "frameSize": {"width": 160, "height": 90},
+      "captionRail": {"x": 6, "y": 64, "width": 148, "height": 20},
+      "privacyRegion": {"x": 110, "y": 8, "width": 40, "height": 26}
+    },
+    "long-form-watch": {
+      "generator": "long-form-watch.mp4",
+      "durationMs": 1200000,
+      "riskMarkersMs": [0, 300000, 600000, 900000, 1199000],
+      "expectation": "sparse and dense passes can cite explicit coverage"
+    },
+    "fire-emblem-regressions": {
+      "fixture": "fire-emblem-regressions.json",
+      "expectation": "technical regressions block while late creator assets remain scope evolution"
+    }
+  }
+}

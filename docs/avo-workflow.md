@@ -433,3 +433,36 @@ local session history only — no network. Privacy: [`SECURITY.md#privacy--telem
 ## Canonical timeline lifecycle
 
 Canonical video state lives in edit/timeline/{cmap,bmap,tracks,animation,sync-map}.json with immutable revisions and stable-ID diffs. edit/edl.json is generated renderer compatibility output. Lifecycle: intake → sources-ready → sync-ready → cmap-draft → cut-ai-review → cmap-approved → bmap-draft → assembly-ai-review → picture-locked → finishing → pre-master-ai-review → master-approved → delivered → archived. All 53 commands declare Owns, Evidence, Consumes, Profile, or Admin and share guards, invalidation, and review. Missing current Watch/transcript blocks. Cleanup preserves compact reconstruction metadata.
+
+## Iteration-aware proof construction
+
+Every proof is compiled from an immutable `ProofPlan` that locks the current
+canonical revisions, original-source fingerprints, registered implementation
+capabilities, audio graph, timed events, validation work, and output identity.
+Earlier proofs are comparison evidence only. A preflight rejects stale locks,
+missing media, forbidden recursive ancestry, output/input aliases, unsupported
+operations, and unavailable tools before a render begins.
+
+The iteration ledger consolidates every active approval, rejected treatment,
+creator scope addition, correction, and unresolved conflict. Historical defects
+become regression obligations and focused microproof windows. Required
+microproofs use the same adapters and event graph as the full proof, and a
+missing, stale, ambiguous, or failed result blocks the expensive render.
+
+One `CandidateSnapshot` atomically binds the rendered bytes, ProofPlan,
+materialization, transcript, regression result, review, and approval for each
+lifecycle state. Status must describe that one snapshot. A master is valid only
+when its bytes are the exact approved and reviewed candidate bytes.
+
+Learndown exports a sanitized immutable timeline-learning snapshot. New videos
+load applicable final provider learning as non-binding guidance; they never
+inherit another video's approval, rights decision, timing, media, or review.
+Exact source, program, current-candidate, and approved-candidate stills use
+immutable extraction records. Thumbnail extraction requires an approved
+candidate and remains reference/delivery media, never an editorial source.
+
+Long-form Watch first probes the exact served vision model and budgets each
+pass from its real context and resource limits. It combines sparse orientation,
+dense required-window review, section-aware pacing, sequential decode,
+movement, transcript, waveform, flash, and human disposition. Coverage is
+reported from actual evidence rather than nominal duration.

@@ -3,7 +3,11 @@ from __future__ import annotations
 from pathlib import Path
 
 from avo.adapters.understand.watch_policy import resolve_watch_policy
-from avo.timeline.review_runner import ReviewRunner
+from avo.timeline.review_runner import (
+    ReviewRunner,
+    actual_coverage,
+    fuse_review_evidence,
+)
 from tests.test_timeline_review_integration import FakeQc, FakeTranscript, FakeWatch
 
 
@@ -64,18 +68,98 @@ class RequestedWindowsWatch(FakeWatch):
         return result
 
 
-def test_requested_windows_satisfy_full_review_when_coverage_windows_empty(
+def test_requested_windows_do_not_claim_actual_full_review_when_observations_empty(
     tmp_path: Path,
 ) -> None:
     result = _run(tmp_path, None, RequestedWindowsWatch())
-    assert result["state"] != "blocked"
-    assert "WATCH_SCOPE_INSUFFICIENT" not in (result.get("blocker") or "")
+    assert result["state"] == "blocked"
+    assert "every required" in result["blocker"]
 
 
 def test_sampled_watch_evidence_cannot_satisfy_full_review(tmp_path: Path) -> None:
     result = _run(tmp_path, None, SampledWatch())
     assert result["state"] == "blocked"
     assert "full Watch evidence required" in result["blocker"]
+
+
+def test_actual_coverage_never_infers_duration_from_nominal_full_scope() -> None:
+    coverage = actual_coverage(
+        {"mode": "full", "durationSeconds": 100, "inspectedRanges": []},
+        required_windows=[],
+    )
+    assert coverage["reviewedSeconds"] == 0
+    actual = actual_coverage(
+        {
+            "mode": "full",
+            "durationSeconds": 100,
+            "inspectedRanges": [{"start": 0, "end": 10}, {"start": 8, "end": 12}],
+            "partiallyInspectedRanges": [{"start": 20, "end": 25}],
+            "deterministicallyCheckedRanges": [{"start": 30, "end": 40}],
+        },
+        required_windows=[],
+    )
+    assert actual["reviewedSeconds"] == 17
+    assert actual["deterministicallyCheckedSeconds"] == 10
+    assert actual["uninspectedRanges"] == [
+        {"start": 12.0, "end": 20.0},
+        {"start": 25.0, "end": 30.0},
+        {"start": 40.0, "end": 100.0},
+    ]
+
+
+def test_actual_coverage_accepts_observed_frame_ranges() -> None:
+    actual = actual_coverage(
+        {
+            "durationSeconds": 10,
+            "frameRate": {"num": 30, "den": 1},
+            "inspectedRanges": [
+                {"startFrame": 0, "endFrameExclusive": 90},
+            ],
+            "deterministicallyCheckedRanges": [
+                {"startFrame": 150, "endFrameExclusive": 180},
+            ],
+        },
+        required_windows=[],
+    )
+    assert actual["reviewedSeconds"] == 3
+    assert actual["deterministicallyCheckedSeconds"] == 1
+    assert actual["uninspectedRanges"] == [
+        {"start": 3.0, "end": 5.0},
+        {"start": 6.0, "end": 10.0},
+    ]
+
+
+def test_evidence_fusion_routes_conflicts_to_exact_human_windows() -> None:
+    fused = fuse_review_evidence(
+        watch_findings=[
+            {
+                "findingId": "watch-motion",
+                "category": "movement",
+                "status": "corroborated",
+                "severity": "blocking",
+                "programRange": {"startFrame": 100, "endFrameExclusive": 120},
+                "observed": "insert appears frozen",
+                "message": "insert appears frozen",
+            }
+        ],
+        deterministic={
+            "sequentialDecode": {"status": "pass", "findings": []},
+            "movement": {"status": "pass", "findings": []},
+            "transcript": {"status": "pass", "findings": []},
+            "waveform": {
+                "status": "needs-human-judgment",
+                "findings": [],
+                "listeningWindows": [{"startFrame": 300, "endFrameExclusive": 315}],
+            },
+            "flash": {"status": "pass", "findings": []},
+            "pacing": {"status": "pass", "findings": []},
+        },
+    )
+    assert fused["status"] == "needs-human-judgment"
+    assert {tuple(window.values()) for window in fused["humanReviewWindows"]} == {
+        (100, 120),
+        (300, 315),
+    }
 
 
 def test_review_transcribes_into_edit_dir_not_nested_transcripts(
@@ -189,6 +273,21 @@ class MaterializationQc:
 
 
 class CurrentWorkspace:
+    project = {
+        "models": {
+            "understand": {
+                "id": "qwen3.5-4b",
+                "source": {
+                    "kind": "endpoint",
+                    "endpoint": {
+                        "baseUrl": "http://127.0.0.1:1234/v1",
+                        "servedName": "qwen3.5-4b",
+                    },
+                },
+            }
+        }
+    }
+
     def active_dependency_snapshot(self):
         return {
             "cmap": "a" * 64,
@@ -244,6 +343,28 @@ def test_final_review_forwards_and_identity_binds_materialization(
         item for item in result["evidence"] if item["kind"] == "source-fidelity"
     )
     assert evidence["fidelityDetails"]["offendingNodeIds"] == []
+
+
+def test_project_understand_pin_is_forwarded_to_watch(tmp_path: Path) -> None:
+    candidate = tmp_path / "proof.mp4"
+    candidate.write_bytes(b"candidate")
+    watch = FakeWatch()
+    ReviewRunner(
+        review_root=tmp_path / "review",
+        transcription=FakeTranscript(),
+        watch=watch,
+        deterministic_qc=FakeQc(),
+        workspace=CurrentWorkspace(),
+        clock=lambda: "2026-09-02T00:00:00Z",
+    ).run(
+        checkpoint="cut-proof",
+        candidate=candidate,
+        dependencies={"cmap": "b" * 64, "sync-map": "c" * 64},
+        render_profile="proof",
+    )
+    request = watch.requests[0]
+    assert request["option_id"] == "qwen3.5-4b"
+    assert request["model_pin"] == CurrentWorkspace.project["models"]["understand"]
 
 
 def test_fidelity_prerequisite_classification_blocks_without_fixing(

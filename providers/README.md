@@ -76,3 +76,72 @@ Or copy `_template/` to `providers/<name>/` by hand and edit the manifest.
 **Personal providers are gitignored.** Only `providers/_template/` and the schema
 ship in the public repo. Your real channel directory (e.g. `providers/my-channel/`)
 stays on disk locally and is never committed.
+
+## Timeline learning
+
+Completed videos may export immutable sanitized learning under
+`providers/<name>/learndowns/<entry>/timeline-learning/`. The active index points
+to one draft or final `TimelineLearningSnapshot`, which binds the final iteration
+ledger, candidate, regression, reconstruction, and approved-master identities.
+It contains prevention rules and neutral rework taxonomy, but no source media,
+transcript body, private absolute path, editable timeline, secret, or inherited
+approval. New projects load only final snapshots as contextual guidance.
+
+```json
+{
+  "snapshotId": "timeline-learning-0123456789ab",
+  "status": "final",
+  "iterationLedgerHash": "<sha256>",
+  "candidateSnapshotHash": "<sha256>",
+  "reconstructionBundleHash": "<sha256>",
+  "masterFingerprint": {"sha256": "<sha256>", "sizeBytes": 123},
+  "taxonomy": [],
+  "preventionRules": [],
+  "snapshotHash": "<sha256>"
+}
+```
+
+The complete contract is [`avo.timeline-learning.schema.json`](../schemas/avo.timeline-learning.schema.json).
+
+## Reusable provider animation components
+
+Reusable HyperFrames behavior is proposed from approved project-local code,
+sanitized, rights-checked, validated with at least two neutral fixtures, and
+explicitly approved before publication. Immutable semantic versions live under
+`providers/<name>/animations/hyperframes/<kitId>/versions/<version>/`; the
+provider catalog validates against
+[`avo.animation-library.schema.json`](./avo.animation-library.schema.json).
+
+A published component declares typed parameters, design tokens, lifecycle,
+SFX relationships, source-file fingerprints, an exact dependency lock, neutral
+fixtures, per-dependency rights, accessibility behavior, provenance, manifest
+integrity, and lifecycle state. Missing, ambiguous, expired, revoked, or
+non-portable rights block new use. The same version cannot be replaced with
+different bytes, and deprecation never deletes a referenced version.
+
+```json
+{
+  "patternId": "chapter-card",
+  "version": "1.1.0",
+  "parameterSchema": {
+    "type": "object",
+    "required": ["label"],
+    "properties": {"label": {"type": "string"}}
+  },
+  "lifecycle": {
+    "preEntry": "hidden",
+    "entrance": "pop",
+    "hold": "readable",
+    "exit": "fade",
+    "reducedMotion": "fade"
+  },
+  "manifestSha256": "<sha256>",
+  "lifecycleState": "active"
+}
+```
+
+Reuse always creates a fresh project-local `ComponentInstance` with exact kit
+version/hash, current text and assets, current BMap/Tracks events and safe areas,
+new rights evidence, generated-file fingerprints, fresh QC, and fresh approval.
+No timing, media, review, rights assumption, or approval is inherited from the
+originating video.

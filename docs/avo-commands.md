@@ -265,3 +265,24 @@ expected update or exact user action. Durable project artifacts—not chat
 memory—decide the reported state. See
 [`avo-agent-step-status.md`](avo-agent-step-status.md) for resume, approval,
 blocker, completion, and prompt-authoring rules.
+
+## Canonical proof and review commands
+
+`/avo.pipeline` compiles the current canonical JSON state into an immutable
+ProofPlan, reports preflight blockers, selects historical-risk microproofs, and
+only permits the full build after their exact gate passes. Proof status reports
+the active CandidateSnapshot rather than combining paths, hashes, transcripts,
+reviews, or approvals from different revisions.
+
+`/avo.watch` reviews the exact candidate under an explicit model capability and
+context budget. It reports sampled and deterministic coverage honestly and
+routes uncertain findings to precise human-review windows.
+
+`/avo.learndown` exports the final iteration taxonomy and prevention rules. A
+provider animation component is proposed and approved separately; reuse creates
+a fresh project-local ComponentInstance with new parameters, assets, timing,
+rights evidence, review, and approval.
+
+`/avo.thumbnail` extracts a deterministic frame from a source, program time, or
+candidate. Cut-boundary side, anomalous VFR frame index, display geometry, and
+HDR color policy must be explicit whenever inference would be ambiguous.

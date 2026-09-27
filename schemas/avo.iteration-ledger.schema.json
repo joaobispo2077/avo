@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://avo.local/avo.iteration-ledger.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "ledgerId", "videoId", "provider", "currentIterationId", "iterations", "decisions", "reworkItems", "artifactFingerprints", "ledgerHash"],
+  "properties": {
+    "schemaVersion": { "const": "1.0.0" },
+    "ledgerId": { "$ref": "#/$defs/stableId" },
+    "videoId": { "type": "string", "minLength": 1 },
+    "provider": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
+    "currentIterationId": { "oneOf": [{ "$ref": "#/$defs/stableId" }, { "type": "null" }] },
+    "iterations": { "type": "array", "items": { "$ref": "#/$defs/iterationRecord" } },
+    "decisions": { "type": "array", "items": { "$ref": "#/$defs/decisionLedgerEntry" } },
+    "reworkItems": { "type": "array", "items": { "$ref": "#/$defs/reworkClassification" } },
+    "artifactFingerprints": { "type": "array", "items": { "$ref": "#/$defs/artifactFingerprint" } },
+    "ledgerHash": { "$ref": "#/$defs/sha256" }
+  },
+  "$defs": {
+    "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "stableId": { "type": "string", "pattern": "^[a-z][a-z0-9-]{2,63}$" },
+    "actor": {
+      "type": "object", "additionalProperties": false, "required": ["type", "id"],
+      "properties": { "type": { "enum": ["user", "agent", "migration", "system"] }, "id": { "type": "string", "minLength": 1 }, "toolVersion": { "type": "string", "minLength": 1 } }
+    },
+    "evidenceRef": {
+      "type": "object", "additionalProperties": false, "required": ["evidenceId", "sha256"],
+      "properties": { "evidenceId": { "type": "string", "minLength": 1 }, "sha256": { "$ref": "#/$defs/sha256" }, "kind": { "type": "string", "minLength": 1 } }
+    },
+    "hashRef": {
+      "type": "object", "additionalProperties": false, "required": ["artifactId", "sha256"],
+      "properties": { "artifactId": { "type": "string", "minLength": 1 }, "sha256": { "$ref": "#/$defs/sha256" }, "locator": { "type": ["string", "null"] }, "tombstoned": { "type": "boolean" } }
+    },
+    "fingerprint": {
+      "type": "object", "additionalProperties": false, "required": ["sha256", "sizeBytes"],
+      "properties": { "sha256": { "$ref": "#/$defs/sha256" }, "sizeBytes": { "type": "integer", "minimum": 0 }, "locator": { "type": ["string", "null"] }, "mediaSignature": { "type": "object", "additionalProperties": true } }
+    },
+    "programWindow": {
+      "type": "object", "additionalProperties": false, "required": ["windowId", "startFrame", "endFrameExclusive", "reason"],
+      "properties": { "windowId": { "$ref": "#/$defs/stableId" }, "startFrame": { "type": "integer", "minimum": 0 }, "endFrameExclusive": { "type": "integer", "minimum": 1 }, "reason": { "type": "string", "minLength": 1 } }
+    },
+    "decisionLedgerEntry": {
+      "type": "object", "additionalProperties": false,
+      "required": ["decisionId", "kind", "scope", "statement", "rationale", "originIterationId", "evidenceRefs", "status", "supersededBy", "riskWindows", "updatedAt"],
+      "properties": {
+        "decisionId": { "$ref": "#/$defs/stableId" },
+        "kind": { "enum": ["approval", "requirement", "rejection", "defect", "exception", "risk", "preference"] },
+        "scope": { "type": "object", "minProperties": 1, "additionalProperties": true },
+        "statement": { "type": "string", "minLength": 1 }, "rationale": { "type": "string", "minLength": 1 },
+        "originIterationId": { "$ref": "#/$defs/stableId" },
+        "evidenceRefs": { "type": "array", "items": { "$ref": "#/$defs/evidenceRef" } },
+        "status": { "enum": ["active", "resolved", "superseded", "rejected", "awaiting-human", "not-applicable"] },
+        "supersededBy": { "oneOf": [{ "$ref": "#/$defs/stableId" }, { "type": "null" }] },
+        "riskWindows": { "type": "array", "items": { "$ref": "#/$defs/programWindow" } },
+        "updatedAt": { "type": "string", "minLength": 1 }
+      },
+      "allOf": [{ "if": { "properties": { "status": { "const": "superseded" } } }, "then": { "properties": { "supersededBy": { "$ref": "#/$defs/stableId" } } } }]
+    },
+    "reworkClassification": {
+      "type": "object", "additionalProperties": false,
+      "required": ["reworkId", "iterationId", "reworkGroupId", "origin", "summary", "impact", "evidenceRefs", "confidence", "capabilityGap", "supersedes", "classifiedBy"],
+      "properties": {
+        "reworkId": { "$ref": "#/$defs/stableId" }, "iterationId": { "$ref": "#/$defs/stableId" }, "reworkGroupId": { "$ref": "#/$defs/stableId" },
+        "origin": { "enum": ["user-scope-change", "creator-preference-refinement", "agent-reasoning-defect", "implementation-defect", "avo-capability-gap", "source-limitation", "external-dependency-failure", "unknown"] },
+        "summary": { "type": "string", "minLength": 1 },
+        "impact": { "type": "object", "additionalProperties": false, "required": ["affectedArtifacts", "programWindows"], "properties": { "affectedArtifacts": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true }, "programWindows": { "type": "array", "items": { "$ref": "#/$defs/programWindow" } }, "renderCost": { "type": "number", "minimum": 0 }, "reviewCost": { "type": "number", "minimum": 0 } } },
+        "evidenceRefs": { "type": "array", "items": { "$ref": "#/$defs/evidenceRef" } },
+        "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+        "capabilityGap": { "oneOf": [{ "type": "object", "additionalProperties": false, "required": ["operation", "desiredBehavior"], "properties": { "operation": { "type": "string", "minLength": 1 }, "desiredBehavior": { "type": "string", "minLength": 1 } } }, { "type": "null" }] },
+        "supersedes": { "oneOf": [{ "$ref": "#/$defs/stableId" }, { "type": "null" }] },
+        "classifiedBy": { "$ref": "#/$defs/actor" }
+      },
+      "allOf": [
+        { "if": { "properties": { "origin": { "const": "avo-capability-gap" } } }, "then": { "properties": { "capabilityGap": { "type": "object" } } } },
+        { "if": { "properties": { "origin": { "not": { "const": "unknown" } } } }, "then": { "properties": { "evidenceRefs": { "minItems": 1 } } } }
+      ]
+    },
+    "regressionContract": {
+      "type": "object", "additionalProperties": false, "required": ["contractId", "ledgerHash", "iterationId", "obligations", "historicalRiskWindows", "conflicts", "contractHash"],
+      "properties": { "contractId": { "$ref": "#/$defs/stableId" }, "ledgerHash": { "$ref": "#/$defs/sha256" }, "iterationId": { "$ref": "#/$defs/stableId" }, "obligations": { "type": "array", "items": { "$ref": "#/$defs/decisionLedgerEntry" } }, "historicalRiskWindows": { "type": "array", "items": { "$ref": "#/$defs/programWindow" } }, "conflicts": { "type": "array", "items": { "type": "object", "additionalProperties": false, "required": ["decisionIds", "reason", "status"], "properties": { "decisionIds": { "type": "array", "minItems": 2, "items": { "$ref": "#/$defs/stableId" }, "uniqueItems": true }, "reason": { "type": "string", "minLength": 1 }, "status": { "enum": ["unresolved", "resolved", "needs-human"] } } } }, "contractHash": { "$ref": "#/$defs/sha256" } }
+    },
+    "iterationRecord": {
+      "type": "object", "additionalProperties": false,
+      "required": ["iterationId", "sequence", "parentIterationId", "intent", "canonicalBasis", "proofPlanRef", "candidate", "findings", "feedback", "decisionIds", "reworkItemIds", "state", "createdAt"],
+      "properties": { "iterationId": { "$ref": "#/$defs/stableId" }, "sequence": { "type": "integer", "minimum": 1 }, "parentIterationId": { "oneOf": [{ "$ref": "#/$defs/stableId" }, { "type": "null" }] }, "intent": { "type": "object", "minProperties": 1, "additionalProperties": true }, "canonicalBasis": { "type": "object", "minProperties": 1, "additionalProperties": { "$ref": "#/$defs/sha256" } }, "proofPlanRef": { "$ref": "#/$defs/hashRef" }, "candidate": { "oneOf": [{ "$ref": "#/$defs/fingerprint" }, { "type": "null" }] }, "findings": { "type": "array", "items": { "$ref": "#/$defs/evidenceRef" } }, "feedback": { "type": "array", "items": { "type": "object", "minProperties": 1, "additionalProperties": true } }, "decisionIds": { "type": "array", "items": { "$ref": "#/$defs/stableId" }, "uniqueItems": true }, "reworkItemIds": { "type": "array", "items": { "$ref": "#/$defs/stableId" }, "uniqueItems": true }, "state": { "enum": ["planned", "rendered", "reviewed", "approved", "rejected", "changes-requested", "superseded", "cleaned"] }, "createdAt": { "type": "string", "minLength": 1 } }
+    },
+    "artifactFingerprint": {
+      "type": "object", "additionalProperties": false, "required": ["artifactId", "mediaClass", "fingerprint"],
+      "properties": { "artifactId": { "type": "string", "minLength": 1 }, "mediaClass": { "enum": ["original", "generated", "proof", "preview", "proxy", "master", "delivery", "unknown"] }, "fingerprint": { "$ref": "#/$defs/fingerprint" }, "state": { "enum": ["current", "historical", "tombstoned", "quarantined"] } }
+    }
+  }
+}

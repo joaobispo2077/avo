@@ -29,6 +29,76 @@ ANSWER_FIELDS = (
     "checkpoint",
 )
 
+_REWORK_GROUPS = {
+    "scopeEvolution": {
+        "user-scope-change",
+        "creator-preference-refinement",
+    },
+    "correctnessRegressions": {
+        "agent-reasoning-defect",
+        "implementation-defect",
+    },
+    "capabilityGaps": {"avo-capability-gap"},
+    "inputEnvironment": {
+        "source-limitation",
+        "external-dependency-failure",
+    },
+    "unknown": {"unknown"},
+}
+
+
+def build_rework_report(ledger: dict[str, Any]) -> dict[str, Any]:
+    """Aggregate evidence-backed classifications without collapsing causality."""
+    items = list(ledger.get("reworkItems") or [])
+    superseded = {str(item["supersedes"]) for item in items if item.get("supersedes")}
+    active = [item for item in items if str(item.get("reworkId")) not in superseded]
+    by_group: dict[str, list[dict[str, Any]]] = {}
+    for item in active:
+        group_id = str(item.get("reworkGroupId") or item.get("reworkId") or "")
+        by_group.setdefault(group_id, []).append(item)
+    categories = {
+        name: {
+            "classificationCount": sum(
+                item.get("origin") in origins for item in active
+            ),
+            "groupCount": len(
+                {
+                    group_id
+                    for group_id, members in by_group.items()
+                    if any(item.get("origin") in origins for item in members)
+                }
+            ),
+        }
+        for name, origins in _REWORK_GROUPS.items()
+    }
+    render_cost = 0.0
+    review_cost = 0.0
+    for members in by_group.values():
+        render_cost += max(
+            (
+                float((item.get("impact") or {}).get("renderCost") or 0)
+                for item in members
+            ),
+            default=0.0,
+        )
+        review_cost += max(
+            (
+                float((item.get("impact") or {}).get("reviewCost") or 0)
+                for item in members
+            ),
+            default=0.0,
+        )
+    return {
+        "classificationCount": len(active),
+        "reworkGroupCount": len(by_group),
+        "categories": categories,
+        "multiCausalGroups": sorted(
+            group_id for group_id, members in by_group.items() if len(members) > 1
+        ),
+        "costSignals": {"renderCost": render_cost, "reviewCost": review_cost},
+        "items": deepcopy(active),
+    }
+
 
 def _load_json(path: Path) -> dict[str, Any]:
     value = json.loads(Path(path).read_text(encoding="utf-8"))

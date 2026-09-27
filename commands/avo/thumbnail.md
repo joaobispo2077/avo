@@ -4,55 +4,43 @@
 
 ## Workflow guidance
 
-**Workflow steps:** Validate thumbnail prerequisites → Run thumbnail → Verify and report the thumbnail result
-**Step state source:** the consumed approved artifact, delivery-manifest.json when present, and the observed result
-**Stopping conditions:** Missing required input, a failed or stale gate, a required human decision, or verified thumbnail completion
-**Valid next commands:** /avo.deliver
+**Workflow steps:** Validate approved candidate and exact moment → Extract immutable candidate → Verify lineage, display geometry, and color record → Ask for selection
 
-Follow the shared [step-status response contract](../../agent-skills/avo-pipeline/references/step-status.md) for every progress, input, blocker, and completion response.
+**Step state source:** the approved candidate fingerprint, current canonical CMap when program mapping is requested, and the immutable StillExtractionRecord
 
-Frame candidates and safe-zone checklist from the approved master (ffmpeg stills v1).
+**Stopping conditions:** Missing or stale fingerprint, ambiguous cut side, anomalous timestamps without an explicit decoded-frame index, HDR without an explicit supported color policy, extraction failure, or required creator selection
 
-**Skill:** [`agent-skills/avo-pipeline/references/thumbnail.md`](../../agent-skills/avo-pipeline/references/thumbnail.md)
+**Valid next commands:** `/avo.deliver`
 
----
+Follow the shared [step-status response contract](../../agent-skills/avo-pipeline/references/step-status.md). Follow the exact-frame policy in [`thumbnail.md`](../../agent-skills/avo-pipeline/references/thumbnail.md).
 
 ## Usage
 
-```
-/avo.thumbnail
-Provider: my-channel
-rawDir: /path/to/footage
-Footage: edit/masters/20260801-review-master-v001.mp4
-```
-
-Optional: `--count 3` (default ≥3 frames)
-
----
-
-## Role
-
-Extract truthful candidate stills to `<rawDir>/edit/delivery/thumbnails/` with provider design checks. No mandatory HyperFrames render in v1.
-
----
-
-## Instructions
-
-1. Parse `Provider`, `rawDir`, optional master path.
-2. Require approved master export.
-3. Follow [`thumbnail.md`](../../agent-skills/avo-pipeline/references/thumbnail.md).
-4. **Wait for user approval** before marking candidates final.
-
----
-
-## Example
-
 ```text
-/avo.thumbnail
-Provider: my-channel
-The footage is at C:/Videos/review
+avo still extract \
+  --project <avo.project.json> \
+  --purpose thumbnail \
+  --candidate <approved-candidate.mp4> \
+  --candidate-frame <frame> \
+  --candidate-state approved \
+  --candidate-sha256 <sha256> \
+  [--color-policy <id>] \
+  [--width <pixels>] \
+  --format png
 ```
+
+Review/reference stills may instead request an exact raw rational time or canonical program frame. A program request exactly on a cut must add `--side incoming` or `--side outgoing`. VFR input with missing, duplicate, or non-monotonic timestamps requires `--decoded-frame-index`.
+
+## Rules
+
+- Thumbnail bytes come only from an exact fingerprinted `approved-candidate`; an unapproved current candidate is review/reference-only.
+- Candidate-derived stills are delivery/reference artifacts and never proof ancestors.
+- Output is an immutable, versioned PNG in `<rawDir>/edit/delivery/thumbnails/` with a sibling record under `records/`.
+- Rotation and sample-aspect ratio are applied without crop and recorded. Optional scaling is explicit.
+- SDR uses the versioned deterministic tagged-sRGB policy. HDR fails closed unless a supported preserve or tone-map policy is explicitly selected; tone mapping is never implicit.
+- Temporary alternatives may be cleaned only after their records, fingerprints, and rejection decisions are retained. Accepted still bytes and records are preserved.
+- Creator approval is required before a thumbnail candidate is treated as selected or final.
 
 ## Shared timeline gateway
 
-Resolves provider/video context and reads only exact approved lineage. It performs no canonical timeline mutation.
+The command reads exact approved lineage and writes only the delivery still and its immutable evidence record. It does not mutate the canonical timeline.
