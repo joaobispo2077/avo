@@ -4,6 +4,21 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from avo.capabilities import (
+    CapabilityImplementation,
+    CapabilityRegistry,
+    CapabilityRegistryError,
+    default_proof_capability_registry,
+)
+
+__all__ = [
+    "CapabilityImplementation",
+    "CapabilityRegistry",
+    "CapabilityRegistryError",
+    "adapter_for_routing_suffix",
+    "default_proof_capability_registry",
+]
+
 if TYPE_CHECKING:
     from avo.adapters.base import JobAdapter
 

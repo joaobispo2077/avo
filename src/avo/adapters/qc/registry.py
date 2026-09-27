@@ -151,11 +151,14 @@ class CheckpointQcRegistry:
                 "status": result.get("status") or "fail",
                 "findings": result.get("findings") or [],
             }
-        source_log = workspace.raw_dir / "SOURCE-LOG.md"
+        candidates = (
+            workspace.raw_dir / "SOURCE-LOG.md",
+            workspace.raw_dir / "edit" / "SOURCE-LOG.md",
+        )
         findings = []
-        if (
-            not source_log.is_file()
-            or not source_log.read_text(encoding="utf-8").strip()
+        if not any(
+            path.is_file() and path.read_text(encoding="utf-8").strip()
+            for path in candidates
         ):
             findings.append(
                 {
