@@ -86,3 +86,35 @@ policy, factual conflict, and ambiguous rebase require human judgment.
 ## Shared timeline gateway
 
 Uses shared timeline storage, transition guards, invalidation, and AI review services. It cannot maintain private CMap, BMap, sync, track, animation, or approval truth.
+
+## Canonical proof planning
+
+After the content maps are current, compile one immutable ProofPlan from the
+exact CMap, BMap, Tracks, Animation, Sync Map, source fingerprints, render
+profile, and complete iteration RegressionContract. The plan is the sole
+orchestration authority for picture, audio, timed events, implementation
+references, validation windows, and output identity. Render adapters consume
+declared plan timing and parameters; they do not reconstruct editorial intent.
+
+Resolve each requested operation in this order: an AVO built-in, a compatible
+provider component, then a registered project-local implementation. When no
+supported capability exists, report a structured capability gap before render.
+Project-specific Python, shell, PowerShell, JavaScript, or HyperFrames code is
+allowed only for that declared unsupported custom delta. Scaffold and register
+it inside the external footage project, fingerprint it, and keep its timing and
+inputs owned by the same ProofPlan. Never add one-video code to this repository.
+
+Every proof is rebuilt from canonical sources and current deterministic
+intermediates. Earlier proofs remain comparison evidence only and are never
+picture or audio inputs.
+
+Before a full proof render, run deterministic ProofPlan preflight and stop on
+any stale revision, dependency fingerprint mismatch, missing source, output
+alias, forbidden recursive media ancestry, unresolved capability, or unavailable
+tool. Then render the declared microproof windows plus one representative window
+for every changed operation kind and every historical risk window. Microproofs
+use the exact same video graph, continuous audio graph, events, implementations,
+and parameters as the full proof. Missing, stale, ambiguous, or failed required
+microproof evidence blocks the full render. `/avo.pipeline` status must report
+the plan hash, preflight state, microproof gate hash, blockers, and the minimum
+remediation without claiming that a complete render started.

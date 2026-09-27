@@ -90,3 +90,22 @@ performance, key moments, dips, spikes, top moments, AVD, APV, CTR by traffic
 source, traffic mix, new/casual/regular viewer behavior when available,
 end-screen performance, chapters, and comments. Classify likely causes and
 compare against similar videos before proposing edits or packaging tests.
+
+## Canonical proof construction and custom code
+
+Editorial decisions live in CMap, BMap, Tracks, Animation, SyncMap, the
+iteration ledger, and the immutable ProofPlan. Proofs are always rebuilt from
+original or admitted generated sources. A previous proof, preview, proxy,
+master, or delivery file may be compared but cannot become picture or audio
+input, even after copying, renaming, cropping, re-encoding, or extracting audio.
+
+Use built-in capabilities first, then compatible provider components. A
+video-specific script or HyperFrames component is an allowed escape hatch only
+for the unsupported custom delta. It must be registered, fingerprinted,
+parameterized by the ProofPlan, reproducible to its declared level, and unable
+to choose sources, reinterpret timing, rebuild the mix, or bypass review.
+
+Iteration history is cumulative. The next candidate preserves all still-active
+approvals and regressions across earlier revisions, not merely the latest proof.
+Creator scope additions and preference refinements remain distinct from
+correctness defects and may be multi-causal when the evidence supports it.

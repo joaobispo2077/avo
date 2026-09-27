@@ -246,6 +246,22 @@ previous timelines or EDLs, review notes, brand assets, export presets,
 analytics, `EDITLOG.md`, `SOURCE-LOG.md`, and any existing project rules.
 Preserve sensible existing conventions.
 
+## Proof Reconstruction Is Canonical-Only
+
+Every proof revision MUST be reconstructed from the current canonical timeline
+revisions and their fingerprinted source media. A prior proof, preview, proxy,
+master, or delivery export MUST NOT be used as a picture base, audio bed,
+full-frame ancestor, or embedded substitute source for another proof. Approved
+proofs are review references only.
+
+Deterministic intermediates are reusable only when their provenance binds them
+to the exact current CMap, BMap, Tracks, Animation, Sync Map, source
+fingerprints, render contract, and relevant generator inputs. Any changed or
+unverifiable dependency requires rematerialization. Before rendering, fail with
+the prohibited input path and owning dependency when forbidden ancestry is
+detected. This rule applies to edit-proof, motion-proof, pre-master, and every
+specialized proof workflow, for both picture and audio.
+
 ## Format Diagnosis Is Mandatory
 
 Before recommending pacing, graphics, transitions, music, B-roll, or effects,

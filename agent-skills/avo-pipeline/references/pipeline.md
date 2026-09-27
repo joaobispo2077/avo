@@ -49,3 +49,40 @@ Write to `avo.project.json`:
 
 - `--skip-motion`: stop after approved edit master
 - `--preview`: hold 360p/720p until user promotes
+
+## JSON-first proof path
+
+Before a proof render, record the current iteration and compile its complete
+RegressionContract. Then compile an immutable ProofPlan that locks the active
+CMap, BMap, Tracks, Animation and Sync Map revisions, source fingerprints,
+render profile, output contract, events and review obligations. Preflight must
+stop on conflicting historical decisions, stale dependencies, forbidden media
+ancestry, or an unresolved capability. A proof, preview, proxy, master, or
+delivery file is comparison evidence only and must never become a render input.
+
+Capability resolution is deterministic: built-in AVO behavior first, compatible
+provider components second, and a registered project-local custom implementation
+last. Custom code is an escape hatch for one explicitly unsupported delta, not
+a parallel orchestration pipeline. Create it under the external footage
+project, fingerprint its implementation and dependencies, register its typed
+inputs and outputs, and leave all timing, media selection, audio routing and
+validation in the ProofPlan. Reusable behavior belongs in AVO or the provider
+component library, while video-specific scripts never enter the AVO repository.
+
+### Preflight and microproof gate
+
+Before spending on a full render, validate the exact ProofPlan hash and every
+active revision/source lock. Fail closed on missing media, an output path that
+aliases an input, recursive proof/preview/proxy/master/delivery ancestry,
+unresolved capability references, or unavailable FFmpeg/HyperFrames execution.
+Select microproof windows deterministically from declared validation windows,
+historical regression risks, and one representative window per changed
+operation kind. Render those windows through the same immutable video graph,
+continuous audio graph, TimedEvents, implementation references, and adapter
+parameters as the full proof. Do not create a special lightweight edit path.
+
+A full build requires a gate whose ProofPlan and preflight hashes are current,
+whose required-window set is complete, and whose results all pass. `failed`,
+`ambiguous`, `needs-human-judgment`, missing, or stale evidence blocks the full
+render. Status output names the exact blocker and minimum remediation while
+keeping the expensive render unstarted.
