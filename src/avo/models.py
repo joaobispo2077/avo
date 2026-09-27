@@ -73,6 +73,29 @@ def catalog_option(
     return None
 
 
+def model_capability_metadata(
+    catalog: dict[str, Any], job_key: str, option_id: str
+) -> dict[str, Any]:
+    """Return declarative capabilities without inventing runtime properties."""
+    option = catalog_option(catalog, job_key, option_id)
+    if option is None:
+        raise KeyError(f"unknown catalog model: {job_key}/{option_id}")
+    context = dict(option.get("effectiveContext") or {})
+    return {
+        "modelId": option_id,
+        "capabilities": list(option.get("capabilities") or []),
+        "endpointProtocol": option.get("endpointProtocol"),
+        "effectiveContext": {
+            "policy": context.get("policy", "unspecified"),
+            "declaredTokens": context.get("declaredTokens"),
+        },
+        "resourceEstimate": {
+            "vramMB": option.get("vramMB"),
+            "ramMB": option.get("ramMB"),
+        },
+    }
+
+
 def format_active_model(catalog: dict[str, Any], job_key: str, option_id: str) -> str:
     job_spec = (catalog.get("jobs") or {}).get(job_key) or {}
     adapter = job_spec.get("adapter", job_key)
