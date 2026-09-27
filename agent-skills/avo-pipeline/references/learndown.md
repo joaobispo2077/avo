@@ -62,6 +62,30 @@ Use `--scratch-out --session-id <id>` on inventory `report` to stage the **full*
 
 Learndown does **not** delete files. Run `/avo.cleanup` after learndown completes.
 
+## Timeline transfer and animation reuse
+
+- Export immutable, content-hashed timeline-learning snapshots. Provider preflight
+  loads final snapshots as contextual advice; it never imports prior approvals.
+- A reusable project component first becomes a sanitized proposal. Strip project
+  text, claims, timing, media, absolute/private paths, secrets, source maps, and
+  render-time network access; require typed parameters, exact dependency locks,
+  portable rights, two neutral fixtures, reduced motion, deterministic renders,
+  and HyperFrames lint/check.
+- Stop for an explicit creator decision. Approval atomically publishes an
+  immutable semantic version; rejection records the decision and leaves the
+  project-local component unchanged. Non-promotion is normal for one-off,
+  coupled, non-portable, or maintenance-heavy work.
+- Reuse binds an exact kit version and manifest hash into a **fresh** project-local
+  ComponentInstance. Bind current text, assets and rights, BMap/Tracks events,
+  timing, SFX, faces, captions, evidence, and UI safe areas. Never copy the old
+  video's media, candidate approval, review refs, or rights assumptions.
+- Every new instance repeats HyperFrames checks/snapshots, Watch/QC,
+  accessibility, and creator approval. Version upgrades are opt-in and create a
+  new instance; deprecation never mutates or deletes referenced versions.
+- Cleanup must preserve final timeline-learning snapshots, promotion decisions,
+  exact ComponentInstance versions, and fingerprinted project component source
+  needed for canonical reconstruction.
+
 ## If ai-memory absent
 
 Print one-line skip notice in wrap learning section (`aiMemory: "skipped"`). **Steps 1–3 above still run.** Proceed to `/avo.cleanup` when user ready. See [`docs/ai-memory-and-ai-jail.md`](../../../docs/ai-memory-and-ai-jail.md) for manual install.

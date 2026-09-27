@@ -56,7 +56,26 @@ rawDir: H:/footage/dealer-walk
 
 ## Animation library integration
 
-May identify and generalize reusable behavior with provenance, contexts, exclusions, assets, and accessibility, but only proposes a provider pattern. Promotion remains a separate explicit creator decision.
+Learndown may identify a project-local HyperFrames component as a transfer candidate,
+but non-promotion is a valid outcome. `/avo.learndown` only prepares a sanitized
+`propose-from-project` record: typed slots replace project text, timing, media, and
+paths; transitive dependencies and portable rights are locked; HyperFrames
+lint/check and two neutral fixtures (including reduced motion) must pass.
+
+Promotion remains a separate explicit creator decision. Approval publishes one
+immutable semantic version atomically; rejection records the decision without
+changing the project component. Same-version byte changes are forbidden.
+
+A later video references the exact kit version and manifest hash. AVO copies it
+into a fresh project-local ComponentInstance with that video's text, assets,
+timing/event IDs, SFX rights, and safe areas. It inherits no prior review,
+approval, or rights decision and must repeat normal HyperFrames, Watch/QC,
+accessibility, and creator-review gates. Upgrades are opt-in and create another
+instance; deprecated versions remain resolvable for reconstruction.
+
+Timeline learning transfers only sanitized prevention rules, preferences, risks,
+capability gaps, and approved technique candidates. The complete editable
+timeline and private project evidence remain in the footage project.
 
 ## Shared timeline gateway
 
