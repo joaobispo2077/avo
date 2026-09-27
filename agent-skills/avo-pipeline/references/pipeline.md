@@ -69,6 +69,10 @@ inputs and outputs, and leave all timing, media selection, audio routing and
 validation in the ProofPlan. Reusable behavior belongs in AVO or the provider
 component library, while video-specific scripts never enter the AVO repository.
 
+Visible HyperFrames and video text must not contain an em dash by default. It is
+allowed only when the user explicitly authorizes that exact visible text and
+the authorization reference is stored with the animation request.
+
 ### Preflight and microproof gate
 
 Before spending on a full render, validate the exact ProofPlan hash and every

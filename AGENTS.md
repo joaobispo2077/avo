@@ -416,6 +416,11 @@ On-screen text must be mobile/TV readable, high contrast, inside safe areas,
 concise, synced to the spoken meaning, and clear of faces, UI, products,
 evidence, captions, and gameplay.
 
+By default, never use em dashes (`—`) in HyperFrames text or any other visible
+video text. Use punctuation or sentence structure that does not require an em
+dash. An em dash is allowed only when the user explicitly requests it for that
+specific visible text or deliverable.
+
 B-roll must support the current idea, not merely hide a cut. Use it to
 demonstrate, prove, contextualize, orient, preserve continuity, or add relevant
 sensory/emotional texture. Avoid generic stock footage that weakens credibility
