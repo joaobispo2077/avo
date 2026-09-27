@@ -459,3 +459,191 @@ def build_picture_lineage(
         "rootIds": [output_id],
     }
     return {**body, "pictureLineageHash": _hash(body)}
+
+
+def build_audiovisual_lineage(
+    *,
+    cmap_revision: dict[str, Any],
+    tracks_revision: dict[str, Any],
+    canonical_input_lock: dict[str, Any],
+    projection_hash: str,
+    output: dict[str, Any],
+    render_contract: dict[str, Any] | None = None,
+    picture_lineage: dict[str, Any] | None = None,
+    generated_assets: dict[str, dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """Extend the legacy picture graph with actual declared audio contributors."""
+    picture = picture_lineage or build_picture_lineage(
+        cmap_revision=cmap_revision,
+        tracks_revision=tracks_revision,
+        canonical_input_lock=canonical_input_lock,
+        projection_hash=projection_hash,
+        output=output,
+        render_contract=render_contract,
+    )
+    nodes = [{**deepcopy(node), "audioCarrying": False} for node in picture["nodes"]]
+    edges = deepcopy(picture["edges"])
+    output_id = str(picture["rootIds"][0])
+    assets = generated_assets or {}
+
+    def append_asset_inputs(
+        asset_id: str,
+        target_id: str,
+        *,
+        picture_carrying: bool,
+        audio_carrying: bool,
+        stack: tuple[str, ...] = (),
+    ) -> None:
+        if asset_id in stack:
+            raise PictureLineageError(
+                f"generated asset ancestry cycle: {' -> '.join((*stack, asset_id))}"
+            )
+        record = assets.get(asset_id)
+        if record is None:
+            return
+        existing_ids = {str(node["nodeId"]) for node in nodes}
+        for ordinal, reference in enumerate(record.get("inputs") or []):
+            fingerprint = reference.get("fingerprint") or {}
+            parent_asset = str(reference.get("artifactId") or "")
+            nested = parent_asset in assets
+            node_id = (
+                f"generated-asset-{parent_asset}"
+                if nested
+                else f"asset-input-{asset_id}-{ordinal + 1:04d}"
+            )
+            if node_id not in existing_ids:
+                nodes.append(
+                    {
+                        "nodeId": node_id,
+                        "kind": "generated" if nested else "source",
+                        "role": "generated-input" if nested else "source-input",
+                        "mediaClass": "generated" if nested else "source",
+                        "locator": str(
+                            fingerprint.get("locator")
+                            or f"canonical:artifact:{parent_asset or node_id}"
+                        ),
+                        "sha256": str(fingerprint.get("sha256") or ""),
+                        "pictureCarrying": picture_carrying,
+                        "audioCarrying": audio_carrying,
+                        "media": deepcopy(fingerprint.get("mediaSignature") or {}),
+                        **({"generator": {"assetId": parent_asset}} if nested else {}),
+                    }
+                )
+                existing_ids.add(node_id)
+                if nested:
+                    append_asset_inputs(
+                        parent_asset,
+                        node_id,
+                        picture_carrying=picture_carrying,
+                        audio_carrying=audio_carrying,
+                        stack=(*stack, asset_id),
+                    )
+            _add_edge(edges, node_id, target_id, "render", {})
+
+    video_layers = (
+        (tracks_revision.get("snapshot") or {}).get("videoTracks") or {}
+    ).get("layers") or []
+    for layer in video_layers:
+        source = layer.get("source") or {}
+        asset_id = str(
+            source.get("generatedAssetId") or layer.get("generatedAssetId") or ""
+        )
+        if asset_id:
+            append_asset_inputs(
+                asset_id,
+                f"track-{layer.get('layerId', '')}",
+                picture_carrying=True,
+                audio_carrying=False,
+            )
+    audio_layers = (
+        (tracks_revision.get("snapshot") or {}).get("audioTracks") or {}
+    ).get("layers") or []
+    if audio_layers:
+        audio_assembly_id = "assembly-audio"
+        nodes.append(
+            {
+                "nodeId": audio_assembly_id,
+                "kind": "intermediate",
+                "role": "audio",
+                "mediaClass": "assembly",
+                "locator": "canonical:audio-assembly",
+                "sha256": _hash(
+                    {
+                        "projectionHash": projection_hash,
+                        "layers": [layer.get("layerId") for layer in audio_layers],
+                    }
+                ),
+                "pictureCarrying": False,
+                "audioCarrying": True,
+                "media": {},
+            }
+        )
+        for layer in audio_layers:
+            layer_id = str(layer.get("layerId") or "")
+            source = layer.get("source") or {}
+            locator = str(source.get("locator") or "")
+            generator = layer.get("generator") or source.get("generator")
+            generated = bool(generator) and not locator
+            node = {
+                "nodeId": f"audio-{layer_id}",
+                "kind": "generated" if generated else "source",
+                "role": str(layer.get("role") or "audio"),
+                "mediaClass": _media_class(
+                    layer, default="generated" if generated else "audio-asset"
+                ),
+                "locator": locator or f"generator:{layer_id}",
+                "sha256": _node_sha(
+                    source, locator, {"generator": generator, "layer": layer}
+                ),
+                "pictureCarrying": False,
+                "audioCarrying": True,
+                "media": deepcopy(source.get("mediaSignature") or {}),
+                "layerId": layer_id,
+            }
+            if generated:
+                node["generator"] = _generator_payload(generator)
+            nodes.append(node)
+            asset_id = str(
+                source.get("generatedAssetId") or layer.get("generatedAssetId") or ""
+            )
+            if asset_id:
+                append_asset_inputs(
+                    asset_id,
+                    node["nodeId"],
+                    picture_carrying=False,
+                    audio_carrying=True,
+                )
+            _add_edge(
+                edges,
+                node["nodeId"],
+                audio_assembly_id,
+                "mix",
+                {
+                    "regions": deepcopy(layer.get("regions") or []),
+                    "gainDb": layer.get("gainDb", 0),
+                    "channels": deepcopy(layer.get("channels") or []),
+                    "fades": deepcopy(layer.get("fades") or {}),
+                    "ducking": deepcopy(layer.get("ducking") or {}),
+                },
+            )
+        _add_edge(edges, audio_assembly_id, output_id, "encode", {})
+        for node in nodes:
+            if node["nodeId"] == output_id:
+                node["audioCarrying"] = True
+                break
+    body = {
+        "schemaVersion": "1.0.0",
+        "canonicalInputLock": deepcopy(canonical_input_lock),
+        "projectionHash": projection_hash,
+        "nodes": nodes,
+        "edges": edges,
+        "rootIds": [output_id],
+        "prohibitedAncestorClasses": [
+            "proof",
+            "preview",
+            "proxy",
+            "master",
+            "delivery",
+        ],
+    }
+    return {**body, "lineageHash": _hash(body)}
