@@ -1,3 +1,18 @@
+# [1.12.0](https://github.com/joaobispo2077/avo/compare/v1.11.3...v1.12.0) (2026-09-27)
+
+
+### Bug Fixes
+
+* **watch:** coerce prose and stamp requested windows ([ecffca8](https://github.com/joaobispo2077/avo/commit/ecffca8a7b70a734d5fb4edc7363e3744d7d0906))
+* **models:** keep stronger-scope source and runtime ([000a574](https://github.com/joaobispo2077/avo/commit/000a574ec53f173c4903acdab85b958e8e90bd6f))
+
+
+### Features
+
+* **transcribe:** honor project and CLI language ([aa1ac1d](https://github.com/joaobispo2077/avo/commit/aa1ac1da3e3e6193c6d9f9dd6e63e191746be55d))
+* **beat-edit:** map a reference edit and label techniques ([e12c3a2](https://github.com/joaobispo2077/avo/commit/e12c3a2ca7cb96b77d4c293ecfc889aeed9613cc))
+* **shorts:** scale overlays and allow fractional stars ([a99cac9](https://github.com/joaobispo2077/avo/commit/a99cac979cd29382e14ae18a43f3eb4a76307a40))
+
 ## [1.11.3](https://github.com/joaobispo2077/avo/compare/v1.11.2...v1.11.3) (2026-09-20)
 
 
