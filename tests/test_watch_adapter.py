@@ -195,7 +195,9 @@ class WatchAdapterTests(unittest.TestCase):
                 )
             self.assertEqual(result["status"], "needs-human-judgment")
             self.assertEqual(result["outcomeKind"], "uncertainty")
-            self.assertIn("prose instead of schema JSON", result["findings"][0]["message"])
+            self.assertIn(
+                "prose instead of schema JSON", result["findings"][0]["message"]
+            )
 
     def test_malformed_analysis_blocks_instead_of_empty_pass(self):
         with tempfile.TemporaryDirectory() as tmp:

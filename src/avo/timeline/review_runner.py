@@ -45,9 +45,7 @@ def _validate_watch_coverage(
             False,
             "rerun full Watch",
         )
-    reviewed_windows = (
-        coverage.get("windows") or coverage.get("requestedWindows") or []
-    )
+    reviewed_windows = coverage.get("windows") or coverage.get("requestedWindows") or []
     if required_windows and len(reviewed_windows) < len(required_windows):
         raise ToolError(
             "WATCH_SCOPE_INSUFFICIENT",
