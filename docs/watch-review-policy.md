@@ -34,3 +34,38 @@ Reviewed 2026-09-02. Watch policy contains no platform-named resolution,
 bitrate, aspect-ratio, language, format, topic, model, or device assumption.
 Platform delivery guidance belongs in an explicitly selected delivery profile,
 not in visual-review execution defaults.
+
+## Context-budgeted long-form review
+
+Watch preflight binds the configured and actually served model, live vision
+probe, effective context provenance, image/detail limits when available,
+adapter/tool versions, and resource policy. A served-model mismatch, missing
+vision support, or unknown context without an explicit conservative limit
+blocks. The runtime does not substitute another model.
+
+The planner reserves instruction, rubric/schema, section-local transcript,
+carry-forward, output, and safety tokens before allocating visual samples. A
+fixed frame count is only a ceiling. Small contexts produce more bounded passes
+rather than dropping required sections, boundaries, historical risks, caption
+checks, privacy windows, tactile actions, or pacing windows. Bounded retry may
+reduce frames, detail, transcript, or window span while retaining the same
+model, and every retry is recorded.
+
+Sparse passes orient the opening, ending, section boundaries, promise, payoff,
+and representative section content. Dense passes cover changed joins and known
+risks. Deterministic sequential decode, movement, transcript, waveform, flash,
+and pacing checks remain independent evidence. Findings are normalized without
+hiding contradictory observations; uncertain privacy or factual judgments route
+to exact human-review windows.
+
+Coverage reports requested, decoded, inspected, failed, partial,
+deterministic-only, and uninspected ranges plus maximum observed gaps. Sampled
+frames are never described as continuously watched footage or as
+`reviewedSeconds=duration`. One aggregate Watch record binds the candidate,
+dependencies, policy, plan, windows, capability, prompt, transcript, terms,
+adapter/tool versions, and estimator identity.
+
+Pacing is judged per declared section purpose, target density, information
+load, emotional role, and protected pauses. It is not a universal cut-rate
+score. The human package presents chronological findings, contradictions,
+coverage limits, regressions, questions, and finding-linked actions.
