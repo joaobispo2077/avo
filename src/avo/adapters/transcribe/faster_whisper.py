@@ -63,6 +63,9 @@ class FasterWhisperAdapter:
         argv = _argv_with_option(argv, "--model-dir", source.get("artifactPath"))
         argv = _argv_with_option(argv, "--device", runtime.get("device"))
         argv = _argv_with_option(argv, "--compute-type", runtime.get("computeType"))
+        argv = _argv_with_option(
+            argv, "--language", request.env.get("AVO_TRANSCRIBE_LANGUAGE")
+        )
         cmd = [sys.executable, str(script), *argv]
         env = {**os.environ, **request.env}
         proc = subprocess.run(

@@ -11,6 +11,7 @@ import hashlib
 import json
 import math
 import os
+import re
 import tempfile
 import time
 from collections.abc import Iterable
@@ -24,6 +25,13 @@ ENGINE_LANGUAGE = "pt"
 LANGUAGE_CODE = "pt-BR"
 SCHEMA_VERSION = 1
 MODEL_FILES = ("config.json", "model.bin", "tokenizer.json")
+_LANGUAGE_ALIASES = {
+    "pt": ("pt", "pt-BR"),
+    "pt-br": ("pt", "pt-BR"),
+    "en": ("en", "en-US"),
+    "en-us": ("en", "en-US"),
+    "en-gb": ("en", "en-GB"),
+}
 
 
 def validate_model_name(model: str) -> str:
@@ -95,10 +103,48 @@ def transcript_path(video: Path, edit_dir: Path) -> Path:
     return edit_dir.resolve() / "transcripts" / f"{video.stem}.json"
 
 
+def resolve_language(requested: str | None) -> tuple[str | None, str, str]:
+    """Return (whisper_language or None for auto, language_code, engine_language)."""
+    token = (requested or "").strip()
+    if not token:
+        return ENGINE_LANGUAGE, LANGUAGE_CODE, ENGINE_LANGUAGE
+    key = token.lower().replace("_", "-")
+    if key in {"auto", "detect"}:
+        return None, "auto", "auto"
+    if key in _LANGUAGE_ALIASES:
+        iso, code = _LANGUAGE_ALIASES[key]
+        return iso, code, iso
+    if len(key) == 2 and key.isalpha():
+        return key, key, key
+    match = re.fullmatch(r"([a-z]{2})-([a-z]{2})", key)
+    if match:
+        iso = match.group(1)
+        return iso, f"{iso}-{match.group(2).upper()}", iso
+    raise ValueError(f"unsupported transcription language: {requested}")
+
+
+def language_from_project(edit_dir: Path) -> str | None:
+    project = Path(edit_dir).resolve().parent / "avo.project.json"
+    if not project.is_file():
+        return None
+    try:
+        data = json.loads(project.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return None
+    transcription = data.get("transcription")
+    if not isinstance(transcription, dict):
+        return None
+    value = transcription.get("language")
+    if isinstance(value, str) and value.strip():
+        return value.strip()
+    return None
+
+
 def inspect_cache(
     out_path: Path,
     fingerprint: dict[str, Any],
     model: str = DEFAULT_MODEL,
+    language_code: str = LANGUAGE_CODE,
 ) -> str:
     if not out_path.exists():
         return "missing"
@@ -116,7 +162,7 @@ def inspect_cache(
     expected = (
         payload.get("schema_version") == SCHEMA_VERSION
         and payload.get("engine") == ENGINE
-        and payload.get("language_code") == LANGUAGE_CODE
+        and payload.get("language_code") == language_code
         and payload.get("model") == model
         and payload.get("source", {}).get("sha256") == fingerprint["sha256"]
     )
@@ -157,14 +203,16 @@ def build_transcript_payload(
     fingerprint: dict[str, Any],
     model: str,
     engine_version: str,
+    language_code: str = LANGUAGE_CODE,
+    engine_language: str = ENGINE_LANGUAGE,
 ) -> dict[str, Any]:
     materialized = list(segments)
     words = adapt_words(materialized)
     payload = {
         "schema_version": SCHEMA_VERSION,
         "text": " ".join(word["text"] for word in words),
-        "language_code": LANGUAGE_CODE,
-        "engine_language": ENGINE_LANGUAGE,
+        "language_code": language_code,
+        "engine_language": engine_language,
         "engine": ENGINE,
         "engine_version": engine_version or "unknown",
         "model": model,
@@ -173,6 +221,15 @@ def build_transcript_payload(
     }
     validate_transcript_payload(payload)
     return payload
+
+
+def _require_language_fields(payload: dict[str, Any]) -> None:
+    language_code = payload["language_code"]
+    engine_language = payload["engine_language"]
+    if not isinstance(language_code, str) or not language_code.strip():
+        raise ValueError("transcript language_code cannot be empty")
+    if not isinstance(engine_language, str) or not engine_language.strip():
+        raise ValueError("transcript engine_language cannot be empty")
 
 
 def validate_transcript_payload(payload: dict[str, Any]) -> None:
@@ -194,11 +251,7 @@ def validate_transcript_payload(payload: dict[str, Any]) -> None:
         )
     if payload["schema_version"] != SCHEMA_VERSION:
         raise ValueError("unsupported transcript schema version")
-    if (
-        payload["language_code"] != LANGUAGE_CODE
-        or payload["engine_language"] != ENGINE_LANGUAGE
-    ):
-        raise ValueError("transcript language must be PT-BR")
+    _require_language_fields(payload)
     source = payload["source"]
     if not isinstance(source, dict) or len(str(source.get("sha256", ""))) != 64:
         raise ValueError("transcript source fingerprint is invalid")
@@ -263,8 +316,10 @@ class LocalTranscriber:
         device: str = "auto",
         compute_type: str = "auto",
         num_workers: int = 1,
+        language: str | None = None,
     ) -> None:
         self.model_name = validate_model_name(model)
+        self.language = language
         self.model_dir = resolve_model_dir(self.model_name, model_dir)
         validate_model_dir(self.model_dir, self.model_name)
         if num_workers < 1:
@@ -302,25 +357,61 @@ class LocalTranscriber:
         video: Path,
         fingerprint: dict[str, Any],
     ) -> dict[str, Any]:
+        whisper_lang, language_code, engine_language = resolve_language(self.language)
+        options: dict[str, Any] = {
+            "task": "transcribe",
+            "word_timestamps": True,
+            "vad_filter": True,
+            "condition_on_previous_text": False,
+        }
+        if whisper_lang is not None:
+            options["language"] = whisper_lang
         try:
-            segments, _info = self.model.transcribe(
-                str(video),
-                language=ENGINE_LANGUAGE,
-                task="transcribe",
-                word_timestamps=True,
-                vad_filter=True,
-                condition_on_previous_text=False,
-            )
+            segments, info = self.model.transcribe(str(video), **options)
+            if whisper_lang is None:
+                detected = str(getattr(info, "language", "") or "").strip() or "en"
+                _, language_code, engine_language = resolve_language(detected)
             return build_transcript_payload(
                 list(segments),
                 fingerprint,
                 self.model_name,
                 self.engine_version,
+                language_code=language_code,
+                engine_language=engine_language,
             )
         except Exception as exc:
             raise RuntimeError(
-                f"local PT-BR transcription failed for {video.name}: {exc}"
+                f"local transcription failed for {video.name}: {exc}"
             ) from exc
+
+
+def _maybe_ci_transcript_stub(
+    video: Path,
+    out_path: Path,
+    model: str,
+    fingerprint: dict[str, Any] | None,
+    verbose: bool,
+    language: str | None = None,
+) -> Path | None:
+    # Zip-smoke only. Do not reuse AVO_CI=1 — that would hide real ASR tests.
+    if os.environ.get("AVO_CI_TRANSCRIBE_STUB") != "1":
+        return None
+    fingerprint = fingerprint or source_fingerprint(video)
+    whisper_lang, language_code, engine_language = resolve_language(language)
+    if whisper_lang is None:
+        language_code, engine_language = LANGUAGE_CODE, ENGINE_LANGUAGE
+    payload = build_transcript_payload(
+        [],
+        fingerprint,
+        model,
+        "ci-stub",
+        language_code=language_code,
+        engine_language=engine_language,
+    )
+    atomic_write_json(out_path, payload)
+    if verbose:
+        print(f"  ci-stub: {out_path.name}", flush=True)
+    return out_path
 
 
 def transcribe_one(
@@ -334,21 +425,22 @@ def transcribe_one(
     force: bool = False,
     verbose: bool = True,
     fingerprint: dict[str, Any] | None = None,
+    language: str | None = None,
 ) -> Path:
     video = video.resolve()
     if not video.is_file():
         raise FileNotFoundError(f"video not found: {video}")
     model = validate_model_name(model)
+    requested = language if language is not None else language_from_project(edit_dir)
+    _, language_code, _engine_language = resolve_language(requested)
     out_path = transcript_path(video, edit_dir)
-    if not out_path.exists() and runtime is None:
-        runtime = LocalTranscriber(
-            model=model,
-            model_dir=model_dir,
-            device=device,
-            compute_type=compute_type,
-        )
+    stub = _maybe_ci_transcript_stub(
+        video, out_path, model, fingerprint, verbose, language=requested
+    )
+    if stub is not None:
+        return stub
     fingerprint = fingerprint or source_fingerprint(video)
-    state = inspect_cache(out_path, fingerprint, model)
+    state = inspect_cache(out_path, fingerprint, model, language_code=language_code)
     if state == "valid" and not force:
         if verbose:
             print(f"cached: {out_path.name}")
@@ -356,11 +448,20 @@ def transcribe_one(
 
     if verbose:
         reason = "forced" if force and out_path.exists() else state
-        print(f"  transcribing {video.name} locally in PT-BR ({reason})", flush=True)
+        print(
+            f"  transcribing {video.name} locally in {language_code} ({reason})",
+            flush=True,
+        )
     started = time.monotonic()
     runtime = runtime or LocalTranscriber(
-        model=model, model_dir=model_dir, device=device, compute_type=compute_type
+        model=model,
+        model_dir=model_dir,
+        device=device,
+        compute_type=compute_type,
+        language=requested,
     )
+    if requested is not None:
+        runtime.language = requested
     payload = runtime.transcribe(video, fingerprint)
     atomic_write_json(out_path, payload)
     if verbose:
@@ -386,6 +487,11 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--device", default="auto")
     parser.add_argument("--compute-type", default="auto")
     parser.add_argument("--force", action="store_true")
+    parser.add_argument(
+        "--language",
+        default=None,
+        help="ISO language (en, pt-BR) or auto. Default: avo.project.json or pt-BR.",
+    )
     return parser
 
 
@@ -402,6 +508,7 @@ def main(argv: list[str] | None = None) -> None:
             device=args.device,
             compute_type=args.compute_type,
             force=args.force,
+            language=args.language,
         )
     except (FileNotFoundError, RuntimeError, ValueError) as exc:
         raise SystemExit(str(exc)) from exc

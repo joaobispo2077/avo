@@ -185,7 +185,7 @@ wheels = [
 
 [[package]]
 name = "avo"
-version = "1.4.0"
+version = "1.11.3"
 source = { editable = "." }
 dependencies = [
     { name = "faster-whisper" },

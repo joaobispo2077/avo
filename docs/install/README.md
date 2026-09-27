@@ -1,6 +1,18 @@
 # AVO install
 
-Two tiers: **Tier 1** installs agent skills + slash commands in ~30 seconds. **Tier 2** prepares the full local toolchain (ffmpeg, whisper, watch-skill, HyperFrames). User-facing summary: [README § Install](../../README.md#install).
+## Runtime
+
+Resolve once. Do not ask. Consumers: **skills + binary**. MCP and clone only when the user asks.
+
+Never `pip install avo` — PyPI `avo` is Soteria.
+
+Engine zip is **AVO Python only** — not ffmpeg, HyperFrames, watch-skill, CUDA, or model weights. Unused when this AVO repo is the opened folder. Windows launcher: `%USERPROFILE%\.avo\bin\avo`.
+
+1. **Override** — user said MCP / self-build / clone-python. Honor it. Do not silently use the zip.
+2. **Opened folder is an AVO checkout** — `pyproject.toml` name `avo` **and** `src/avo/` **and** `AGENTS.md` contains `<!-- avo:orchestrator:start -->` → `python -m avo.*`. Do **not** use `~/.avo/bin/avo`.
+3. **Else** → `~/.avo/bin/avo`. Missing? Run the installer. Do not clone unless asked.
+
+**Tier 1** (~30s) is skills + slash commands; the same installer also fetches the engine zip on v1 OS/arch. `npx skills add` copies markdown only — if `~/.avo/bin/avo` is missing, run the installer. **Tier 2** (`--full` from a clone) is ffmpeg, whisper weights, watch-skill, HyperFrames — not inside the zip. Summary: [README § Install](../../README.md#install).
 
 ---
 
@@ -131,7 +143,7 @@ rm -rf ~/.cursor/commands/avo
 
 **curl pipe fails:** Clone the repo and run `bash scripts/install/install.sh` locally.
 
-**Need ffmpeg / whisper:** Tier 1 is agent brain only. Run `bash scripts/install/install.sh --full --lang en` from a clone.
+**Need ffmpeg / whisper / HyperFrames / watch-skill:** those are not in the engine zip. Run `bash scripts/install/install.sh --full --lang en` from a clone, or install the sidecar on PATH.
 
 **Install broke?** Open your agent in the AVO repo and say: *"Read docs/install/README.md and install AVO for me."*
 

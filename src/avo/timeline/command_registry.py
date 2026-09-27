@@ -23,6 +23,7 @@ _MATRIX = {
     "animation-qc": ("Evidence", ()),
     "audio-qc": ("Evidence", ()),
     "audit": ("Evidence", ()),
+    "beat-edit": ("Profile", ()),
     "captions": ("Owns", ("bmap", "tracks")),
     "changelog-video": ("Profile", ()),
     "chapters": ("Consumes", ()),

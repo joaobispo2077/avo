@@ -1,0 +1,25 @@
+{
+  "version": 2,
+  "audio": { "path": "reference.mp4", "duration_sec": 8.0, "sr": 22050 },
+  "tempo": {
+    "bpm": 90.0,
+    "beats_per_bar": 4,
+    "downbeat_phase": 0,
+    "n_beats": 8,
+    "n_bars": 2
+  },
+  "grid": {
+    "beats_sec": [0.0, 0.667, 1.333, 2.0, 2.667, 3.333, 4.0, 4.667],
+    "downbeats_sec": [0.0, 2.667]
+  },
+  "energy_phases": [
+    { "start": 0.0, "end": 8.0, "level": "MID", "energy": 0.5 }
+  ],
+  "key_moments": [{ "t": 2.0, "kind": "SURGE", "delta": 0.4 }],
+  "hard_stops": [{ "t": 7.5 }],
+  "events": [
+    { "t": 0.0, "drum": "kick", "special": null, "energy": 0.4 },
+    { "t": 2.0, "drum": "snare", "special": null, "energy": 0.8 },
+    { "t": 7.5, "drum": "perc", "special": "hard_stop", "energy": 0.1 }
+  ]
+}

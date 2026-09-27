@@ -105,6 +105,50 @@ class HyperframesAdapterTests(unittest.TestCase):
             )
             self.assertEqual(manifest["renderContract"]["width"], 1080)
             self.assertEqual(manifest["renderContract"]["height"], 1920)
+            self.assertIn('id="ui-design"', page)
+            self.assertIn("--ui-scale:1;", page)
+            self.assertIn("--short-rail-width:920px;", page)
+            css = (project / "styles.css").read_text(encoding="utf-8")
+            self.assertNotIn("transform: scale(calc", css)
+            self.assertIn("inset: 0", css)
+
+    def test_compiler_stamps_source_resolution_canvas(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            assets = {
+                "baseVideo": asset(root / "video.mp4", True),
+                "dialogueAudio": asset(root / "audio.m4a", False),
+            }
+            item = {
+                "id": "01",
+                "editedDurationSec": 2,
+                "captions": PHRASES,
+                "layout": {"mode": "full-frame", "captionAnchor": "bottom"},
+                "factualReviewReferences": ["review:1"],
+            }
+            spec = build_composition_spec(
+                batch_id="batch",
+                item=item,
+                output={"width": 1728, "height": 3072, "fps": 29.97},
+                assets=assets,
+                proof_revision=1,
+                expected_output_path=root / "proof.mp4",
+            )
+            project = compile_project(spec, root / "project")
+            page = (project / "index.html").read_text(encoding="utf-8")
+            manifest = json.loads(
+                (project / "hyperframes.json").read_text(encoding="utf-8")
+            )
+            self.assertEqual(manifest["renderContract"]["width"], 1728)
+            self.assertEqual(manifest["renderContract"]["height"], 3072)
+            self.assertIn('data-width="1728"', page)
+            self.assertIn('id="ui-design"', page)
+            self.assertIn("--ui-scale:1.6;", page)
+            self.assertIn("--short-rail-width:1472px;", page)
+            self.assertIn("--short-safe-x:86.4px;", page)
+            css = (project / "styles.css").read_text(encoding="utf-8")
+            self.assertNotIn("width: 1080px", css)
+            self.assertNotIn("transform: scale(calc", css)
 
     def test_callouts_and_punchins_compile_into_existing_timeline(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

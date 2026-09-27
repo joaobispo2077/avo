@@ -51,6 +51,27 @@ class SampledWatch(FakeWatch):
         return result
 
 
+class RequestedWindowsWatch(FakeWatch):
+    def review(self, candidate: Path, **request):
+        result = super().review(candidate, **request)
+        result["coverage"] = {
+            "mode": "full",
+            "sampling": "frames",
+            "windows": [],
+            "requestedWindows": request["windows"],
+            "maxFrames": 18,
+        }
+        return result
+
+
+def test_requested_windows_satisfy_full_review_when_coverage_windows_empty(
+    tmp_path: Path,
+) -> None:
+    result = _run(tmp_path, None, RequestedWindowsWatch())
+    assert result["state"] != "blocked"
+    assert "WATCH_SCOPE_INSUFFICIENT" not in (result.get("blocker") or "")
+
+
 def test_sampled_watch_evidence_cannot_satisfy_full_review(tmp_path: Path) -> None:
     result = _run(tmp_path, None, SampledWatch())
     assert result["state"] == "blocked"

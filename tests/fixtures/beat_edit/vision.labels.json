@@ -1,0 +1,27 @@
+{
+  "model": "prism-ml/bonsai-27b",
+  "promptHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "frames": [
+    {
+      "t": 0.0,
+      "anchor": "downbeat:0",
+      "path": "edit/review/technique-frames/t-0000.jpg",
+      "techniques": ["card_carousel", "kinetic_text", "stylize"],
+      "confidence": 0.8
+    },
+    {
+      "t": 2.0,
+      "anchor": "moment:SURGE:2.000",
+      "path": "edit/review/technique-frames/t-2000.jpg",
+      "techniques": ["punch_zoom", "whip_bump"],
+      "confidence": 0.7
+    },
+    {
+      "t": 7.5,
+      "anchor": "hard_stop:7.500",
+      "path": "edit/review/technique-frames/t-7500.jpg",
+      "techniques": [],
+      "confidence": 0.4
+    }
+  ]
+}

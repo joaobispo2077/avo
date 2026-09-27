@@ -1,0 +1,59 @@
+{
+  "schemaVersion": "1.0.0",
+  "kind": "technique-map",
+  "videoId": "beat-edit-fixture",
+  "provider": "bishop",
+  "source": {
+    "path": "edit/review/reference.mp4",
+    "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "durationSec": 8.0,
+    "width": 1080,
+    "height": 1080,
+    "fps": 30,
+    "aspect": "1:1",
+    "codec": "vp9"
+  },
+  "models": {
+    "transcribe": "large-v3",
+    "understand": "bonsai-27b-gguf",
+    "promptHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  },
+  "audiomapRef": "edit/audiomap.json",
+  "transcriptRef": "edit/transcripts/reference.json",
+  "pacing": "phrase_flow",
+  "vocabulary": {
+    "card_carousel": "present",
+    "punch_zoom": "present",
+    "whip_bump": "present",
+    "kinetic_text": "present",
+    "flip_3d": "absent",
+    "stylize": "present"
+  },
+  "events": [
+    {
+      "id": "e-000",
+      "t": 0.0,
+      "tEnd": 2.0,
+      "anchor": "downbeat:0",
+      "techniques": ["card_carousel", "kinetic_text", "stylize"],
+      "params": { "caption": "LOCKUP" },
+      "text": "LOCKUP",
+      "insertSlot": "slot-0",
+      "confidence": 0.8,
+      "evidenceFrame": "edit/review/technique-frames/t-0000.jpg"
+    },
+    {
+      "id": "e-001",
+      "t": 2.0,
+      "tEnd": 4.0,
+      "anchor": "moment:SURGE:2.000",
+      "techniques": ["punch_zoom", "whip_bump"],
+      "insertSlot": "slot-1",
+      "confidence": 0.7,
+      "sfxClass": "impact"
+    }
+  ],
+  "rights": {
+    "sourceLogRef": "edit/SOURCE-LOG.md"
+  }
+}

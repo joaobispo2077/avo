@@ -346,6 +346,55 @@ def _analysis_from_output(text: str) -> dict[str, Any] | None:
         return None
 
 
+def _unstructured_analysis(text: str) -> dict[str, Any] | None:
+    blob = text.strip()
+    if not blob:
+        return None
+    excerpt = " ".join(blob.split())
+    if len(excerpt) > 280:
+        excerpt = excerpt[:277] + "..."
+    return {
+        "status": "needs-human-judgment",
+        "confidence": 0.0,
+        "findings": [
+            {
+                "classification": "meaning",
+                "severity": "warning",
+                "message": (
+                    "Watch returned retrieval/vision prose instead of schema JSON "
+                    f"({excerpt}); human must inspect the exact candidate."
+                ),
+                "start": None,
+                "end": None,
+            }
+        ],
+        "model": "watch-skill-unstructured",
+    }
+
+
+def _resolved_analysis(text: str) -> dict[str, Any] | None:
+    return (
+        _analysis_from_output(text)
+        or _refusal_analysis(text)
+        or _unstructured_analysis(text)
+    )
+
+
+def _coverage_payload(
+    review: _ReviewRequest, attempts: list[dict[str, Any]]
+) -> dict[str, Any]:
+    frame_key = "maxFrames" if len(attempts) == 1 else "repairMaxFrames"
+    windows = list(review.windows)
+    return {
+        "mode": ("full" if review.scope in {"full", "whole"} else "sampled"),
+        "sampling": "frames",
+        "windows": windows,
+        "requestedScope": review.scope,
+        "requestedWindows": windows,
+        "maxFrames": int(review.effective[frame_key]),
+    }
+
+
 def _coerce_findings(raw: Any) -> list[dict[str, Any]] | None:
     if raw is None:
         return []
@@ -375,7 +424,6 @@ def _analyze_candidate(
 ) -> _AnalysisRun:
     attempts: list[dict[str, Any]] = []
     latest = JobResult(exit_code=0)
-    refusal: dict[str, Any] | None = None
     for attempt in range(1, int(review.effective["analysisAttempts"]) + 1):
         latest = adapter.run(
             JobRequest(
@@ -389,12 +437,9 @@ def _analyze_candidate(
         attempts.append(_attempt_record(attempt, latest))
         if latest.exit_code != 0:
             raise adapter._tool_error(latest, "analysis")
-        analysis = _analysis_from_output(latest.stdout)
+        analysis = _resolved_analysis(latest.stdout)
         if analysis is not None:
             return _AnalysisRun(analysis=analysis, result=latest, attempts=attempts)
-        refusal = refusal or _refusal_analysis(latest.stdout)
-    if refusal is not None:
-        return _AnalysisRun(analysis=refusal, result=latest, attempts=attempts)
     raise ToolError(
         "WATCH_MALFORMED",
         "Watch analysis did not return a schema-valid JSON object",
@@ -453,19 +498,12 @@ def _evidence_payload(
     analysis_path: Path,
 ) -> dict[str, Any]:
     status, findings = _validated_analysis(analysis_run.analysis)
-    frame_key = "maxFrames" if len(analysis_run.attempts) == 1 else "repairMaxFrames"
     return {
         "schemaVersion": "1.0.0",
         "status": status,
         "checkpoint": review.checkpoint,
         "candidate": str(review.candidate),
-        "coverage": {
-            "mode": "sampled",
-            "windows": [],
-            "requestedScope": review.scope,
-            "requestedWindows": review.windows,
-            "maxFrames": int(review.effective[frame_key]),
-        },
+        "coverage": _coverage_payload(review, analysis_run.attempts),
         "findings": findings,
         "confidence": analysis_run.analysis.get("confidence"),
         "tool": "watch-skill",

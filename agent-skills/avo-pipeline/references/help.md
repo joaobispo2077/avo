@@ -101,6 +101,7 @@ Spoken alias: **`/avo --help`**. Cursor file: `commands/avo/help.md` → `/avo.h
 | `/avo.slideshow` | Slide outline → HyperFrames slideshow |
 | `/avo.launch` | Product / marketing URL → launch video |
 | `/avo.music-video` | Music track → visual video |
+| `/avo.beat-edit` | Beat-synced insert edit (map + generate) |
 | `/avo.figma` | Figma → HyperFrames import |
 | `/avo.media` | Catalog BGM/SFX/logos via media-use |
 

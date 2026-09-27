@@ -68,6 +68,10 @@ def _merge(
     for key, value in patch.items():
         path = f"{prefix}.{key}" if prefix else str(key)
         if isinstance(value, Mapping) and isinstance(target.get(key), Mapping):
+            # The stronger scope owns the merged object as well as the leaves
+            # it supplies. Keeping the parent at the weaker scope can make a
+            # stronger model source/runtime pin get discarded later.
+            sources[path] = source
             nested = dict(target[key])
             _merge(nested, sources, value, source, path)
             target[key] = nested

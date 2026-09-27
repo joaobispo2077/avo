@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "text": "",
+  "language_code": "en-US",
+  "engine_language": "en",
+  "engine": "faster-whisper",
+  "engine_version": "test",
+  "model": "large-v3",
+  "source": {
+    "path": "reference.mp4",
+    "size_bytes": 1,
+    "mtime_ns": 0,
+    "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "words": []
+}

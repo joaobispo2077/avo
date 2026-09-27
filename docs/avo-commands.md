@@ -118,6 +118,7 @@ generated composition should be hand edited.
 | `/avo.slideshow` | Slide outline → HyperFrames slideshow ([source](../commands/avo/slideshow.md)) |
 | `/avo.launch` | Product launch video ([source](../commands/avo/launch.md)) |
 | `/avo.music-video` | Music → visual video ([source](../commands/avo/music-video.md)) |
+| `/avo.beat-edit` | Beat-synced insert edit ([source](../commands/avo/beat-edit.md)) |
 | `/avo.figma` | Figma import ([source](../commands/avo/figma.md)) |
 | `/avo.media` | Media catalog router ([source](../commands/avo/media.md)) |
 
@@ -142,7 +143,7 @@ Skill: [`avo-provider`](../agent-skills/avo-provider/SKILL.md) · Concept: [`doc
 | `/avo.stats` | Local aggregate metrics ([source](../commands/avo/stats.md)) |
 | `/avo.models` | Inspect catalog pins and resolved sources ([source](../commands/avo/models.md)) |
 
-Shipped command files: [`../commands/avo/`](../commands/avo/) (47 commands)
+Shipped command files: [`../commands/avo/`](../commands/avo/) (53 commands)
 
 ---
 

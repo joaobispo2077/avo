@@ -699,9 +699,9 @@
     {
       "path": "src/avo/transcribe.py",
       "name": "transcribe_one",
-      "complexity": 13,
+      "complexity": 14,
       "rank": "C",
-      "reason": "Audio/transcript validation with many optional payload shapes"
+      "reason": "Audio/transcript validation with many optional payload shapes; CI stub gate"
     },
     {
       "path": "src/avo/transcribe.py",

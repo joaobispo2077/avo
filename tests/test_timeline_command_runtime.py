@@ -14,9 +14,9 @@ from avo.timeline.command_registry import (
 
 def test_all_command_wrappers_have_exactly_one_runtime_mode():
     wrappers = {path.stem for path in Path("commands/avo").glob("*.md")}
-    assert len(wrappers) == 52
+    assert len(wrappers) == 53
     assert wrappers == set(COMMANDS)
-    assert len(registry_document()["commands"]) == 52
+    assert len(registry_document()["commands"]) == 53
     assert all(
         spec.mode in {"Owns", "Evidence", "Consumes", "Profile", "Admin"}
         for spec in COMMANDS.values()

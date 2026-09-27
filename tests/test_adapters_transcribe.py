@@ -51,8 +51,31 @@ class AdapterTranscribeTests(unittest.TestCase):
         cmd = run.call_args[0][0]
         self.assertTrue(str(cmd[1]).endswith("transcribe.py"))
         self.assertIn("--model", cmd)
+        self.assertNotIn("--language", cmd)
         self.assertIn("models_used", result.__dict__)
         self.assertIn("transcribe", result.models_used)
+
+    @mock.patch("avo.model_sources.preflight")
+    @mock.patch("subprocess.run")
+    def test_faster_whisper_forwards_language_env(
+        self, run: mock.Mock, _preflight: mock.Mock
+    ) -> None:
+        run.return_value = mock.Mock(returncode=0, stdout="ok", stderr="")
+        from avo.adapters.base import JobRequest
+        from avo.adapters.transcribe.faster_whisper import FasterWhisperAdapter
+
+        FasterWhisperAdapter().run(
+            JobRequest(
+                job="transcribe",
+                label="local",
+                argv=["video.mp4"],
+                root=ROOT,
+                env={"AVO_TRANSCRIBE_LANGUAGE": "en"},
+            )
+        )
+        cmd = run.call_args[0][0]
+        self.assertIn("--language", cmd)
+        self.assertIn("en", cmd)
 
     def test_elevenlabs_stub_without_key(self) -> None:
         from avo.adapters.base import JobRequest

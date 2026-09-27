@@ -65,6 +65,7 @@ class TranscribeTests(unittest.TestCase):
             self.assertTrue(options["word_timestamps"])
             self.assertTrue(options["vad_filter"])
             self.assertEqual(payload["text"], "Olá, mundo!")
+            self.assertEqual(payload["language_code"], "pt-BR")
 
     def test_missing_model_names_preparation_command(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

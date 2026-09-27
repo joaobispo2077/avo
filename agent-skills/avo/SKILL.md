@@ -5,7 +5,19 @@ description: AVO — AI Video Orchestrator. Agent contract for conversation-driv
 
 # AVO (AI Video Orchestrator)
 
-**Install full toolchain:** clone the repo and run `bash scripts/install/install.sh --full --lang en`, or see [docs/install/README.md](https://github.com/joaobispo2077/avo/blob/main/docs/install/README.md).
+## Runtime
+
+Resolve once. Do not ask. Consumers: **skills + binary**. MCP and clone only when the user asks.
+
+Never `pip install avo` — PyPI `avo` is Soteria.
+
+Engine zip is **AVO Python only** — not ffmpeg, HyperFrames, watch-skill, CUDA, or model weights. Unused when this AVO repo is the opened folder.
+
+1. **Override** — user said MCP / self-build / clone-python. Honor it. Do not silently use the zip.
+2. **Opened folder is an AVO checkout** — `pyproject.toml` name `avo` **and** `src/avo/` **and** `AGENTS.md` contains `<!-- avo:orchestrator:start -->` → `python -m avo.*`. Do **not** use `~/.avo/bin/avo`.
+3. **Else** → `~/.avo/bin/avo`. Missing? Run the installer. Do not clone unless asked.
+
+Missing engine: [docs/install/README.md](https://github.com/joaobispo2077/avo/blob/main/docs/install/README.md).
 
 **Slash commands:** `/avo.help`, `/avo.guidelines`, `/avo.pipeline`, `/avo.trim`, `/avo.transcribe`, `/avo.sound`, `/avo.audit`, `/avo.watch`, `/avo.motion`, `/avo.telemetry`, `/avo.learndown`, `/avo.cleanup`, `/avo.stats`, `/avo.models`, `/avo.provider`, `/avo.docs` (also load skill `avo-pipeline`).
 

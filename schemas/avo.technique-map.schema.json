@@ -1,0 +1,276 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/joaobispo2077/avo/schemas/avo.technique-map.schema.json",
+  "title": "AVO beat-edit technique map",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "kind",
+    "videoId",
+    "provider",
+    "source",
+    "models",
+    "audiomapRef",
+    "transcriptRef",
+    "pacing",
+    "vocabulary",
+    "events",
+    "rights"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "1.0.0"
+    },
+    "kind": {
+      "const": "technique-map"
+    },
+    "videoId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "provider": {
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]*$"
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "sha256",
+        "durationSec",
+        "width",
+        "height",
+        "fps",
+        "aspect"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "durationSec": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "width": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "height": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "fps": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "aspect": {
+          "type": "string",
+          "enum": ["1:1", "9:16", "16:9", "other"]
+        },
+        "codec": {
+          "type": "string"
+        }
+      }
+    },
+    "models": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["transcribe", "understand", "promptHash"],
+      "properties": {
+        "transcribe": {
+          "type": "string",
+          "minLength": 1
+        },
+        "understand": {
+          "type": "string",
+          "minLength": 1
+        },
+        "promptHash": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "audiomapRef": {
+      "type": "string",
+      "minLength": 1
+    },
+    "transcriptRef": {
+      "type": "string",
+      "minLength": 1
+    },
+    "pacing": {
+      "type": "string",
+      "enum": ["beat_cut", "phrase_flow"]
+    },
+    "vocabulary": {
+      "$ref": "#/$defs/vocabulary"
+    },
+    "events": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/event"
+      }
+    },
+    "rights": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sourceLogRef"],
+      "properties": {
+        "sourceLogRef": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "safety": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "whipFlashFlag": {
+          "type": "boolean"
+        },
+        "notes": {
+          "type": "string"
+        }
+      }
+    },
+    "recycle": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "unused": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "techniqueId": {
+      "type": "string",
+      "enum": [
+        "card_carousel",
+        "punch_zoom",
+        "whip_bump",
+        "kinetic_text",
+        "flip_3d",
+        "stylize"
+      ]
+    },
+    "presence": {
+      "type": "string",
+      "enum": ["present", "absent"]
+    },
+    "vocabulary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "card_carousel",
+        "punch_zoom",
+        "whip_bump",
+        "kinetic_text",
+        "flip_3d",
+        "stylize"
+      ],
+      "properties": {
+        "card_carousel": {
+          "$ref": "#/$defs/presence"
+        },
+        "punch_zoom": {
+          "$ref": "#/$defs/presence"
+        },
+        "whip_bump": {
+          "$ref": "#/$defs/presence"
+        },
+        "kinetic_text": {
+          "$ref": "#/$defs/presence"
+        },
+        "flip_3d": {
+          "$ref": "#/$defs/presence"
+        },
+        "stylize": {
+          "$ref": "#/$defs/presence"
+        }
+      }
+    },
+    "event": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "t",
+        "tEnd",
+        "anchor",
+        "techniques",
+        "insertSlot",
+        "confidence"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "t": {
+          "type": "number",
+          "minimum": 0
+        },
+        "tEnd": {
+          "type": "number",
+          "minimum": 0
+        },
+        "anchor": {
+          "type": "string",
+          "minLength": 1
+        },
+        "techniques": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/techniqueId"
+          }
+        },
+        "params": {
+          "type": "object",
+          "additionalProperties": {
+            "type": ["number", "string", "boolean"]
+          }
+        },
+        "text": {
+          "type": "string"
+        },
+        "sfxClass": {
+          "type": "string",
+          "enum": ["impact", "whoosh", "riser", "silence", "other"]
+        },
+        "insertSlot": {
+          "type": "string",
+          "minLength": 1
+        },
+        "confidence": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "evidenceFrame": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

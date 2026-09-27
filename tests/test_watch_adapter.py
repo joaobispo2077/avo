@@ -11,6 +11,7 @@ from avo.adapters.understand.watch_skill import WatchSkillAdapter, _extract_json
 from avo.timeline.ports import ToolError
 
 _RESOLVE = "avo.models.resolve_option_id"
+_RESOLVE_JOB = "avo.model_sources.resolve_job"
 
 
 class WatchAdapterTests(unittest.TestCase):
@@ -87,9 +88,10 @@ class WatchAdapterTests(unittest.TestCase):
             self.assertEqual(result["status"], "pass")
             self.assertEqual(result["model"], "qwen2.5-7b")
             self.assertEqual(result["toolVersion"], "0.6.0")
-            self.assertEqual(result["coverage"]["mode"], "sampled")
+            self.assertEqual(result["coverage"]["mode"], "full")
+            self.assertEqual(result["coverage"]["sampling"], "frames")
             self.assertEqual(result["coverage"]["maxFrames"], 18)
-            self.assertEqual(result["coverage"]["windows"], [])
+            self.assertEqual(result["coverage"]["windows"][0]["reason"], "join")
             self.assertEqual(
                 result["coverage"]["requestedWindows"][0]["reason"], "join"
             )
@@ -169,6 +171,34 @@ class WatchAdapterTests(unittest.TestCase):
                 adapter.review(candidate, artifact_dir=root / "review")
             self.assertNotIn("CUDA_VISIBLE_DEVICES", run.call_args_list[0].args[0].env)
 
+    def test_prose_watch_answer_is_uncertainty_not_malformed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            candidate = root / "proof.mp4"
+            candidate.write_bytes(b"proof")
+            adapter = WatchSkillAdapter(executable="watch-skill")
+            prose = (
+                "The video frames show the back of the Orbitals game case "
+                "with PT-BR overlays.\n(confidence: 0.54 | verified: true)"
+            )
+            with mock.patch.object(
+                adapter,
+                "run",
+                side_effect=[
+                    JobResult(exit_code=0, stdout="video_id `vid-1`"),
+                    JobResult(exit_code=0, stdout=prose),
+                    JobResult(exit_code=0, stdout="0.6.0\n"),
+                ],
+            ):
+                result = adapter.review(
+                    candidate, scope="full", artifact_dir=root / "review"
+                )
+            self.assertEqual(result["status"], "needs-human-judgment")
+            self.assertEqual(result["outcomeKind"], "uncertainty")
+            self.assertIn(
+                "prose instead of schema JSON", result["findings"][0]["message"]
+            )
+
     def test_malformed_analysis_blocks_instead_of_empty_pass(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -181,8 +211,8 @@ class WatchAdapterTests(unittest.TestCase):
                     "run",
                     side_effect=[
                         JobResult(exit_code=0, stdout="video_id `vid-1`"),
-                        JobResult(exit_code=0, stdout="looks fine"),
-                        JobResult(exit_code=0, stdout="still not json"),
+                        JobResult(exit_code=0, stdout=""),
+                        JobResult(exit_code=0, stdout=""),
                     ],
                 ),
                 self.assertRaises(ToolError) as raised,
@@ -208,7 +238,7 @@ class WatchAdapterTests(unittest.TestCase):
                 "run",
                 side_effect=[
                     JobResult(exit_code=0, stdout="video_id `vid-1`"),
-                    JobResult(exit_code=0, stdout="not structured"),
+                    JobResult(exit_code=0, stdout=""),
                     JobResult(
                         exit_code=0,
                         stdout='{"status":"pass","confidence":1,"findings":[]}',
@@ -295,7 +325,10 @@ class WatchAdapterTests(unittest.TestCase):
                 "AVO_UNDERSTAND_MMPROJ": str(root / "mmproj.gguf"),
                 "WATCHSKILL_CUSTOM_BASE_URL": "http://127.0.0.1:8080/v1",
             }
-            with mock.patch(_RESOLVE, return_value="bonsai-27b-gguf"):
+            with (
+                mock.patch(_RESOLVE, return_value="bonsai-27b-gguf"),
+                mock.patch(_RESOLVE_JOB, side_effect=RuntimeError("isolated test")),
+            ):
                 with mock.patch.dict(os.environ, env, clear=False):
                     os.environ.pop("AVO_UNDERSTAND_GGUF", None)
                     with mock.patch.object(adapter, "run") as run:
@@ -321,7 +354,10 @@ class WatchAdapterTests(unittest.TestCase):
                 "AVO_UNDERSTAND_GGUF": str(gguf),
                 "WATCHSKILL_CUSTOM_BASE_URL": "http://127.0.0.1:8080/v1",
             }
-            with mock.patch(_RESOLVE, return_value="bonsai-27b-gguf"):
+            with (
+                mock.patch(_RESOLVE, return_value="bonsai-27b-gguf"),
+                mock.patch(_RESOLVE_JOB, side_effect=RuntimeError("isolated test")),
+            ):
                 with mock.patch.dict(os.environ, env, clear=False):
                     os.environ.pop("AVO_UNDERSTAND_MMPROJ", None)
                     with mock.patch.object(adapter, "run") as run:
@@ -347,7 +383,10 @@ class WatchAdapterTests(unittest.TestCase):
                 "AVO_UNDERSTAND_GGUF": str(gguf),
                 "AVO_UNDERSTAND_MMPROJ": str(mmproj),
             }
-            with mock.patch(_RESOLVE, return_value="bonsai-27b-gguf"):
+            with (
+                mock.patch(_RESOLVE, return_value="bonsai-27b-gguf"),
+                mock.patch(_RESOLVE_JOB, side_effect=RuntimeError("isolated test")),
+            ):
                 with mock.patch.dict(os.environ, env, clear=False):
                     for key in (
                         "WATCHSKILL_CUSTOM_BASE_URL",
@@ -380,7 +419,10 @@ class WatchAdapterTests(unittest.TestCase):
                 "AVO_UNDERSTAND_MMPROJ": str(mmproj),
                 "WATCHSKILL_CUSTOM_BASE_URL": "http://127.0.0.1:8080/v1",
             }
-            with mock.patch(_RESOLVE, return_value="bonsai-27b-gguf"):
+            with (
+                mock.patch(_RESOLVE, return_value="bonsai-27b-gguf"),
+                mock.patch(_RESOLVE_JOB, side_effect=RuntimeError("isolated test")),
+            ):
                 with mock.patch.dict(os.environ, env, clear=False):
                     with mock.patch.object(
                         adapter,
@@ -440,7 +482,8 @@ class WatchAdapterTests(unittest.TestCase):
                 result = adapter.review(
                     candidate, scope="full", artifact_dir=root / "review"
                 )
-            self.assertEqual(result["coverage"]["mode"], "sampled")
+            self.assertEqual(result["coverage"]["mode"], "full")
+            self.assertEqual(result["coverage"]["sampling"], "frames")
             self.assertEqual(result["coverage"]["requestedScope"], "full")
             self.assertIsNone(result["model"])
 

@@ -1,0 +1,45 @@
+{
+  "schemaVersion": "1.0.0",
+  "kind": "technique-map",
+  "videoId": "beat-edit-fixture",
+  "provider": "bishop",
+  "source": {
+    "path": "edit/review/reference.mp4",
+    "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "durationSec": 8.0,
+    "width": 1080,
+    "height": 1080,
+    "fps": 30,
+    "aspect": "1:1"
+  },
+  "models": {
+    "transcribe": "large-v3",
+    "understand": "bonsai-27b-gguf",
+    "promptHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+  },
+  "audiomapRef": "edit/audiomap.json",
+  "transcriptRef": "edit/transcripts/reference.json",
+  "pacing": "beat_cut",
+  "vocabulary": {
+    "card_carousel": "present",
+    "punch_zoom": "absent",
+    "whip_bump": "absent",
+    "kinetic_text": "absent",
+    "flip_3d": "absent",
+    "stylize": "absent"
+  },
+  "events": [
+    {
+      "id": "e-000",
+      "t": 0.0,
+      "tEnd": 1.0,
+      "anchor": "downbeat:0",
+      "techniques": ["ken_burns"],
+      "insertSlot": "slot-0",
+      "confidence": 0.5
+    }
+  ],
+  "rights": {
+    "sourceLogRef": "edit/SOURCE-LOG.md"
+  }
+}

@@ -1,10 +1,12 @@
-# AVO installer (PowerShell). Delegates to bin/install.cjs or npx github:REPO.
+# AVO installer (PowerShell). Delegates to bin/install.cjs (skills + engine zip).
+# npx skills add does NOT download the engine zip — this script does.
 #
 # irm https://raw.githubusercontent.com/joaobispo2077/avo/main/scripts/install/install.ps1 | iex
 # pwsh scripts/install/install.ps1 -DryRun -Only cursor
 
 $ErrorActionPreference = 'Stop'
 $Repo = if ($env:AVO_INSTALL_REPO) { $env:AVO_INSTALL_REPO } else { 'joaobispo2077/avo' }
+$Ref = if ($env:AVO_INSTALL_REF) { $env:AVO_INSTALL_REF } else { 'main' }
 
 function Test-Node {
   if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
@@ -18,16 +20,17 @@ function Test-Node {
 
 Test-Node
 
-$here = $PSScriptRoot
-$repoRoot = (Resolve-Path (Join-Path $here '..\..')).Path
-if (Test-Path (Join-Path $repoRoot 'bin\install.cjs')) {
-  node (Join-Path $repoRoot 'bin\install.cjs') @args
-  exit $LASTEXITCODE
+if ($PSScriptRoot) {
+  $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
+  $local = Join-Path $repoRoot 'bin\install.cjs'
+  if (Test-Path $local) {
+    node $local @args
+    exit $LASTEXITCODE
+  }
 }
 
-if (-not (Get-Command npx -ErrorAction SilentlyContinue)) {
-  Write-Error 'AVO: npx required (ships with Node ≥18).'
-}
-
-npx -y "github:$Repo" @args
+$tmp = Join-Path ([System.IO.Path]::GetTempPath()) 'avo-install.cjs'
+$installUrl = "https://raw.githubusercontent.com/$Repo/$Ref/bin/install.cjs"
+Invoke-WebRequest -Uri $installUrl -OutFile $tmp
+node $tmp @args
 exit $LASTEXITCODE

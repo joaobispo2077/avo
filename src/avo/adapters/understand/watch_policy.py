@@ -238,7 +238,8 @@ def build_watch_prompt(
         )
     lines.extend(
         [
-            "Return one JSON object with keys status, confidence, and findings.",
+            "Answer with one JSON object only. Do not describe frames in prose.",
+            'Required shape: {"status":"pass"|"fail"|"needs-human-judgment","confidence":0.0,"findings":[]}',
             "status must be pass, fail, or needs-human-judgment; confidence must be numeric; findings must be a list.",
             "Use pass only when no blocker exists. Never invent unseen evidence.",
         ]

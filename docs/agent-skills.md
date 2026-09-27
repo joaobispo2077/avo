@@ -4,6 +4,18 @@ AVO ships **three skills** for every supported agent. They install via the
 [skills registry](https://www.npmjs.com/package/skills) (`npx skills add`) or the
 unified installer (`bash scripts/install/install.sh`).
 
+## Runtime
+
+Resolve once. Do not ask. Consumers: **skills + binary**. MCP and clone only when the user asks.
+
+Never `pip install avo` — PyPI `avo` is Soteria.
+
+Engine zip is **AVO Python only** — not ffmpeg, HyperFrames, watch-skill, CUDA, or model weights. Unused when this AVO repo is the opened folder. `npx skills add` copies markdown only; missing engine → run the installer, not clone.
+
+1. **Override** — user said MCP / self-build / clone-python. Honor it. Do not silently use the zip.
+2. **Opened folder is an AVO checkout** — `pyproject.toml` name `avo` **and** `src/avo/` **and** `AGENTS.md` contains `<!-- avo:orchestrator:start -->` → `python -m avo.*`. Do **not** use `~/.avo/bin/avo`.
+3. **Else** → `~/.avo/bin/avo`. Missing? Run the installer. Do not clone unless asked.
+
 ## Skills package
 
 | Skill | Load when |

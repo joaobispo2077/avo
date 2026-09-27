@@ -24,6 +24,7 @@ PROFILE_TO_PRESET: dict[str, str] = {
     "podcast-clip": "podcast_clip",
     "trailer": "youtube_shorts",
     "music-video": "music_video",
+    "beat-edit": "music_video",
 }
 
 LIMITER_FILTER_TEMPLATE = "alimiter=limit={limit:.3f}:level=false:attack=5:release=50"
