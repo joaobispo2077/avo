@@ -53,6 +53,16 @@
         "$ref": "#/$defs/file"
       }
     },
+    "iterationLedgers": { "type": "array", "items": { "$ref": "#/$defs/file" } },
+    "proofPlans": { "type": "array", "items": { "$ref": "#/$defs/file" } },
+    "candidateSnapshots": { "type": "array", "items": { "$ref": "#/$defs/file" } },
+    "regressionResults": { "type": "array", "items": { "$ref": "#/$defs/file" } },
+    "generatedAssets": { "type": "array", "items": { "$ref": "#/$defs/file" } },
+    "componentInstances": { "type": "array", "items": { "$ref": "#/$defs/file" } },
+    "stillExtractionRecords": { "type": "array", "items": { "$ref": "#/$defs/file" } },
+    "timelineLearning": { "type": "array", "items": { "$ref": "#/$defs/file" } },
+    "promotionDecisions": { "type": "array", "items": { "$ref": "#/$defs/file" } },
+    "projectComponentCode": { "type": "array", "items": { "$ref": "#/$defs/file" } },
     "files": {
       "type": "array",
       "minItems": 1,

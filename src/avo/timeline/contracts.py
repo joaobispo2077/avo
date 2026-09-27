@@ -54,6 +54,30 @@ def _schema_and_fragment(
     return schema, fragment if separator else ""
 
 
+def _schema_registry(root: Path):
+    """Build a local registry so production schemas may use cross-file refs."""
+    try:
+        from referencing import Registry, Resource
+    except ImportError as exc:  # pragma: no cover - jsonschema installs referencing
+        raise ContractError(f"cannot load JSON Schema registry support: {exc}") from exc
+
+    registry = Registry()
+    for path in sorted(Path(root).glob("*.json")):
+        try:
+            document = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            # An unrelated optional schema must not break validation of a
+            # self-contained contract. A referenced malformed schema remains
+            # absent and therefore fails closed when the validator resolves it.
+            continue
+        identifier = document.get("$id") if isinstance(document, dict) else None
+        if identifier:
+            registry = registry.with_resource(
+                str(identifier), Resource.from_contents(document)
+            )
+    return registry
+
+
 def load_schema(name: str, root: Path | None = None) -> dict[str, Any]:
     schema, fragment = _schema_and_fragment(name, root)
     if not fragment:
@@ -81,13 +105,18 @@ def validate_document(
     root: Path | None = None,
 ) -> Any:
     schema = load_schema(schema_name, root)
+    schema_root = (
+        Path(root) if root else schema_path(schema_name.partition("#")[0]).parent
+    )
     try:
         import jsonschema
 
         validator_cls = jsonschema.validators.validator_for(schema)
         validator_cls.check_schema(schema)
         errors = sorted(
-            validator_cls(schema).iter_errors(document),
+            validator_cls(schema, registry=_schema_registry(schema_root)).iter_errors(
+                document
+            ),
             key=lambda error: list(error.absolute_path),
         )
     except Exception as exc:

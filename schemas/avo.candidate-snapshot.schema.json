@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://avo.local/avo.candidate-snapshot.schema.json",
+  "type": "object", "additionalProperties": false,
+  "required": ["schemaVersion", "snapshotId", "candidate", "iterationId", "proofPlan", "materialization", "transcript", "review", "regressionResult", "approval", "state", "supersedesSnapshotId", "createdAt", "snapshotHash"],
+  "properties": {
+    "schemaVersion": { "const": "1.0.0" }, "snapshotId": { "$ref": "#/$defs/stableId" }, "candidate": { "$ref": "#/$defs/fingerprint" }, "iterationId": { "$ref": "#/$defs/stableId" }, "proofPlan": { "$ref": "#/$defs/hashRef" }, "materialization": { "$ref": "#/$defs/hashRef" }, "transcript": { "oneOf": [{ "$ref": "#/$defs/fingerprint" }, { "type": "null" }] }, "review": { "oneOf": [{ "$ref": "#/$defs/hashRef" }, { "type": "null" }] }, "regressionResult": { "oneOf": [{ "$ref": "#/$defs/hashRef" }, { "type": "null" }] }, "approval": { "oneOf": [{ "$ref": "#/$defs/hashRef" }, { "type": "null" }] }, "state": { "enum": ["rendered", "reviewing", "needs-human", "approved", "rejected", "superseded"] }, "supersedesSnapshotId": { "oneOf": [{ "$ref": "#/$defs/stableId" }, { "type": "null" }] }, "createdAt": { "type": "string", "minLength": 1 }, "snapshotHash": { "$ref": "#/$defs/sha256" }
+  },
+  "allOf": [
+    { "if": { "properties": { "state": { "enum": ["reviewing", "needs-human", "approved", "rejected"] } } }, "then": { "properties": { "transcript": { "$ref": "#/$defs/fingerprint" } } } },
+    { "if": { "properties": { "state": { "enum": ["needs-human", "approved", "rejected"] } } }, "then": { "properties": { "review": { "$ref": "#/$defs/hashRef" }, "regressionResult": { "$ref": "#/$defs/hashRef" } } } },
+    { "if": { "properties": { "state": { "const": "approved" } } }, "then": { "properties": { "approval": { "$ref": "#/$defs/hashRef" } } } }
+  ],
+  "$defs": { "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }, "stableId": { "type": "string", "pattern": "^[a-z][a-z0-9-]{2,63}$" }, "hashRef": { "type": "object", "additionalProperties": false, "required": ["artifactId", "sha256"], "properties": { "artifactId": { "type": "string", "minLength": 1 }, "sha256": { "$ref": "#/$defs/sha256" } } }, "fingerprint": { "type": "object", "additionalProperties": false, "required": ["sha256", "sizeBytes"], "properties": { "sha256": { "$ref": "#/$defs/sha256" }, "sizeBytes": { "type": "integer", "minimum": 0 }, "locator": { "type": "string", "minLength": 1 }, "mediaSignature": { "type": "object", "additionalProperties": true } } } }
+}
