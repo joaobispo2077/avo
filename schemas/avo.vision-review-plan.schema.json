@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://avo.local/avo.vision-review-plan.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "planId", "candidateRef", "proofPlanHash", "regressionContractHash", "capabilitySnapshot", "formatDiagnosisRef", "sections", "transcriptRef", "requiredWindowHash", "budgetPolicy", "deterministicChecks", "passes", "coverageManifest", "planHash"],
+  "properties": {
+    "schemaVersion": { "const": "1.0.0" },
+    "planId": { "$ref": "#/$defs/stableId" },
+    "candidateRef": { "$ref": "#/$defs/fingerprint" },
+    "proofPlanHash": { "$ref": "#/$defs/sha256" },
+    "regressionContractHash": { "$ref": "#/$defs/sha256" },
+    "capabilitySnapshot": { "$ref": "#/$defs/capabilitySnapshot" },
+    "formatDiagnosisRef": { "$ref": "#/$defs/hashRef" },
+    "sections": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/section" } },
+    "transcriptRef": { "$ref": "#/$defs/fingerprint" },
+    "requiredWindowHash": { "$ref": "#/$defs/sha256" },
+    "budgetPolicy": { "$ref": "#/$defs/budget" },
+    "deterministicChecks": { "type": "array", "uniqueItems": true, "items": { "enum": ["decode", "movement", "waveform", "transcript", "flash", "profile", "pacing-metrics"] } },
+    "passes": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/reviewPass" } },
+    "coverageManifest": { "oneOf": [{ "$ref": "#/$defs/coverageManifest" }, { "type": "null" }] },
+    "planHash": { "$ref": "#/$defs/sha256" }
+  },
+  "$defs": {
+    "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "stableId": { "type": "string", "pattern": "^[a-z][a-z0-9-]{2,63}$" },
+    "rational": { "type": "object", "additionalProperties": false, "required": ["num", "den"], "properties": { "num": { "type": "integer" }, "den": { "type": "integer", "minimum": 1 } } },
+    "frameRange": { "type": "object", "additionalProperties": false, "required": ["startFrame", "endFrameExclusive", "frameRate"], "properties": { "startFrame": { "type": "integer", "minimum": 0 }, "endFrameExclusive": { "type": "integer", "minimum": 1 }, "frameRate": { "$ref": "#/$defs/rational" } } },
+    "hashRef": { "type": "object", "additionalProperties": false, "required": ["artifactId", "sha256"], "properties": { "artifactId": { "type": "string", "minLength": 1 }, "sha256": { "$ref": "#/$defs/sha256" } } },
+    "fingerprint": { "type": "object", "additionalProperties": false, "required": ["sha256", "sizeBytes"], "properties": { "sha256": { "$ref": "#/$defs/sha256" }, "sizeBytes": { "type": "integer", "minimum": 0 }, "locator": { "type": "string", "minLength": 1 } } },
+    "artifactRef": { "type": "object", "additionalProperties": false, "required": ["artifactId", "sha256"], "properties": { "artifactId": { "type": "string", "minLength": 1 }, "sha256": { "$ref": "#/$defs/sha256" }, "kind": { "type": "string", "minLength": 1 } } },
+    "capabilitySnapshot": {
+      "type": "object", "additionalProperties": false,
+      "required": ["snapshotId", "configuredModel", "servedModel", "endpointIdentity", "supportsVision", "effectiveContextTokens", "contextProvenance", "maxOutputTokens", "imageCapabilities", "resourcePolicy", "probe", "identityHash"],
+      "properties": {
+        "snapshotId": { "$ref": "#/$defs/stableId" }, "configuredModel": { "type": "string", "minLength": 1 }, "servedModel": { "type": "string", "minLength": 1 },
+        "endpointIdentity": { "type": "object", "additionalProperties": false, "required": ["providerType", "redactedBase"], "properties": { "providerType": { "type": "string", "minLength": 1 }, "redactedBase": { "type": "string", "minLength": 1 } } },
+        "supportsVision": { "const": true }, "effectiveContextTokens": { "type": ["integer", "null"], "minimum": 1 }, "contextProvenance": { "enum": ["runtime-observed", "endpoint-declared", "policy-conservative-limit"] }, "maxOutputTokens": { "type": ["integer", "null"], "minimum": 1 },
+        "imageCapabilities": { "type": "object", "additionalProperties": false, "required": ["maxImages", "detailModes", "maxWidth", "maxHeight", "estimatorName", "estimatorVersion"], "properties": { "maxImages": { "type": ["integer", "null"], "minimum": 1 }, "detailModes": { "type": "array", "items": { "type": "string", "minLength": 1 } }, "maxWidth": { "type": ["integer", "null"], "minimum": 1 }, "maxHeight": { "type": ["integer", "null"], "minimum": 1 }, "estimatorName": { "type": "string", "minLength": 1 }, "estimatorVersion": { "type": "string", "minLength": 1 } } },
+        "resourcePolicy": { "type": "object", "additionalProperties": false, "required": ["device", "vramCeilingBytes", "concurrency", "operatorManagedLifecycle", "allowedCoResidency"], "properties": { "device": { "type": "string", "minLength": 1 }, "vramCeilingBytes": { "type": ["integer", "null"], "minimum": 1 }, "concurrency": { "type": "integer", "minimum": 1 }, "operatorManagedLifecycle": { "type": "boolean" }, "allowedCoResidency": { "type": "array", "items": { "type": "string" } } } },
+        "probe": { "type": "object", "additionalProperties": false, "required": ["probedAt", "requestHash", "responseHash", "latencyMs", "success"], "properties": { "probedAt": { "type": "string", "minLength": 1 }, "requestHash": { "$ref": "#/$defs/sha256" }, "responseHash": { "$ref": "#/$defs/sha256" }, "latencyMs": { "type": "number", "minimum": 0 }, "success": { "const": true } } },
+        "identityHash": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "section": { "type": "object", "additionalProperties": false, "required": ["sectionId", "range", "formatRole", "purpose", "promiseContribution", "payoff", "targetDensity", "protectedPauses", "expectedBeats", "riskClasses"], "properties": { "sectionId": { "$ref": "#/$defs/stableId" }, "range": { "$ref": "#/$defs/frameRange" }, "formatRole": { "type": "string", "minLength": 1 }, "purpose": { "type": "string", "minLength": 1 }, "promiseContribution": { "type": "string", "minLength": 1 }, "payoff": { "type": ["string", "null"] }, "targetDensity": { "type": "integer", "minimum": 0, "maximum": 5 }, "protectedPauses": { "type": "array", "items": { "$ref": "#/$defs/frameRange" } }, "expectedBeats": { "type": "array", "items": { "type": "string", "minLength": 1 } }, "riskClasses": { "type": "array", "uniqueItems": true, "items": { "type": "string", "minLength": 1 } } } },
+    "budget": { "type": "object", "additionalProperties": false, "required": ["instructionTokens", "rubricTokens", "transcriptTokens", "outputReserveTokens", "carryForwardTokens", "safetyMarginTokens", "visualTokens", "totalTokens"], "properties": { "instructionTokens": { "type": "integer", "minimum": 0 }, "rubricTokens": { "type": "integer", "minimum": 0 }, "transcriptTokens": { "type": "integer", "minimum": 0 }, "outputReserveTokens": { "type": "integer", "minimum": 0 }, "carryForwardTokens": { "type": "integer", "minimum": 0 }, "safetyMarginTokens": { "type": "integer", "minimum": 0 }, "visualTokens": { "type": "integer", "minimum": 0 }, "totalTokens": { "type": "integer", "minimum": 1 } } },
+    "reviewPass": {
+      "type": "object", "additionalProperties": false,
+      "required": ["passId", "kind", "requiredWindowIds", "programRanges", "sampleFrames", "transcriptRange", "rubric", "budget", "detailPolicy", "boundaryPolicy", "retryPolicy", "passSpecHash"],
+      "properties": {
+        "passId": { "$ref": "#/$defs/stableId" }, "kind": { "enum": ["sparse-overview", "dense-window", "repair", "comparison"] }, "requiredWindowIds": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/stableId" } }, "programRanges": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/frameRange" } }, "sampleFrames": { "type": "array", "uniqueItems": true, "items": { "type": "integer", "minimum": 0 } }, "transcriptRange": { "$ref": "#/$defs/frameRange" },
+        "rubric": { "type": "object", "additionalProperties": false, "required": ["criterionIds", "resultSchemaVersion"], "properties": { "criterionIds": { "type": "array", "items": { "type": "string", "minLength": 1 } }, "resultSchemaVersion": { "type": "string", "minLength": 1 } } }, "budget": { "$ref": "#/$defs/budget" },
+        "detailPolicy": { "type": "object", "additionalProperties": false, "required": ["detail", "width", "height", "estimatorVersion"], "properties": { "detail": { "type": "string", "minLength": 1 }, "width": { "type": "integer", "minimum": 1 }, "height": { "type": "integer", "minimum": 1 }, "estimatorVersion": { "type": "string", "minLength": 1 } } },
+        "boundaryPolicy": { "type": "object", "additionalProperties": false, "required": ["mode", "overlapFrames"], "properties": { "mode": { "enum": ["explicit-endpoints", "bounded-overlap"] }, "overlapFrames": { "type": "integer", "minimum": 0 } } },
+        "retryPolicy": { "type": "object", "additionalProperties": false, "required": ["maxAttempts", "allowedReductions", "allowModelSubstitution"], "properties": { "maxAttempts": { "type": "integer", "minimum": 0 }, "allowedReductions": { "type": "array", "items": { "enum": ["deduplicate-frames", "reduce-detail", "reduce-transcript-handles", "split-window"] } }, "allowModelSubstitution": { "const": false } } }, "passSpecHash": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "sample": { "type": "object", "additionalProperties": false, "required": ["frame", "timestamp"], "properties": { "frame": { "type": "integer", "minimum": 0 }, "timestamp": { "$ref": "#/$defs/rational" }, "reason": { "type": "string" } } },
+    "coverageCount": { "type": "object", "additionalProperties": false, "required": ["required", "observed", "maximumGapFrames"], "properties": { "required": { "type": "integer", "minimum": 0 }, "observed": { "type": "integer", "minimum": 0 }, "maximumGapFrames": { "type": ["integer", "null"], "minimum": 0 } } },
+    "coverageManifest": {
+      "type": "object", "additionalProperties": false,
+      "required": ["planHash", "passResults", "requestedSamples", "decodedSamples", "failedSamples", "inspectedRanges", "partiallyInspectedRanges", "deterministicallyCheckedRanges", "uninspectedRanges", "coverageHoles", "coverageBySection", "coverageByRiskClass", "criterionResults", "findings", "reviewContractHash", "aggregateStatus"],
+      "properties": {
+        "planHash": { "$ref": "#/$defs/sha256" },
+        "passResults": { "type": "array", "items": { "type": "object", "additionalProperties": false, "required": ["passId", "passSpecHash", "status", "observedFrames", "coveredWindowIds", "retries", "rawArtifactRefs"], "properties": { "passId": { "$ref": "#/$defs/stableId" }, "passSpecHash": { "$ref": "#/$defs/sha256" }, "status": { "enum": ["pass", "fail", "needs-human-judgment", "blocked"] }, "observedFrames": { "type": "array", "items": { "type": "integer", "minimum": 0 } }, "coveredWindowIds": { "type": "array", "items": { "$ref": "#/$defs/stableId" } }, "retries": { "type": "array", "items": { "type": "object" } }, "rawArtifactRefs": { "type": "array", "items": { "$ref": "#/$defs/artifactRef" } } } } },
+        "requestedSamples": { "type": "array", "items": { "$ref": "#/$defs/sample" } }, "decodedSamples": { "type": "array", "items": { "$ref": "#/$defs/sample" } },
+        "failedSamples": { "type": "array", "items": { "type": "object", "additionalProperties": false, "required": ["sample", "reason"], "properties": { "sample": { "$ref": "#/$defs/sample" }, "reason": { "type": "string", "minLength": 1 } } } },
+        "inspectedRanges": { "type": "array", "items": { "$ref": "#/$defs/frameRange" } }, "partiallyInspectedRanges": { "type": "array", "items": { "$ref": "#/$defs/frameRange" } }, "deterministicallyCheckedRanges": { "type": "array", "items": { "$ref": "#/$defs/frameRange" } }, "uninspectedRanges": { "type": "array", "items": { "$ref": "#/$defs/frameRange" } },
+        "coverageHoles": { "type": "array", "items": { "type": "object", "additionalProperties": false, "required": ["windowId", "mandatory", "reason"], "properties": { "windowId": { "$ref": "#/$defs/stableId" }, "mandatory": { "type": "boolean" }, "reason": { "type": "string", "minLength": 1 } } } },
+        "coverageBySection": { "type": "object", "additionalProperties": { "$ref": "#/$defs/coverageCount" } }, "coverageByRiskClass": { "type": "object", "additionalProperties": { "$ref": "#/$defs/coverageCount" } },
+        "criterionResults": { "type": "array", "items": { "type": "object", "additionalProperties": false, "required": ["criterionId", "status", "evidenceRefs"], "properties": { "criterionId": { "type": "string", "minLength": 1 }, "status": { "enum": ["pass", "fail", "needs-human", "unreviewed"] }, "evidenceRefs": { "type": "array", "items": { "$ref": "#/$defs/artifactRef" } } } } },
+        "findings": { "type": "array", "items": { "$ref": "avo.vision-finding.schema.json" } }, "reviewContractHash": { "$ref": "#/$defs/sha256" }, "aggregateStatus": { "enum": ["pass", "fail", "needs-human-judgment", "blocked"] }
+      }
+    }
+  }
+}

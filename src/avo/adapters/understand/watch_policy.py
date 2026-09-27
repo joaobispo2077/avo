@@ -33,6 +33,8 @@ DEFAULT_WATCH_SETTINGS: dict[str, Any] = {
     "language": None,
     "acceptanceCriteria": [],
     "riskNotes": [],
+    "sections": [],
+    "pacingMetrics": {},
 }
 
 _DEVICE = re.compile(r"^(?:auto|cpu|cuda(?::[0-9]+)?)$")
@@ -121,10 +123,57 @@ def _validated_context(values: Mapping[str, Any]) -> dict[str, Any]:
             isinstance(item, str) and item.strip() for item in value
         ):
             raise WatchPolicyError(f"watch.{name} must be a list of non-empty strings")
+    sections = values.get("sections")
+    if not isinstance(sections, list):
+        raise WatchPolicyError("watch.sections must be a list")
+    required_section_fields = {
+        "sectionId",
+        "formatRole",
+        "purpose",
+        "payoff",
+        "targetDensity",
+        "protectedPauses",
+        "riskClasses",
+    }
+    for section in sections:
+        if not isinstance(section, dict) or not required_section_fields.issubset(
+            section
+        ):
+            raise WatchPolicyError(
+                "watch.sections entries require format, purpose, payoff, density, pauses, and risks"
+            )
+        density = section.get("targetDensity")
+        if (
+            isinstance(density, bool)
+            or not isinstance(density, int)
+            or not 0 <= density <= 5
+        ):
+            raise WatchPolicyError(
+                "watch section targetDensity must be between 0 and 5"
+            )
+        if not isinstance(section.get("protectedPauses"), list) or not isinstance(
+            section.get("riskClasses"), list
+        ):
+            raise WatchPolicyError("watch section pauses and risks must be lists")
+    pacing_metrics = values.get("pacingMetrics")
+    if not isinstance(pacing_metrics, dict) or not all(
+        isinstance(key, str) and isinstance(value, dict)
+        for key, value in pacing_metrics.items()
+    ):
+        raise WatchPolicyError(
+            "watch.pacingMetrics must map section IDs to metric objects"
+        )
     return {
         key: values[key]
-        for key in ("format", "language", "acceptanceCriteria", "riskNotes")
-        if values.get(key) not in (None, [], "")
+        for key in (
+            "format",
+            "language",
+            "acceptanceCriteria",
+            "riskNotes",
+            "sections",
+            "pacingMetrics",
+        )
+        if values.get(key) not in (None, [], "", {})
     }
 
 
@@ -171,17 +220,45 @@ def resolve_watch_policy(
     )
 
 
+_PROMPT_WINDOW_CAP = 8
+
+
 def _window_prompt_lines(windows: list[dict[str, Any]]) -> list[str]:
     if not windows:
         return []
-    return [
-        "Required windows:",
-        *[
-            f"- {float(window['start']):.3f}–{float(window['end']):.3f} seconds: "
-            f"{window['reason']}"
-            for window in windows
-        ],
-    ]
+    editorial: list[dict[str, Any]] = []
+    joins = 0
+    cues = 0
+    for window in windows:
+        reason = str(window.get("reason") or "")
+        if reason.startswith("join:"):
+            joins += 1
+        elif reason.startswith("cue:"):
+            cues += 1
+        else:
+            editorial.append(window)
+    listed = editorial[:_PROMPT_WINDOW_CAP]
+    lines = ["Required windows:"]
+    lines.extend(
+        f"- {float(window['start']):.3f}–{float(window['end']):.3f} seconds: "
+        f"{window['reason']}"
+        for window in listed
+    )
+    extras: list[str] = []
+    omitted = len(editorial) - len(listed)
+    if omitted:
+        extras.append(f"{omitted} more editorial windows")
+    if joins:
+        extras.append(f"{joins} cut joins")
+    if cues:
+        extras.append(f"{cues} overlay cues")
+    if extras:
+        lines.append(
+            "Sampled frames also cover "
+            + ", ".join(extras)
+            + ". Judge those frames. Do not repeat this list."
+        )
+    return lines
 
 
 def _context_prompt_lines(context: Mapping[str, Any]) -> list[str]:
@@ -195,6 +272,17 @@ def _context_prompt_lines(context: Mapping[str, Any]) -> list[str]:
         for item in context.get("acceptanceCriteria") or []
     )
     lines.extend(f"Declared risk: {item}" for item in context.get("riskNotes") or [])
+    for section in context.get("sections") or []:
+        lines.append(
+            "Section "
+            f"{section['sectionId']}: format={section['formatRole']}; "
+            f"purpose={section['purpose']}; payoff={section['payoff']}; "
+            f"target-density={section['targetDensity']}; "
+            f"protected-pauses={len(section['protectedPauses'])}; "
+            f"risks={','.join(section['riskClasses']) or 'none'}"
+        )
+    for section_id, metrics in sorted((context.get("pacingMetrics") or {}).items()):
+        lines.append(f"Deterministic pacing metrics for {section_id}: {metrics}")
     return lines
 
 

@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://avo.local/avo.vision-finding.schema.json",
+  "type": "object", "additionalProperties": false,
+  "required": ["schemaVersion", "findingId", "category", "severity", "confidence", "programRange", "evidenceRefs", "criterionIds", "obligationIds", "observed", "expected", "whyItMatters", "alternativeExplanations", "message", "suggestedAction", "requiresHuman", "status", "humanDisposition"],
+  "properties": {
+    "schemaVersion": { "const": "1.0.0" }, "findingId": { "$ref": "#/$defs/stableId" },
+    "category": { "enum": ["layout", "pacing", "movement", "continuity", "privacy", "caption", "visual-quality", "editorial", "factual-risk", "rights", "accessibility", "technical", "other"] },
+    "severity": { "enum": ["info", "warning", "blocking", "unknown"] }, "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
+    "programRange": { "oneOf": [{ "$ref": "#/$defs/frameRange" }, { "type": "null" }] },
+    "evidenceRefs": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/evidenceRef" } },
+    "criterionIds": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true }, "obligationIds": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+    "observed": { "type": "string", "minLength": 1 }, "expected": { "type": ["string", "null"] }, "whyItMatters": { "type": "string", "minLength": 1 }, "alternativeExplanations": { "type": "array", "items": { "type": "string", "minLength": 1 } }, "message": { "type": "string", "minLength": 1 }, "suggestedAction": { "type": ["string", "null"] }, "requiresHuman": { "type": "boolean" }, "status": { "enum": ["open", "corroborated", "dismissed", "resolved", "needs-human"] }, "humanDisposition": { "oneOf": [{ "$ref": "#/$defs/humanDisposition" }, { "type": "null" }] }, "aliases": { "type": "array", "items": { "$ref": "#/$defs/stableId" }, "uniqueItems": true }
+  },
+  "allOf": [
+    { "if": { "properties": { "status": { "const": "needs-human" } } }, "then": { "properties": { "requiresHuman": { "const": true } } } },
+    { "if": { "properties": { "status": { "enum": ["dismissed", "resolved"] } } }, "then": { "properties": { "humanDisposition": { "$ref": "#/$defs/humanDisposition" } } } },
+    { "if": { "properties": { "category": { "enum": ["pacing", "movement", "continuity", "caption", "visual-quality"] } } }, "then": { "properties": { "programRange": { "$ref": "#/$defs/frameRange" } } } }
+  ],
+  "$defs": {
+    "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }, "stableId": { "type": "string", "pattern": "^[a-z][a-z0-9-]{2,63}$" },
+    "frameRange": { "type": "object", "additionalProperties": false, "required": ["startFrame", "endFrameExclusive"], "properties": { "startFrame": { "type": "integer", "minimum": 0 }, "endFrameExclusive": { "type": "integer", "minimum": 1 } } },
+    "evidenceRef": { "type": "object", "additionalProperties": false, "required": ["kind", "artifactId", "sha256"], "properties": { "kind": { "enum": ["observed-frame", "observed-range", "pass-result", "transcript", "deterministic", "raw-response", "human"] }, "artifactId": { "type": "string", "minLength": 1 }, "sha256": { "$ref": "#/$defs/sha256" }, "passId": { "type": "string", "minLength": 1 }, "programRange": { "$ref": "#/$defs/frameRange" } } },
+    "humanDisposition": { "type": "object", "additionalProperties": false, "required": ["decision", "actor", "rationale", "decidedAt", "candidateSha256", "reviewContractHash"], "properties": { "decision": { "enum": ["corroborated", "dismissed", "resolved", "accepted-risk", "deferred"] }, "actor": { "type": "string", "minLength": 1 }, "rationale": { "type": "string", "minLength": 1 }, "decidedAt": { "type": "string", "minLength": 1 }, "candidateSha256": { "$ref": "#/$defs/sha256" }, "reviewContractHash": { "$ref": "#/$defs/sha256" } } }
+  }
+}

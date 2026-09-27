@@ -41,6 +41,23 @@ class ApprovalService:
         self.workspace = workspace
         self.store = workspace.store("cmap")
 
+    def _require_candidate_snapshot(
+        self, candidate_sha256: str, candidate_size: int | None = None
+    ) -> dict[str, Any] | None:
+        from .pipeline import TimelinePipeline
+
+        snapshot = TimelinePipeline(self.workspace).active_candidate_snapshot()
+        if snapshot is None:
+            return None
+        candidate = snapshot["candidate"]
+        if candidate["sha256"] != candidate_sha256 or (
+            candidate_size is not None and candidate["sizeBytes"] != candidate_size
+        ):
+            raise ValueError("approval candidate bytes differ from active snapshot")
+        if snapshot["state"] not in {"reviewing", "needs-human"}:
+            raise ValueError("approval requires the active reviewed candidate snapshot")
+        return snapshot
+
     @staticmethod
     def _load(path: Path) -> dict[str, Any]:
         try:
@@ -83,6 +100,25 @@ class ApprovalService:
         candidate_hash = str((materialization.get("output") or {}).get("sha256") or "")
         if candidate_hash != review["candidate"]["sha256"]:
             raise ValueError("review candidate does not match cut materialization")
+        active_snapshot = self._require_candidate_snapshot(
+            candidate_hash, review["candidate"].get("byteSize")
+        )
+        if active_snapshot is not None:
+            materialization_hash = str(materialization.get("materializationHash") or "")
+            if active_snapshot["materialization"]["sha256"] != materialization_hash:
+                raise ValueError(
+                    "approval materialization differs from active snapshot"
+                )
+            proof_plan_hash = str(materialization.get("proofPlanHash") or "")
+            if (
+                proof_plan_hash
+                and active_snapshot["proofPlan"]["sha256"] != proof_plan_hash
+            ):
+                raise ValueError("approval proof plan differs from active snapshot")
+            if active_snapshot["review"] is not None and active_snapshot["review"][
+                "sha256"
+            ] != content_hash(review):
+                raise ValueError("approval review differs from active snapshot")
         dependencies = review["candidate"]["dependencies"]
         if dependencies.get("cmap") != revision["contentHash"]:
             raise ValueError("review is bound to another CMap revision")
@@ -93,6 +129,20 @@ class ApprovalService:
         if review["dependencyLockSha256"] != dependency_lock_hash(dependencies):
             raise ValueError("review dependency lock is invalid")
         _require_cut_proof_integrity(review, candidate_hash)
+        regression_result = next(
+            (
+                evidence.get("regressionResult")
+                for evidence in review.get("evidence") or []
+                if evidence.get("regressionResult")
+            ),
+            None,
+        )
+        if (
+            active_snapshot is not None
+            and active_snapshot["regressionResult"] is None
+            and regression_result is None
+        ):
+            raise ValueError("candidate approval requires an exact regression result")
         expected_materialization_hash = materialization.get("materializationHash")
         body = {
             key: value
@@ -116,6 +166,65 @@ class ApprovalService:
             reason=reason,
             evidence_bundle_hash=content_hash(review),
         )
+        if active_snapshot is not None:
+            from .pipeline import TimelinePipeline
+
+            plan_sha256 = active_snapshot["proofPlan"]["sha256"]
+            review_binding = {
+                "artifactId": f"{review['checkpoint']}-review",
+                "sha256": content_hash(review),
+                "candidateSha256": candidate_hash,
+                "proofPlanSha256": plan_sha256,
+            }
+            regression_binding = (
+                {
+                    **active_snapshot["regressionResult"],
+                    "candidateSha256": candidate_hash,
+                }
+                if active_snapshot["regressionResult"] is not None
+                else {
+                    "artifactId": "regression-result",
+                    "sha256": content_hash(regression_result),
+                    "candidateSha256": candidate_hash,
+                }
+            )
+            TimelinePipeline(self.workspace).record_candidate_snapshot(
+                state="approved" if decision == "approved" else "rejected",
+                candidate=active_snapshot["candidate"],
+                iteration_id=active_snapshot["iterationId"],
+                proof_plan={
+                    **active_snapshot["proofPlan"],
+                    "iterationId": active_snapshot["iterationId"],
+                },
+                materialization={
+                    **active_snapshot["materialization"],
+                    "candidateSha256": candidate_hash,
+                },
+                transcript={
+                    "fingerprint": active_snapshot["transcript"],
+                    "sourceSha256": candidate_hash,
+                },
+                review=(
+                    {
+                        **active_snapshot["review"],
+                        "candidateSha256": candidate_hash,
+                        "proofPlanSha256": plan_sha256,
+                    }
+                    if active_snapshot["review"] is not None
+                    else review_binding
+                ),
+                regression_result=regression_binding,
+                approval=(
+                    {
+                        "artifactId": str(event["eventId"]),
+                        "sha256": content_hash(event),
+                        "candidateSha256": candidate_hash,
+                    }
+                    if decision == "approved"
+                    else None
+                ),
+                expected_active_snapshot_hash=active_snapshot["snapshotHash"],
+            )
         run_store = PipelineRunStore(self.workspace.pipeline_run_path)
         run = run_store.load()
         if (
@@ -132,7 +241,11 @@ class ApprovalService:
                     **run["activeRefs"],
                     "cmapRevisionId": revision_id,
                     "cutOutputSha256": candidate_hash,
-                    "reviewIdentityHash": review["candidate"]["identityHash"],
+                    **(
+                        {}
+                        if active_snapshot is not None
+                        else {"reviewIdentityHash": review["candidate"]["identityHash"]}
+                    ),
                 },
             )
         event["editlogRefresh"] = self.workspace.notify_editlog()
