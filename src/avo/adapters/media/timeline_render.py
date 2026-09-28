@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import json
 import shutil
+import subprocess
 import sys
 from copy import deepcopy
 from pathlib import Path
@@ -106,10 +108,33 @@ class TimelineRenderAdapter:
             str(output),
             "--no-subtitles",
         ]
-        if profile == "draft":
+        render_contract = request.get("render_contract")
+        dimensions = (
+            (
+                int(render_contract.get("width") or 0),
+                int(render_contract.get("height") or 0),
+            )
+            if render_contract
+            else None
+        )
+        mode_by_dimensions = {
+            (1280, 720): "--draft",
+            (1920, 1080): "--preview",
+            (3840, 2160): "--youtube-4k",
+        }
+        if dimensions:
+            mode = mode_by_dimensions.get(dimensions)
+            if mode is None:
+                raise RuntimeError(
+                    f"unsupported render contract dimensions: {dimensions[0]}x{dimensions[1]}"
+                )
+            argv.append(mode)
+        elif profile == "draft":
             argv.append("--draft")
         elif profile == "preview":
             argv.append("--preview")
+        elif profile in {"4k", "master-4k", "youtube-4k", "youtube_4k"}:
+            argv.append("--youtube-4k")
         previous = sys.argv
         try:
             sys.argv = argv
@@ -120,7 +145,24 @@ class TimelineRenderAdapter:
         finally:
             sys.argv = previous
         fingerprint = file_fingerprint(output)
-        render_contract = request.get("render_contract")
+        media = self._probe_output(output) if render_contract else None
+        if render_contract and media:
+            expected_fps = float(render_contract["frameRate"]["num"]) / float(
+                render_contract["frameRate"]["den"]
+            )
+            tolerance = float(render_contract["frameRate"].get("tolerance") or 0)
+            mismatches = [
+                field
+                for field in ("width", "height")
+                if int(media[field]) != int(render_contract[field])
+            ]
+            if abs(float(media["frameRate"]) - expected_fps) > tolerance:
+                mismatches.append("frameRate")
+            if mismatches:
+                raise RuntimeError(
+                    "rendered output does not match render contract: "
+                    + ", ".join(mismatches)
+                )
         return {
             "status": "pass",
             "output": {**fingerprint, "locator": str(output)},
@@ -130,8 +172,40 @@ class TimelineRenderAdapter:
                 content_hash(render_contract) if render_contract is not None else None
             ),
             "producer": {"name": "avo.render", "version": "1"},
+            "media": media,
             "audioGraphHash": (
                 compiled_audio["graphHash"] if compiled_audio is not None else None
             ),
             "audioEncodeCount": 1 if compiled_audio is not None else None,
+        }
+
+    @staticmethod
+    def _probe_output(path: Path) -> dict[str, Any]:
+        probe = json.loads(
+            subprocess.run(
+                [
+                    "ffprobe",
+                    "-v",
+                    "error",
+                    "-select_streams",
+                    "v:0",
+                    "-show_entries",
+                    "stream=width,height,r_frame_rate",
+                    "-of",
+                    "json",
+                    str(path),
+                ],
+                check=True,
+                capture_output=True,
+                text=True,
+            ).stdout
+        )
+        stream = (probe.get("streams") or [None])[0]
+        if not stream:
+            raise RuntimeError(f"rendered output has no video stream: {path}")
+        numerator, denominator = str(stream["r_frame_rate"]).split("/", 1)
+        return {
+            "width": int(stream["width"]),
+            "height": int(stream["height"]),
+            "frameRate": float(numerator) / float(denominator),
         }
