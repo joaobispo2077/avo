@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -50,6 +51,30 @@ class OverlayCompositeTests(unittest.TestCase):
         self.assertIn("[0:v][a1]overlay=enable='between(t,0.000,1.000)'[v1]", graph)
         self.assertIn("[v1][a2]overlay=enable='between(t,2.000,3.500)'[v2]", graph)
         self.assertIn("[v2][a3]overlay=enable='between(t,5.000,7.000)'[v3]", graph)
+
+    def test_final_composite_preoffsets_overlay_inputs_to_bound_4k_memory(self) -> None:
+        captured: list[str] = []
+
+        def capture(command, *_args, **_kwargs):
+            captured.extend(command)
+
+        with (
+            patch.object(render, "run_ffmpeg_progress", side_effect=capture),
+            patch.object(render, "media_duration", return_value=10.0),
+        ):
+            render.build_final_composite(
+                Path("base.mp4"),
+                [{"file": "late.mov", "start_in_output": 500, "duration": 2}],
+                None,
+                Path("out.mp4"),
+                Path("."),
+                youtube_4k=True,
+            )
+
+        command = " ".join(str(item) for item in captured)
+        self.assertIn("-itsoffset 500 -i", command)
+        self.assertIn("trim=duration=2.000,setpts=PTS[a1]", command)
+        self.assertNotIn("PTS-STARTPTS+500/TB", command)
 
     def test_visual_subtitles_disabled_means_no_subtitle_filter(self) -> None:
         edl = {"caption_policy": {"visual_subtitles": False}, "caption_burn_in": None}
