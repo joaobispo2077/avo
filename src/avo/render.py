@@ -929,6 +929,7 @@ def build_overlay_filter_parts(
     overlays: list[dict],
     first_input_index: int = 1,
     overlay_scale: str | None = None,
+    inputs_preoffset: bool = False,
 ) -> tuple[list[str], str]:
     """Build alpha-overlay filters and return parts plus the current video label."""
     parts: list[str] = []
@@ -950,9 +951,13 @@ def build_overlay_filter_parts(
         # Limit overlay streams to their approved EDL window. Without this,
         # a longer reusable overlay asset can extend the output timeline even
         # when the overlay filter's enable window has already ended.
-        overlay_chain += (
-            f"trim=duration={duration:.3f},setpts=PTS-STARTPTS+{start:g}/TB{shifted}"
-        )
+        overlay_chain += f"trim=duration={duration:.3f},"
+        if inputs_preoffset:
+            # The demuxer timestamp offset keeps late 4K alpha inputs from being
+            # decoded and buffered at t=0 while the main timeline catches up.
+            overlay_chain += f"setpts=PTS{shifted}"
+        else:
+            overlay_chain += f"setpts=PTS-STARTPTS+{start:g}/TB{shifted}"
         parts.append(overlay_chain)
         position = ""
         if "x" in overlay or "y" in overlay:
@@ -1059,7 +1064,12 @@ def build_final_composite(
 
     inputs: list[str] = ["-i", str(base_path)]
     for overlay in overlays:
-        inputs += ["-i", str(resolve_path(overlay["file"], edit_dir))]
+        inputs += [
+            "-itsoffset",
+            f"{float(overlay['start_in_output']):g}",
+            "-i",
+            str(resolve_path(overlay["file"], edit_dir)),
+        ]
     for effect in sound_effects:
         inputs += ["-i", str(resolve_path(effect["file"], edit_dir))]
 
@@ -1077,6 +1087,7 @@ def build_final_composite(
     video_parts, current_video = build_overlay_filter_parts(
         overlays,
         overlay_scale="3840:2160" if youtube_4k else None,
+        inputs_preoffset=True,
     )
 
     if has_subs:
@@ -1111,6 +1122,8 @@ def build_final_composite(
         video_output,
         "-map",
         audio_output,
+    ]
+    cmd += [
         "-c:v",
         "libx264",
         "-preset",
