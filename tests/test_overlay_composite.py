@@ -76,6 +76,31 @@ class OverlayCompositeTests(unittest.TestCase):
         self.assertIn("trim=duration=2.000,setpts=PTS[a1]", command)
         self.assertNotIn("PTS-STARTPTS+500/TB", command)
 
+    def test_final_4k_composite_honors_requested_nvenc_encoder(self) -> None:
+        captured: list[str] = []
+
+        def capture(command, *_args, **_kwargs):
+            captured.extend(command)
+
+        with (
+            patch.dict("os.environ", {"AVO_RENDER_VIDEO_ENCODER": "h264_nvenc"}),
+            patch.object(render, "run_ffmpeg_progress", side_effect=capture),
+            patch.object(render, "media_duration", return_value=10.0),
+            patch.object(Path, "exists", return_value=True),
+        ):
+            render.build_final_composite(
+                Path("base.mp4"),
+                [],
+                Path("captions.srt"),
+                Path("out.mp4"),
+                Path("."),
+                youtube_4k=True,
+            )
+
+        command = " ".join(str(item) for item in captured)
+        self.assertIn("-c:v h264_nvenc -preset p6 -tune hq", command)
+        self.assertIn("-rc vbr -cq 17 -b:v 40M", command)
+
     def test_visual_subtitles_disabled_means_no_subtitle_filter(self) -> None:
         edl = {"caption_policy": {"visual_subtitles": False}, "caption_burn_in": None}
         self.assertFalse(render.visual_subtitles_enabled(edl))
