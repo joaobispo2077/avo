@@ -32,6 +32,17 @@
     "generatedAt": { "type": "string" },
     "summary": { "type": "string" },
     "sessionId": { "type": "string" },
+    "timelineLearningRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["snapshotId", "sha256", "path"],
+      "properties": {
+        "snapshotId": { "type": "string", "pattern": "^[a-z][a-z0-9-]{2,63}$" },
+        "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "path": { "type": "string", "minLength": 1 },
+        "status": { "enum": ["draft", "final"] }
+      }
+    },
     "space": {
       "type": "object",
       "additionalProperties": false,

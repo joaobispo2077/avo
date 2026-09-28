@@ -291,3 +291,77 @@ class PipelineRunStore:
         updated["updatedAt"] = history["occurredAt"]
         updated.setdefault("extensions", {})["lastRecovery"] = recovery_event
         return self._write(updated, expected_updated_at=expected_updated_at)
+
+    def bind_iteration_context(
+        self,
+        *,
+        ledger_revision_id,
+        ledger_sha256,
+        regression_contract_id,
+        regression_contract_sha256,
+        expected_updated_at=None,
+    ):
+        """Atomically bind active lightweight iteration and regression history."""
+        import re
+        from copy import deepcopy
+
+        exact_sha = re.compile(r"^[a-f0-9]{64}$")
+        if (
+            not str(ledger_revision_id).strip()
+            or not str(regression_contract_id).strip()
+        ):
+            raise LifecycleError("iteration context identities are required")
+        if not exact_sha.fullmatch(str(ledger_sha256)) or not exact_sha.fullmatch(
+            str(regression_contract_sha256)
+        ):
+            raise LifecycleError("iteration context requires exact sha256 values")
+        current = self.load()
+        updated = deepcopy(current)
+        updated["activeRefs"]["iterationLedger"] = {
+            "revisionId": str(ledger_revision_id),
+            "sha256": str(ledger_sha256),
+        }
+        updated["activeRefs"]["regressionContract"] = {
+            "contractId": str(regression_contract_id),
+            "sha256": str(regression_contract_sha256),
+        }
+        updated["updatedAt"] = self.clock()
+        return self._write(updated, expected_updated_at=expected_updated_at)
+
+    def activate_candidate_snapshot(
+        self,
+        reference,
+        *,
+        expected_active_snapshot_hash,
+        expected_updated_at=None,
+    ):
+        """Atomically replace every loose candidate ref with one snapshot ref."""
+        from copy import deepcopy
+
+        current = self.load()
+        active = current["activeRefs"].get("activeCandidateSnapshot") or {}
+        if active.get("sha256") != expected_active_snapshot_hash:
+            raise LifecycleError("candidate snapshot compare-and-swap failed")
+        updated = deepcopy(current)
+        stale = {
+            "candidatePath",
+            "candidateSha256",
+            "candidateIdentityHash",
+            "cutCandidateSha256",
+            "cutCandidateIdentityHash",
+            "transcript",
+            "materialization",
+            "review",
+            "reviewIdentityHash",
+            "regressionResult",
+            "approval",
+            "masterSha256",
+        }
+        for key in stale:
+            updated["activeRefs"].pop(key, None)
+        updated["activeRefs"]["activeCandidateSnapshot"] = dict(reference)
+        updated["updatedAt"] = self.clock()
+        return self._write(
+            updated,
+            expected_updated_at=expected_updated_at or current["updatedAt"],
+        )

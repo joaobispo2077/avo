@@ -10,6 +10,36 @@ from typing import Any
 from .contracts import content_hash, file_fingerprint, validate_document
 from .store import atomic_write_json, now_iso
 
+_HISTORICAL_OUTPUT_DIRECTORIES = {
+    "proof": "proof",
+    "proofs": "proof",
+    "preview": "preview",
+    "previews": "preview",
+    "proxy": "proxy",
+    "proxies": "proxy",
+    "masters": "master",
+    "delivery": "delivery",
+}
+
+
+def inventory_historical_output_fingerprints(raw_dir: Path) -> list[dict[str, Any]]:
+    """Fingerprint retained historical outputs for copy/rename quarantine."""
+    edit_dir = Path(raw_dir).resolve() / "edit"
+    records: dict[str, dict[str, Any]] = {}
+    for directory, role in _HISTORICAL_OUTPUT_DIRECTORIES.items():
+        root = edit_dir / directory
+        if not root.is_dir():
+            continue
+        for path in sorted(item for item in root.rglob("*") if item.is_file()):
+            if path.suffix.lower() in {".json", ".md", ".txt"}:
+                continue
+            fingerprint = file_fingerprint(path)
+            records.setdefault(
+                fingerprint["sha256"],
+                {**fingerprint, "role": role, "path": str(path)},
+            )
+    return [records[key] for key in sorted(records)]
+
 
 def _file_time(path: Path) -> str:
     value = datetime.fromtimestamp(path.stat().st_mtime, timezone.utc)
@@ -249,7 +279,19 @@ def legacy_edl_snapshots(
                         "locator": locator,
                         "sha256": file_fingerprint(asset)["sha256"],
                         "sizeBytes": asset.stat().st_size,
+                        "provenanceStatus": "unverifiable",
                     }
+                    findings.append(
+                        {
+                            "classification": "unverifiable-input",
+                            "message": (
+                                "legacy derived input requires human-verified "
+                                f"registration: {locator}"
+                            ),
+                            "locator": locator,
+                            "sha256": cue["assetRef"]["sha256"],
+                        }
+                    )
                 else:
                     findings.append(
                         {
@@ -265,6 +307,8 @@ def legacy_edl_snapshots(
                 "range": {"start": cue["start"], "end": cue["end"]},
                 "legacy": dict(item),
             }
+            if cue.get("assetRef"):
+                layer["source"] = dict(cue["assetRef"])
             (audio_layers if kind == "sfx" else video_layers).append(layer)
     if edl.get("subtitles"):
         ordinal += 1
@@ -374,6 +418,19 @@ class MigrationService:
     def plan(self) -> dict[str, Any]:
         edl = json.loads(self.edl_path.read_text(encoding="utf-8"))
         snapshots, findings = legacy_edl_snapshots(edl, edl_path=self.edl_path)
+        findings.extend(
+            {
+                "classification": "known-output-fingerprint",
+                "message": f"historical {record['role']} fingerprint inventoried",
+                "role": record["role"],
+                "locator": record["locator"],
+                "sha256": record["sha256"],
+                "sizeBytes": record["sizeBytes"],
+            }
+            for record in inventory_historical_output_fingerprints(
+                self.workspace.raw_dir
+            )
+        )
         return {
             "dryRun": True,
             "status": "dry-run-passed",

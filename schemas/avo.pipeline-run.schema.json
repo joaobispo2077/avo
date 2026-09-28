@@ -75,6 +75,17 @@
     },
     "activeRefs": {
       "type": "object",
+      "properties": {
+        "activeCandidateSnapshot": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["snapshotId", "sha256"],
+          "properties": {
+            "snapshotId": { "type": "string", "pattern": "^[a-z][a-z0-9-]{2,63}$" },
+            "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+          }
+        }
+      },
       "additionalProperties": true
     },
     "blockers": {

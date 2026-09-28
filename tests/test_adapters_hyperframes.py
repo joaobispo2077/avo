@@ -6,6 +6,7 @@ import subprocess
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from avo.adapters.motion.hyperframes import (
     HyperframesAdapter,
@@ -57,6 +58,82 @@ PHRASES = [
 
 
 class HyperframesAdapterTests(unittest.TestCase):
+    def test_proof_operation_preserves_declared_range_and_parameters(self):
+        adapter = HyperframesAdapter()
+        operation = {
+            "operationId": "operation-title",
+            "kind": "text-card-graphic",
+            "inputs": ["camera"],
+            "outputRange": {"startFrame": 30, "endFrameExclusive": 90},
+            "implementationId": "impl-title",
+            "parameters": {
+                "project": "project",
+                "instance": {
+                    "componentRef": "title@1.0.0",
+                    "bmapCueId": "cue-title",
+                    "placement": {"x": 0, "y": 0},
+                    "range": {"startFrame": 30, "endFrameExclusive": 90},
+                    "reducedMotion": False,
+                },
+                "componentContract": {"lifecycle": {"hold": "declared"}},
+                "accent": "cyan",
+            },
+        }
+        with patch.object(
+            adapter,
+            "render_timeline_instance",
+            return_value={"status": "pass"},
+        ) as render:
+            result = adapter.render_proof_operation(
+                operation=operation, output=Path("title.mov")
+            )
+        assert (
+            render.call_args.kwargs["instance"] is operation["parameters"]["instance"]
+        )
+        assert result["declaredOutputRange"] == operation["outputRange"]
+        assert result["declaredParameters"] == operation["parameters"]
+
+    def test_visible_text_em_dash_requires_explicit_authorization_reference(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            assets = {
+                "baseVideo": asset(root / "video.mp4", True),
+                "dialogueAudio": asset(root / "audio.m4a", False),
+            }
+            item = {
+                "id": "01",
+                "editedDurationSec": 2,
+                "captions": [
+                    {
+                        **PHRASES[0],
+                        "words": [
+                            {**PHRASES[0]["words"][0], "text": "Friday — Night"},
+                            PHRASES[0]["words"][1],
+                        ],
+                    }
+                ],
+                "layout": {"mode": "full-frame", "captionAnchor": "bottom"},
+            }
+            with self.assertRaisesRegex(HyperframesError, "authorization"):
+                build_composition_spec(
+                    batch_id="batch",
+                    item=item,
+                    output={"width": 1080, "height": 1920, "fps": 30},
+                    assets=assets,
+                    proof_revision=1,
+                    expected_output_path=root / "proof.mp4",
+                )
+            item["emDashAuthorizationRef"] = "creator-request-001"
+            spec = build_composition_spec(
+                batch_id="batch",
+                item=item,
+                output={"width": 1080, "height": 1920, "fps": 30},
+                assets=assets,
+                proof_revision=1,
+                expected_output_path=root / "proof.mp4",
+            )
+            self.assertEqual(spec["shortId"], "01")
+
     def test_compiler_emits_direct_root_muted_video_separate_audio_and_local_runtime(
         self,
     ) -> None:

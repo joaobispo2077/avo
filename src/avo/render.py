@@ -24,9 +24,12 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import subprocess
 import sys
+from collections import defaultdict
+from fractions import Fraction
 from pathlib import Path
 
 from avo.build_captions import derive_burn_in_srt
@@ -160,6 +163,55 @@ def media_duration(path: Path) -> float | None:
         return float(out.stdout.strip())
     except Exception:
         return None
+
+
+def probe_frame_rate(path: Path) -> str | None:
+    """Return a stable rational video frame rate suitable for FFmpeg."""
+    try:
+        out = subprocess.run(
+            [
+                "ffprobe",
+                "-v",
+                "error",
+                "-select_streams",
+                "v:0",
+                "-show_entries",
+                "stream=avg_frame_rate",
+                "-of",
+                "default=noprint_wrappers=1:nokey=1",
+                str(path),
+            ],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        value = out.stdout.strip()
+        if not value or value == "0/0":
+            return None
+        rate = Fraction(value).limit_denominator(1001)
+        if rate <= 0:
+            return None
+        return f"{rate.numerator}/{rate.denominator}"
+    except (OSError, ValueError, subprocess.SubprocessError):
+        return None
+
+
+def timeline_frame_rate(edl: dict, edit_dir: Path) -> str | None:
+    """Choose the duration-weighted primary cadence for mixed-source edits."""
+    durations: dict[str, float] = defaultdict(float)
+    sources = edl["sources"]
+    probed: dict[str, str | None] = {}
+    for item in edl["ranges"]:
+        source_id = item["source"]
+        if source_id not in probed:
+            path = resolve_path(source_path_value(sources[source_id]), edit_dir)
+            probed[source_id] = probe_frame_rate(path)
+        rate = probed[source_id]
+        if rate:
+            durations[rate] += float(item["end"]) - float(item["start"])
+    if not durations:
+        return None
+    return max(durations, key=lambda rate: (durations[rate], rate))
 
 
 def resolve_grade_filter(grade_field: str | None) -> str:
@@ -326,32 +378,6 @@ def is_hdr_source(video: Path) -> bool:
         return False
 
 
-def is_portrait_source(video: Path) -> bool:
-    """Return True if the video's height > width (portrait / vertical)."""
-    try:
-        out = subprocess.run(
-            [
-                "ffprobe",
-                "-v",
-                "error",
-                "-select_streams",
-                "v:0",
-                "-show_entries",
-                "stream=width,height",
-                "-of",
-                "csv=p=0",
-                str(video),
-            ],
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-        w, h = map(int, out.stdout.strip().split(","))
-        return h > w
-    except Exception:
-        return False
-
-
 # -------- Per-segment extraction (Rule 2 + Rule 3) --------------------------
 
 
@@ -368,11 +394,19 @@ def extract_segment(
     audio_stream: str = "a:0",
     audio_repair_filter: str = "",
     include_source_audio: bool = True,
+    frame_rate: str | None = None,
 ) -> None:
-    """Extract a cut range as its own MP4 with grade + 30ms audio fades baked in.
+    """Extract a cut range as its own MP4 with grade + click-safe audio fades.
 
-    `-ss` before `-i` for fast accurate seeking. Scale to 1080p from 4K.
-    Portrait sources (height > width) are scaled by height to preserve orientation.
+    `-ss` before `-i` seeks to a short decode lead. Exact in/out points are
+    then enforced with ``trim`` / ``atrim``. Do not combine a second output
+    ``-ss`` with ``-t duration`` here: FFmpeg measures that duration before
+    the output seek for some inputs, which silently replaces the final decode
+    lead with audio silence at every cut.
+    Scale into a fixed 16:9
+    canvas. ``force_original_aspect_ratio=decrease`` is deliberately applied
+    after FFmpeg's autorotation, so phone clips whose portrait orientation is
+    carried only in display-matrix metadata cannot change resolution mid-file.
 
     Quality ladder:
       - final (default): 1080p libx264 fast CRF 20
@@ -383,18 +417,30 @@ def extract_segment(
     """
     out_path.parent.mkdir(parents=True, exist_ok=True)
 
-    portrait = is_portrait_source(source)
     if draft:
-        scale = "scale=-2:1280" if portrait else "scale=1280:-2"
+        width, height = 1280, 720
     elif youtube_4k:
-        scale = "scale=-2:3840" if portrait else "scale=3840:-2"
+        width, height = 3840, 2160
     else:
-        scale = "scale=-2:1920" if portrait else "scale=1920:-2"
+        width, height = 1920, 1080
+    scale = (
+        f"scale={width}:{height}:force_original_aspect_ratio=decrease,"
+        f"pad={width}:{height}:(ow-iw)/2:(oh-ih)/2:color=black,setsar=1"
+    )
 
-    vf_parts: list[str] = []
+    lead = 1.0
+    coarse = max(0.0, seg_start - lead)
+    fine = seg_start - coarse
+
+    vf_parts: list[str] = [
+        f"trim=start={fine:.3f}:duration={duration:.3f}",
+        "setpts=PTS-STARTPTS",
+    ]
     if is_hdr_source(source):
         vf_parts.append(TONEMAP_CHAIN)
     vf_parts.append(scale)
+    if frame_rate:
+        vf_parts.append(f"fps={frame_rate}")
     if grade_filter:
         vf_parts.append(grade_filter)
     vf = ",".join(vf_parts)
@@ -410,37 +456,66 @@ def extract_segment(
 
     audio_bitrate = "384k" if youtube_4k else "192k"
 
+    video_encoder = os.environ.get("AVO_RENDER_VIDEO_ENCODER", "libx264").strip()
     cmd = [
         "ffmpeg",
         "-y",
         "-ss",
-        f"{seg_start:.3f}",
+        f"{coarse:.3f}",
         "-i",
         str(source),
-        "-t",
-        f"{duration:.3f}",
         "-vf",
         vf,
         "-map",
         "0:v:0",
-        "-c:v",
-        "libx264",
-        "-preset",
-        preset,
-        "-crf",
-        crf,
-        "-pix_fmt",
-        "yuv420p",
-        "-profile:v",
-        "high",
     ]
+    if video_encoder == "h264_nvenc":
+        nvenc_preset = "p4" if draft else ("p5" if preview else "p6")
+        cmd += [
+            "-c:v",
+            "h264_nvenc",
+            "-preset",
+            nvenc_preset,
+            "-tune",
+            "hq",
+            "-rc",
+            "vbr",
+            "-cq",
+            crf,
+            "-b:v",
+            "0",
+            "-pix_fmt",
+            "yuv420p",
+            "-profile:v",
+            "high",
+        ]
+    else:
+        cmd += [
+            "-c:v",
+            video_encoder,
+            "-preset",
+            preset,
+            "-crf",
+            crf,
+            "-pix_fmt",
+            "yuv420p",
+            "-profile:v",
+            "high",
+        ]
+    if frame_rate:
+        cmd += ["-video_track_timescale", str(Fraction(frame_rate).numerator)]
     if include_source_audio:
-        fade_out_start = max(0.0, duration - 0.03)
-        af_parts = []
+        fade_duration = 0.03
+        fade_out_start = max(0.0, duration - fade_duration)
+        af_parts = [
+            f"atrim=start={fine:.3f}:duration={duration:.3f}",
+            "asetpts=PTS-STARTPTS",
+        ]
         if audio_repair_filter:
             af_parts.append(audio_repair_filter)
         af_parts.append(
-            f"afade=t=in:st=0:d=0.03,afade=t=out:st={fade_out_start:.3f}:d=0.03"
+            f"afade=t=in:st=0:d={fade_duration:.3f},"
+            f"afade=t=out:st={fade_out_start:.3f}:d={fade_duration:.3f}"
         )
         af = ",".join(af_parts)
         cmd += [
@@ -499,6 +574,9 @@ def extract_all_segments(
     from avo.voiceover import is_external_voiceover_edl
 
     video_only = is_external_voiceover_edl(edl)
+    frame_rate = timeline_frame_rate(edl, edit_dir)
+    if frame_rate:
+        print(f"  (normalizing mixed sources to {frame_rate} fps)")
 
     seg_paths: list[Path] = []
     print(f"extracting {len(ranges)} segment(s) -> {clips_dir.name}/")
@@ -551,6 +629,7 @@ def extract_all_segments(
             audio_stream=audio_source_stream(edl),
             audio_repair_filter=audio_repair_filter_for(edl, src_name, start, end),
             include_source_audio=not video_only,
+            frame_rate=frame_rate,
         )
         seg_paths.append(out_path)
 
@@ -560,14 +639,24 @@ def extract_all_segments(
 # -------- Lossless concat ----------------------------------------------------
 
 
-def concat_segments(segment_paths: list[Path], out_path: Path, edit_dir: Path) -> None:
+def concat_segments(
+    segment_paths: list[Path],
+    out_path: Path,
+    edit_dir: Path,
+    *,
+    durations: list[float] | None = None,
+) -> None:
     """Lossless concat via the concat demuxer. No re-encode."""
     out_path.parent.mkdir(parents=True, exist_ok=True)
     concat_list = edit_dir / "_concat.txt"
-    concat_list.write_text(
-        "".join(f"file '{p.resolve()}'\n" for p in segment_paths),
-        encoding="utf-8",
-    )
+    if durations is not None and len(durations) != len(segment_paths):
+        raise ValueError("concat duration count must match segment count")
+    lines: list[str] = []
+    for index, path in enumerate(segment_paths):
+        lines.append(f"file '{path.resolve()}'\n")
+        if durations is not None:
+            lines.append(f"duration {durations[index]:.6f}\n")
+    concat_list.write_text("".join(lines), encoding="utf-8")
 
     cmd = [
         "ffmpeg",
@@ -1255,7 +1344,12 @@ def main() -> None:
     else:
         base_name = "base.mp4"
     base_path = edit_dir / base_name
-    concat_segments(segment_paths, base_path, edit_dir)
+    concat_segments(
+        segment_paths,
+        base_path,
+        edit_dir,
+        durations=[float(item["end"]) - float(item["start"]) for item in edl["ranges"]],
+    )
 
     # 3. Captions: keep the complete selectable SRT, but burn only the
     # first-minute derived file for EDL v3.

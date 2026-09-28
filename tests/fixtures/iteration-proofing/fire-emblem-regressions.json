@@ -1,0 +1,15 @@
+{
+  "schemaVersion": "1.0.0",
+  "provenance": "sanitized-synthetic-only",
+  "cases": [
+    {"id": "audio-leak-wheel-scissors", "class": "event-sync", "origin": "implementation-defect", "gate": "waveform-event-audit"},
+    {"id": "truncated-dialogue-at-cuts", "class": "speech-boundary", "origin": "implementation-defect", "gate": "final-file-transcript"},
+    {"id": "frozen-walking-overlay", "class": "movement", "origin": "implementation-defect", "gate": "sequential-decode"},
+    {"id": "frozen-cutscene", "class": "movement", "origin": "implementation-defect", "gate": "sequential-decode"},
+    {"id": "displaced-or-duplicate-sfx", "class": "event-sync", "origin": "implementation-defect", "gate": "waveform-event-audit"},
+    {"id": "main-program-cutscene-given-insert-sfx", "class": "semantic-audio", "origin": "reasoning-defect", "gate": "event-cardinality"},
+    {"id": "late-creator-asset", "class": "scope", "origin": "user-scope-change", "gate": "iteration-ledger"},
+    {"id": "stale-active-candidate", "class": "candidate-state", "origin": "implementation-defect", "gate": "candidate-snapshot-cas"},
+    {"id": "prior-proof-as-render-base", "class": "lineage", "origin": "implementation-defect", "gate": "recursive-ancestry"}
+  ]
+}

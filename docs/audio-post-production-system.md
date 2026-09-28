@@ -69,3 +69,23 @@ samples, loops, ambience, voice models, generated music, and evidence.
 - Missing audio rights evidence or unresolved Content ID/reused-content risk.
 - Misleading AI/synthetic audio or missing disclosure review.
 - No documented loudness/peak measurement for final delivery.
+
+## Continuous proof audio and event verification
+
+Assemble the full program as one continuous PCM-domain graph, then perform one
+final lossy encode. Segment joins must declare intentional gaps, overlaps,
+latency compensation, channel mapping, and protected speech/tactile boundaries.
+Do not concatenate independently encoded AAC fragments as the canonical proof
+mix.
+
+Visual inserts, animation impacts, and SFX share one integer-frame event clock.
+Convert event frames directly to 48 kHz sample positions, measure the real SFX
+transient after trimming leading silence, and validate the exported waveform.
+Cardinality is release-blocking: no orphaned or duplicate effects, and no
+synthetic insert SFX on a main-program scene unless explicitly designed.
+Ambiguous overlapping transients route to human listening instead of passing
+automatically.
+
+Exact-candidate transcript and acoustic checks protect complete words,
+sentences, natural cadence, source sounds such as openings and crunches, and
+continuity across every changed or historically risky join.

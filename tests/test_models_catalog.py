@@ -134,6 +134,19 @@ class ModelCatalogTests(unittest.TestCase):
             model_id = resolve_option_id("understand", root=ROOT)
         self.assertEqual(model_id, "qwen2.5-7b")
 
+    def test_qwen35_vision_requires_runtime_context_probe(self) -> None:
+        from avo.models import load_catalog, model_capability_metadata
+
+        catalog = load_catalog(ROOT)
+        metadata = model_capability_metadata(catalog, "understand", "qwen3.5-4b")
+        self.assertIn("vision", metadata["capabilities"])
+        self.assertEqual(metadata["endpointProtocol"], "openai-compatible")
+        self.assertEqual(
+            metadata["effectiveContext"],
+            {"policy": "runtime-probe-required", "declaredTokens": None},
+        )
+        self.assertLessEqual(metadata["resourceEstimate"]["vramMB"], 7 * 1024)
+
     def test_understand_7b_next_heavier_stays_14b(self) -> None:
         from avo.models import list_alternatives
 

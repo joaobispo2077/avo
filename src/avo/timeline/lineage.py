@@ -2,13 +2,100 @@
 
 from __future__ import annotations
 
+from copy import deepcopy
 from typing import Any
 
+from .contracts import content_hash
 from .store import ArtifactStore
 
 
 class LineageError(ValueError):
     pass
+
+
+_PROHIBITED_ANCESTOR_CLASSES = frozenset(
+    {"proof", "preview", "proxy", "master", "delivery"}
+)
+
+
+def lineage_from_materialization(
+    materialization: dict[str, Any], *, audiovisual: bool = True
+) -> dict[str, Any]:
+    """Read new audiovisual lineage while keeping legacy picture reads intact."""
+    current = materialization.get("audiovisualLineage")
+    legacy = materialization.get("pictureLineage")
+    if audiovisual and current is not None:
+        return current
+    if not audiovisual and current is not None and current.get("pictureLineage"):
+        return current["pictureLineage"]
+    if legacy is not None:
+        return legacy
+    raise LineageError("materialization lineage is missing")
+
+
+def validate_audiovisual_lineage(graph: dict[str, Any]) -> dict[str, Any]:
+    """Validate graph completeness, cycles, hash, and forbidden ancestors."""
+    nodes = graph.get("nodes") or []
+    node_by_id = {str(node.get("nodeId") or ""): node for node in nodes}
+    if "" in node_by_id or len(node_by_id) != len(nodes):
+        raise LineageError("lineage node IDs must be non-empty and unique")
+    roots = [str(value) for value in graph.get("rootIds") or []]
+    if not roots or any(root not in node_by_id for root in roots):
+        raise LineageError("lineage roots are missing")
+    parents: dict[str, list[str]] = {node_id: [] for node_id in node_by_id}
+    for edge in graph.get("edges") or []:
+        source = str(edge.get("from") or "")
+        target = str(edge.get("to") or "")
+        if source not in node_by_id or target not in node_by_id:
+            raise LineageError(
+                f"lineage edge references missing node: {source or target}"
+            )
+        parents[target].append(source)
+
+    visiting: set[str] = set()
+    visited: set[str] = set()
+
+    def visit(node_id: str) -> None:
+        if node_id in visiting:
+            raise LineageError(f"lineage cycle detected at {node_id}")
+        if node_id in visited:
+            return
+        visiting.add(node_id)
+        for parent in parents[node_id]:
+            visit(parent)
+        visiting.remove(node_id)
+        visited.add(node_id)
+
+    for node_id in node_by_id:
+        visit(node_id)
+    prohibited = {
+        str(value).lower()
+        for value in graph.get("prohibitedAncestorClasses")
+        or _PROHIBITED_ANCESTOR_CLASSES
+    }
+    for node_id, node in node_by_id.items():
+        if node_id in roots:
+            continue
+        media_class = str(node.get("mediaClass") or "").lower()
+        role = str(node.get("role") or "").lower()
+        if media_class in prohibited or role in prohibited:
+            raise LineageError(
+                "PROOF_FORBIDDEN_ANCESTOR: "
+                f"node={node_id} path={node.get('locator', '')} "
+                f"sha256={node.get('sha256', '')}"
+            )
+    expected = graph.get("audiovisualLineageHash") or graph.get("lineageHash")
+    if expected:
+        actual = content_hash(
+            {
+                key: value
+                for key, value in graph.items()
+                if key not in {"audiovisualLineageHash", "lineageHash"}
+            }
+        )
+        if actual != expected:
+            raise LineageError("audiovisual lineage hash mismatch")
+    return deepcopy(graph)
 
 
 def validate_cmap_snapshot(snapshot: dict[str, Any]) -> None:

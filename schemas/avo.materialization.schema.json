@@ -70,6 +70,7 @@
         "locator": { "type": "string", "minLength": 1 },
         "sha256": { "$ref": "#/$defs/sha256" },
         "pictureCarrying": { "type": "boolean" },
+        "audioCarrying": { "type": "boolean" },
         "media": { "type": "object" },
         "sourceId": { "type": "string", "minLength": 1 },
         "segmentId": { "type": "string", "minLength": 1 },
@@ -104,6 +105,12 @@
             "grade/color",
             "place/composite",
             "captions",
+            "mix",
+            "fade",
+            "gain",
+            "duck",
+            "resample",
+            "render",
             "encode"
           ]
         },
@@ -145,6 +152,21 @@
           "items": { "type": "string", "minLength": 1 }
         },
         "pictureLineageHash": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "audiovisualLineage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaVersion", "canonicalInputLock", "projectionHash", "nodes", "edges", "rootIds", "prohibitedAncestorClasses", "lineageHash"],
+      "properties": {
+        "schemaVersion": { "const": "1.0.0" },
+        "canonicalInputLock": { "$ref": "#/$defs/lock" },
+        "projectionHash": { "$ref": "#/$defs/sha256" },
+        "nodes": { "type": "array", "minItems": 2, "items": { "$ref": "#/$defs/lineageNode" } },
+        "edges": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/lineageEdge" } },
+        "rootIds": { "type": "array", "minItems": 1, "uniqueItems": true, "items": { "type": "string", "minLength": 1 } },
+        "prohibitedAncestorClasses": { "type": "array", "uniqueItems": true, "items": { "enum": ["proof", "preview", "proxy", "master", "delivery"] } },
+        "lineageHash": { "$ref": "#/$defs/sha256" }
       }
     },
     "renderContract": {
@@ -261,6 +283,10 @@
         "renderHash": { "$ref": "#/$defs/sha256" },
         "pictureLineage": { "$ref": "#/$defs/pictureLineage" },
         "pictureLineageHash": { "$ref": "#/$defs/sha256" },
+        "audiovisualLineage": { "$ref": "#/$defs/audiovisualLineage" },
+        "audiovisualLineageHash": { "$ref": "#/$defs/sha256" },
+        "proofPlanHash": { "$ref": "#/$defs/sha256" },
+        "regressionContractHash": { "$ref": "#/$defs/sha256" },
         "deliveryFidelityPolicy": { "$ref": "#/$defs/policy" },
         "deliveryFidelityPolicyHash": { "$ref": "#/$defs/sha256" },
         "output": { "$ref": "#/$defs/fingerprint" },
