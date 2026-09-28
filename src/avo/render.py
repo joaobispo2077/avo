@@ -1123,16 +1123,37 @@ def build_final_composite(
         "-map",
         audio_output,
     ]
-    cmd += [
-        "-c:v",
-        "libx264",
-        "-preset",
-        youtube_4k_preset if youtube_4k else "fast",
-    ]
-    if youtube_4k:
-        cmd += ["-b:v", "40M", "-maxrate", "45M", "-bufsize", "90M"]
+    video_encoder = os.environ.get("AVO_RENDER_VIDEO_ENCODER", "libx264").strip()
+    if youtube_4k and video_encoder == "h264_nvenc":
+        cmd += [
+            "-c:v",
+            "h264_nvenc",
+            "-preset",
+            "p6",
+            "-tune",
+            "hq",
+            "-rc",
+            "vbr",
+            "-cq",
+            "17",
+            "-b:v",
+            "40M",
+            "-maxrate",
+            "45M",
+            "-bufsize",
+            "90M",
+        ]
     else:
-        cmd += ["-crf", "18"]
+        cmd += [
+            "-c:v",
+            video_encoder,
+            "-preset",
+            youtube_4k_preset if youtube_4k else "fast",
+        ]
+        if youtube_4k:
+            cmd += ["-b:v", "40M", "-maxrate", "45M", "-bufsize", "90M"]
+        else:
+            cmd += ["-crf", "18"]
     cmd += [
         "-pix_fmt",
         "yuv420p",
