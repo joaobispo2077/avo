@@ -11,6 +11,59 @@ class AnimationError(ValueError):
     pass
 
 
+_VISIBLE_TEXT_KEYS = {
+    "text",
+    "title",
+    "subtitle",
+    "label",
+    "copy",
+    "caption",
+    "captions",
+    "callout",
+    "callouts",
+    "graphics",
+    "words",
+    "front",
+    "back",
+    "heading",
+    "body",
+}
+
+
+def validate_visible_text_policy(
+    value: Any, *, em_dash_authorization_ref: str | None = None
+) -> None:
+    """Reject em dashes only in viewer-visible copy unless explicitly authorized."""
+
+    def walk(node: Any, *, visible: bool, path: str) -> list[str]:
+        failures: list[str] = []
+        if isinstance(node, str):
+            if visible and "—" in node:
+                failures.append(path or "<visible-text>")
+            return failures
+        if isinstance(node, dict):
+            for key, child in node.items():
+                child_path = f"{path}.{key}" if path else str(key)
+                failures.extend(
+                    walk(
+                        child,
+                        visible=visible or str(key).lower() in _VISIBLE_TEXT_KEYS,
+                        path=child_path,
+                    )
+                )
+        elif isinstance(node, list):
+            for index, child in enumerate(node):
+                failures.extend(walk(child, visible=visible, path=f"{path}[{index}]"))
+        return failures
+
+    failures = walk(value, visible=False, path="")
+    if failures and not str(em_dash_authorization_ref or "").strip():
+        raise AnimationError(
+            "visible video text cannot use em dashes without an explicit user "
+            "authorization reference: " + ", ".join(failures)
+        )
+
+
 _FORBIDDEN = {
     "text",
     "timestamps",
@@ -138,6 +191,11 @@ class AnimationService:
 
         value = deepcopy(strategy)
         _assert_no_timing(value)
+        policy = value.get("visibleTextPolicy") or {}
+        validate_visible_text_policy(
+            value,
+            em_dash_authorization_ref=policy.get("emDashAuthorizationRef"),
+        )
         diagnosis = value.get("formatDiagnosis") or {}
         if not diagnosis.get("format") or not diagnosis.get("viewerIntent"):
             raise AnimationError(

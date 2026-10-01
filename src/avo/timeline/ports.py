@@ -105,4 +105,45 @@ class ClockPort(Protocol):
 @runtime_checkable
 class ArtifactStorePort(Protocol):
     def load_index(self) -> dict[str, Any]: ...
+    def head_hash(self) -> str | None: ...
     def append_revision(self, **request: Any) -> dict[str, Any]: ...
+
+
+@runtime_checkable
+class WaveformAnalysisPort(Protocol):
+    def analyze(self, source: Path, **request: Any) -> dict[str, Any]: ...
+
+
+@runtime_checkable
+class CustomComponentPort(Protocol):
+    def execute(
+        self,
+        component: dict[str, Any],
+        output_dir: Path,
+        **request: Any,
+    ) -> dict[str, Any]: ...
+
+
+@runtime_checkable
+class ExactStillPort(Protocol):
+    def extract(self, source: Path, output: Path, **request: Any) -> dict[str, Any]: ...
+
+
+@runtime_checkable
+class ProofExecutionPort(Protocol):
+    def execute(
+        self,
+        proof_plan: dict[str, Any],
+        output: Path,
+        **request: Any,
+    ) -> dict[str, Any]: ...
+
+
+@runtime_checkable
+class VisionCapabilityPort(Protocol):
+    def probe(self, **request: Any) -> dict[str, Any]: ...
+
+
+@runtime_checkable
+class MultimodalPassPort(Protocol):
+    def review_pass(self, candidate: Path, **request: Any) -> dict[str, Any]: ...

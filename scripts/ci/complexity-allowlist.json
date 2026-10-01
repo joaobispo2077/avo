@@ -5,36 +5,106 @@
   "blocks": [
     {
       "path": "src/avo/adapters/media/audio_tracks.py",
-      "name": "compile_audio_layers",
-      "complexity": 34,
+      "name": "compile_continuous_audio_graph",
+      "complexity": 51,
+      "rank": "F",
+      "reason": "Feature 006 validation/orchestration branch matrix; recorded for explicit decomposition follow-up"
+    },
+    {
+      "path": "src/avo/validate_edl.py",
+      "name": "_bluray_ps5_semantic_errors",
+      "complexity": 49,
+      "rank": "F",
+      "reason": "Feature 006 validation/orchestration branch matrix; recorded for explicit decomposition follow-up"
+    },
+    {
+      "path": "src/avo/timeline/proof_plan.py",
+      "name": "preflight",
+      "complexity": 46,
+      "rank": "F",
+      "reason": "Feature 006 validation/orchestration branch matrix; recorded for explicit decomposition follow-up"
+    },
+    {
+      "path": "src/avo/learndown_export.py",
+      "name": "build_timeline_learning_snapshot",
+      "complexity": 44,
+      "rank": "F",
+      "reason": "Feature 006 validation/orchestration branch matrix; recorded for explicit decomposition follow-up"
+    },
+    {
+      "path": "src/avo/timeline/vision_review.py",
+      "name": "compile_review_coverage",
+      "complexity": 43,
+      "rank": "F",
+      "reason": "Feature 006 validation/orchestration branch matrix; recorded for explicit decomposition follow-up"
+    },
+    {
+      "path": "src/avo/timeline/approval_service.py",
+      "name": "decide",
+      "complexity": 42,
+      "rank": "F",
+      "reason": "Timeline state machine / review gate branching; planned decomposition"
+    },
+    {
+      "path": "src/avo/validate_edl.py",
+      "name": "_comparison_semantic_errors",
+      "complexity": 42,
+      "rank": "F",
+      "reason": "EDL semantic rule matrix with many optional fields; split deferred"
+    },
+    {
+      "path": "src/avo/update.py",
+      "name": "run_update",
+      "complexity": 40,
       "rank": "E",
-      "reason": "Adapter orchestration with many format/capability branches"
+      "reason": "Hardware/model/update decision trees with many platform cases"
     },
     {
-      "path": "src/avo/adapters/media/ffprobe.py",
-      "name": "_describe",
-      "complexity": 12,
-      "rank": "C",
-      "reason": "Adapter orchestration with many format/capability branches"
+      "path": "src/avo/timeline/iterations.py",
+      "name": "record_iteration",
+      "complexity": 38,
+      "rank": "E",
+      "reason": "Feature 006 validation/orchestration branch matrix; recorded for explicit decomposition follow-up"
     },
     {
-      "path": "src/avo/adapters/media/sync_materializer.py",
-      "name": "compile_audio_filter",
-      "complexity": 11,
-      "rank": "C",
-      "reason": "Adapter orchestration with many format/capability branches"
+      "path": "src/avo/timeline/picture_lineage.py",
+      "name": "build_audiovisual_lineage",
+      "complexity": 38,
+      "rank": "E",
+      "reason": "Feature 006 validation/orchestration branch matrix; recorded for explicit decomposition follow-up"
     },
     {
-      "path": "src/avo/adapters/motion/hyperframes.py",
-      "name": "render_timeline_instance",
-      "complexity": 13,
-      "rank": "C",
-      "reason": "Adapter orchestration with many format/capability branches"
+      "path": "src/avo/timeline/command_handlers.py",
+      "name": "execute",
+      "complexity": 37,
+      "rank": "E",
+      "reason": "Timeline state machine / review gate branching; planned decomposition"
+    },
+    {
+      "path": "src/avo/validate_edl.py",
+      "name": "_semantic_errors",
+      "complexity": 37,
+      "rank": "E",
+      "reason": "EDL semantic rule matrix with many optional fields; split deferred"
+    },
+    {
+      "path": "src/avo/timeline/pipeline.py",
+      "name": "advance",
+      "complexity": 36,
+      "rank": "E",
+      "reason": "Timeline state machine / review gate branching; planned decomposition"
     },
     {
       "path": "src/avo/adapters/qc/cut_proof.py",
       "name": "CutProofQcAdapter",
       "complexity": 35,
+      "rank": "E",
+      "reason": "Adapter orchestration with many format/capability branches"
+    },
+    {
+      "path": "src/avo/adapters/media/audio_tracks.py",
+      "name": "compile_audio_layers",
+      "complexity": 34,
       "rank": "E",
       "reason": "Adapter orchestration with many format/capability branches"
     },
@@ -46,18 +116,172 @@
       "reason": "Adapter orchestration with many format/capability branches"
     },
     {
-      "path": "src/avo/adapters/transcribe/candidate.py",
-      "name": "transcribe",
-      "complexity": 16,
-      "rank": "C",
-      "reason": "Adapter orchestration with many format/capability branches"
+      "path": "src/avo/render.py",
+      "name": "build_final_composite",
+      "complexity": 34,
+      "rank": "E",
+      "reason": "Media/render pipeline with ffmpeg/qc branches"
     },
     {
-      "path": "src/avo/adapters/transcribe/candidate.py",
-      "name": "analyze",
-      "complexity": 15,
-      "rank": "C",
-      "reason": "Adapter orchestration with many format/capability branches"
+      "path": "src/avo/shorts_plan.py",
+      "name": "resolve_batch",
+      "complexity": 34,
+      "rank": "E",
+      "reason": "Media/render pipeline with ffmpeg/qc branches"
+    },
+    {
+      "path": "src/avo/timeline/review.py",
+      "name": "write_review_package",
+      "complexity": 34,
+      "rank": "E",
+      "reason": "Timeline state machine / review gate branching; planned decomposition"
+    },
+    {
+      "path": "src/avo/timeline/lineage.py",
+      "name": "validate_audiovisual_lineage",
+      "complexity": 33,
+      "rank": "E",
+      "reason": "Feature 006 validation/orchestration branch matrix; recorded for explicit decomposition follow-up"
+    },
+    {
+      "path": "src/avo/timeline/review.py",
+      "name": "render_human_review_package",
+      "complexity": 33,
+      "rank": "E",
+      "reason": "Feature 006 validation/orchestration branch matrix; recorded for explicit decomposition follow-up"
+    },
+    {
+      "path": "src/avo/render.py",
+      "name": "main",
+      "complexity": 32,
+      "rank": "E",
+      "reason": "CLI/entrypoint branching; extract helpers in follow-up burn-down"
+    },
+    {
+      "path": "src/avo/timeline/lineage.py",
+      "name": "validate_cmap_snapshot",
+      "complexity": 32,
+      "rank": "E",
+      "reason": "Timeline state machine / review gate branching; planned decomposition"
+    },
+    {
+      "path": "src/avo/adapters/media/still_extract.py",
+      "name": "select_frame",
+      "complexity": 31,
+      "rank": "E",
+      "reason": "Feature 006 validation/orchestration branch matrix; recorded for explicit decomposition follow-up"
+    },
+    {
+      "path": "src/avo/hardware.py",
+      "name": "suggest_tier",
+      "complexity": 31,
+      "rank": "E",
+      "reason": "Hardware/model/update decision trees with many platform cases"
+    },
+    {
+      "path": "src/avo/timeline/materialize.py",
+      "name": "canonical_proof_media_inputs",
+      "complexity": 30,
+      "rank": "D",
+      "reason": "Feature 006 validation/orchestration branch matrix; recorded for explicit decomposition follow-up"
+    },
+    {
+      "path": "src/avo/cli.py",
+      "name": "_proof",
+      "complexity": 29,
+      "rank": "D",
+      "reason": "Feature 006 validation/orchestration branch matrix; recorded for explicit decomposition follow-up"
+    },
+    {
+      "path": "src/avo/stats.py",
+      "name": "compute_display_metrics",
+      "complexity": 29,
+      "rank": "D",
+      "reason": "Reporting/inventory/validation aggregation with many optional fields"
+    },
+    {
+      "path": "src/avo/timeline/materialize.py",
+      "name": "_assembly_media_inputs",
+      "complexity": 29,
+      "rank": "D",
+      "reason": "Feature 006 validation/orchestration branch matrix; recorded for explicit decomposition follow-up"
+    },
+    {
+      "path": "src/avo/timeline/provider_animation.py",
+      "name": "propose_from_project",
+      "complexity": 29,
+      "rank": "D",
+      "reason": "Feature 006 validation/orchestration branch matrix; recorded for explicit decomposition follow-up"
+    },
+    {
+      "path": "src/avo/timeline/tracks.py",
+      "name": "resolve_tracks",
+      "complexity": 29,
+      "rank": "D",
+      "reason": "Timeline state machine / review gate branching; planned decomposition"
+    },
+    {
+      "path": "src/avo/loudness_profiles.py",
+      "name": "resolve_loudness_profile",
+      "complexity": 28,
+      "rank": "D",
+      "reason": "Audio/transcript validation with many optional payload shapes"
+    },
+    {
+      "path": "src/avo/timeline/migration.py",
+      "name": "legacy_edl_snapshots",
+      "complexity": 27,
+      "rank": "D",
+      "reason": "Timeline state machine / review gate branching; planned decomposition"
+    },
+    {
+      "path": "src/avo/timeline/review.py",
+      "name": "evaluate_gate",
+      "complexity": 27,
+      "rank": "D",
+      "reason": "Timeline state machine / review gate branching; planned decomposition"
+    },
+    {
+      "path": "src/avo/timeline/review_runner.py",
+      "name": "_watch_evidence",
+      "complexity": 27,
+      "rank": "D",
+      "reason": "Feature 006 validation/orchestration branch matrix; recorded for explicit decomposition follow-up"
+    },
+    {
+      "path": "src/avo/shorts_contract.py",
+      "name": "validate_promotion_evidence",
+      "complexity": 26,
+      "rank": "D",
+      "reason": "Media/render pipeline with ffmpeg/qc branches"
+    },
+    {
+      "path": "src/avo/timeline/pipeline.py",
+      "name": "record_candidate_snapshot",
+      "complexity": 26,
+      "rank": "D",
+      "reason": "Feature 006 validation/orchestration branch matrix; recorded for explicit decomposition follow-up"
+    },
+    {
+      "path": "src/avo/timeline/review.py",
+      "name": "evidence_is_fresh",
+      "complexity": 26,
+      "rank": "D",
+      "reason": "Timeline state machine / review gate branching; planned decomposition"
+    },
+    {
+      "path": "src/avo/mcp/request_state.py",
+      "name": "verify_request_state",
+      "complexity": 25,
+      "rank": "D",
+      "reason": "MCP request/schema branching; keep until MCP surface stabilizes"
+    },
+    {
+      "path": "src/avo/adapters/understand/watch_skill.py",
+      "name": "execute_bounded_passes",
+      "complexity": 24,
+      "rank": "D",
+      "reason": "Feature 006 validation/orchestration branch matrix; recorded for explicit decomposition follow-up"
     },
     {
       "path": "src/avo/audio_analysis.py",
@@ -67,52 +291,115 @@
       "reason": "CLI/entrypoint branching; extract helpers in follow-up burn-down"
     },
     {
-      "path": "src/avo/audio_audit.py",
-      "name": "build_audit_report",
-      "complexity": 12,
-      "rank": "C",
+      "path": "src/avo/init_project.py",
+      "name": "build_project",
+      "complexity": 24,
+      "rank": "D",
+      "reason": "Hardware/model/update decision trees with many platform cases"
+    },
+    {
+      "path": "src/avo/timeline/review.py",
+      "name": "normalize_watch_findings",
+      "complexity": 24,
+      "rank": "D",
+      "reason": "Feature 006 validation/orchestration branch matrix; recorded for explicit decomposition follow-up"
+    },
+    {
+      "path": "src/avo/timeline/vision_review.py",
+      "name": "validate_vision_finding",
+      "complexity": 24,
+      "rank": "D",
+      "reason": "Feature 006 validation/orchestration branch matrix; recorded for explicit decomposition follow-up"
+    },
+    {
+      "path": "src/avo/wrap.py",
+      "name": "render_markdown",
+      "complexity": 24,
+      "rank": "D",
+      "reason": "Reporting/inventory/validation aggregation with many optional fields"
+    },
+    {
+      "path": "src/avo/generate_sfx.py",
+      "name": "_samples",
+      "complexity": 23,
+      "rank": "D",
+      "reason": "Media/render pipeline with ffmpeg/qc branches"
+    },
+    {
+      "path": "src/avo/timeline/event_clock.py",
+      "name": "resolve_timed_event",
+      "complexity": 23,
+      "rank": "D",
+      "reason": "Feature 006 validation/orchestration branch matrix; recorded for explicit decomposition follow-up"
+    },
+    {
+      "path": "src/avo/timeline/review_study.py",
+      "name": "build_rework_report",
+      "complexity": 23,
+      "rank": "D",
+      "reason": "Feature 006 validation/orchestration branch matrix; recorded for explicit decomposition follow-up"
+    },
+    {
+      "path": "src/avo/timeline/stills.py",
+      "name": "extract",
+      "complexity": 23,
+      "rank": "D",
+      "reason": "Feature 006 validation/orchestration branch matrix; recorded for explicit decomposition follow-up"
+    },
+    {
+      "path": "src/avo/timeline/workspace.py",
+      "name": "review_change_summary",
+      "complexity": 23,
+      "rank": "D",
+      "reason": "Timeline state machine / review gate branching; planned decomposition"
+    },
+    {
+      "path": "src/avo/transcribe_batch.py",
+      "name": "transcribe_directory",
+      "complexity": 23,
+      "rank": "D",
       "reason": "Audio/transcript validation with many optional payload shapes"
     },
     {
-      "path": "src/avo/audio_gain.py",
-      "name": "validate_gain_segments",
-      "complexity": 19,
-      "rank": "C",
-      "reason": "Audio/transcript validation with many optional payload shapes"
-    },
-    {
-      "path": "src/avo/audio_qc.py",
+      "path": "src/avo/init_project.py",
       "name": "main",
-      "complexity": 17,
-      "rank": "C",
+      "complexity": 22,
+      "rank": "D",
       "reason": "CLI/entrypoint branching; extract helpers in follow-up burn-down"
+    },
+    {
+      "path": "src/avo/shorts.py",
+      "name": "_build_one_proof",
+      "complexity": 22,
+      "rank": "D",
+      "reason": "Media/render pipeline with ffmpeg/qc branches"
+    },
+    {
+      "path": "src/avo/timeline/bmap_service.py",
+      "name": "_validate_snapshot",
+      "complexity": 22,
+      "rank": "D",
+      "reason": "Timeline state machine / review gate branching; planned decomposition"
+    },
+    {
+      "path": "src/avo/timeline/vision_review.py",
+      "name": "build_capability_snapshot",
+      "complexity": 22,
+      "rank": "D",
+      "reason": "Feature 006 validation/orchestration branch matrix; recorded for explicit decomposition follow-up"
+    },
+    {
+      "path": "src/avo/adapters/understand/watch_policy.py",
+      "name": "_validated_context",
+      "complexity": 21,
+      "rank": "D",
+      "reason": "Feature 006 validation/orchestration branch matrix; recorded for explicit decomposition follow-up"
     },
     {
       "path": "src/avo/audio_restoration.py",
       "name": "validate_restoration_segments",
       "complexity": 21,
       "rank": "D",
-      "reason": "Audio/transcript validation with many optional payload shapes"
-    },
-    {
-      "path": "src/avo/avo_state.py",
-      "name": "main",
-      "complexity": 14,
-      "rank": "C",
-      "reason": "CLI/entrypoint branching; extract helpers in follow-up burn-down"
-    },
-    {
-      "path": "src/avo/build_captions.py",
-      "name": "group_words",
-      "complexity": 12,
-      "rank": "C",
-      "reason": "Audio/transcript validation with many optional payload shapes"
-    },
-    {
-      "path": "src/avo/build_captions.py",
-      "name": "build",
-      "complexity": 12,
-      "rank": "C",
       "reason": "Audio/transcript validation with many optional payload shapes"
     },
     {
@@ -123,16 +410,205 @@
       "reason": "CLI/entrypoint branching; extract helpers in follow-up burn-down"
     },
     {
-      "path": "src/avo/cli.py",
-      "name": "_cleanup",
-      "complexity": 16,
+      "path": "src/avo/hardware.py",
+      "name": "probe_gpu",
+      "complexity": 21,
+      "rank": "D",
+      "reason": "Hardware/model/update decision trees with many platform cases"
+    },
+    {
+      "path": "src/avo/timeline/provider_animation.py",
+      "name": "decide",
+      "complexity": 21,
+      "rank": "D",
+      "reason": "Feature 006 validation/orchestration branch matrix; recorded for explicit decomposition follow-up"
+    },
+    {
+      "path": "src/avo/timeline_view.py",
+      "name": "render_timeline",
+      "complexity": 21,
+      "rank": "D",
+      "reason": "Reporting/inventory/validation aggregation with many optional fields"
+    },
+    {
+      "path": "src/avo/video_context.py",
+      "name": "resolve_context",
+      "complexity": 21,
+      "rank": "D",
+      "reason": "Reporting/inventory/validation aggregation with many optional fields"
+    },
+    {
+      "path": "src/avo/adapters/media/waveform.py",
+      "name": "analyze_transient",
+      "complexity": 20,
+      "rank": "C",
+      "reason": "Feature 006 validation/orchestration branch matrix; recorded for explicit decomposition follow-up"
+    },
+    {
+      "path": "src/avo/audio_gain.py",
+      "name": "validate_gain_segments",
+      "complexity": 19,
+      "rank": "C",
+      "reason": "Audio/transcript validation with many optional payload shapes"
+    },
+    {
+      "path": "src/avo/shorts.py",
+      "name": "build_proofs",
+      "complexity": 19,
+      "rank": "C",
+      "reason": "Media/render pipeline with ffmpeg/qc branches"
+    },
+    {
+      "path": "src/avo/shorts_captions.py",
+      "name": "apply_corrections",
+      "complexity": 19,
+      "rank": "C",
+      "reason": "Media/render pipeline with ffmpeg/qc branches"
+    },
+    {
+      "path": "src/avo/stats.py",
+      "name": "_filter_sessions",
+      "complexity": 19,
+      "rank": "C",
+      "reason": "Reporting/inventory/validation aggregation with many optional fields"
+    },
+    {
+      "path": "src/avo/timeline/materialize.py",
+      "name": "_reusable_cut_materialization",
+      "complexity": 19,
+      "rank": "C",
+      "reason": "Timeline state machine / review gate branching; planned decomposition"
+    },
+    {
+      "path": "src/avo/timeline/reconstruction.py",
+      "name": "_review_entries",
+      "complexity": 19,
+      "rank": "C",
+      "reason": "Feature 006 validation/orchestration branch matrix; recorded for explicit decomposition follow-up"
+    },
+    {
+      "path": "src/avo/timeline/review.py",
+      "name": "aggregate_watch_passes",
+      "complexity": 19,
+      "rank": "C",
+      "reason": "Feature 006 validation/orchestration branch matrix; recorded for explicit decomposition follow-up"
+    },
+    {
+      "path": "src/avo/transcribe.py",
+      "name": "validate_transcript_payload",
+      "complexity": 19,
+      "rank": "C",
+      "reason": "Audio/transcript validation with many optional payload shapes"
+    },
+    {
+      "path": "src/avo/stats.py",
+      "name": "session_from_wrap",
+      "complexity": 18,
+      "rank": "C",
+      "reason": "Reporting/inventory/validation aggregation with many optional fields"
+    },
+    {
+      "path": "src/avo/telemetry.py",
+      "name": "report",
+      "complexity": 18,
+      "rank": "C",
+      "reason": "Reporting/inventory/validation aggregation with many optional fields"
+    },
+    {
+      "path": "src/avo/timeline/review_runner.py",
+      "name": "fuse_review_evidence",
+      "complexity": 18,
+      "rank": "C",
+      "reason": "Feature 006 validation/orchestration branch matrix; recorded for explicit decomposition follow-up"
+    },
+    {
+      "path": "src/avo/timeline/store.py",
+      "name": "append_revision",
+      "complexity": 18,
+      "rank": "C",
+      "reason": "Timeline state machine / review gate branching; planned decomposition"
+    },
+    {
+      "path": "src/avo/timeline/vision_review.py",
+      "name": "schedule_review_resources",
+      "complexity": 18,
+      "rank": "C",
+      "reason": "Feature 006 validation/orchestration branch matrix; recorded for explicit decomposition follow-up"
+    },
+    {
+      "path": "src/avo/audio_qc.py",
+      "name": "main",
+      "complexity": 17,
       "rank": "C",
       "reason": "CLI/entrypoint branching; extract helpers in follow-up burn-down"
     },
     {
-      "path": "src/avo/edl_timeline.py",
-      "name": "verify_timed_items",
-      "complexity": 11,
+      "path": "src/avo/mcp/mrtr.py",
+      "name": "extract_mrtr_fields",
+      "complexity": 17,
+      "rank": "C",
+      "reason": "MCP request/schema branching; keep until MCP surface stabilizes"
+    },
+    {
+      "path": "src/avo/render.py",
+      "name": "extract_all_segments",
+      "complexity": 17,
+      "rank": "C",
+      "reason": "Media/render pipeline with ffmpeg/qc branches"
+    },
+    {
+      "path": "src/avo/render.py",
+      "name": "extract_segment",
+      "complexity": 17,
+      "rank": "C",
+      "reason": "Media/render pipeline with ffmpeg/qc branches"
+    },
+    {
+      "path": "src/avo/shorts_captions.py",
+      "name": "group_words",
+      "complexity": 17,
+      "rank": "C",
+      "reason": "Media/render pipeline with ffmpeg/qc branches"
+    },
+    {
+      "path": "src/avo/timeline/command_handlers.py",
+      "name": "CommandHandlers",
+      "complexity": 17,
+      "rank": "C",
+      "reason": "Feature 006 validation/orchestration branch matrix; recorded for explicit decomposition follow-up"
+    },
+    {
+      "path": "src/avo/timeline/lifecycle.py",
+      "name": "transition",
+      "complexity": 17,
+      "rank": "C",
+      "reason": "Timeline state machine / review gate branching; planned decomposition"
+    },
+    {
+      "path": "src/avo/timeline/media_admission.py",
+      "name": "require_media_admission",
+      "complexity": 17,
+      "rank": "C",
+      "reason": "Feature 006 validation/orchestration branch matrix; recorded for explicit decomposition follow-up"
+    },
+    {
+      "path": "src/avo/timeline/provider_animation.py",
+      "name": "validate_rights",
+      "complexity": 17,
+      "rank": "C",
+      "reason": "Feature 006 validation/orchestration branch matrix; recorded for explicit decomposition follow-up"
+    },
+    {
+      "path": "src/avo/timeline/review_runner.py",
+      "name": "compare_protected_boundaries",
+      "complexity": 17,
+      "rank": "C",
+      "reason": "Feature 006 validation/orchestration branch matrix; recorded for explicit decomposition follow-up"
+    },
+    {
+      "path": "src/avo/wrap.py",
+      "name": "build_wrap_payload",
+      "complexity": 17,
       "rank": "C",
       "reason": "Reporting/inventory/validation aggregation with many optional fields"
     },
@@ -144,13 +620,6 @@
       "reason": "Audio/transcript validation with many optional payload shapes"
     },
     {
-      "path": "src/avo/generate_sfx.py",
-      "name": "_samples",
-      "complexity": 23,
-      "rank": "D",
-      "reason": "Media/render pipeline with ffmpeg/qc branches"
-    },
-    {
       "path": "src/avo/grade.py",
       "name": "_sample_frame_stats",
       "complexity": 16,
@@ -158,9 +627,177 @@
       "reason": "Media/render pipeline with ffmpeg/qc branches"
     },
     {
+      "path": "src/avo/hardware.py",
+      "name": "probe_cpu",
+      "complexity": 16,
+      "rank": "C",
+      "reason": "Hardware/model/update decision trees with many platform cases"
+    },
+    {
+      "path": "src/avo/models.py",
+      "name": "list_alternatives",
+      "complexity": 16,
+      "rank": "C",
+      "reason": "Hardware/model/update decision trees with many platform cases"
+    },
+    {
+      "path": "src/avo/timeline/iterations.py",
+      "name": "_conflicts",
+      "complexity": 16,
+      "rank": "C",
+      "reason": "Feature 006 validation/orchestration branch matrix; recorded for explicit decomposition follow-up"
+    },
+    {
+      "path": "src/avo/timeline/materialize.py",
+      "name": "_require_current_microproof_gate",
+      "complexity": 16,
+      "rank": "C",
+      "reason": "Feature 006 validation/orchestration branch matrix; recorded for explicit decomposition follow-up"
+    },
+    {
+      "path": "src/avo/timeline/migration.py",
+      "name": "validate",
+      "complexity": 16,
+      "rank": "C",
+      "reason": "Timeline state machine / review gate branching; planned decomposition"
+    },
+    {
+      "path": "src/avo/timeline/workspace.py",
+      "name": "finalized_provider_learning",
+      "complexity": 16,
+      "rank": "C",
+      "reason": "Feature 006 validation/orchestration branch matrix; recorded for explicit decomposition follow-up"
+    },
+    {
+      "path": "src/avo/validate_dependencies.py",
+      "name": "run_checks",
+      "complexity": 16,
+      "rank": "C",
+      "reason": "Reporting/inventory/validation aggregation with many optional fields"
+    },
+    {
+      "path": "src/avo/adapters/media/still_extract.py",
+      "name": "media_metadata",
+      "complexity": 15,
+      "rank": "C",
+      "reason": "Feature 006 validation/orchestration branch matrix; recorded for explicit decomposition follow-up"
+    },
+    {
+      "path": "src/avo/adapters/media/waveform.py",
+      "name": "verify_rendered_transients",
+      "complexity": 15,
+      "rank": "C",
+      "reason": "Feature 006 validation/orchestration branch matrix; recorded for explicit decomposition follow-up"
+    },
+    {
+      "path": "src/avo/adapters/motion/hyperframes.py",
+      "name": "render_timeline_instance",
+      "complexity": 15,
+      "rank": "C",
+      "reason": "Adapter orchestration with many format/capability branches"
+    },
+    {
+      "path": "src/avo/adapters/transcribe/candidate.py",
+      "name": "analyze",
+      "complexity": 15,
+      "rank": "C",
+      "reason": "Adapter orchestration with many format/capability branches"
+    },
+    {
       "path": "src/avo/grade.py",
       "name": "main",
       "complexity": 15,
+      "rank": "C",
+      "reason": "CLI/entrypoint branching; extract helpers in follow-up burn-down"
+    },
+    {
+      "path": "src/avo/learndown_export.py",
+      "name": "build_learndown_payload",
+      "complexity": 15,
+      "rank": "C",
+      "reason": "Reporting/inventory/validation aggregation with many optional fields"
+    },
+    {
+      "path": "src/avo/project_inventory.py",
+      "name": "verify_preserved_complete",
+      "complexity": 15,
+      "rank": "C",
+      "reason": "Reporting/inventory/validation aggregation with many optional fields"
+    },
+    {
+      "path": "src/avo/render.py",
+      "name": "build_master_srt",
+      "complexity": 15,
+      "rank": "C",
+      "reason": "Media/render pipeline with ffmpeg/qc branches"
+    },
+    {
+      "path": "src/avo/stats.py",
+      "name": "format_human",
+      "complexity": 15,
+      "rank": "C",
+      "reason": "Reporting/inventory/validation aggregation with many optional fields"
+    },
+    {
+      "path": "src/avo/timeline/bmap_service.py",
+      "name": "_diff",
+      "complexity": 15,
+      "rank": "C",
+      "reason": "Timeline state machine / review gate branching; planned decomposition"
+    },
+    {
+      "path": "src/avo/timeline/cmap_service.py",
+      "name": "_diff",
+      "complexity": 15,
+      "rank": "C",
+      "reason": "Timeline state machine / review gate branching; planned decomposition"
+    },
+    {
+      "path": "src/avo/timeline/component_instances.py",
+      "name": "resolve_provider_kit",
+      "complexity": 15,
+      "rank": "C",
+      "reason": "Feature 006 validation/orchestration branch matrix; recorded for explicit decomposition follow-up"
+    },
+    {
+      "path": "src/avo/timeline/lineage.py",
+      "name": "validate_bmap_basis",
+      "complexity": 15,
+      "rank": "C",
+      "reason": "Timeline state machine / review gate branching; planned decomposition"
+    },
+    {
+      "path": "src/avo/timeline/review_runner.py",
+      "name": "_inspect_once",
+      "complexity": 15,
+      "rank": "C",
+      "reason": "Feature 006 validation/orchestration branch matrix; recorded for explicit decomposition follow-up"
+    },
+    {
+      "path": "src/avo/adapters/media/timeline_render.py",
+      "name": "render",
+      "complexity": 14,
+      "rank": "C",
+      "reason": "Feature 006 validation/orchestration branch matrix; recorded for explicit decomposition follow-up"
+    },
+    {
+      "path": "src/avo/adapters/media/video_tracks.py",
+      "name": "compose_media_layer",
+      "complexity": 14,
+      "rank": "C",
+      "reason": "Feature 006 validation/orchestration branch matrix; recorded for explicit decomposition follow-up"
+    },
+    {
+      "path": "src/avo/adapters/transcribe/candidate.py",
+      "name": "transcribe",
+      "complexity": 14,
+      "rank": "C",
+      "reason": "Adapter orchestration with many format/capability branches"
+    },
+    {
+      "path": "src/avo/avo_state.py",
+      "name": "main",
+      "complexity": 14,
       "rank": "C",
       "reason": "CLI/entrypoint branching; extract helpers in follow-up burn-down"
     },
@@ -172,95 +809,60 @@
       "reason": "Media/render pipeline with ffmpeg/qc branches"
     },
     {
-      "path": "src/avo/hardware.py",
-      "name": "suggest_tier",
-      "complexity": 31,
-      "rank": "E",
-      "reason": "Hardware/model/update decision trees with many platform cases"
-    },
-    {
-      "path": "src/avo/hardware.py",
-      "name": "probe_gpu",
-      "complexity": 21,
-      "rank": "D",
-      "reason": "Hardware/model/update decision trees with many platform cases"
-    },
-    {
-      "path": "src/avo/hardware.py",
-      "name": "probe_cpu",
-      "complexity": 16,
-      "rank": "C",
-      "reason": "Hardware/model/update decision trees with many platform cases"
-    },
-    {
-      "path": "src/avo/init_project.py",
-      "name": "build_project",
-      "complexity": 24,
-      "rank": "D",
-      "reason": "Hardware/model/update decision trees with many platform cases"
-    },
-    {
-      "path": "src/avo/init_project.py",
-      "name": "main",
-      "complexity": 22,
-      "rank": "D",
-      "reason": "CLI/entrypoint branching; extract helpers in follow-up burn-down"
-    },
-    {
-      "path": "src/avo/learndown_export.py",
-      "name": "build_learndown_payload",
-      "complexity": 15,
+      "path": "src/avo/stats.py",
+      "name": "load_stats_config",
+      "complexity": 14,
       "rank": "C",
       "reason": "Reporting/inventory/validation aggregation with many optional fields"
     },
     {
-      "path": "src/avo/loudness_profiles.py",
-      "name": "resolve_loudness_profile",
-      "complexity": 28,
-      "rank": "D",
-      "reason": "Audio/transcript validation with many optional payload shapes"
-    },
-    {
-      "path": "src/avo/mcp/bridge.py",
-      "name": "kwargs_to_argv",
-      "complexity": 12,
+      "path": "src/avo/timeline/animation.py",
+      "name": "author",
+      "complexity": 14,
       "rank": "C",
-      "reason": "MCP request/schema branching; keep until MCP surface stabilizes"
+      "reason": "Timeline state machine / review gate branching; planned decomposition"
     },
     {
-      "path": "src/avo/mcp/mrtr.py",
-      "name": "extract_mrtr_fields",
-      "complexity": 17,
+      "path": "src/avo/timeline/approval_service.py",
+      "name": "ApprovalService",
+      "complexity": 14,
       "rank": "C",
-      "reason": "MCP request/schema branching; keep until MCP surface stabilizes"
+      "reason": "Feature 006 validation/orchestration branch matrix; recorded for explicit decomposition follow-up"
     },
     {
-      "path": "src/avo/mcp/mrtr.py",
-      "name": "_try_sdk_input_required",
-      "complexity": 11,
+      "path": "src/avo/timeline/mapping.py",
+      "name": "classify_cue_rebase",
+      "complexity": 14,
       "rank": "C",
-      "reason": "MCP request/schema branching; keep until MCP surface stabilizes"
+      "reason": "Timeline state machine / review gate branching; planned decomposition"
     },
     {
-      "path": "src/avo/mcp/request_state.py",
-      "name": "verify_request_state",
-      "complexity": 25,
-      "rank": "D",
-      "reason": "MCP request/schema branching; keep until MCP surface stabilizes"
-    },
-    {
-      "path": "src/avo/mcp/request_state.py",
-      "name": "from_mapping",
-      "complexity": 11,
+      "path": "src/avo/timeline/materialize.py",
+      "name": "materialize_cut_proof",
+      "complexity": 14,
       "rank": "C",
-      "reason": "MCP request/schema branching; keep until MCP surface stabilizes"
+      "reason": "Timeline state machine / review gate branching; planned decomposition"
     },
     {
-      "path": "src/avo/models.py",
-      "name": "list_alternatives",
-      "complexity": 16,
+      "path": "src/avo/transcribe.py",
+      "name": "transcribe_one",
+      "complexity": 14,
       "rank": "C",
-      "reason": "Hardware/model/update decision trees with many platform cases"
+      "reason": "Audio/transcript validation with many optional payload shapes; CI stub gate"
+    },
+    {
+      "path": "src/avo/adapters/media/still_extract.py",
+      "name": "extract",
+      "complexity": 13,
+      "rank": "C",
+      "reason": "Feature 006 validation/orchestration branch matrix; recorded for explicit decomposition follow-up"
+    },
+    {
+      "path": "src/avo/cli.py",
+      "name": "_cleanup",
+      "complexity": 13,
+      "rank": "C",
+      "reason": "CLI/entrypoint branching; extract helpers in follow-up burn-down"
     },
     {
       "path": "src/avo/pack_transcripts.py",
@@ -268,13 +870,6 @@
       "complexity": 13,
       "rank": "C",
       "reason": "Audio/transcript validation with many optional payload shapes"
-    },
-    {
-      "path": "src/avo/project_inventory.py",
-      "name": "verify_preserved_complete",
-      "complexity": 15,
-      "rank": "C",
-      "reason": "Reporting/inventory/validation aggregation with many optional fields"
     },
     {
       "path": "src/avo/project_inventory.py",
@@ -291,39 +886,130 @@
       "reason": "Reporting/inventory/validation aggregation with many optional fields"
     },
     {
-      "path": "src/avo/render.py",
-      "name": "build_final_composite",
-      "complexity": 34,
-      "rank": "E",
-      "reason": "Media/render pipeline with ffmpeg/qc branches"
-    },
-    {
-      "path": "src/avo/render.py",
-      "name": "main",
-      "complexity": 31,
-      "rank": "E",
-      "reason": "CLI/entrypoint branching; extract helpers in follow-up burn-down"
-    },
-    {
-      "path": "src/avo/render.py",
-      "name": "extract_all_segments",
-      "complexity": 16,
+      "path": "src/avo/shorts.py",
+      "name": "_qc",
+      "complexity": 13,
       "rank": "C",
       "reason": "Media/render pipeline with ffmpeg/qc branches"
     },
     {
-      "path": "src/avo/render.py",
-      "name": "extract_segment",
-      "complexity": 15,
+      "path": "src/avo/timeline/materialize.py",
+      "name": "render_proof_microproofs",
+      "complexity": 13,
       "rank": "C",
-      "reason": "Media/render pipeline with ffmpeg/qc branches"
+      "reason": "Feature 006 validation/orchestration branch matrix; recorded for explicit decomposition follow-up"
     },
     {
-      "path": "src/avo/render.py",
-      "name": "build_master_srt",
-      "complexity": 15,
+      "path": "src/avo/timeline/review_runner.py",
+      "name": "actual_coverage",
+      "complexity": 13,
       "rank": "C",
-      "reason": "Media/render pipeline with ffmpeg/qc branches"
+      "reason": "Feature 006 validation/orchestration branch matrix; recorded for explicit decomposition follow-up"
+    },
+    {
+      "path": "src/avo/timeline/review_runner.py",
+      "name": "select_microproof_windows",
+      "complexity": 13,
+      "rank": "C",
+      "reason": "Feature 006 validation/orchestration branch matrix; recorded for explicit decomposition follow-up"
+    },
+    {
+      "path": "src/avo/timeline/review_study.py",
+      "name": "_expected_answers",
+      "complexity": 13,
+      "rank": "C",
+      "reason": "Timeline state machine / review gate branching; planned decomposition"
+    },
+    {
+      "path": "src/avo/timeline/review_study.py",
+      "name": "complete_session",
+      "complexity": 13,
+      "rank": "C",
+      "reason": "Timeline state machine / review gate branching; planned decomposition"
+    },
+    {
+      "path": "src/avo/timeline/stills.py",
+      "name": "resolve_program_frame",
+      "complexity": 13,
+      "rank": "C",
+      "reason": "Feature 006 validation/orchestration branch matrix; recorded for explicit decomposition follow-up"
+    },
+    {
+      "path": "src/avo/timeline/tracks.py",
+      "name": "normalize_audio_track_layer",
+      "complexity": 13,
+      "rank": "C",
+      "reason": "Feature 006 validation/orchestration branch matrix; recorded for explicit decomposition follow-up"
+    },
+    {
+      "path": "src/avo/timeline/vision_review.py",
+      "name": "review_section_pacing",
+      "complexity": 13,
+      "rank": "C",
+      "reason": "Feature 006 validation/orchestration branch matrix; recorded for explicit decomposition follow-up"
+    },
+    {
+      "path": "src/avo/validate_edl.py",
+      "name": "_voiceover_semantic_errors",
+      "complexity": 13,
+      "rank": "C",
+      "reason": "EDL semantic rule matrix with many optional fields; split deferred"
+    },
+    {
+      "path": "src/avo/adapters/media/ffprobe.py",
+      "name": "_describe",
+      "complexity": 12,
+      "rank": "C",
+      "reason": "Adapter orchestration with many format/capability branches"
+    },
+    {
+      "path": "src/avo/adapters/media/still_extract.py",
+      "name": "_explicit_frame",
+      "complexity": 12,
+      "rank": "C",
+      "reason": "Feature 006 validation/orchestration branch matrix; recorded for explicit decomposition follow-up"
+    },
+    {
+      "path": "src/avo/adapters/understand/watch_policy.py",
+      "name": "_context_prompt_lines",
+      "complexity": 12,
+      "rank": "C",
+      "reason": "Feature 006 validation/orchestration branch matrix; recorded for explicit decomposition follow-up"
+    },
+    {
+      "path": "src/avo/adapters/understand/watch_skill.py",
+      "name": "_coverage_payload",
+      "complexity": 12,
+      "rank": "C",
+      "reason": "Feature 006 validation/orchestration branch matrix; recorded for explicit decomposition follow-up"
+    },
+    {
+      "path": "src/avo/audio_audit.py",
+      "name": "build_audit_report",
+      "complexity": 12,
+      "rank": "C",
+      "reason": "Audio/transcript validation with many optional payload shapes"
+    },
+    {
+      "path": "src/avo/build_captions.py",
+      "name": "build",
+      "complexity": 12,
+      "rank": "C",
+      "reason": "Audio/transcript validation with many optional payload shapes"
+    },
+    {
+      "path": "src/avo/build_captions.py",
+      "name": "group_words",
+      "complexity": 12,
+      "rank": "C",
+      "reason": "Audio/transcript validation with many optional payload shapes"
+    },
+    {
+      "path": "src/avo/mcp/bridge.py",
+      "name": "kwargs_to_argv",
+      "complexity": 12,
+      "rank": "C",
+      "reason": "MCP request/schema branching; keep until MCP surface stabilizes"
     },
     {
       "path": "src/avo/render.py",
@@ -333,65 +1019,135 @@
       "reason": "Media/render pipeline with ffmpeg/qc branches"
     },
     {
-      "path": "src/avo/shorts.py",
-      "name": "_build_one_proof",
-      "complexity": 29,
-      "rank": "D",
-      "reason": "Media/render pipeline with ffmpeg/qc branches"
-    },
-    {
-      "path": "src/avo/shorts.py",
-      "name": "build_proofs",
-      "complexity": 19,
+      "path": "src/avo/shorts_plan.py",
+      "name": "dirty_items",
+      "complexity": 12,
       "rank": "C",
       "reason": "Media/render pipeline with ffmpeg/qc branches"
     },
     {
-      "path": "src/avo/shorts.py",
-      "name": "_qc",
-      "complexity": 14,
+      "path": "src/avo/shorts_qc.py",
+      "name": "evaluate_probe",
+      "complexity": 12,
       "rank": "C",
       "reason": "Media/render pipeline with ffmpeg/qc branches"
     },
     {
-      "path": "src/avo/shorts_captions.py",
-      "name": "apply_corrections",
-      "complexity": 19,
+      "path": "src/avo/timeline/iterations.py",
+      "name": "_rework",
+      "complexity": 12,
       "rank": "C",
-      "reason": "Media/render pipeline with ffmpeg/qc branches"
+      "reason": "Feature 006 validation/orchestration branch matrix; recorded for explicit decomposition follow-up"
     },
     {
-      "path": "src/avo/shorts_captions.py",
-      "name": "group_words",
-      "complexity": 17,
+      "path": "src/avo/timeline/iterations.py",
+      "name": "compile_regression_contract",
+      "complexity": 12,
       "rank": "C",
-      "reason": "Media/render pipeline with ffmpeg/qc branches"
+      "reason": "Feature 006 validation/orchestration branch matrix; recorded for explicit decomposition follow-up"
     },
     {
-      "path": "src/avo/shorts_contract.py",
-      "name": "validate_promotion_evidence",
-      "complexity": 26,
-      "rank": "D",
-      "reason": "Media/render pipeline with ffmpeg/qc branches"
+      "path": "src/avo/timeline/iterations.py",
+      "name": "set_decision_status",
+      "complexity": 12,
+      "rank": "C",
+      "reason": "Feature 006 validation/orchestration branch matrix; recorded for explicit decomposition follow-up"
+    },
+    {
+      "path": "src/avo/timeline/reconstruction.py",
+      "name": "verify_reconstruction_bundle",
+      "complexity": 12,
+      "rank": "C",
+      "reason": "Timeline state machine / review gate branching; planned decomposition"
+    },
+    {
+      "path": "src/avo/timeline/tracks.py",
+      "name": "apply_event_role_defaults",
+      "complexity": 12,
+      "rank": "C",
+      "reason": "Feature 006 validation/orchestration branch matrix; recorded for explicit decomposition follow-up"
+    },
+    {
+      "path": "src/avo/timeline/tracks.py",
+      "name": "inspect_audio_hierarchy",
+      "complexity": 12,
+      "rank": "C",
+      "reason": "Timeline state machine / review gate branching; planned decomposition"
+    },
+    {
+      "path": "src/avo/timeline/vision_review.py",
+      "name": "aggregate_finding_status",
+      "complexity": 12,
+      "rank": "C",
+      "reason": "Feature 006 validation/orchestration branch matrix; recorded for explicit decomposition follow-up"
+    },
+    {
+      "path": "src/avo/timeline/vision_review.py",
+      "name": "compile_context_budget",
+      "complexity": 12,
+      "rank": "C",
+      "reason": "Feature 006 validation/orchestration branch matrix; recorded for explicit decomposition follow-up"
+    },
+    {
+      "path": "src/avo/video_context.py",
+      "name": "timeline_paths",
+      "complexity": 12,
+      "rank": "C",
+      "reason": "Reporting/inventory/validation aggregation with many optional fields"
+    },
+    {
+      "path": "src/avo/wrap.py",
+      "name": "_resolve_provider",
+      "complexity": 12,
+      "rank": "C",
+      "reason": "Reporting/inventory/validation aggregation with many optional fields"
+    },
+    {
+      "path": "src/avo/adapters/media/sync_materializer.py",
+      "name": "compile_audio_filter",
+      "complexity": 11,
+      "rank": "C",
+      "reason": "Adapter orchestration with many format/capability branches"
+    },
+    {
+      "path": "src/avo/adapters/motion/hyperframes.py",
+      "name": "build_composition_spec",
+      "complexity": 11,
+      "rank": "C",
+      "reason": "Feature 006 validation/orchestration branch matrix; recorded for explicit decomposition follow-up"
+    },
+    {
+      "path": "src/avo/adapters/understand/watch_policy.py",
+      "name": "_window_prompt_lines",
+      "complexity": 11,
+      "rank": "C",
+      "reason": "Feature 006 validation/orchestration branch matrix; recorded for explicit decomposition follow-up"
+    },
+    {
+      "path": "src/avo/edl_timeline.py",
+      "name": "verify_timed_items",
+      "complexity": 11,
+      "rank": "C",
+      "reason": "Reporting/inventory/validation aggregation with many optional fields"
+    },
+    {
+      "path": "src/avo/mcp/mrtr.py",
+      "name": "_try_sdk_input_required",
+      "complexity": 11,
+      "rank": "C",
+      "reason": "MCP request/schema branching; keep until MCP surface stabilizes"
+    },
+    {
+      "path": "src/avo/mcp/request_state.py",
+      "name": "from_mapping",
+      "complexity": 11,
+      "rank": "C",
+      "reason": "MCP request/schema branching; keep until MCP surface stabilizes"
     },
     {
       "path": "src/avo/shorts_delivery.py",
       "name": "promote_batch",
       "complexity": 11,
-      "rank": "C",
-      "reason": "Media/render pipeline with ffmpeg/qc branches"
-    },
-    {
-      "path": "src/avo/shorts_plan.py",
-      "name": "resolve_batch",
-      "complexity": 35,
-      "rank": "E",
-      "reason": "Media/render pipeline with ffmpeg/qc branches"
-    },
-    {
-      "path": "src/avo/shorts_plan.py",
-      "name": "dirty_items",
-      "complexity": 12,
       "rank": "C",
       "reason": "Media/render pipeline with ffmpeg/qc branches"
     },
@@ -410,100 +1166,9 @@
       "reason": "Media/render pipeline with ffmpeg/qc branches"
     },
     {
-      "path": "src/avo/shorts_qc.py",
-      "name": "evaluate_probe",
-      "complexity": 12,
-      "rank": "C",
-      "reason": "Media/render pipeline with ffmpeg/qc branches"
-    },
-    {
-      "path": "src/avo/stats.py",
-      "name": "compute_display_metrics",
-      "complexity": 29,
-      "rank": "D",
-      "reason": "Reporting/inventory/validation aggregation with many optional fields"
-    },
-    {
-      "path": "src/avo/stats.py",
-      "name": "_filter_sessions",
-      "complexity": 19,
-      "rank": "C",
-      "reason": "Reporting/inventory/validation aggregation with many optional fields"
-    },
-    {
-      "path": "src/avo/stats.py",
-      "name": "session_from_wrap",
-      "complexity": 18,
-      "rank": "C",
-      "reason": "Reporting/inventory/validation aggregation with many optional fields"
-    },
-    {
-      "path": "src/avo/stats.py",
-      "name": "format_human",
-      "complexity": 15,
-      "rank": "C",
-      "reason": "Reporting/inventory/validation aggregation with many optional fields"
-    },
-    {
-      "path": "src/avo/stats.py",
-      "name": "load_stats_config",
-      "complexity": 14,
-      "rank": "C",
-      "reason": "Reporting/inventory/validation aggregation with many optional fields"
-    },
-    {
-      "path": "src/avo/telemetry.py",
-      "name": "report",
-      "complexity": 23,
-      "rank": "D",
-      "reason": "Reporting/inventory/validation aggregation with many optional fields"
-    },
-    {
-      "path": "src/avo/timeline/animation.py",
-      "name": "author",
-      "complexity": 13,
-      "rank": "C",
-      "reason": "Timeline state machine / review gate branching; planned decomposition"
-    },
-    {
-      "path": "src/avo/timeline/approval_service.py",
-      "name": "decide",
-      "complexity": 22,
-      "rank": "D",
-      "reason": "Timeline state machine / review gate branching; planned decomposition"
-    },
-    {
-      "path": "src/avo/timeline/bmap_service.py",
-      "name": "_validate_snapshot",
-      "complexity": 22,
-      "rank": "D",
-      "reason": "Timeline state machine / review gate branching; planned decomposition"
-    },
-    {
-      "path": "src/avo/timeline/bmap_service.py",
-      "name": "_diff",
-      "complexity": 15,
-      "rank": "C",
-      "reason": "Timeline state machine / review gate branching; planned decomposition"
-    },
-    {
-      "path": "src/avo/timeline/cmap_service.py",
-      "name": "_diff",
-      "complexity": 15,
-      "rank": "C",
-      "reason": "Timeline state machine / review gate branching; planned decomposition"
-    },
-    {
       "path": "src/avo/timeline/cmap_service.py",
       "name": "_verify_raw",
       "complexity": 11,
-      "rank": "C",
-      "reason": "Timeline state machine / review gate branching; planned decomposition"
-    },
-    {
-      "path": "src/avo/timeline/command_handlers.py",
-      "name": "execute",
-      "complexity": 13,
       "rank": "C",
       "reason": "Timeline state machine / review gate branching; planned decomposition"
     },
@@ -515,116 +1180,25 @@
       "reason": "Timeline state machine / review gate branching; planned decomposition"
     },
     {
-      "path": "src/avo/timeline/lifecycle.py",
-      "name": "transition",
-      "complexity": 17,
-      "rank": "C",
-      "reason": "Timeline state machine / review gate branching; planned decomposition"
-    },
-    {
-      "path": "src/avo/timeline/lineage.py",
-      "name": "validate_cmap_snapshot",
-      "complexity": 32,
-      "rank": "E",
-      "reason": "Timeline state machine / review gate branching; planned decomposition"
-    },
-    {
-      "path": "src/avo/timeline/lineage.py",
-      "name": "validate_bmap_basis",
-      "complexity": 15,
-      "rank": "C",
-      "reason": "Timeline state machine / review gate branching; planned decomposition"
-    },
-    {
-      "path": "src/avo/timeline/mapping.py",
-      "name": "classify_cue_rebase",
-      "complexity": 14,
-      "rank": "C",
-      "reason": "Timeline state machine / review gate branching; planned decomposition"
-    },
-    {
-      "path": "src/avo/timeline/materialize.py",
-      "name": "_reusable_cut_materialization",
-      "complexity": 19,
-      "rank": "C",
-      "reason": "Timeline state machine / review gate branching; planned decomposition"
-    },
-    {
-      "path": "src/avo/timeline/materialize.py",
-      "name": "materialize_cut_proof",
-      "complexity": 14,
-      "rank": "C",
-      "reason": "Timeline state machine / review gate branching; planned decomposition"
-    },
-    {
-      "path": "src/avo/timeline/migration.py",
-      "name": "legacy_edl_snapshots",
-      "complexity": 26,
-      "rank": "D",
-      "reason": "Timeline state machine / review gate branching; planned decomposition"
-    },
-    {
-      "path": "src/avo/timeline/migration.py",
-      "name": "validate",
-      "complexity": 16,
-      "rank": "C",
-      "reason": "Timeline state machine / review gate branching; planned decomposition"
-    },
-    {
-      "path": "src/avo/timeline/pipeline.py",
-      "name": "advance",
-      "complexity": 37,
-      "rank": "E",
-      "reason": "Timeline state machine / review gate branching; planned decomposition"
-    },
-    {
       "path": "src/avo/timeline/projection.py",
       "name": "project_cmap_to_edl",
-      "complexity": 24,
-      "rank": "D",
-      "reason": "Timeline state machine / review gate branching; planned decomposition"
-    },
-    {
-      "path": "src/avo/timeline/reconstruction.py",
-      "name": "verify_reconstruction_bundle",
-      "complexity": 12,
+      "complexity": 11,
       "rank": "C",
       "reason": "Timeline state machine / review gate branching; planned decomposition"
     },
     {
-      "path": "src/avo/timeline/review.py",
-      "name": "write_review_package",
-      "complexity": 34,
-      "rank": "E",
-      "reason": "Timeline state machine / review gate branching; planned decomposition"
-    },
-    {
-      "path": "src/avo/timeline/review.py",
-      "name": "evaluate_gate",
-      "complexity": 27,
-      "rank": "D",
-      "reason": "Timeline state machine / review gate branching; planned decomposition"
-    },
-    {
-      "path": "src/avo/timeline/review.py",
-      "name": "evidence_is_fresh",
-      "complexity": 22,
-      "rank": "D",
-      "reason": "Timeline state machine / review gate branching; planned decomposition"
-    },
-    {
-      "path": "src/avo/timeline/review_study.py",
-      "name": "_expected_answers",
-      "complexity": 13,
+      "path": "src/avo/timeline/provider_animation.py",
+      "name": "resolve_version",
+      "complexity": 11,
       "rank": "C",
-      "reason": "Timeline state machine / review gate branching; planned decomposition"
+      "reason": "Feature 006 validation/orchestration branch matrix; recorded for explicit decomposition follow-up"
     },
     {
-      "path": "src/avo/timeline/review_study.py",
-      "name": "complete_session",
-      "complexity": 13,
+      "path": "src/avo/timeline/review_runner.py",
+      "name": "_ranges_in_seconds",
+      "complexity": 11,
       "rank": "C",
-      "reason": "Timeline state machine / review gate branching; planned decomposition"
+      "reason": "Feature 006 validation/orchestration branch matrix; recorded for explicit decomposition follow-up"
     },
     {
       "path": "src/avo/timeline/review_study.py",
@@ -635,29 +1209,15 @@
     },
     {
       "path": "src/avo/timeline/store.py",
-      "name": "append_revision",
-      "complexity": 17,
+      "name": "write_immutable_json",
+      "complexity": 11,
       "rank": "C",
-      "reason": "Timeline state machine / review gate branching; planned decomposition"
+      "reason": "Feature 006 validation/orchestration branch matrix; recorded for explicit decomposition follow-up"
     },
     {
       "path": "src/avo/timeline/sync.py",
       "name": "validate_sync_snapshot",
       "complexity": 11,
-      "rank": "C",
-      "reason": "Timeline state machine / review gate branching; planned decomposition"
-    },
-    {
-      "path": "src/avo/timeline/tracks.py",
-      "name": "resolve_tracks",
-      "complexity": 25,
-      "rank": "D",
-      "reason": "Timeline state machine / review gate branching; planned decomposition"
-    },
-    {
-      "path": "src/avo/timeline/tracks.py",
-      "name": "inspect_audio_hierarchy",
-      "complexity": 12,
       "rank": "C",
       "reason": "Timeline state machine / review gate branching; planned decomposition"
     },
@@ -670,38 +1230,10 @@
     },
     {
       "path": "src/avo/timeline/workspace.py",
-      "name": "review_change_summary",
-      "complexity": 23,
-      "rank": "D",
-      "reason": "Timeline state machine / review gate branching; planned decomposition"
-    },
-    {
-      "path": "src/avo/timeline/workspace.py",
       "name": "validate",
       "complexity": 11,
       "rank": "C",
       "reason": "Timeline state machine / review gate branching; planned decomposition"
-    },
-    {
-      "path": "src/avo/timeline_view.py",
-      "name": "render_timeline",
-      "complexity": 21,
-      "rank": "D",
-      "reason": "Reporting/inventory/validation aggregation with many optional fields"
-    },
-    {
-      "path": "src/avo/transcribe.py",
-      "name": "validate_transcript_payload",
-      "complexity": 21,
-      "rank": "D",
-      "reason": "Audio/transcript validation with many optional payload shapes"
-    },
-    {
-      "path": "src/avo/transcribe.py",
-      "name": "transcribe_one",
-      "complexity": 14,
-      "rank": "C",
-      "reason": "Audio/transcript validation with many optional payload shapes; CI stub gate"
     },
     {
       "path": "src/avo/transcribe.py",
@@ -711,93 +1243,9 @@
       "reason": "Audio/transcript validation with many optional payload shapes"
     },
     {
-      "path": "src/avo/transcribe_batch.py",
-      "name": "transcribe_directory",
-      "complexity": 23,
-      "rank": "D",
-      "reason": "Audio/transcript validation with many optional payload shapes"
-    },
-    {
-      "path": "src/avo/update.py",
-      "name": "run_update",
-      "complexity": 40,
-      "rank": "E",
-      "reason": "Hardware/model/update decision trees with many platform cases"
-    },
-    {
-      "path": "src/avo/validate_dependencies.py",
-      "name": "run_checks",
-      "complexity": 16,
-      "rank": "C",
-      "reason": "Reporting/inventory/validation aggregation with many optional fields"
-    },
-    {
       "path": "src/avo/validate_dependencies.py",
       "name": "check_git_clone",
       "complexity": 11,
-      "rank": "C",
-      "reason": "Reporting/inventory/validation aggregation with many optional fields"
-    },
-    {
-      "path": "src/avo/validate_edl.py",
-      "name": "_bluray_ps5_semantic_errors",
-      "complexity": 49,
-      "rank": "F",
-      "reason": "EDL semantic rule matrix with many optional fields; split deferred"
-    },
-    {
-      "path": "src/avo/validate_edl.py",
-      "name": "_comparison_semantic_errors",
-      "complexity": 42,
-      "rank": "F",
-      "reason": "EDL semantic rule matrix with many optional fields; split deferred"
-    },
-    {
-      "path": "src/avo/validate_edl.py",
-      "name": "_semantic_errors",
-      "complexity": 37,
-      "rank": "E",
-      "reason": "EDL semantic rule matrix with many optional fields; split deferred"
-    },
-    {
-      "path": "src/avo/validate_edl.py",
-      "name": "_voiceover_semantic_errors",
-      "complexity": 13,
-      "rank": "C",
-      "reason": "EDL semantic rule matrix with many optional fields; split deferred"
-    },
-    {
-      "path": "src/avo/video_context.py",
-      "name": "resolve_context",
-      "complexity": 21,
-      "rank": "D",
-      "reason": "Reporting/inventory/validation aggregation with many optional fields"
-    },
-    {
-      "path": "src/avo/video_context.py",
-      "name": "timeline_paths",
-      "complexity": 12,
-      "rank": "C",
-      "reason": "Reporting/inventory/validation aggregation with many optional fields"
-    },
-    {
-      "path": "src/avo/wrap.py",
-      "name": "render_markdown",
-      "complexity": 29,
-      "rank": "D",
-      "reason": "Reporting/inventory/validation aggregation with many optional fields"
-    },
-    {
-      "path": "src/avo/wrap.py",
-      "name": "build_wrap_payload",
-      "complexity": 20,
-      "rank": "C",
-      "reason": "Reporting/inventory/validation aggregation with many optional fields"
-    },
-    {
-      "path": "src/avo/wrap.py",
-      "name": "_resolve_provider",
-      "complexity": 12,
       "rank": "C",
       "reason": "Reporting/inventory/validation aggregation with many optional fields"
     }

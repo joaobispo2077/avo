@@ -149,6 +149,32 @@ class DeliveryService:
     def manifest_path(self) -> Path:
         return self.workspace.raw_dir / "edit" / "delivery-manifest.json"
 
+    def _require_candidate_snapshot(
+        self,
+        fingerprint: dict[str, Any],
+        *,
+        state: str = "approved",
+    ) -> dict[str, Any] | None:
+        from .pipeline import TimelinePipeline
+
+        if not self.workspace.pipeline_run_path.is_file():
+            return None
+        pipeline = TimelinePipeline(self.workspace)
+        snapshot = pipeline.active_candidate_snapshot()
+        if snapshot is None:
+            return None
+        candidate = snapshot["candidate"]
+        if candidate["sha256"] != fingerprint.get("sha256") or candidate[
+            "sizeBytes"
+        ] != fingerprint.get("sizeBytes"):
+            raise DeliveryError("master bytes differ from active reviewed snapshot")
+        if snapshot["state"] != state:
+            raise DeliveryError(f"delivery requires active {state} candidate snapshot")
+        return {
+            "snapshotId": snapshot["snapshotId"],
+            "sha256": snapshot["snapshotHash"],
+        }
+
     def prepare(
         self,
         *,
@@ -167,9 +193,10 @@ class DeliveryService:
         master = Path(master).resolve()
         if not candidate.is_file():
             raise DeliveryError(f"candidate does not exist: {candidate}")
-        _, materialized_output_hash = _validate_materialization(
+        candidate_fingerprint, materialized_output_hash = _validate_materialization(
             candidate, materialization, materialization_path
         )
+        candidate_snapshot = self._require_candidate_snapshot(candidate_fingerprint)
         master_fp = _copy_verified_master(candidate, master, materialized_output_hash)
         canonical_dependencies = _canonical_dependencies(
             dependencies, materialization, materialized_output_hash
@@ -221,6 +248,8 @@ class DeliveryService:
             "approval": None,
             "createdAt": self.clock(),
         }
+        if candidate_snapshot is not None:
+            manifest["candidateSnapshot"] = candidate_snapshot
         atomic_write_json(self.manifest_path, manifest)
         manifest["editlogRefresh"] = self.workspace.notify_editlog()
         return manifest
@@ -240,6 +269,11 @@ class DeliveryService:
         _validate_materialization_reference(
             manifest.get("materialization") or {}, current
         )
+        expected_snapshot = manifest.get("candidateSnapshot")
+        if expected_snapshot is not None:
+            active_snapshot = self._require_candidate_snapshot(current)
+            if active_snapshot != expected_snapshot:
+                raise DeliveryError("delivery candidate snapshot is stale")
         return manifest
 
     def approve(self, *, actor: str, reason: str) -> dict[str, Any]:

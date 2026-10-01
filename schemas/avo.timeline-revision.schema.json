@@ -32,7 +32,8 @@
         "bmap",
         "tracks",
         "animation",
-        "sync-map"
+        "sync-map",
+        "iteration-ledger"
       ]
     },
     "artifactId": {

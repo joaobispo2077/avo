@@ -2,52 +2,63 @@
 
 ## Step/state mapping
 
-**Durable state:** the consumed approved artifact, delivery-manifest.json when present, and the observed result
+**Durable state:** exact candidate/source fingerprint plus the immutable StillExtractionRecord and selected image bytes
 
-**Workflow steps:** Validate thumbnail prerequisites → Run thumbnail → Verify and report the thumbnail result
+**Workflow steps:** Validate lineage → Resolve exact frame → Extract → Verify record/output → Request creator selection
 
-**Approval or input gate:** Pause whenever required input or a human decision prevents the next declared step; report the exact reply or artifact needed.
+**Approval or input gate:** Stop for a missing fingerprint, ambiguous cut side, timestamp anomaly, unspecified HDR policy, or creator selection.
 
-**Stop when:** Missing required input, a failed or stale gate, a required human decision, or verified thumbnail completion
+**Stop when:** Any required lineage/input is missing or stale, extraction or verification fails, or creator selection is required.
 
-**Valid next commands:** /avo.deliver
-
-Thumbnail candidate stills from approved master (v1: ffmpeg frame extract + checklist).
+**Valid next commands:** `/avo.deliver`
 
 ## Preconditions
 
-- [ ] `provider` + `rawDir` declared
-- [ ] Approved master under `edit/masters/` or documented final path
-- [ ] Load `providers/<provider>/DESIGN.md` when present for brand/safe-zone guidance
+- `provider`, `rawDir`, and `avo.project.json` resolve to the active footage project.
+- A thumbnail request names an approved candidate and its exact SHA-256.
+- A raw/program review request resolves through the current valid CMap and verifies the registered source fingerprint.
+- Provider `DESIGN.md`, when present, supplies brand and safe-zone guidance after truthful extraction.
 
-## Parse args
+## Exact moment inputs
 
-| Arg | Required | Notes |
-| --- | -------- | ----- |
-| `Provider` | yes | Resolves provider brand assets |
-| `rawDir` | yes | Workflow root |
-| `Footage:` | optional | Master path; infer latest approved if omitted |
-| `--count N` | optional | Default ≥3 frames at distinct timestamps |
+Use exactly one input mode:
 
-## Workflow
+| Mode | Required fields | Resolution |
+| --- | --- | --- |
+| Raw source | `--source-id`, `--source-time-num`, `--source-time-den` | Rational seconds from normalized stream start; decode registered source bytes directly. |
+| Program | `--program-frame`, `--frame-rate-num`, `--frame-rate-den` | Resolve through current CMap half-open ranges to source/frame. At a cut, require `--side incoming|outgoing`. |
+| Candidate | `--candidate`, `--candidate-frame`, `--candidate-state`, `--candidate-sha256` | Resolve by explicit decoded-frame index against exact candidate bytes. Thumbnail requires state `approved`; current is review/reference-only. |
 
-1. `ffprobe` master duration; select diverse timestamps (avoid mid-blink, heavy motion blur when possible).
-2. Extract stills via ffmpeg to `<rawDir>/edit/delivery/thumbnails/` with versioned names.
-3. Apply safe-zone checklist:
-   - [ ] Readable at mobile and TV preview sizes
-   - [ ] High contrast; faces/products/evidence not cropped awkwardly
-   - [ ] **No misleading text** over evidence, faces, or UI that changes meaning
-   - [ ] Title/thumbnail promise alignment (truthful, not clickbait fabrication)
-4. Optional text overlay **brief** only in v1 — no mandatory HyperFrames composition.
-5. **User approval** before marking candidates final in delivery manifest.
+For ordinary VFR timestamp requests, select the decoded display interval `[PTS,nextPTS)` containing the requested time. An exact PTS boundary selects the incoming frame. Missing, duplicate, or non-monotonic PTS blocks timestamp selection; use an explicitly chosen `--decoded-frame-index` when editorially justified.
+
+## Output and verification
+
+1. Extract one frame without approximate-seek selection or network input.
+2. Apply declared display rotation and sample-aspect ratio without crop. Source resolution is the default; `--width` records an explicit derivative.
+3. For SDR, use the versioned deterministic conversion and tag the lossless PNG as sRGB. For HDR, require an explicit supported policy: preserve (`hdr-preserve-v1`) or deterministic Hable tone map (`hdr-tone-map-hable-v1`). Never infer a tone map.
+4. Write `<video-id>-<purpose>-f<decoded-frame>-vNNN.png` to:
+   - thumbnails: `<rawDir>/edit/delivery/thumbnails/`;
+   - review/reference: `<rawDir>/edit/review/stills/`.
+5. Write the sibling immutable record to `records/<extraction-id>.json`. Verify request, PTS interval/index, boundary side, input/output fingerprints, canonical mapping when available, geometry, color policy/tool version, purpose, and approval state.
+6. Check mobile/TV readability, safe zones, truthful promise alignment, and awkward face/product/evidence crops. These design checks do not change which source frame was extracted.
+7. Ask the creator to select a candidate. Selection is a human decision; extraction alone does not approve it.
+
+## Admission and cleanup
+
+- Candidate-derived stills are reference/delivery-only and cannot enter any proof graph.
+- A raw-derived still may enter a proof only after separate registration as a canonical generated asset with full lineage.
+- Never use a proof, preview, proxy, master, or delivery export as an editing ancestor.
+- Preserve accepted image bytes and immutable records. Disposable alternatives may be removed only after their record, fingerprint, and rejection/supersession decision are retained under project cleanup policy.
 
 ## Forbidden
 
-- Fabricated reactions, products, or scenes not in master
-- Text that contradicts program content or implies events not shown
+- Extracting a thumbnail from a current/unapproved candidate.
+- Guessing incoming versus outgoing at a cut.
+- Timestamp selection across anomalous VFR PTS without an explicit decoded index.
+- Implicit HDR tone mapping, undocumented crop/grade/scale, or fabricated reactions, products, text, or scenes.
 
 ## Related
 
+- Canonical contract: `specs/006-iteration-aware-proofing/contracts/still-extraction.md`
 - Provider design: `providers/<name>/DESIGN.md`
-- Deliver manifest: [`docs/templates/delivery/delivery-manifest.md`](../../../docs/templates/delivery/delivery-manifest.md)
-- Chapters (upload prep): [`chapters.md`](chapters.md)
+- Delivery manifest: [`docs/templates/delivery/delivery-manifest.md`](../../../docs/templates/delivery/delivery-manifest.md)

@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import shutil
 import sys
+from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
@@ -12,7 +14,75 @@ from avo.timeline.contracts import content_hash, file_fingerprint
 class TimelineRenderAdapter:
     """TimelineRenderPort: projection JSON in, hash-bound media out."""
 
+    def __init__(self, *, proof_executor: Any | None = None) -> None:
+        self.proof_executor = proof_executor
+
+    def proof_tool_readiness(self, proof_plan: dict[str, Any]) -> dict[str, bool]:
+        adapters = {
+            str(item.get("adapterId") or "").casefold()
+            for item in proof_plan.get("implementationRefs") or []
+        }
+        return {
+            "ffmpeg": shutil.which("ffmpeg") is not None,
+            "hyperframes": (
+                shutil.which("hyperframes") is not None
+                if any("hyperframes" in item for item in adapters)
+                else True
+            ),
+            "proof-plan-executor": self.proof_executor is not None,
+        }
+
+    def render_proof_plan(
+        self,
+        proof_plan: dict[str, Any],
+        output: Path,
+        *,
+        window: dict[str, int] | None,
+    ) -> dict[str, Any]:
+        """Pass the immutable operation/event graph to one registered executor."""
+        from avo.timeline.contracts import document_hash_excluding, validate_document
+
+        validate_document(proof_plan, "avo.proof-plan.schema.json")
+        if proof_plan.get("proofPlanHash") != document_hash_excluding(
+            proof_plan, "proofPlanHash"
+        ):
+            raise RuntimeError("ProofPlan hash mismatch")
+        if self.proof_executor is None:
+            raise RuntimeError("ProofPlan execution backend is not configured")
+        execution = {
+            "proofPlanId": proof_plan["proofPlanId"],
+            "proofPlanHash": proof_plan["proofPlanHash"],
+            "videoGraph": deepcopy(proof_plan["videoGraph"]),
+            "audioGraph": deepcopy(proof_plan["audioGraph"]),
+            "events": deepcopy(proof_plan["events"]),
+            "implementationRefs": deepcopy(proof_plan["implementationRefs"]),
+            "output": deepcopy(proof_plan["output"]),
+            "renderProfile": proof_plan["renderProfile"],
+            "window": deepcopy(window),
+        }
+        graph_hash = content_hash(
+            {
+                key: execution[key]
+                for key in (
+                    "videoGraph",
+                    "audioGraph",
+                    "events",
+                    "implementationRefs",
+                )
+            }
+        )
+        result = self.proof_executor(execution, Path(output))
+        if not isinstance(result, dict):
+            raise RuntimeError("ProofPlan executor returned an invalid result")
+        return {
+            **result,
+            "graphHash": graph_hash,
+            "proofPlanHash": proof_plan["proofPlanHash"],
+            "window": deepcopy(window),
+        }
+
     def render(self, projection: Path, output: Path, **request: Any) -> dict[str, Any]:
+        from avo.adapters.media.audio_tracks import compile_continuous_audio_graph
         from avo.render import main as render_main
 
         projection = Path(projection)
@@ -21,13 +91,20 @@ class TimelineRenderAdapter:
             request.get("profile") or request.get("render_profile") or "draft"
         )
         output.parent.mkdir(parents=True, exist_ok=True)
+        audio_graph = request.get("audio_graph")
+        compiled_audio = None
+        if audio_graph is not None:
+            compiled_audio = compile_continuous_audio_graph(
+                audio_graph.get("nodes") or [],
+                audio_graph.get("operations") or [],
+                sample_rate=int(audio_graph.get("sampleRate") or 48_000),
+            )
         argv = [
             "avo.render",
             str(projection),
             "-o",
             str(output),
             "--no-subtitles",
-            "--no-loudnorm",
         ]
         if profile == "draft":
             argv.append("--draft")
@@ -53,4 +130,8 @@ class TimelineRenderAdapter:
                 content_hash(render_contract) if render_contract is not None else None
             ),
             "producer": {"name": "avo.render", "version": "1"},
+            "audioGraphHash": (
+                compiled_audio["graphHash"] if compiled_audio is not None else None
+            ),
+            "audioEncodeCount": 1 if compiled_audio is not None else None,
         }

@@ -7,6 +7,7 @@ view for the existing renderer-policy adapters; ``load_index()`` is canonical.
 
 from __future__ import annotations
 
+import errno
 import json
 import os
 import re
@@ -98,6 +99,65 @@ def atomic_write_json(path: Path, value: Any) -> Path:
         temp.unlink(missing_ok=True)
         raise
     return path
+
+
+def write_immutable_json(path: Path, value: Any) -> Path:
+    """Create one immutable JSON document, allowing only byte-equivalent retries."""
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = json.dumps(value, indent=2, ensure_ascii=False, sort_keys=True) + "\n"
+    temp = path.with_name(f".{path.name}.{uuid4().hex}.tmp")
+    try:
+        with temp.open("x", encoding="utf-8", newline="\n") as stream:
+            stream.write(payload)
+            stream.flush()
+            os.fsync(stream.fileno())
+        try:
+            os.link(temp, path)
+        except FileExistsError:
+            try:
+                existing = path.read_text(encoding="utf-8")
+            except OSError as exc:
+                raise StoreError(
+                    f"cannot verify immutable document {path}: {exc}"
+                ) from exc
+            if existing != payload:
+                raise StoreError(
+                    f"immutable document already exists with different content: {path}"
+                )
+        except OSError as exc:
+            unsupported = {
+                errno.EINVAL,
+                errno.EPERM,
+                errno.EXDEV,
+                getattr(errno, "ENOTSUP", errno.EINVAL),
+                getattr(errno, "EOPNOTSUPP", errno.EINVAL),
+            }
+            if exc.errno not in unsupported and getattr(exc, "winerror", None) != 1:
+                raise
+            try:
+                descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL)
+            except FileExistsError:
+                existing = path.read_text(encoding="utf-8")
+                if existing != payload:
+                    raise StoreError(
+                        "immutable document already exists with different content: "
+                        f"{path}"
+                    )
+            else:
+                try:
+                    with os.fdopen(
+                        descriptor, "w", encoding="utf-8", newline="\n"
+                    ) as stream:
+                        stream.write(payload)
+                        stream.flush()
+                        os.fsync(stream.fileno())
+                except Exception:
+                    path.unlink(missing_ok=True)
+                    raise
+        return path
+    finally:
+        temp.unlink(missing_ok=True)
 
 
 class ArtifactStore:
@@ -306,6 +366,19 @@ class ArtifactStore:
             if item["revisionId"] == head
         )
 
+    def head_hash(self) -> str | None:
+        """Return the exact immutable identity used for revision CAS."""
+        return self._head_hash(self.load_index())
+
+    @staticmethod
+    def _next_revision_id(artifact_type: str, existing: set[str]) -> str:
+        sequence = len(existing) + 1
+        while True:
+            candidate = f"{artifact_type}-r{sequence:04d}"
+            if candidate not in existing:
+                return candidate
+            sequence += 1
+
     def append_revision(
         self,
         *,
@@ -331,7 +404,9 @@ class ArtifactStore:
                 f"compare-and-swap failed: expected head {expected_head_hash}, actual {actual_head_hash}"
             )
         existing = {item["revisionId"] for item in index["revisionRefs"]}
-        revision_id = revision_id or f"{index['artifactType']}-r{len(existing) + 1:04d}"
+        revision_id = revision_id or self._next_revision_id(
+            str(index["artifactType"]), existing
+        )
         if revision_id in existing:
             raise StoreError(f"revision id already exists: {revision_id}")
         current = index["headRevisionId"]
@@ -360,9 +435,8 @@ class ArtifactStore:
         body["contentSha256"] = content_hash(body)
         self._validate_revision(body)
         revision_path = self._revision_dir(index) / f"{revision_id}.json"
-        if revision_path.exists():
-            raise StoreError(f"immutable revision already exists: {revision_path}")
-        atomic_write_json(revision_path, body)
+        revision_existed = revision_path.exists()
+        write_immutable_json(revision_path, body)
         ref = {
             "revisionId": revision_id,
             "path": self._relative(revision_path),
@@ -377,7 +451,12 @@ class ArtifactStore:
         updated.pop("stateReason", None)
         updated["updatedAt"] = timestamp
         self._validate_index(updated)
-        atomic_write_json(self.path, updated)
+        try:
+            atomic_write_json(self.path, updated)
+        except Exception:
+            if not revision_existed:
+                revision_path.unlink(missing_ok=True)
+            raise
         return self._compat_revision(body)
 
     def revision(self, revision_id: str) -> dict[str, Any]:

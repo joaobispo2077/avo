@@ -1,81 +1,56 @@
-# /avo.watch reference
+# Watch long-form review reference
 
 ## Step/state mapping
 
-**Durable state:** current review.json and approval record
+**Durable state:** capability snapshot, VisionReviewPlan, fingerprinted raw review artifacts, and the current candidate-bound `kind="watch"` evidence record
 
-**Workflow steps:** Validate watch prerequisites → Run watch → Verify and report the watch result
+**Approval or input gate:** Pause for any model/context/coverage blocker or exact human-review question; report the required endpoint fix, artifact, or disposition.
 
-**Approval or input gate:** Pause whenever required input or a human decision prevents the next declared step; report the exact reply or artifact needed.
+**Stop when:** Model mismatch, failed probe, unknown unbounded context, mandatory coverage hole, stale review contract, exhausted bounded retries, or unresolved human judgment
 
-**Stop when:** Missing required input, a failed or stale gate, a required human decision, or verified watch completion
+**Valid next commands:** the active proof checkpoint command after current Watch evidence passes
 
-**Valid next commands:** the declared human approval gate
+## Preconditions
 
-Full **THE LOOP** via watch-skill. See [`docs/avo-workflow.md`](../../avo-workflow.md) §4.
+- Exact candidate and transcript fingerprints exist.
+- Proof plan, regression contract, required windows, section diagnosis, terms/names, and Watch policy are immutable for the run.
+- The endpoint pin names one OpenAI-compatible endpoint and one served model.
 
-**Blocking:** Do not open the human approval gate until watch-skill **and** transcript
-analysis both pass. Cut/motion proofs also require [`cuts.md`](cuts.md) pre-review.
+## Model preflight
 
-## Steps
+Persist a capability snapshot from a live image request. It binds configured and served identity, vision support, effective runtime context or an explicit conservative limit, output/image limits, visual estimator version, device, concurrency, VRAM ceiling, operator-managed lifecycle, request/response hashes, and probe time. A name mismatch, failed probe, missing vision, or unknown unbounded context blocks review.
 
-1. Select proof render (`edit/preview/*.mp4`).
-2. Run `python -m avo.edl_timeline verify edit/edl.json` when EDL changed.
-3. **Transcript read:** confirm cut edges, privacy spans, names/terms; record source
-   times in the review package.
-4. watch-skill: inspect → defect list → confidence. Pass `--timestamps` for every
-   range join, blocked-range B-window, and overlay `start_in_output`.
-5. Agent applies fixes to owning stage tool.
-6. Re-render proof; repeat until stable or user intervenes.
-7. Write approval package:
+Qwen3.5-4B is a local opt-in profile: reuse the already served model with concurrency one inside the declared 7 GB VRAM policy. Do not load Bonsai, start a second model, stop the server, or substitute another endpoint. CPU transcription may coexist only when CPU/RAM/VRAM/I/O preflight allows it; GPU-heavy stages otherwise serialize.
 
-```
-edit/review/<checkpoint>/
-  approval-gate.md
-  (links to preview + analysis)
-```
+## Context budgeting
 
-6. **Block** until user says approve.
+For each pass, subtract instruction, rubric/schema, transcript slice, carry-forward, response reserve, and safety tokens from the probed effective context. Divide the remainder by the active detail/resolution estimator cost. The frame ceiling is the minimum of that result, backend image limit, configured safety ceiling, and frames actually required after deterministic deduplication. Record estimator name/version and the requested image policy.
 
-## Agent pre-human gate (required)
+## Layered coverage
 
-Complete **before** step 7 above and before asking the creator to watch:
+1. Deterministic: sequential decode, moving-media variation, exact transcript/protected speech, waveform/tactile events, flash safety, output profile, and section pacing metrics.
+2. Sparse overview: first/final regions, every section boundary, representative evidence per section, story and payoff checkpoints.
+3. Dense risks: changed/historical joins, overlay entry-hold-exit, captions, privacy, gameplay UI, tactile source audio, moving inserts, transitions, and changed pacing.
+4. Repair/comparison: only unresolved findings or explicit comparison requests; prior proofs remain comparison-only.
 
-| Check | Tool |
-| --- | --- |
-| Source↔B-time consistency | `python -m avo.edl_timeline verify` |
-| Cut/privacy correctness | Transcript JSON + [`cuts.md`](cuts.md) |
-| Visual QC | watch-skill with boundary/overlay timestamps |
+Record requested, decoded, failed, and observed samples separately. Merge actual inspected and deterministic ranges, report partial ranges and maximum gaps, and list every mandatory coverage hole. `full` describes requested program scope only; it never means every second was viewed.
 
-See [`cuts.md`](cuts.md) for the full cut-map / beat-map requirements.
+## Section pacing rubric
 
-## Checkpoint names
+Every section supplies format role, purpose, payoff, target density, protected pauses, risk classes, and deterministic metrics such as shot duration, speech density, silence, repetition, section duration, and visual-change cadence. Dense teasers, conversational bodies, gameplay explanations, lifestyle detours, payoffs, and reflective conclusions are judged against their own purpose. Protect complete speech, tactile source sound, comedy timing, emotional pauses, and gameplay/cutscene payoff.
 
-- `edit-proof` — after cut proof
-- `motion-proof` — after motion proof
-- `pre-master` — before 1080p/source promotion
+## Findings and evidence fusion
 
-## Non-overridable AI-first gate
+Findings require temporal ranges and fingerprinted evidence references. Distinguish direct visual observation, transcript evidence, deterministic measurement, and editorial inference. Merge semantically identical overlapping findings and their references. Preserve conflicting observations as contradictions. Corroborated blocking findings fail; unresolved material uncertainty needs human judgment; missing/invalid required passes block.
 
-Human review opens only after current candidate Watch evidence, current-candidate
-transcript analysis, and all checkpoint-specific deterministic checks. Evidence
-is fresh only when candidate and dependency hashes match exactly. Missing Watch
-or transcript remains `blocked`; do not hide a waiver in chat.
+Fuse Watch observations with sequential decode, movement, transcript, waveform, flash, and pacing evidence. Conflicts and low-confidence/masked events generate exact visual or listening windows; the model does not decide ambiguous privacy, identity, rights, factual truth, disclosure, or creator intent.
 
-Safe automatic fixes must be reversible, remain inside approved intent, create
-a new immutable revision, invalidate affected evidence, and rerun checks.
-Meaning, chronology, rights, disclosure, privacy, safety, policy, factual
-conflict, and ambiguous rebase become `needs-human-judgment`. Persist attempts,
-blockers, coverage, and recovery commands in `review.json`; generate
-`approval-gate.md` only as its human-readable projection.
+## Retries and freshness
 
-## Configurable execution policy
+Retries are bounded and ordered: remove redundant frames, reduce supported detail, shorten transcript handles, then split a window without dropping mandatory endpoints. Never change model, endpoint, capability snapshot, candidate index, or criteria during retry.
 
-Before invoking Watch, resolve the shared policy field-by-field and validate it.
-Use `avo review policy --project <avo.project.json>` for read-only inspection.
-Forward only declared format, language, acceptance criteria, risk notes,
-transcript reference, validated terms/names, and required windows. Never infer a
-project topic or language. Only explicit `device=cpu` forces CPU. Preserve raw
-attempts and outcome kind; uncertainty/refusal routes to human judgment, while
-tool, malformed, or coverage errors block. Full controls and examples:
-[`docs/watch-review-policy.md`](../../../docs/watch-review-policy.md).
+The review-contract hash binds candidate and dependencies, policy, coverage plan, required windows, capability identity, prompt, transcript, terms/names, adapter/tool, and estimator. Any change makes evidence stale. Raw stdout/stderr, provider responses, and frame bundles remain fingerprinted raw artifacts; canonical evidence stores references only.
+
+## Human package
+
+Present exact identities and status first, then truthful coverage, regressions, chronological findings grouped by section, pacing evidence, speech/tactile/movement/caption/privacy checks, contradictions and false positives, exact human questions, and concise actions tied to finding IDs.

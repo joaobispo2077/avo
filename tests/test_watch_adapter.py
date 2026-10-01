@@ -7,6 +7,8 @@ from pathlib import Path
 from unittest import mock
 
 from avo.adapters.base import JobRequest, JobResult
+from avo.adapters.transcribe.candidate import CandidateTranscriptionAdapter
+from avo.adapters.understand.watch_policy import build_watch_prompt
 from avo.adapters.understand.watch_skill import WatchSkillAdapter, _extract_json_object
 from avo.timeline.ports import ToolError
 
@@ -91,9 +93,14 @@ class WatchAdapterTests(unittest.TestCase):
             self.assertEqual(result["coverage"]["mode"], "full")
             self.assertEqual(result["coverage"]["sampling"], "frames")
             self.assertEqual(result["coverage"]["maxFrames"], 18)
-            self.assertEqual(result["coverage"]["windows"][0]["reason"], "join")
+            self.assertEqual(result["coverage"]["windows"], [])
             self.assertEqual(
                 result["coverage"]["requestedWindows"][0]["reason"], "join"
+            )
+            self.assertNotIn("stdout", result["attempts"][0])
+            self.assertTrue(result["rawArtifactRefs"])
+            self.assertTrue(
+                all(len(item["sha256"]) == 64 for item in result["rawArtifactRefs"])
             )
             self.assertTrue((root / "review" / "watch-evidence.json").is_file())
             self.assertTrue((root / "review" / "watch-analysis.txt").is_file())
@@ -342,6 +349,55 @@ class WatchAdapterTests(unittest.TestCase):
             self.assertIn("prism-ml/Bonsai-27B-gguf", raised.exception.message)
             run.assert_not_called()
 
+    def test_explicit_endpoint_pin_overrides_global_bonsai_preflight(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            candidate = root / "proof.mp4"
+            candidate.write_bytes(b"proof")
+            adapter = WatchSkillAdapter(executable="watch-skill")
+            endpoint_pin = {
+                "id": "qwen3.5-4b",
+                "source": {
+                    "kind": "endpoint",
+                    "endpoint": {
+                        "baseUrl": "http://127.0.0.1:1234/v1",
+                        "servedName": "qwen3.5-4b",
+                    },
+                },
+            }
+            with (
+                mock.patch(_RESOLVE, return_value="bonsai-27b-gguf"),
+                mock.patch.object(
+                    adapter,
+                    "run",
+                    side_effect=[
+                        JobResult(exit_code=0, stdout="video_id `vid-1`"),
+                        JobResult(
+                            exit_code=0,
+                            stdout='{"status":"pass","confidence":1,"findings":[]}',
+                        ),
+                        JobResult(exit_code=0, stdout="1.0"),
+                    ],
+                ) as run,
+            ):
+                result = adapter.review(
+                    candidate,
+                    scope="full",
+                    artifact_dir=root / "review",
+                    option_id="qwen3.5-4b",
+                    model_pin=endpoint_pin,
+                )
+            assert run.call_count == 3
+            acquisition = run.call_args_list[0].args[0]
+            assert acquisition.env["WATCHSKILL_VISION_CHEAP_PROVIDER"] == "custom"
+            assert acquisition.env["WATCHSKILL_VISION_STRONG_PROVIDER"] == "custom"
+            assert acquisition.env["WATCHSKILL_CUSTOM_BASE_URL"] == (
+                "http://127.0.0.1:1234/v1"
+            )
+            assert acquisition.env["WATCHSKILL_VISION_CHEAP_MODEL"] == "qwen3.5-4b"
+            assert acquisition.env["WATCHSKILL_CUSTOM_API_KEY"] == "lm-studio"
+            assert result["status"] == "pass"
+
     def test_bonsai_preflight_missing_mmproj_fails_closed(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -500,3 +556,61 @@ class WatchAdapterTests(unittest.TestCase):
                 }
             ],
         )
+
+    def test_prompt_lists_editorial_windows_and_counts_joins(self):
+        windows = [
+            {"start": 1, "end": 2, "reason": "wall joke"},
+            {"start": 3, "end": 4, "reason": "join:a->b"},
+            {"start": 5, "end": 6, "reason": "cue:pop"},
+        ]
+        prompt = build_watch_prompt(
+            checkpoint="motion-proof",
+            scope="full",
+            windows=windows,
+        )
+        self.assertIn("wall joke", prompt)
+        self.assertNotIn("join:a->b", prompt)
+        self.assertIn("1 cut joins", prompt)
+        self.assertIn("1 overlay cues", prompt)
+
+    def test_accent_folded_term_matches(self):
+        findings = CandidateTranscriptionAdapter.analyze(
+            {"text": "tem uma parede invisível e injogável", "words": []},
+            terms=["parede invisivel", "injogavel"],
+        )
+        self.assertEqual(findings, [])
+
+    def test_retrieval_refusal_retries_until_json(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            candidate = root / "proof.mp4"
+            candidate.write_bytes(b"proof")
+            adapter = WatchSkillAdapter(executable="watch-skill")
+            refusal = (
+                "The video does not clearly show an answer. No guess is being made."
+            )
+            policy = {
+                "effective": {
+                    "analysisAttempts": 2,
+                    "maxFrames": 4,
+                    "repairMaxFrames": 2,
+                }
+            }
+            with mock.patch.object(
+                adapter,
+                "run",
+                side_effect=[
+                    JobResult(exit_code=0, stdout="video_id `vid-1`"),
+                    JobResult(exit_code=0, stdout=refusal),
+                    JobResult(
+                        exit_code=0,
+                        stdout='{"status":"pass","confidence":0.8,"findings":[]}',
+                    ),
+                    JobResult(exit_code=0, stdout="1.0"),
+                ],
+            ):
+                result = adapter.review(
+                    candidate, policy=policy, artifact_dir=root / "review"
+                )
+            self.assertEqual(result["status"], "pass")
+            self.assertEqual(len(result["attempts"]), 2)

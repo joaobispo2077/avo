@@ -8,6 +8,7 @@ import re
 import shutil
 import subprocess
 from collections.abc import Callable, Mapping, Sequence
+from copy import deepcopy
 from importlib import resources
 from pathlib import Path
 from typing import Any, ClassVar
@@ -134,6 +135,22 @@ def build_composition_spec(
     expected_output_path: Path,
     provider_tokens: Mapping[str, Any] | None = None,
 ) -> dict[str, Any]:
+    from avo.timeline.animation import (
+        AnimationError,
+        validate_visible_text_policy,
+    )
+
+    try:
+        validate_visible_text_policy(
+            {
+                "captions": item.get("captions") or [],
+                "callouts": item.get("callouts") or [],
+                "graphics": item.get("graphics") or [],
+            },
+            em_dash_authorization_ref=item.get("emDashAuthorizationRef"),
+        )
+    except AnimationError as exc:
+        raise HyperframesError(str(exc)) from exc
     layout = _normalized_layout(item)
     if layout["mode"] == "split" and not assets.get("insertionVideo"):
         raise HyperframesError("split layout requires prepared insertion video")
@@ -650,7 +667,25 @@ class HyperframesAdapter:
         quality: str = "draft",
     ) -> dict[str, Any]:
         """Check then render one frozen, BMap-timed/Tracks-placed instance."""
+        from avo.timeline.animation import (
+            AnimationError,
+            validate_visible_text_policy,
+        )
         from avo.timeline.contracts import file_fingerprint
+
+        try:
+            validate_visible_text_policy(
+                {
+                    "instance": instance,
+                    "component": component_contract,
+                },
+                em_dash_authorization_ref=(
+                    instance.get("emDashAuthorizationRef")
+                    or component_contract.get("emDashAuthorizationRef")
+                ),
+            )
+        except AnimationError as exc:
+            raise HyperframesError(str(exc)) from exc
 
         required = {"componentRef", "bmapCueId", "placement", "range", "reducedMotion"}
         missing = required - set(instance)
@@ -706,4 +741,48 @@ class HyperframesAdapter:
             "range": dict(instance["range"]),
             "reducedMotion": bool(instance["reducedMotion"]),
             "producer": {"name": "hyperframes", "version": "installed"},
+        }
+
+    def render_proof_operation(
+        self,
+        *,
+        operation: Mapping[str, Any],
+        output: Path,
+        root: Path | None = None,
+        quality: str = "draft",
+    ) -> dict[str, Any]:
+        """Execute declared component timing without deriving adapter-local cues."""
+        parameters = operation.get("parameters") or {}
+        instance = parameters.get("instance")
+        component_contract = parameters.get("componentContract")
+        project = parameters.get("project")
+        if not isinstance(instance, Mapping) or not isinstance(
+            component_contract, Mapping
+        ):
+            raise HyperframesError(
+                "ProofPlan HyperFrames operation requires frozen instance and contract"
+            )
+        if not project:
+            raise HyperframesError(
+                "ProofPlan HyperFrames operation requires a project locator"
+            )
+        if dict(instance.get("range") or {}) != dict(
+            operation.get("outputRange") or {}
+        ):
+            raise HyperframesError(
+                "HyperFrames instance range must exactly match ProofPlan outputRange"
+            )
+        result = self.render_timeline_instance(
+            project=Path(str(project)),
+            output=Path(output),
+            instance=instance,
+            component_contract=component_contract,
+            root=root,
+            quality=quality,
+        )
+        return {
+            **result,
+            "operationId": operation.get("operationId"),
+            "declaredOutputRange": deepcopy(operation["outputRange"]),
+            "declaredParameters": deepcopy(parameters),
         }

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import unicodedata
 from pathlib import Path
 from typing import Any
 
@@ -29,6 +30,11 @@ def _matching_transcript(
     return payload
 
 
+def _fold(value: str) -> str:
+    decomposed = unicodedata.normalize("NFD", value.casefold())
+    return "".join(ch for ch in decomposed if unicodedata.category(ch) != "Mn")
+
+
 class CandidateTranscriptionAdapter:
     def __init__(self, runtime: Any | None = None, *, model: str = "small"):
         self.runtime = runtime
@@ -44,9 +50,9 @@ class CandidateTranscriptionAdapter:
     ) -> list[dict[str, Any]]:
         findings = []
         words = payload.get("words") or []
-        text = str(payload.get("text") or "")
+        folded = _fold(str(payload.get("text") or ""))
         for expected in [*(terms or []), *(names or [])]:
-            if expected.casefold() not in text.casefold():
+            if _fold(expected) not in folded:
                 findings.append(
                     {
                         "id": f"missing-term-{expected}",

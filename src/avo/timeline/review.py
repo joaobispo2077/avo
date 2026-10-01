@@ -16,8 +16,393 @@ from .contracts import (
 from .store import atomic_write_json
 
 
+def meaningful_change_summary(changes: list[dict[str, Any]]) -> dict[str, Any]:
+    """Separate editorial intent changes from mechanically propagated shifts."""
+    primary: list[dict[str, Any]] = []
+    downstream: list[dict[str, Any]] = []
+    mechanical_kinds = {"downstream-shift", "timing-shift", "reflow"}
+    for change in changes:
+        value = deepcopy(change)
+        is_mechanical = (
+            bool(value.get("mechanical")) or value.get("kind") in mechanical_kinds
+        )
+        (downstream if is_mechanical else primary).append(value)
+    return {
+        "primarySemanticChanges": primary,
+        "mechanicalDownstreamShifts": downstream,
+        "primaryCount": len(primary),
+        "mechanicalCount": len(downstream),
+    }
+
+
 class GateError(RuntimeError):
     pass
+
+
+def review_contract_hash(
+    *,
+    candidateHash: str,
+    dependencyHashes: dict[str, str],
+    policyHash: str,
+    coveragePlanHash: str,
+    requiredWindowHash: str,
+    modelCapabilityHash: str,
+    promptHash: str,
+    transcriptHash: str,
+    termsHash: str,
+    adapterToolHash: str,
+    estimatorHash: str,
+) -> str:
+    """Bind every input that can change a Watch observation or its coverage."""
+    return content_hash(
+        {
+            "candidateHash": candidateHash,
+            "dependencyHashes": dict(sorted(dependencyHashes.items())),
+            "policyHash": policyHash,
+            "coveragePlanHash": coveragePlanHash,
+            "requiredWindowHash": requiredWindowHash,
+            "modelCapabilityHash": modelCapabilityHash,
+            "promptHash": promptHash,
+            "transcriptHash": transcriptHash,
+            "termsHash": termsHash,
+            "adapterToolHash": adapterToolHash,
+            "estimatorHash": estimatorHash,
+        }
+    )
+
+
+def _finding_range(finding: dict[str, Any]) -> tuple[int, int] | None:
+    value = finding.get("programRange")
+    if not isinstance(value, dict):
+        return None
+    if "startFrame" not in value or "endFrameExclusive" not in value:
+        return None
+    return int(value["startFrame"]), int(value["endFrameExclusive"])
+
+
+def _ranges_overlap(
+    left: tuple[int, int] | None, right: tuple[int, int] | None
+) -> bool:
+    if left is None or right is None:
+        return left == right
+    return left[0] < right[1] and right[0] < left[1]
+
+
+def _finding_semantics(finding: dict[str, Any]) -> tuple[str, ...]:
+    return tuple(
+        str(finding.get(key) or "").strip().casefold()
+        for key in ("category", "observed", "expected", "message")
+    )
+
+
+def normalize_watch_findings(findings: list[dict[str, Any]]) -> dict[str, Any]:
+    """Merge semantic duplicates while retaining overlapping contradictions."""
+    normalized: list[dict[str, Any]] = []
+    contradictions: list[dict[str, Any]] = []
+    for source in findings:
+        item = deepcopy(source)
+        item.setdefault("findingId", f"finding-{content_hash(item)[:16]}")
+        duplicate = next(
+            (
+                existing
+                for existing in normalized
+                if _finding_semantics(existing) == _finding_semantics(item)
+                and _ranges_overlap(_finding_range(existing), _finding_range(item))
+            ),
+            None,
+        )
+        if duplicate is not None:
+            left, right = _finding_range(duplicate), _finding_range(item)
+            if left is not None and right is not None:
+                duplicate["programRange"] = {
+                    "startFrame": min(left[0], right[0]),
+                    "endFrameExclusive": max(left[1], right[1]),
+                }
+            refs = [*(duplicate.get("evidenceRefs") or [])]
+            for reference in item.get("evidenceRefs") or []:
+                if reference not in refs:
+                    refs.append(reference)
+            duplicate["evidenceRefs"] = refs
+            aliases = list(duplicate.get("aliases") or [])
+            if (
+                item["findingId"] != duplicate["findingId"]
+                and item["findingId"] not in aliases
+            ):
+                aliases.append(item["findingId"])
+            if aliases:
+                duplicate["aliases"] = aliases
+            continue
+        for existing in normalized:
+            if (
+                str(existing.get("category")) == str(item.get("category"))
+                and _ranges_overlap(_finding_range(existing), _finding_range(item))
+                and _finding_semantics(existing) != _finding_semantics(item)
+            ):
+                contradictions.append(
+                    {
+                        "findingIds": [existing["findingId"], item["findingId"]],
+                        "programRange": deepcopy(
+                            item.get("programRange") or existing.get("programRange")
+                        ),
+                    }
+                )
+        normalized.append(item)
+    normalized.sort(
+        key=lambda item: (
+            (_finding_range(item) or (2**63, 2**63))[0],
+            str(item.get("category") or ""),
+            str(item.get("findingId") or ""),
+        )
+    )
+    return {"findings": normalized, "contradictions": contradictions}
+
+
+def aggregate_watch_passes(
+    pass_results: list[dict[str, Any]], *, required_pass_ids: list[str]
+) -> dict[str, Any]:
+    """Apply pass/finding precedence and emit one compatibility Watch record."""
+    by_id = {str(item.get("passId")): item for item in pass_results}
+    missing = [pass_id for pass_id in required_pass_ids if pass_id not in by_id]
+    normalized = normalize_watch_findings(
+        [finding for result in pass_results for finding in result.get("findings") or []]
+    )
+    statuses = {str(item.get("status") or "blocked") for item in pass_results}
+    if missing or "blocked" in statuses:
+        status = "blocked"
+    elif "fail" in statuses or any(
+        item.get("severity") == "blocking" and item.get("status") == "corroborated"
+        for item in normalized["findings"]
+    ):
+        status = "fail"
+    elif (
+        "needs-human-judgment" in statuses
+        or normalized["contradictions"]
+        or any(item.get("requiresHuman") for item in normalized["findings"])
+    ):
+        status = "needs-human-judgment"
+    else:
+        status = "pass"
+    return {
+        "kind": "watch",
+        "status": status,
+        "findings": normalized["findings"],
+        "contradictions": normalized["contradictions"],
+        "passResults": deepcopy(pass_results),
+        "missingPassIds": missing,
+    }
+
+
+def render_human_review_package(package: dict[str, Any]) -> str:
+    """Render a structured Watch aggregate without promoting raw model prose."""
+    findings = sorted(
+        package.get("findings") or [],
+        key=lambda item: (
+            int((item.get("programRange") or {}).get("startFrame") or 0),
+            str(item.get("findingId") or ""),
+        ),
+    )
+    coverage = package.get("coverage") or {}
+    lines = [
+        "# Vision review package",
+        "",
+        "## Exact identities",
+        "",
+        f"- Candidate: `{package.get('candidateSha256', 'unknown')}`",
+        f"- Proof plan: `{package.get('proofPlanHash', 'unknown')}`",
+        f"- Transcript: `{package.get('transcriptHash', 'unknown')}`",
+        f"- Model: `{package.get('modelIdentity', 'unknown')}`",
+        f"- Review contract: `{package.get('reviewContractHash', 'unknown')}`",
+        "",
+        "## Status and blockers",
+        "",
+        f"- Status: **{package.get('status', 'blocked')}**",
+    ]
+    for blocker in package.get("blockers") or []:
+        lines.append(f"- Blocker: {blocker}")
+    lines.extend(
+        [
+            "",
+            "## Truthful coverage",
+            "",
+            f"- Sampling: {coverage.get('samplingMode', 'unknown')}",
+            f"- Requested samples: {coverage.get('requestedSamples', 0)}",
+            f"- Observed samples: {coverage.get('observedSamples', 0)}",
+            f"- Failed samples: {coverage.get('failedSamples', 0)}",
+        ]
+    )
+    for hole in coverage.get("coverageHoles") or []:
+        lines.append(
+            f"- Coverage hole `{hole.get('windowId', 'unknown')}`: "
+            f"{hole.get('reason', 'uninspected')}"
+        )
+    for frame_range in coverage.get("uninspectedRanges") or []:
+        lines.append(
+            "- Uninspected: "
+            f"frames {frame_range.get('startFrame')}–"
+            f"{frame_range.get('endFrameExclusive')}"
+        )
+    lines.extend(["", "## Regressions", ""])
+    regressions = package.get("regressions") or []
+    lines.extend(
+        f"- `{item.get('obligationId', 'unknown')}`: {item.get('status', 'unresolved')}"
+        for item in regressions
+    )
+    if not regressions:
+        lines.append("- None reported.")
+    lines.extend(["", "## Chronological findings by section", ""])
+    for finding in findings:
+        frame_range = finding.get("programRange") or {}
+        lines.append(
+            f"- [{finding.get('findingId', 'finding')}] "
+            f"{finding.get('sectionId', 'unassigned')} "
+            f"frames {frame_range.get('startFrame', '?')}–"
+            f"{frame_range.get('endFrameExclusive', '?')}: "
+            f"{finding.get('message', finding.get('observed', 'finding'))}"
+        )
+    if not findings:
+        lines.append("- None.")
+    lines.extend(["", "## Pacing by section purpose", ""])
+    pacing = [item for item in findings if item.get("category") == "pacing"]
+    lines.extend(
+        f"- [{item.get('findingId')}] {item.get('sectionId', 'unassigned')}: "
+        f"{item.get('message', item.get('observed'))}"
+        for item in pacing
+    )
+    if not pacing:
+        lines.append("- No pacing finding; deterministic metrics remain in evidence.")
+    lines.extend(["", "## Contradictions and human questions", ""])
+    for contradiction in package.get("contradictions") or []:
+        lines.append(
+            "- Contradiction: " + ", ".join(contradiction.get("findingIds") or [])
+        )
+    for question in package.get("humanQuestions") or []:
+        lines.append(f"- Human judgment: {question}")
+    if not (package.get("contradictions") or package.get("humanQuestions")):
+        lines.append("- None.")
+    lines.extend(["", "## Finding-linked actions", ""])
+    actions = [item for item in findings if item.get("suggestedAction")]
+    lines.extend(
+        f"- [{item.get('findingId')}] {item['suggestedAction']}" for item in actions
+    )
+    if not actions:
+        lines.append("- None; do not invent work without an evidence-linked finding.")
+    return "\n".join(lines) + "\n"
+
+
+def audio_editlog_entry(
+    audio_graph: dict[str, Any],
+    *,
+    candidate_sha256: str,
+    boundary_review: dict[str, Any],
+    actor: str,
+) -> dict[str, Any]:
+    """Build the durable AUDIO-EDITLOG payload for one exact export."""
+    return {
+        "graphHash": audio_graph["graphHash"],
+        "candidateSha256": candidate_sha256,
+        "sampleRate": audio_graph["sampleRate"],
+        "durationSamples": audio_graph["durationSamples"],
+        "channelMappings": [
+            {
+                "nodeId": item["nodeId"],
+                "channelMap": deepcopy(item.get("channelMap") or []),
+            }
+            for item in audio_graph.get("nodes") or []
+        ],
+        "latencyCompensation": [
+            {"nodeId": item["nodeId"], "samples": int(item.get("latencySamples") or 0)}
+            for item in audio_graph.get("nodes") or []
+            if item.get("kind") == "source"
+        ],
+        "exactExportReview": deepcopy(boundary_review),
+        "actor": actor,
+    }
+
+
+def write_audio_editlog_entry(path: Path, entry: dict[str, Any]) -> Path:
+    """Append one compact exact-export audit without rewriting prior entries."""
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    existing = (
+        path.read_text(encoding="utf-8") if path.is_file() else "# AUDIO-EDITLOG\n"
+    )
+    findings = entry.get("exactExportReview", {}).get("findings") or []
+    block = [
+        "",
+        f"## Candidate {entry['candidateSha256'][:12]}",
+        "",
+        f"- Audio graph: `{entry['graphHash']}`",
+        f"- PCM: {entry['sampleRate']} Hz, {entry['durationSamples']} samples",
+        f"- Boundary review: {entry['exactExportReview']['status']}",
+        f"- Findings: {len(findings)}",
+        f"- Actor: {entry['actor']}",
+        "",
+    ]
+    path.write_text(existing.rstrip() + "\n" + "\n".join(block), encoding="utf-8")
+    return path
+
+
+def event_audit_entry(
+    *,
+    candidate_sha256: str,
+    events: list[dict[str, Any]],
+    exact_export_review: dict[str, Any],
+) -> dict[str, Any]:
+    """Persist the resolved event clock and exact-export waveform disposition."""
+    matches = exact_export_review.get("transientMatches") or {}
+    event_rows = []
+    for event in events:
+        expected_sample = int(event["resolvedImpactSample"])
+        observed_matches = deepcopy(matches.get(str(event["eventId"])) or [])
+        for match in observed_matches:
+            if match.get("sample") is not None:
+                match["offsetSamples"] = int(match["sample"]) - expected_sample
+        event_rows.append(
+            {
+                "eventId": event["eventId"],
+                "role": event.get("role"),
+                "programFrame": event.get("programFrame"),
+                "resolvedImpactSample": expected_sample,
+                "scheduledAudioStartSample": event.get("scheduledAudioStartSample"),
+                "expectedOccurrences": int(
+                    (event.get("validation") or {}).get("expectedOccurrences") or 1
+                ),
+                "observedMatches": observed_matches,
+            }
+        )
+    return {
+        "candidateSha256": candidate_sha256,
+        "events": event_rows,
+        "exactExportReview": deepcopy(exact_export_review),
+        "auditHash": content_hash(
+            {
+                "candidateSha256": candidate_sha256,
+                "events": events,
+                "review": exact_export_review,
+            }
+        ),
+    }
+
+
+def historical_review_requirements(
+    ledger: dict[str, Any], regression_contract: dict[str, Any]
+) -> dict[str, Any]:
+    """Project complete ledger history into exact windows and evidence inputs."""
+    if regression_contract.get("ledgerHash") != ledger.get("ledgerHash"):
+        raise GateError("regression contract is bound to another iteration ledger")
+    evidence: dict[tuple[str, str], dict[str, Any]] = {}
+    for decision in ledger.get("decisions") or []:
+        for item in decision.get("evidenceRefs") or []:
+            key = (str(item.get("evidenceId")), str(item.get("sha256")))
+            evidence[key] = deepcopy(item)
+    return {
+        "ledgerHash": ledger["ledgerHash"],
+        "contractHash": regression_contract["contractHash"],
+        "requiredWindows": deepcopy(
+            regression_contract.get("historicalRiskWindows") or []
+        ),
+        "sourceEvidenceRefs": [evidence[key] for key in sorted(evidence)],
+    }
 
 
 EVIDENCE_PROFILES = {
@@ -127,6 +512,7 @@ def evidence_is_fresh(
     *,
     candidate_identity_hash: str | None = None,
     dependency_lock_sha256: str | None = None,
+    review_contract_sha256: str | None = None,
 ) -> bool:
     profile = str(
         evidence.get("dependencyProfile")
@@ -147,6 +533,14 @@ def evidence_is_fresh(
         if (
             dependency_lock_sha256 is not None
             and evidence.get("dependencyLockSha256") != dependency_lock_sha256
+        ):
+            return False
+        recorded_contract = evidence.get("reviewContractHash") or (
+            evidence.get("policy") or {}
+        ).get("reviewContractHash")
+        if (
+            review_contract_sha256 is not None
+            and recorded_contract != review_contract_sha256
         ):
             return False
     elif profile == "raw-sync":

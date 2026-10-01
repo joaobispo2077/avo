@@ -3,18 +3,212 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
-from .contracts import dependency_lock_hash, file_fingerprint
+from .contracts import content_hash, dependency_lock_hash, file_fingerprint
 from .ports import ToolError
 from .review import (
     EVIDENCE_PROFILES,
+    aggregate_watch_passes,
     candidate_identity,
     classify_findings,
     evaluate_gate,
+    review_contract_hash,
     write_review_package,
 )
+
+_DETERMINISTIC_REVIEW_KINDS = {
+    "sequentialDecode",
+    "movement",
+    "transcript",
+    "waveform",
+    "flash",
+    "pacing",
+}
+
+
+def _merged_ranges(ranges: list[dict[str, Any]]) -> list[dict[str, float]]:
+    ordered = sorted(
+        (
+            (float(item["start"]), float(item["end"]))
+            for item in ranges
+            if float(item["end"]) > float(item["start"])
+        ),
+        key=lambda item: item[0],
+    )
+    merged: list[list[float]] = []
+    for start, end in ordered:
+        if merged and start <= merged[-1][1]:
+            merged[-1][1] = max(merged[-1][1], end)
+        else:
+            merged.append([start, end])
+    return [{"start": start, "end": end} for start, end in merged]
+
+
+def _range_seconds(ranges: list[dict[str, Any]]) -> float:
+    return sum(item["end"] - item["start"] for item in _merged_ranges(ranges))
+
+
+def _ranges_in_seconds(
+    ranges: list[dict[str, Any]], frame_rate: dict[str, Any]
+) -> list[dict[str, float]]:
+    num = float(frame_rate.get("num") or 0)
+    den = float(frame_rate.get("den") or 0)
+    fps = num / den if num > 0 and den > 0 else 0
+    normalized: list[dict[str, float]] = []
+    for item in ranges:
+        if "start" in item and "end" in item:
+            normalized.append(
+                {"start": float(item["start"]), "end": float(item["end"])}
+            )
+        elif fps and "startFrame" in item and "endFrameExclusive" in item:
+            normalized.append(
+                {
+                    "start": float(item["startFrame"]) / fps,
+                    "end": float(item["endFrameExclusive"]) / fps,
+                }
+            )
+    return normalized
+
+
+def actual_coverage(
+    coverage: dict[str, Any], *, required_windows: list[dict[str, Any]]
+) -> dict[str, Any]:
+    """Compute coverage only from observed/decoded evidence, never nominal scope."""
+    normalized = deepcopy(coverage)
+    inspected = list(coverage.get("inspectedRanges") or coverage.get("windows") or [])
+    partial = list(coverage.get("partiallyInspectedRanges") or [])
+    deterministic = list(coverage.get("deterministicallyCheckedRanges") or [])
+    duration = float(coverage.get("durationSeconds") or coverage.get("duration") or 0)
+    frame_rate = coverage.get("frameRate") or {}
+    inspected = _ranges_in_seconds(inspected, frame_rate)
+    partial = _ranges_in_seconds(partial, frame_rate)
+    deterministic = _ranges_in_seconds(deterministic, frame_rate)
+    reviewed_ranges = _merged_ranges([*inspected, *partial])
+    checked_ranges = _merged_ranges(deterministic)
+    known_ranges = _merged_ranges([*reviewed_ranges, *checked_ranges])
+    uninspected: list[dict[str, float]] = []
+    cursor = 0.0
+    for item in known_ranges:
+        if item["start"] > cursor:
+            uninspected.append({"start": cursor, "end": item["start"]})
+        cursor = max(cursor, item["end"])
+    if duration > cursor:
+        uninspected.append({"start": cursor, "end": duration})
+    observed_windows = coverage.get("observedWindows") or coverage.get("windows") or []
+    normalized.update(
+        {
+            "durationSeconds": duration,
+            "reviewedSeconds": _range_seconds(reviewed_ranges),
+            "deterministicallyCheckedSeconds": _range_seconds(checked_ranges),
+            "requiredWindows": len(required_windows),
+            "reviewedWindows": len(observed_windows),
+            "inspectedRanges": reviewed_ranges,
+            "deterministicallyCheckedRanges": checked_ranges,
+            "uninspectedRanges": uninspected,
+        }
+    )
+    return normalized
+
+
+def fuse_review_evidence(
+    *,
+    watch_findings: list[dict[str, Any]],
+    deterministic: dict[str, dict[str, Any]],
+) -> dict[str, Any]:
+    """Fuse visual observations with six deterministic evidence families."""
+    missing = sorted(_DETERMINISTIC_REVIEW_KINDS - deterministic.keys())
+    if missing:
+        return {
+            "status": "blocked",
+            "findings": deepcopy(watch_findings),
+            "humanReviewWindows": [],
+            "missingEvidence": missing,
+        }
+    findings = deepcopy(watch_findings)
+    windows: list[dict[str, Any]] = []
+    statuses = {str(item.get("status") or "blocked") for item in deterministic.values()}
+    for kind, result in deterministic.items():
+        for finding in result.get("findings") or []:
+            findings.append({**deepcopy(finding), "evidenceKind": kind})
+        windows.extend(deepcopy(result.get("listeningWindows") or []))
+    movement_passed = deterministic["movement"].get("status") == "pass"
+    for finding in watch_findings:
+        if (
+            finding.get("category") == "movement"
+            and finding.get("status") == "corroborated"
+            and movement_passed
+        ):
+            frame_range = finding.get("programRange")
+            if frame_range:
+                windows.append(deepcopy(frame_range))
+            statuses.add("needs-human-judgment")
+    if "blocked" in statuses:
+        status = "blocked"
+    elif "fail" in statuses:
+        status = "fail"
+    elif "needs-human-judgment" in statuses:
+        status = "needs-human-judgment"
+    else:
+        status = "pass"
+    unique_windows = []
+    for window in windows:
+        if window not in unique_windows:
+            unique_windows.append(window)
+    return {
+        "status": status,
+        "findings": findings,
+        "humanReviewWindows": unique_windows,
+        "missingEvidence": [],
+    }
+
+
+def select_microproof_windows(proof_plan: dict[str, Any]) -> list[dict[str, Any]]:
+    """Select deterministic changed-operation and historical-risk windows."""
+    selected: dict[tuple[int, int], dict[str, Any]] = {}
+
+    def add(
+        window: dict[str, Any], *, reason: str, operation_id: str | None = None
+    ) -> None:
+        start = int(window["startFrame"])
+        end = int(window["endFrameExclusive"])
+        if start < 0 or end <= start:
+            raise ValueError("microproof window must be a positive half-open range")
+        key = (start, end)
+        item = selected.setdefault(
+            key,
+            {
+                "startFrame": start,
+                "endFrameExclusive": end,
+                "reasons": [],
+                "operationIds": [],
+            },
+        )
+        if reason not in item["reasons"]:
+            item["reasons"].append(reason)
+        if operation_id and operation_id not in item["operationIds"]:
+            item["operationIds"].append(operation_id)
+
+    for window in (proof_plan.get("validationPlan") or {}).get("microproof") or []:
+        add(window, reason="declared-microproof")
+    for window in (proof_plan.get("regressionContract") or {}).get(
+        "historicalRiskWindows"
+    ) or []:
+        add(window, reason="historical-risk")
+    seen_kinds: set[str] = set()
+    for operation in (proof_plan.get("videoGraph") or {}).get("operations") or []:
+        kind = str(operation.get("kind") or "")
+        if kind in seen_kinds:
+            continue
+        seen_kinds.add(kind)
+        add(
+            operation["outputRange"],
+            reason=f"changed-operation:{kind}",
+            operation_id=str(operation["operationId"]),
+        )
+    return [selected[key] for key in sorted(selected)]
 
 
 def _review_windows(
@@ -35,6 +229,17 @@ def _watch_policy_values(
     return policy.payload(), dict(getattr(policy, "context", {}))
 
 
+def _understand_model_pin(workspace: Any | None) -> dict[str, Any]:
+    project = getattr(workspace, "project", None)
+    if not isinstance(project, dict):
+        return {}
+    models = project.get("models")
+    if not isinstance(models, dict):
+        return {}
+    pin = models.get("understand")
+    return dict(pin) if isinstance(pin, dict) else {}
+
+
 def _validate_watch_coverage(
     coverage: dict[str, Any], required_windows: list[dict[str, Any]]
 ) -> None:
@@ -45,7 +250,7 @@ def _validate_watch_coverage(
             False,
             "rerun full Watch",
         )
-    reviewed_windows = coverage.get("windows") or coverage.get("requestedWindows") or []
+    reviewed_windows = coverage.get("observedWindows") or coverage.get("windows") or []
     if required_windows and len(reviewed_windows) < len(required_windows):
         raise ToolError(
             "WATCH_SCOPE_INSUFFICIENT",
@@ -90,12 +295,127 @@ def _active_revision_hashes(
 
 def _normalized_watch_status(watch: dict[str, Any]) -> str:
     status = str(watch.get("status") or "pass")
-    return "fail" if status == "needs-human-judgment" else status
+    if status == "needs-human-judgment":
+        return "fail"
+    if status == "blocked":
+        return "error"
+    return status
 
 
 def _watch_extra(watch: dict[str, Any]) -> dict[str, Any]:
     fields = ("outcomeKind", "policy", "reviewContext", "promptSha256", "attempts")
     return {key: watch[key] for key in fields if key in watch}
+
+
+def _normalized_words(transcript: dict[str, Any]) -> list[str]:
+    return [
+        str(item.get("word") or item.get("text") or "").strip().casefold()
+        for item in transcript.get("words") or []
+        if str(item.get("word") or item.get("text") or "").strip()
+    ]
+
+
+def compare_protected_boundaries(
+    source_transcript: dict[str, Any],
+    candidate_transcript: dict[str, Any],
+    *,
+    protected_boundaries: list[dict[str, Any]],
+    acoustic_checks: dict[str, dict[str, Any]],
+) -> dict[str, Any]:
+    """Fuse exact-candidate words with local acoustic boundary evidence."""
+    source_words = _normalized_words(source_transcript)
+    candidate_words = _normalized_words(candidate_transcript)
+    candidate_text = " ".join(candidate_words)
+    findings: list[dict[str, Any]] = []
+    for boundary in protected_boundaries:
+        boundary_id = str(boundary.get("boundaryId") or "")
+        check = acoustic_checks.get(boundary_id) or {}
+        confidence = float(check.get("confidence") or 0)
+        kind = str(boundary.get("kind") or "phrase")
+        expected = str(boundary.get("text") or "").strip().casefold()
+        phrase_missing = (
+            kind == "phrase" and expected and expected not in candidate_text
+        )
+        acoustically_incomplete = check.get("complete") is False
+        if phrase_missing or acoustically_incomplete:
+            findings.append(
+                {
+                    "code": "protected-speech-regression",
+                    "classification": "meaning",
+                    "boundaryId": boundary_id,
+                    "expected": expected,
+                    "sourceWords": source_words,
+                    "candidateWords": candidate_words,
+                    "confidence": confidence,
+                    "range": {
+                        "start": boundary.get("start"),
+                        "end": boundary.get("end"),
+                    },
+                }
+            )
+        elif confidence < 0.5 or check.get("complete") is None:
+            findings.append(
+                {
+                    "code": "acoustic-boundary-needs-human",
+                    "classification": "ambiguous-rebase",
+                    "boundaryId": boundary_id,
+                    "confidence": confidence,
+                    "listeningWindow": {
+                        "start": boundary.get("start"),
+                        "end": boundary.get("end"),
+                    },
+                }
+            )
+    if any(item["code"] == "protected-speech-regression" for item in findings):
+        status = "fail"
+    elif findings:
+        status = "needs-human-judgment"
+    else:
+        status = "pass"
+    return {
+        "status": status,
+        "findings": findings,
+        "checkedBoundaryIds": [
+            str(item.get("boundaryId")) for item in protected_boundaries
+        ],
+    }
+
+
+def verify_exact_export_events(
+    events: list[dict[str, Any]],
+    *,
+    transient_result: dict[str, Any],
+    movement_results: list[dict[str, Any]],
+) -> dict[str, Any]:
+    """Fuse exported waveform and movement checks without upgrading ambiguity."""
+    del events  # identities already bind the supplied result records
+    findings = [*(transient_result.get("findings") or [])]
+    for result in movement_results:
+        if result.get("status") != "pass":
+            findings.append(
+                {
+                    "code": "moving-media-" + str(result.get("status")),
+                    "layerId": result.get("layerId"),
+                    "confidence": result.get("confidence"),
+                    "variationCount": result.get("variationCount"),
+                }
+            )
+    statuses = {
+        str(transient_result.get("status")),
+        *(str(item.get("status")) for item in movement_results),
+    }
+    if "fail" in statuses:
+        status = "fail"
+    elif "needs-human-judgment" in statuses:
+        status = "needs-human-judgment"
+    else:
+        status = "pass"
+    return {
+        "status": status,
+        "findings": findings,
+        "listeningWindows": deepcopy(transient_result.get("listeningWindows") or []),
+        "transientMatches": deepcopy(transient_result.get("matches") or {}),
+    }
 
 
 class ReviewRunner:
@@ -186,26 +506,7 @@ class ReviewRunner:
         attempt: int = 1,
         extra: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        duration = float(
-            coverage.get("durationSeconds") or coverage.get("duration") or 0
-        )
-        reviewed = float(
-            coverage.get("reviewedSeconds")
-            or (
-                duration
-                if scope_mode == "full"
-                else sum(max(0.0, float(w["end"]) - float(w["start"])) for w in windows)
-            )
-        )
-        normalized_coverage = dict(coverage)
-        normalized_coverage.update(
-            {
-                "durationSeconds": duration,
-                "reviewedSeconds": reviewed,
-                "requiredWindows": len(windows),
-                "reviewedWindows": len(coverage.get("windows") or windows),
-            }
-        )
+        normalized_coverage = actual_coverage(coverage, required_windows=windows)
         return {
             "evidenceId": f"{kind}-{identity['sha256'][:12]}-{attempt:02d}",
             "kind": kind,
@@ -296,12 +597,90 @@ class ReviewRunner:
         identity: dict[str, Any],
         lock_hash: str,
         windows: list[dict[str, Any]],
+        transcript: dict[str, Any],
+        terms: list[str],
+        names: list[str],
     ) -> dict[str, Any]:
         coverage = watch.get("coverage") or {}
         _validate_watch_coverage(coverage, windows)
+        findings = list(watch.get("findings") or [])
+        status = str(watch.get("status") or "pass")
+        contradictions: list[dict[str, Any]] = []
+        if watch.get("passResults"):
+            aggregate = aggregate_watch_passes(
+                list(watch["passResults"]),
+                required_pass_ids=list(
+                    watch.get("requiredPassIds")
+                    or [item["passId"] for item in watch["passResults"]]
+                ),
+            )
+            findings = aggregate["findings"]
+            status = aggregate["status"]
+            contradictions = aggregate["contradictions"]
+        deterministic = watch.get("deterministicEvidence") or qc.get(
+            "deterministicEvidence"
+        )
+        fusion: dict[str, Any] | None = None
+        if isinstance(deterministic, dict):
+            fusion = fuse_review_evidence(
+                watch_findings=findings,
+                deterministic=deterministic,
+            )
+            findings = fusion["findings"]
+            precedence = {
+                "pass": 0,
+                "needs-human-judgment": 1,
+                "fail": 2,
+                "blocked": 3,
+            }
+            status = max(
+                (status, fusion["status"]),
+                key=lambda value: precedence.get(value, 3),
+            )
+        contract_hash = review_contract_hash(
+            candidateHash=identity["sha256"],
+            dependencyHashes=identity["dependencies"],
+            policyHash=str(
+                (watch.get("policy") or {}).get("policyHash") or "unconfigured"
+            ),
+            coveragePlanHash=str(
+                watch.get("coveragePlanHash") or content_hash(coverage)
+            ),
+            requiredWindowHash=content_hash(windows),
+            modelCapabilityHash=str(
+                watch.get("capabilityIdentityHash")
+                or content_hash({"model": watch.get("model")})
+            ),
+            promptHash=str(watch.get("promptSha256") or content_hash("unavailable")),
+            transcriptHash=content_hash(transcript),
+            termsHash=content_hash({"terms": terms, "names": names}),
+            adapterToolHash=content_hash(
+                {
+                    "tool": watch.get("tool") or "watch",
+                    "version": watch.get("toolVersion") or "unknown",
+                }
+            ),
+            estimatorHash=str(
+                watch.get("estimatorHash") or content_hash({"estimator": "unavailable"})
+            ),
+        )
+        extra = _watch_extra(watch)
+        policy = dict(extra.get("policy") or {})
+        policy["reviewContractHash"] = contract_hash
+        extra["policy"] = policy
+        if contradictions:
+            context = dict(extra.get("reviewContext") or {})
+            context["contradictions"] = contradictions
+            extra["reviewContext"] = context
+        if fusion is not None:
+            context = dict(extra.get("reviewContext") or {})
+            context["humanReviewWindows"] = fusion["humanReviewWindows"]
+            context["missingDeterministicEvidence"] = fusion["missingEvidence"]
+            extra["reviewContext"] = context
+        normalized_watch = {**watch, "status": status}
         return self._evidence(
             kind="watch",
-            status=_normalized_watch_status(watch),
+            status=_normalized_watch_status(normalized_watch),
             tool_name=watch.get("tool") or "watch",
             tool_version=watch.get("toolVersion") or "unknown",
             model=watch.get("model"),
@@ -312,9 +691,9 @@ class ReviewRunner:
             ),
             windows=windows,
             coverage={**coverage, "durationSeconds": qc.get("duration") or 0},
-            findings=watch.get("findings") or [],
+            findings=findings,
             artifacts=self._artifact_refs(watch.get("artifacts") or []),
-            extra=_watch_extra(watch),
+            extra=extra,
         )
 
     def _inspect_once(
@@ -362,7 +741,23 @@ class ReviewRunner:
             ),
             attempts,
         )
+        protected = qc.get("protectedBoundaries") or []
+        if protected:
+            boundary_review = compare_protected_boundaries(
+                qc.get("sourceTranscript") or {},
+                transcript,
+                protected_boundaries=protected,
+                acoustic_checks=qc.get("acousticBoundaryChecks") or {},
+            )
+            transcript = dict(transcript)
+            transcript["findings"] = [
+                *(transcript.get("findings") or []),
+                *boundary_review["findings"],
+            ]
+            if boundary_review["status"] != "pass":
+                transcript["status"] = boundary_review["status"]
         policy_payload, policy_context = _watch_policy_values(self.watch_policy)
+        model_pin = _understand_model_pin(self.workspace)
         watch = self._call(
             "watch",
             lambda: self.watch.review(
@@ -375,6 +770,8 @@ class ReviewRunner:
                 names=names,
                 policy=policy_payload,
                 context=policy_context,
+                option_id=model_pin.get("id") or None,
+                model_pin=model_pin or None,
                 root=getattr(self.watch_policy, "working_directory", None),
                 artifact_dir=self.review_root
                 / checkpoint
@@ -390,7 +787,16 @@ class ReviewRunner:
             )
         )
         evidence.append(
-            self._watch_evidence(watch, qc, identity, lock_hash, review_windows)
+            self._watch_evidence(
+                watch,
+                qc,
+                identity,
+                lock_hash,
+                review_windows,
+                transcript,
+                terms,
+                names,
+            )
         )
         findings = [
             finding for item in evidence for finding in item.get("findings") or []

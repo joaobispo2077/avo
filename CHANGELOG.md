@@ -1,3 +1,20 @@
+# [1.13.0](https://github.com/joaobispo2077/avo/compare/v1.12.0...v1.13.0) (2026-09-28)
+
+
+### Features
+
+* **candidate:** bind candidate snapshots and reconstruction ([964e4f9](https://github.com/joaobispo2077/avo/commit/964e4f9b54b3ab54b9318156ca29a43776a89f84))
+* **watch:** budget long-form vision review ([6ede2d5](https://github.com/joaobispo2077/avo/commit/6ede2d5c6c6a2a9befb9be96ef38cc6814b75400))
+* **audio:** compile continuous audio and timed events ([95cf048](https://github.com/joaobispo2077/avo/commit/95cf0483df25007d0d5da4502e7e4eddd3583d81))
+* **proof:** compile proof plans and block forbidden ancestry ([992d753](https://github.com/joaobispo2077/avo/commit/992d753ef6d2e874d5c6a4b8bfcf70d922aac47f))
+* **learndown:** export sanitized timeline learning ([f998c01](https://github.com/joaobispo2077/avo/commit/f998c011ccb2639b77243a7eeab8b07067abe2a6))
+* **stills:** extract exact frames with admission checks ([f3c11f2](https://github.com/joaobispo2077/avo/commit/f3c11f2c156f414b284f87e2ede0009286b1ff02))
+* **iterations:** persist cumulative iteration ledgers ([0bc29cc](https://github.com/joaobispo2077/avo/commit/0bc29ccfa89419c7838bca2ab298bbda041fafaf))
+* **animation:** publish and reuse provider components ([56eac00](https://github.com/joaobispo2077/avo/commit/56eac007f55aeef2aa9689936db863a0dc3b8923))
+* **models:** register vision model capability pins ([ac14820](https://github.com/joaobispo2077/avo/commit/ac148206e90d9cb687b7aad9b29ec6705401adc7))
+* **render:** render portrait segments and verify movement ([1886cc7](https://github.com/joaobispo2077/avo/commit/1886cc7183509b7a11538313dd0178f1a88b4de3))
+* **lineage:** trace audiovisual picture lineage ([193a5de](https://github.com/joaobispo2077/avo/commit/193a5deb0d7c7a298abc35e981d0cc66e1dddac6))
+
 # [1.12.0](https://github.com/joaobispo2077/avo/compare/v1.11.3...v1.12.0) (2026-09-27)
 
 

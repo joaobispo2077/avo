@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://avo.local/avo.component-instance.schema.json",
+  "type": "object", "additionalProperties": false,
+  "required": ["schemaVersion", "instanceId", "kitId", "kitVersion", "kitManifestHash", "parameters", "assetBindings", "eventBindings", "safeAreaBindings", "generatedFiles", "reviewRefs", "instanceHash"],
+  "properties": {
+    "schemaVersion": { "const": "1.0.0" }, "instanceId": { "$ref": "#/$defs/stableId" }, "kitId": { "$ref": "#/$defs/stableId" }, "kitVersion": { "type": "string", "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?$" }, "kitManifestHash": { "$ref": "#/$defs/sha256" },
+    "parameters": { "type": "object", "additionalProperties": true },
+    "assetBindings": { "type": "array", "items": { "type": "object", "additionalProperties": false, "required": ["slot", "sha256", "rightsRef"], "properties": { "slot": { "type": "string", "minLength": 1 }, "sha256": { "$ref": "#/$defs/sha256" }, "rightsRef": { "type": "string", "minLength": 1 } } } },
+    "eventBindings": { "type": "array", "items": { "type": "object", "additionalProperties": false, "required": ["slot", "eventId", "revisionHash"], "properties": { "slot": { "type": "string", "minLength": 1 }, "eventId": { "$ref": "#/$defs/stableId" }, "revisionHash": { "$ref": "#/$defs/sha256" } } } },
+    "safeAreaBindings": { "type": "object", "additionalProperties": false, "required": ["faces", "captions", "evidence", "ui"], "properties": { "faces": { "type": "array" }, "captions": { "type": "array" }, "evidence": { "type": "array" }, "ui": { "type": "array" } } },
+    "generatedFiles": { "type": "array", "items": { "$ref": "#/$defs/fileRef" } },
+    "reviewRefs": { "type": "array", "items": { "type": "object", "additionalProperties": false, "required": ["kind", "sha256"], "properties": { "kind": { "enum": ["accessibility", "rights", "render", "visual"] }, "sha256": { "$ref": "#/$defs/sha256" } } } },
+    "supersedesInstanceId": { "oneOf": [{ "$ref": "#/$defs/stableId" }, { "type": "null" }] }, "instanceHash": { "$ref": "#/$defs/sha256" }
+  },
+  "$defs": { "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }, "stableId": { "type": "string", "pattern": "^[a-z][a-z0-9-]{2,63}$" }, "fileRef": { "type": "object", "additionalProperties": false, "required": ["path", "sha256"], "properties": { "path": { "type": "string", "minLength": 1 }, "sha256": { "$ref": "#/$defs/sha256" } } } }
+}
