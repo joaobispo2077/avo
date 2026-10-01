@@ -1,3 +1,11 @@
+## [1.13.1](https://github.com/joaobispo2077/avo/compare/v1.13.0...v1.13.1) (2026-10-01)
+
+
+### Bug Fixes
+
+* **deps:** bump brace-expansion and undici for npm audit ([33bb853](https://github.com/joaobispo2077/avo/commit/33bb85359334611aa70ec458209e47e205cac85c))
+* **deps:** bump urllib3 to >=2.8.0 for pip-audit ([7ff1089](https://github.com/joaobispo2077/avo/commit/7ff10893c5f027b4809d3d1a77dde3c91d3dc928))
+
 # [1.13.0](https://github.com/joaobispo2077/avo/compare/v1.12.0...v1.13.0) (2026-09-28)
 
 
