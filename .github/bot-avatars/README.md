@@ -14,6 +14,7 @@ Official bot to character mapping (João’s branding):
 | quality-gate-devsecops.png | Quality Gate DevSecOps | Young Zangetsu |
 | ai-gate-reviewer.png | AI Gate Reviewer | Kisuke Urahara |
 | pr-shepherd.png | PR Shepherd | Akon |
+| qa-expert.png | QA Expert | Ragdoll |
 | product-manager.png | Product Manager | Bulma |
 | data-analytics.png | Data Analytics | Cortana |
 | business-analyst.png | Business Analyst | Kurisu Makise |
