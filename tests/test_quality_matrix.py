@@ -737,6 +737,23 @@ class QualityMatrixTests(unittest.TestCase):
         )
         self.assertIn("## Software metrics", writer)
         self.assertIn("What this checks", writer)
+        self.assertIn("overall_label", writer)
+        job = ci.split("  software-quality:", 1)[1].split("\n  usability-gate:", 1)[0]
+        self.assertIn("scripts/ci/gen_kpi_charts.py", job)
+        self.assertIn("scripts/ci/upload_kpi_chart_images.py", job)
+        self.assertLess(job.index("quality-lint.sh"), job.index("gen_kpi_charts.py"))
+        self.assertLess(
+            job.index("gen_kpi_charts.py"),
+            job.index("upload_kpi_chart_images.py"),
+        )
+        self.assertLess(
+            job.index("upload_kpi_chart_images.py"),
+            job.index("header: quality-gates-report"),
+        )
+        self.assertEqual(job.count("continue-on-error: true"), 1)
+        self.assertNotIn("run-mutation", job)
+        self.assertNotIn("--floor 80", job)
+        self.assertNotIn("fail_under = 80", (ROOT / "pyproject.toml").read_text())
 
     def test_workflows_use_node24_action_runtimes(self) -> None:
         """ci-quality-hardening: Node 24 + Node 24 GitHub-owned action majors."""

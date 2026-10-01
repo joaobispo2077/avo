@@ -61,8 +61,17 @@ workflow basenames, **20-minute** mutation timeouts, sticky quality/mutation PR
 comments, and Node 24 / Node 24 action majors.
 
 PRs get two short sticky comments (Maxframe shape): **Software metrics** (status,
-numeric metric, and what the gate checks) and **Mutation tests** (score, floor,
-killed/survived/timeout). The GitHub check name stays **Software quality**.
+numeric metric, and what the gate checks, plus PNG charts for those same
+numbers) and **Mutation tests** (score, floor, killed/survived/timeout). The
+Software quality sticky (`quality-gates-report`) posts on green and red runs.
+**Overall: PASS** only when every Software quality gate step succeeded;
+otherwise the banner is **Overall: FAIL** and failed or skipped gates are not
+drawn as passes. Coverage charts use the real `fail_under` (**68%**). Mutation
+in this sticky is **—** and points at `mutation-report`. Charts are
+visualization only: they do not change floors, and a missing image is an
+explicit note rather than an empty `![]()`. The GitHub check name stays
+**Software quality**.
+
 Comments post on `pull_request` **and** on `push` to a branch that already has
 an open PR (`gh pr list --head`). Size-signal is a third sticky: packed/unpacked
 bytes and file count only — no `npm pack` file listing. Publish steps
