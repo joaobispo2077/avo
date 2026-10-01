@@ -22,8 +22,10 @@ Footage exports use `YYYYMMDD-video-slug-stage-v001` — not in `CHANGELOG.md`.
 
 ## Branch → changelog
 
-- Ticket in branch (`feature/GTW-233`): link ticket in changelog entry
+- Names: `feature/{project_name}-{VARIABLE}` (for example `feature/avo-bot-avatars`, `feature/avo-issue-5`)
+- Issue in the variable (`feature/avo-issue-5`): link the issue in the changelog entry
 - Scope only (`feature/avo-install`): create/update `docs/avo-install.md`, link from changelog
+- Merge order when `develop` and `release` exist: feature → `develop`/`dev` → `release` → `main`/`master`. Do not open feature PRs straight to `main`.
 
 See `docs/branching.md` and `docs/versioning.md`.
 
@@ -35,4 +37,4 @@ See `docs/branching.md` and `docs/versioning.md`.
 
 ## Branches
 
-Agents never switch or create branches. User owns branch orchestration.
+Agents never create, delete, rename, checkout, or switch branches. User owns branch orchestration. Ask the user to rename a wrong head branch.
