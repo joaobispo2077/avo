@@ -5,7 +5,7 @@ contradict it.
 
 ## Software foundation (orchestrator code)
 
-- **Branches:** User owns branches. Never checkout/switch/create/delete branches.
+- **Branches:** User owns branches. Never checkout, switch, create, delete, or rename branches. Pattern: `feature/{project_name}-{VARIABLE}` (for example `feature/avo-bot-avatars`). Merge order: feature → `develop`/`dev` → `release` → `main`/`master`. Do not open feature PRs straight to `main` when `develop` and `release` exist. See `docs/branching.md`.
 - **Behavior:** Change behavior only when explicitly requested. Small focused diffs.
 - **Testing:** TDD / Test Trophy — unit tests first (`pytest`; `pip install -e ".[dev]"`).
 - **Principles:** KISS, DRY, YAGNI, SOLID when useful, low coupling, high cohesion.

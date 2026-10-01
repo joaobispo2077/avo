@@ -9,41 +9,56 @@ The **user** decides which branch to use. Agents:
 - Work **only** on the currently checked-out branch
 - **Never** create, delete, rename, checkout, switch, merge, or orchestrate branches
 - **Never** push unless explicitly requested
+- If a pull request head has the wrong name, ask the user to rename it. Do not create a replacement branch.
 
 Agents may **infer context** from the branch name (ticket, scope) for specs and changelog
 entries.
 
 ---
 
-## Expected branch patterns
+## Branch name pattern
 
-| Pattern | Example | Agent use |
-| ------- | ------- | --------- |
-| `feature/${ticket}` | `feature/GTW-233` | Link ticket in `CHANGELOG.md` |
-| `feature/${scope}` | `feature/avo-install` | Link `./docs/${scope}.md` in changelog |
-| `main` | default trunk | release target |
+`feature/{project_name}-{VARIABLE}`
 
-### Ticket branches
+- `{project_name}` is the repository slug. In this repo it is `avo`.
+- `{VARIABLE}` is the work slug (for example `bot-avatars`) or an issue id (for example `issue-5`).
 
-When the branch contains a ticket id (e.g. `GTW-233`), reference it in changelog items:
+Examples:
 
-```md
-- Add install slug canonicalization [GTW-233](https://aircanada.atlassian.net/servicedesk/customer/portal/1670/GTW-233)
-```
+- `feature/avo-bot-avatars`
+- `feature/avo-issue-5`
 
-Replace the URL base if your org uses a different tracker.
+---
 
-### Scope branches (no ticket)
+## Merge order
 
-When the branch is `feature/dynatrace`, extract scope `dynatrace`:
+When `develop` (or `dev`) and `release` exist, merge in this order only:
 
-1. Create or update `./docs/dynatrace.md` with what was done
-2. Reference in changelog: `[dynatrace](./docs/dynatrace.md)`
+1. `feature/…` → `develop` / `dev`
+2. `develop` / `dev` → `release`
+3. `release` → `main` / `master`
+
+Do not open a feature pull request straight to `main` or `master` while `develop`/`dev` and `release` exist.
+
+`joaobispo2077/avo` has `develop` and `release`. Feature work targets `develop`.
+
+---
+
+## Changelog links
+
+### Issue branches
+
+When `{VARIABLE}` contains an issue id (for example `feature/avo-issue-5`), reference it in changelog items.
+
+### Scope branches (no issue)
+
+When the branch is `feature/avo-install`, the scope is `avo-install`:
+
+1. Create or update `./docs/avo-install.md` with what was done
+2. Reference in changelog: `[avo-install](./docs/avo-install.md)`
 
 ---
 
 ## AVO launch note
 
-Pre-launch work may live on `main` or a long-lived feature branch until
-`joaobispo2077/avo` is published. Agents do not change remotes or push without
-explicit user request.
+`develop` and `release` exist on `joaobispo2077/avo`. Feature pull requests target `develop`, then follow the merge order above. Agents do not change remotes or push without an explicit user request.
