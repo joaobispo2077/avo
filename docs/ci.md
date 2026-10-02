@@ -72,6 +72,10 @@ visualization only: they do not change floors, and a missing image is an
 explicit note rather than an empty `![]()`. The GitHub check name stays
 **Software quality**.
 
+A release cut writes `docs/quality-metrics.md` from that push's green Software
+quality JSON. Pull-request greens do not write that file. See the release-cut
+section below.
+
 Comments post on `pull_request` **and** on `push` to a branch that already has
 an open PR (`gh pr list --head`). Size-signal is a third sticky: packed/unpacked
 bytes and file count only — no `npm pack` file listing. Publish steps
@@ -92,6 +96,30 @@ Every `job` in `config/avo.dependencies.json` must exist under `config/avo.confi
 - Workflow: `.github/workflows/release.yml` runs after **CI** succeeds on `develop` (alpha) or `release` (stable)
 - Secret: `GH_TOKEN` with `contents: write` (see [versioning.md](./versioning.md))
 
+### Release-cut quality metrics snapshot
+
+`release.yml` writes `docs/quality-metrics.md` only when
+a release cut runs (semantic-release has a version to publish). The step
+downloads artifact `quality-metrics` from the green CI run for the **exact tip
+SHA** and fails the job if that JSON is missing, not overall PASS, or bound to
+a different SHA. There is no soft warning that still publishes. The step does
+not re-measure gates and does not copy the previous release's numbers.
+
+Software quality writes that JSON only on a push to `release`, then uploads it.
+Ordinary pull requests and other branches do not upload it and do not write
+`docs/quality-metrics.md`. Phase A sticky comments and KPI charts on pull
+requests are unchanged. The snapshot does not change floors or replace gates.
+
+Optional PNGs from the same run are copied to `docs/quality/charts/<version>/`.
+If any chart ships, every chart's embedded series must match the JSON and the
+tables, or the cut fails. Missing charts leave tables only.
+
+Mutation uses `killed` and `survived` from that cut's `mutation-metrics.json`
+when the SHA matches. Otherwise the snapshot prints **—** and says see Mutation
+sticky. It never invents a kill rate.
+
+Template note: [`docs/templates/quality-metrics.md`](./templates/quality-metrics.md).
+
 ## Workflows (maxframe-style layout)
 
 | Workflow | Trigger | Purpose |
@@ -105,7 +133,7 @@ Every `job` in `config/avo.dependencies.json` must exist under `config/avo.confi
 | `setup-smoke.yml` | `workflow_dispatch` | Full `setup.sh` on ubuntu + windows |
 | `orchestrator-smoke.yml` | manual + weekly cron | Gate 1 (+ optional) + Whisper tiny model + Gate 2 |
 | `ffmpeg-whisper-smoke.yml` | `workflow_dispatch` | Binary/import smoke (like maxframe `yt-dlp-smoke.yml`) |
-| `release.yml` | After **CI** on `release` (+ manual) | semantic-release dry-run → publish, then `workflow_dispatch` Engine binary to attach platform zips (`GITHUB_TOKEN` does not fire `on: release`) |
+| `release.yml` | After **CI** on `release` (+ manual) | semantic-release dry-run → publish, then `workflow_dispatch` Engine binary to attach platform zips (`GITHUB_TOKEN` does not fire `on: release`). Before publish, hard-fails unless the green Software quality JSON matches the tip SHA, then commits `docs/quality-metrics.md` |
 | `engine-binary.yml` | path-filtered push/PR + `workflow_dispatch` (`attach_tag`) + manual `release` | PyInstaller zip smoke; attach `avo-$VERSION-$platform.zip` + SHA256SUMS to the GitHub release |
 
 Reference: [maxframe workflows](https://github.com/joaobispo2077/maxframe/tree/main/.github/workflows).

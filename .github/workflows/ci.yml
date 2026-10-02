@@ -220,7 +220,15 @@ jobs:
           Q_DUPLICATION: ${{ steps.q-duplication.outcome }}
           Q_ARCHITECTURE: ${{ steps.q-architecture.outcome }}
           Q_TREE: ${{ steps.q-tree.outcome }}
-        run: python scripts/ci/write_quality_pr_report.py --out reports/quality/quality-gates.md
+        run: |
+          python scripts/ci/write_quality_pr_report.py --out reports/quality/quality-gates.md
+          # Tip-bound artifact for the release cut only. PRs do not publish it
+          # and this step does not render the release readout document.
+          if [ "$GITHUB_REF" = "refs/heads/release" ]; then
+            python scripts/ci/write_quality_metrics_snapshot.py \
+              --write-json reports/quality/quality-metrics.json \
+              --coverage reports/quality/coverage.json
+          fi
 
       # Charts are visualization only. They run on red and green (if: always)
       # and the script exits 0 after writing either PNGs or an explicit failure
@@ -238,6 +246,27 @@ jobs:
           Q_ARCHITECTURE: ${{ steps.q-architecture.outcome }}
           Q_TREE: ${{ steps.q-tree.outcome }}
         run: python scripts/ci/gen_kpi_charts.py --append reports/quality/quality-gates.md --coverage reports/quality/coverage.json --out-dir reports/quality/charts
+
+      # Release-branch artifacts for the cut. Not a gate. Missing charts stay
+      # optional; a missing metrics JSON fails this push so the cut cannot stamp
+      # an older tip. Ordinary PRs skip both uploads.
+      - name: Upload release-cut quality metrics
+        if: success() && github.ref == 'refs/heads/release'
+        uses: actions/upload-artifact@v7
+        with:
+          name: quality-metrics
+          path: reports/quality/quality-metrics.json
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload release-cut quality charts
+        if: success() && github.ref == 'refs/heads/release'
+        uses: actions/upload-artifact@v7
+        with:
+          name: quality-metrics-charts
+          path: reports/quality/charts/*.png
+          if-no-files-found: ignore
+          retention-days: 14
 
       - name: Upload KPI chart images
         if: always()
@@ -337,6 +366,12 @@ jobs:
           AVO_MUTATION_PROFILE: light
         run: bash scripts/ci/run-mutation-light.sh
 
+      - name: Build mutation PR report
+        if: always()
+        env:
+          AVO_MUTATION_PROFILE: light
+        run: python scripts/ci/write_mutation_pr_report.py --out reports/mutation/mutation-report.md
+
       - name: Upload light mutation reports
         if: always()
         uses: actions/upload-artifact@v7
@@ -345,12 +380,6 @@ jobs:
           path: reports/mutation
           if-no-files-found: warn
           retention-days: 14
-
-      - name: Build mutation PR report
-        if: always()
-        env:
-          AVO_MUTATION_PROFILE: light
-        run: python scripts/ci/write_mutation_pr_report.py --out reports/mutation/mutation-report.md
 
       - name: Resolve PR number
         if: always()
