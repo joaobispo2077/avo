@@ -82,6 +82,16 @@ class MutationGateTests(unittest.TestCase):
                 text.index("check_mutation.py"),
             )
 
+    def test_light_runner_stamps_only_after_export(self) -> None:
+        text = (ROOT / "scripts/ci/run-mutation-light.sh").read_text(encoding="utf-8")
+        self.assertIn("set -euo pipefail", text)
+        export_at = text.index("mutmut export-cicd-stats")
+        stamp_at = text.index("--stamp")
+        check_at = text.index("check_mutation.py")
+        self.assertLess(text.index("mutmut run"), export_at)
+        self.assertLess(export_at, stamp_at)
+        self.assertLess(stamp_at, check_at)
+
     def test_patch_mutmut_profile_round_trip(self) -> None:
         spec = importlib.util.spec_from_file_location(
             "patch_mutmut_profile",
