@@ -28,4 +28,10 @@ Cut workflow detail: [`cuts.md`](cuts.md).
 
 ## Optional window
 
+Breathing remains off unless requested. For approved breath duration changes,
+load [breathing guidelines](guidelines-breathing.md). Emit raw-source CMap cut
+proposals, preserve cadence and word guards, and remap dependent cues. Never
+delete time solely from the dialogue track. Attenuation without a duration
+change belongs to `/avo.sound`.
+
 When `from`/`to` set, limit EDL and transcript analysis to that range only; do not imply content outside the window was reviewed.

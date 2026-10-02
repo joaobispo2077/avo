@@ -349,6 +349,18 @@ performances.
 
 ## Audio Post Production System
 
+### Opt-in breathing policy
+
+Breath control is OFF by default. Activate only on an explicit user request;
+an unspecified reduction request recommends conservative attenuation, not
+removal or time cuts. Follow [docs/breath-control.md](docs/breath-control.md).
+Process only confirmed, unprotected dialogue events. Preserve word beginnings,
+expressive breaths and meaningful product/game sounds. Music, SFX and their
+ducking control must remain unchanged; freeze the canonical pre-treatment mix
+when required and alter only the dialogue delta. Never process a mixed master.
+Deletion of time requires approved raw-source CMap edits, not dialogue-only
+splices. Preview and removed-signal listening approval precede a new master.
+
 Before changing audio, diagnose the source: format, speech/music priority,
 available microphones, camera audio, recorder audio, system/game audio, music,
 SFX, ambience, sample rates, channel layout, sync method, drift risk, noise,
