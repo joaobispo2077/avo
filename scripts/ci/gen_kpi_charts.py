@@ -1,0 +1,655 @@
+#!/usr/bin/env python3
+"""PNG charts for the Software quality sticky. Visualization only, not a gate.
+
+Numbers come from the same helpers as ``write_quality_pr_report.py``.
+Coverage floor is pyproject ``fail_under`` (68). Mutation is not measured here.
+"""
+
+from __future__ import annotations
+
+import argparse
+import importlib.util
+import json
+import os
+import sys
+import traceback
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[2]
+IMAGE_PREFIX = "kpi-chart:"
+START = "<!-- kpi-charts:start -->"
+END = "<!-- kpi-charts:end -->"
+
+PASS_HEX = "#1b7f3a"
+FAIL_HEX = "#b00020"
+SKIP_HEX = "#8a6d00"
+UNKNOWN_HEX = "#5c6770"
+FLOOR_HEX = "#1f4e79"
+NEUTRAL_HEX = "#1f4e79"
+EDGE = "#1a1a1a"
+
+
+def _report():
+    name = "avo_ci_write_quality_pr_report"
+    cached = sys.modules.get(name)
+    if cached is not None:
+        return cached
+    path = Path(__file__).resolve().parent / "write_quality_pr_report.py"
+    spec = importlib.util.spec_from_file_location(name, path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError(f"cannot load {path}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def _plt():
+    os.environ.setdefault("MPLBACKEND", "Agg")
+    import matplotlib.pyplot as plt
+
+    return plt
+
+
+def coverage_bar_state(percent: float | None, floor: float, step_outcome: str) -> str:
+    """Red unless this run measured coverage at or above the real floor."""
+    if percent is None or step_outcome.strip().lower() != "success":
+        return "fail"
+    if percent < floor:
+        return "fail"
+    return "pass"
+
+
+def _count_block(count: int | None, reported: str) -> dict:
+    return {"count": count, "reported": reported}
+
+
+def build_snapshot(
+    outcomes: dict[str, str],
+    *,
+    coverage_json: Path,
+    floor: float,
+    root: Path,
+) -> dict:
+    report = _report()
+    gates = []
+    for key, title in report.GATES:
+        outcome = outcomes.get(key, "")
+        gates.append(
+            {
+                "key": key,
+                "title": title,
+                "status": report._label(outcome),
+                "metric": report.gate_metric(
+                    key, coverage_json=coverage_json, floor=floor, root=root
+                ),
+            }
+        )
+    numbers = report.coverage_numbers(coverage_json)
+    coverage_step = outcomes.get("coverage", "")
+    percent = numbers["percent"]
+    return {
+        "overall": report.overall_label(outcomes),
+        "floor": floor,
+        "gates": gates,
+        "coverage": {
+            "measured": percent,
+            "covered": numbers["covered"],
+            "statements": numbers["statements"],
+            "floor": floor,
+            "step": report._label(coverage_step),
+            "state": coverage_bar_state(percent, floor, coverage_step),
+            "reported": report.coverage_detail(coverage_json, floor),
+        },
+        "complexity": _count_block(
+            report.complexity_allowlisted(root),
+            report.gate_metric(
+                "complexity", coverage_json=coverage_json, floor=floor, root=root
+            ),
+        ),
+        "deadcode": _count_block(
+            report.deadcode_allowlisted(root),
+            report.gate_metric(
+                "deadcode", coverage_json=coverage_json, floor=floor, root=root
+            ),
+        ),
+        "deps": _count_block(
+            report.npm_exception_count(root),
+            report.gate_metric(
+                "deps", coverage_json=coverage_json, floor=floor, root=root
+            ),
+        ),
+        "duplication": {
+            "ceiling": report.duplication_ceiling(root),
+            "reported": report.gate_metric(
+                "duplication", coverage_json=coverage_json, floor=floor, root=root
+            ),
+        },
+        "architecture": _count_block(
+            report.architecture_contracts(root),
+            report.gate_metric(
+                "architecture", coverage_json=coverage_json, floor=floor, root=root
+            ),
+        ),
+        "mutation": {"value": None, "sticky": "mutation-report"},
+    }
+
+
+def _save(fig, path: Path, series: dict) -> dict:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(
+        path,
+        format="png",
+        metadata={"Description": json.dumps(series, sort_keys=True)},
+        bbox_inches="tight",
+        facecolor="white",
+    )
+    _plt().close(fig)
+    return series
+
+
+def _figure(title: str, title_color: str):
+    plt = _plt()
+    fig, ax = plt.subplots(figsize=(8.0, 4.6), dpi=120)
+    fig.patch.set_facecolor("white")
+    ax.set_facecolor("white")
+    ax.set_title(title, color=title_color, fontsize=14, fontweight="bold", loc="left")
+    ax.spines["top"].set_visible(False)
+    ax.spines["right"].set_visible(False)
+    ax.tick_params(labelsize=11, colors=EDGE)
+    return fig, ax
+
+
+def _status_style(status: str) -> tuple[str, str]:
+    if status == "PASS":
+        return PASS_HEX, ""
+    if status in {"FAIL", "CANCELLED"}:
+        return FAIL_HEX, "//"
+    if status == "SKIPPED":
+        return SKIP_HEX, ".."
+    return UNKNOWN_HEX, ""
+
+
+def render_status(snapshot: dict, path: Path) -> dict:
+    series = {
+        "chart": "status",
+        "overall": snapshot["overall"],
+        "gates": [
+            {"title": gate["title"], "status": gate["status"]}
+            for gate in snapshot["gates"]
+        ],
+    }
+    overall = snapshot["overall"]
+    color = PASS_HEX if overall == "PASS" else FAIL_HEX
+    fig, ax = _figure(f"Software quality: {overall}", color)
+    titles = [gate["title"] for gate in snapshot["gates"]]
+    colors = []
+    hatches = []
+    for gate in snapshot["gates"]:
+        paint, hatch = _status_style(gate["status"])
+        colors.append(paint)
+        hatches.append(hatch)
+    bars = ax.barh(
+        titles,
+        [1] * len(titles),
+        color=colors,
+        edgecolor=EDGE,
+        height=0.7,
+    )
+    for bar, hatch in zip(bars, hatches, strict=True):
+        bar.set_hatch(hatch)
+    for bar, gate in zip(bars, snapshot["gates"], strict=True):
+        ax.text(
+            1.04,
+            bar.get_y() + bar.get_height() / 2,
+            gate["status"],
+            va="center",
+            ha="left",
+            fontsize=11,
+            fontweight="bold",
+            color=EDGE,
+        )
+    ax.set_xlim(0, 1.55)
+    ax.set_xticks([])
+    ax.invert_yaxis()
+    return _save(fig, path, series)
+
+
+def render_coverage(snapshot: dict, path: Path) -> dict:
+    block = snapshot["coverage"]
+    series = {
+        "chart": "coverage",
+        "measured": block["measured"],
+        "floor": block["floor"],
+        "state": block["state"],
+        "step": block["step"],
+        "reported": block["reported"],
+        "covered": block["covered"],
+        "statements": block["statements"],
+    }
+    state = block["state"]
+    title_color = PASS_HEX if state == "pass" else FAIL_HEX
+    if block["measured"] is None:
+        title = f"Coverage: not measured (floor {block['floor']:.0f}%)"
+    elif state == "pass":
+        title = f"Coverage: {block['measured']:.2f}% (floor {block['floor']:.0f}%)"
+    else:
+        title = (
+            f"Coverage: {block['measured']:.2f}% "
+            f"(step {block['step']}, floor {block['floor']:.0f}%)"
+        )
+    fig, ax = _figure(title, title_color)
+    labels: list[str] = []
+    values: list[float] = []
+    colors: list[str] = []
+    hatches: list[str] = []
+    if block["measured"] is not None:
+        labels.append("This run")
+        values.append(float(block["measured"]))
+        colors.append(PASS_HEX if state == "pass" else FAIL_HEX)
+        hatches.append("" if state == "pass" else "//")
+    labels.append(f"Floor {block['floor']:.0f}%")
+    values.append(float(block["floor"]))
+    colors.append(FLOOR_HEX)
+    hatches.append("")
+    bars = ax.bar(labels, values, color=colors, edgecolor=EDGE, width=0.55)
+    for bar, hatch in zip(bars, hatches, strict=True):
+        bar.set_hatch(hatch)
+    for bar, value in zip(bars, values, strict=True):
+        ax.text(
+            bar.get_x() + bar.get_width() / 2,
+            value + 1.5,
+            f"{value:.2f}%",
+            ha="center",
+            va="bottom",
+            fontsize=12,
+            color=EDGE,
+        )
+    if block["measured"] is None:
+        ax.text(
+            0.02,
+            0.95,
+            "not measured this run",
+            transform=ax.transAxes,
+            color=FAIL_HEX,
+            fontsize=12,
+            fontweight="bold",
+            va="top",
+        )
+    ax.set_ylim(0, 100)
+    ax.set_ylabel("line coverage %")
+    return _save(fig, path, series)
+
+
+def _render_count(series: dict, path: Path, *, title: str, noun: str) -> dict:
+    fig, ax = _figure(title, EDGE)
+    count = series["count"]
+    if count is None:
+        ax.text(
+            0.5,
+            0.5,
+            "n/a",
+            transform=ax.transAxes,
+            ha="center",
+            va="center",
+            fontsize=20,
+            color=UNKNOWN_HEX,
+        )
+        ax.set_axis_off()
+    else:
+        bars = ax.bar([noun], [count], color=NEUTRAL_HEX, edgecolor=EDGE, width=0.45)
+        ax.set_ylim(0, max(count * 1.35, 1))
+        ax.text(
+            bars[0].get_x() + bars[0].get_width() / 2,
+            count,
+            str(count),
+            ha="center",
+            va="bottom",
+            fontsize=12,
+            color=EDGE,
+        )
+    return _save(fig, path, series)
+
+
+def render_complexity(snapshot: dict, path: Path) -> dict:
+    block = snapshot["complexity"]
+    series = {
+        "chart": "complexity",
+        "count": block["count"],
+        "reported": block["reported"],
+    }
+    return _render_count(
+        series, path, title="Complexity allowlisted blocks", noun="Allowlisted"
+    )
+
+
+def render_deadcode(snapshot: dict, path: Path) -> dict:
+    block = snapshot["deadcode"]
+    series = {
+        "chart": "deadcode",
+        "count": block["count"],
+        "reported": block["reported"],
+    }
+    return _render_count(
+        series, path, title="Dead code allowlisted items", noun="Allowlisted"
+    )
+
+
+def render_deps(snapshot: dict, path: Path) -> dict:
+    block = snapshot["deps"]
+    series = {"chart": "deps", "count": block["count"], "reported": block["reported"]}
+    return _render_count(series, path, title="npm GHSA exceptions", noun="Exceptions")
+
+
+def render_duplication(snapshot: dict, path: Path) -> dict:
+    block = snapshot["duplication"]
+    ceiling = int(block["ceiling"])
+    series = {
+        "chart": "duplication",
+        "ceiling": ceiling,
+        "reported": block["reported"],
+    }
+    fig, ax = _figure(
+        f"Duplication ceiling {ceiling}% (configured, not measured)",
+        EDGE,
+    )
+    bars = ax.bar(["Ceiling"], [ceiling], color=NEUTRAL_HEX, edgecolor=EDGE, width=0.45)
+    ax.set_ylim(0, max(10, ceiling * 1.4))
+    ax.set_ylabel("percent")
+    ax.text(
+        bars[0].get_x() + bars[0].get_width() / 2,
+        ceiling,
+        f"{ceiling}%",
+        ha="center",
+        va="bottom",
+        fontsize=12,
+        color=EDGE,
+    )
+    return _save(fig, path, series)
+
+
+def render_architecture(snapshot: dict, path: Path) -> dict:
+    block = snapshot["architecture"]
+    series = {
+        "chart": "architecture",
+        "count": block["count"],
+        "reported": block["reported"],
+    }
+    return _render_count(series, path, title="Architecture contracts", noun="Contracts")
+
+
+def _table(rows: list[tuple[str, str]]) -> str:
+    lines = ["| Field | Value |", "|---|---|"]
+    lines.extend(f"| {label} | {value} |" for label, value in rows)
+    return "\n".join(lines)
+
+
+def _image(alt: str, filename: str) -> str:
+    return f"![{alt}]({IMAGE_PREFIX}{filename})"
+
+
+def _pct(value: float) -> str:
+    return f"{value:.2f}%"
+
+
+def _lines(series: dict) -> str:
+    covered = series["covered"]
+    statements = series["statements"]
+    if covered is None or statements is None:
+        return "—"
+    return f"{covered}/{statements}"
+
+
+def build_chart_markdown(snapshot: dict, rendered: dict[str, dict]) -> str:
+    """Heading, image placeholder, then a table built from the plotted series."""
+    status = rendered["status"]
+    coverage = rendered["coverage"]
+    complexity = rendered["complexity"]
+    deadcode = rendered["deadcode"]
+    deps = rendered["deps"]
+    duplication = rendered["duplication"]
+    architecture = rendered["architecture"]
+    status_rows = [(gate["title"], f"**{gate['status']}**") for gate in status["gates"]]
+    status_rows.append(("Overall", f"**{status['overall']}**"))
+    measured = (
+        "—" if coverage["measured"] is None else _pct(float(coverage["measured"]))
+    )
+    parts = [
+        "## KPI charts",
+        "",
+        f"**Overall: {snapshot['overall']}**",
+        "",
+        "Charts show this run's Software quality numbers. They are not gates and do not change floors.",
+        "",
+        "### Gate status",
+        "",
+        _image("Gate status", "status.png"),
+        "",
+        _table(status_rows),
+        "",
+        "### Coverage",
+        "",
+        _image("Coverage", "coverage.png"),
+        "",
+        _table(
+            [
+                ("Line coverage", measured),
+                ("Floor (fail_under)", f"{float(coverage['floor']):.0f}%"),
+                ("Lines", _lines(coverage)),
+                ("Step", coverage["step"]),
+                ("Reported", coverage["reported"]),
+            ]
+        ),
+        "",
+        "### Complexity allowlist",
+        "",
+        _image("Complexity allowlist", "complexity.png"),
+        "",
+        _table(
+            [
+                ("Allowlisted blocks", _count_cell(complexity["count"])),
+                ("Reported", complexity["reported"]),
+            ]
+        ),
+        "",
+        "### Dead code allowlist",
+        "",
+        _image("Dead code allowlist", "deadcode.png"),
+        "",
+        _table(
+            [
+                ("Allowlisted items", _count_cell(deadcode["count"])),
+                ("Reported", deadcode["reported"]),
+            ]
+        ),
+        "",
+        "### Dependency exceptions",
+        "",
+        _image("Dependency exceptions", "deps.png"),
+        "",
+        _table(
+            [
+                ("npm GHSA exceptions", str(deps["count"])),
+                ("Reported", deps["reported"]),
+            ]
+        ),
+        "",
+        "### Duplication ceiling",
+        "",
+        _image("Duplication ceiling", "duplication.png"),
+        "",
+        _table(
+            [
+                ("Ceiling", f"{duplication['ceiling']}%"),
+                ("Reported", duplication["reported"]),
+            ]
+        ),
+        "",
+        "Configured jscpd ceiling only. This chart is not a measured duplication rate.",
+        "",
+        "### Architecture contracts",
+        "",
+        _image("Architecture contracts", "architecture.png"),
+        "",
+        _table(
+            [
+                ("Contracts", _count_cell(architecture["count"])),
+                ("Reported", architecture["reported"]),
+            ]
+        ),
+        "",
+        "### Mutation",
+        "",
+        "Mutation is not part of Software quality. See the Mutation sticky (`mutation-report`).",
+        "",
+        _table(
+            [
+                ("Mutation", "—"),
+                ("Sticky", "`mutation-report`"),
+            ]
+        ),
+        "",
+    ]
+    return "\n".join(parts)
+
+
+def _count_cell(count: int | None) -> str:
+    return "n/a" if count is None else str(count)
+
+
+def render_charts(snapshot: dict, out_dir: Path) -> dict[str, dict]:
+    out_dir.mkdir(parents=True, exist_ok=True)
+    return {
+        "status": render_status(snapshot, out_dir / "status.png"),
+        "coverage": render_coverage(snapshot, out_dir / "coverage.png"),
+        "complexity": render_complexity(snapshot, out_dir / "complexity.png"),
+        "deadcode": render_deadcode(snapshot, out_dir / "deadcode.png"),
+        "deps": render_deps(snapshot, out_dir / "deps.png"),
+        "duplication": render_duplication(snapshot, out_dir / "duplication.png"),
+        "architecture": render_architecture(snapshot, out_dir / "architecture.png"),
+    }
+
+
+def upsert_section(existing: str, section: str) -> str:
+    block = f"{START}\n{section.rstrip()}\n{END}\n"
+    if START in existing and END in existing:
+        pre, rest = existing.split(START, 1)
+        _old, post = rest.split(END, 1)
+        return pre.rstrip() + "\n\n" + block + post.lstrip("\n")
+    if not existing.strip():
+        return block
+    return existing.rstrip() + "\n\n" + block
+
+
+def failure_section(overall: str, reason: str) -> str:
+    safe = " ".join(reason.split())[:300]
+    return "\n".join(
+        [
+            "## KPI charts",
+            "",
+            f"**Overall: {overall}**",
+            "",
+            f"**Chart generation failed:** {safe}. No image is embedded.",
+            "",
+            "### Mutation",
+            "",
+            "Mutation is not part of Software quality. See the Mutation sticky (`mutation-report`).",
+            "",
+            "| Field | Value |",
+            "|---|---|",
+            "| Mutation | — |",
+            "| Sticky | `mutation-report` |",
+            "",
+        ]
+    )
+
+
+def generate(
+    outcomes: dict[str, str],
+    *,
+    coverage_json: Path,
+    floor: float,
+    root: Path,
+    out_dir: Path,
+) -> tuple[str, dict]:
+    snapshot = build_snapshot(
+        outcomes, coverage_json=coverage_json, floor=floor, root=root
+    )
+    rendered = render_charts(snapshot, out_dir)
+    snapshot["charts"] = rendered
+    return build_chart_markdown(snapshot, rendered), snapshot
+
+
+def resolve_outcomes(outcomes_json: Path) -> dict[str, str]:
+    """Prefer the report sidecar so charts cannot diverge from the table."""
+    report = _report()
+    if outcomes_json.is_file():
+        try:
+            loaded = report.load_gate_outcomes(outcomes_json)
+        except json.JSONDecodeError as exc:
+            print(f"ignoring unreadable gate outcomes {outcomes_json}: {exc}")
+            loaded = None
+        if loaded is not None:
+            print(f"gate outcomes from {outcomes_json}")
+            return loaded
+    print("gate outcomes from Q_* environment")
+    return report.outcomes_from_env()
+
+
+def _write_append(path: Path, section: str) -> None:
+    existing = path.read_text(encoding="utf-8") if path.is_file() else ""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(upsert_section(existing, section), encoding="utf-8", newline="\n")
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--append", required=True)
+    parser.add_argument("--coverage", default="reports/quality/coverage.json")
+    parser.add_argument("--out-dir", default="reports/quality/charts")
+    parser.add_argument("--floor", type=float, default=None)
+    parser.add_argument("--root", default=str(ROOT))
+    parser.add_argument(
+        "--outcomes",
+        default="",
+        help="Gate outcome sidecar. Default: gate-outcomes.json beside --append.",
+    )
+    args = parser.parse_args()
+    root = Path(args.root)
+    report = _report()
+    floor = (
+        args.floor
+        if args.floor is not None
+        else report.coverage_floor_from_pyproject(root / "pyproject.toml")
+    )
+    append = Path(args.append)
+    outcomes_path = (
+        Path(args.outcomes) if args.outcomes else report.gate_outcomes_path(append)
+    )
+    outcomes = resolve_outcomes(outcomes_path)
+    try:
+        section, snapshot = generate(
+            outcomes,
+            coverage_json=Path(args.coverage),
+            floor=floor,
+            root=root,
+            out_dir=Path(args.out_dir),
+        )
+        snap_path = Path(args.out_dir) / "kpi-snapshot.json"
+        snap_path.parent.mkdir(parents=True, exist_ok=True)
+        snap_path.write_text(
+            json.dumps(snapshot, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+            newline="\n",
+        )
+    except Exception as exc:
+        traceback.print_exc()
+        section = failure_section(report.overall_label(outcomes), str(exc))
+        print(f"kpi chart generation failed: {exc}")
+    _write_append(append, section)
+    print(f"wrote chart section to {append}")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

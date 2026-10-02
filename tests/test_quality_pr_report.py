@@ -40,6 +40,8 @@ class QualityPrReportTests(unittest.TestCase):
         self.assertIn("| Gate | Status | Metric | What this checks |", text)
         self.assertIn("Ruff", text)
         self.assertIn("68%", text)
+        self.assertIn("**Overall: FAIL**", text)
+        self.assertNotIn("**Overall: PASS**", text)
 
     def test_quality_coverage_detail_from_json(self) -> None:
         mod = _load("write_quality_pr_report", "scripts/ci/write_quality_pr_report.py")
@@ -91,6 +93,36 @@ class QualityPrReportTests(unittest.TestCase):
         )
         self.assertIn("stats JSON was not found", text)
         self.assertIn("20 minutes", text)
+
+    def test_mutation_metrics_document_uses_counts_only(self) -> None:
+        mod = _load(
+            "write_mutation_pr_report", "scripts/ci/write_mutation_pr_report.py"
+        )
+        sha = "a" * 40
+        self.assertIsNone(
+            mod.mutation_metrics_document(
+                {"score": 99.0},
+                sha=sha,
+                floor=40.0,
+            )
+        )
+        self.assertIsNone(
+            mod.mutation_metrics_document(
+                {"killed": 8, "survived": 2},
+                sha="",
+                floor=40.0,
+            )
+        )
+        doc = mod.mutation_metrics_document(
+            {"killed": 8, "survived": 2, "score": 1},
+            sha=sha,
+            floor=40.0,
+        )
+        self.assertEqual(
+            doc,
+            {"sha": sha, "killed": 8, "survived": 2, "floor": 40.0},
+        )
+        self.assertNotIn("score", doc)
 
     def test_size_signal_summarizes_pack_without_file_dump(self) -> None:
         mod = _load(

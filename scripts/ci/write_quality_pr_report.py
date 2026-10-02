@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -59,57 +60,142 @@ def _json_count(path: Path, key: str) -> int | None:
     return None
 
 
+def coverage_floor_from_pyproject(path: Path) -> float:
+    """Real pytest-cov fail_under. Does not invent a second target."""
+    text = path.read_text(encoding="utf-8")
+    marker = "[tool.coverage.report]"
+    if marker not in text:
+        raise SystemExit(f"{path} is missing {marker}")
+    body = text.split(marker, 1)[1].split("\n[", 1)[0]
+    match = re.search(r"(?m)^fail_under\s*=\s*(\d+(?:\.\d+)?)\s*$", body)
+    if not match:
+        raise SystemExit(f"{path} is missing coverage fail_under")
+    return float(match.group(1))
+
+
+def overall_label(outcomes: dict[str, str]) -> str:
+    """PASS only when every Software quality gate step succeeded."""
+    passed = all(
+        outcomes.get(key, "").strip().lower() == "success" for key, _title in GATES
+    )
+    return "PASS" if passed else "FAIL"
+
+
+def outcomes_from_env() -> dict[str, str]:
+    return {key: os.environ.get(f"Q_{key.upper()}", "") for key, _title in GATES}
+
+
+def gate_outcomes_path(report_path: Path) -> Path:
+    return report_path.parent / "gate-outcomes.json"
+
+
+def write_gate_outcomes(path: Path, outcomes: dict[str, str]) -> None:
+    """Sidecar the report table uses, so later steps cannot invent other statuses."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {"gates": {key: outcomes.get(key, "") for key, _title in GATES}}
+    path.write_text(
+        json.dumps(payload, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+        newline="\n",
+    )
+
+
+def load_gate_outcomes(path: Path) -> dict[str, str] | None:
+    if not path.is_file():
+        return None
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    gates = payload.get("gates") if isinstance(payload, dict) else None
+    if not isinstance(gates, dict):
+        return None
+    return {key: str(gates.get(key, "") or "") for key, _title in GATES}
+
+
+def coverage_numbers(coverage_json: Path) -> dict[str, float | int | None]:
+    if not coverage_json.is_file():
+        return {"percent": None, "covered": None, "statements": None}
+    payload = json.loads(coverage_json.read_text(encoding="utf-8"))
+    totals = payload.get("totals") or {}
+    percent = totals.get("percent_covered")
+    return {
+        "percent": None if percent is None else float(percent),
+        "covered": totals.get("covered_lines"),
+        "statements": totals.get("num_statements"),
+    }
+
+
+def complexity_allowlisted(root: Path = ROOT) -> int | None:
+    return _json_count(root / "scripts/ci/complexity-allowlist.json", "blocks")
+
+
+def deadcode_allowlisted(root: Path = ROOT) -> int | None:
+    return _json_count(root / "scripts/ci/deadcode-allowlist.json", "items")
+
+
+def npm_exception_count(root: Path = ROOT) -> int:
+    allow = root / "scripts/ci/deps-audit-allowlist.json"
+    if not allow.is_file():
+        return 0
+    npm = (json.loads(allow.read_text(encoding="utf-8")).get("npm") or {}).get(
+        "advisory_ids"
+    )
+    if isinstance(npm, list):
+        return len(npm)
+    return 0
+
+
+def duplication_ceiling(root: Path = ROOT) -> int:
+    threshold = 2
+    jscpd = root / ".jscpd.json"
+    if jscpd.is_file():
+        raw = json.loads(jscpd.read_text(encoding="utf-8")).get("threshold") or 2
+        threshold = int(raw)
+    return threshold
+
+
+def architecture_contracts(root: Path = ROOT) -> int | None:
+    config = root / ".importlinter"
+    if not config.is_file():
+        return None
+    return config.read_text(encoding="utf-8").count("[importlinter:contract:")
+
+
 def coverage_detail(coverage_json: Path, floor: float) -> str:
     if not coverage_json.is_file():
         return f"— (floor {floor:.0f}%, json missing)"
-    payload = json.loads(coverage_json.read_text(encoding="utf-8"))
-    totals = payload.get("totals") or {}
-    pct = totals.get("percent_covered")
-    covered = totals.get("covered_lines")
-    statements = totals.get("num_statements")
-    if pct is None:
+    numbers = coverage_numbers(coverage_json)
+    percent = numbers["percent"]
+    if percent is None:
         return f"floor {floor:.0f}%"
     extra = ""
+    covered = numbers["covered"]
+    statements = numbers["statements"]
     if covered is not None and statements is not None:
         extra = f" · {covered}/{statements} lines"
-    return f"{float(pct):.2f}% (floor {floor:.0f}%){extra}"
+    return f"{float(percent):.2f}% (floor {floor:.0f}%){extra}"
 
 
-def gate_metric(key: str, *, coverage_json: Path, floor: float) -> str:
+def gate_metric(
+    key: str,
+    *,
+    coverage_json: Path,
+    floor: float,
+    root: Path = ROOT,
+) -> str:
     if key == "coverage":
         return coverage_detail(coverage_json, floor)
     if key == "complexity":
-        blocks = _json_count(ROOT / "scripts/ci/complexity-allowlist.json", "blocks")
-        extra = f"{blocks} allowlisted" if blocks is not None else "allowlist n/a"
-        return extra
+        blocks = complexity_allowlisted(root)
+        return f"{blocks} allowlisted" if blocks is not None else "allowlist n/a"
     if key == "deadcode":
-        items = _json_count(ROOT / "scripts/ci/deadcode-allowlist.json", "items")
-        extra = f"{items} allowlisted" if items is not None else "allowlist n/a"
-        return extra
+        items = deadcode_allowlisted(root)
+        return f"{items} allowlisted" if items is not None else "allowlist n/a"
     if key == "deps":
-        allow = ROOT / "scripts/ci/deps-audit-allowlist.json"
-        npm_n = 0
-        if allow.is_file():
-            npm = (json.loads(allow.read_text(encoding="utf-8")).get("npm") or {}).get(
-                "advisory_ids"
-            )
-            if isinstance(npm, list):
-                npm_n = len(npm)
-        return f"{npm_n} npm GHSA exceptions"
+        return f"{npm_exception_count(root)} npm GHSA exceptions"
     if key == "duplication":
-        threshold = 2
-        jscpd = ROOT / ".jscpd.json"
-        if jscpd.is_file():
-            threshold = int(
-                json.loads(jscpd.read_text(encoding="utf-8")).get("threshold") or 2
-            )
-        return f"ceiling {threshold}%"
+        return f"ceiling {duplication_ceiling(root)}%"
     if key == "architecture":
-        config = ROOT / ".importlinter"
-        if not config.is_file():
-            return "—"
-        n = config.read_text(encoding="utf-8").count("[importlinter:contract:")
-        return f"{n} contracts"
+        contracts = architecture_contracts(root)
+        return "—" if contracts is None else f"{contracts} contracts"
     return "—"
 
 
@@ -118,9 +204,12 @@ def build_markdown(
     *,
     coverage_json: Path,
     floor: float,
+    root: Path = ROOT,
 ) -> str:
     lines = [
         "## Software metrics",
+        "",
+        f"**Overall: {overall_label(outcomes)}**",
         "",
         "Fast gates from the **Software quality** job. Later rows are SKIPPED when an earlier gate fails immediately.",
         "",
@@ -129,7 +218,7 @@ def build_markdown(
     ]
     for key, title in GATES:
         outcome = outcomes.get(key, "")
-        metric = gate_metric(key, coverage_json=coverage_json, floor=floor)
+        metric = gate_metric(key, coverage_json=coverage_json, floor=floor, root=root)
         policy = GATE_POLICY.get(key, "")
         lines.append(f"| {title} | **{_label(outcome)}** | {metric} | {policy} |")
     lines.extend(
@@ -148,17 +237,28 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--out", required=True)
     parser.add_argument("--coverage", default="reports/quality/coverage.json")
-    parser.add_argument("--floor", type=float, default=68.0)
+    parser.add_argument(
+        "--floor",
+        type=float,
+        default=None,
+        help="Coverage fail_under. Default: [tool.coverage.report] fail_under.",
+    )
     args = parser.parse_args()
-    outcomes = {key: os.environ.get(f"Q_{key.upper()}", "") for key, _title in GATES}
+    floor = (
+        args.floor
+        if args.floor is not None
+        else coverage_floor_from_pyproject(ROOT / "pyproject.toml")
+    )
+    outcomes = outcomes_from_env()
     text = build_markdown(
         outcomes,
         coverage_json=Path(args.coverage),
-        floor=args.floor,
+        floor=floor,
     )
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(text, encoding="utf-8", newline="\n")
+    write_gate_outcomes(gate_outcomes_path(out), outcomes)
     summary = os.environ.get("GITHUB_STEP_SUMMARY")
     if summary:
         with Path(summary).open("a", encoding="utf-8") as handle:
