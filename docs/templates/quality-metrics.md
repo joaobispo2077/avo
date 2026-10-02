@@ -4,9 +4,11 @@
 (`.github/workflows/release.yml`) writes it from the green Software quality
 artifact `quality-metrics` for the exact tip SHA.
 
-The cut fails when that JSON is missing, not overall PASS, or bound to a
-different SHA. It does not re-run gates and does not reuse the previous
-release's numbers. Ordinary pull requests do not write the file.
+The cut fails when that JSON is missing, not overall PASS, any Software
+quality gate is not PASS, or the JSON is bound to a different SHA. It does
+not re-run gates and does not reuse the previous release's numbers. Ordinary
+pull requests do not write the file. A dry-run with no releasable version
+does not write the file and does not fail the workflow.
 
 Optional PNGs land in `docs/quality/charts/<version>/` only at the cut. If
 they ship, their embedded series must match the JSON and the tables.
