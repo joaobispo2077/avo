@@ -40,6 +40,8 @@ class QualityPrReportTests(unittest.TestCase):
         self.assertIn("| Gate | Status | Metric | What this checks |", text)
         self.assertIn("Ruff", text)
         self.assertIn("68%", text)
+        self.assertIn("**Overall: FAIL**", text)
+        self.assertNotIn("**Overall: PASS**", text)
 
     def test_quality_coverage_detail_from_json(self) -> None:
         mod = _load("write_quality_pr_report", "scripts/ci/write_quality_pr_report.py")

@@ -131,7 +131,10 @@ jobs:
     runs-on: ubuntu-latest
     needs: prerequisites-gate
     permissions:
-      contents: read
+      # contents: write hosts chart PNGs on ci/quality-kpi-charts so the sticky
+      # can embed them. Gate scripts do not push. The chart uploader refuses
+      # every other branch.
+      contents: write
       pull-requests: write
     # Coverage re-runs the unit suite only (tests/integration has its own job).
     timeout-minutes: 35
@@ -218,6 +221,33 @@ jobs:
           Q_ARCHITECTURE: ${{ steps.q-architecture.outcome }}
           Q_TREE: ${{ steps.q-tree.outcome }}
         run: python scripts/ci/write_quality_pr_report.py --out reports/quality/quality-gates.md
+
+      # Charts are visualization only. They run on red and green (if: always)
+      # and the script exits 0 after writing either PNGs or an explicit failure
+      # note, so a chart problem cannot hide or become a quality gate.
+      - name: Generate KPI charts
+        if: always()
+        env:
+          Q_LINT: ${{ steps.q-lint.outcome }}
+          Q_FORMAT: ${{ steps.q-format.outcome }}
+          Q_COVERAGE: ${{ steps.q-coverage.outcome }}
+          Q_COMPLEXITY: ${{ steps.q-complexity.outcome }}
+          Q_DEPS: ${{ steps.q-deps.outcome }}
+          Q_DEADCODE: ${{ steps.q-deadcode.outcome }}
+          Q_DUPLICATION: ${{ steps.q-duplication.outcome }}
+          Q_ARCHITECTURE: ${{ steps.q-architecture.outcome }}
+          Q_TREE: ${{ steps.q-tree.outcome }}
+        run: python scripts/ci/gen_kpi_charts.py --append reports/quality/quality-gates.md --coverage reports/quality/coverage.json --out-dir reports/quality/charts
+
+      - name: Upload KPI chart images
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          KPI_CHART_UPLOAD_TOKEN: ${{ secrets.QUALITY_CHARTS_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+          GITHUB_SHA: ${{ github.sha }}
+        run: python scripts/ci/upload_kpi_chart_images.py --markdown reports/quality/quality-gates.md --charts-dir reports/quality/charts
 
       - name: Resolve PR number
         if: always()
