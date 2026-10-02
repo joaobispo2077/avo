@@ -21,7 +21,7 @@ env:
 jobs:
   prerequisites-gate:
     name: Gate 1 — Orchestrator prerequisites
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - name: Checkout
@@ -46,7 +46,7 @@ jobs:
 
   repo-unit-tests:
     name: Unit tests (AVO repo)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: prerequisites-gate
     timeout-minutes: 12
     steps:
@@ -59,7 +59,7 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Setup uv
-        uses: astral-sh/setup-uv@v5
+        uses: astral-sh/setup-uv@v10.2.0
         with:
           enable-cache: true
 
@@ -95,7 +95,7 @@ jobs:
 
   repo-integration-tests:
     name: Integration tests (AVO repo)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: prerequisites-gate
     timeout-minutes: 20
     steps:
@@ -108,7 +108,7 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Setup uv
-        uses: astral-sh/setup-uv@v5
+        uses: astral-sh/setup-uv@v10.2.0
         with:
           enable-cache: true
 
@@ -128,7 +128,7 @@ jobs:
     # GitHub check name for branch protection: "Software quality"
     # Phase-1 Must Have fast gates (task-013) — blocking on PR/push via needs into Gate 2.
     name: Software quality
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: prerequisites-gate
     permissions:
       # contents: write hosts chart PNGs on ci/quality-kpi-charts so the sticky
@@ -148,7 +148,7 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Setup uv
-        uses: astral-sh/setup-uv@v5
+        uses: astral-sh/setup-uv@v10.2.0
         with:
           enable-cache: true
 
@@ -274,7 +274,7 @@ jobs:
 
   usability-gate:
     name: Gate 2 — Project usability
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # Blocks merge readiness when Software quality fails (required check below).
     needs: [prerequisites-gate, repo-unit-tests, repo-integration-tests, software-quality]
     timeout-minutes: 15
@@ -298,7 +298,7 @@ jobs:
     # scripts/ci/mutation-config.json light floor. Not part of Software quality
     # fast gates (coverage already re-runs pytest). 20m SLA (ci-quality-hardening).
     name: Mutation tests (light)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [prerequisites-gate, repo-unit-tests]
     timeout-minutes: 20
     permissions:
@@ -314,7 +314,7 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Setup uv
-        uses: astral-sh/setup-uv@v5
+        uses: astral-sh/setup-uv@v10.2.0
         with:
           enable-cache: true
 
