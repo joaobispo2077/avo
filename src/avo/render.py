@@ -1014,6 +1014,57 @@ def build_audio_filter_parts(
     return parts, "[outa]"
 
 
+def _preoffset_overlay_inputs(overlays: list[dict], edit_dir: Path) -> list[str]:
+    """Place each overlay input with -itsoffset so late alpha is not decoded at t=0."""
+    inputs: list[str] = []
+    for overlay in overlays:
+        inputs += [
+            "-itsoffset",
+            f"{float(overlay['start_in_output']):g}",
+            "-i",
+            str(resolve_path(overlay["file"], edit_dir)),
+        ]
+    return inputs
+
+
+def _composite_video_encoder_args(
+    youtube_4k: bool,
+    youtube_4k_preset: str,
+) -> list[str]:
+    """Video encoder flags, including NVENC via AVO_RENDER_VIDEO_ENCODER."""
+    video_encoder = os.environ.get("AVO_RENDER_VIDEO_ENCODER", "libx264").strip()
+    if youtube_4k and video_encoder == "h264_nvenc":
+        return [
+            "-c:v",
+            "h264_nvenc",
+            "-preset",
+            "p6",
+            "-tune",
+            "hq",
+            "-rc",
+            "vbr",
+            "-cq",
+            "17",
+            "-b:v",
+            "40M",
+            "-maxrate",
+            "45M",
+            "-bufsize",
+            "90M",
+        ]
+    args = [
+        "-c:v",
+        video_encoder,
+        "-preset",
+        youtube_4k_preset if youtube_4k else "fast",
+    ]
+    if youtube_4k:
+        args += ["-b:v", "40M", "-maxrate", "45M", "-bufsize", "90M"]
+    else:
+        args += ["-crf", "18"]
+    return args
+
+
 def build_final_composite(
     base_path: Path,
     overlays: list[dict],
@@ -1062,14 +1113,11 @@ def build_final_composite(
         )
         return
 
-    inputs: list[str] = ["-i", str(base_path)]
-    for overlay in overlays:
-        inputs += [
-            "-itsoffset",
-            f"{float(overlay['start_in_output']):g}",
-            "-i",
-            str(resolve_path(overlay["file"], edit_dir)),
-        ]
+    inputs: list[str] = [
+        "-i",
+        str(base_path),
+        *_preoffset_overlay_inputs(overlays, edit_dir),
+    ]
     for effect in sound_effects:
         inputs += ["-i", str(resolve_path(effect["file"], edit_dir))]
 
@@ -1126,37 +1174,7 @@ def build_final_composite(
         "-map",
         audio_output,
     ]
-    video_encoder = os.environ.get("AVO_RENDER_VIDEO_ENCODER", "libx264").strip()
-    if youtube_4k and video_encoder == "h264_nvenc":
-        cmd += [
-            "-c:v",
-            "h264_nvenc",
-            "-preset",
-            "p6",
-            "-tune",
-            "hq",
-            "-rc",
-            "vbr",
-            "-cq",
-            "17",
-            "-b:v",
-            "40M",
-            "-maxrate",
-            "45M",
-            "-bufsize",
-            "90M",
-        ]
-    else:
-        cmd += [
-            "-c:v",
-            video_encoder,
-            "-preset",
-            youtube_4k_preset if youtube_4k else "fast",
-        ]
-        if youtube_4k:
-            cmd += ["-b:v", "40M", "-maxrate", "45M", "-bufsize", "90M"]
-        else:
-            cmd += ["-crf", "18"]
+    cmd += _composite_video_encoder_args(youtube_4k, youtube_4k_preset)
     cmd += [
         "-pix_fmt",
         "yuv420p",
