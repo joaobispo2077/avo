@@ -106,6 +106,21 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      # Hard-fail the cut when the green Software quality JSON for this tip is
+      # missing or bound to a different SHA. Does not re-run gates.
+      - name: Snapshot release quality metrics
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN || github.token }}
+          RELEASE_SHA: ${{ needs.determine-version.outputs.release-sha }}
+          RELEASE_VERSION: ${{ needs.determine-version.outputs.next-version }}
+          QUALITY_RUN_ID: ${{ github.event.workflow_run.id }}
+        run: bash scripts/ci/snapshot-release-quality-metrics.sh
+
       - name: Release
         env:
           GITHUB_HEAD_REF: ${{ needs.determine-version.outputs.release-branch }}
