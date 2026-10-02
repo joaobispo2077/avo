@@ -12,6 +12,67 @@ from typing import Any
 
 from avo.timeline.contracts import content_hash, file_fingerprint
 
+_MODE_BY_DIMENSIONS = {
+    (1280, 720): "--draft",
+    (1920, 1080): "--preview",
+    (3840, 2160): "--youtube-4k",
+}
+_YOUTUBE_4K_PROFILES = {"4k", "master-4k", "youtube-4k", "youtube_4k"}
+
+
+def _render_mode_args(
+    profile: str,
+    render_contract: dict[str, Any] | None,
+) -> list[str]:
+    """Map a render contract or profile name to one avo.render mode flag."""
+    dimensions = (
+        (
+            int(render_contract.get("width") or 0),
+            int(render_contract.get("height") or 0),
+        )
+        if render_contract
+        else None
+    )
+    if dimensions:
+        mode = _MODE_BY_DIMENSIONS.get(dimensions)
+        if mode is None:
+            raise RuntimeError(
+                "unsupported render contract dimensions: "
+                f"{dimensions[0]}x{dimensions[1]}"
+            )
+        return [mode]
+    if profile == "draft":
+        return ["--draft"]
+    if profile == "preview":
+        return ["--preview"]
+    if profile in _YOUTUBE_4K_PROFILES:
+        return ["--youtube-4k"]
+    return []
+
+
+def _reject_contract_mismatch(
+    media: dict[str, Any] | None,
+    render_contract: dict[str, Any] | None,
+) -> None:
+    """Fail when probed picture geometry disagrees with the render contract."""
+    if render_contract and media:
+        expected_fps = float(render_contract["frameRate"]["num"]) / float(
+            render_contract["frameRate"]["den"]
+        )
+        tolerance = float(render_contract["frameRate"].get("tolerance") or 0)
+        mismatches = [
+            field
+            for field in ("width", "height")
+            if int(media[field]) != int(render_contract[field])
+        ]
+        if abs(float(media["frameRate"]) - expected_fps) > tolerance:
+            mismatches.append("frameRate")
+        if mismatches:
+            raise RuntimeError(
+                "rendered output does not match render contract: "
+                + ", ".join(mismatches)
+            )
+
 
 class TimelineRenderAdapter:
     """TimelineRenderPort: projection JSON in, hash-bound media out."""
@@ -101,40 +162,15 @@ class TimelineRenderAdapter:
                 audio_graph.get("operations") or [],
                 sample_rate=int(audio_graph.get("sampleRate") or 48_000),
             )
+        render_contract = request.get("render_contract")
         argv = [
             "avo.render",
             str(projection),
             "-o",
             str(output),
             "--no-subtitles",
+            *_render_mode_args(profile, render_contract),
         ]
-        render_contract = request.get("render_contract")
-        dimensions = (
-            (
-                int(render_contract.get("width") or 0),
-                int(render_contract.get("height") or 0),
-            )
-            if render_contract
-            else None
-        )
-        mode_by_dimensions = {
-            (1280, 720): "--draft",
-            (1920, 1080): "--preview",
-            (3840, 2160): "--youtube-4k",
-        }
-        if dimensions:
-            mode = mode_by_dimensions.get(dimensions)
-            if mode is None:
-                raise RuntimeError(
-                    f"unsupported render contract dimensions: {dimensions[0]}x{dimensions[1]}"
-                )
-            argv.append(mode)
-        elif profile == "draft":
-            argv.append("--draft")
-        elif profile == "preview":
-            argv.append("--preview")
-        elif profile in {"4k", "master-4k", "youtube-4k", "youtube_4k"}:
-            argv.append("--youtube-4k")
         previous = sys.argv
         try:
             sys.argv = argv
@@ -146,23 +182,7 @@ class TimelineRenderAdapter:
             sys.argv = previous
         fingerprint = file_fingerprint(output)
         media = self._probe_output(output) if render_contract else None
-        if render_contract and media:
-            expected_fps = float(render_contract["frameRate"]["num"]) / float(
-                render_contract["frameRate"]["den"]
-            )
-            tolerance = float(render_contract["frameRate"].get("tolerance") or 0)
-            mismatches = [
-                field
-                for field in ("width", "height")
-                if int(media[field]) != int(render_contract[field])
-            ]
-            if abs(float(media["frameRate"]) - expected_fps) > tolerance:
-                mismatches.append("frameRate")
-            if mismatches:
-                raise RuntimeError(
-                    "rendered output does not match render contract: "
-                    + ", ".join(mismatches)
-                )
+        _reject_contract_mismatch(media, render_contract)
         return {
             "status": "pass",
             "output": {**fingerprint, "locator": str(output)},
