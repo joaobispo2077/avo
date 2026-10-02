@@ -224,6 +224,23 @@ def _seconds(ticks: int, timebase: dict[str, int] | None = None) -> float:
     return float(ticks) * num / den
 
 
+def _ducking_filter(label: str, sidechain: str, ducking: dict, end: float) -> str:
+    end_sample = round(end * 48000)
+    if end_sample <= 0:
+        raise AudioGraphError("ducked audio requires a positive region end")
+    attack = float(ducking.get("attackMs") or 20)
+    release = float(ducking.get("releaseMs") or 250)
+    amount = float(ducking.get("amountDb") or 8)
+    # Do not let either input's EOF discard the compressor's queued samples.
+    # Silence padding is bounded by the declared absolute timeline end.
+    return (
+        f"[{label}]apad[{label}pad];[{sidechain}]apad[{sidechain}pad];"
+        f"[{label}pad][{sidechain}pad]sidechaincompress="
+        f"threshold=0.05:ratio={max(1.0, amount)}:attack={attack}:release={release},"
+        f"atrim=end_sample={end_sample}[{label}d]"
+    )
+
+
 def compile_audio_layers(
     layers: list[dict[str, Any]],
     *,
@@ -296,15 +313,8 @@ def compile_audio_layers(
             ducking = layer.get("ducking") or {}
             if ducking and sidechain_pads:
                 ducked = f"{label}d"
-                attack = float(ducking.get("attackMs") or 20)
-                release = float(ducking.get("releaseMs") or 250)
-                amount = float(ducking.get("amountDb") or 8)
                 sidechain = sidechain_pads.pop(0)
-                filters.append(
-                    f"[{label}][{sidechain}]sidechaincompress="
-                    f"threshold=0.05:ratio={max(1.0, amount)}:attack={attack}:release={release}"
-                    f"[{ducked}]"
-                )
+                filters.append(_ducking_filter(label, sidechain, ducking, end))
                 mix_labels.append(f"[{ducked}]")
             else:
                 mix_labels.append(f"[{label}]")
