@@ -22,6 +22,7 @@ Load editorial guidelines for a platform or discipline before editing.
 ```
 /avo.guidelines --youtube
 /avo.guidelines --eq
+/avo.guidelines --breathing
 /avo.guidelines --tiktok
 /avo.guidelines --shorts
 ```

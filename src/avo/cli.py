@@ -42,6 +42,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="avo")
     sub = parser.add_subparsers(dest="command", required=True)
 
+    from avo.breathing import configure_parser
+
+    configure_parser(sub.add_parser("breathing"))
+
     pipeline = sub.add_parser("pipeline")
     pipeline_sub = pipeline.add_subparsers(dest="pipeline_command", required=True)
     for name in ("run", "status", "verify-commands"):
@@ -1495,6 +1499,10 @@ def _still(args: argparse.Namespace) -> int:
 
 
 def _run_cli(args: argparse.Namespace) -> int:
+    if args.command == "breathing":
+        from avo.breathing import run as breathing_run
+
+        return breathing_run(args)
     handlers = {
         "pipeline": _pipeline,
         "timeline": _timeline,

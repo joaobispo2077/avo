@@ -32,6 +32,7 @@ Spoken alias: **`/avo --help`**. Cursor file: `commands/avo/help.md` → `/avo.h
 | ------- | ----------- |
 | `/avo.guidelines --youtube` | YouTube format + playbooks |
 | `/avo.guidelines --eq` | Audio EQ, restoration, loudness |
+| `/avo.guidelines --breathing` | Opt-in dialogue breathing policies |
 | `/avo.guidelines --tiktok` | TikTok vertical short-form |
 | `/avo.guidelines --shorts` | YouTube Shorts |
 | `/avo.format` | Per-project format diagnosis (before edit) |
