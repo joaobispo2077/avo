@@ -227,6 +227,16 @@ jobs:
       # note, so a chart problem cannot hide or become a quality gate.
       - name: Generate KPI charts
         if: always()
+        env:
+          Q_LINT: ${{ steps.q-lint.outcome }}
+          Q_FORMAT: ${{ steps.q-format.outcome }}
+          Q_COVERAGE: ${{ steps.q-coverage.outcome }}
+          Q_COMPLEXITY: ${{ steps.q-complexity.outcome }}
+          Q_DEPS: ${{ steps.q-deps.outcome }}
+          Q_DEADCODE: ${{ steps.q-deadcode.outcome }}
+          Q_DUPLICATION: ${{ steps.q-duplication.outcome }}
+          Q_ARCHITECTURE: ${{ steps.q-architecture.outcome }}
+          Q_TREE: ${{ steps.q-tree.outcome }}
         run: python scripts/ci/gen_kpi_charts.py --append reports/quality/quality-gates.md --coverage reports/quality/coverage.json --out-dir reports/quality/charts
 
       - name: Upload KPI chart images

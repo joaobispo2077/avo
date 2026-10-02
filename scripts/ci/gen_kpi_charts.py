@@ -580,9 +580,20 @@ def generate(
     return build_chart_markdown(snapshot, rendered), snapshot
 
 
-def _outcomes_from_env() -> dict[str, str]:
+def resolve_outcomes(outcomes_json: Path) -> dict[str, str]:
+    """Prefer the report sidecar so charts cannot diverge from the table."""
     report = _report()
-    return {key: os.environ.get(f"Q_{key.upper()}", "") for key, _title in report.GATES}
+    if outcomes_json.is_file():
+        try:
+            loaded = report.load_gate_outcomes(outcomes_json)
+        except json.JSONDecodeError as exc:
+            print(f"ignoring unreadable gate outcomes {outcomes_json}: {exc}")
+            loaded = None
+        if loaded is not None:
+            print(f"gate outcomes from {outcomes_json}")
+            return loaded
+    print("gate outcomes from Q_* environment")
+    return report.outcomes_from_env()
 
 
 def _write_append(path: Path, section: str) -> None:
@@ -598,6 +609,11 @@ def main() -> int:
     parser.add_argument("--out-dir", default="reports/quality/charts")
     parser.add_argument("--floor", type=float, default=None)
     parser.add_argument("--root", default=str(ROOT))
+    parser.add_argument(
+        "--outcomes",
+        default="",
+        help="Gate outcome sidecar. Default: gate-outcomes.json beside --append.",
+    )
     args = parser.parse_args()
     root = Path(args.root)
     report = _report()
@@ -606,8 +622,11 @@ def main() -> int:
         if args.floor is not None
         else report.coverage_floor_from_pyproject(root / "pyproject.toml")
     )
-    outcomes = _outcomes_from_env()
     append = Path(args.append)
+    outcomes_path = (
+        Path(args.outcomes) if args.outcomes else report.gate_outcomes_path(append)
+    )
+    outcomes = resolve_outcomes(outcomes_path)
     try:
         section, snapshot = generate(
             outcomes,

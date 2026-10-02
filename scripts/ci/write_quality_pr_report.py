@@ -81,6 +81,35 @@ def overall_label(outcomes: dict[str, str]) -> str:
     return "PASS" if passed else "FAIL"
 
 
+def outcomes_from_env() -> dict[str, str]:
+    return {key: os.environ.get(f"Q_{key.upper()}", "") for key, _title in GATES}
+
+
+def gate_outcomes_path(report_path: Path) -> Path:
+    return report_path.parent / "gate-outcomes.json"
+
+
+def write_gate_outcomes(path: Path, outcomes: dict[str, str]) -> None:
+    """Sidecar the report table uses, so later steps cannot invent other statuses."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = {"gates": {key: outcomes.get(key, "") for key, _title in GATES}}
+    path.write_text(
+        json.dumps(payload, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+        newline="\n",
+    )
+
+
+def load_gate_outcomes(path: Path) -> dict[str, str] | None:
+    if not path.is_file():
+        return None
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    gates = payload.get("gates") if isinstance(payload, dict) else None
+    if not isinstance(gates, dict):
+        return None
+    return {key: str(gates.get(key, "") or "") for key, _title in GATES}
+
+
 def coverage_numbers(coverage_json: Path) -> dict[str, float | int | None]:
     if not coverage_json.is_file():
         return {"percent": None, "covered": None, "statements": None}
@@ -220,7 +249,7 @@ def main() -> int:
         if args.floor is not None
         else coverage_floor_from_pyproject(ROOT / "pyproject.toml")
     )
-    outcomes = {key: os.environ.get(f"Q_{key.upper()}", "") for key, _title in GATES}
+    outcomes = outcomes_from_env()
     text = build_markdown(
         outcomes,
         coverage_json=Path(args.coverage),
@@ -229,6 +258,7 @@ def main() -> int:
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(text, encoding="utf-8", newline="\n")
+    write_gate_outcomes(gate_outcomes_path(out), outcomes)
     summary = os.environ.get("GITHUB_STEP_SUMMARY")
     if summary:
         with Path(summary).open("a", encoding="utf-8") as handle:

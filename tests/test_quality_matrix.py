@@ -738,7 +738,31 @@ class QualityMatrixTests(unittest.TestCase):
         self.assertIn("## Software metrics", writer)
         self.assertIn("What this checks", writer)
         self.assertIn("overall_label", writer)
+        self.assertIn("gate-outcomes.json", writer)
+        self.assertIn(
+            "load_gate_outcomes",
+            (ROOT / "scripts/ci/gen_kpi_charts.py").read_text(encoding="utf-8"),
+        )
         job = ci.split("  software-quality:", 1)[1].split("\n  usability-gate:", 1)[0]
+        chart_step = job.split("- name: Generate KPI charts", 1)[1].split(
+            "- name: Upload KPI chart images", 1
+        )[0]
+        report_step = job.split("- name: Build quality PR report", 1)[1].split(
+            "- name: Generate KPI charts", 1
+        )[0]
+        for name in (
+            "Q_LINT",
+            "Q_FORMAT",
+            "Q_COVERAGE",
+            "Q_COMPLEXITY",
+            "Q_DEPS",
+            "Q_DEADCODE",
+            "Q_DUPLICATION",
+            "Q_ARCHITECTURE",
+            "Q_TREE",
+        ):
+            self.assertIn(f"{name}:", chart_step)
+            self.assertIn(f"{name}:", report_step)
         self.assertIn("scripts/ci/gen_kpi_charts.py", job)
         self.assertIn("scripts/ci/upload_kpi_chart_images.py", job)
         self.assertLess(job.index("quality-lint.sh"), job.index("gen_kpi_charts.py"))

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -300,6 +301,82 @@ class KpiChartTests(unittest.TestCase):
         self.assertIn("| Mutation | — |", note)
         self.assertNotIn("![", note)
         self.assertNotIn("![](", note)
+
+    def _without_gate_env(self) -> None:
+        saved = {
+            f"Q_{key.upper()}": os.environ.pop(f"Q_{key.upper()}", None)
+            for key, _title in self.report.GATES
+        }
+
+        def restore() -> None:
+            for key, value in saved.items():
+                if value is None:
+                    os.environ.pop(key, None)
+                else:
+                    os.environ[key] = value
+
+        self.addCleanup(restore)
+
+    def test_sidecar_keeps_chart_pass_when_env_is_empty(self) -> None:
+        """Empty Q_* must not turn a PASS report table into FAIL/UNKNOWN charts."""
+        self._without_gate_env()
+        tmp = self._workspace()
+        _fixture_root(tmp)
+        coverage = tmp / "coverage.json"
+        _coverage(coverage, 71.25, 712, 1000)
+        outcomes = self._outcomes()
+        table = self.report.build_markdown(
+            outcomes,
+            coverage_json=coverage,
+            floor=68.0,
+            root=tmp,
+        )
+        sidecar = tmp / "gate-outcomes.json"
+        self.report.write_gate_outcomes(sidecar, outcomes)
+        loaded = self.charts.resolve_outcomes(sidecar)
+        section, snapshot = self.charts.generate(
+            loaded,
+            coverage_json=coverage,
+            floor=68.0,
+            root=tmp,
+            out_dir=tmp / "charts",
+        )
+        self.assertIn("**Overall: PASS**", table)
+        self.assertIn("| Lint | **PASS** |", table)
+        self.assertEqual(loaded, outcomes)
+        self.assertEqual(snapshot["overall"], self.report.overall_label(outcomes))
+        self.assertEqual(snapshot["overall"], "PASS")
+        self.assertIn("**Overall: PASS**", section)
+        self.assertNotIn("**UNKNOWN**", section)
+        self.assertNotIn("**Overall: FAIL**", section)
+
+    def test_env_outcomes_match_table_when_sidecar_is_absent(self) -> None:
+        self._without_gate_env()
+        for key, _title in self.report.GATES:
+            os.environ[f"Q_{key.upper()}"] = "success"
+        tmp = self._workspace()
+        _fixture_root(tmp)
+        coverage = tmp / "coverage.json"
+        _coverage(coverage, 71.25, 712, 1000)
+        loaded = self.charts.resolve_outcomes(tmp / "gate-outcomes.json")
+        table = self.report.build_markdown(
+            loaded,
+            coverage_json=coverage,
+            floor=68.0,
+            root=tmp,
+        )
+        section, snapshot = self.charts.generate(
+            loaded,
+            coverage_json=coverage,
+            floor=68.0,
+            root=tmp,
+            out_dir=tmp / "charts",
+        )
+        self.assertEqual(snapshot["overall"], "PASS")
+        self.assertEqual(snapshot["overall"], self.report.overall_label(loaded))
+        self.assertIn("**Overall: PASS**", table)
+        self.assertIn("**Overall: PASS**", section)
+        self.assertNotIn("**UNKNOWN**", section)
 
     def test_upsert_replaces_previous_chart_block(self) -> None:
         once = self.charts.upsert_section("## Software metrics\n", "first")
