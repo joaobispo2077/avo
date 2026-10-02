@@ -5,6 +5,7 @@ from __future__ import annotations
 from copy import deepcopy
 from typing import Any
 
+from avo.breath_control import BreathControlError, gain_filter, resolve_control
 from avo.timeline.contracts import content_hash
 from avo.timeline.event_clock import sample_rate_boundary
 
@@ -224,6 +225,30 @@ def _seconds(ticks: int, timebase: dict[str, int] | None = None) -> float:
     return float(ticks) * num / den
 
 
+def _breath_filter(layer: dict, ducking_count: int) -> str:
+    control = layer.get("breathControl")
+    role = str(layer.get("role") or "")
+    policy = resolve_control(control, role=role)
+    if not policy:
+        return ""
+    if policy.get("sourceSha256") != (layer.get("source") or {}).get("sha256"):
+        raise BreathControlError("breath source fingerprint is missing or stale")
+    result = gain_filter(control, role=role)
+    if result and ducking_count:
+        raise BreathControlError(
+            "breath control with ducking requires frozen PCM mix materialization"
+        )
+    return result
+
+
+def _processed_label(label: str, breath_filter: str, filters: list[str]) -> str:
+    if not breath_filter:
+        return f"[{label}]"
+    output = f"{label}breath"
+    filters.append(f"[{label}]{breath_filter}[{output}]")
+    return f"[{output}]"
+
+
 def _ducking_filter(label: str, sidechain: str, ducking: dict, end: float) -> str:
     end_sample = round(end * 48000)
     if end_sample <= 0:
@@ -266,6 +291,7 @@ def compile_audio_layers(
 
     for layer in ordered:
         role = str(layer.get("role") or "")
+        breath_filter = _breath_filter(layer, ducking_count)
         enabled = not bool(layer.get("mute"))
         trace.append(
             {
@@ -305,10 +331,10 @@ def compile_audio_layers(
         if role == "dialogue" and ducking_count:
             pads = "".join(f"[dlgsc{index}]" for index in range(ducking_count))
             filters.append(f"[{label}]asplit={ducking_count + 1}[dlgmix]{pads}")
-            mix_labels.append("[dlgmix]")
+            mix_labels.append(_processed_label("dlgmix", breath_filter, filters))
             sidechain_pads = [f"dlgsc{index}" for index in range(ducking_count)]
         elif role == "dialogue":
-            mix_labels.append(f"[{label}]")
+            mix_labels.append(_processed_label(label, breath_filter, filters))
         else:
             ducking = layer.get("ducking") or {}
             if ducking and sidechain_pads:

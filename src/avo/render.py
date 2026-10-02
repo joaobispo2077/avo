@@ -1076,6 +1076,9 @@ def build_final_composite(
     audio_compiled = None
     if audio_layers:
         from avo.adapters.media.audio_tracks import compile_audio_layers
+        from avo.breath_mix import prepare_breath_layers
+
+        audio_layers = prepare_breath_layers(audio_layers, edit_dir, resolve_path)
 
         audio_compiled = compile_audio_layers(
             audio_layers,
