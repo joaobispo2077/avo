@@ -182,10 +182,11 @@ class KpiChartTests(unittest.TestCase):
             section,
         )
         self.assertIn("| Line coverage | 90.00% |", section)
-        self.assertEqual(_png_series(tmp / "charts" / "coverage.png")["state"], "fail")
+        coverage_png = _png_series(tmp / "charts" / "coverage.png")
+        self.assertEqual(coverage_png["state"], "fail")
         self.assertEqual(_png_series(tmp / "charts" / "status.png")["overall"], "FAIL")
         self.assertTrue(_has_color(tmp / "charts" / "status.png", FAIL_RGB))
-        self.assertTrue(_has_color(tmp / "charts" / "coverage.png", FAIL_RGB))
+        self.assertTrue(_has_color(tmp / "charts" / "coverage.png", PASS_RGB))
 
     def test_below_floor_bar_is_red_even_if_steps_passed(self) -> None:
         tmp = self._workspace()
@@ -609,6 +610,98 @@ class KpiChartTests(unittest.TestCase):
             "red",
         )
         self.assertTrue(_has_color(tmp / "red" / "status.png", FAIL_RGB))
+
+    def test_score_charts_use_the_status_slack_band(self) -> None:
+        tmp = self._workspace()
+        _fixture_root(tmp)
+        _coverage(tmp / "coverage.json", 70.98, 15156, 21351)
+        _jscpd(tmp, 1.8)
+        section, snapshot = self.charts.generate(
+            self._outcomes(),
+            coverage_json=tmp / "coverage.json",
+            floor=68.0,
+            root=tmp,
+            out_dir=tmp / "charts",
+        )
+        self.assertEqual(snapshot["overall"], "PASS")
+        self.assertEqual(snapshot["coverage"]["state"], "pass")
+        coverage = _png_series(tmp / "charts" / "coverage.png")
+        self.assertEqual(coverage["measured"], 70.98)
+        self.assertEqual(coverage["floor"], 68.0)
+        self.assertEqual(coverage["state"], "pass")
+        self.assertTrue(_has_color(tmp / "charts" / "coverage.png", YELLOW_RGB))
+        self.assertFalse(_has_color(tmp / "charts" / "coverage.png", PASS_RGB))
+        self.assertIn("| Line coverage | 70.98% |", section)
+        self.assertIn("| Floor (fail_under) | 68% |", section)
+
+        duplication = _png_series(tmp / "charts" / "duplication.png")
+        self.assertEqual(duplication["ceiling"], 2)
+        self.assertEqual(duplication["measured"], 1.8)
+        self.assertEqual(duplication["slack"], "yellow")
+        self.assertTrue(_has_color(tmp / "charts" / "duplication.png", YELLOW_RGB))
+        self.assertFalse(_has_color(tmp / "charts" / "duplication.png", PASS_RGB))
+        self.assertIn("| Duplicated lines | 1.80% |", section)
+        self.assertIn("| Slack | yellow |", section)
+        self.assertIn("Yellow still passes.", section)
+
+        _jscpd(tmp, 1.5)
+        self.charts.generate(
+            self._outcomes(),
+            coverage_json=tmp / "coverage.json",
+            floor=68.0,
+            root=tmp,
+            out_dir=tmp / "green-dup",
+        )
+        green = _png_series(tmp / "green-dup" / "duplication.png")
+        self.assertEqual(green["slack"], "green")
+        self.assertTrue(_has_color(tmp / "green-dup" / "duplication.png", PASS_RGB))
+
+        _jscpd(tmp, 2.01)
+        self.charts.generate(
+            self._outcomes(),
+            coverage_json=tmp / "coverage.json",
+            floor=68.0,
+            root=tmp,
+            out_dir=tmp / "red-dup",
+        )
+        red = _png_series(tmp / "red-dup" / "duplication.png")
+        self.assertEqual(red["slack"], "red")
+        self.assertTrue(_has_color(tmp / "red-dup" / "duplication.png", FAIL_RGB))
+        self.assertFalse(_has_color(tmp / "red-dup" / "duplication.png", PASS_RGB))
+
+        _coverage(tmp / "coverage.json", 76.0, 760, 1000)
+        self.charts.generate(
+            self._outcomes(),
+            coverage_json=tmp / "coverage.json",
+            floor=68.0,
+            root=tmp,
+            out_dir=tmp / "green-cov",
+        )
+        self.assertEqual(
+            _png_series(tmp / "green-cov" / "coverage.png")["state"], "pass"
+        )
+        self.assertTrue(_has_color(tmp / "green-cov" / "coverage.png", PASS_RGB))
+
+        plain_root = self._workspace()
+        _fixture_root(plain_root)
+        _coverage(plain_root / "coverage.json", 80.0, 800, 1000)
+        self.charts.generate(
+            self._outcomes(),
+            coverage_json=plain_root / "coverage.json",
+            floor=68.0,
+            root=plain_root,
+            out_dir=plain_root / "charts",
+        )
+        plain = _png_series(plain_root / "charts" / "duplication.png")
+        self.assertNotIn("slack", plain)
+        self.assertNotIn("measured", plain)
+        self.assertEqual(plain["ceiling"], 2)
+        self.assertFalse(
+            _has_color(plain_root / "charts" / "duplication.png", PASS_RGB)
+        )
+        self.assertFalse(
+            _has_color(plain_root / "charts" / "duplication.png", YELLOW_RGB)
+        )
 
     def _coverage_row_pixels(self, path: Path) -> tuple[int, int, int, int]:
         with Image.open(path) as image:

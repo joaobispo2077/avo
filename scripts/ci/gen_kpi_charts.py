@@ -408,16 +408,21 @@ def render_coverage(snapshot: dict, path: Path) -> dict:
         "statements": block["statements"],
     }
     state = block["state"]
-    title_color = PASS_HEX if state == "pass" else FAIL_HEX
     if block["measured"] is None:
         title = f"Coverage: not measured (floor {block['floor']:.0f}%)"
-    elif state == "pass":
-        title = f"Coverage: {block['measured']:.2f}% (floor {block['floor']:.0f}%)"
+        title_color = FAIL_HEX
+        bar_color = FAIL_HEX
     else:
-        title = (
-            f"Coverage: {block['measured']:.2f}% "
-            f"(step {block['step']}, floor {block['floor']:.0f}%)"
-        )
+        measured = float(block["measured"])
+        floor = float(block["floor"])
+        bar_color = SLACK_HEX[slack_band(measured, floor)]
+        title_color = bar_color
+        if state == "pass":
+            title = f"Coverage: {measured:.2f}% (floor {floor:.0f}%)"
+        else:
+            title = (
+                f"Coverage: {measured:.2f}% (step {block['step']}, floor {floor:.0f}%)"
+            )
     fig, ax = _figure(title, title_color)
     labels: list[str] = []
     values: list[float] = []
@@ -425,9 +430,9 @@ def render_coverage(snapshot: dict, path: Path) -> dict:
     hatches: list[str] = []
     if block["measured"] is not None:
         labels.append("This run")
-        values.append(float(block["measured"]))
-        colors.append(PASS_HEX if state == "pass" else FAIL_HEX)
-        hatches.append("" if state == "pass" else "//")
+        values.append(min(100.0, max(0.0, float(block["measured"]))))
+        colors.append(bar_color)
+        hatches.append("")
     labels.append(f"Floor {block['floor']:.0f}%")
     values.append(float(block["floor"]))
     colors.append(FLOOR_HEX)
@@ -521,7 +526,8 @@ def render_deps(snapshot: dict, path: Path) -> dict:
     return _render_count(series, path, title="npm GHSA exceptions", noun="Exceptions")
 
 
-def render_duplication(snapshot: dict, path: Path) -> dict:
+def duplication_chart_series(snapshot: dict) -> dict:
+    """Unmeasured duplication stays a ceiling mark. A measured bar uses slack."""
     block = snapshot["duplication"]
     ceiling = int(block["ceiling"])
     series = {
@@ -529,17 +535,51 @@ def render_duplication(snapshot: dict, path: Path) -> dict:
         "ceiling": ceiling,
         "reported": block["reported"],
     }
-    fig, ax = _figure(
-        f"Duplication ceiling {ceiling}% (configured, not measured)",
-        EDGE,
-    )
-    bars = ax.bar(["Ceiling"], [ceiling], color=NEUTRAL_HEX, edgecolor=EDGE, width=0.45)
-    ax.set_ylim(0, max(10, ceiling * 1.4))
-    ax.set_ylabel("percent")
+    percent = block.get("percent")
+    if percent is None:
+        return series
+    measured = float(percent)
+    line = 100.0 - float(ceiling)
+    series["measured"] = measured
+    series["slack"] = slack_band(100.0 - measured, line)
+    return series
+
+
+def render_duplication(snapshot: dict, path: Path) -> dict:
+    series = duplication_chart_series(snapshot)
+    ceiling = int(series["ceiling"])
+    if "slack" not in series:
+        fig, ax = _figure(
+            f"Duplication ceiling {ceiling}% (configured, not measured)",
+            EDGE,
+        )
+        bars = ax.bar(
+            ["Ceiling"], [ceiling], color=NEUTRAL_HEX, edgecolor=EDGE, width=0.45
+        )
+        ax.set_ylim(0, max(10, ceiling * 1.4))
+        ax.set_ylabel("percent")
+        ax.text(
+            bars[0].get_x() + bars[0].get_width() / 2,
+            ceiling,
+            f"{ceiling}%",
+            ha="center",
+            va="bottom",
+            fontsize=12,
+            color=EDGE,
+        )
+        return _save(fig, path, series)
+    measured = float(series["measured"])
+    color = SLACK_HEX[str(series["slack"])]
+    drawn = min(100.0, max(0.0, measured))
+    fig, ax = _figure(f"Duplication: {measured:.2f}% (ceiling {ceiling}%)", color)
+    ax.bar(["This run"], [drawn], color=color, edgecolor="none", width=0.45)
+    ax.plot([-0.4, 0.4], [ceiling, ceiling], color=EDGE, linewidth=2.0, zorder=4)
+    ax.set_ylim(0, min(100.0, max(10.0, float(ceiling) * 2.0, drawn * 1.35, 4.0)))
+    ax.set_ylabel("duplicated lines %")
     ax.text(
-        bars[0].get_x() + bars[0].get_width() / 2,
-        ceiling,
-        f"{ceiling}%",
+        0,
+        drawn,
+        f"{measured:.2f}%",
         ha="center",
         va="bottom",
         fontsize=12,
@@ -667,14 +707,9 @@ def build_chart_markdown(snapshot: dict, rendered: dict[str, dict]) -> str:
         "",
         _image("Duplication ceiling", "duplication.png"),
         "",
-        _table(
-            [
-                ("Ceiling", f"{duplication['ceiling']}%"),
-                ("Reported", duplication["reported"]),
-            ]
-        ),
+        _table(_duplication_rows(duplication)),
         "",
-        "Configured jscpd ceiling only. This chart is not a measured duplication rate.",
+        _duplication_note(duplication),
         "",
         "### Architecture contracts",
         "",
@@ -704,6 +739,27 @@ def build_chart_markdown(snapshot: dict, rendered: dict[str, dict]) -> str:
 
 def _count_cell(count: int | None) -> str:
     return "n/a" if count is None else str(count)
+
+
+def _duplication_rows(series: dict) -> list[tuple[str, str]]:
+    rows = [
+        ("Ceiling", f"{series['ceiling']}%"),
+        ("Reported", str(series["reported"])),
+    ]
+    if "measured" not in series:
+        return rows
+    return [
+        ("Duplicated lines", f"{float(series['measured']):.2f}%"),
+        ("Ceiling", f"{series['ceiling']}%"),
+        ("Slack", str(series["slack"])),
+        ("Reported", str(series["reported"])),
+    ]
+
+
+def _duplication_note(series: dict) -> str:
+    if "measured" not in series:
+        return "Configured jscpd ceiling only. This chart is not a measured duplication rate."
+    return "Color is slack against the ceiling. Yellow still passes."
 
 
 def render_charts(snapshot: dict, out_dir: Path) -> dict[str, dict]:

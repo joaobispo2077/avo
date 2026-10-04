@@ -72,7 +72,6 @@ def _charts():
 def chart_series(snapshot: dict) -> dict[str, dict]:
     """Series embedded in Phase A chart PNGs. No extra numbers."""
     coverage = snapshot["coverage"]
-    duplication = snapshot["duplication"]
     return {
         "status": _charts().status_chart_series(snapshot),
         "coverage": {
@@ -100,11 +99,7 @@ def chart_series(snapshot: dict) -> dict[str, dict]:
             "count": snapshot["deps"]["count"],
             "reported": snapshot["deps"]["reported"],
         },
-        "duplication": {
-            "chart": "duplication",
-            "ceiling": int(duplication["ceiling"]),
-            "reported": duplication["reported"],
-        },
+        "duplication": _charts().duplication_chart_series(snapshot),
         "architecture": {
             "chart": "architecture",
             "count": snapshot["architecture"]["count"],
@@ -289,12 +284,7 @@ def _chart_tables(series: dict, images: dict[str, str]) -> str:
         parts.extend([f"![Duplication ceiling]({images['duplication']})", ""])
     parts.extend(
         [
-            _table(
-                [
-                    ("Ceiling", f"{series['duplication']['ceiling']}%"),
-                    ("Reported", str(series["duplication"]["reported"])),
-                ]
-            ),
+            _table(_charts()._duplication_rows(series["duplication"])),
             "",
             "### Architecture contracts",
             "",
