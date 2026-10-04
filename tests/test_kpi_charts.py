@@ -15,6 +15,9 @@ ROOT = Path(__file__).resolve().parents[1]
 FAIL_RGB = (176, 0, 32)
 PASS_RGB = (27, 127, 58)
 YELLOW_RGB = (240, 180, 0)
+CHIP_PASS_RGB = (31, 78, 137)
+CHIP_SKIP_RGB = (92, 103, 112)
+AMBER_RGB = (138, 109, 0)
 
 
 def _load(name: str, rel: str):
@@ -250,7 +253,7 @@ class KpiChartTests(unittest.TestCase):
             out_dir=tmp / "charts",
         )
         status = tmp / "charts" / "status.png"
-        self.assertTrue(_has_color(status, PASS_RGB))
+        self.assertTrue(_has_color(status, CHIP_PASS_RGB))
         self.assertFalse(_has_color(status, FAIL_RGB))
 
     def test_upload_rewrites_urls_and_never_leaves_an_empty_image(self) -> None:
@@ -606,6 +609,137 @@ class KpiChartTests(unittest.TestCase):
             "red",
         )
         self.assertTrue(_has_color(tmp / "red" / "status.png", FAIL_RGB))
+
+    def _coverage_row_pixels(self, path: Path) -> tuple[int, int, int, int]:
+        with Image.open(path) as image:
+            rgb = image.convert("RGB")
+            width, height = rgb.size
+            pix = rgb.load()
+        yellow = []
+        for y in range(height):
+            for x in range(width):
+                red, green, blue = pix[x, y]
+                if (
+                    abs(red - YELLOW_RGB[0]) <= 25
+                    and abs(green - YELLOW_RGB[1]) <= 35
+                    and blue <= 50
+                ):
+                    yellow.append((x, y))
+        self.assertTrue(yellow)
+        xs = [point[0] for point in yellow]
+        ys = [point[1] for point in yellow]
+        return min(xs), max(xs), min(ys), max(ys)
+
+    def test_floor_line_sits_inside_the_coverage_bar(self) -> None:
+        """70.98 crosses the floor at 68. The tip is the score, not a tick."""
+        tmp = self._workspace()
+        _fixture_root(tmp)
+        _coverage(tmp / "coverage.json", 70.98, 15156, 21351)
+        self.charts.generate(
+            self._outcomes(duplication="skipped"),
+            coverage_json=tmp / "coverage.json",
+            floor=68.0,
+            root=tmp,
+            out_dir=tmp / "charts",
+        )
+        path = tmp / "charts" / "status.png"
+        series = _png_series(path)
+        coverage = next(row for row in series["gates"] if row["title"] == "Coverage")
+        self.assertEqual(coverage["measured"], 70.98)
+        self.assertEqual(coverage["line"], 68.0)
+        self.assertEqual(coverage["drawn"], 70.98)
+        self.assertGreater(coverage["drawn"], coverage["line"])
+        self.assertEqual(coverage["slack"], "yellow")
+        duplication = next(
+            row for row in series["gates"] if row["title"] == "Duplication"
+        )
+        self.assertEqual(duplication["kind"], "chip")
+        self.assertEqual(duplication["status"], "SKIPPED")
+
+        left, right, top, bottom = self._coverage_row_pixels(path)
+        with Image.open(path) as image:
+            pix = image.convert("RGB").load()
+        line_xs = []
+        for y in range(top - 8, top):
+            for x in range(left, right + 8):
+                red, green, blue = pix[x, y]
+                if red < 40 and green < 40 and blue < 40:
+                    line_xs.append(x)
+        self.assertTrue(line_xs)
+        line_x = sorted(line_xs)[len(line_xs) // 2]
+        self.assertLess(line_x, right - 8)
+        self.assertGreater(line_x, left + 8)
+        yellow_past_line = False
+        for y in range((top + bottom) // 2, (top + bottom) // 2 + 1):
+            for x in range(line_x + 4, right + 1):
+                red, green, blue = pix[x, y]
+                if (
+                    abs(red - YELLOW_RGB[0]) <= 25
+                    and abs(green - YELLOW_RGB[1]) <= 35
+                    and blue <= 50
+                ):
+                    yellow_past_line = True
+        self.assertTrue(yellow_past_line)
+        past_tip = []
+        for y in range(top - 8, bottom + 9):
+            for x in range(right + 2, right + 12):
+                red, green, blue = pix[x, y]
+                if red < 40 and green < 40 and blue < 40:
+                    past_tip.append((x, y))
+        self.assertEqual(past_tip, [])
+
+    def test_chips_are_not_band_colors(self) -> None:
+        tmp = self._workspace()
+        _fixture_root(tmp)
+        _coverage(tmp / "coverage.json", 70.98, 15156, 21351)
+        self.charts.generate(
+            self._outcomes(
+                deps="failure",
+                deadcode="skipped",
+                duplication="skipped",
+                architecture="skipped",
+                tree="skipped",
+            ),
+            coverage_json=tmp / "coverage.json",
+            floor=68.0,
+            root=tmp,
+            out_dir=tmp / "charts",
+        )
+        path = tmp / "charts" / "status.png"
+        self.assertTrue(_has_color(path, CHIP_PASS_RGB))
+        self.assertTrue(_has_color(path, CHIP_SKIP_RGB))
+        self.assertTrue(_has_color(path, YELLOW_RGB))
+        self.assertTrue(_has_color(path, FAIL_RGB))
+        self.assertFalse(_has_color(path, PASS_RGB))
+        self.assertFalse(_has_color(path, AMBER_RGB))
+
+    def test_axis_caption_is_not_on_the_50_tick(self) -> None:
+        tmp = self._workspace()
+        _fixture_root(tmp)
+        _coverage(tmp / "coverage.json", 70.98, 15156, 21351)
+        self.charts.generate(
+            self._outcomes(),
+            coverage_json=tmp / "coverage.json",
+            floor=68.0,
+            root=tmp,
+            out_dir=tmp / "charts",
+        )
+        path = tmp / "charts" / "status.png"
+        left, right, _top, bottom = self._coverage_row_pixels(path)
+        fifty = left + (50.0 / 70.98) * (right - left)
+        with Image.open(path) as image:
+            rgb = image.convert("RGB")
+            width, height = rgb.size
+            pix = rgb.load()
+        caption = []
+        for y in range(bottom + 28, height):
+            for x in range(width):
+                red, green, blue = pix[x, y]
+                if red < 80 and green < 80 and blue < 80:
+                    caption.append(x)
+        self.assertTrue(caption)
+        centroid = sum(caption) / len(caption)
+        self.assertGreater(abs(centroid - fifty), 80)
 
     def test_upsert_replaces_previous_chart_block(self) -> None:
         once = self.charts.upsert_section("## Software metrics\n", "first")

@@ -24,11 +24,12 @@ END = "<!-- kpi-charts:end -->"
 
 PASS_HEX = "#1b7f3a"
 FAIL_HEX = "#b00020"
-SKIP_HEX = "#8a6d00"
 UNKNOWN_HEX = "#5c6770"
 FLOOR_HEX = "#1f4e79"
 NEUTRAL_HEX = "#1f4e79"
 YELLOW_HEX = "#f0b400"
+CHIP_PASS_HEX = "#1f4e89"
+CHIP_SKIP_HEX = "#5c6770"
 EDGE = "#1a1a1a"
 JSCPD_REPORT = Path("reports/quality/jscpd/jscpd-report.json")
 SLACK_HEX = {"red": FAIL_HEX, "yellow": YELLOW_HEX, "green": PASS_HEX}
@@ -288,14 +289,15 @@ def _figure(title: str, title_color: str):
     return fig, ax
 
 
-def _status_style(status: str) -> tuple[str, str]:
+def _chip_color(status: str) -> str:
+    """Status pills. Yellow and green are reserved for score bars."""
     if status == "PASS":
-        return PASS_HEX, ""
+        return CHIP_PASS_HEX
     if status in {"FAIL", "CANCELLED"}:
-        return FAIL_HEX, "//"
+        return FAIL_HEX
     if status == "SKIPPED":
-        return SKIP_HEX, ".."
-    return UNKNOWN_HEX, ""
+        return CHIP_SKIP_HEX
+    return UNKNOWN_HEX
 
 
 def _draw_score_bar(ax, y: float, row: dict) -> None:
@@ -304,26 +306,18 @@ def _draw_score_bar(ax, y: float, row: dict) -> None:
         y,
         drawn,
         color=SLACK_HEX[str(row["slack"])],
-        edgecolor=EDGE,
+        edgecolor="none",
+        linewidth=0,
         height=0.62,
         zorder=2,
     )
     line = float(row["line"])
     if 0.0 <= line <= 100.0:
-        span = [y - 0.46, y + 0.46]
         ax.plot(
             [line, line],
-            span,
-            color="white",
-            linewidth=4.2,
-            solid_capstyle="butt",
-            zorder=3,
-        )
-        ax.plot(
-            [line, line],
-            span,
+            [y - 0.5, y + 0.5],
             color=EDGE,
-            linewidth=2.0,
+            linewidth=2.2,
             solid_capstyle="butt",
             zorder=4,
         )
@@ -344,7 +338,7 @@ def _draw_score_bar(ax, y: float, row: dict) -> None:
 def _draw_chip(ax, y: float, row: dict) -> None:
     from matplotlib.patches import Rectangle
 
-    paint, _hatch = _status_style(str(row["status"]))
+    paint = _chip_color(str(row["status"]))
     ax.add_patch(
         Rectangle(
             (1.2, y - 0.22),
@@ -385,7 +379,18 @@ def render_status(snapshot: dict, path: Path) -> dict:
             _draw_chip(ax, float(y), row)
     ax.set_xlim(0, 100)
     ax.set_xticks([0, 25, 50, 75, 100])
-    ax.set_xlabel("0 to 100")
+    ax.annotate(
+        "0 to 100",
+        xy=(1, 0),
+        xycoords="axes fraction",
+        xytext=(10, -28),
+        textcoords="offset points",
+        ha="left",
+        va="top",
+        fontsize=11,
+        color=EDGE,
+        annotation_clip=False,
+    )
     ax.invert_yaxis()
     return _save(fig, path, series)
 
