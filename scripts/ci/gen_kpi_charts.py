@@ -33,6 +33,12 @@ CHIP_SKIP_HEX = "#5c6770"
 EDGE = "#1a1a1a"
 JSCPD_REPORT = Path("reports/quality/jscpd/jscpd-report.json")
 SLACK_HEX = {"red": FAIL_HEX, "yellow": YELLOW_HEX, "green": PASS_HEX}
+# Score bars share this thickness. Chips use it too, but not the 0 to 100 scale.
+SCORE_BAR_HEIGHT = 0.62
+CHIP_FONT_SIZE = 8
+CHIP_PAD_POINTS = 10.0
+CHIP_GAP_POINTS = 12.0
+CHIP_LABELS = ("PASS", "FAIL", "SKIPPED", "CANCELLED", "UNKNOWN")
 
 
 def _report():
@@ -300,6 +306,49 @@ def _chip_color(status: str) -> str:
     return UNKNOWN_HEX
 
 
+def _chip_width_points() -> float:
+    """One box, in points, wide enough for the longest status word."""
+    from matplotlib.font_manager import FontProperties
+    from matplotlib.textpath import TextPath
+
+    prop = FontProperties(weight="bold")
+    widest = 0.0
+    for label in CHIP_LABELS:
+        path = TextPath((0, 0), label, size=CHIP_FONT_SIZE, prop=prop)
+        widest = max(widest, float(path.get_extents().width))
+    return widest + 2 * CHIP_PAD_POINTS
+
+
+def _chip_transform(ax):
+    """x in points past the score axis, y in data coordinates.
+
+    A width on the 0 to 100 axis would read as a score. Chip rows have no length.
+    """
+    from matplotlib.transforms import Transform
+
+    class ChipTransform(Transform):
+        input_dims = 2
+        output_dims = 2
+
+        def __init__(self, axes):
+            super().__init__()
+            self.axes = axes
+
+        def transform_non_affine(self, values):
+            import numpy as np
+
+            points = np.asarray(values, dtype=float)
+            single = points.ndim == 1
+            if single:
+                points = points.reshape(1, 2)
+            anchor = np.column_stack((np.full(len(points), 100.0), points[:, 1]))
+            display = np.array(self.axes.transData.transform(anchor), dtype=float)
+            display[:, 0] += points[:, 0] * (self.axes.figure.dpi / 72.0)
+            return display[0] if single else display
+
+    return ChipTransform(ax)
+
+
 def _draw_score_bar(ax, y: float, row: dict) -> None:
     drawn = float(row["drawn"])
     ax.barh(
@@ -308,7 +357,7 @@ def _draw_score_bar(ax, y: float, row: dict) -> None:
         color=SLACK_HEX[str(row["slack"])],
         edgecolor="none",
         linewidth=0,
-        height=0.62,
+        height=SCORE_BAR_HEIGHT,
         zorder=2,
     )
     line = float(row["line"])
@@ -335,30 +384,34 @@ def _draw_score_bar(ax, y: float, row: dict) -> None:
     )
 
 
-def _draw_chip(ax, y: float, row: dict) -> None:
+def _draw_chip(ax, y: float, row: dict, transform, width: float) -> None:
     from matplotlib.patches import Rectangle
 
     paint = _chip_color(str(row["status"]))
     ax.add_patch(
         Rectangle(
-            (1.2, y - 0.22),
-            18,
-            0.44,
+            (CHIP_GAP_POINTS, y - SCORE_BAR_HEIGHT / 2),
+            width,
+            SCORE_BAR_HEIGHT,
             facecolor=paint,
-            edgecolor=EDGE,
+            edgecolor="none",
+            linewidth=0,
+            transform=transform,
+            clip_on=False,
             zorder=2,
-            linewidth=0.6,
         )
     )
     ax.text(
-        10.2,
+        CHIP_GAP_POINTS + width / 2,
         y,
         row["status"],
+        transform=transform,
         va="center",
         ha="center",
-        fontsize=8,
+        fontsize=CHIP_FONT_SIZE,
         fontweight="bold",
         color="white",
+        clip_on=False,
         zorder=3,
     )
 
@@ -372,12 +425,16 @@ def render_status(snapshot: dict, path: Path) -> dict:
     positions = list(range(len(rows)))
     ax.set_yticks(positions)
     ax.set_yticklabels([row["title"] for row in rows])
+    chip_transform = _chip_transform(ax)
+    chip_width = _chip_width_points()
     for y, row in zip(positions, rows, strict=True):
         if row["kind"] == "bar":
             _draw_score_bar(ax, float(y), row)
         else:
-            _draw_chip(ax, float(y), row)
+            _draw_chip(ax, float(y), row, chip_transform, chip_width)
     ax.set_xlim(0, 100)
+    # Chips are not on this axis, so they must not define its limits.
+    ax.set_ylim(-0.5, len(rows) - 0.5)
     ax.set_xticks([0, 25, 50, 75, 100])
     ax.annotate(
         "0 to 100",
@@ -653,7 +710,7 @@ def build_chart_markdown(snapshot: dict, rendered: dict[str, dict]) -> str:
             "Coverage bar is the measured percent. Duplication is inverted: "
             "0% draws at 100 and the line is 100 minus the ceiling. "
             "Color is slack against that line. Yellow still passes. "
-            "Chips are the gates without a 0 to 100 score."
+            "Chips sit off that axis in one shared pill."
         ),
         "",
         "### Coverage",

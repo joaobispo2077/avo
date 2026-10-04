@@ -38,6 +38,56 @@ def _png_series(path: Path) -> dict:
     return json.loads(raw)
 
 
+def _close(pixel: tuple[int, int, int], rgb: tuple[int, int, int], tol: int) -> bool:
+    return all(
+        abs(channel - target) <= tol for channel, target in zip(pixel, rgb, strict=True)
+    )
+
+
+def _solid_boxes(
+    path: Path,
+    rgb: tuple[int, int, int],
+    *,
+    tol: int = 8,
+    min_area: int = 400,
+) -> list[tuple[int, int, int, int]]:
+    """Bounding boxes of solid color regions: (left, right, top, bottom)."""
+    with Image.open(path) as image:
+        picture = image.convert("RGB")
+        width, height = picture.size
+        pix = picture.load()
+    seen = bytearray(width * height)
+    boxes = []
+    for y in range(height):
+        for x in range(width):
+            start = y * width + x
+            if seen[start] or not _close(pix[x, y], rgb, tol):
+                continue
+            stack = [(x, y)]
+            seen[start] = 1
+            left = right = x
+            top = bottom = y
+            area = 0
+            while stack:
+                cx, cy = stack.pop()
+                area += 1
+                left = min(left, cx)
+                right = max(right, cx)
+                top = min(top, cy)
+                bottom = max(bottom, cy)
+                for nx, ny in ((cx - 1, cy), (cx + 1, cy), (cx, cy - 1), (cx, cy + 1)):
+                    if nx < 0 or ny < 0 or nx >= width or ny >= height:
+                        continue
+                    index = ny * width + nx
+                    if seen[index] or not _close(pix[nx, ny], rgb, tol):
+                        continue
+                    seen[index] = 1
+                    stack.append((nx, ny))
+            if area >= min_area:
+                boxes.append((left, right, top, bottom))
+    return boxes
+
+
 def _has_color(path: Path, rgb: tuple[int, int, int], tol: int = 12) -> bool:
     with Image.open(path) as image:
         data = image.convert("RGB").tobytes()
@@ -780,6 +830,95 @@ class KpiChartTests(unittest.TestCase):
                 if red < 40 and green < 40 and blue < 40:
                     past_tip.append((x, y))
         self.assertEqual(past_tip, [])
+
+    def test_chip_pills_share_one_box_off_the_score_axis(self) -> None:
+        """PASS and SKIPPED use one pill. That pill is not a length on 0 to 100."""
+        tmp = self._workspace()
+        _fixture_root(tmp)
+        _coverage(tmp / "coverage.json", 70.98, 15156, 21351)
+        section, _snapshot = self.charts.generate(
+            self._outcomes(
+                format="skipped",
+                deps="failure",
+                duplication="skipped",
+                tree="cancelled",
+            ),
+            coverage_json=tmp / "coverage.json",
+            floor=68.0,
+            root=tmp,
+            out_dir=tmp / "charts",
+        )
+        path = tmp / "charts" / "status.png"
+        series = _png_series(path)
+        coverage = next(item for item in series["gates"] if item["title"] == "Coverage")
+        self.assertEqual(coverage["kind"], "bar")
+        self.assertIn("drawn", coverage)
+        for title in (
+            "Lint",
+            "Format",
+            "Dependency audit",
+            "Duplication",
+            "Dependency tree",
+        ):
+            row = next(item for item in series["gates"] if item["title"] == title)
+            self.assertEqual(row["kind"], "chip")
+            self.assertNotIn("drawn", row)
+        self.assertIn("| Duplication | chip · **SKIPPED** |", section)
+        self.assertNotIn("### Mutation\n\n![", section)
+
+        pass_bands = _solid_boxes(path, CHIP_PASS_RGB)
+        skip_bands = _solid_boxes(path, CHIP_SKIP_RGB)
+        self.assertGreaterEqual(len(pass_bands), 2)
+        self.assertGreaterEqual(len(skip_bands), 2)
+        pill = pass_bands[0]
+        pill_width = pill[1] - pill[0]
+        pill_height = pill[3] - pill[2]
+        self.assertGreater(pill_width, 8)
+        self.assertGreater(pill_height, 8)
+        for band in (*pass_bands, *skip_bands):
+            self.assertAlmostEqual(band[1] - band[0], pill_width, delta=2)
+            self.assertAlmostEqual(band[3] - band[2], pill_height, delta=2)
+            self.assertAlmostEqual(band[0], pill[0], delta=2)
+
+        fail_pills = _solid_boxes(path, FAIL_RGB)
+        self.assertGreaterEqual(len(fail_pills), 2)
+        for band in fail_pills:
+            self.assertAlmostEqual(band[1] - band[0], pill_width, delta=2)
+            self.assertAlmostEqual(band[3] - band[2], pill_height, delta=2)
+            self.assertAlmostEqual(band[0], pill[0], delta=2)
+
+        yellow = _solid_boxes(path, YELLOW_RGB, tol=25)
+        self.assertGreaterEqual(len(yellow), 1)
+        bar_left = min(band[0] for band in yellow)
+        bar_right = max(band[1] for band in yellow)
+        bar_top = min(band[2] for band in yellow)
+        bar_bottom = max(band[3] for band in yellow)
+        self.assertAlmostEqual(bar_bottom - bar_top, pill_height, delta=4)
+        axis_100 = bar_left + (bar_right - bar_left) * (100.0 / 70.98)
+        for band in (*pass_bands, *skip_bands, *fail_pills):
+            self.assertGreater(band[0], axis_100 + 4)
+        with Image.open(path) as image:
+            pix = image.convert("RGB").load()
+
+        def word_inside(band: tuple[int, int, int, int]) -> None:
+            left, right, top, bottom = band
+            light = []
+            for y in range(top, bottom + 1):
+                for x in range(left, right + 1):
+                    red, green, blue = pix[x, y]
+                    if red > 185 and green > 185 and blue > 185:
+                        light.append((x, y))
+            self.assertTrue(light)
+            xs = [point[0] for point in light]
+            ys = [point[1] for point in light]
+            self.assertGreaterEqual(min(xs), left + 6)
+            self.assertLessEqual(max(xs), right - 6)
+            self.assertGreaterEqual(min(ys), top + 2)
+            self.assertLessEqual(max(ys), bottom - 2)
+
+        word_inside(skip_bands[0])
+        word_inside(pass_bands[0])
+        word_inside(fail_pills[0])
 
     def test_chips_are_not_band_colors(self) -> None:
         tmp = self._workspace()
