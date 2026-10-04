@@ -143,6 +143,57 @@ def npm_exception_count(root: Path = ROOT) -> int:
     return 0
 
 
+def deps_findings_path(root: Path = ROOT) -> Path:
+    return root / "reports" / "quality" / "deps-findings.json"
+
+
+def load_deps_findings(path: Path) -> list[dict]:
+    """Audit findings recorded by the deps gate. Missing file means none."""
+    if not path.is_file():
+        return []
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return []
+    raw = payload.get("findings") if isinstance(payload, dict) else None
+    if not isinstance(raw, list):
+        return []
+    return [item for item in raw if isinstance(item, dict) and item.get("package")]
+
+
+def format_deps_finding(finding: dict) -> str:
+    """One finding. No waiver count. No id names the package and via path."""
+    package = str(finding.get("package") or "").strip()
+    advisory = finding.get("id")
+    advisory_id = advisory.strip() if isinstance(advisory, str) else ""
+    if advisory_id:
+        return f"{package} {advisory_id}"
+    via = finding.get("via")
+    via_path = via.strip() if isinstance(via, str) else ""
+    if via_path:
+        return f"{package} via {via_path} has no GHSA id"
+    return f"{package} has no GHSA id"
+
+
+def deps_cell(
+    outcome: str,
+    *,
+    root: Path = ROOT,
+    findings_path: Path | None = None,
+) -> str:
+    """Sticky Dependency audit metric.
+
+    FAIL with a recorded finding names that finding and nothing else.
+    PASS keeps the waiver count. Charts keep using ``gate_metric``.
+    """
+    path = findings_path if findings_path is not None else deps_findings_path(root)
+    if outcome.strip().lower() == "failure":
+        findings = load_deps_findings(path)
+        if findings:
+            return "; ".join(format_deps_finding(item) for item in findings)
+    return f"{npm_exception_count(root)} npm GHSA exceptions"
+
+
 def duplication_ceiling(root: Path = ROOT) -> int:
     threshold = 2
     jscpd = root / ".jscpd.json"
@@ -205,6 +256,7 @@ def build_markdown(
     coverage_json: Path,
     floor: float,
     root: Path = ROOT,
+    findings_path: Path | None = None,
 ) -> str:
     lines = [
         "## Software metrics",
@@ -218,7 +270,12 @@ def build_markdown(
     ]
     for key, title in GATES:
         outcome = outcomes.get(key, "")
-        metric = gate_metric(key, coverage_json=coverage_json, floor=floor, root=root)
+        if key == "deps":
+            metric = deps_cell(outcome, root=root, findings_path=findings_path)
+        else:
+            metric = gate_metric(
+                key, coverage_json=coverage_json, floor=floor, root=root
+            )
         policy = GATE_POLICY.get(key, "")
         lines.append(f"| {title} | **{_label(outcome)}** | {metric} | {policy} |")
     lines.extend(

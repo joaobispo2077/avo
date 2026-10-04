@@ -5,6 +5,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -128,6 +129,56 @@ class TestCheckNpmAudit(unittest.TestCase):
             ),
         ):
             self.assertEqual(self.mod.main(), 1)
+
+    def test_no_ghsa_records_package_and_via_then_fails(self) -> None:
+        audit = {
+            "vulnerabilities": {
+                "@jscpd/finder": {
+                    "severity": "high",
+                    "via": ["fast-glob"],
+                    "nodes": ["node_modules/@jscpd/finder"],
+                }
+            }
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "deps-findings.json"
+            with mock.patch.object(self.mod, "FINDINGS_PATH", path):
+                with self.assertRaises(SystemExit) as caught:
+                    self.mod._high_advisory_ids(audit)
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        self.assertIn("without GHSA id", str(caught.exception))
+        self.assertIn("@jscpd/finder", str(caught.exception))
+        self.assertEqual(
+            payload["findings"],
+            [{"package": "@jscpd/finder", "id": None, "via": "fast-glob"}],
+        )
+        allow = json.loads(
+            (ROOT / "scripts/ci/deps-audit-allowlist.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual(allow["npm"]["advisory_ids"], [])
+
+    def test_record_pip_keeps_pysec_id(self) -> None:
+        payload = {
+            "dependencies": [
+                {
+                    "name": "requests",
+                    "version": "2.0.0",
+                    "vulns": [{"id": "PYSEC-2024-123", "fix_versions": []}],
+                },
+                {"name": "local", "skip_reason": "skip-editable"},
+            ],
+            "fixes": [],
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "deps-findings.json"
+            with mock.patch.object(self.mod, "FINDINGS_PATH", path):
+                code = self.mod.record_pip_payload(payload)
+            written = json.loads(path.read_text(encoding="utf-8"))
+        self.assertEqual(code, 0)
+        self.assertEqual(
+            written["findings"],
+            [{"package": "requests", "id": "PYSEC-2024-123", "via": ""}],
+        )
 
     def test_allowlist_file_schema(self) -> None:
         raw = json.loads(

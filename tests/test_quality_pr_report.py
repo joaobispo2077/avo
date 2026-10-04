@@ -43,6 +43,133 @@ class QualityPrReportTests(unittest.TestCase):
         self.assertIn("**Overall: FAIL**", text)
         self.assertNotIn("**Overall: PASS**", text)
 
+    def _empty_allowlist_root(self) -> Path:
+        handle = tempfile.TemporaryDirectory()
+        self.addCleanup(handle.cleanup)
+        root = Path(handle.name)
+        allow = root / "scripts" / "ci"
+        allow.mkdir(parents=True)
+        (allow / "deps-audit-allowlist.json").write_text(
+            json.dumps({"npm": {"advisory_ids": []}, "pip": {"ignore_vulns": []}}),
+            encoding="utf-8",
+        )
+        return root
+
+    def _deps_findings(self, root: Path, findings: list[dict]) -> Path:
+        path = root / "reports" / "quality" / "deps-findings.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            json.dumps({"findings": findings}, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        return path
+
+    def test_deps_fail_without_ghsa_names_package_and_via(self) -> None:
+        mod = _load("write_quality_pr_report", "scripts/ci/write_quality_pr_report.py")
+        root = self._empty_allowlist_root()
+        self._deps_findings(
+            root,
+            [{"package": "@jscpd/finder", "id": None, "via": "fast-glob"}],
+        )
+        text = mod.build_markdown(
+            {
+                "lint": "success",
+                "format": "success",
+                "coverage": "success",
+                "complexity": "success",
+                "deps": "failure",
+                "deadcode": "skipped",
+                "duplication": "skipped",
+                "architecture": "skipped",
+                "tree": "skipped",
+            },
+            coverage_json=Path("missing.json"),
+            floor=68.0,
+            root=root,
+        )
+        self.assertIn(
+            "| Dependency audit | **FAIL** | "
+            "@jscpd/finder via fast-glob has no GHSA id |",
+            text,
+        )
+        self.assertNotIn("npm GHSA exceptions", text)
+        self.assertEqual(
+            mod.gate_metric(
+                "deps",
+                coverage_json=Path("missing.json"),
+                floor=68.0,
+                root=root,
+            ),
+            "0 npm GHSA exceptions",
+        )
+        self.assertIn("| Dead code | **SKIPPED** |", text)
+        self.assertIn("| Duplication | **SKIPPED** |", text)
+        self.assertIn("| Architecture | **SKIPPED** |", text)
+        self.assertIn("| Dependency tree | **SKIPPED** |", text)
+        self.assertIn("**Overall: FAIL**", text)
+
+    def test_deps_pass_with_empty_allowlist_reports_waiver_count(self) -> None:
+        mod = _load("write_quality_pr_report", "scripts/ci/write_quality_pr_report.py")
+        root = self._empty_allowlist_root()
+        self._deps_findings(
+            root,
+            [{"package": "@jscpd/finder", "id": None, "via": "fast-glob"}],
+        )
+        text = mod.build_markdown(
+            {"deps": "success"},
+            coverage_json=Path("missing.json"),
+            floor=68.0,
+            root=root,
+        )
+        self.assertIn(
+            "| Dependency audit | **PASS** | 0 npm GHSA exceptions |",
+            text,
+        )
+        self.assertNotIn("@jscpd/finder", text)
+        self.assertNotIn("fast-glob", text)
+        self.assertNotIn("no GHSA id", text)
+
+    def test_deps_fail_with_advisory_id_names_package_and_id(self) -> None:
+        mod = _load("write_quality_pr_report", "scripts/ci/write_quality_pr_report.py")
+        root = self._empty_allowlist_root()
+        cases = (
+            ("ip-address", "GHSA-mwp4-54f8-5fhr"),
+            ("requests", "PYSEC-2024-123"),
+        )
+        for package, advisory in cases:
+            self._deps_findings(
+                root,
+                [{"package": package, "id": advisory, "via": ""}],
+            )
+            text = mod.build_markdown(
+                {"deps": "failure"},
+                coverage_json=Path("missing.json"),
+                floor=68.0,
+                root=root,
+            )
+            self.assertIn(
+                f"| Dependency audit | **FAIL** | {package} {advisory} |",
+                text,
+            )
+            self.assertNotIn("npm GHSA exceptions", text)
+            self.assertNotIn("@jscpd/finder", text)
+
+    def test_deps_fail_without_recorded_finding_does_not_invent_one(self) -> None:
+        mod = _load("write_quality_pr_report", "scripts/ci/write_quality_pr_report.py")
+        root = self._empty_allowlist_root()
+        text = mod.build_markdown(
+            {"deps": "failure"},
+            coverage_json=Path("missing.json"),
+            floor=68.0,
+            root=root,
+        )
+        self.assertIn(
+            "| Dependency audit | **FAIL** | 0 npm GHSA exceptions |",
+            text,
+        )
+        self.assertNotIn("@jscpd/finder", text)
+        self.assertNotIn("fast-glob", text)
+
     def test_quality_coverage_detail_from_json(self) -> None:
         mod = _load("write_quality_pr_report", "scripts/ci/write_quality_pr_report.py")
         with tempfile.TemporaryDirectory() as tmp:

@@ -8,6 +8,7 @@ Soft/warn-only mode is intentionally absent.
 
 from __future__ import annotations
 
+import argparse
 import json
 import re
 import shutil
@@ -15,9 +16,11 @@ import subprocess
 import sys
 from datetime import date
 from pathlib import Path
+from typing import NoReturn
 
 ROOT = Path(__file__).resolve().parents[2]
 ALLOWLIST_PATH = Path(__file__).resolve().parent / "deps-audit-allowlist.json"
+FINDINGS_PATH = ROOT / "reports" / "quality" / "deps-findings.json"
 GHSA_RE = re.compile(r"GHSA-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4}", re.I)
 FAIL_SEVERITIES = frozenset({"high", "critical"})
 
@@ -44,6 +47,32 @@ def _load_allowlist() -> dict[str, dict]:
                 )
         index[adv_id] = entry
     return index
+
+
+def write_deps_findings(findings: list[dict], path: Path | None = None) -> None:
+    """Persist the findings that failed the gate. Not an allowlist."""
+    dest = FINDINGS_PATH if path is None else path
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    dest.write_text(
+        json.dumps({"findings": findings}, indent=2) + "\n",
+        encoding="utf-8",
+        newline="\n",
+    )
+
+
+def _via_path(via: object) -> str:
+    if isinstance(via, str):
+        return via
+    if isinstance(via, dict):
+        name = via.get("name")
+        if isinstance(name, str):
+            return name
+    return ""
+
+
+def _fail_without_ghsa(package: str, via: object, detail: str) -> NoReturn:
+    write_deps_findings([{"package": package, "id": None, "via": _via_path(via)}])
+    raise SystemExit(detail)
 
 
 def _ghsa_from_via(item: object) -> str | None:
@@ -89,8 +118,11 @@ def _high_advisory_ids(audit: dict) -> dict[str, dict]:
                 continue
             ghsa = _ghsa_from_via(via)
             if not ghsa:
-                raise SystemExit(
-                    f"high/critical npm finding without GHSA id: package={name} via={via!r}"
+                _fail_without_ghsa(
+                    name,
+                    via,
+                    "high/critical npm finding without GHSA id: "
+                    f"package={name} via={via!r}",
                 )
             matched_any = True
             found[ghsa] = {
@@ -100,8 +132,10 @@ def _high_advisory_ids(audit: dict) -> dict[str, dict]:
             }
         if not matched_any:
             # Package marked high/critical but only moderate vias — treat as fail.
-            raise SystemExit(
-                f"package {name!r} severity={pkg_severity} but no high/critical via GHSA"
+            _fail_without_ghsa(
+                name,
+                "",
+                f"package {name!r} severity={pkg_severity} but no high/critical via GHSA",
             )
     return found
 
@@ -133,7 +167,58 @@ def _run_npm_audit() -> dict:
         raise SystemExit(f"npm audit JSON parse failed: {exc}\n{raw[:500]}") from exc
 
 
-def main() -> int:
+def pip_findings(payload: dict) -> list[dict]:
+    """pip-audit ``--format json`` rows that carry an advisory id (PYSEC/GHSA)."""
+    deps = payload.get("dependencies")
+    if not isinstance(deps, list):
+        return []
+    findings: list[dict] = []
+    for dep in deps:
+        if not isinstance(dep, dict):
+            continue
+        package = dep.get("name")
+        vulns = dep.get("vulns")
+        if not isinstance(package, str) or not package or not isinstance(vulns, list):
+            continue
+        for vuln in vulns:
+            if not isinstance(vuln, dict):
+                continue
+            advisory = vuln.get("id")
+            if not isinstance(advisory, str) or not advisory.strip():
+                continue
+            findings.append({"package": package, "id": advisory.strip(), "via": ""})
+    return findings
+
+
+def record_pip_payload(payload: dict) -> int:
+    findings = pip_findings(payload) if isinstance(payload, dict) else []
+    if findings:
+        write_deps_findings(findings)
+    return 0
+
+
+def record_pip_stdin() -> int:
+    raw = sys.stdin.read().strip()
+    if not raw:
+        return 0
+    try:
+        payload = json.loads(raw)
+    except json.JSONDecodeError:
+        return 0
+    return record_pip_payload(payload)
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--record-pip",
+        action="store_true",
+        help="Read pip-audit JSON on stdin and record findings. Does not waive.",
+    )
+    args = parser.parse_args([] if argv is None else argv)
+    if args.record_pip:
+        return record_pip_stdin()
+
     allowlist = _load_allowlist()
     audit = _run_npm_audit()
     found = _high_advisory_ids(audit)
@@ -148,7 +233,10 @@ def main() -> int:
 
     unused = sorted(set(allowlist) - set(found))
     if unused:
-        print("ERROR: unused npm audit allowlist entries (remove or fix):", file=sys.stderr)
+        print(
+            "ERROR: unused npm audit allowlist entries (remove or fix):",
+            file=sys.stderr,
+        )
         for ghsa in unused:
             entry = allowlist[ghsa]
             print(
@@ -164,6 +252,12 @@ def main() -> int:
             print(f"  - {ghsa} {meta['package']} [{meta['severity']}]: {reason}")
 
     if unexpected:
+        write_deps_findings(
+            [
+                {"package": str(meta.get("package") or ""), "id": ghsa, "via": ""}
+                for ghsa, meta in unexpected
+            ]
+        )
         print(
             "Dependency security gate failed — unexpected npm high/critical advisories:",
             file=sys.stderr,
@@ -181,9 +275,10 @@ def main() -> int:
         )
         return 1
 
+    write_deps_findings([])
     print("npm audit high+ passed (after documented allowlist).")
     return 0
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(main(sys.argv[1:]))

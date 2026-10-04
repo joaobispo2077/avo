@@ -28,7 +28,20 @@ for vuln in "${PIP_IGNORE_IDS[@]+"${PIP_IGNORE_IDS[@]}"}"; do
   PIP_IGNORE_ARGS+=(--ignore-vuln "$vuln")
 done
 # --skip-editable: audit third-party deps only (local avo is not on PyPI).
-uv run --frozen --extra dev pip-audit --skip-editable "${PIP_IGNORE_ARGS[@]}"
+# JSON is recorded only when pip-audit fails, so the sticky cell can name a
+# PYSEC/GHSA id. A clean audit does not invent a finding.
+pip_status=0
+pip_json="$(
+  uv run --frozen --extra dev pip-audit --skip-editable --format json \
+    "${PIP_IGNORE_ARGS[@]}"
+)" || pip_status=$?
+if [[ "$pip_status" -ne 0 ]]; then
+  printf '%s\n' "$pip_json"
+  printf '%s\n' "$pip_json" \
+    | uv run --frozen --extra dev python "$CI_DIR/check_npm_audit.py" --record-pip
+  exit "$pip_status"
+fi
+echo "No known vulnerabilities found"
 
 echo "==> quality:deps (npm audit high+ via check_npm_audit.py)"
 uv run --frozen --extra dev python "$CI_DIR/check_npm_audit.py"
