@@ -74,14 +74,7 @@ def chart_series(snapshot: dict) -> dict[str, dict]:
     coverage = snapshot["coverage"]
     duplication = snapshot["duplication"]
     return {
-        "status": {
-            "chart": "status",
-            "overall": snapshot["overall"],
-            "gates": [
-                {"title": gate["title"], "status": gate["status"]}
-                for gate in snapshot["gates"]
-            ],
-        },
+        "status": _charts().status_chart_series(snapshot),
         "coverage": {
             "chart": "coverage",
             "measured": coverage["measured"],
@@ -224,7 +217,9 @@ def _chart_tables(series: dict, images: dict[str, str]) -> str:
     ]
     if "status" in images:
         parts.extend([f"![Gate status]({images['status']})", ""])
-    status_rows = [(gate["title"], f"**{gate['status']}**") for gate in status["gates"]]
+    status_rows = [
+        (gate["title"], _charts().status_table_value(gate)) for gate in status["gates"]
+    ]
     status_rows.append(("Overall", f"**{status['overall']}**"))
     parts.extend([_table(status_rows), "", "### Coverage", ""])
     if "coverage" in images:

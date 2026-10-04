@@ -2,7 +2,9 @@
 """PNG charts for the Software quality sticky. Visualization only, not a gate.
 
 Numbers come from the same helpers as ``write_quality_pr_report.py``.
-Coverage floor is pyproject ``fail_under`` (68). Mutation is not measured here.
+Coverage floor is pyproject ``fail_under``. Duplication ceiling is ``.jscpd.json``.
+The status chart paints slack against those lines. It does not move them.
+Mutation is not measured here.
 """
 
 from __future__ import annotations
@@ -26,7 +28,10 @@ SKIP_HEX = "#8a6d00"
 UNKNOWN_HEX = "#5c6770"
 FLOOR_HEX = "#1f4e79"
 NEUTRAL_HEX = "#1f4e79"
+YELLOW_HEX = "#f0b400"
 EDGE = "#1a1a1a"
+JSCPD_REPORT = Path("reports/quality/jscpd/jscpd-report.json")
+SLACK_HEX = {"red": FAIL_HEX, "yellow": YELLOW_HEX, "green": PASS_HEX}
 
 
 def _report():
@@ -58,6 +63,128 @@ def coverage_bar_state(percent: float | None, floor: float, step_outcome: str) -
     if percent < floor:
         return "fail"
     return "pass"
+
+
+def quarter_mark(line: float) -> float:
+    """First quarter of the headroom above the line. That point is green."""
+    return line + 0.25 * (100.0 - line)
+
+
+def slack_band(goodness: float, line: float) -> str:
+    """Higher goodness is better. On the line is yellow. The quarter mark is green."""
+    if goodness < line:
+        return "red"
+    if goodness < quarter_mark(line):
+        return "yellow"
+    return "green"
+
+
+def _cap100(value: float) -> float:
+    return min(100.0, max(0.0, value))
+
+
+def duplication_percent(root: Path) -> float | None:
+    """Line percentage jscpd already computed. Missing file draws no bar."""
+    path = root / JSCPD_REPORT
+    if not path.is_file():
+        return None
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(payload, dict):
+        return None
+    statistics = payload.get("statistics")
+    if not isinstance(statistics, dict):
+        return None
+    total = statistics.get("total")
+    if not isinstance(total, dict):
+        return None
+    raw = total.get("percentage")
+    if isinstance(raw, bool) or not isinstance(raw, (int, float)):
+        return None
+    return float(raw)
+
+
+def _chip_row(gate: dict) -> dict:
+    return {"title": gate["title"], "status": gate["status"], "kind": "chip"}
+
+
+def _bar_row(
+    gate: dict,
+    *,
+    measured: float,
+    drawn: float,
+    line: float,
+    goodness: float,
+) -> dict:
+    return {
+        "title": gate["title"],
+        "status": gate["status"],
+        "kind": "bar",
+        "measured": measured,
+        "drawn": _cap100(drawn),
+        "line": line,
+        "slack": slack_band(goodness, line),
+    }
+
+
+def status_chart_series(snapshot: dict) -> dict:
+    """Bars are coverage and duplication only. Every other gate is a chip."""
+    coverage = snapshot["coverage"]
+    duplication = snapshot["duplication"]
+    rows = []
+    for gate in snapshot["gates"]:
+        key = gate["key"]
+        if key == "coverage" and coverage["measured"] is not None:
+            measured = float(coverage["measured"])
+            line = float(coverage["floor"])
+            rows.append(
+                _bar_row(
+                    gate,
+                    measured=measured,
+                    drawn=measured,
+                    line=line,
+                    goodness=measured,
+                )
+            )
+        elif key == "duplication" and duplication.get("percent") is not None:
+            measured = float(duplication["percent"])
+            line = 100.0 - float(duplication["ceiling"])
+            goodness = 100.0 - measured
+            rows.append(
+                _bar_row(
+                    gate,
+                    measured=measured,
+                    drawn=goodness,
+                    line=line,
+                    goodness=goodness,
+                )
+            )
+        else:
+            rows.append(_chip_row(gate))
+    return {
+        "chart": "status",
+        "overall": snapshot["overall"],
+        "axis_max": 100,
+        "gates": rows,
+    }
+
+
+def status_chart_cell(row: dict) -> str:
+    if row.get("kind") != "bar":
+        return "chip"
+    drawn = float(row["drawn"])
+    line = float(row["line"])
+    slack = str(row["slack"])
+    measured = float(row["measured"])
+    if abs(measured - drawn) > 1e-9:
+        return f"{drawn:.2f} · measured {measured:.2f}% · line {line:.2f} · {slack}"
+    return f"{drawn:.2f} · line {line:.2f} · {slack}"
+
+
+def status_table_value(row: dict) -> str:
+    return f"{status_chart_cell(row)} · **{row['status']}**"
 
 
 def _count_block(count: int | None, reported: str) -> dict:
@@ -121,6 +248,7 @@ def build_snapshot(
         ),
         "duplication": {
             "ceiling": report.duplication_ceiling(root),
+            "percent": duplication_percent(root),
             "reported": report.gate_metric(
                 "duplication", coverage_json=coverage_json, floor=floor, root=root
             ),
@@ -170,47 +298,94 @@ def _status_style(status: str) -> tuple[str, str]:
     return UNKNOWN_HEX, ""
 
 
-def render_status(snapshot: dict, path: Path) -> dict:
-    series = {
-        "chart": "status",
-        "overall": snapshot["overall"],
-        "gates": [
-            {"title": gate["title"], "status": gate["status"]}
-            for gate in snapshot["gates"]
-        ],
-    }
-    overall = snapshot["overall"]
-    color = PASS_HEX if overall == "PASS" else FAIL_HEX
-    fig, ax = _figure(f"Software quality: {overall}", color)
-    titles = [gate["title"] for gate in snapshot["gates"]]
-    colors = []
-    hatches = []
-    for gate in snapshot["gates"]:
-        paint, hatch = _status_style(gate["status"])
-        colors.append(paint)
-        hatches.append(hatch)
-    bars = ax.barh(
-        titles,
-        [1] * len(titles),
-        color=colors,
+def _draw_score_bar(ax, y: float, row: dict) -> None:
+    drawn = float(row["drawn"])
+    ax.barh(
+        y,
+        drawn,
+        color=SLACK_HEX[str(row["slack"])],
         edgecolor=EDGE,
-        height=0.7,
+        height=0.62,
+        zorder=2,
     )
-    for bar, hatch in zip(bars, hatches, strict=True):
-        bar.set_hatch(hatch)
-    for bar, gate in zip(bars, snapshot["gates"], strict=True):
-        ax.text(
-            1.04,
-            bar.get_y() + bar.get_height() / 2,
-            gate["status"],
-            va="center",
-            ha="left",
-            fontsize=11,
-            fontweight="bold",
-            color=EDGE,
+    line = float(row["line"])
+    if 0.0 <= line <= 100.0:
+        span = [y - 0.46, y + 0.46]
+        ax.plot(
+            [line, line],
+            span,
+            color="white",
+            linewidth=4.2,
+            solid_capstyle="butt",
+            zorder=3,
         )
-    ax.set_xlim(0, 1.55)
-    ax.set_xticks([])
+        ax.plot(
+            [line, line],
+            span,
+            color=EDGE,
+            linewidth=2.0,
+            solid_capstyle="butt",
+            zorder=4,
+        )
+    ax.text(
+        102,
+        y,
+        row["status"],
+        va="center",
+        ha="left",
+        fontsize=10,
+        fontweight="bold",
+        color=EDGE,
+        clip_on=False,
+        zorder=5,
+    )
+
+
+def _draw_chip(ax, y: float, row: dict) -> None:
+    from matplotlib.patches import Rectangle
+
+    paint, _hatch = _status_style(str(row["status"]))
+    ax.add_patch(
+        Rectangle(
+            (1.2, y - 0.22),
+            18,
+            0.44,
+            facecolor=paint,
+            edgecolor=EDGE,
+            zorder=2,
+            linewidth=0.6,
+        )
+    )
+    ax.text(
+        10.2,
+        y,
+        row["status"],
+        va="center",
+        ha="center",
+        fontsize=8,
+        fontweight="bold",
+        color="white",
+        zorder=3,
+    )
+
+
+def render_status(snapshot: dict, path: Path) -> dict:
+    series = status_chart_series(snapshot)
+    overall = series["overall"]
+    title_color = PASS_HEX if overall == "PASS" else FAIL_HEX
+    fig, ax = _figure(f"Software quality: {overall}", title_color)
+    rows = series["gates"]
+    positions = list(range(len(rows)))
+    ax.set_yticks(positions)
+    ax.set_yticklabels([row["title"] for row in rows])
+    for y, row in zip(positions, rows, strict=True):
+        if row["kind"] == "bar":
+            _draw_score_bar(ax, float(y), row)
+        else:
+            _draw_chip(ax, float(y), row)
+    ax.set_xlim(0, 100)
+    ax.set_xticks([0, 25, 50, 75, 100])
+    ax.set_xlabel("0 to 100")
     ax.invert_yaxis()
     return _save(fig, path, series)
 
@@ -409,7 +584,9 @@ def build_chart_markdown(snapshot: dict, rendered: dict[str, dict]) -> str:
     deps = rendered["deps"]
     duplication = rendered["duplication"]
     architecture = rendered["architecture"]
-    status_rows = [(gate["title"], f"**{gate['status']}**") for gate in status["gates"]]
+    status_rows = [
+        (gate["title"], status_table_value(gate)) for gate in status["gates"]
+    ]
     status_rows.append(("Overall", f"**{status['overall']}**"))
     measured = (
         "—" if coverage["measured"] is None else _pct(float(coverage["measured"]))
@@ -426,6 +603,13 @@ def build_chart_markdown(snapshot: dict, rendered: dict[str, dict]) -> str:
         _image("Gate status", "status.png"),
         "",
         _table(status_rows),
+        "",
+        (
+            "Coverage bar is the measured percent. Duplication is inverted: "
+            "0% draws at 100 and the line is 100 minus the ceiling. "
+            "Color is slack against that line. Yellow still passes. "
+            "Chips are the gates without a 0 to 100 score."
+        ),
         "",
         "### Coverage",
         "",
