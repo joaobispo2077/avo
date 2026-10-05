@@ -162,14 +162,16 @@ def load_deps_findings(path: Path) -> list[dict]:
 
 
 def format_deps_finding(finding: dict) -> str:
-    """One finding. No waiver count. No id names the package and via path."""
+    """One finding. No waiver count. Package and via path; id when one exists."""
     package = str(finding.get("package") or "").strip()
     advisory = finding.get("id")
     advisory_id = advisory.strip() if isinstance(advisory, str) else ""
-    if advisory_id:
-        return f"{package} {advisory_id}"
     via = finding.get("via")
     via_path = via.strip() if isinstance(via, str) else ""
+    if advisory_id and via_path:
+        return f"{package} {advisory_id} via {via_path}"
+    if advisory_id:
+        return f"{package} {advisory_id}"
     if via_path:
         return f"{package} via {via_path} has no GHSA id"
     return f"{package} has no GHSA id"
@@ -183,8 +185,8 @@ def deps_cell(
 ) -> str:
     """Sticky Dependency audit metric.
 
-    FAIL with a recorded finding names that finding and nothing else.
-    PASS keeps the waiver count. Charts keep using ``gate_metric``.
+    FAIL lists every recorded unwaived finding. PASS keeps the waiver count.
+    Charts keep using ``gate_metric``.
     """
     path = findings_path if findings_path is not None else deps_findings_path(root)
     if outcome.strip().lower() == "failure":

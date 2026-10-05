@@ -129,6 +129,42 @@ class QualityPrReportTests(unittest.TestCase):
         self.assertNotIn("fast-glob", text)
         self.assertNotIn("no GHSA id", text)
 
+    def test_deps_fail_lists_every_unwaived_finding(self) -> None:
+        mod = _load("write_quality_pr_report", "scripts/ci/write_quality_pr_report.py")
+        root = self._empty_allowlist_root()
+        self._deps_findings(
+            root,
+            [
+                {"package": "@jscpd/finder", "id": None, "via": "fast-glob"},
+                {"package": "minimatch", "id": None, "via": "brace-expansion"},
+                {"package": "yaml", "id": None, "via": "lodash"},
+            ],
+        )
+        text = mod.build_markdown(
+            {"deps": "failure"},
+            coverage_json=Path("missing.json"),
+            floor=68.0,
+            root=root,
+        )
+        cell = (
+            "@jscpd/finder via fast-glob has no GHSA id; "
+            "minimatch via brace-expansion has no GHSA id; "
+            "yaml via lodash has no GHSA id"
+        )
+        self.assertIn(f"| Dependency audit | **FAIL** | {cell} |", text)
+        self.assertNotIn("npm GHSA exceptions", text)
+        self.assertLess(text.index("@jscpd/finder"), text.index("minimatch"))
+        self.assertLess(text.index("minimatch"), text.index("yaml via lodash"))
+        self.assertEqual(
+            mod.gate_metric(
+                "deps",
+                coverage_json=Path("missing.json"),
+                floor=68.0,
+                root=root,
+            ),
+            "0 npm GHSA exceptions",
+        )
+
     def test_deps_fail_with_advisory_id_names_package_and_id(self) -> None:
         mod = _load("write_quality_pr_report", "scripts/ci/write_quality_pr_report.py")
         root = self._empty_allowlist_root()

@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import contextlib
 import importlib.util
+import io
 import json
 import sys
 import tempfile
@@ -142,12 +144,19 @@ class TestCheckNpmAudit(unittest.TestCase):
         }
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "deps-findings.json"
-            with mock.patch.object(self.mod, "FINDINGS_PATH", path):
-                with self.assertRaises(SystemExit) as caught:
-                    self.mod._high_advisory_ids(audit)
+            stderr = io.StringIO()
+            with (
+                mock.patch.object(self.mod, "FINDINGS_PATH", path),
+                mock.patch.object(self.mod, "_load_allowlist", return_value={}),
+                mock.patch.object(self.mod, "_run_npm_audit", return_value=audit),
+                contextlib.redirect_stderr(stderr),
+            ):
+                code = self.mod.main()
             payload = json.loads(path.read_text(encoding="utf-8"))
-        self.assertIn("without GHSA id", str(caught.exception))
-        self.assertIn("@jscpd/finder", str(caught.exception))
+        output = stderr.getvalue()
+        self.assertEqual(code, 1)
+        self.assertIn("without GHSA id", output)
+        self.assertIn("package=@jscpd/finder via='fast-glob'", output)
         self.assertEqual(
             payload["findings"],
             [{"package": "@jscpd/finder", "id": None, "via": "fast-glob"}],
@@ -156,6 +165,114 @@ class TestCheckNpmAudit(unittest.TestCase):
             (ROOT / "scripts/ci/deps-audit-allowlist.json").read_text(encoding="utf-8")
         )
         self.assertEqual(allow["npm"]["advisory_ids"], [])
+
+    def test_two_unwaived_findings_are_reported_and_exit_1(self) -> None:
+        """Collect every hit before exiting. Dev paths are not exempt."""
+        audit = {
+            "vulnerabilities": {
+                "@jscpd/finder": {
+                    "severity": "high",
+                    "dev": True,
+                    "via": ["fast-glob"],
+                    "nodes": ["node_modules/@jscpd/finder"],
+                },
+                "minimatch": {
+                    "severity": "critical",
+                    "via": ["brace-expansion"],
+                    "nodes": ["node_modules/minimatch"],
+                },
+                "tar": {
+                    "severity": "moderate",
+                    "dev": True,
+                    "via": ["other"],
+                },
+            }
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "deps-findings.json"
+            stderr = io.StringIO()
+            with (
+                mock.patch.object(self.mod, "FINDINGS_PATH", path),
+                mock.patch.object(self.mod, "_load_allowlist", return_value={}),
+                mock.patch.object(self.mod, "_run_npm_audit", return_value=audit),
+                contextlib.redirect_stderr(stderr),
+            ):
+                code = self.mod.main()
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        output = stderr.getvalue()
+        self.assertEqual(code, 1)
+        self.assertIn("package=@jscpd/finder via='fast-glob'", output)
+        self.assertIn("package=minimatch via='brace-expansion'", output)
+        self.assertNotIn("tar", output)
+        self.assertEqual(
+            payload["findings"],
+            [
+                {"package": "@jscpd/finder", "id": None, "via": "fast-glob"},
+                {"package": "minimatch", "id": None, "via": "brace-expansion"},
+            ],
+        )
+
+    def test_no_ghsa_id_is_not_waived_by_another_allowlisted_hit(self) -> None:
+        audit = {
+            "vulnerabilities": {
+                "ip-address": {
+                    "severity": "high",
+                    "via": [
+                        {
+                            "severity": "high",
+                            "name": "ip-address",
+                            "url": "https://github.com/advisories/GHSA-mwp4-54f8-5fhr",
+                        }
+                    ],
+                    "nodes": ["node_modules/ip-address"],
+                },
+                "@jscpd/finder": {
+                    "severity": "high",
+                    "dev": True,
+                    "via": ["fast-glob"],
+                    "nodes": ["node_modules/@jscpd/finder"],
+                },
+            }
+        }
+        allow = {
+            "GHSA-MWP4-54F8-5FHR": {
+                "id": "GHSA-mwp4-54f8-5fhr",
+                "package": "ip-address",
+                "reason": "documented test exception",
+                "expires": "2099-01-01",
+            }
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "deps-findings.json"
+            stderr = io.StringIO()
+            with (
+                mock.patch.object(self.mod, "FINDINGS_PATH", path),
+                mock.patch.object(self.mod, "_load_allowlist", return_value=allow),
+                mock.patch.object(self.mod, "_run_npm_audit", return_value=audit),
+                contextlib.redirect_stderr(stderr),
+            ):
+                code = self.mod.main()
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        self.assertEqual(code, 1)
+        self.assertIn("package=@jscpd/finder via='fast-glob'", stderr.getvalue())
+        self.assertEqual(
+            payload["findings"],
+            [{"package": "@jscpd/finder", "id": None, "via": "fast-glob"}],
+        )
+
+    def test_npm_audit_command_keeps_dev_dependencies(self) -> None:
+        completed = mock.Mock(returncode=0, stdout='{"vulnerabilities":{}}', stderr="")
+        with (
+            mock.patch.object(self.mod.shutil, "which", return_value="npm"),
+            mock.patch.object(
+                self.mod.subprocess, "run", return_value=completed
+            ) as run,
+        ):
+            self.mod._run_npm_audit()
+        argv = run.call_args.args[0]
+        self.assertEqual(argv[1:], ["audit", "--json"])
+        self.assertNotIn("--omit=dev", argv)
+        self.assertNotIn("--production", argv)
 
     def test_record_pip_keeps_pysec_id(self) -> None:
         payload = {

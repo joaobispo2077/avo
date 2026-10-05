@@ -16,7 +16,6 @@ import subprocess
 import sys
 from datetime import date
 from pathlib import Path
-from typing import NoReturn
 
 ROOT = Path(__file__).resolve().parents[2]
 ALLOWLIST_PATH = Path(__file__).resolve().parent / "deps-audit-allowlist.json"
@@ -70,11 +69,6 @@ def _via_path(via: object) -> str:
     return ""
 
 
-def _fail_without_ghsa(package: str, via: object, detail: str) -> NoReturn:
-    write_deps_findings([{"package": package, "id": None, "via": _via_path(via)}])
-    raise SystemExit(detail)
-
-
 def _ghsa_from_via(item: object) -> str | None:
     if isinstance(item, str):
         match = GHSA_RE.search(item)
@@ -93,13 +87,16 @@ def _ghsa_from_via(item: object) -> str | None:
     return None
 
 
-def _high_advisory_ids(audit: dict) -> dict[str, dict]:
-    """Map GHSA id -> {package, severity, nodes} for high/critical findings."""
-    found: dict[str, dict] = {}
+def _collect_high_hits(audit: dict) -> list[dict]:
+    """Every high/critical hit, including dev paths and hits with no GHSA id.
+
+    Does not exit. Callers waive by GHSA id, then fail if anything remains.
+    """
     vulns = audit.get("vulnerabilities") or {}
     if not isinstance(vulns, dict):
         raise SystemExit("npm audit JSON missing vulnerabilities object")
 
+    hits: list[dict] = []
     for name, entry in vulns.items():
         if not isinstance(entry, dict):
             continue
@@ -109,34 +106,53 @@ def _high_advisory_ids(audit: dict) -> dict[str, dict]:
         vias = entry.get("via") or []
         if not isinstance(vias, list):
             continue
-        matched_any = False
+        saw_high = False
+        nodes = entry.get("nodes") or []
         for via in vias:
             via_severity = pkg_severity
             if isinstance(via, dict) and via.get("severity"):
                 via_severity = str(via["severity"]).lower()
             if via_severity not in FAIL_SEVERITIES:
                 continue
-            ghsa = _ghsa_from_via(via)
-            if not ghsa:
-                _fail_without_ghsa(
-                    name,
-                    via,
-                    "high/critical npm finding without GHSA id: "
-                    f"package={name} via={via!r}",
-                )
-            matched_any = True
-            found[ghsa] = {
-                "package": name,
-                "severity": via_severity,
-                "nodes": entry.get("nodes") or [],
-            }
-        if not matched_any:
-            # Package marked high/critical but only moderate vias — treat as fail.
-            _fail_without_ghsa(
-                name,
-                "",
-                f"package {name!r} severity={pkg_severity} but no high/critical via GHSA",
+            saw_high = True
+            hits.append(
+                {
+                    "package": name,
+                    "id": _ghsa_from_via(via),
+                    "via": _via_path(via),
+                    "severity": via_severity,
+                    "nodes": nodes,
+                    "bare": False,
+                }
             )
+        if not saw_high:
+            # High/critical package with no high/critical via still fails.
+            hits.append(
+                {
+                    "package": name,
+                    "id": None,
+                    "via": "",
+                    "severity": pkg_severity,
+                    "nodes": nodes,
+                    "bare": True,
+                }
+            )
+    return hits
+
+
+def _high_advisory_ids(audit: dict) -> dict[str, dict]:
+    """Map GHSA id -> {package, severity, nodes} for high/critical findings."""
+    found: dict[str, dict] = {}
+    for hit in _collect_high_hits(audit):
+        ghsa = hit.get("id")
+        if not isinstance(ghsa, str) or not ghsa:
+            continue
+        found[ghsa] = {
+            "package": hit["package"],
+            "severity": hit["severity"],
+            "nodes": hit["nodes"],
+            "via": hit["via"],
+        }
     return found
 
 
@@ -208,6 +224,53 @@ def record_pip_stdin() -> int:
     return record_pip_payload(payload)
 
 
+def _print_unwaived(hits: list[dict]) -> None:
+    bare = [hit for hit in hits if hit.get("bare")]
+    no_id = [hit for hit in hits if not hit.get("id") and not hit.get("bare")]
+    identified = [hit for hit in hits if hit.get("id")]
+    for hit in no_id:
+        print(
+            "high/critical npm finding without GHSA id: "
+            f"package={hit['package']} via={hit['via']!r}",
+            file=sys.stderr,
+        )
+    for hit in bare:
+        print(
+            f"package {hit['package']!r} severity={hit['severity']} "
+            "but no high/critical via GHSA",
+            file=sys.stderr,
+        )
+    if not identified:
+        return
+    print(
+        "Dependency security gate failed — unexpected npm high/critical advisories:",
+        file=sys.stderr,
+    )
+    for hit in identified:
+        nodes = ", ".join(hit.get("nodes") or []) or "(no nodes)"
+        print(
+            f"  - {hit['id']} {hit['package']} [{hit['severity']}] @ {nodes}",
+            file=sys.stderr,
+        )
+    print(
+        "Fix the dependency, add a root override, or document a narrow "
+        "allowlist entry in scripts/ci/deps-audit-allowlist.json.",
+        file=sys.stderr,
+    )
+
+
+def _finding_record(hit: dict) -> dict:
+    advisory = hit.get("id")
+    if not isinstance(advisory, str) or not advisory:
+        advisory = None
+    via = hit.get("via")
+    return {
+        "package": hit["package"],
+        "id": advisory,
+        "via": via if isinstance(via, str) else "",
+    }
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -221,17 +284,22 @@ def main(argv: list[str] | None = None) -> int:
 
     allowlist = _load_allowlist()
     audit = _run_npm_audit()
-    found = _high_advisory_ids(audit)
+    hits = _collect_high_hits(audit)
 
-    unexpected: list[tuple[str, dict]] = []
-    allowed_hits: list[tuple[str, dict]] = []
-    for ghsa, meta in sorted(found.items()):
-        if ghsa in allowlist:
-            allowed_hits.append((ghsa, meta))
-        else:
-            unexpected.append((ghsa, meta))
+    allowed_hits: list[dict] = []
+    unwaived: list[dict] = []
+    seen: set[str] = set()
+    for hit in hits:
+        advisory = hit.get("id")
+        if isinstance(advisory, str) and advisory:
+            seen.add(advisory)
+            if advisory in allowlist:
+                allowed_hits.append(hit)
+                continue
+        # No GHSA id cannot be waived. Dev paths are not exempt.
+        unwaived.append(hit)
 
-    unused = sorted(set(allowlist) - set(found))
+    unused = sorted(set(allowlist) - seen)
     if unused:
         print(
             "ERROR: unused npm audit allowlist entries (remove or fix):",
@@ -243,36 +311,19 @@ def main(argv: list[str] | None = None) -> int:
                 f"  - {ghsa} ({entry.get('package')}): {entry.get('reason')}",
                 file=sys.stderr,
             )
-        return 1
 
     if allowed_hits:
         print("npm audit high+ allowlisted (documented exceptions):")
-        for ghsa, meta in allowed_hits:
-            reason = allowlist[ghsa]["reason"]
-            print(f"  - {ghsa} {meta['package']} [{meta['severity']}]: {reason}")
+        for hit in allowed_hits:
+            reason = allowlist[hit["id"]]["reason"]
+            print(f"  - {hit['id']} {hit['package']} [{hit['severity']}]: {reason}")
 
-    if unexpected:
-        write_deps_findings(
-            [
-                {"package": str(meta.get("package") or ""), "id": ghsa, "via": ""}
-                for ghsa, meta in unexpected
-            ]
-        )
-        print(
-            "Dependency security gate failed — unexpected npm high/critical advisories:",
-            file=sys.stderr,
-        )
-        for ghsa, meta in unexpected:
-            nodes = ", ".join(meta.get("nodes") or []) or "(no nodes)"
-            print(
-                f"  - {ghsa} {meta['package']} [{meta['severity']}] @ {nodes}",
-                file=sys.stderr,
-            )
-        print(
-            "Fix the dependency, add a root override, or document a narrow "
-            "allowlist entry in scripts/ci/deps-audit-allowlist.json.",
-            file=sys.stderr,
-        )
+    if unwaived:
+        write_deps_findings([_finding_record(hit) for hit in unwaived])
+        _print_unwaived(unwaived)
+        return 1
+
+    if unused:
         return 1
 
     write_deps_findings([])
