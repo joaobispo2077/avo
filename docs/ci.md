@@ -99,11 +99,19 @@ Every `job` in `config/avo.dependencies.json` must exist under `config/avo.confi
 ### Release-cut quality metrics snapshot
 
 `release.yml` writes `docs/quality-metrics.md` only when
-a release cut runs (semantic-release has a version to publish). The step
-downloads artifact `quality-metrics` from the green CI run for the **exact tip
-SHA** and fails the job if that JSON is missing, not overall PASS, or bound to
-a different SHA. There is no soft warning that still publishes. The step does
+a release cut runs (semantic-release has a version to publish). The snapshot
+is its own job. It checks out the green CI head SHA (the release tip) and
+downloads artifact `quality-metrics` for that **exact tip
+SHA**. It fails the job if that JSON is missing, not overall PASS, bound to
+a different SHA, or any Software quality gate is not PASS. There is no soft
+warning that still publishes. The job does
 not re-measure gates and does not copy the previous release's numbers.
+When the dry-run has no next version, the snapshot job exits without writing
+`docs/quality-metrics.md` and does not fail the workflow.
+
+`workflow_run` loads `release.yml` from the default branch. A merge to
+`develop` does not change the workflow the next cut executes. This job runs
+on a cut only after the file is on `main`.
 
 Software quality writes that JSON only on a push to `release`, then uploads it.
 Ordinary pull requests and other branches do not upload it and do not write
@@ -133,7 +141,7 @@ Template note: [`docs/templates/quality-metrics.md`](./templates/quality-metrics
 | `setup-smoke.yml` | `workflow_dispatch` | Full `setup.sh` on ubuntu + windows |
 | `orchestrator-smoke.yml` | manual + weekly cron | Gate 1 (+ optional) + Whisper tiny model + Gate 2 |
 | `ffmpeg-whisper-smoke.yml` | `workflow_dispatch` | Binary/import smoke (like maxframe `yt-dlp-smoke.yml`) |
-| `release.yml` | After **CI** on `release` (+ manual) | semantic-release dry-run → publish, then `workflow_dispatch` Engine binary to attach platform zips (`GITHUB_TOKEN` does not fire `on: release`). Before publish, hard-fails unless the green Software quality JSON matches the tip SHA, then commits `docs/quality-metrics.md` |
+| `release.yml` | After **CI** on `release` (+ manual) | semantic-release dry-run → publish, then `workflow_dispatch` Engine binary to attach platform zips (`GITHUB_TOKEN` does not fire `on: release`). The snapshot job checks out the green CI head SHA. With a next version it hard-fails unless that SHA's Software quality JSON is PASS, then the publish job commits `docs/quality-metrics.md`. No next version exits without writing the file and does not fail the workflow. `workflow_run` reads this file from the default branch. |
 | `engine-binary.yml` | path-filtered push/PR + `workflow_dispatch` (`attach_tag`) + manual `release` | PyInstaller zip smoke; attach `avo-$VERSION-$platform.zip` + SHA256SUMS to the GitHub release |
 
 Reference: [maxframe workflows](https://github.com/joaobispo2077/maxframe/tree/main/.github/workflows).
