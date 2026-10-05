@@ -175,7 +175,12 @@ footage and deliverable work. Full scan: [`docs/software-foundation.md`](docs/so
 ### Branch policy
 
 The user owns branches. Agents work only on the checked-out branch and **never** create,
-delete, rename, checkout, switch, or orchestrate branches. See [`docs/branching.md`](docs/branching.md).
+delete, rename, checkout, switch, or orchestrate branches. Names follow
+`feature/{project_name}-{VARIABLE}` (for example `feature/avo-bot-avatars` or
+`feature/avo-issue-5`). Merge order is feature → `develop`/`dev` → `release` →
+`main`/`master`. Do not open feature pull requests straight to `main` when `develop`
+and `release` exist. If a head branch has the wrong name, ask the user to rename it.
+See [`docs/branching.md`](docs/branching.md).
 
 ### Behavior preservation
 

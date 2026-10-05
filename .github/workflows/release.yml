@@ -30,7 +30,7 @@ jobs:
       (github.event.workflow_run.conclusion == 'success' &&
        github.event.workflow_run.event == 'push' &&
        github.event.workflow_run.head_branch == 'release')
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     outputs:
       next-version: ${{ steps.version.outputs.next-version }}
@@ -76,11 +76,73 @@ jobs:
           GITHUB_SHA: ${{ steps.meta.outputs.sha }}
         run: bash scripts/ci/determine-next-release-version.sh
 
+  snapshot-quality-metrics:
+    name: Snapshot release quality metrics
+    needs: determine-version
+    # Runs after a successful dry-run even when next-version is empty.
+    # An empty version exits without writing the doc and does not fail.
+    if: needs.determine-version.result == 'success'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      actions: write
+    steps:
+      - name: Skip snapshot when there is no release version
+        if: needs.determine-version.outputs.next-version == ''
+        run: echo "No releasable version. docs/quality-metrics.md is not written."
+
+      - name: Checkout release tip
+        if: needs.determine-version.outputs.next-version != ''
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.determine-version.outputs.release-sha }}
+          fetch-depth: 0
+          fetch-tags: true
+          persist-credentials: true
+
+      - name: Setup Python
+        if: needs.determine-version.outputs.next-version != ''
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      # Hard-fail the cut when the green Software quality JSON for this tip is
+      # missing, not overall PASS, or any gate is not PASS. Does not re-run gates.
+      - name: Snapshot release quality metrics
+        if: needs.determine-version.outputs.next-version != ''
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN || github.token }}
+          RELEASE_SHA: ${{ needs.determine-version.outputs.release-sha }}
+          RELEASE_VERSION: ${{ needs.determine-version.outputs.next-version }}
+          QUALITY_RUN_ID: ${{ github.event.workflow_run.id }}
+        run: bash scripts/ci/snapshot-release-quality-metrics.sh
+
+      - name: Pack snapshot for the release commit
+        if: needs.determine-version.outputs.next-version != ''
+        run: |
+          set -euo pipefail
+          mkdir -p reports/quality
+          tar -cf reports/quality/release-snapshot.tar docs/quality-metrics.md
+          if [ -d docs/quality/charts ]; then
+            tar -rf reports/quality/release-snapshot.tar docs/quality/charts
+          fi
+
+      - name: Upload quality metrics snapshot
+        if: needs.determine-version.outputs.next-version != ''
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-quality-snapshot
+          path: reports/quality/release-snapshot.tar
+          if-no-files-found: error
+
   release:
     name: Semantic release
-    needs: determine-version
+    needs:
+      - determine-version
+      - snapshot-quality-metrics
     if: needs.determine-version.outputs.next-version != ''
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
       contents: write
@@ -89,13 +151,20 @@ jobs:
       GITHUB_TOKEN: ${{ secrets.GH_TOKEN || github.token }}
       GH_TOKEN: ${{ secrets.GH_TOKEN || github.token }}
     steps:
-      - name: Checkout
+      - name: Checkout release tip
         uses: actions/checkout@v6
         with:
-          ref: ${{ needs.determine-version.outputs.release-branch }}
+          ref: ${{ needs.determine-version.outputs.release-sha }}
           fetch-depth: 0
           fetch-tags: true
           persist-credentials: true
+
+      - name: Attach the release branch at that tip
+        run: |
+          set -euo pipefail
+          git checkout -B "${{ needs.determine-version.outputs.release-branch }}" "${{ needs.determine-version.outputs.release-sha }}"
+          test "$(git rev-parse --abbrev-ref HEAD)" = "${{ needs.determine-version.outputs.release-branch }}"
+          test "$(git rev-parse HEAD)" = "${{ needs.determine-version.outputs.release-sha }}"
 
       - name: Setup Node
         uses: actions/setup-node@v6
@@ -105,6 +174,19 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Download quality metrics snapshot
+        uses: actions/download-artifact@v7
+        with:
+          name: release-quality-snapshot
+          path: reports/quality
+
+      - name: Unpack quality metrics snapshot
+        run: |
+          set -euo pipefail
+          tar -xf reports/quality/release-snapshot.tar
+          rm -f reports/quality/release-snapshot.tar
+          test -f docs/quality-metrics.md
 
       - name: Release
         env:

@@ -322,7 +322,7 @@ class QualityMatrixTests(unittest.TestCase):
         )
 
     def test_ci_software_quality_enforces_deps_audit_fail_immediately(self) -> None:
-        """task-011: pip-audit + npm audit high+ wired in npm, scripts, ci.yml."""
+        """task-011: pip-audit + npm audit critical wired in npm, scripts, ci.yml."""
         ci = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
         self.assertIn("quality-deps.sh", ci)
         self.assertIn("Software quality — deps", ci)
@@ -737,6 +737,47 @@ class QualityMatrixTests(unittest.TestCase):
         )
         self.assertIn("## Software metrics", writer)
         self.assertIn("What this checks", writer)
+        self.assertIn("overall_label", writer)
+        self.assertIn("gate-outcomes.json", writer)
+        self.assertIn(
+            "load_gate_outcomes",
+            (ROOT / "scripts/ci/gen_kpi_charts.py").read_text(encoding="utf-8"),
+        )
+        job = ci.split("  software-quality:", 1)[1].split("\n  usability-gate:", 1)[0]
+        chart_step = job.split("- name: Generate KPI charts", 1)[1].split(
+            "- name: Upload KPI chart images", 1
+        )[0]
+        report_step = job.split("- name: Build quality PR report", 1)[1].split(
+            "- name: Generate KPI charts", 1
+        )[0]
+        for name in (
+            "Q_LINT",
+            "Q_FORMAT",
+            "Q_COVERAGE",
+            "Q_COMPLEXITY",
+            "Q_DEPS",
+            "Q_DEADCODE",
+            "Q_DUPLICATION",
+            "Q_ARCHITECTURE",
+            "Q_TREE",
+        ):
+            self.assertIn(f"{name}:", chart_step)
+            self.assertIn(f"{name}:", report_step)
+        self.assertIn("scripts/ci/gen_kpi_charts.py", job)
+        self.assertIn("scripts/ci/upload_kpi_chart_images.py", job)
+        self.assertLess(job.index("quality-lint.sh"), job.index("gen_kpi_charts.py"))
+        self.assertLess(
+            job.index("gen_kpi_charts.py"),
+            job.index("upload_kpi_chart_images.py"),
+        )
+        self.assertLess(
+            job.index("upload_kpi_chart_images.py"),
+            job.index("header: quality-gates-report"),
+        )
+        self.assertEqual(job.count("continue-on-error: true"), 1)
+        self.assertNotIn("run-mutation", job)
+        self.assertNotIn("--floor 80", job)
+        self.assertNotIn("fail_under = 80", (ROOT / "pyproject.toml").read_text())
 
     def test_workflows_use_node24_action_runtimes(self) -> None:
         """ci-quality-hardening: Node 24 + Node 24 GitHub-owned action majors."""

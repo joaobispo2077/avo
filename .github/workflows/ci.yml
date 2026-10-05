@@ -21,7 +21,7 @@ env:
 jobs:
   prerequisites-gate:
     name: Gate 1 — Orchestrator prerequisites
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - name: Checkout
@@ -46,7 +46,7 @@ jobs:
 
   repo-unit-tests:
     name: Unit tests (AVO repo)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: prerequisites-gate
     timeout-minutes: 12
     steps:
@@ -59,7 +59,7 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Setup uv
-        uses: astral-sh/setup-uv@v5
+        uses: astral-sh/setup-uv@v10.2.0
         with:
           enable-cache: true
 
@@ -95,7 +95,7 @@ jobs:
 
   repo-integration-tests:
     name: Integration tests (AVO repo)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: prerequisites-gate
     timeout-minutes: 20
     steps:
@@ -108,7 +108,7 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Setup uv
-        uses: astral-sh/setup-uv@v5
+        uses: astral-sh/setup-uv@v10.2.0
         with:
           enable-cache: true
 
@@ -128,10 +128,13 @@ jobs:
     # GitHub check name for branch protection: "Software quality"
     # Phase-1 Must Have fast gates (task-013) — blocking on PR/push via needs into Gate 2.
     name: Software quality
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: prerequisites-gate
     permissions:
-      contents: read
+      # contents: write hosts chart PNGs on ci/quality-kpi-charts so the sticky
+      # can embed them. Gate scripts do not push. The chart uploader refuses
+      # every other branch.
+      contents: write
       pull-requests: write
     # Coverage re-runs the unit suite only (tests/integration has its own job).
     timeout-minutes: 35
@@ -145,7 +148,7 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Setup uv
-        uses: astral-sh/setup-uv@v5
+        uses: astral-sh/setup-uv@v10.2.0
         with:
           enable-cache: true
 
@@ -217,7 +220,63 @@ jobs:
           Q_DUPLICATION: ${{ steps.q-duplication.outcome }}
           Q_ARCHITECTURE: ${{ steps.q-architecture.outcome }}
           Q_TREE: ${{ steps.q-tree.outcome }}
-        run: python scripts/ci/write_quality_pr_report.py --out reports/quality/quality-gates.md
+        run: |
+          python scripts/ci/write_quality_pr_report.py --out reports/quality/quality-gates.md
+          # Tip-bound artifact for the release cut only. PRs do not publish it
+          # and this step does not render the release readout document.
+          if [ "$GITHUB_REF" = "refs/heads/release" ]; then
+            python scripts/ci/write_quality_metrics_snapshot.py \
+              --write-json reports/quality/quality-metrics.json \
+              --coverage reports/quality/coverage.json
+          fi
+
+      # Charts are visualization only. They run on red and green (if: always)
+      # and the script exits 0 after writing either PNGs or an explicit failure
+      # note, so a chart problem cannot hide or become a quality gate.
+      - name: Generate KPI charts
+        if: always()
+        env:
+          Q_LINT: ${{ steps.q-lint.outcome }}
+          Q_FORMAT: ${{ steps.q-format.outcome }}
+          Q_COVERAGE: ${{ steps.q-coverage.outcome }}
+          Q_COMPLEXITY: ${{ steps.q-complexity.outcome }}
+          Q_DEPS: ${{ steps.q-deps.outcome }}
+          Q_DEADCODE: ${{ steps.q-deadcode.outcome }}
+          Q_DUPLICATION: ${{ steps.q-duplication.outcome }}
+          Q_ARCHITECTURE: ${{ steps.q-architecture.outcome }}
+          Q_TREE: ${{ steps.q-tree.outcome }}
+        run: python scripts/ci/gen_kpi_charts.py --append reports/quality/quality-gates.md --coverage reports/quality/coverage.json --out-dir reports/quality/charts
+
+      # Release-branch artifacts for the cut. Not a gate. Missing charts stay
+      # optional; a missing metrics JSON fails this push so the cut cannot stamp
+      # an older tip. Ordinary PRs skip both uploads.
+      - name: Upload release-cut quality metrics
+        if: success() && github.ref == 'refs/heads/release'
+        uses: actions/upload-artifact@v7
+        with:
+          name: quality-metrics
+          path: reports/quality/quality-metrics.json
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload release-cut quality charts
+        if: success() && github.ref == 'refs/heads/release'
+        uses: actions/upload-artifact@v7
+        with:
+          name: quality-metrics-charts
+          path: reports/quality/charts/*.png
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Upload KPI chart images
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          KPI_CHART_UPLOAD_TOKEN: ${{ secrets.QUALITY_CHARTS_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+          GITHUB_SHA: ${{ github.sha }}
+        run: python scripts/ci/upload_kpi_chart_images.py --markdown reports/quality/quality-gates.md --charts-dir reports/quality/charts
 
       - name: Resolve PR number
         if: always()
@@ -244,7 +303,7 @@ jobs:
 
   usability-gate:
     name: Gate 2 — Project usability
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # Blocks merge readiness when Software quality fails (required check below).
     needs: [prerequisites-gate, repo-unit-tests, repo-integration-tests, software-quality]
     timeout-minutes: 15
@@ -268,7 +327,7 @@ jobs:
     # scripts/ci/mutation-config.json light floor. Not part of Software quality
     # fast gates (coverage already re-runs pytest). 20m SLA (ci-quality-hardening).
     name: Mutation tests (light)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [prerequisites-gate, repo-unit-tests]
     timeout-minutes: 20
     permissions:
@@ -284,7 +343,7 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Setup uv
-        uses: astral-sh/setup-uv@v5
+        uses: astral-sh/setup-uv@v10.2.0
         with:
           enable-cache: true
 
@@ -307,6 +366,12 @@ jobs:
           AVO_MUTATION_PROFILE: light
         run: bash scripts/ci/run-mutation-light.sh
 
+      - name: Build mutation PR report
+        if: always()
+        env:
+          AVO_MUTATION_PROFILE: light
+        run: python scripts/ci/write_mutation_pr_report.py --out reports/mutation/mutation-report.md
+
       - name: Upload light mutation reports
         if: always()
         uses: actions/upload-artifact@v7
@@ -315,12 +380,6 @@ jobs:
           path: reports/mutation
           if-no-files-found: warn
           retention-days: 14
-
-      - name: Build mutation PR report
-        if: always()
-        env:
-          AVO_MUTATION_PROFILE: light
-        run: python scripts/ci/write_mutation_pr_report.py --out reports/mutation/mutation-report.md
 
       - name: Resolve PR number
         if: always()

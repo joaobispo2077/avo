@@ -37,6 +37,8 @@ export default {
           'package.json',
           'package-lock.json',
           'pyproject.toml',
+          'docs/quality-metrics.md',
+          'docs/quality/charts/**/*.png',
         ],
         message:
           'chore(release): ${nextRelease.version}\n\n${nextRelease.notes}',

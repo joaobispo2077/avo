@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -17,6 +18,31 @@ def _count(stats: dict[str, object], *keys: str) -> int:
         if key in stats and stats[key] is not None:
             return int(stats[key])
     return 0
+
+
+def mutation_metrics_document(
+    stats: dict[str, object] | None,
+    *,
+    sha: str,
+    floor: float,
+) -> dict | None:
+    """SHA-bound killed/survived counts for the release snapshot. No bare score."""
+    if not isinstance(stats, dict):
+        return None
+    if not re.fullmatch(r"[0-9a-f]{40}", sha):
+        return None
+    killed = stats.get("killed")
+    survived = stats.get("survived")
+    if type(killed) is not int or type(survived) is not int:
+        return None
+    if killed < 0 or survived < 0 or killed + survived <= 0:
+        return None
+    return {
+        "sha": sha,
+        "killed": killed,
+        "survived": survived,
+        "floor": floor,
+    }
 
 
 def build_markdown(
@@ -107,6 +133,18 @@ def main() -> int:
     out = Path(args.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(text, encoding="utf-8", newline="\n")
+    sha = os.environ.get("GITHUB_SHA", "").strip().lower()
+    metrics = mutation_metrics_document(stats, sha=sha, floor=floor)
+    metrics_path = out.parent / "mutation-metrics.json"
+    if metrics is None:
+        if metrics_path.is_file():
+            metrics_path.unlink()
+    else:
+        metrics_path.write_text(
+            json.dumps(metrics, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+            newline="\n",
+        )
     summary = os.environ.get("GITHUB_STEP_SUMMARY")
     if summary:
         with Path(summary).open("a", encoding="utf-8") as handle:
