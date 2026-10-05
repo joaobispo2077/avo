@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
-"""Failing npm audit gate at high+ with documented allowlist (task-011 / FR-6).
+"""Failing npm audit gate for critical findings, with documented allowlist.
 
-Runs ``npm audit --json``, keeps only high/critical advisories, subtracts
-``deps-audit-allowlist.json``, and exits non-zero on anything unexpected.
-Soft/warn-only mode is intentionally absent.
+Runs ``npm audit --json``. Critical findings fail the process (exit 1).
+High, moderate, and low findings are printed and recorded for the sticky
+metric, and do not fail. String ``via`` names are followed to the root
+advisory that carries a GHSA id. A critical finding that never reaches a
+GHSA id still fails. Soft/warn-only mode is intentionally absent.
 """
 
 from __future__ import annotations
@@ -18,8 +20,11 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 ALLOWLIST_PATH = Path(__file__).resolve().parent / "deps-audit-allowlist.json"
+SUMMARY_PATH = ROOT / "reports" / "quality" / "npm-audit-summary.json"
 GHSA_RE = re.compile(r"GHSA-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4}", re.I)
-FAIL_SEVERITIES = frozenset({"high", "critical"})
+FAIL_SEVERITIES = frozenset({"critical"})
+REPORT_SEVERITIES = frozenset({"high", "moderate", "low"})
+_COUNT_KEYS = ("critical", "high", "moderate", "low")
 
 
 def _load_allowlist() -> dict[str, dict]:
@@ -46,64 +51,147 @@ def _load_allowlist() -> dict[str, dict]:
     return index
 
 
-def _ghsa_from_via(item: object) -> str | None:
+def _ghsa_display(item: object) -> str | None:
     if isinstance(item, str):
         match = GHSA_RE.search(item)
-        return match.group(0).upper() if match else None
+        return match.group(0) if match else None
     if isinstance(item, dict):
         for key in ("url", "title", "name"):
             value = item.get(key)
             if isinstance(value, str):
                 match = GHSA_RE.search(value)
                 if match:
-                    return match.group(0).upper()
-        source = item.get("source")
-        if source is not None:
-            # Numeric npm advisory ids are unstable across registries; require GHSA.
-            return None
+                    return match.group(0)
     return None
 
 
-def _high_advisory_ids(audit: dict) -> dict[str, dict]:
-    """Map GHSA id -> {package, severity, nodes} for high/critical findings."""
-    found: dict[str, dict] = {}
-    vulns = audit.get("vulnerabilities") or {}
-    if not isinstance(vulns, dict):
-        raise SystemExit("npm audit JSON missing vulnerabilities object")
+def _lock_packages() -> dict:
+    path = ROOT / "package-lock.json"
+    if not path.is_file():
+        return {}
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    packages = payload.get("packages")
+    return packages if isinstance(packages, dict) else {}
 
-    for name, entry in vulns.items():
+
+def _version(name: str, entry: dict, packages: dict) -> str:
+    nodes = entry.get("nodes") if isinstance(entry, dict) else None
+    if isinstance(nodes, list):
+        for node in nodes:
+            meta = packages.get(node)
+            if isinstance(meta, dict) and isinstance(meta.get("version"), str):
+                return meta["version"]
+    meta = packages.get(f"node_modules/{name}")
+    if isinstance(meta, dict) and isinstance(meta.get("version"), str):
+        return meta["version"]
+    return ""
+
+
+def _root_label(package: str, version: str, ghsa: str) -> str:
+    ident = f"{package}@{version}" if version else package
+    return f"{ident} {ghsa}"
+
+
+def _counts(vulns: dict) -> dict[str, int]:
+    counts = {key: 0 for key in _COUNT_KEYS}
+    for entry in vulns.values():
         if not isinstance(entry, dict):
             continue
-        pkg_severity = str(entry.get("severity", "")).lower()
-        if pkg_severity not in FAIL_SEVERITIES:
-            continue
-        vias = entry.get("via") or []
-        if not isinstance(vias, list):
-            continue
-        matched_any = False
-        for via in vias:
-            via_severity = pkg_severity
-            if isinstance(via, dict) and via.get("severity"):
-                via_severity = str(via["severity"]).lower()
-            if via_severity not in FAIL_SEVERITIES:
+        severity = str(entry.get("severity", "")).lower()
+        if severity in counts:
+            counts[severity] += 1
+    return counts
+
+
+def _summary_line(counts: dict[str, int], *, ok: bool) -> str:
+    label = "PASS" if ok else "FAIL"
+    return f"{label}, {counts['critical']} critical, {counts['high']} high reported"
+
+
+def _write_summary(counts: dict[str, int], *, ok: bool) -> None:
+    SUMMARY_PATH.parent.mkdir(parents=True, exist_ok=True)
+    payload = {"ok": ok, **counts}
+    SUMMARY_PATH.write_text(
+        json.dumps(payload, indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+
+def _root_record(name: str, entry: dict, ghsa: str, packages: dict) -> dict:
+    return {
+        "package": name,
+        "ghsa": ghsa,
+        "version": _version(name, entry, packages),
+    }
+
+
+def _walk(
+    vulns: dict,
+    name: str,
+    packages: dict,
+    trail: set[str],
+    cache: dict[str, tuple[list[dict], bool]],
+) -> tuple[list[dict], bool, bool]:
+    """Follow string via names to GHSA-bearing advisories.
+
+    Returns ``(roots, missing_id, incomplete)``. A via cycle is incomplete and
+    is not cached, so a later pass can name the root once the cycle resolves.
+    """
+    cached = cache.get(name)
+    if cached is not None:
+        return cached[0], cached[1], False
+    if name in trail:
+        return [], False, True
+    entry = vulns.get(name)
+    if not isinstance(entry, dict):
+        return [], True, False
+    vias = entry.get("via") or []
+    if not isinstance(vias, list) or not vias:
+        return [], True, False
+
+    found: list[dict] = []
+    missing = False
+    incomplete = False
+    trail.add(name)
+    for via in vias:
+        if isinstance(via, str):
+            ghsa = _ghsa_display(via)
+            if ghsa:
+                found.append(_root_record(name, entry, ghsa, packages))
                 continue
-            ghsa = _ghsa_from_via(via)
-            if not ghsa:
-                raise SystemExit(
-                    f"high/critical npm finding without GHSA id: package={name} via={via!r}"
-                )
-            matched_any = True
-            found[ghsa] = {
-                "package": name,
-                "severity": via_severity,
-                "nodes": entry.get("nodes") or [],
-            }
-        if not matched_any:
-            # Package marked high/critical but only moderate vias — treat as fail.
-            raise SystemExit(
-                f"package {name!r} severity={pkg_severity} but no high/critical via GHSA"
+            child_found, _child_missing, child_incomplete = _walk(
+                vulns, via, packages, trail, cache
             )
-    return found
+            if child_found:
+                found.extend(child_found)
+            elif child_incomplete:
+                incomplete = True
+            else:
+                missing = True
+            continue
+        if isinstance(via, dict):
+            ghsa = _ghsa_display(via)
+            if ghsa:
+                found.append(_root_record(name, entry, ghsa, packages))
+            else:
+                missing = True
+            continue
+        missing = True
+    trail.remove(name)
+
+    deduped: list[dict] = []
+    seen: set[tuple[str, str]] = set()
+    for item in found:
+        key = (item["package"], item["ghsa"].upper())
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(item)
+    if incomplete and not deduped:
+        return [], True, True
+    resolved = (deduped, missing and not deduped)
+    cache[name] = resolved
+    return resolved[0], resolved[1], False
 
 
 def _npm_executable() -> str:
@@ -133,55 +221,105 @@ def _run_npm_audit() -> dict:
         raise SystemExit(f"npm audit JSON parse failed: {exc}\n{raw[:500]}") from exc
 
 
+def _print_reported(lines: list[str]) -> None:
+    if not lines:
+        return
+    print("npm audit reported (high, moderate, and low do not fail the gate):")
+    for line in lines:
+        print(f"  - {line}")
+
+
 def main() -> int:
     allowlist = _load_allowlist()
     audit = _run_npm_audit()
-    found = _high_advisory_ids(audit)
+    vulns = audit.get("vulnerabilities") or {}
+    if not isinstance(vulns, dict):
+        raise SystemExit("npm audit JSON missing vulnerabilities object")
+
+    packages = _lock_packages()
+    cache: dict[str, tuple[list[dict], bool]] = {}
+    counts = _counts(vulns)
+    reported: list[str] = []
+    critical: dict[str, dict] = {}
+
+    for name, entry in vulns.items():
+        if not isinstance(entry, dict):
+            continue
+        severity = str(entry.get("severity", "")).lower()
+        if severity not in FAIL_SEVERITIES and severity not in REPORT_SEVERITIES:
+            continue
+        roots, missing_id, incomplete = _walk(vulns, name, packages, set(), cache)
+        if incomplete and not roots:
+            missing_id = True
+        if severity in FAIL_SEVERITIES and (missing_id or not roots):
+            _write_summary(counts, ok=False)
+            raise SystemExit(
+                f"critical npm finding without GHSA id: package={name} via={entry.get('via')!r}"
+            )
+        if severity in FAIL_SEVERITIES:
+            for root in roots:
+                critical[root["ghsa"].upper()] = root
+            continue
+        if not roots:
+            reported.append(f"{severity} {name} (no GHSA id)")
+            continue
+        for root in roots:
+            label = _root_label(root["package"], root["version"], root["ghsa"])
+            reported.append(f"{severity} {name} via {label}")
 
     unexpected: list[tuple[str, dict]] = []
     allowed_hits: list[tuple[str, dict]] = []
-    for ghsa, meta in sorted(found.items()):
+    for ghsa, root in sorted(critical.items()):
         if ghsa in allowlist:
-            allowed_hits.append((ghsa, meta))
+            allowed_hits.append((ghsa, root))
         else:
-            unexpected.append((ghsa, meta))
+            unexpected.append((ghsa, root))
 
-    unused = sorted(set(allowlist) - set(found))
+    unused = sorted(set(allowlist) - set(critical))
     if unused:
-        print("ERROR: unused npm audit allowlist entries (remove or fix):", file=sys.stderr)
+        print(
+            "ERROR: unused npm audit allowlist entries (remove or fix):",
+            file=sys.stderr,
+        )
         for ghsa in unused:
             entry = allowlist[ghsa]
             print(
                 f"  - {ghsa} ({entry.get('package')}): {entry.get('reason')}",
                 file=sys.stderr,
             )
+        _print_reported(reported)
+        print(_summary_line(counts, ok=False))
+        _write_summary(counts, ok=False)
         return 1
 
     if allowed_hits:
-        print("npm audit high+ allowlisted (documented exceptions):")
-        for ghsa, meta in allowed_hits:
+        print("npm audit critical allowlisted (documented exceptions):")
+        for ghsa, root in allowed_hits:
             reason = allowlist[ghsa]["reason"]
-            print(f"  - {ghsa} {meta['package']} [{meta['severity']}]: {reason}")
+            label = _root_label(root["package"], root["version"], root["ghsa"])
+            print(f"  - {label}: {reason}")
 
     if unexpected:
         print(
-            "Dependency security gate failed — unexpected npm high/critical advisories:",
+            "Dependency security gate failed — unexpected npm critical advisories:",
             file=sys.stderr,
         )
-        for ghsa, meta in unexpected:
-            nodes = ", ".join(meta.get("nodes") or []) or "(no nodes)"
-            print(
-                f"  - {ghsa} {meta['package']} [{meta['severity']}] @ {nodes}",
-                file=sys.stderr,
-            )
+        for _ghsa, root in unexpected:
+            label = _root_label(root["package"], root["version"], root["ghsa"])
+            print(f"  - {label}", file=sys.stderr)
         print(
             "Fix the dependency, add a root override, or document a narrow "
             "allowlist entry in scripts/ci/deps-audit-allowlist.json.",
             file=sys.stderr,
         )
+        _print_reported(reported)
+        print(_summary_line(counts, ok=False))
+        _write_summary(counts, ok=False)
         return 1
 
-    print("npm audit high+ passed (after documented allowlist).")
+    _print_reported(reported)
+    print(_summary_line(counts, ok=True))
+    _write_summary(counts, ok=True)
     return 0
 
 

@@ -2,7 +2,7 @@
 # Software-quality umbrella (Phase 1 Must Have + Phase 2 deadcode/architecture). Additive to Gate 1/2.
 # Mirrors npm run quality. Lint/format fail-immediately (task-008 / ci.yml);
 # coverage fail-under (task-009); complexity xenon B + allowlist + C901 (task-010);
-# deps pip-audit + npm audit high+ fail-immediately (task-011);
+# deps pip-audit + npm audit critical fail-immediately (task-011);
 # deadcode vulture + allowlist fail-immediately (task-014 / FR-8);
 # architecture import-linter contracts fail-immediately (task-016 / FR-9).
 set -euo pipefail

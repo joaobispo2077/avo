@@ -322,7 +322,7 @@ class QualityMatrixTests(unittest.TestCase):
         )
 
     def test_ci_software_quality_enforces_deps_audit_fail_immediately(self) -> None:
-        """task-011: pip-audit + npm audit high+ wired in npm, scripts, ci.yml."""
+        """task-011: pip-audit + npm audit critical wired in npm, scripts, ci.yml."""
         ci = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
         self.assertIn("quality-deps.sh", ci)
         self.assertIn("Software quality — deps", ci)

@@ -146,6 +146,34 @@ class QualityPrReportTests(unittest.TestCase):
         self.assertNotIn("Tarball Contents", text)
         self.assertNotIn("<details>", text)
 
+    def test_deps_metric_reads_npm_audit_summary(self) -> None:
+        mod = _load("write_quality_pr_report", "scripts/ci/write_quality_pr_report.py")
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            summary = root / "reports" / "quality" / "npm-audit-summary.json"
+            summary.parent.mkdir(parents=True)
+            summary.write_text(
+                json.dumps({"ok": True, "critical": 0, "high": 8}),
+                encoding="utf-8",
+            )
+            metric = mod.gate_metric(
+                "deps",
+                coverage_json=Path("missing.json"),
+                floor=68.0,
+                root=root,
+            )
+            self.assertEqual(metric, "PASS, 0 critical, 8 high reported")
+
+            empty = root / "empty"
+            empty.mkdir()
+            fallback = mod.gate_metric(
+                "deps",
+                coverage_json=Path("missing.json"),
+                floor=68.0,
+                root=empty,
+            )
+        self.assertEqual(fallback, "0 npm GHSA exceptions")
+
 
 if __name__ == "__main__":
     unittest.main()
