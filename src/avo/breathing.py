@@ -6,21 +6,17 @@ import argparse
 import json
 import subprocess
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-import numpy as np
-
-from avo.breath_analysis import analyze_candidates, protected_word_ranges
-from avo.breath_control import (
-    BreathControlError,
-    apply_control,
-    cut_proposals,
-    resolve_control,
-    select_events,
-)
 from avo.timeline.contracts import content_hash, file_fingerprint, validate_document
+
+if TYPE_CHECKING:
+    import numpy as np
 
 
 def decode_pcm(path: Path, *, channels: int = 1, rate: int = 48000) -> np.ndarray:
+    import numpy as np
+
     result = subprocess.run(
         [
             "ffmpeg",
@@ -51,6 +47,8 @@ def _write_json(path: Path, body: dict) -> None:
 
 
 def _write_audio(path: Path, pcm: np.ndarray, rate: int) -> None:
+    import numpy as np
+
     channels = 1 if pcm.ndim == 1 else pcm.shape[1]
     subprocess.run(
         [
@@ -77,6 +75,8 @@ def _write_audio(path: Path, pcm: np.ndarray, rate: int) -> None:
 
 
 def _output_directory(project: Path, directory: Path) -> Path:
+    from avo.breath_control import BreathControlError
+
     config = json.loads(project.read_text(encoding="utf-8-sig"))
     edit = (Path(config.get("rawDir") or project.parent) / "edit").resolve()
     target = directory.resolve()
@@ -146,6 +146,8 @@ def configure_parser(parser: argparse.ArgumentParser) -> None:
 
 
 def _words(args: argparse.Namespace) -> tuple[list[dict], dict | None]:
+    from avo.breath_control import BreathControlError
+
     if args.transcript is None:
         raise BreathControlError("audit needs a fingerprinted word transcript")
     transcript = json.loads(args.transcript.read_text(encoding="utf-8-sig"))
@@ -170,6 +172,8 @@ def _words(args: argparse.Namespace) -> tuple[list[dict], dict | None]:
 
 
 def _audit(args: argparse.Namespace, source: dict, pcm: np.ndarray) -> dict:
+    from avo.breath_analysis import analyze_candidates
+
     words, basis = _words(args)
     analysis = analyze_candidates(pcm, 48000, words)
     body = {
@@ -200,6 +204,10 @@ def _word_clock(projection: dict | None, length: int) -> dict:
 
 
 def _candidate_review(args: argparse.Namespace, source: dict, pcm: np.ndarray) -> dict:
+    import numpy as np
+
+    from avo.breath_control import BreathControlError
+
     if args.analysis is None or args.limit <= 0:
         raise BreathControlError("review needs an analysis and a positive limit")
     analysis = json.loads(args.analysis.read_text(encoding="utf-8-sig"))
@@ -265,6 +273,9 @@ def _review_events(
 
 
 def _reviewed_control(args: argparse.Namespace, source: dict, length: int) -> dict:
+    from avo.breath_analysis import protected_word_ranges
+    from avo.breath_control import BreathControlError, resolve_control, select_events
+
     if args.control is None:
         raise BreathControlError("processing needs a reviewed breathControl document")
     control = json.loads(args.control.read_text(encoding="utf-8-sig"))
@@ -298,6 +309,8 @@ def _reviewed_control(args: argparse.Namespace, source: dict, length: int) -> di
 
 
 def _window(args: argparse.Namespace, length: int) -> tuple[int, int]:
+    from avo.breath_control import BreathControlError
+
     if args.mode == "apply" and (args.start or args.end is not None):
         raise BreathControlError(
             "apply must cover the full dialogue; use preview for windows"
@@ -310,6 +323,8 @@ def _window(args: argparse.Namespace, length: int) -> tuple[int, int]:
 
 
 def _process(args: argparse.Namespace, source: dict, pcm: np.ndarray) -> dict:
+    from avo.breath_control import apply_control, cut_proposals
+
     control = _reviewed_control(args, source, len(pcm))
     if args.mode == "propose-cuts":
         proposals = cut_proposals(control, 48000)
@@ -345,6 +360,8 @@ def _process(args: argparse.Namespace, source: dict, pcm: np.ndarray) -> dict:
 
 
 def run(args: argparse.Namespace) -> int:
+    from avo.breath_control import BreathControlError
+
     target = _output_directory(args.project, args.out_dir)
     source_path = args.source.resolve()
     # Filename is an extra guard, not provenance. Canonical render preflight

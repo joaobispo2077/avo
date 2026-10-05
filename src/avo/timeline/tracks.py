@@ -6,8 +6,6 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
-from avo.breath_control import resolve_control, select_events
-
 from .contracts import file_fingerprint, validate_document
 from .workspace import TimelineWorkspace
 
@@ -102,6 +100,9 @@ def compile_video_layers(layers: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 def _validate_breath_layer(layer: dict) -> None:
+    # breath_control imports numpy. Keep that off the pipeline import path.
+    from avo.breath_control import resolve_control, select_events
+
     control = layer.get("breathControl")
     if not resolve_control(control, role=str(layer.get("role") or "")):
         return
