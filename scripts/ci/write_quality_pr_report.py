@@ -166,6 +166,25 @@ def duplication_ceiling(root: Path = ROOT) -> int:
     return threshold
 
 
+def duplication_measured(root: Path = ROOT) -> float | None:
+    """Line percentage from the jscpd JSON report. Missing file has no measurement."""
+    path = root / "reports" / "quality" / "jscpd" / "jscpd-report.json"
+    if not path.is_file():
+        return None
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(payload, dict):
+        return None
+    statistics = payload.get("statistics")
+    total = statistics.get("total") if isinstance(statistics, dict) else None
+    raw = total.get("percentage") if isinstance(total, dict) else None
+    if isinstance(raw, bool) or not isinstance(raw, (int, float)):
+        return None
+    return float(raw)
+
+
 def architecture_contracts(root: Path = ROOT) -> int | None:
     config = root / ".importlinter"
     if not config.is_file():
@@ -209,7 +228,11 @@ def gate_metric(
             return reported
         return f"{npm_exception_count(root)} npm GHSA exceptions"
     if key == "duplication":
-        return f"ceiling {duplication_ceiling(root)}%"
+        ceiling = duplication_ceiling(root)
+        measured = duplication_measured(root)
+        if measured is None:
+            return f"ceiling {ceiling}%"
+        return f"{measured:.2f}% (ceiling {ceiling}%)"
     if key == "architecture":
         contracts = architecture_contracts(root)
         return "—" if contracts is None else f"{contracts} contracts"

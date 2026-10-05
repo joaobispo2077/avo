@@ -174,6 +174,34 @@ class QualityPrReportTests(unittest.TestCase):
             )
         self.assertEqual(fallback, "0 npm GHSA exceptions")
 
+    def test_duplication_metric_shows_measured_percent_beside_ceiling(self) -> None:
+        mod = _load("write_quality_pr_report", "scripts/ci/write_quality_pr_report.py")
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / ".jscpd.json").write_text(
+                json.dumps({"threshold": 2}), encoding="utf-8"
+            )
+            missing = mod.gate_metric(
+                "duplication",
+                coverage_json=Path("missing.json"),
+                floor=68.0,
+                root=root,
+            )
+            self.assertEqual(missing, "ceiling 2%")
+            report = root / "reports" / "quality" / "jscpd" / "jscpd-report.json"
+            report.parent.mkdir(parents=True)
+            report.write_text(
+                json.dumps({"statistics": {"total": {"percentage": 0.97672}}}),
+                encoding="utf-8",
+            )
+            measured = mod.gate_metric(
+                "duplication",
+                coverage_json=Path("missing.json"),
+                floor=68.0,
+                root=root,
+            )
+        self.assertEqual(measured, "0.98% (ceiling 2%)")
+
 
 if __name__ == "__main__":
     unittest.main()
