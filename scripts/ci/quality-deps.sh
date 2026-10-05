@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Dependency security: pip-audit + npm audit high+ (task-011 / FR-6).
+# Dependency security: pip-audit + npm audit critical (task-011 / FR-6).
+# High, moderate, and low npm findings are listed and do not fail the gate.
 # Fail-immediately — no warn-only. Documented exceptions live in
 # deps-audit-allowlist.json (npm GHSA ids; pip ignore list via pip-audit flags).
 # Requires network + tooling installed (uv sync --frozen --extra dev; npm ci).
@@ -30,7 +31,7 @@ done
 # --skip-editable: audit third-party deps only (local avo is not on PyPI).
 uv run --frozen --extra dev pip-audit --skip-editable "${PIP_IGNORE_ARGS[@]}"
 
-echo "==> quality:deps (npm audit high+ via check_npm_audit.py)"
+echo "==> quality:deps (npm audit critical via check_npm_audit.py; high/moderate/low reported)"
 uv run --frozen --extra dev python "$CI_DIR/check_npm_audit.py"
 
 echo "quality:deps passed."
