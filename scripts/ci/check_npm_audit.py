@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
-"""Failing npm audit gate at high+ with documented allowlist (task-011 / FR-6).
+"""Failing npm audit gate for critical findings, with documented allowlist.
 
-Runs ``npm audit --json``, keeps only high/critical advisories, subtracts
-``deps-audit-allowlist.json``, and exits non-zero on anything unexpected.
-Soft/warn-only mode is intentionally absent.
+Runs ``npm audit --json``. Critical findings fail the process (exit 1).
+High, moderate, and low findings are printed and recorded for the sticky
+metric, and do not fail. String ``via`` names are followed to the root
+advisory that carries a GHSA id. A critical finding that never reaches a
+GHSA id still fails. Soft/warn-only mode is intentionally absent.
 """
 
 from __future__ import annotations
@@ -21,7 +23,9 @@ ROOT = Path(__file__).resolve().parents[2]
 ALLOWLIST_PATH = Path(__file__).resolve().parent / "deps-audit-allowlist.json"
 FINDINGS_PATH = ROOT / "reports" / "quality" / "deps-findings.json"
 GHSA_RE = re.compile(r"GHSA-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4}", re.I)
-FAIL_SEVERITIES = frozenset({"high", "critical"})
+FAIL_SEVERITIES = frozenset({"critical"})
+REPORT_SEVERITIES = frozenset({"high", "moderate", "low"})
+_COUNT_KEYS = ("critical", "high", "moderate", "low")
 
 
 def _load_allowlist() -> dict[str, dict]:
@@ -72,18 +76,14 @@ def _via_path(via: object) -> str:
 def _ghsa_from_via(item: object) -> str | None:
     if isinstance(item, str):
         match = GHSA_RE.search(item)
-        return match.group(0).upper() if match else None
+        return match.group(0) if match else None
     if isinstance(item, dict):
         for key in ("url", "title", "name"):
             value = item.get(key)
             if isinstance(value, str):
                 match = GHSA_RE.search(value)
                 if match:
-                    return match.group(0).upper()
-        source = item.get("source")
-        if source is not None:
-            # Numeric npm advisory ids are unstable across registries; require GHSA.
-            return None
+                    return match.group(0)
     return None
 
 

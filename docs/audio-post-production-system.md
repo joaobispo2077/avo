@@ -33,6 +33,10 @@ Before editing audio, record or infer:
 
 ## Restoration Principles
 
+For explicitly requested breathing cleanup, follow [breath-control.md](breath-control.md).
+It is opt-in, event-based and dialogue-only. Preserve natural pauses unless
+time removal is separately approved, and keep music/SFX ducking unchanged.
+
 Use waveform and spectral views to identify the problem before choosing a tool.
 Use noise prints only from clean noise-only sections. Prefer targeted fixes over
 global processing. Stop or reduce processing when artifacts become more

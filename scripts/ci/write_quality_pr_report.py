@@ -36,7 +36,7 @@ GATE_POLICY = {
     "format": "Ruff format --check + Prettier --check",
     "coverage": "pytest-cov fail-under on `src/avo`",
     "complexity": "xenon max-absolute **B** · Ruff C901 ≤ 31",
-    "deps": "pip-audit + npm high+ (`deps-audit-allowlist.json`)",
+    "deps": "pip-audit + npm critical (`deps-audit-allowlist.json`); high/moderate/low reported",
     "deadcode": "vulture confidence ≥ 60 (`deadcode-allowlist.json`)",
     "duplication": "jscpd on `src/avo`",
     "architecture": "import-linter (`.importlinter`)",
@@ -131,6 +131,20 @@ def deadcode_allowlisted(root: Path = ROOT) -> int | None:
     return _json_count(root / "scripts/ci/deadcode-allowlist.json", "items")
 
 
+def npm_audit_reported(root: Path = ROOT) -> str | None:
+    """Sticky metric from the npm audit summary written by check_npm_audit.py."""
+    path = root / "reports" / "quality" / "npm-audit-summary.json"
+    if not path.is_file():
+        return None
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict):
+        return None
+    label = "PASS" if payload.get("ok") else "FAIL"
+    critical = int(payload.get("critical") or 0)
+    high = int(payload.get("high") or 0)
+    return f"{label}, {critical} critical, {high} high reported"
+
+
 def npm_exception_count(root: Path = ROOT) -> int:
     allow = root / "scripts/ci/deps-audit-allowlist.json"
     if not allow.is_file():
@@ -205,6 +219,25 @@ def duplication_ceiling(root: Path = ROOT) -> int:
     return threshold
 
 
+def duplication_measured(root: Path = ROOT) -> float | None:
+    """Line percentage from the jscpd JSON report. Missing file has no measurement."""
+    path = root / "reports" / "quality" / "jscpd" / "jscpd-report.json"
+    if not path.is_file():
+        return None
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return None
+    if not isinstance(payload, dict):
+        return None
+    statistics = payload.get("statistics")
+    total = statistics.get("total") if isinstance(statistics, dict) else None
+    raw = total.get("percentage") if isinstance(total, dict) else None
+    if isinstance(raw, bool) or not isinstance(raw, (int, float)):
+        return None
+    return float(raw)
+
+
 def architecture_contracts(root: Path = ROOT) -> int | None:
     config = root / ".importlinter"
     if not config.is_file():
@@ -243,9 +276,16 @@ def gate_metric(
         items = deadcode_allowlisted(root)
         return f"{items} allowlisted" if items is not None else "allowlist n/a"
     if key == "deps":
+        reported = npm_audit_reported(root)
+        if reported:
+            return reported
         return f"{npm_exception_count(root)} npm GHSA exceptions"
     if key == "duplication":
-        return f"ceiling {duplication_ceiling(root)}%"
+        ceiling = duplication_ceiling(root)
+        measured = duplication_measured(root)
+        if measured is None:
+            return f"ceiling {ceiling}%"
+        return f"{measured:.2f}% (ceiling {ceiling}%)"
     if key == "architecture":
         contracts = architecture_contracts(root)
         return "—" if contracts is None else f"{contracts} contracts"

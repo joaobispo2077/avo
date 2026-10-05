@@ -929,6 +929,7 @@ def build_overlay_filter_parts(
     overlays: list[dict],
     first_input_index: int = 1,
     overlay_scale: str | None = None,
+    inputs_preoffset: bool = False,
 ) -> tuple[list[str], str]:
     """Build alpha-overlay filters and return parts plus the current video label."""
     parts: list[str] = []
@@ -950,9 +951,13 @@ def build_overlay_filter_parts(
         # Limit overlay streams to their approved EDL window. Without this,
         # a longer reusable overlay asset can extend the output timeline even
         # when the overlay filter's enable window has already ended.
-        overlay_chain += (
-            f"trim=duration={duration:.3f},setpts=PTS-STARTPTS+{start:g}/TB{shifted}"
-        )
+        overlay_chain += f"trim=duration={duration:.3f},"
+        if inputs_preoffset:
+            # The demuxer timestamp offset keeps late 4K alpha inputs from being
+            # decoded and buffered at t=0 while the main timeline catches up.
+            overlay_chain += f"setpts=PTS{shifted}"
+        else:
+            overlay_chain += f"setpts=PTS-STARTPTS+{start:g}/TB{shifted}"
         parts.append(overlay_chain)
         position = ""
         if "x" in overlay or "y" in overlay:
@@ -1009,6 +1014,57 @@ def build_audio_filter_parts(
     return parts, "[outa]"
 
 
+def _preoffset_overlay_inputs(overlays: list[dict], edit_dir: Path) -> list[str]:
+    """Place each overlay input with -itsoffset so late alpha is not decoded at t=0."""
+    inputs: list[str] = []
+    for overlay in overlays:
+        inputs += [
+            "-itsoffset",
+            f"{float(overlay['start_in_output']):g}",
+            "-i",
+            str(resolve_path(overlay["file"], edit_dir)),
+        ]
+    return inputs
+
+
+def _composite_video_encoder_args(
+    youtube_4k: bool,
+    youtube_4k_preset: str,
+) -> list[str]:
+    """Video encoder flags, including NVENC via AVO_RENDER_VIDEO_ENCODER."""
+    video_encoder = os.environ.get("AVO_RENDER_VIDEO_ENCODER", "libx264").strip()
+    if youtube_4k and video_encoder == "h264_nvenc":
+        return [
+            "-c:v",
+            "h264_nvenc",
+            "-preset",
+            "p6",
+            "-tune",
+            "hq",
+            "-rc",
+            "vbr",
+            "-cq",
+            "17",
+            "-b:v",
+            "40M",
+            "-maxrate",
+            "45M",
+            "-bufsize",
+            "90M",
+        ]
+    args = [
+        "-c:v",
+        video_encoder,
+        "-preset",
+        youtube_4k_preset if youtube_4k else "fast",
+    ]
+    if youtube_4k:
+        args += ["-b:v", "40M", "-maxrate", "45M", "-bufsize", "90M"]
+    else:
+        args += ["-crf", "18"]
+    return args
+
+
 def build_final_composite(
     base_path: Path,
     overlays: list[dict],
@@ -1057,15 +1113,20 @@ def build_final_composite(
         )
         return
 
-    inputs: list[str] = ["-i", str(base_path)]
-    for overlay in overlays:
-        inputs += ["-i", str(resolve_path(overlay["file"], edit_dir))]
+    inputs: list[str] = [
+        "-i",
+        str(base_path),
+        *_preoffset_overlay_inputs(overlays, edit_dir),
+    ]
     for effect in sound_effects:
         inputs += ["-i", str(resolve_path(effect["file"], edit_dir))]
 
     audio_compiled = None
     if audio_layers:
         from avo.adapters.media.audio_tracks import compile_audio_layers
+        from avo.breath_mix import prepare_breath_layers
+
+        audio_layers = prepare_breath_layers(audio_layers, edit_dir, resolve_path)
 
         audio_compiled = compile_audio_layers(
             audio_layers,
@@ -1077,6 +1138,7 @@ def build_final_composite(
     video_parts, current_video = build_overlay_filter_parts(
         overlays,
         overlay_scale="3840:2160" if youtube_4k else None,
+        inputs_preoffset=True,
     )
 
     if has_subs:
@@ -1111,15 +1173,8 @@ def build_final_composite(
         video_output,
         "-map",
         audio_output,
-        "-c:v",
-        "libx264",
-        "-preset",
-        youtube_4k_preset if youtube_4k else "fast",
     ]
-    if youtube_4k:
-        cmd += ["-b:v", "40M", "-maxrate", "45M", "-bufsize", "90M"]
-    else:
-        cmd += ["-crf", "18"]
+    cmd += _composite_video_encoder_args(youtube_4k, youtube_4k_preset)
     cmd += [
         "-pix_fmt",
         "yuv420p",

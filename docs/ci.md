@@ -16,7 +16,7 @@ separate workflow. Local umbrella: `npm run quality`. See
 | **Gate 1** | `scripts/validate-prerequisites.sh --ci` | GitHub Spec Kit (`.specify`), video-use engine, ffmpeg (warn in CI), watch-skill, HyperFrames, optional clones — see `avo.dependencies.json` |
 | **Unit tests** | `scripts/ci/run-unit-tests.sh` | AVO core unit pytest (`not project and not integration`); Python via `uv sync --frozen --extra dev` |
 | **Integration tests** | `scripts/ci/run-integration-tests.sh` | `tests/integration` runtime/subprocess boundaries; requires ffmpeg in CI |
-| **Software quality** | `quality-lint.sh` + `quality-format.sh` + `run-coverage.sh` + `quality-complexity.sh` + `quality-deps.sh` + `quality-deadcode.sh` + `quality-duplication.sh` + `quality-architecture.sh` + `quality-tree.sh` (job `Software quality` in `ci.yml`) | Lint/format **fail-immediately** (Ruff C901 ≤ **31**); coverage fail-under **68%** on the **unit** suite only (`--ignore=tests/integration`); complexity xenon max-absolute **B** + `complexity-allowlist.json`; deps **fail-immediately** (`pip-audit` + npm high+ via `check_npm_audit.py` / `deps-audit-allowlist.json`); deadcode vulture min_confidence **60** + `deadcode-allowlist.json`; duplication jscpd threshold **2%** (`.jscpd.json`); architecture import-linter `.importlinter`; tree health `npm find-dupes` (command failure fails; hoist plan report-only). Python via `uv sync --frozen --extra dev`. Local: `npm run quality:*` / `test:coverage` |
+| **Software quality** | `quality-lint.sh` + `quality-format.sh` + `run-coverage.sh` + `quality-complexity.sh` + `quality-deps.sh` + `quality-deadcode.sh` + `quality-duplication.sh` + `quality-architecture.sh` + `quality-tree.sh` (job `Software quality` in `ci.yml`) | Lint/format **fail-immediately** (Ruff C901 ≤ **31**); coverage fail-under **68%** on the **unit** suite only (`--ignore=tests/integration`); complexity xenon max-absolute **B** + `complexity-allowlist.json`; deps **fail-immediately** on critical (`pip-audit` + npm critical via `check_npm_audit.py` / `deps-audit-allowlist.json`; high, moderate, and low reported); deadcode vulture min_confidence **60** + `deadcode-allowlist.json`; duplication jscpd threshold **2%** (`.jscpd.json`); architecture import-linter `.importlinter`; tree health `npm find-dupes` (command failure fails; hoist plan report-only). Python via `uv sync --frozen --extra dev`. Local: `npm run quality:*` / `test:coverage` |
 | **Gate 2** | `scripts/validate-usability.sh --ci` | `avo.config.json`, provider scaffolds, `setup.sh --dry-run`, scaffold scripts — after Gate 1 + unit tests + software quality |
 
 Order in `.github/workflows/ci.yml` is enforced via job `needs:`.
@@ -62,15 +62,20 @@ comments, and Node 24 / Node 24 action majors. Linux jobs pin `ubuntu-24.04`.
 
 PRs get two short sticky comments (Maxframe shape): **Software metrics** (status,
 numeric metric, and what the gate checks, plus PNG charts for those same
-numbers) and **Mutation tests** (score, floor, killed/survived/timeout). The
-Software quality sticky (`quality-gates-report`) posts on green and red runs.
+numbers) and **Mutation tests** (score, floor, killed/survived/timeout when this
+run actually scored). The Software quality sticky (`quality-gates-report`) posts
+on green and red runs.
 **Overall: PASS** only when every Software quality gate step succeeded;
 otherwise the banner is **Overall: FAIL** and failed or skipped gates are not
 drawn as passes. Coverage charts use the real `fail_under` (**68%**). Mutation
-in this sticky is **—** and points at `mutation-report`. Charts are
-visualization only: they do not change floors, and a missing image is an
-explicit note rather than an empty `![]()`. The GitHub check name stays
-**Software quality**.
+in this sticky is **—** and points at `mutation-report`. The mutation sticky
+prints **Passing** and a kill rate only after this run finishes
+`mutmut export-cicd-stats` and stamps `mutants/mutmut-cicd-stats.json` with this
+commit SHA and GitHub run id. A restored cache, a clean-test failure, or a
+missing score for this SHA is **Did not score**: no Passing banner and no
+killed/survived counts from another run. Charts are visualization only: they do
+not change floors, and a missing image is an explicit note rather than an empty
+`![]()`. The GitHub check name stays **Software quality**.
 
 A release cut writes `docs/quality-metrics.md` from that push's green Software
 quality JSON. Pull-request greens do not write that file. See the release-cut
@@ -99,11 +104,19 @@ Every `job` in `config/avo.dependencies.json` must exist under `config/avo.confi
 ### Release-cut quality metrics snapshot
 
 `release.yml` writes `docs/quality-metrics.md` only when
-a release cut runs (semantic-release has a version to publish). The step
-downloads artifact `quality-metrics` from the green CI run for the **exact tip
-SHA** and fails the job if that JSON is missing, not overall PASS, or bound to
-a different SHA. There is no soft warning that still publishes. The step does
+a release cut runs (semantic-release has a version to publish). The snapshot
+is its own job. It checks out the green CI head SHA (the release tip) and
+downloads artifact `quality-metrics` for that **exact tip
+SHA**. It fails the job if that JSON is missing, not overall PASS, bound to
+a different SHA, or any Software quality gate is not PASS. There is no soft
+warning that still publishes. The job does
 not re-measure gates and does not copy the previous release's numbers.
+When the dry-run has no next version, the snapshot job exits without writing
+`docs/quality-metrics.md` and does not fail the workflow.
+
+`workflow_run` loads `release.yml` from the default branch. A merge to
+`develop` does not change the workflow the next cut executes. This job runs
+on a cut only after the file is on `main`.
 
 Software quality writes that JSON only on a push to `release`, then uploads it.
 Ordinary pull requests and other branches do not upload it and do not write
@@ -133,7 +146,7 @@ Template note: [`docs/templates/quality-metrics.md`](./templates/quality-metrics
 | `setup-smoke.yml` | `workflow_dispatch` | Full `setup.sh` on ubuntu + windows |
 | `orchestrator-smoke.yml` | manual + weekly cron | Gate 1 (+ optional) + Whisper tiny model + Gate 2 |
 | `ffmpeg-whisper-smoke.yml` | `workflow_dispatch` | Binary/import smoke (like maxframe `yt-dlp-smoke.yml`) |
-| `release.yml` | After **CI** on `release` (+ manual) | semantic-release dry-run → publish, then `workflow_dispatch` Engine binary to attach platform zips (`GITHUB_TOKEN` does not fire `on: release`). Before publish, hard-fails unless the green Software quality JSON matches the tip SHA, then commits `docs/quality-metrics.md` |
+| `release.yml` | After **CI** on `release` (+ manual) | semantic-release dry-run → publish, then `workflow_dispatch` Engine binary to attach platform zips (`GITHUB_TOKEN` does not fire `on: release`). The snapshot job checks out the green CI head SHA. With a next version it hard-fails unless that SHA's Software quality JSON is PASS, then the publish job commits `docs/quality-metrics.md`. No next version exits without writing the file and does not fail the workflow. `workflow_run` reads this file from the default branch. |
 | `engine-binary.yml` | path-filtered push/PR + `workflow_dispatch` (`attach_tag`) + manual `release` | PyInstaller zip smoke; attach `avo-$VERSION-$platform.zip` + SHA256SUMS to the GitHub release |
 
 Reference: [maxframe workflows](https://github.com/joaobispo2077/maxframe/tree/main/.github/workflows).

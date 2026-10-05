@@ -374,9 +374,45 @@ class QualityMetricsSnapshotTests(unittest.TestCase):
     def test_release_workflow_hard_fails_and_prs_do_not_write_the_doc(self) -> None:
         release = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
         self.assertIn("snapshot-release-quality-metrics.sh", release)
+        self.assertEqual(release.count("snapshot-release-quality-metrics.sh"), 1)
         self.assertLess(
             release.index("snapshot-release-quality-metrics.sh"),
             release.index("npm run release"),
+        )
+        jobs = release.split("jobs:", 1)[1]
+        snapshot_job = jobs.split("snapshot-quality-metrics:", 1)[1].split(
+            "\n  release:", 1
+        )[0]
+        publish_job = jobs.split("\n  release:", 1)[1]
+        snapshot_header = snapshot_job.split("steps:", 1)[0]
+        if_lines = [
+            line.strip()
+            for line in snapshot_header.splitlines()
+            if line.strip().startswith("if:")
+        ]
+        self.assertEqual(
+            if_lines,
+            ["if: needs.determine-version.result == 'success'"],
+        )
+        self.assertIn(
+            "ref: ${{ needs.determine-version.outputs.release-sha }}",
+            snapshot_job,
+        )
+        self.assertIn(
+            "No releasable version. docs/quality-metrics.md is not written.",
+            snapshot_job,
+        )
+        self.assertNotIn("snapshot-release-quality-metrics.sh", publish_job)
+        self.assertIn(
+            "if: needs.determine-version.outputs.next-version != ''",
+            publish_job.split("steps:", 1)[0],
+        )
+        self.assertIn("release-quality-snapshot", publish_job)
+        self.assertIn("release-sha", publish_job)
+        script_at = snapshot_job.index("snapshot-release-quality-metrics.sh")
+        self.assertIn(
+            "needs.determine-version.outputs.next-version != ''",
+            snapshot_job[max(0, script_at - 500) : script_at],
         )
         step = release.split("Snapshot release quality metrics", 1)[1].split(
             "- name: Release", 1
