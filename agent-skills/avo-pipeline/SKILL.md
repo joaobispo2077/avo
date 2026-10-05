@@ -26,6 +26,7 @@ Engine zip is **AVO Python only** — not ffmpeg, HyperFrames, watch-skill, CUDA
 | `/avo.help` (alias `/avo --help`) | [`references/help.md`](references/help.md) |
 | `/avo.guidelines --youtube` | [`references/guidelines-youtube.md`](references/guidelines-youtube.md) |
 | `/avo.guidelines --eq` | [`references/guidelines-eq.md`](references/guidelines-eq.md) |
+| `/avo.guidelines --breathing` | [`references/guidelines-breathing.md`](references/guidelines-breathing.md) |
 | `/avo.guidelines --tiktok` | [`references/guidelines-tiktok.md`](references/guidelines-tiktok.md) |
 | `/avo.guidelines --shorts` | [`references/guidelines-shorts.md`](references/guidelines-shorts.md) |
 | `/avo.guidelines` (no flag) | [`references/guidelines.md`](references/guidelines.md) |

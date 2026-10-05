@@ -24,6 +24,7 @@ Follow [`AGENTS.md`](../../../AGENTS.md) audio rules and [`docs/audio-post-produ
 | `noise-reduction` | Analyze waveform → suggest % per region → user confirms → EDL `restoration_segments[]` (see [`noise-reduction-knowledge.md`](noise-reduction-knowledge.md)) |
 | `level-match` | Analyze quiet dialogue → suggest boost % → preview → EDL `gain_segments[]` (see [`gain-knowledge.md`](gain-knowledge.md)) |
 | `mix` | Full hierarchy with declared SFX/Music |
+| `breathing` | Explicit opt-in dialogue breath audit and reviewed gain-only treatment; see [breathing guidelines](guidelines-breathing.md) |
 
 ## Read-only audit (`audit` mode)
 

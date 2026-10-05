@@ -60,6 +60,7 @@ export default tseslint.config(
       '**/tests/**',
       'package-lock.json',
       'uv.lock',
+      'scripts/ci/braces/**',
     ],
   },
   withFiles(js.configs.recommended),
