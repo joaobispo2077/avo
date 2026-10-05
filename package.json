@@ -51,6 +51,7 @@
     "@semantic-release/git": "^10.0.1",
     "@semantic-release/github": "^12.0.6",
     "@semantic-release/release-notes-generator": "^14.1.0",
+    "braces": "file:scripts/ci/braces",
     "cross-env": "^7.0.3",
     "eslint": "^10.5.0",
     "eslint-config-prettier": "^10.1.8",
@@ -77,10 +78,12 @@
   },
   "overrides": {
     "adm-zip": "0.6.1",
-    "brace-expansion": "5.0.9",
+    "brace-expansion": "5.0.12",
+    "braces": "$braces",
     "ip-address": "10.5.0",
     "js-yaml": "4.3.2",
     "nanoid": "3.3.18",
+    "undici": "7.30.0",
     "@semantic-release/npm": "file:scripts/ci/semantic-release-npm-stub"
   },
   "bin": {
