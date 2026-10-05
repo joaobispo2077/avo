@@ -1,9 +1,9 @@
 'use strict';
 
-const stringify = require('./lib/stringify');
-const compile = require('./lib/compile');
-const expand = require('./lib/expand');
-const parse = require('./lib/parse');
+const stringify = require('./src/stringify');
+const compile = require('./src/compile');
+const expand = require('./src/expand');
+const parse = require('./src/parse');
 
 /**
  * Expand the given pattern or create a regex-compatible string.
