@@ -140,14 +140,6 @@
       "reason": "Public API / CLI surface not referenced inside src/avo scan"
     },
     {
-      "path": "src/avo/capabilities.py",
-      "name": "implementations",
-      "kind": "method",
-      "lineno": 119,
-      "confidence": 60,
-      "reason": "Feature 006 public/dynamic contract covered by focused tests and runtime registration"
-    },
-    {
       "path": "src/avo/edl_timeline.py",
       "name": "output_to_source",
       "kind": "function",
