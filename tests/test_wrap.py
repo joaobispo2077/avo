@@ -7,6 +7,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
@@ -55,7 +56,14 @@ class WrapTests(unittest.TestCase):
             len(payload["files"]["scheduledForDeletion"]),
         )
 
-    def test_build_wrap_payload_final_has_freed_bytes(self) -> None:
+    @patch(
+        "avo.wrap._actual_cleanup",
+        return_value={
+            "freedBytes": 1234,
+            "deleted": [{"path": "edit/removed.mp4", "bytes": 1234}],
+        },
+    )
+    def test_build_wrap_payload_final_has_freed_bytes(self, _receipt) -> None:
         payload = wrap.build_wrap_payload(
             self.report,
             session_id="final-id",
@@ -70,7 +78,8 @@ class WrapTests(unittest.TestCase):
         self.assertGreaterEqual(payload["files"]["deletedCount"], 1)
         self.assertLessEqual(len(payload["files"]["deletedSample"]), 50)
 
-    def test_render_markdown_includes_summary_and_status(self) -> None:
+    @patch("avo.wrap._actual_cleanup", return_value={"freedBytes": 500, "deleted": []})
+    def test_render_markdown_includes_summary_and_status(self, _receipt) -> None:
         payload = wrap.build_wrap_payload(
             self.report,
             session_id="md-test",
@@ -136,7 +145,16 @@ class WrapTests(unittest.TestCase):
             self.assertTrue((raw_dir / "avo.wrap.json").is_file())
             self.assertTrue((raw_dir / "avo.wrap.draft.json").is_file())
 
-    def test_final_payload_deleted_sample_capped(self) -> None:
+    @patch(
+        "avo.wrap._actual_cleanup",
+        return_value={
+            "freedBytes": 550,
+            "deleted": [
+                {"path": f"edit/removed{i}.mp4", "bytes": 10} for i in range(55)
+            ],
+        },
+    )
+    def test_final_payload_deleted_sample_capped(self, _receipt) -> None:
         inv = self.report.to_dict()
         inv["files"]["scheduledForDeletion"] = [
             {"path": f"edit/preview/file{i}.mp4", "bytes": 10} for i in range(55)
@@ -155,7 +173,7 @@ class WrapTests(unittest.TestCase):
         self.assertLessEqual(len(payload["files"]["deletedOnCleanup"]), 50)
         self.assertLessEqual(len(payload["files"]["scheduledForDeletion"]), 50)
 
-    def test_final_wrap_inherits_draft_space_when_candidates_empty(self) -> None:
+    def test_final_wrap_never_infers_deletions_from_draft(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             raw_dir = Path(tmp) / "project"
             raw_dir.mkdir()
@@ -210,16 +228,15 @@ class WrapTests(unittest.TestCase):
                     "degradedMode": False,
                 },
             }
-            payload = wrap.build_wrap_payload(
-                empty,
-                session_id="inherit",
-                provider="bishop",
-                master_basename=MASTER,
-                summary="",
-                status="final",
-            )
-            self.assertEqual(payload["space"]["freedBytes"], 999)
-            self.assertEqual(payload["files"]["deletedCount"], 12)
+            with self.assertRaisesRegex(ValueError, "cleanup receipt"):
+                wrap.build_wrap_payload(
+                    empty,
+                    session_id="inherit",
+                    provider="bishop",
+                    master_basename=MASTER,
+                    summary="",
+                    status="final",
+                )
 
     def test_links_editlog_is_root_file_iff_present(self) -> None:
         payload_missing = wrap.build_wrap_payload(

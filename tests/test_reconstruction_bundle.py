@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from avo import project_inventory
-from avo.timeline.contracts import file_fingerprint
+from avo.timeline.contracts import content_hash, file_fingerprint
 from avo.timeline.reconstruction import (
     ReconstructionError,
     build_reconstruction_bundle,
@@ -177,3 +177,173 @@ def test_reconstruction_preserves_fingerprinted_raw_review_artifacts(tmp_path: P
     entry = next(item for item in bundle["files"] if item["path"].endswith(raw.name))
     assert entry["role"] == "review-raw-artifact"
     assert entry["sha256"] == file_fingerprint(raw)["sha256"]
+
+
+def test_bundle_preserves_current_media_and_delivery_receipt(tmp_path: Path):
+    workspace, basename = canonical_project(tmp_path)
+    media = tmp_path / "edit" / "custom-audio" / "dialogue.wav"
+    media.parent.mkdir(parents=True)
+    media.write_bytes(b"approved-dialogue")
+    workspace.store("tracks").append_revision(
+        snapshot={
+            "layers": [{"source": {"locator": str(media), **file_fingerprint(media)}}]
+        },
+        actor="agent",
+        reason="dialogue",
+    )
+    approval = tmp_path / "edit" / "delivery" / "v001" / "APPROVAL.json"
+    approval.parent.mkdir(parents=True)
+    approval.write_text("{}\n", encoding="utf-8")
+    bundle = build_reconstruction_bundle(
+        workspace, master_basename=basename, actor="creator"
+    )
+    bundled = {tmp_path / item["path"] for item in bundle["files"]}
+    assert {media, approval} <= bundled
+    assert not (
+        {media, approval}
+        & set(project_inventory.execute_cleanup(tmp_path, basename, dry_run=True))
+    )
+
+    # Even a correctly re-signed old/incomplete bundle must not permit deletion.
+    bundle["files"] = [
+        item for item in bundle["files"] if tmp_path / item["path"] != media
+    ]
+    bundle["bundleSha256"] = content_hash(
+        {key: value for key, value in bundle.items() if key != "bundleSha256"}
+    )
+    (workspace.timeline_dir / "reconstruction-bundle.json").write_text(
+        json.dumps(bundle), encoding="utf-8"
+    )
+    with pytest.raises(ReconstructionError, match="coverage"):
+        verify_reconstruction_bundle(tmp_path)
+
+
+def test_cleanup_respects_project_retention_and_actual_deletions(tmp_path: Path):
+    workspace, basename = canonical_project(tmp_path)
+    keep = tmp_path / "edit" / "preview" / "approved.mp4"
+    discard = tmp_path / "edit" / "cache" / "unused.bin"
+    for path in (keep, discard):
+        path.parent.mkdir(parents=True)
+        path.write_bytes(b"media")
+    project = json.loads(workspace.project_path.read_text(encoding="utf-8"))
+    project["cleanup"] = {"preservePaths": ["edit/preview"]}
+    workspace.project_path.write_text(json.dumps(project), encoding="utf-8")
+    build_reconstruction_bundle(workspace, master_basename=basename, actor="creator")
+    outcome = project_inventory.run_cleanup(
+        tmp_path, basename, rimraf_runner=lambda path: None
+    )
+    assert keep.exists() and discard.exists()
+    assert outcome.paths == []
+    assert outcome.freed_bytes == 0
+    assert outcome.leftover == 1
+    receipt = json.loads(
+        (tmp_path / "edit" / "cleanup" / "cleanup-result.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert receipt["deleted"] == []
+    assert receipt["status"] == "incomplete"
+
+
+@pytest.mark.parametrize("path", ["../outside", "/outside", "C:\\outside", "."])
+def test_cleanup_rejects_unsafe_retention_paths(tmp_path: Path, path: str):
+    workspace, basename = canonical_project(tmp_path)
+    project = json.loads(workspace.project_path.read_text(encoding="utf-8"))
+    project["cleanup"] = {"preservePaths": [path]}
+    workspace.project_path.write_text(json.dumps(project), encoding="utf-8")
+    with pytest.raises(project_inventory.PreservedSetViolation, match="preserve"):
+        project_inventory.resolve_preserved_set(tmp_path, basename)
+
+
+def test_final_wrap_requires_actual_cleanup_not_simulation(tmp_path: Path):
+    from avo.wrap import build_wrap_payload
+
+    workspace, basename = canonical_project(tmp_path)
+    build_reconstruction_bundle(workspace, master_basename=basename, actor="creator")
+    inventory = project_inventory.build_inventory_report(tmp_path, basename)
+    with pytest.raises(ValueError, match="cleanup receipt"):
+        build_wrap_payload(
+            inventory,
+            session_id="test",
+            provider="bishop",
+            master_basename=basename,
+            summary="Done",
+            status="final",
+            freed_bytes=0,
+        )
+    outcome = project_inventory.run_cleanup(tmp_path, basename)
+    assert outcome.freed_bytes == 0
+    # A later, still-existing candidate must never become a claimed deletion.
+    later = tmp_path / "edit" / "later.bin"
+    later.write_bytes(b"not deleted")
+    inventory = project_inventory.build_inventory_report(tmp_path, basename)
+    final = build_wrap_payload(
+        inventory,
+        session_id="test",
+        provider="bishop",
+        master_basename=basename,
+        summary="Done",
+        status="final",
+    )
+    assert final["files"]["deletedCount"] == 0
+    assert final["files"]["deletedOnCleanup"] == []
+    assert final["space"]["freedBytes"] == 0
+
+
+def test_successful_cleanup_receipt_drives_final_metrics(tmp_path: Path):
+    from avo.wrap import build_wrap_payload
+
+    workspace, basename = canonical_project(tmp_path)
+    build_reconstruction_bundle(workspace, master_basename=basename, actor="creator")
+    scratch = tmp_path / "edit" / "cache.bin"
+    scratch.write_bytes(b"discard")
+    outcome = project_inventory.run_cleanup(tmp_path, basename)
+    assert outcome.paths == [scratch]
+    assert outcome.freed_bytes == 7
+    inventory = project_inventory.build_inventory_report(tmp_path, basename)
+    final = build_wrap_payload(
+        inventory,
+        session_id="test",
+        provider="bishop",
+        master_basename=basename,
+        summary="Done",
+        status="final",
+    )
+    assert final["files"]["deletedCount"] == 1
+    assert final["space"]["freedBytes"] == 7
+    assert final["space"]["preCleanupProjectBytes"] == outcome.pre_cleanup_project_bytes
+    assert final["files"]["deletedOnCleanup"] == [
+        {"path": "edit/cache.bin", "bytes": 7}
+    ]
+    with pytest.raises(ValueError, match="override"):
+        build_wrap_payload(
+            inventory,
+            session_id="test",
+            provider="bishop",
+            master_basename=basename,
+            summary="Done",
+            status="final",
+            freed_bytes=0,
+        )
+    # A receipt cannot silently be replaced by a second execution.
+    with pytest.raises(project_inventory.PreservedSetViolation, match="already exists"):
+        project_inventory.run_cleanup(tmp_path, basename)
+
+
+def test_missing_or_changed_canonical_media_blocks_bundle(tmp_path: Path):
+    workspace, basename = canonical_project(tmp_path)
+    media = tmp_path / "edit" / "dialogue.wav"
+    media.write_bytes(b"dialogue")
+    workspace.store("tracks").append_revision(
+        snapshot={"source": file_fingerprint(media)}, actor="agent", reason="fixture"
+    )
+    media.write_bytes(b"changed")
+    with pytest.raises(ReconstructionError, match="fingerprint changed"):
+        build_reconstruction_bundle(
+            workspace, master_basename=basename, actor="creator"
+        )
+    media.unlink()
+    with pytest.raises(ReconstructionError, match="missing"):
+        build_reconstruction_bundle(
+            workspace, master_basename=basename, actor="creator"
+        )
