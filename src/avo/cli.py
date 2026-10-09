@@ -1297,6 +1297,27 @@ def _request(path: Path | None) -> dict[str, Any]:
     return value
 
 
+def _proof_request_from_cmap(request, args, workspace):
+    if not request.pop("fromCMap", False):
+        return request
+    from avo.timeline.initial_cut import initial_cut_proof_request
+
+    if set(request) - {"output"}:
+        raise ValueError("fromCMap accepts only an output contract")
+    output_contract = request.get("output") or {}
+    if set(output_contract) - {"frameRate", "width", "height", "audioSampleRate"}:
+        raise ValueError("fromCMap output contains unsupported fields")
+    return initial_cut_proof_request(
+        workspace,
+        iteration_id=args.iteration_id,
+        output=args.output,
+        frame_rate=output_contract["frameRate"],
+        width=output_contract.get("width", 640),
+        height=output_contract.get("height", 360),
+        sample_rate=output_contract.get("audioSampleRate", 48000),
+    )
+
+
 def _proof(args: argparse.Namespace) -> int:
     from avo.adapters.registry import default_proof_capability_registry
     from avo.timeline.component_instances import ComponentInstanceService
@@ -1391,7 +1412,7 @@ def _proof(args: argparse.Namespace) -> int:
         return 0
     registry = default_proof_capability_registry()
     if operation == "plan":
-        request = _request(args.request)
+        request = _proof_request_from_cmap(_request(args.request), args, workspace)
         for record in request.pop("capabilityImplementations", []):
             registry.register_record(record)
         request["iterationId"] = args.iteration_id

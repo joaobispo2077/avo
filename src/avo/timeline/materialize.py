@@ -689,15 +689,43 @@ class ProofMaterializationError(RuntimeError):
         }
 
 
-def canonical_proof_media_inputs(
-    workspace: Any, proof_plan: dict[str, Any]
-) -> dict[str, dict[str, Any]]:
-    """Resolve locked source IDs from canonical CMap/Tracks without proof media."""
-    required = {
+def _validated_absent_tracks(workspace: Any, proof_plan: dict[str, Any]) -> bool:
+    from .contracts import content_hash
+
+    if proof_plan.get(
+        "checkpoint"
+    ) == "cut-proof" and "absent:tracks" in proof_plan.get("canonicalInputLock", {}):
+        tracks_index = workspace.store("tracks").load_index()
+        from .proof_plan import ProofPlanCompiler
+
+        if (
+            not ProofPlanCompiler._empty_index(tracks_index)
+            or content_hash(tracks_index)
+            != proof_plan["canonicalInputLock"]["absent:tracks"]
+            or "tracks" in proof_plan["canonicalInputLock"]
+        ):
+            raise ProofMaterializationError(
+                "PROOF_REVISION_STALE",
+                "canonical Tracks absence no longer matches the proof plan",
+                "compile a new proof plan from current canonical state",
+            )
+        return True
+    return False
+
+
+def _required_proof_sources(proof_plan: dict[str, Any]) -> set[str]:
+    return {
         key.removeprefix("source:")
         for key in proof_plan.get("canonicalInputLock") or {}
         if key.startswith("source:")
     }
+
+
+def canonical_proof_media_inputs(
+    workspace: Any, proof_plan: dict[str, Any]
+) -> dict[str, dict[str, Any]]:
+    """Resolve locked source IDs from canonical CMap/Tracks without proof media."""
+    required = _required_proof_sources(proof_plan)
     inputs: dict[str, dict[str, Any]] = {}
     cmap_index = workspace.require_active("cmap")
     cmap = workspace.store("cmap").revision(cmap_index["headRevisionId"])
@@ -716,6 +744,8 @@ def canonical_proof_media_inputs(
                 "mediaClass": str(source.get("mediaClass") or "source"),
                 "ancestry": deepcopy(source.get("ancestry") or []),
             }
+    if _validated_absent_tracks(workspace, proof_plan):
+        return inputs
     tracks_index = workspace.require_active("tracks")
     tracks = workspace.store("tracks").revision(tracks_index["headRevisionId"])
     snapshot = tracks.get("snapshot") or {}
@@ -780,6 +810,13 @@ def _proof_readiness(render_port: Any, plan: dict[str, Any]) -> dict[str, bool]:
         "proof-plan-executor", hasattr(render_port, "render_proof_plan")
     )
     return normalized
+
+
+def default_proof_readiness(plan: dict[str, Any]) -> dict[str, bool]:
+    """Probe the default renderer through the materialization adapter boundary."""
+    from avo.adapters.media.timeline_render import TimelineRenderAdapter
+
+    return _proof_readiness(TimelineRenderAdapter(), plan)
 
 
 def _proof_render(
@@ -1022,6 +1059,7 @@ def materialize_proof_plan(
     record = {
         "schemaVersion": "1.0.0",
         "kind": "proof-plan",
+        "checkpoint": plan.get("checkpoint", "pre-master"),
         "materializationId": (
             f"proof-build-{plan['proofPlanHash'][:12]}-"
             f"{rendered['output']['sha256'][:12]}"

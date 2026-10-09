@@ -6,6 +6,7 @@
   "required": ["schemaVersion", "proofPlanId", "iterationId", "canonicalInputLock", "regressionContract", "renderProfile", "output", "capabilityResolution", "implementationRefs", "videoGraph", "audioGraph", "events", "validationPlan", "visionReviewPlanRef", "lineagePolicy", "producer", "proofPlanHash"],
   "properties": {
     "schemaVersion": { "const": "1.0.0" },
+    "checkpoint": { "enum": ["cut-proof", "motion-proof", "pre-master", "deliver"] },
     "proofPlanId": { "$ref": "#/$defs/stableId" }, "iterationId": { "$ref": "#/$defs/stableId" },
     "canonicalInputLock": { "type": "object", "minProperties": 5, "additionalProperties": { "$ref": "#/$defs/sha256" } },
     "regressionContract": { "type": "object", "additionalProperties": false, "required": ["contractId", "ledgerHash", "iterationId", "obligations", "historicalRiskWindows", "conflicts", "contractHash"], "properties": { "contractId": { "$ref": "#/$defs/stableId" }, "ledgerHash": { "$ref": "#/$defs/sha256" }, "iterationId": { "$ref": "#/$defs/stableId" }, "obligations": { "type": "array", "items": { "type": "object" } }, "historicalRiskWindows": { "type": "array", "items": { "$ref": "#/$defs/frameRange" } }, "conflicts": { "type": "array", "items": { "type": "object" } }, "contractHash": { "$ref": "#/$defs/sha256" } } },
