@@ -78,6 +78,10 @@ class TimelineRenderAdapter:
     """TimelineRenderPort: projection JSON in, hash-bound media out."""
 
     def __init__(self, *, proof_executor: Any | None = None) -> None:
+        if proof_executor is None:
+            from .proof_executor import execute_ffmpeg_proof
+
+            proof_executor = execute_ffmpeg_proof
         self.proof_executor = proof_executor
 
     def proof_tool_readiness(self, proof_plan: dict[str, Any]) -> dict[str, bool]:
@@ -121,6 +125,8 @@ class TimelineRenderAdapter:
             "implementationRefs": deepcopy(proof_plan["implementationRefs"]),
             "output": deepcopy(proof_plan["output"]),
             "renderProfile": proof_plan["renderProfile"],
+            "canonicalInputLock": deepcopy(proof_plan["canonicalInputLock"]),
+            "lineagePolicy": deepcopy(proof_plan["lineagePolicy"]),
             "window": deepcopy(window),
         }
         graph_hash = content_hash(
