@@ -570,6 +570,10 @@ def _complete_hashes(required: dict[str, Any], label: str) -> dict[str, str]:
 def _materialization_dependencies(materialization: dict) -> dict[str, str]:
     from avo.timeline.contracts import content_hash
 
+    if materialization.get("kind") == "proof-plan":
+        from avo.timeline.approval_service import native_cut_dependencies
+
+        return native_cut_dependencies(materialization)
     lock = materialization.get("canonicalInputLock") or {}
     kind = str(materialization.get("kind") or "")
     output_sha = (materialization.get("output") or {}).get("sha256")

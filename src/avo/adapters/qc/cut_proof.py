@@ -40,6 +40,42 @@ def _join_windows(workspace: Any) -> list[dict[str, Any]]:
     return windows
 
 
+def _require_cut_lineage(workspace, materialization, candidate, dependencies):
+    if workspace is None:
+        raise ProjectionError("canonical workspace is required")
+    if materialization and materialization.get("kind") == "proof-plan":
+        from avo.timeline.approval_service import require_native_cut_materialization
+
+        expected = require_native_cut_materialization(
+            workspace, materialization, candidate
+        )
+        if any(dependencies.get(key) != value for key, value in expected.items()):
+            raise ProjectionError("candidate native cut dependencies are not exact")
+    else:
+        verify_projection(workspace)
+    _require_current_cut_heads(workspace, candidate, dependencies)
+
+
+def _require_current_cut_heads(workspace, candidate, dependencies):
+    cmap_store = workspace.store("cmap")
+    cmap_index = cmap_store.load_index()
+    cmap_ref = next(
+        item
+        for item in cmap_index["revisionRefs"]
+        if item["revisionId"] == cmap_index["headRevisionId"]
+    )
+    if dependencies.get("cmap") != cmap_ref["contentSha256"]:
+        raise ProjectionError("candidate CMap dependency is not current")
+    sync_event = workspace.store("sync-map").effective_approval()
+    if sync_event is None:
+        raise ProjectionError("current approved Sync/N/A is missing")
+    if dependencies.get("sync-map") != sync_event["subject"]["contentSha256"]:
+        raise ProjectionError("candidate Sync dependency is not current")
+    candidate_hash = file_fingerprint(candidate)["sha256"]
+    if dependencies.get("cutOutput") and dependencies["cutOutput"] != candidate_hash:
+        raise ProjectionError("cut-output dependency does not match candidate bytes")
+
+
 class CutProofQcAdapter:
     def check(self, candidate: Path, **request: Any) -> dict[str, Any]:
         candidate = Path(candidate)
@@ -95,32 +131,16 @@ class CutProofQcAdapter:
         workspace = request.get("workspace")
         dependencies = request.get("dependencies") or {}
         try:
-            if workspace is None:
-                raise ProjectionError("canonical workspace is required")
-            verify_projection(workspace)
-            cmap_store = workspace.store("cmap")
-            cmap_index = cmap_store.load_index()
-            cmap_ref = next(
-                item
-                for item in cmap_index["revisionRefs"]
-                if item["revisionId"] == cmap_index["headRevisionId"]
+            _require_cut_lineage(
+                workspace, request.get("materialization"), candidate, dependencies
             )
-            if dependencies.get("cmap") != cmap_ref["contentSha256"]:
-                raise ProjectionError("candidate CMap dependency is not current")
-            sync_event = workspace.store("sync-map").effective_approval()
-            if sync_event is None:
-                raise ProjectionError("current approved Sync/N/A is missing")
-            if dependencies.get("sync-map") != sync_event["subject"]["contentSha256"]:
-                raise ProjectionError("candidate Sync dependency is not current")
-            candidate_hash = file_fingerprint(candidate)["sha256"]
-            if (
-                dependencies.get("cutOutput")
-                and dependencies["cutOutput"] != candidate_hash
-            ):
-                raise ProjectionError(
-                    "cut-output dependency does not match candidate bytes"
-                )
-        except (ProjectionError, StopIteration, KeyError, ValueError) as error:
+        except (
+            ProjectionError,
+            StopIteration,
+            KeyError,
+            ValueError,
+            RuntimeError,
+        ) as error:
             findings.append(
                 {"id": "lineage", "classification": "lineage", "message": str(error)}
             )
