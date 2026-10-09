@@ -21,6 +21,18 @@
       "type": "string",
       "description": "Optional working title for this video project."
     },
+    "cleanup": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "preservePaths": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": { "type": "string", "minLength": 1 },
+          "description": "Existing project-relative files/directories retained in addition to the verified reconstruction graph. Absolute paths and traversal are rejected."
+        }
+      }
+    },
     "assets": {
       "type": "object",
       "description": "Optional per-project asset locations (EXTERNAL paths). Any field left empty inherits the provider manifest's assets value.",

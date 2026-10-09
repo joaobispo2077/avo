@@ -1076,7 +1076,7 @@ def _compact_from_outcome(
             pre_cleanup=outcome.pre_cleanup_project_bytes,
             delete_bytes=outcome.delete_candidate_bytes,
             preserved_bytes=outcome.preserved_bytes,
-            freed_bytes=None if dry else outcome.delete_candidate_bytes,
+            freed_bytes=None if dry else outcome.freed_bytes,
         ),
         session_id=session_id,
         scratch_report=scratch_report,
@@ -1108,6 +1108,12 @@ def _purge_session_stderr(session_id: str | None) -> None:
         purged = False
     if purged:
         print(f"scratch purged: session {session_id}", file=sys.stderr)
+
+
+def _cleanup_status(command: str, leftover: int) -> tuple[str, int]:
+    if command == "dry-run":
+        return "dry-run", 0
+    return ("incomplete", 3) if leftover else ("executed", 0)
 
 
 def _cleanup(args: argparse.Namespace) -> int:
@@ -1182,7 +1188,7 @@ def _cleanup(args: argparse.Namespace) -> int:
             raw_dir, args.master_basename, session_id
         )
 
-    status = "dry-run" if args.cleanup_command == "dry-run" else "executed"
+    status, exit_code = _cleanup_status(args.cleanup_command, outcome.leftover)
     _emit(
         _compact_from_outcome(
             status=status,
@@ -1196,7 +1202,7 @@ def _cleanup(args: argparse.Namespace) -> int:
     )
     if status == "executed":
         _purge_session_stderr(session_id)
-    return 0
+    return exit_code
 
 
 def _prepare_delivery(args: argparse.Namespace, workspace: TimelineWorkspace) -> dict:
