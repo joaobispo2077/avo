@@ -23,6 +23,59 @@ def _load(name: str, rel: str):
 
 
 class QualityPrReportTests(unittest.TestCase):
+    def test_exception_diagnostic_does_not_hide_blocking_findings(self) -> None:
+        mod = _load("write_quality_pr_report", "scripts/ci/write_quality_pr_report.py")
+        root = self._empty_allowlist_root()
+        path = self._deps_findings(
+            root, [{"package": "demo", "id": "GHSA-aaaa-bbbb-cccc", "via": "wrapper"}]
+        )
+        payload = json.loads(path.read_text())
+        payload["error"] = "unused exception"
+        path.write_text(json.dumps(payload))
+        report = mod.deps_cell("failure", root=root)
+        self.assertIn("unused exception", report)
+        self.assertIn("demo GHSA-aaaa-bbbb-cccc via wrapper", report)
+
+    def test_dependency_execution_error_is_not_zero_or_waiver_count(self) -> None:
+        mod = _load("write_quality_pr_report", "scripts/ci/write_quality_pr_report.py")
+        root = self._empty_allowlist_root()
+        path = self._deps_findings(root, [])
+        path.write_text(
+            json.dumps({"findings": [], "error": "pip-audit network unavailable"})
+        )
+        path.with_name("npm-audit-summary.json").write_text(
+            json.dumps(
+                {
+                    "ok": False,
+                    "critical": None,
+                    "high": None,
+                    "error": "npm audit unavailable",
+                }
+            )
+        )
+        self.assertIn(
+            "pip-audit network unavailable", mod.deps_cell("failure", root=root)
+        )
+        self.assertIn("unknown", mod.npm_audit_reported(root))
+        self.assertNotIn("0 critical", mod.npm_audit_reported(root))
+        skipped = mod.build_markdown(
+            {"deps": "skipped"}, coverage_json=Path("missing"), floor=68, root=root
+        )
+        self.assertNotIn("network unavailable", skipped)
+        self.assertNotIn("npm audit unavailable", skipped)
+
+    def test_successful_dependency_report_includes_all_severities(self) -> None:
+        mod = _load("write_quality_pr_report", "scripts/ci/write_quality_pr_report.py")
+        root = self._empty_allowlist_root()
+        path = self._deps_findings(root, [])
+        path.with_name("npm-audit-summary.json").write_text(
+            json.dumps({"ok": True, "critical": 0, "high": 2, "moderate": 3, "low": 1})
+        )
+        result = mod.deps_cell("success", root=root)
+        self.assertIn("2 high", result)
+        self.assertIn("3 moderate", result)
+        self.assertIn("1 low", result)
+
     def test_quality_table_marks_skipped_after_fail(self) -> None:
         mod = _load("write_quality_pr_report", "scripts/ci/write_quality_pr_report.py")
         text = mod.build_markdown(
@@ -202,7 +255,7 @@ class QualityPrReportTests(unittest.TestCase):
             root=root,
         )
         self.assertIn(
-            "| Dependency audit | **FAIL** | 0 npm GHSA exceptions |",
+            "| Dependency audit | **FAIL** | dependency audit failed; no finding evidence available |",
             text,
         )
         self.assertNotIn("@jscpd/finder", text)

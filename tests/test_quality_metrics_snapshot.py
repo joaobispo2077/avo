@@ -67,6 +67,26 @@ def _coverage(path: Path, percent: float, covered: int, statements: int) -> None
 
 
 class QualityMetricsSnapshotTests(unittest.TestCase):
+    def test_skipped_dependency_gate_ignores_stale_summary_in_all_views(self) -> None:
+        root = self._workspace()
+        self._document(root)
+        summary = root / "reports" / "quality" / "npm-audit-summary.json"
+        summary.parent.mkdir(parents=True)
+        summary.write_text(json.dumps({"ok": True, "critical": 0, "high": 99}))
+        document = self.mod.build_ci_document(
+            self._outcomes(deps="skipped"),
+            coverage_json=root / "coverage.json",
+            floor=68,
+            root=root,
+            sha=SHA,
+            recorded_at=RECORDED,
+        )
+        gate = next(row for row in document["gates"] if row["key"] == "deps")
+        self.assertEqual(gate["status"], "SKIPPED")
+        self.assertEqual(gate["metric"], "not measured")
+        self.assertEqual(document["series"]["deps"]["reported"], "not measured")
+        self.assertNotIn("99 high", json.dumps(document))
+
     def setUp(self) -> None:
         self.mod = _load(
             "write_quality_metrics_snapshot",
