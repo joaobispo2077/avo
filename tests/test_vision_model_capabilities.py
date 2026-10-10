@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from avo.adapters.understand.watch_skill import probe_vision_capabilities
+from avo.adapters.understand.watch_skill import _live_probe, probe_vision_capabilities
 from avo.timeline.vision_review import VisionReviewError, build_capability_snapshot
 
 
@@ -124,3 +124,26 @@ def test_endpoint_pin_is_live_probed_and_endpoint_failure_blocks() -> None:
             probe=lambda *_: _probe(success=False),
             resource_policy=policy,
         )
+
+
+def test_live_probe_disables_reasoning(monkeypatch) -> None:
+    captured = {}
+
+    def fake_post(url, payload, *, timeout):
+        captured.update({"url": url, "payload": payload, "timeout": timeout})
+        return {"model": "qwen3.5-4b", "choices": [{"message": {"content": "{}"}}]}
+
+    monkeypatch.setattr("avo.adapters.understand.watch_skill._post_json", fake_post)
+    result = _live_probe(
+        "http://127.0.0.1:1234/v1",
+        "qwen3.5-4b",
+        {
+            "timeoutSeconds": 240,
+            "contextLimit": 8192,
+            "maxOutputTokens": 1024,
+            "maxImagesPerPass": 3,
+            "imageLongSide": 640,
+        },
+    )
+    assert result["success"] is True
+    assert captured["payload"]["reasoning_effort"] == "none"
