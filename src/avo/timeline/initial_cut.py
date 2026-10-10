@@ -1,7 +1,6 @@
 """Build the first source-only proof request from the current canonical CMap."""
 
-import json
-import subprocess
+from collections.abc import Callable
 from copy import deepcopy
 from fractions import Fraction
 from pathlib import Path
@@ -40,26 +39,20 @@ def _source_selection(source, workspace):
     return metadata, selection, locator, channel_map
 
 
-def _native_sample_rate(selection, locator):
+def _native_sample_rate(selection, locator, sample_rate_probe):
     declared = selection.get("sourceSampleRate")
     if declared is not None:
         return int(declared)
-    probe = subprocess.run(
-        ["ffprobe", "-v", "error", "-show_streams", "-of", "json", str(locator)],
-        capture_output=True,
-        text=True,
-        check=True,
-    )
-    streams = json.loads(probe.stdout)["streams"]
-    stream = next(item for item in streams if item["index"] == selection["streamIndex"])
-    if stream["codec_type"] != "audio":
-        raise ValueError("canonical selected stream must contain audio")
-    return int(stream["sample_rate"])
+    if sample_rate_probe is None:
+        from avo.proof_composition import probe_audio_sample_rate
+
+        sample_rate_probe = probe_audio_sample_rate
+    return sample_rate_probe(selection, locator)
 
 
-def _cached_native_rate(selection, locator, source_id, cache):
+def _cached_native_rate(selection, locator, source_id, cache, sample_rate_probe):
     if source_id not in cache:
-        cache[source_id] = _native_sample_rate(selection, locator)
+        cache[source_id] = _native_sample_rate(selection, locator, sample_rate_probe)
     return cache[source_id]
 
 
@@ -167,6 +160,7 @@ def initial_cut_proof_request(
     width: int = 640,
     height: int = 360,
     sample_rate: int = 48000,
+    sample_rate_probe: Callable[[dict, Path], int] | None = None,
 ) -> dict[str, Any]:
     """Preserve source routing and declare every join as a review obligation."""
     index = workspace.require_active("cmap")
@@ -189,7 +183,9 @@ def initial_cut_proof_request(
         source_id = segment["sourceId"]
         source = sources[source_id]
         metadata, selection, locator, channel_map = _source_selection(source, workspace)
-        native_rate = _cached_native_rate(selection, locator, source_id, native_rates)
+        native_rate = _cached_native_rate(
+            selection, locator, source_id, native_rates, sample_rate_probe
+        )
         start, end, start_time, end_time = _source_interval(segment)
         first = _clock_boundary(elapsed * fps, precise)
         elapsed += end_time - start_time

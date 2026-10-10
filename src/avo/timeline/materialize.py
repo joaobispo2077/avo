@@ -6,7 +6,7 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
-from avo.adapters.media.sync_materializer import SyncMaterializer
+from avo.proof_composition import create_sync_materializer, create_timeline_render_port
 
 
 def _stat_identity(path: Path) -> dict[str, int]:
@@ -128,7 +128,7 @@ def materialize_synced_raw(
     sync_revision: dict[str, Any],
     expected_picture_sha256: str | None = None,
     expected_audio_sha256: str | None = None,
-    materializer: SyncMaterializer | None = None,
+    materializer: Any | None = None,
 ) -> dict[str, Any]:
     snapshot = sync_revision.get("snapshot") or {}
     if snapshot.get("status") == "not-applicable":
@@ -138,7 +138,7 @@ def materialize_synced_raw(
     )
     if len(revision_hash) != 64:
         raise ValueError("Sync materialization requires exact approved revision hash")
-    return (materializer or SyncMaterializer()).materialize(
+    return (materializer or create_sync_materializer()).materialize(
         picture_path=picture_path,
         audio_path=audio_path,
         output_path=output_path,
@@ -159,8 +159,6 @@ def materialize_cut_proof(
 ) -> dict[str, Any]:
     """Project current CMap and render an immutable hash-bound cut proof."""
     import json
-
-    from avo.adapters.media.timeline_render import TimelineRenderAdapter
 
     from .contracts import content_hash
     from .projection import write_cmap_projection
@@ -199,7 +197,7 @@ def materialize_cut_proof(
     if reusable is not None:
         return reusable
 
-    rendered = (render_port or TimelineRenderAdapter()).render(
+    rendered = (render_port or create_timeline_render_port()).render(
         edl_path,
         Path(output_path),
         profile=render_profile,
@@ -578,8 +576,6 @@ def materialize_assembly(
     media_admission: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Render and immutably bind a complete canonical timeline assembly."""
-    from avo.adapters.media.timeline_render import TimelineRenderAdapter
-
     from .contracts import content_hash
     from .lineage import validate_audiovisual_lineage
     from .picture_lineage import (
@@ -623,7 +619,7 @@ def materialize_assembly(
         return reusable
 
     rendered, actual_output = _render_assembly_output(
-        render_port=render_port or TimelineRenderAdapter(),
+        render_port=render_port or create_timeline_render_port(),
         projection_path=projection_path,
         output_path=output_path,
         render_profile=render_profile,
@@ -814,9 +810,7 @@ def _proof_readiness(render_port: Any, plan: dict[str, Any]) -> dict[str, bool]:
 
 def default_proof_readiness(plan: dict[str, Any]) -> dict[str, bool]:
     """Probe the default renderer through the materialization adapter boundary."""
-    from avo.adapters.media.timeline_render import TimelineRenderAdapter
-
-    return _proof_readiness(TimelineRenderAdapter(), plan)
+    return _proof_readiness(create_timeline_render_port(), plan)
 
 
 def _proof_render(
@@ -896,14 +890,12 @@ def render_proof_microproofs(
     """Render every required risk window through the full proof's exact graph."""
     import json
 
-    from avo.adapters.media.timeline_render import TimelineRenderAdapter
-
     from .contracts import content_hash
     from .review_runner import select_microproof_windows
     from .store import write_immutable_json
 
     compiler, plan = _proof_plan_value(workspace, proof_plan)
-    port = render_port or TimelineRenderAdapter().for_proof_plan(workspace, plan)
+    port = render_port or create_timeline_render_port().for_proof_plan(workspace, plan)
     readiness = _proof_readiness(port, plan)
     preflight = compiler.require_preflight(
         plan,
@@ -1123,8 +1115,6 @@ def materialize_proof_plan(
             "a proposed cutting preview cannot be promoted to a full proof",
             "apply the reviewed CMap and compile a new canonical full proof plan",
         )
-    from avo.adapters.media.timeline_render import TimelineRenderAdapter
-
     from .contracts import content_hash
     from .store import now_iso, write_immutable_json
 
@@ -1135,7 +1125,7 @@ def materialize_proof_plan(
             "a proposed cutting preview cannot be promoted to a full proof",
             "apply the reviewed CMap and compile a new canonical full proof plan",
         )
-    port = render_port or TimelineRenderAdapter()
+    port = render_port or create_timeline_render_port()
     readiness = _proof_readiness(port, plan)
     preflight = compiler.require_preflight(
         plan,
@@ -1191,10 +1181,8 @@ def proof_build_status(
     render_port: Any | None = None,
 ) -> dict[str, Any]:
     """Return one non-mutating preflight/microproof build-gate summary."""
-    from avo.adapters.media.timeline_render import TimelineRenderAdapter
-
     compiler, plan = _proof_plan_value(workspace, proof_plan)
-    port = render_port or TimelineRenderAdapter()
+    port = render_port or create_timeline_render_port()
     readiness = _proof_readiness(port, plan)
     preflight = compiler.preflight(
         plan,
