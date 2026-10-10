@@ -248,7 +248,8 @@ class QualityMatrixTests(unittest.TestCase):
             0
         ]
         self.assertIn("Install ffmpeg", quality_block)
-        self.assertIn("apt-get install -y ffmpeg", quality_block)
+        self.assertIn("ensure-ffmpeg.sh", quality_block)
+        self.assertIn("timeout-minutes: 3", quality_block)
 
         pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
         self.assertIn("[tool.coverage.report]", pyproject)
