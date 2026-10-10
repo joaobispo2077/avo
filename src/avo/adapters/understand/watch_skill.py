@@ -12,7 +12,6 @@ import shutil
 import subprocess
 import time
 import urllib.request
-from urllib.error import HTTPError
 from collections.abc import Callable
 from copy import deepcopy
 from dataclasses import dataclass
@@ -20,12 +19,15 @@ from datetime import UTC, datetime
 from fractions import Fraction
 from pathlib import Path
 from typing import Any
+from urllib.error import HTTPError
 
 from avo.adapters.base import JobRequest, JobResult
 from avo.adapters.understand.watch_policy import (
     DEFAULT_WATCH_SETTINGS,
     build_watch_prompt,
 )
+from avo.timeline.contracts import content_hash, file_fingerprint
+from avo.timeline.cutting_contracts import source_interval
 from avo.timeline.ports import ToolError
 from avo.timeline.vision_review import (
     VisionReviewError,
@@ -1397,6 +1399,112 @@ def _native_review(review: _ReviewRequest, model_pin: dict[str, Any]) -> dict[st
     }
 
 
+def _take_source_preflight(source: Path, raw_dir: Path, expected_sha256: str) -> None:
+    relative = source.resolve().relative_to(raw_dir.resolve())
+    if relative.parts[0].casefold() == "edit":
+        raise ValueError("take vision requires an original outside edit outputs")
+    if file_fingerprint(source)["sha256"] != expected_sha256:
+        raise ValueError("original take source fingerprint changed")
+
+
+def _take_windows(takes: list[dict]) -> list[dict]:
+    windows = []
+    source_ids = set()
+    for take in takes:
+        identity = take.get("takeId") or take.get("unitId")
+        if not identity:
+            raise ValueError("original visual take requires a stable identity")
+        source_id, start, end = source_interval(take["sourceRange"])
+        source_ids.add(source_id)
+        windows.append(
+            {
+                "start": float(start),
+                "end": float(end),
+                "reason": f"takeId={identity}: visual usability",
+                "takeId": identity,
+            }
+        )
+    if len(source_ids) != 1:
+        raise ValueError("original take windows must use one source")
+    return windows
+
+
+def _take_observed_frames(take: dict, review: dict) -> list[int]:
+    coverage = review.get("coverage") or {}
+    rate = coverage.get("frameRate") or {}
+    _, start, end = source_interval(take["sourceRange"])
+    fps = Fraction(rate.get("num", 0), rate.get("den", 1))
+    observed = (
+        [
+            frame
+            for frame in coverage.get("observedFrames", [])
+            if start <= Fraction(frame, 1) / fps < end
+        ]
+        if fps
+        else []
+    )
+    return observed
+
+
+def _take_visual_findings(identity: str, review: dict) -> list[dict]:
+    prefix = f"takeId={identity}; usability="
+    findings = [
+        finding
+        for finding in review.get("findings", [])
+        if finding.get("category") == "visual-quality"
+        and str(finding.get("observed", "")).startswith(prefix)
+    ]
+    return findings
+
+
+def _take_visual_eligible(review: dict, observed: list) -> bool:
+    coverage = review.get("coverage") or {}
+    eligible = all(
+        (
+            review.get("status") == "pass",
+            not coverage.get("coverageHoles"),
+            bool(observed),
+            bool(review.get("model")),
+            bool(review.get("promptSha256")),
+            bool(review.get("capabilityIdentityHash")),
+            bool(review.get("reviewContractHash")),
+        )
+    )
+    return eligible
+
+
+def _take_visual_observation(take: dict, review: dict) -> dict:
+    identity = str(take.get("takeId") or take.get("unitId"))
+    prefix = f"takeId={identity}; usability="
+    observed = _take_observed_frames(take, review)
+    findings = _take_visual_findings(identity, review)
+    labels = {str(finding["observed"])[len(prefix) :].strip() for finding in findings}
+    usability = None
+    if _take_visual_eligible(review, observed) and len(labels) == 1:
+        usability = {"usable": 1.0, "unusable": 0.0}.get(next(iter(labels)))
+    return {
+        "visualUsability": usability,
+        "observations": deepcopy(findings),
+        "observedFrames": observed,
+        "claimScope": "sampled-still-images",
+    }
+
+
+def _take_semantic_response(review: dict):
+    prefix = "take-semantics-json="
+    responses = [
+        str(item.get("observed", ""))[len(prefix) :]
+        for item in review.get("findings", [])
+        if str(item.get("observed", "")).startswith(prefix)
+    ]
+    if len(responses) != 1:
+        return None
+    try:
+        return json.loads(responses[0])
+    except (ValueError, TypeError):
+        return None
+
+
 class WatchSkillAdapter:
     routing_id = "watch-skill"
 
@@ -1479,6 +1587,63 @@ class WatchSkillAdapter:
             if result.exit_code == 0 and result.stdout.strip()
             else "unknown"
         )
+
+    def review_original_takes(
+        self,
+        source: Path,
+        *,
+        source_sha256: str,
+        takes: list[dict],
+        raw_dir: Path,
+        **request: Any,
+    ) -> dict:
+        """Reuse configured Watch for visual observations of fingerprinted takes."""
+        source, raw_dir = Path(source), Path(raw_dir)
+        _take_source_preflight(source, raw_dir, source_sha256)
+        policy_payload, effective = _policy_settings(request)
+        if effective["concurrency"] != 1 or effective["vramCeilingBytes"] > 7 * 1024**3:
+            raise ValueError(
+                "original take visual resource policy must remain serialized and within 7 GB"
+            )
+        windows = _take_windows(takes)
+        context = deepcopy(request.get("context") or {})
+        context.setdefault("acceptanceCriteria", []).append(
+            "For each declared takeId, provide a visual-quality finding observed exactly 'takeId=<id>; usability=usable', 'takeId=<id>; usability=unusable', or 'takeId=<id>; usability=unknown'. Assess only visible focus/framing/obstruction at sampled frames. Do not certify audio, complete speech or continuous movement."
+        )
+        review_request = {
+            **request,
+            "scope": "windows",
+            "windows": windows,
+            "context": context,
+        }
+        review = self.review(source, **review_request)
+        _take_source_preflight(source, raw_dir, source_sha256)
+        return {
+            "sourceSha256": source_sha256,
+            "sourceRanges": [deepcopy(take["sourceRange"]) for take in takes],
+            "modelIdentity": review.get("model"),
+            "capabilityIdentityHash": review.get("capabilityIdentityHash"),
+            "promptHash": review.get("promptSha256"),
+            "reviewContractHash": review.get("reviewContractHash"),
+            "inputHash": content_hash(
+                {
+                    "sourceSha256": source_sha256,
+                    "takes": takes,
+                    "policy": policy_payload,
+                    "promptHash": review.get("promptSha256"),
+                    "modelIdentity": review.get("model"),
+                }
+            ),
+            "claimScope": "sampled-still-images",
+            "semanticResponse": _take_semantic_response(review),
+            "status": "inferred" if review.get("status") == "pass" else "blocked",
+            "perTake": {
+                str(take.get("takeId") or take.get("unitId")): _take_visual_observation(
+                    take, review
+                )
+                for take in takes
+            },
+        }
 
     @staticmethod
     def _tool_error(result: JobResult, phase: str) -> ToolError:
