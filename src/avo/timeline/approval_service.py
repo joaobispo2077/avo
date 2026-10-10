@@ -165,6 +165,53 @@ def _require_cut_proof_integrity(review: dict[str, Any], candidate_hash: str) ->
         raise ValueError(str(error)) from error
 
 
+def _automated_watch_evidence(review: dict[str, Any]) -> dict[str, Any]:
+    watch = next(
+        (item for item in review.get("evidence") or [] if item.get("kind") == "watch"),
+        None,
+    )
+    if watch is None:
+        raise ValueError("approval requires native automated visual review evidence")
+    return watch
+
+
+def _require_open_automated_status(watch: dict[str, Any]) -> None:
+    manifest = watch.get("visionCoverageManifest")
+    if not isinstance(manifest, dict):
+        raise ValueError("approval requires a structured vision coverage manifest")
+    status = str(manifest.get("aggregateStatus") or "blocked")
+    if status not in {"pass", "needs-human-judgment"}:
+        raise ValueError(
+            "human approval is closed while automated review is blocked or failed"
+        )
+    contract_hash = str(manifest.get("reviewContractHash") or "")
+    if contract_hash != str(
+        (watch.get("policy") or {}).get("reviewContractHash") or ""
+    ):
+        raise ValueError("automated review contract is stale or inconsistent")
+
+
+def _require_complete_frame_coverage(watch: dict[str, Any]) -> None:
+    coverage = watch.get("coverage") or {}
+    requested = set(coverage.get("requestedFrames") or [])
+    decoded = set(coverage.get("decodedFrames") or [])
+    observed = set(coverage.get("observedFrames") or [])
+    if (
+        not requested
+        or not requested.issubset(decoded)
+        or not requested.issubset(observed)
+        or coverage.get("failedFrames")
+        or coverage.get("coverageHoles")
+    ):
+        raise ValueError("automated visual review coverage is incomplete")
+
+
+def _require_complete_automated_review(review: dict[str, Any]) -> None:
+    watch = _automated_watch_evidence(review)
+    _require_open_automated_status(watch)
+    _require_complete_frame_coverage(watch)
+
+
 def _decision_materialization_lock(workspace, materialization, revision, dependencies):
     lock = materialization.get("canonicalInputLock") or {}
     if materialization.get("kind") == "proof-plan":
@@ -237,6 +284,8 @@ class ApprovalService:
             "needs-human-judgment",
         }:
             raise ValueError("CMap approval requires current review evidence")
+        if decision == "approved":
+            _require_complete_automated_review(review)
         lock = _decision_materialization_lock(
             self.workspace,
             materialization,

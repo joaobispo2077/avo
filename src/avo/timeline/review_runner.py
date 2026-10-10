@@ -303,8 +303,59 @@ def _normalized_watch_status(watch: dict[str, Any]) -> str:
 
 
 def _watch_extra(watch: dict[str, Any]) -> dict[str, Any]:
-    fields = ("outcomeKind", "policy", "reviewContext", "promptSha256", "attempts")
+    fields = (
+        "outcomeKind",
+        "policy",
+        "reviewContext",
+        "promptSha256",
+        "attempts",
+        "visionCoverageManifest",
+        "disposition",
+    )
     return {key: watch[key] for key in fields if key in watch}
+
+
+def _automated_review_status(evidence: list[dict[str, Any]]) -> str | None:
+    watch = next((item for item in evidence if item.get("kind") == "watch"), None)
+    if watch is None:
+        return None
+    manifest = watch.get("visionCoverageManifest") or {}
+    return str(manifest.get("aggregateStatus") or "blocked")
+
+
+def _resolved_review_state(
+    evidence: list[dict[str, Any]], findings: list[dict[str, Any]]
+) -> str:
+    automated = _automated_review_status(evidence)
+    if automated in {"fail", "blocked", "needs-human-judgment"}:
+        return automated
+    return classify_findings(findings)
+
+
+def _resolved_review_contract_hash(
+    watch: dict[str, Any], computed_contract_hash: str
+) -> str:
+    contract_hash = str(watch.get("reviewContractHash") or computed_contract_hash)
+    valid = len(contract_hash) == 64 and all(
+        character in "0123456789abcdef" for character in contract_hash
+    )
+    if not valid:
+        raise ToolError(
+            "WATCH_CONTRACT_INVALID",
+            "native review returned an invalid review contract hash",
+            False,
+            "rerun native structured review for the exact candidate",
+        )
+    return contract_hash
+
+
+def _bind_manifest_contract(extra: dict[str, Any], contract_hash: str) -> None:
+    manifest = extra.get("visionCoverageManifest")
+    if isinstance(manifest, dict):
+        extra["visionCoverageManifest"] = {
+            **manifest,
+            "reviewContractHash": contract_hash,
+        }
 
 
 def _normalized_words(transcript: dict[str, Any]) -> list[str]:
@@ -637,7 +688,7 @@ class ReviewRunner:
                 (status, fusion["status"]),
                 key=lambda value: precedence.get(value, 3),
             )
-        contract_hash = review_contract_hash(
+        computed_contract_hash = review_contract_hash(
             candidateHash=identity["sha256"],
             dependencyHashes=identity["dependencies"],
             policyHash=str(
@@ -664,7 +715,9 @@ class ReviewRunner:
                 watch.get("estimatorHash") or content_hash({"estimator": "unavailable"})
             ),
         )
+        contract_hash = _resolved_review_contract_hash(watch, computed_contract_hash)
         extra = _watch_extra(watch)
+        _bind_manifest_contract(extra, contract_hash)
         policy = dict(extra.get("policy") or {})
         policy["reviewContractHash"] = contract_hash
         extra["policy"] = policy
@@ -772,6 +825,10 @@ class ReviewRunner:
                 context=policy_context,
                 option_id=model_pin.get("id") or None,
                 model_pin=model_pin or None,
+                contract_context={
+                    "candidateIdentityHash": identity["identityHash"],
+                    "dependencies": identity["dependencies"],
+                },
                 root=getattr(self.watch_policy, "working_directory", None),
                 artifact_dir=self.review_root
                 / checkpoint
@@ -922,7 +979,7 @@ class ReviewRunner:
         attempts: list[dict[str, Any]],
         findings: list[dict[str, Any]],
     ) -> dict[str, Any] | None:
-        if state == "needs-human-judgment":
+        if state in {"needs-human-judgment", "fail"}:
             return self._write(
                 checkpoint=checkpoint,
                 identity=identity,
@@ -1086,7 +1143,7 @@ class ReviewRunner:
                     blocker=str(error),
                 )
             last_identity, last_evidence, last_findings = identity, evidence, findings
-            state = classify_findings(findings)
+            state = _resolved_review_state(evidence, findings)
             terminal = self._terminal_result(
                 checkpoint=checkpoint,
                 state=state,
