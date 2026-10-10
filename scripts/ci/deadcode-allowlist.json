@@ -420,14 +420,6 @@
       "reason": "Timeline domain/API surface (dynamic CLI and future stages)"
     },
     {
-      "path": "src/avo/timeline/command_handlers.py",
-      "name": "CommandHandlers",
-      "kind": "class",
-      "lineno": 14,
-      "confidence": 60,
-      "reason": "Timeline domain/API surface (dynamic CLI and future stages)"
-    },
-    {
       "path": "src/avo/timeline/component_instances.py",
       "name": "resolve_provider_kit",
       "kind": "method",
@@ -1170,6 +1162,41 @@
       "lineno": 210,
       "confidence": 60,
       "reason": "Public API / CLI surface not referenced inside src/avo scan"
+    },
+    {
+      "path": "src/avo/adapters/understand/cutting_alignment_worker.py",
+      "name": "create_connection",
+      "kind": "attribute",
+      "confidence": 60,
+      "reason": "Offline worker replaces socket/ NLTK functions by attribute assignment; exercised by worker contract tests, not dead methods."
+    },
+    {
+      "path": "src/avo/adapters/understand/cutting_alignment_worker.py",
+      "name": "connect",
+      "kind": "attribute",
+      "confidence": 60,
+      "reason": "Offline worker replaces socket/ NLTK functions by attribute assignment; exercised by worker contract tests, not dead methods."
+    },
+    {
+      "path": "src/avo/adapters/understand/cutting_alignment_worker.py",
+      "name": "connect_ex",
+      "kind": "attribute",
+      "confidence": 60,
+      "reason": "Offline worker replaces socket/ NLTK functions by attribute assignment; exercised by worker contract tests, not dead methods."
+    },
+    {
+      "path": "src/avo/adapters/understand/cutting_alignment_worker.py",
+      "name": "download",
+      "kind": "attribute",
+      "confidence": 60,
+      "reason": "Offline worker replaces socket/ NLTK functions by attribute assignment; exercised by worker contract tests, not dead methods."
+    },
+    {
+      "path": "src/avo/timeline/cutting_evaluation.py",
+      "name": "evaluate_cutting",
+      "kind": "function",
+      "confidence": 60,
+      "reason": "Public external benchmark evaluation API used by tests and evaluation protocol; private held-out datasets stay outside AVO, with no runtime inference side effects."
     }
   ]
 }
