@@ -42,6 +42,27 @@ class IterationLedgerError(RuntimeError):
     """Raised when iteration history would become ambiguous or inconsistent."""
 
 
+def _attach_cutting_refs(request):
+    cutting_refs = request.pop("cuttingRefs", None)
+    if cutting_refs is None:
+        return
+    if not isinstance(cutting_refs, dict):
+        raise IterationLedgerError("cutting references must be an object")
+    for role, reference in cutting_refs.items():
+        try:
+            validate_document(reference, "avo.cutting.schema.json#/$defs/artifactRef")
+        except ContractError as exc:
+            raise IterationLedgerError(f"invalid cutting reference: {exc}") from exc
+        request.setdefault("findings", []).append(
+            {
+                "evidenceId": f"cutting-{role}",
+                "sha256": reference["sha256"],
+                "kind": f"cutting-{role}",
+            }
+        )
+    request.setdefault("intent", {})["cutting"] = cutting_refs
+
+
 def _actor(value: str | dict[str, Any]) -> dict[str, str]:
     if isinstance(value, dict):
         actor = {
@@ -243,6 +264,7 @@ class IterationLedgerService:
         actual_head = self.store.head_hash()
         expected = actual_head if expected_head_hash is None else expected_head_hash
         request = deepcopy(request)
+        _attach_cutting_refs(request)
         sequence = len(ledger["iterations"]) + 1
         iteration_ids = {item["iterationId"] for item in ledger["iterations"]}
         iteration_id = str(

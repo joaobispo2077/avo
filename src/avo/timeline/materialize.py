@@ -856,6 +856,36 @@ def _proof_render(
     return {**rendered, "output": actual}
 
 
+def _cutting_window_verification(port, plan, output, window):
+    cutting = plan.get("validationPlan", {}).get("cutting") or {}
+    if not cutting.get("required"):
+        return None
+    verifier = getattr(port, "verify_cutting_window", None)
+    if verifier is None:
+        return {"status": "blocked", "code": "CUTTING_VERIFICATION_REQUIRED"}
+    report = verifier(plan, Path(output["locator"]), window=deepcopy(window))
+    if not isinstance(report, dict):
+        return {"status": "blocked", "code": "CUTTING_VERIFICATION_INVALID"}
+    if (
+        report.get("candidateSha256") != output["sha256"]
+        or report.get("proofPlanHash") != plan["proofPlanHash"]
+        or report.get("graphHash") != cutting["graphHash"]
+    ):
+        return {"status": "blocked", "code": "CUTTING_VERIFICATION_STALE"}
+    return report
+
+
+def _attach_cutting_verification(port, plan, result, frame_range):
+    verification = _cutting_window_verification(
+        port, plan, result["output"], frame_range
+    )
+    if verification is None:
+        return
+    result["verification"] = verification
+    if verification.get("status") != "pass":
+        result["status"] = str(verification.get("status") or "blocked")
+
+
 def render_proof_microproofs(
     *,
     workspace: Any,
@@ -873,7 +903,7 @@ def render_proof_microproofs(
     from .store import write_immutable_json
 
     compiler, plan = _proof_plan_value(workspace, proof_plan)
-    port = render_port or TimelineRenderAdapter()
+    port = render_port or TimelineRenderAdapter().for_proof_plan(workspace, plan)
     readiness = _proof_readiness(port, plan)
     preflight = compiler.require_preflight(
         plan,
@@ -906,6 +936,7 @@ def render_proof_microproofs(
                 "output": rendered["output"],
                 "graphHash": str(rendered.get("graphHash") or ""),
             }
+            _attach_cutting_verification(port, plan, result, frame_range)
         except Exception as exc:
             result = {
                 "window": frame_range,
@@ -935,6 +966,7 @@ def render_proof_microproofs(
         ),
         "gateHash": "",
     }
+    _record_cutting_coverage(plan, gate)
     gate["gateHash"] = content_hash(
         {key: value for key, value in gate.items() if key != "gateHash"}
     )
@@ -963,6 +995,55 @@ def _load_microproof_gate(value: dict[str, Any] | str | Path) -> dict[str, Any]:
             "rerun microproof validation",
         )
     return result
+
+
+def _record_cutting_coverage(plan, gate):
+    cutting = plan.get("validationPlan", {}).get("cutting") or {}
+    covered = {
+        identity
+        for result in gate["results"]
+        for identity in (result.get("verification") or {}).get("verifiedJoinIds", [])
+    }
+    if cutting.get("required") and not set(cutting["joinIds"]) <= covered:
+        gate["status"] = "fail"
+        gate["missingCuttingJoinIds"] = sorted(set(cutting["joinIds"]) - covered)
+
+
+def _require_cutting_result(plan, cutting, result):
+    from .contracts import file_fingerprint
+
+    report = result.get("verification") or {}
+    output = result.get("output") or {}
+    path = Path(output.get("locator") or "")
+    if (
+        report.get("status") != "pass"
+        or report.get("proofPlanHash") != plan["proofPlanHash"]
+        or report.get("graphHash") != cutting["graphHash"]
+        or report.get("candidateSha256") != output.get("sha256")
+        or not path.is_file()
+        or file_fingerprint(path)["sha256"] != output.get("sha256")
+    ):
+        raise ProofMaterializationError(
+            "CUTTING_VERIFICATION_REQUIRED",
+            "current cutting speech verification is missing, failed or stale",
+            "verify every required local candidate from the current original-source graph",
+        )
+    return report.get("verifiedJoinIds", [])
+
+
+def _require_cutting_gate(plan, gate):
+    cutting = plan.get("validationPlan", {}).get("cutting") or {}
+    if not cutting.get("required"):
+        return
+    covered = set()
+    for result in gate.get("results") or []:
+        covered.update(_require_cutting_result(plan, cutting, result))
+    if not set(cutting["joinIds"]) <= covered:
+        raise ProofMaterializationError(
+            "CUTTING_JOIN_COVERAGE_REQUIRED",
+            "not every current cutting join was verified",
+            "inspect and dispose every required join before full proof generation",
+        )
 
 
 def _require_current_microproof_gate(
@@ -1002,6 +1083,7 @@ def _require_current_microproof_gate(
             "microproof gate does not cover every required window",
             "rerun every changed-operation and historical-risk window",
         )
+    _require_cutting_gate(plan, gate)
     statuses = [str(item.get("status")) for item in gate.get("results") or []]
     if any(
         status in {"needs-human", "needs-human-judgment", "ambiguous"}
@@ -1035,12 +1117,24 @@ def materialize_proof_plan(
     render_port: Any | None = None,
 ) -> dict[str, Any]:
     """Build a full candidate only after current required microproofs pass."""
+    if isinstance(proof_plan, dict) and proof_plan.get("previewOnly"):
+        raise ProofMaterializationError(
+            "PROOF_PREVIEW_ONLY",
+            "a proposed cutting preview cannot be promoted to a full proof",
+            "apply the reviewed CMap and compile a new canonical full proof plan",
+        )
     from avo.adapters.media.timeline_render import TimelineRenderAdapter
 
     from .contracts import content_hash
     from .store import now_iso, write_immutable_json
 
     compiler, plan = _proof_plan_value(workspace, proof_plan)
+    if plan.get("previewOnly"):
+        raise ProofMaterializationError(
+            "PROOF_PREVIEW_ONLY",
+            "a proposed cutting preview cannot be promoted to a full proof",
+            "apply the reviewed CMap and compile a new canonical full proof plan",
+        )
     port = render_port or TimelineRenderAdapter()
     readiness = _proof_readiness(port, plan)
     preflight = compiler.require_preflight(

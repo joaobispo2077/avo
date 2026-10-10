@@ -20,6 +20,10 @@ from .iterations import IterationLedgerService
 from .store import StoreError, write_immutable_json
 
 
+def _preview_declaration(request):
+    return {"previewOnly": request["previewOnly"]} if "previewOnly" in request else {}
+
+
 class ProofPlanError(RuntimeError):
     def __init__(
         self,
@@ -228,6 +232,7 @@ class ProofPlanCompiler:
             ),
             "proofPlanHash": "",
         }
+        body.update(_preview_declaration(request))
         identity_seed = deepcopy(body)
         identity_seed.pop("proofPlanHash", None)
         identity_seed.pop("proofPlanId", None)

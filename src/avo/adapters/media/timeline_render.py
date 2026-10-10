@@ -84,6 +84,14 @@ class TimelineRenderAdapter:
             proof_executor = execute_ffmpeg_proof
         self.proof_executor = proof_executor
 
+    def for_proof_plan(self, workspace, proof_plan):
+        """Compose fresh physical cutting checks at the existing adapter seam."""
+        if not proof_plan.get("validationPlan", {}).get("cutting", {}).get("required"):
+            return self
+        from .cutting_preview import CuttingPreviewAdapter
+
+        return CuttingPreviewAdapter(workspace, render_port=self)
+
     def proof_tool_readiness(self, proof_plan: dict[str, Any]) -> dict[str, bool]:
         adapters = {
             str(item.get("adapterId") or "").casefold()

@@ -292,6 +292,33 @@ class PipelineRunStore:
         updated.setdefault("extensions", {})["lastRecovery"] = recovery_event
         return self._write(updated, expected_updated_at=expected_updated_at)
 
+    def bind_cutting_context(self, references, *, expected_updated_at=None):
+        """Bind evidence without changing state or granting editorial approval."""
+        from copy import deepcopy
+
+        from .contracts import ContractError, validate_document
+
+        if not isinstance(references, dict):
+            raise LifecycleError("cutting references must be an object")
+        allowed = {"analysis", "proposal", "verification", "repairLedger", "decisions"}
+        if set(references) - allowed:
+            raise LifecycleError("unknown cutting reference role")
+        try:
+            for reference in references.values():
+                validate_document(
+                    reference, "avo.cutting.schema.json#/$defs/artifactRef"
+                )
+        except ContractError as exc:
+            raise LifecycleError(f"invalid cutting reference: {exc}") from exc
+        current = self.load()
+        updated = deepcopy(current)
+        updated["activeRefs"]["cutting"] = {
+            **updated["activeRefs"].get("cutting", {}),
+            **deepcopy(references),
+        }
+        updated["updatedAt"] = self.clock()
+        return self._write(updated, expected_updated_at=expected_updated_at)
+
     def bind_iteration_context(
         self,
         *,

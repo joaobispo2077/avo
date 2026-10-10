@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from copy import deepcopy
+from math import isfinite
 from pathlib import Path
 from typing import Any
 
@@ -366,6 +367,65 @@ def _normalized_words(transcript: dict[str, Any]) -> list[str]:
     ]
 
 
+def _valid_word_clock(first, last):
+    return (
+        all(
+            not isinstance(value, bool)
+            and isinstance(value, (int, float))
+            and isfinite(value)
+            for value in (first, last)
+        )
+        and 0 <= first < last
+    )
+
+
+def _local_candidate_words(
+    transcript: dict[str, Any], candidate_range: Any
+) -> list[str] | None:
+    """Return words in the exact mapped occurrence; invalid clocks are unknown."""
+    if not isinstance(candidate_range, dict):
+        return None
+    start, end = candidate_range.get("start"), candidate_range.get("end")
+    if not _valid_word_clock(start, end):
+        return None
+    local = []
+    for word in transcript.get("words") or []:
+        first, last = word.get("start"), word.get("end")
+        if not _valid_word_clock(first, last):
+            return None
+        if first < end and last > start:
+            local.append(word)
+    return _normalized_words({"words": local})
+
+
+def _contains_local_phrase(words: list[str], expected: str) -> bool:
+    punctuation = ".,!?;:\"'()[]"
+    tokens = [word.strip(punctuation) for word in words]
+    phrase = [word.strip(punctuation) for word in expected.split()]
+    return bool(phrase) and any(
+        tokens[index : index + len(phrase)] == phrase
+        for index in range(len(tokens) - len(phrase) + 1)
+    )
+
+
+def _boundary_word_match(
+    boundary, transcript, candidate_words, candidate_text, expected
+):
+    if "candidateRange" not in boundary:
+        return candidate_words, False, expected in candidate_text
+    words = _local_candidate_words(transcript, boundary["candidateRange"])
+    return words, words is None, _contains_local_phrase(words or [], expected)
+
+
+def _boundary_regression(kind, expected, phrase_present, local_unknown, check):
+    missing = not local_unknown and kind == "phrase" and expected and not phrase_present
+    return missing or check.get("complete") is False
+
+
+def _boundary_needs_listening(local_unknown, confidence, check):
+    return local_unknown or confidence < 0.5 or check.get("complete") is None
+
+
 def compare_protected_boundaries(
     source_transcript: dict[str, Any],
     candidate_transcript: dict[str, Any],
@@ -384,11 +444,10 @@ def compare_protected_boundaries(
         confidence = float(check.get("confidence") or 0)
         kind = str(boundary.get("kind") or "phrase")
         expected = str(boundary.get("text") or "").strip().casefold()
-        phrase_missing = (
-            kind == "phrase" and expected and expected not in candidate_text
+        boundary_words, local_unknown, phrase_present = _boundary_word_match(
+            boundary, candidate_transcript, candidate_words, candidate_text, expected
         )
-        acoustically_incomplete = check.get("complete") is False
-        if phrase_missing or acoustically_incomplete:
+        if _boundary_regression(kind, expected, phrase_present, local_unknown, check):
             findings.append(
                 {
                     "code": "protected-speech-regression",
@@ -396,7 +455,7 @@ def compare_protected_boundaries(
                     "boundaryId": boundary_id,
                     "expected": expected,
                     "sourceWords": source_words,
-                    "candidateWords": candidate_words,
+                    "candidateWords": boundary_words or [],
                     "confidence": confidence,
                     "range": {
                         "start": boundary.get("start"),
@@ -404,7 +463,7 @@ def compare_protected_boundaries(
                     },
                 }
             )
-        elif confidence < 0.5 or check.get("complete") is None:
+        elif _boundary_needs_listening(local_unknown, confidence, check):
             findings.append(
                 {
                     "code": "acoustic-boundary-needs-human",
