@@ -69,22 +69,6 @@
     },
     {
       "path": "src/avo/adapters/understand/watch_skill.py",
-      "name": "execute_bounded_passes",
-      "kind": "function",
-      "lineno": 704,
-      "confidence": 60,
-      "reason": "Feature 006 public/dynamic contract covered by focused tests and runtime registration"
-    },
-    {
-      "path": "src/avo/adapters/understand/watch_skill.py",
-      "name": "probe_vision_capabilities",
-      "kind": "function",
-      "lineno": 637,
-      "confidence": 60,
-      "reason": "Feature 006 public/dynamic contract covered by focused tests and runtime registration"
-    },
-    {
-      "path": "src/avo/adapters/understand/watch_skill.py",
       "name": "retry_number",
       "kind": "variable",
       "lineno": 678,
