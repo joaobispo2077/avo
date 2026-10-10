@@ -99,3 +99,39 @@ class FfprobeMediaAdapter:
             "durationSeconds": duration,
             "streams": {"video": video, "audio": audio},
         }
+
+
+def media_duration(path: Path) -> float | None:
+    try:
+        out = subprocess.run(
+            [
+                "ffprobe",
+                "-v",
+                "error",
+                "-show_entries",
+                "format=duration",
+                "-of",
+                "default=noprint_wrappers=1:nokey=1",
+                str(path),
+            ],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        return float(out.stdout.strip())
+    except Exception:
+        return None
+
+
+def audio_sample_rate(selection: dict, locator: Path) -> int:
+    probe = subprocess.run(
+        ["ffprobe", "-v", "error", "-show_streams", "-of", "json", str(locator)],
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    streams = json.loads(probe.stdout)["streams"]
+    stream = next(item for item in streams if item["index"] == selection["streamIndex"])
+    if stream["codec_type"] != "audio":
+        raise ValueError("canonical selected stream must contain audio")
+    return int(stream["sample_rate"])

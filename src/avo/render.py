@@ -32,6 +32,7 @@ from collections import defaultdict
 from fractions import Fraction
 from pathlib import Path
 
+from avo.adapters.media.ffprobe import media_duration as _media_duration
 from avo.build_captions import derive_burn_in_srt
 from avo.grade import auto_grade_for_clip, get_preset
 from avo.paths import repo_root
@@ -144,25 +145,7 @@ def run_ffmpeg_progress(
 
 
 def media_duration(path: Path) -> float | None:
-    try:
-        out = subprocess.run(
-            [
-                "ffprobe",
-                "-v",
-                "error",
-                "-show_entries",
-                "format=duration",
-                "-of",
-                "default=noprint_wrappers=1:nokey=1",
-                str(path),
-            ],
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-        return float(out.stdout.strip())
-    except Exception:
-        return None
+    return _media_duration(path)
 
 
 def probe_frame_rate(path: Path) -> str | None:
