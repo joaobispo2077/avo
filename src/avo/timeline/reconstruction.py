@@ -32,6 +32,128 @@ def _entry(raw_dir: Path, path: Path, role: str) -> dict[str, Any]:
     }
 
 
+def _fingerprinted_refs(value: Any):
+    if isinstance(value, dict):
+        if value.get("sha256") and (value.get("locator") or value.get("path")):
+            yield value
+        for child in value.values():
+            yield from _fingerprinted_refs(child)
+    elif isinstance(value, list):
+        for child in value:
+            yield from _fingerprinted_refs(child)
+
+
+def _head_media_refs(raw_dir: Path, artifact: dict[str, Any]):
+    store = ArtifactStore(raw_dir / artifact["path"])
+    index = store.load_index()
+    head = next(
+        (
+            ref
+            for ref in index["revisionRefs"]
+            if ref["revisionId"] == index["headRevisionId"]
+        ),
+        None,
+    )
+    if head is not None:
+        revision = json.loads(
+            (store.timeline_dir / head["path"]).read_text(encoding="utf-8")
+        )
+        yield from _fingerprinted_refs(revision["snapshot"])
+
+
+def _local_media_path(raw_dir: Path, ref: dict[str, Any]) -> Path | None:
+    locator = str(ref.get("locator") or ref["path"])
+    if "://" in locator:
+        return None
+    path = Path(locator)
+    path = (path if path.is_absolute() else raw_dir / path).resolve()
+    return path if path.is_relative_to(raw_dir) else None
+
+
+def _authoring_files(raw_dir: Path):
+    suffixes = {
+        ".json",
+        ".md",
+        ".txt",
+        ".html",
+        ".css",
+        ".js",
+        ".ts",
+        ".py",
+        ".srt",
+        ".ass",
+    }
+    for name in (
+        "delivery",
+        "tools",
+        "animations",
+        "learndown",
+        "motion",
+        "intermediates",
+    ):
+        for path in (raw_dir / "edit" / name).rglob("*"):
+            if (
+                path.is_file()
+                and path.suffix.lower() in suffixes
+                and "node_modules" not in path.parts
+            ):
+                yield path.resolve()
+    for path in (raw_dir / "avo.project.json", raw_dir / "edit" / "edl.json"):
+        if path.is_file():
+            yield path.resolve()
+
+
+def _required_files(
+    raw_dir: Path, canonical: list[dict[str, Any]]
+) -> dict[Path, str | None]:
+    """Current local media plus authoring/delivery evidence, not disposable caches."""
+    required: dict[Path, str | None] = dict.fromkeys(_authoring_files(raw_dir))
+    for artifact in canonical:
+        for ref in _head_media_refs(raw_dir, artifact):
+            path = _local_media_path(raw_dir, ref)
+            if path is None:
+                continue
+            expected = str(ref["sha256"])
+            if path in required and required[path] not in (None, expected):
+                raise ReconstructionError(
+                    f"conflicting canonical media fingerprints: {path}"
+                )
+            required[path] = expected
+    return required
+
+
+def _bundled_path(raw_dir: Path, relative: str) -> Path:
+    path = (raw_dir / relative).resolve()
+    if not path.is_relative_to(raw_dir):
+        raise ReconstructionError(f"reconstruction path escapes project: {relative}")
+    return path
+
+
+def _required_entries(
+    raw_dir: Path, canonical: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    entries = []
+    for path, expected in _required_files(raw_dir, canonical).items():
+        entry = _entry(raw_dir, path, "reconstruction-input")
+        if expected is not None and entry["sha256"] != expected:
+            raise ReconstructionError(f"canonical media fingerprint changed: {path}")
+        entries.append(entry)
+    return entries
+
+
+def _verify_coverage(raw_dir: Path, bundle: dict[str, Any]) -> None:
+    files = {entry["path"]: entry for entry in bundle["files"]}
+    for path, expected in _required_files(
+        raw_dir, bundle["canonicalArtifacts"]
+    ).items():
+        relative = path.relative_to(raw_dir).as_posix()
+        entry = files.get(relative)
+        if entry is None or (expected is not None and entry["sha256"] != expected):
+            raise ReconstructionError(
+                f"reconstruction coverage missing or stale: {relative}"
+            )
+
+
 def _raw_sources(raw_dir: Path) -> list[Path]:
     raw_root = raw_dir / "raw"
     if raw_root.is_dir():
@@ -314,6 +436,7 @@ def build_reconstruction_bundle(
     _validate_active_candidate_snapshot(workspace, state_groups["candidateSnapshots"])
     for entries in state_groups.values():
         graph_files.extend(entries)
+    graph_files.extend(_required_entries(raw_dir, canonical))
 
     raw_entries = [
         _entry(raw_dir, path, "raw-source") for path in _raw_sources(raw_dir)
@@ -366,7 +489,7 @@ def verify_reconstruction_bundle(
     if expected != actual:
         raise ReconstructionError("reconstruction bundle hash mismatch")
     for entry in bundle["files"]:
-        path = raw_dir / entry["path"]
+        path = _bundled_path(raw_dir, entry["path"])
         if not path.is_file():
             raise ReconstructionError(f"reconstruction file missing: {entry['path']}")
         current = file_fingerprint(path)
@@ -375,6 +498,7 @@ def verify_reconstruction_bundle(
             or current["sizeBytes"] != entry["sizeBytes"]
         ):
             raise ReconstructionError(f"reconstruction file changed: {entry['path']}")
+    _verify_coverage(raw_dir, bundle)
     master = raw_dir / bundle["master"]["path"]
     transcript = json.loads(
         (raw_dir / bundle["finalTranscript"]["path"]).read_text(encoding="utf-8")

@@ -7,6 +7,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 SRC = ROOT / "src"
@@ -117,7 +118,8 @@ class LearndownExportTests(unittest.TestCase):
             )
             self.assertIsNotNone(entry)
 
-    def test_final_export_copies_final_wrap_sidecars(self) -> None:
+    @patch("avo.wrap._actual_cleanup", return_value={"freedBytes": 99, "deleted": []})
+    def test_final_export_copies_final_wrap_sidecars(self, _receipt) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             raw_dir = root / "footage"

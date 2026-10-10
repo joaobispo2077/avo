@@ -63,6 +63,11 @@ never committed, and is deleted only after explicit user confirm.
 
 ## Preserved set
 
+The bundle must cover current canonical local media and authoring/delivery
+evidence, not just metadata hashes. Respect project `cleanup.preservePaths`.
+Execution persists `edit/cleanup/cleanup-result.json`; final wrap requires its
+completed actual outcome, not draft estimates. See [cleanup safety](../../docs/cleanup-safety.md).
+
 Cleanup is allowed only after a verified reconstruction graph exists:
 
 - **Canonical projects** (all five indexes `cmap`, `bmap`, `tracks`, `animation`, `sync-map`): `edit/timeline/reconstruction-bundle.json` must verify.

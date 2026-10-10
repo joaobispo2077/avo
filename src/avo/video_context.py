@@ -194,6 +194,18 @@ def merge_config(ctx: VideoContext, root: Path | None = None) -> dict[str, Any]:
             "watch",
         ),
     )
+    cutting_scopes = (
+        merged.get("cutting"),
+        (_provider_manifest(ctx, root).get("routingOverrides") or {}).get("cutting"),
+        ctx.project.get("cutting"),
+    )
+    if any(settings is not None for settings in cutting_scopes):
+        from avo.settings import resolve_scoped_settings
+
+        merged["cutting"] = resolve_scoped_settings(
+            defaults={},
+            scopes=list(zip(("global", "provider", "project"), cutting_scopes)),
+        ).values
     return merged
 
 
@@ -217,6 +229,28 @@ def watch_setting_scopes(
         ("project", project_watch),
         ("invocation", invocation),
     ]
+
+
+def resolve_context_cutting_policy(
+    ctx: VideoContext,
+    *,
+    root: Path | None = None,
+    invocation: dict[str, Any] | None = None,
+    section: dict[str, Any] | None = None,
+) -> Any:
+    """Resolve cutting without inheriting Watch/video registry overrides."""
+    from avo.timeline.cutting_policy import resolve_cutting_policy
+
+    root = repo_root(root)
+    config = load_config(root)
+    provider = _provider_manifest(ctx, root)
+    return resolve_cutting_policy(
+        global_settings=config.get("cutting"),
+        provider_settings=(provider.get("routingOverrides") or {}).get("cutting"),
+        project_settings=ctx.project.get("cutting"),
+        run_settings=invocation,
+        section_settings=section,
+    )
 
 
 def resolve_context_watch_policy(

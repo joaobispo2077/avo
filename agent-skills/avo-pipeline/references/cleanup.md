@@ -76,6 +76,12 @@ the AVO clone.
 
 ## Final wrap additions (vs draft)
 
+Final wrap requires the completed `edit/cleanup/cleanup-result.json` execution
+receipt for the same project/master. Counts and freed bytes come only from
+actual deletions, never from draft estimates or remaining candidates. Failed
+deletions block finalization and session purge. Additional creator retention
+uses project-relative `cleanup.preservePaths`; see `docs/cleanup-safety.md`.
+
 - Actual freed bytes, preserved bytes, deleted file count
 - File sections: added then removed, produced/preserved, deleted on cleanup
 - Link to footage-root `EDITLOG.md` when present (hybrid digest + Human notes; do not hand-edit the marked digest)

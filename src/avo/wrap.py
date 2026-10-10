@@ -24,17 +24,6 @@ FINAL_JSON = "avo.wrap.json"
 FINAL_MD = "avo.wrap.md"
 
 
-def _load_wrap_draft(raw_dir: Path) -> dict[str, Any] | None:
-    path = Path(raw_dir) / DRAFT_JSON
-    if not path.is_file():
-        return None
-    try:
-        payload = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return None
-    return payload if isinstance(payload, dict) else None
-
-
 def _scratch_meta_for_session(session_id: str) -> tuple[str | None, str | None]:
     if not session_id:
         return None, None
@@ -97,83 +86,59 @@ def _entry_bytes(entry: Any) -> int:
     return int(getattr(entry, "bytes", getattr(entry, "size", 0)))
 
 
-def _entries_as_path_bytes(entries: list[Any]) -> list[dict[str, Any]]:
-    return [
-        {"path": _entry_path(entry), "bytes": _entry_bytes(entry)} for entry in entries
-    ]
+def _read_cleanup_receipt(raw_dir: Path, master_basename: str) -> dict[str, Any]:
+    path = raw_dir / "edit" / "cleanup" / "cleanup-result.json"
+    try:
+        receipt = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise ValueError("final wrap requires a completed cleanup receipt") from exc
+    if (
+        receipt.get("status") != "completed"
+        or receipt.get("masterBasename") != master_basename
+        or Path(receipt.get("rawDir", "")).resolve() != raw_dir
+    ):
+        raise ValueError(
+            "cleanup receipt is incomplete or belongs to another master/project"
+        )
+    return receipt
 
 
-def _deleted_on_cleanup_entries(
-    *,
-    status: str,
-    scheduled: list[Any],
-    added_then_removed: list[Any],
-) -> list[dict[str, Any]]:
-    if status != "final":
-        return []
-    if added_then_removed:
-        return _entries_as_path_bytes(added_then_removed)
-    if scheduled:
-        return _entries_as_path_bytes(scheduled)
-    return []
+def _actual_cleanup(raw_dir: Path, master_basename: str) -> dict[str, Any]:
+    raw_dir = raw_dir.resolve()
+    receipt = _read_cleanup_receipt(raw_dir, master_basename)
+    deleted = receipt.get("deleted")
+    if not isinstance(deleted, list):
+        raise ValueError("cleanup receipt has no actual deleted-file list")
+    for entry in deleted:
+        target = (raw_dir / entry["path"]).resolve()
+        if (
+            not target.is_relative_to(raw_dir / "edit")
+            or target.exists()
+            or not isinstance(entry.get("bytes"), int)
+            or entry["bytes"] < 0
+        ):
+            raise ValueError(f"cleanup receipt deletion is invalid: {entry['path']}")
+    if receipt.get("freedBytes") != sum(entry["bytes"] for entry in deleted):
+        raise ValueError("cleanup receipt freed bytes do not match actual deletions")
+    return receipt
 
 
-def _copy_draft_deletes(
-    draft: dict[str, Any], sample_limit: int
-) -> tuple[list[Any], list[Any], int]:
-    draft_files = draft.get("files") or {}
-    deleted_on_cleanup = list(
-        draft_files.get("deletedOnCleanup")
-        or draft_files.get("scheduledForDeletion")
-        or []
-    )
-    sample, total = truncate_path_list(deleted_on_cleanup, max_items=sample_limit)
-    return deleted_on_cleanup, sample, total
-
-
-def _inherit_draft_space(
-    *,
-    status: str,
+def _cleanup_fields(
     raw_dir: Path,
-    space: dict[str, Any],
+    master_basename: str,
+    status: str,
     freed_bytes: int | None,
-    deleted_on_cleanup: list[Any],
-    sample_limit: int,
-) -> tuple[int | None, int | None, list[Any], list[Any], int]:
-    deleted_cleanup_sample, deleted_cleanup_total = truncate_path_list(
-        deleted_on_cleanup, max_items=sample_limit
+    space: dict[str, Any],
+) -> tuple[list[Any], int | None]:
+    if status != "final":
+        return [], None
+    receipt = _actual_cleanup(raw_dir, master_basename)
+    if freed_bytes is not None and freed_bytes != receipt["freedBytes"]:
+        raise ValueError("freed-bytes override contradicts actual cleanup receipt")
+    space["preCleanupProjectBytes"] = receipt.get(
+        "preCleanupProjectBytes", space.get("preCleanupProjectBytes", 0)
     )
-    if status != "final" or freed_bytes is not None:
-        return (
-            freed_bytes,
-            None,
-            deleted_on_cleanup,
-            deleted_cleanup_sample,
-            deleted_cleanup_total,
-        )
-    current_bytes = int(space.get("deleteCandidateBytes", 0))
-    draft = _load_wrap_draft(raw_dir)
-    if current_bytes != 0 or draft is None:
-        return (
-            current_bytes,
-            None,
-            deleted_on_cleanup,
-            deleted_cleanup_sample,
-            deleted_cleanup_total,
-        )
-    draft_space = draft.get("space") or {}
-    inherited_count = int((draft.get("files") or {}).get("deletedCount", 0))
-    if not deleted_on_cleanup:
-        deleted_on_cleanup, deleted_cleanup_sample, deleted_cleanup_total = (
-            _copy_draft_deletes(draft, sample_limit)
-        )
-    return (
-        int(draft_space.get("deleteCandidateBytes", 0)),
-        inherited_count,
-        deleted_on_cleanup,
-        deleted_cleanup_sample,
-        deleted_cleanup_total,
-    )
+    return receipt["deleted"], receipt["freedBytes"]
 
 
 def build_wrap_payload(
@@ -191,7 +156,7 @@ def build_wrap_payload(
 ) -> dict[str, Any]:
     """Build wrap JSON payload from inventory report and session metadata."""
     inv = _inventory_dict(inventory)
-    space = inv.get("space") or {}
+    space = dict(inv.get("space") or {})
     files = inv.get("files") or {}
 
     scheduled = list(files.get("scheduledForDeletion") or [])
@@ -214,33 +179,18 @@ def build_wrap_payload(
         modified, max_items=sample_limit
     )
 
-    deleted_on_cleanup = _deleted_on_cleanup_entries(
-        status=status,
-        scheduled=scheduled,
-        added_then_removed=added_then_removed,
-    )
     raw_dir = Path(str(inv.get("rawDir", ".")))
-    (
-        freed_bytes,
-        inherited_count,
-        deleted_on_cleanup,
-        deleted_cleanup_sample,
-        deleted_cleanup_total,
-    ) = _inherit_draft_space(
-        status=status,
-        raw_dir=raw_dir,
-        space=space,
-        freed_bytes=freed_bytes,
-        deleted_on_cleanup=deleted_on_cleanup,
-        sample_limit=sample_limit,
+    deleted_on_cleanup, freed_bytes = _cleanup_fields(
+        raw_dir, master_basename, status, freed_bytes, space
+    )
+    deleted_cleanup_sample, deleted_cleanup_total = truncate_path_list(
+        deleted_on_cleanup, max_items=sample_limit
     )
 
     sample_source = deleted_cleanup_sample if status == "final" else scheduled_sample
     deleted_count = scheduled_total
     if status == "final":
-        deleted_count = (
-            inherited_count if inherited_count is not None else deleted_cleanup_total
-        )
+        deleted_count = deleted_cleanup_total
 
     editlog = "EDITLOG.md" if (raw_dir / "EDITLOG.md").is_file() else None
     scratch_meta, _scratch_report = _scratch_meta_for_session(session_id)
@@ -585,7 +535,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--freed-bytes",
         type=int,
         default=None,
-        help="Actual bytes freed (defaults to delete candidate bytes).",
+        help="Optional cross-check against actual bytes freed in the cleanup receipt.",
     )
     p_final.set_defaults(func=_cmd_final)
 

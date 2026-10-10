@@ -68,6 +68,15 @@ class RequestedWindowsWatch(FakeWatch):
         return result
 
 
+class AutomatedFailWatch(FakeWatch):
+    def review(self, candidate: Path, **request):
+        result = super().review(candidate, **request)
+        result["status"] = "fail"
+        result["disposition"] = "fail"
+        result["visionCoverageManifest"]["aggregateStatus"] = "fail"
+        return result
+
+
 def test_requested_windows_do_not_claim_actual_full_review_when_observations_empty(
     tmp_path: Path,
 ) -> None:
@@ -80,6 +89,13 @@ def test_sampled_watch_evidence_cannot_satisfy_full_review(tmp_path: Path) -> No
     result = _run(tmp_path, None, SampledWatch())
     assert result["state"] == "blocked"
     assert "full Watch evidence required" in result["blocker"]
+
+
+def test_automated_fail_is_terminal_and_never_opens_human_gate(tmp_path: Path) -> None:
+    result = _run(tmp_path, None, AutomatedFailWatch())
+    assert result["state"] == "fail"
+    assert result["approvalGatePath"] is None
+    assert not (Path(result["reviewPath"]).parent / "approval-gate.md").exists()
 
 
 def test_actual_coverage_never_infers_duration_from_nominal_full_scope() -> None:

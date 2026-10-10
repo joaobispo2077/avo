@@ -68,3 +68,36 @@ truth. Motion, music, SFX, captions, and other BMap work are out of scope.
 ## Shared timeline gateway
 
 Uses shared timeline storage, transition guards, invalidation, and AI review services. It cannot maintain private CMap, BMap, sync, track, animation, or approval truth.
+
+## Opt-in precise cutting
+
+The CLI and slash workflow use the same `CuttingService` through shared command
+handlers. Existing projects remain unchanged until `cutting.enabled` is true.
+Declare the format family and intensity; a duration target does not authorize
+script changes. Inspect the effective settings and their origins with `status`.
+
+```powershell
+python -m avo trim analyze --project <rawDir>/avo.project.json --request request.json
+python -m avo trim preview --project <rawDir>/avo.project.json --proposal <immutable-proposal.json>
+python -m avo trim decide --project <rawDir>/avo.project.json --proposal <immutable-proposal.json> --request decisions.json
+python -m avo trim apply --project <rawDir>/avo.project.json --proposal <immutable-proposal.json>
+python -m avo trim status --project <rawDir>/avo.project.json
+```
+
+`analyze` writes evidence and proposals under `<rawDir>/edit/timeline/cutting/`;
+it does not change CMap. `preview` renders contextual windows from fingerprinted
+originals using an immutable proposed-selection plan. `decide` binds each human
+choice to an exact proposal and verification reference. `apply` requires current
+verified evidence and authors a new CMap, staling dependents through the existing
+mechanism. `status` reports uncertain and unavailable capabilities explicitly.
+
+Protected holds and words override every profile. Short islands are search flags,
+not deletion permission. Missing acoustic/alignment/context evidence preserves
+the selection for local review. Rendering or model confidence does not certify
+speech. At most two automatic selection attempts per source occurrence persist
+across resume; transport retries do not create a new selection attempt.
+
+Local preview acceptance is separate from full-proof and master approval. NR,
+EQ, music, breath treatment and animation remain outside this operation. See
+[alignment setup](../../docs/cutting-alignment-runtime.md) for the optional
+explicitly provisioned offline runtime. Profile seeds are not benchmark validated.

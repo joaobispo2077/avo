@@ -46,6 +46,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     configure_parser(sub.add_parser("breathing"))
 
+    _trim_parser(sub)
+
     pipeline = sub.add_parser("pipeline")
     pipeline_sub = pipeline.add_subparsers(dest="pipeline_command", required=True)
     for name in ("run", "status", "verify-commands"):
@@ -214,6 +216,10 @@ def build_parser() -> argparse.ArgumentParser:
     run_review.add_argument("--name", action="append", default=[])
     run_review.add_argument("--profile", default="draft")
     _watch_policy_args(run_review)
+    batch_review = review_sub.add_parser("batch")
+    _project_arg(batch_review)
+    batch_review.add_argument("--manifest", type=Path, required=True)
+    batch_review.add_argument("--force", action="store_true")
     policy_review = review_sub.add_parser("policy")
     _project_arg(policy_review)
     _watch_policy_args(policy_review)
@@ -570,6 +576,10 @@ def _complete_hashes(required: dict[str, Any], label: str) -> dict[str, str]:
 def _materialization_dependencies(materialization: dict) -> dict[str, str]:
     from avo.timeline.contracts import content_hash
 
+    if materialization.get("kind") == "proof-plan":
+        from avo.timeline.approval_service import native_cut_dependencies
+
+        return native_cut_dependencies(materialization)
     lock = materialization.get("canonicalInputLock") or {}
     kind = str(materialization.get("kind") or "")
     output_sha = (materialization.get("output") or {}).get("sha256")
@@ -934,6 +944,8 @@ def _review(args: argparse.Namespace) -> int:
     from avo.timeline.review_runner import ReviewRunner
     from avo.timeline.store import now_iso
 
+    if args.review_command == "batch":
+        return _review_batch(args)
     workspace = TimelineWorkspace.from_project(
         args.project, video_id=args.video_id or None
     )
@@ -984,7 +996,168 @@ def _review(args: argparse.Namespace) -> int:
     )
     _record_review_side_state(run_store, result)
     _emit(result)
-    return 4 if result["state"] == "blocked" else 0
+    return _review_exit_code([result["state"]])
+
+
+def _file_sha256(path: Path) -> str:
+    import hashlib
+
+    digest = hashlib.sha256()
+    with Path(path).open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def _review_exit_code(states: list[str]) -> int:
+    if "blocked" in states:
+        return 4
+    return 5 if "fail" in states else 0
+
+
+def _batch_window(value: Any) -> str:
+    if isinstance(value, str):
+        _parse_window(value)
+        return value
+    if isinstance(value, dict):
+        return f"{float(value['start'])}:{float(value['end'])}:{value['reason']}"
+    raise ValueError("review batch windows must be strings or window objects")
+
+
+def _review_batch(args: argparse.Namespace) -> int:
+    try:
+        manifest = json.loads(Path(args.manifest).read_text(encoding="utf-8"))
+    except (OSError, ValueError) as error:
+        raise ValueError(f"cannot load review batch manifest: {error}") from error
+    if isinstance(manifest, dict):
+        from avo.timeline.contracts import validate_document
+
+        validate_document(manifest, "avo.review-batch.schema.json")
+        jobs = manifest.get("jobs")
+        defaults = dict(manifest.get("defaults") or {})
+    else:
+        jobs = None
+        defaults = {}
+    if not isinstance(jobs, list) or not jobs:
+        raise ValueError("review batch manifest requires a non-empty jobs array")
+    workspace = TimelineWorkspace.from_project(
+        args.project, video_id=args.video_id or None
+    )
+    summaries: list[dict[str, Any]] = []
+    for item in jobs:
+        if not isinstance(item, dict):
+            raise ValueError("review batch jobs must be objects")
+        job_id = str(item.get("id") or "").strip()
+        candidate = Path(str(item.get("candidate") or ""))
+        if not job_id or not candidate.is_file():
+            raise ValueError(
+                f"review batch job {job_id or '<unknown>'} has no candidate"
+            )
+        digest = _file_sha256(candidate)
+        expected_hash = str(item.get("sha256") or "")
+        if expected_hash and digest != expected_hash:
+            raise ValueError(f"review batch job {job_id} candidate hash mismatch")
+        expected_bytes = item.get("bytes")
+        if expected_bytes is not None and candidate.stat().st_size != int(
+            expected_bytes
+        ):
+            raise ValueError(f"review batch job {job_id} candidate size mismatch")
+        checkpoint = str(
+            item.get("checkpoint") or defaults.get("checkpoint") or "motion-proof"
+        )
+        existing_path = workspace.review_dir / checkpoint / digest[:12] / "review.json"
+        if not args.force and existing_path.is_file():
+            existing = _load_json(existing_path)
+            watch = next(
+                (e for e in existing.get("evidence") or [] if e.get("kind") == "watch"),
+                {},
+            )
+            manifest_record = watch.get("visionCoverageManifest") or {}
+            if existing.get("candidate", {}).get(
+                "sha256"
+            ) == digest and manifest_record.get("aggregateStatus") in {
+                "pass",
+                "needs-human-judgment",
+            }:
+                summaries.append(
+                    {
+                        "id": job_id,
+                        "status": "skipped-current",
+                        "reviewPath": str(existing_path),
+                    }
+                )
+                continue
+        invocation = argparse.Namespace(
+            command="review",
+            review_command="run",
+            project=args.project,
+            video_id=args.video_id,
+            as_json=True,
+            checkpoint=checkpoint,
+            candidate=candidate,
+            materialization=None,
+            dependency=[f"candidate={digest}"],
+            window=[_batch_window(value) for value in item.get("windows") or []],
+            term=list(item.get("terms") or []),
+            name=list(item.get("names") or []),
+            profile=str(item.get("profile") or defaults.get("profile") or "draft"),
+            watch_whisper_model=None,
+            watch_device=None,
+            watch_max_frames=None,
+            watch_repair_max_frames=None,
+            watch_analysis_attempts=None,
+            watch_tool_attempts=None,
+            watch_working_directory=None,
+            watch_format=None,
+            watch_language=None,
+            watch_acceptance_criterion=None,
+            watch_risk_note=[str(item.get("risk") or "declared batch review")],
+        )
+        candidate_path, dependencies, materialization = _review_inputs(invocation)
+        policy = _workspace_watch_policy(
+            workspace, invocation=_watch_invocation(invocation)
+        )
+        from avo.adapters.qc.registry import CheckpointQcRegistry
+        from avo.adapters.transcribe.candidate import CandidateTranscriptionAdapter
+        from avo.adapters.understand.watch_skill import WatchSkillAdapter
+        from avo.timeline.review_runner import ReviewRunner
+        from avo.timeline.store import now_iso
+
+        result = ReviewRunner(
+            review_root=workspace.review_dir,
+            transcription=CandidateTranscriptionAdapter(model=policy.whisper_model),
+            watch=WatchSkillAdapter(),
+            deterministic_qc=CheckpointQcRegistry(),
+            workspace=workspace,
+            clock=now_iso,
+            watch_policy=policy,
+        ).run(
+            checkpoint=checkpoint,
+            candidate=candidate_path,
+            dependencies=dependencies,
+            render_profile=invocation.profile,
+            risk_windows=[_parse_window(value) for value in invocation.window],
+            terms=invocation.term,
+            names=invocation.name,
+            materialization=materialization,
+            materialization_path=None,
+        )
+        summaries.append(
+            {
+                "id": job_id,
+                "status": result["state"],
+                "reviewPath": str(result["reviewPath"]),
+                "candidateSha256": digest,
+            }
+        )
+    payload = {
+        "schemaVersion": "1.0.0",
+        "manifest": str(Path(args.manifest)),
+        "forced": bool(args.force),
+        "jobs": summaries,
+    }
+    _emit(payload, as_json=True)
+    return _review_exit_code([str(item["status"]) for item in summaries])
 
 
 def _migrate(args: argparse.Namespace) -> int:
@@ -1076,7 +1249,7 @@ def _compact_from_outcome(
             pre_cleanup=outcome.pre_cleanup_project_bytes,
             delete_bytes=outcome.delete_candidate_bytes,
             preserved_bytes=outcome.preserved_bytes,
-            freed_bytes=None if dry else outcome.delete_candidate_bytes,
+            freed_bytes=None if dry else outcome.freed_bytes,
         ),
         session_id=session_id,
         scratch_report=scratch_report,
@@ -1108,6 +1281,12 @@ def _purge_session_stderr(session_id: str | None) -> None:
         purged = False
     if purged:
         print(f"scratch purged: session {session_id}", file=sys.stderr)
+
+
+def _cleanup_status(command: str, leftover: int) -> tuple[str, int]:
+    if command == "dry-run":
+        return "dry-run", 0
+    return ("incomplete", 3) if leftover else ("executed", 0)
 
 
 def _cleanup(args: argparse.Namespace) -> int:
@@ -1182,7 +1361,7 @@ def _cleanup(args: argparse.Namespace) -> int:
             raw_dir, args.master_basename, session_id
         )
 
-    status = "dry-run" if args.cleanup_command == "dry-run" else "executed"
+    status, exit_code = _cleanup_status(args.cleanup_command, outcome.leftover)
     _emit(
         _compact_from_outcome(
             status=status,
@@ -1196,7 +1375,7 @@ def _cleanup(args: argparse.Namespace) -> int:
     )
     if status == "executed":
         _purge_session_stderr(session_id)
-    return 0
+    return exit_code
 
 
 def _prepare_delivery(args: argparse.Namespace, workspace: TimelineWorkspace) -> dict:
@@ -1289,6 +1468,27 @@ def _request(path: Path | None) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise ValueError("proof request must be a JSON object")
     return value
+
+
+def _proof_request_from_cmap(request, args, workspace):
+    if not request.pop("fromCMap", False):
+        return request
+    from avo.timeline.initial_cut import initial_cut_proof_request
+
+    if set(request) - {"output"}:
+        raise ValueError("fromCMap accepts only an output contract")
+    output_contract = request.get("output") or {}
+    if set(output_contract) - {"frameRate", "width", "height", "audioSampleRate"}:
+        raise ValueError("fromCMap output contains unsupported fields")
+    return initial_cut_proof_request(
+        workspace,
+        iteration_id=args.iteration_id,
+        output=args.output,
+        frame_rate=output_contract["frameRate"],
+        width=output_contract.get("width", 640),
+        height=output_contract.get("height", 360),
+        sample_rate=output_contract.get("audioSampleRate", 48000),
+    )
 
 
 def _proof(args: argparse.Namespace) -> int:
@@ -1385,7 +1585,7 @@ def _proof(args: argparse.Namespace) -> int:
         return 0
     registry = default_proof_capability_registry()
     if operation == "plan":
-        request = _request(args.request)
+        request = _proof_request_from_cmap(_request(args.request), args, workspace)
         for record in request.pop("capabilityImplementations", []):
             registry.register_record(record)
         request["iterationId"] = args.iteration_id
@@ -1498,12 +1698,49 @@ def _still(args: argparse.Namespace) -> int:
     return 0
 
 
+def _trim_parser(sub):
+    trim = sub.add_parser("trim")
+    trim_sub = trim.add_subparsers(dest="trim_command", required=True)
+    for operation in ("analyze", "preview", "decide", "apply", "status"):
+        item = trim_sub.add_parser(operation)
+        _project_arg(item)
+        if operation in {"preview", "decide", "apply", "status"}:
+            item.add_argument("--proposal", type=Path, required=operation != "status")
+        if operation in {"analyze", "decide"}:
+            item.add_argument("--request", type=Path, required=operation == "decide")
+
+
+def _trim(args: argparse.Namespace) -> int:
+    from avo.adapters.registry import build_cutting_service
+    from avo.timeline.command_handlers import CommandHandlers
+    from avo.timeline.pipeline import TimelinePipeline
+
+    workspace = TimelineWorkspace.from_project(
+        args.project, video_id=args.video_id or None
+    )
+    request = _load_json(args.request) if getattr(args, "request", None) else None
+    service = build_cutting_service(workspace, invocation=request)
+    payload = {}
+    if request is not None:
+        payload["request"] = request
+    if getattr(args, "proposal", None) is not None:
+        payload["proposalRef"] = args.proposal
+    if args.trim_command == "apply":
+        payload["mutation"] = "cmap"
+    result = CommandHandlers(
+        TimelinePipeline(workspace), cutting_service=service
+    ).execute("trim", args.trim_command, payload)
+    _emit(result)
+    return 3 if result["result"].get("status") in {"blocked", "fail"} else 0
+
+
 def _run_cli(args: argparse.Namespace) -> int:
     if args.command == "breathing":
         from avo.breathing import run as breathing_run
 
         return breathing_run(args)
     handlers = {
+        "trim": _trim,
         "pipeline": _pipeline,
         "timeline": _timeline,
         "sync": _sync,

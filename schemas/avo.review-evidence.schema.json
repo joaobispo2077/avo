@@ -451,6 +451,7 @@
         "fixing",
         "ai-passed",
         "needs-human-judgment",
+        "fail",
         "blocked",
         "superseded"
       ]

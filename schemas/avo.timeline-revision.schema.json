@@ -33,7 +33,8 @@
         "tracks",
         "animation",
         "sync-map",
-        "iteration-ledger"
+        "iteration-ledger",
+        "cutting-ledger"
       ]
     },
     "artifactId": {

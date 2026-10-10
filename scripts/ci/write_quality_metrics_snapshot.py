@@ -130,7 +130,11 @@ def build_ci_document(
                 "title": title,
                 "status": report._label(outcomes.get(key, "")),
                 "metric": report.gate_metric(
-                    key, coverage_json=coverage_json, floor=floor, root=root
+                    key,
+                    coverage_json=coverage_json,
+                    floor=floor,
+                    root=root,
+                    outcome=outcomes.get(key, ""),
                 ),
                 "checks": report.GATE_POLICY.get(key, ""),
             }

@@ -1248,6 +1248,20 @@
       "complexity": 11,
       "rank": "C",
       "reason": "Reporting/inventory/validation aggregation with many optional fields"
+    },
+    {
+      "path": "src/avo/cli.py",
+      "name": "_review_batch",
+      "complexity": 39,
+      "rank": "E",
+      "reason": "Native review batch validates immutable candidates and orchestrates fail-closed jobs; planned decomposition"
+    },
+    {
+      "path": "src/avo/adapters/understand/watch_skill.py",
+      "name": "_native_review",
+      "complexity": 29,
+      "rank": "D",
+      "reason": "Native visual review combines exact-frame coverage, endpoint evidence, and fail-closed manifest production; planned decomposition"
     }
   ]
 }

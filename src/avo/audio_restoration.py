@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import itertools
+from copy import deepcopy
 
 ENGINE_DEFAULT_PCT = 35
 MAX_STRENGTH_PCT = 100
@@ -86,6 +87,53 @@ def afftdn_filter(strength_pct: int) -> str:
         return ""
     nr, nf = params
     return f"afftdn=nr={nr:.2f}:nf={nf:.1f}:tn=1"
+
+
+def validate_dialogue_noise_policy(
+    policy: dict, stream_index: int, channels: list
+) -> dict:
+    """Validate explicitly authorized, source-scoped mono dialogue restoration."""
+    keys = {
+        "mode",
+        "role",
+        "strengthPercent",
+        "streamIndex",
+        "channelIndex",
+        "approvedByUser",
+    }
+    if not isinstance(policy, dict) or set(policy) != keys:
+        raise ValueError("Dialogue noise policy requires exact supported keys")
+    if policy["mode"] != "afftdn" or policy["role"] != "presenter-dialogue":
+        raise ValueError("Unsupported dialogue noise policy mode or role")
+    _validate_noise_values(policy)
+    _validate_noise_routing(policy, stream_index, channels)
+    return deepcopy(policy)
+
+
+def _validate_noise_values(policy):
+    for key in ("strengthPercent", "streamIndex", "channelIndex"):
+        if type(policy[key]) is not int or policy[key] < 0:
+            raise ValueError(
+                "Dialogue noise policy requires nonnegative integer values"
+            )
+    if policy["strengthPercent"] > 100 or type(policy["approvedByUser"]) is not bool:
+        raise ValueError("Invalid dialogue noise strength or approval")
+    if policy["strengthPercent"] > 50 and not policy["approvedByUser"]:
+        raise ValueError("Dialogue noise strength above 50 requires user authorization")
+
+
+def _validate_noise_routing(policy, stream_index, channels):
+    if type(stream_index) is not int or any(
+        type(channel) is not int for channel in channels
+    ):
+        raise ValueError("Dialogue noise routing requires integer stream and channels")
+    if (
+        policy["streamIndex"] != stream_index
+        or channels != [policy["channelIndex"]] * 2
+    ):
+        raise ValueError(
+            "Dialogue noise policy requires exact selected centered channel"
+        )
 
 
 def build_repair_filter(strength_pct: int) -> str:
