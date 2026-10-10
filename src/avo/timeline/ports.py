@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
 
 
-@dataclass(frozen=True)
+@dataclass
 class ToolError(Exception):
     code: str
     message: str
