@@ -44,14 +44,35 @@ class FakeWatch:
         if self.fail:
             raise ToolError("WATCH_UNAVAILABLE", "offline", True, "install Watch")
         windows = request["windows"]
+        digest = hashlib.sha256(candidate.read_bytes()).hexdigest()
         return {
             "status": "pass",
-            "coverage": {"mode": "full", "windows": windows},
+            "coverage": {
+                "mode": "full",
+                "windows": windows,
+                "observedWindows": windows,
+                "requestedFrames": [0],
+                "decodedFrames": [0],
+                "failedFrames": [],
+                "observedFrames": [0],
+                "coverageHoles": [],
+            },
             "findings": [],
             "tool": "watch-fixture",
             "toolVersion": "1",
             "model": "fixture",
             "artifacts": [],
+            "visionCoverageManifest": {
+                "planHash": "a" * 64,
+                "reviewContractHash": "b" * 64,
+                "aggregateStatus": "pass",
+                "artifact": {
+                    "path": str(candidate),
+                    "sha256": digest,
+                    "kind": "fixture-coverage",
+                },
+            },
+            "disposition": "pass",
         }
 
 
