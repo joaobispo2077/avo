@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from .contracts import file_fingerprint
+from .diff import stable_id_diff
 from .lifecycle import PipelineRunStore, PipelineState, TransitionFacts
 from .lineage import LineageError, validate_bmap_basis
 from .mapping import cmap_output_duration
@@ -125,47 +126,14 @@ class BMapService:
     def _diff(
         parent: dict[str, Any] | None, child: dict[str, Any], reason: str
     ) -> list[dict[str, Any]]:
-        before = (parent or {}).get("cues") or []
-        after = child.get("cues") or []
-        before_by = {item["cueId"]: item for item in before}
-        after_by = {item["cueId"]: item for item in after}
-        operations = []
-        ordinal = 1
-
-        def add(op: str, cue_id: str, **values: Any) -> None:
-            nonlocal ordinal
-            operations.append(
-                {
-                    "opId": f"diff-{ordinal:04d}",
-                    "op": op,
-                    "target": {"collection": "cues", "stableId": cue_id},
-                    "reason": reason,
-                    "actorIntent": "preserve beat intent on approved cut output",
-                    "affectedTimeRanges": [],
-                    **values,
-                }
-            )
-            ordinal += 1
-
-        for cue_id, item in before_by.items():
-            if cue_id not in after_by:
-                add("remove", cue_id, before=item)
-        for cue_id, item in after_by.items():
-            if cue_id not in before_by:
-                add("add", cue_id, after=item)
-            elif before_by[cue_id] != item:
-                add("replace", cue_id, before=before_by[cue_id], after=item)
-        before_order = [item["cueId"] for item in before]
-        after_order = [item["cueId"] for item in after]
-        for cue_id in set(before_order) & set(after_order):
-            if before_order.index(cue_id) != after_order.index(cue_id):
-                add(
-                    "move",
-                    cue_id,
-                    fromOrder=before_order.index(cue_id),
-                    toOrder=after_order.index(cue_id),
-                )
-        return operations
+        return stable_id_diff(
+            parent,
+            child,
+            reason,
+            collection="cues",
+            id_key="cueId",
+            actor_intent="preserve beat intent on approved cut output",
+        )
 
     def author(
         self, snapshot: dict[str, Any], *, actor: str, reason: str
