@@ -15,6 +15,7 @@ stryker-tmp/
 reports/
 package-lock.json
 uv.lock
+scripts/ci/braces/
 
 # Agent / SDD / editor tooling
 .sdd/

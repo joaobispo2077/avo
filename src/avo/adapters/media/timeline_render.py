@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import json
 import shutil
+import subprocess
 import sys
 from copy import deepcopy
 from pathlib import Path
@@ -10,12 +12,85 @@ from typing import Any
 
 from avo.timeline.contracts import content_hash, file_fingerprint
 
+_MODE_BY_DIMENSIONS = {
+    (1280, 720): "--draft",
+    (1920, 1080): "--preview",
+    (3840, 2160): "--youtube-4k",
+}
+_YOUTUBE_4K_PROFILES = {"4k", "master-4k", "youtube-4k", "youtube_4k"}
+
+
+def _render_mode_args(
+    profile: str,
+    render_contract: dict[str, Any] | None,
+) -> list[str]:
+    """Map a render contract or profile name to one avo.render mode flag."""
+    dimensions = (
+        (
+            int(render_contract.get("width") or 0),
+            int(render_contract.get("height") or 0),
+        )
+        if render_contract
+        else None
+    )
+    if dimensions:
+        mode = _MODE_BY_DIMENSIONS.get(dimensions)
+        if mode is None:
+            raise RuntimeError(
+                "unsupported render contract dimensions: "
+                f"{dimensions[0]}x{dimensions[1]}"
+            )
+        return [mode]
+    if profile == "draft":
+        return ["--draft"]
+    if profile == "preview":
+        return ["--preview"]
+    if profile in _YOUTUBE_4K_PROFILES:
+        return ["--youtube-4k"]
+    return []
+
+
+def _reject_contract_mismatch(
+    media: dict[str, Any] | None,
+    render_contract: dict[str, Any] | None,
+) -> None:
+    """Fail when probed picture geometry disagrees with the render contract."""
+    if render_contract and media:
+        expected_fps = float(render_contract["frameRate"]["num"]) / float(
+            render_contract["frameRate"]["den"]
+        )
+        tolerance = float(render_contract["frameRate"].get("tolerance") or 0)
+        mismatches = [
+            field
+            for field in ("width", "height")
+            if int(media[field]) != int(render_contract[field])
+        ]
+        if abs(float(media["frameRate"]) - expected_fps) > tolerance:
+            mismatches.append("frameRate")
+        if mismatches:
+            raise RuntimeError(
+                "rendered output does not match render contract: "
+                + ", ".join(mismatches)
+            )
+
 
 class TimelineRenderAdapter:
     """TimelineRenderPort: projection JSON in, hash-bound media out."""
 
     def __init__(self, *, proof_executor: Any | None = None) -> None:
+        if proof_executor is None:
+            from .proof_executor import execute_ffmpeg_proof
+
+            proof_executor = execute_ffmpeg_proof
         self.proof_executor = proof_executor
+
+    def for_proof_plan(self, workspace, proof_plan):
+        """Compose fresh physical cutting checks at the existing adapter seam."""
+        if not proof_plan.get("validationPlan", {}).get("cutting", {}).get("required"):
+            return self
+        from .cutting_preview import CuttingPreviewAdapter
+
+        return CuttingPreviewAdapter(workspace, render_port=self)
 
     def proof_tool_readiness(self, proof_plan: dict[str, Any]) -> dict[str, bool]:
         adapters = {
@@ -58,6 +133,8 @@ class TimelineRenderAdapter:
             "implementationRefs": deepcopy(proof_plan["implementationRefs"]),
             "output": deepcopy(proof_plan["output"]),
             "renderProfile": proof_plan["renderProfile"],
+            "canonicalInputLock": deepcopy(proof_plan["canonicalInputLock"]),
+            "lineagePolicy": deepcopy(proof_plan["lineagePolicy"]),
             "window": deepcopy(window),
         }
         graph_hash = content_hash(
@@ -99,17 +176,15 @@ class TimelineRenderAdapter:
                 audio_graph.get("operations") or [],
                 sample_rate=int(audio_graph.get("sampleRate") or 48_000),
             )
+        render_contract = request.get("render_contract")
         argv = [
             "avo.render",
             str(projection),
             "-o",
             str(output),
             "--no-subtitles",
+            *_render_mode_args(profile, render_contract),
         ]
-        if profile == "draft":
-            argv.append("--draft")
-        elif profile == "preview":
-            argv.append("--preview")
         previous = sys.argv
         try:
             sys.argv = argv
@@ -120,7 +195,8 @@ class TimelineRenderAdapter:
         finally:
             sys.argv = previous
         fingerprint = file_fingerprint(output)
-        render_contract = request.get("render_contract")
+        media = self._probe_output(output) if render_contract else None
+        _reject_contract_mismatch(media, render_contract)
         return {
             "status": "pass",
             "output": {**fingerprint, "locator": str(output)},
@@ -130,8 +206,40 @@ class TimelineRenderAdapter:
                 content_hash(render_contract) if render_contract is not None else None
             ),
             "producer": {"name": "avo.render", "version": "1"},
+            "media": media,
             "audioGraphHash": (
                 compiled_audio["graphHash"] if compiled_audio is not None else None
             ),
             "audioEncodeCount": 1 if compiled_audio is not None else None,
+        }
+
+    @staticmethod
+    def _probe_output(path: Path) -> dict[str, Any]:
+        probe = json.loads(
+            subprocess.run(
+                [
+                    "ffprobe",
+                    "-v",
+                    "error",
+                    "-select_streams",
+                    "v:0",
+                    "-show_entries",
+                    "stream=width,height,r_frame_rate",
+                    "-of",
+                    "json",
+                    str(path),
+                ],
+                check=True,
+                capture_output=True,
+                text=True,
+            ).stdout
+        )
+        stream = (probe.get("streams") or [None])[0]
+        if not stream:
+            raise RuntimeError(f"rendered output has no video stream: {path}")
+        numerator, denominator = str(stream["r_frame_rate"]).split("/", 1)
+        return {
+            "width": int(stream["width"]),
+            "height": int(stream["height"]),
+            "frameRate": float(numerator) / float(denominator),
         }

@@ -118,7 +118,12 @@ class CMapService:
         return ops
 
     def author(
-        self, snapshot: dict[str, Any], *, actor: str, reason: str
+        self,
+        snapshot: dict[str, Any],
+        *,
+        actor: str,
+        reason: str,
+        expected_head_hash: str | None = None,
     ) -> dict[str, Any]:
         snapshot = deepcopy(snapshot)
         validate_cmap_snapshot(snapshot)
@@ -132,6 +137,8 @@ class CMapService:
             current = self.store.revision(index["headRevisionId"])
             parent = current["snapshot"]
             before = current["contentHash"]
+        if expected_head_hash is not None and expected_head_hash != before:
+            raise LineageError("stale cutting proposal: CMap head changed")
         diff = self._diff(parent, snapshot, reason)
         revision = self.store.append_revision(
             snapshot=snapshot,

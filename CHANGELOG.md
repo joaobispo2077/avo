@@ -1,3 +1,45 @@
+# [1.14.0](https://github.com/joaobispo2077/avo/compare/v1.13.1...v1.14.0) (2026-10-10)
+
+
+### Bug Fixes
+
+* **tools:** allow traceback propagation through ToolError ([3958019](https://github.com/joaobispo2077/avo/commit/3958019014caba2dda8f5ed4881e3f0f093e960e))
+* **deps:** bump urllib3 to 2.8.0 ([52fd6d9](https://github.com/joaobispo2077/avo/commit/52fd6d94cd8397bedd19d7425a4b7e3302c1c7b4))
+* **deps:** clear high npm advisories in braces, brace-expansion, and undici ([69862c4](https://github.com/joaobispo2077/avo/commit/69862c4b2e4969b8c4dc224751085ab3d3ba3ddc))
+* **breath:** defer numpy imports off the pipeline CLI path ([022d425](https://github.com/joaobispo2077/avo/commit/022d4250e55c2c20ffb827969ed6bed0f9339e0b))
+* **ci:** fail closed when the mutation sticky only has a cached score ([7cc3fac](https://github.com/joaobispo2077/avo/commit/7cc3fac9bc7e86e8bba0a5a8ae61e8da30cf2722))
+* **audit:** make dependency evidence fail closed ([e239a27](https://github.com/joaobispo2077/avo/commit/e239a271ce27c6d01621e4a516d9b934f3a392db))
+* **shorts:** match short 05 as a path segment ([423650a](https://github.com/joaobispo2077/avo/commit/423650a7f83603baae342840bb03ada1cb8f6a88))
+* **audio:** pad ducked inputs and trim at the region end ([a804f93](https://github.com/joaobispo2077/avo/commit/a804f93ad814bb62756db9c7986299894adb1af0))
+* **cleanup:** preserve reconstruction inputs and record actual deletions ([19f783b](https://github.com/joaobispo2077/avo/commit/19f783b1c52513d7f2e94dafe9b0532e3b257738))
+* **quality:** report unavailable dependency measurements ([3ccc08c](https://github.com/joaobispo2077/avo/commit/3ccc08c7e1b745d6b5faa47155fef023717b15ea))
+* **deps:** track the depth-limited braces sources ([45b0dd8](https://github.com/joaobispo2077/avo/commit/45b0dd81229cd852ccd9e2d0c9d70196df09d4d6))
+* **timeline:** validate candidate ids and isolate fresh render evidence ([ea06da7](https://github.com/joaobispo2077/avo/commit/ea06da72aaf15e25eb5baf19cd72998e4d3bc140))
+* **review:** verify native cut materialization lineage ([736476d](https://github.com/joaobispo2077/avo/commit/736476d891ffdc56452168265dfdba8f5f5c508c))
+
+
+### Features
+
+* **cli:** add declarative native review batches ([b1b584b](https://github.com/joaobispo2077/avo/commit/b1b584bb037b3490151cb01bba8dd163b876be5e))
+* **review:** add native structured vision passes ([d3111d3](https://github.com/joaobispo2077/avo/commit/d3111d3f7cbcdc1ccc98821f16ded2dcfa22a307))
+* **breath:** add opt-in dialogue breath control ([e98fa00](https://github.com/joaobispo2077/avo/commit/e98fa009235e289f1dde355bd6d80fc289f75ca4))
+* **cutting:** analyze routed audio with offline character alignment ([b3e1304](https://github.com/joaobispo2077/avo/commit/b3e130407579f477cd0e9adcd650bdde6562009a))
+* **proof:** bind cutting approvals to canonical proof dependencies ([ad8cfa4](https://github.com/joaobispo2077/avo/commit/ad8cfa4a96d4d2e659a6e2035eb736db206a6cbd))
+* **cutting:** classify safe boundaries and inherited joins ([99e5f1b](https://github.com/joaobispo2077/avo/commit/99e5f1bdad380e33f45dc4b9960ba8f5cb20658e))
+* **proof:** compile initial cuts from canonical cmap ([64e9dde](https://github.com/joaobispo2077/avo/commit/64e9ddead03438a73c10b9b5ce21ab43ab1a3305))
+* **cutting:** define evidence contracts and immutable storage ([b4f1df7](https://github.com/joaobispo2077/avo/commit/b4f1df7eaf4a09511abdafa7b1b42897b099798c))
+* **review:** enforce automated review before human approval ([53e70c5](https://github.com/joaobispo2077/avo/commit/53e70c5493ef8a116f614aa279b096b9ee0206fe))
+* **proof:** execute source-only graphs with native ffmpeg ([dc3acb1](https://github.com/joaobispo2077/avo/commit/dc3acb15031a5f105bfc9bac009d738a9248cb45))
+* **render:** honor requested nvenc encoder for 4k composites ([a317f0b](https://github.com/joaobispo2077/avo/commit/a317f0bf7b624618399eb78ba4ba87220ab29985))
+* **cutting:** orchestrate bounded review and trim commands ([6709e23](https://github.com/joaobispo2077/avo/commit/6709e23decbbd0b8a1f9d44fae81b269f3c53882))
+* **render:** preoffset late overlay inputs to bound 4k memory ([c4ba590](https://github.com/joaobispo2077/avo/commit/c4ba59032de301313674631c86eb000d983ac162))
+* **retakes:** propose complete takes and separate editorial reductions ([a489889](https://github.com/joaobispo2077/avo/commit/a489889b3a7042c3fe6f859ccd15821ee6e773ea))
+* **evaluation:** report cutting precision coverage and correction metrics ([2e8cf81](https://github.com/joaobispo2077/avo/commit/2e8cf81214024751bdc36abbea70ae034a77f6ae))
+* **cutting:** resolve protected pacing profiles across scopes ([1b02455](https://github.com/joaobispo2077/avo/commit/1b024554462c19a7ef3d1a36451f89666877e69b))
+* **render:** select timeline mode from the render contract ([7f7d5a6](https://github.com/joaobispo2077/avo/commit/7f7d5a6f46c0c619706cf07aabb9c7638ad9109c))
+* **audio:** validate source-scoped dialogue noise policies ([84c62fb](https://github.com/joaobispo2077/avo/commit/84c62fbc6280beaf025bf885119efd74e395cecf))
+* **preview:** verify cutting windows through native media rendering ([72d36c0](https://github.com/joaobispo2077/avo/commit/72d36c0457bf454e4297d3739297a52683fd98ca))
+
 ## [1.13.1](https://github.com/joaobispo2077/avo/compare/v1.13.0...v1.13.1) (2026-10-01)
 
 

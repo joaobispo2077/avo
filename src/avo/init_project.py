@@ -15,10 +15,22 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
 from avo.paths import config_path, repo_root
+
+
+def _cutting_declaration(settings):
+    if settings is None:
+        return {}
+    from avo.timeline.contracts import validate_document
+
+    validate_document(settings, "avo.cutting.schema.json#/$defs/config")
+    return {"cutting": deepcopy(settings)}
+
+
 from avo.paths import providers_dir as _providers_dir
 
 ASSET_KEYS = ("sfx", "music", "inserts", "graphics", "logos")
@@ -124,6 +136,7 @@ def build_project(
     provider_manifest: dict[str, Any] | None = None,
     config: dict[str, Any] | None = None,
     registry_defaults: dict[str, Any] | None = None,
+    cutting_settings: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     provider_manifest = provider_manifest or {}
     config = config or {}
@@ -153,6 +166,7 @@ def build_project(
         "provider": provider_slug,
         "rawDir": raw_dir,
     }
+    project.update(_cutting_declaration(cutting_settings))
     if title.strip():
         project["title"] = title.strip()
     project["assets"] = assets

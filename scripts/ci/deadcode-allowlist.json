@@ -69,22 +69,6 @@
     },
     {
       "path": "src/avo/adapters/understand/watch_skill.py",
-      "name": "execute_bounded_passes",
-      "kind": "function",
-      "lineno": 704,
-      "confidence": 60,
-      "reason": "Feature 006 public/dynamic contract covered by focused tests and runtime registration"
-    },
-    {
-      "path": "src/avo/adapters/understand/watch_skill.py",
-      "name": "probe_vision_capabilities",
-      "kind": "function",
-      "lineno": 637,
-      "confidence": 60,
-      "reason": "Feature 006 public/dynamic contract covered by focused tests and runtime registration"
-    },
-    {
-      "path": "src/avo/adapters/understand/watch_skill.py",
       "name": "retry_number",
       "kind": "variable",
       "lineno": 678,
@@ -138,14 +122,6 @@
       "lineno": 186,
       "confidence": 60,
       "reason": "Public API / CLI surface not referenced inside src/avo scan"
-    },
-    {
-      "path": "src/avo/capabilities.py",
-      "name": "implementations",
-      "kind": "method",
-      "lineno": 119,
-      "confidence": 60,
-      "reason": "Feature 006 public/dynamic contract covered by focused tests and runtime registration"
     },
     {
       "path": "src/avo/edl_timeline.py",
@@ -440,14 +416,6 @@
       "name": "promote_pattern",
       "kind": "function",
       "lineno": 94,
-      "confidence": 60,
-      "reason": "Timeline domain/API surface (dynamic CLI and future stages)"
-    },
-    {
-      "path": "src/avo/timeline/command_handlers.py",
-      "name": "CommandHandlers",
-      "kind": "class",
-      "lineno": 14,
       "confidence": 60,
       "reason": "Timeline domain/API surface (dynamic CLI and future stages)"
     },
@@ -1194,6 +1162,41 @@
       "lineno": 210,
       "confidence": 60,
       "reason": "Public API / CLI surface not referenced inside src/avo scan"
+    },
+    {
+      "path": "src/avo/adapters/understand/cutting_alignment_worker.py",
+      "name": "create_connection",
+      "kind": "attribute",
+      "confidence": 60,
+      "reason": "Offline worker replaces socket/ NLTK functions by attribute assignment; exercised by worker contract tests, not dead methods."
+    },
+    {
+      "path": "src/avo/adapters/understand/cutting_alignment_worker.py",
+      "name": "connect",
+      "kind": "attribute",
+      "confidence": 60,
+      "reason": "Offline worker replaces socket/ NLTK functions by attribute assignment; exercised by worker contract tests, not dead methods."
+    },
+    {
+      "path": "src/avo/adapters/understand/cutting_alignment_worker.py",
+      "name": "connect_ex",
+      "kind": "attribute",
+      "confidence": 60,
+      "reason": "Offline worker replaces socket/ NLTK functions by attribute assignment; exercised by worker contract tests, not dead methods."
+    },
+    {
+      "path": "src/avo/adapters/understand/cutting_alignment_worker.py",
+      "name": "download",
+      "kind": "attribute",
+      "confidence": 60,
+      "reason": "Offline worker replaces socket/ NLTK functions by attribute assignment; exercised by worker contract tests, not dead methods."
+    },
+    {
+      "path": "src/avo/timeline/cutting_evaluation.py",
+      "name": "evaluate_cutting",
+      "kind": "function",
+      "confidence": 60,
+      "reason": "Public external benchmark evaluation API used by tests and evaluation protocol; private held-out datasets stay outside AVO, with no runtime inference side effects."
     }
   ]
 }

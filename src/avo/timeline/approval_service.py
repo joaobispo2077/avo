@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -10,6 +11,134 @@ from .contracts import content_hash, dependency_lock_hash, validate_document
 from .lifecycle import PipelineRunStore, PipelineState, TransitionFacts
 from .review import GateError, evaluate_gate, validate_evidence_integrity
 from .workspace import TimelineWorkspace
+
+
+def _require_native_hashes(required):
+    for value in required.values():
+        if not isinstance(value, str) or len(value) != 64:
+            raise ValueError(
+                "native cut materialization dependency hashes are incomplete"
+            )
+        if any(c not in "0123456789abcdef" for c in value):
+            raise ValueError(
+                "native cut materialization dependency hashes are incomplete"
+            )
+
+
+def _native_raw_dependency(lock, proof_plan_id):
+    sources = {key: value for key, value in lock.items() if key.startswith("source:")}
+    if (
+        not sources
+        or re.fullmatch(r"proof-plan-[0-9a-f]{12}", str(proof_plan_id)) is None
+    ):
+        raise ValueError("native cut materialization source/plan identity is missing")
+    _require_native_hashes(sources)
+    return content_hash(sources)
+
+
+def native_cut_dependencies(materialization: dict[str, Any]) -> dict[str, str]:
+    """Bind an explicit initial-cut native materialization to its exact proof."""
+    if (
+        materialization.get("kind") != "proof-plan"
+        or materialization.get("checkpoint") != "cut-proof"
+    ):
+        raise ValueError(
+            "native cut materialization requires explicit cut-proof checkpoint"
+        )
+    body = {k: v for k, v in materialization.items() if k != "materializationHash"}
+    if materialization.get("materializationHash") != content_hash(body):
+        raise ValueError("native cut materialization record hash mismatch")
+    lock = materialization.get("canonicalInputLock") or {}
+    required = {
+        "cmap": lock.get("cmap"),
+        "sync-map": lock.get("sync-map"),
+        "materialization": materialization.get("materializationHash"),
+        "proof-plan": materialization.get("proofPlanHash"),
+        "microproof-gate": materialization.get("microproofGateHash"),
+        "cutOutput": (materialization.get("output") or {}).get("sha256"),
+    }
+    _require_native_hashes(required)
+    return {
+        **required,
+        "raw": _native_raw_dependency(lock, materialization.get("proofPlanId")),
+    }
+
+
+def _require_native_sync(workspace, expected):
+    event = workspace.store("sync-map").effective_approval()
+    if event is None or event["subject"]["contentSha256"] != expected:
+        raise ValueError("current approved Sync/N/A is missing or stale")
+
+
+def _require_native_plan_binding(materialization, plan):
+    seed = {
+        key: value
+        for key, value in plan.items()
+        if key not in {"proofPlanId", "proofPlanHash"}
+    }
+    if plan["proofPlanId"] != f"proof-plan-{content_hash(seed)[:12]}":
+        raise ValueError("native cut proof plan identity does not match its graph")
+    for field in (
+        "proofPlanId",
+        "proofPlanHash",
+        "checkpoint",
+        "canonicalInputLock",
+        "renderProfile",
+    ):
+        if materialization.get(field) != plan.get(field):
+            raise ValueError(
+                f"native cut materialization {field} differs from proof plan"
+            )
+
+
+def require_native_cut_materialization(workspace, materialization, candidate):
+    """Verify native source-only lineage without requiring a legacy projection."""
+    from .contracts import file_fingerprint
+    from .materialize import (
+        _load_microproof_gate,
+        _require_current_microproof_gate,
+        canonical_proof_media_inputs,
+        default_proof_readiness,
+    )
+    from .proof_plan import ProofPlanCompiler
+
+    dependencies = native_cut_dependencies(materialization)
+    compiler = ProofPlanCompiler(workspace)
+    plan = compiler.load(compiler.path(materialization["proofPlanId"]))
+    _require_native_plan_binding(materialization, plan)
+    actual = file_fingerprint(Path(candidate))
+    declared = materialization["output"]
+    if (
+        actual["sha256"] != declared["sha256"]
+        or actual["sizeBytes"] != declared["sizeBytes"]
+    ):
+        raise ValueError("native cut candidate bytes differ from materialization")
+    if Path(candidate).resolve() != Path(plan["output"]["path"]).resolve():
+        raise ValueError("native cut candidate path differs from proof plan")
+    if Path(declared["locator"]).resolve() != Path(candidate).resolve():
+        raise ValueError("native cut output locator differs from candidate")
+    preflight = compiler.require_preflight(
+        plan,
+        media_inputs=canonical_proof_media_inputs(workspace, plan),
+        tool_readiness=default_proof_readiness(plan),
+    )
+    if preflight["reportHash"] != materialization.get("preflightHash"):
+        raise ValueError("native cut materialization preflight is stale")
+    gate_path = (
+        Path(workspace.timeline_dir)
+        / "microproofs"
+        / plan["proofPlanId"]
+        / f"gate-{materialization['microproofGateHash'][:12]}.json"
+    )
+    gate = _load_microproof_gate(gate_path)
+    if (
+        gate.get("gateHash") != materialization["microproofGateHash"]
+        or gate.get("proofPlanId") != plan["proofPlanId"]
+    ):
+        raise ValueError("native cut microproof gate identity differs")
+    _require_current_microproof_gate(plan, gate, preflight_hash=preflight["reportHash"])
+    _require_native_sync(workspace, dependencies["sync-map"])
+    return dependencies
 
 
 def _require_cut_proof_integrity(review: dict[str, Any], candidate_hash: str) -> None:
@@ -34,6 +163,69 @@ def _require_cut_proof_integrity(review: dict[str, Any], candidate_hash: str) ->
             )
     except GateError as error:
         raise ValueError(str(error)) from error
+
+
+def _automated_watch_evidence(review: dict[str, Any]) -> dict[str, Any]:
+    watch = next(
+        (item for item in review.get("evidence") or [] if item.get("kind") == "watch"),
+        None,
+    )
+    if watch is None:
+        raise ValueError("approval requires native automated visual review evidence")
+    return watch
+
+
+def _require_open_automated_status(watch: dict[str, Any]) -> None:
+    manifest = watch.get("visionCoverageManifest")
+    if not isinstance(manifest, dict):
+        raise ValueError("approval requires a structured vision coverage manifest")
+    status = str(manifest.get("aggregateStatus") or "blocked")
+    if status not in {"pass", "needs-human-judgment"}:
+        raise ValueError(
+            "human approval is closed while automated review is blocked or failed"
+        )
+    contract_hash = str(manifest.get("reviewContractHash") or "")
+    if contract_hash != str(
+        (watch.get("policy") or {}).get("reviewContractHash") or ""
+    ):
+        raise ValueError("automated review contract is stale or inconsistent")
+
+
+def _require_complete_frame_coverage(watch: dict[str, Any]) -> None:
+    coverage = watch.get("coverage") or {}
+    requested = set(coverage.get("requestedFrames") or [])
+    decoded = set(coverage.get("decodedFrames") or [])
+    observed = set(coverage.get("observedFrames") or [])
+    if (
+        not requested
+        or not requested.issubset(decoded)
+        or not requested.issubset(observed)
+        or coverage.get("failedFrames")
+        or coverage.get("coverageHoles")
+    ):
+        raise ValueError("automated visual review coverage is incomplete")
+
+
+def _require_complete_automated_review(review: dict[str, Any]) -> None:
+    watch = _automated_watch_evidence(review)
+    _require_open_automated_status(watch)
+    _require_complete_frame_coverage(watch)
+
+
+def _decision_materialization_lock(workspace, materialization, revision, dependencies):
+    lock = materialization.get("canonicalInputLock") or {}
+    if materialization.get("kind") == "proof-plan":
+        expected = require_native_cut_materialization(
+            workspace, materialization, Path(materialization["output"]["locator"])
+        )
+        if any(dependencies.get(key) != value for key, value in expected.items()):
+            raise ValueError(
+                "review native cut dependencies differ from materialization"
+            )
+        return {"cmapRevisionHash": lock["cmap"], "syncRevisionHash": lock["sync-map"]}
+    if materialization.get("cmapRevisionId") != revision["revisionId"]:
+        raise ValueError("materialization is bound to another CMap revision")
+    return lock
 
 
 class ApprovalService:
@@ -92,9 +284,14 @@ class ApprovalService:
             "needs-human-judgment",
         }:
             raise ValueError("CMap approval requires current review evidence")
-        if materialization.get("cmapRevisionId") != revision_id:
-            raise ValueError("materialization is bound to another CMap revision")
-        lock = materialization.get("canonicalInputLock") or {}
+        if decision == "approved":
+            _require_complete_automated_review(review)
+        lock = _decision_materialization_lock(
+            self.workspace,
+            materialization,
+            revision,
+            review["candidate"]["dependencies"],
+        )
         if lock.get("cmapRevisionHash") != revision["contentHash"]:
             raise ValueError("materialization CMap hash is stale")
         candidate_hash = str((materialization.get("output") or {}).get("sha256") or "")

@@ -279,10 +279,13 @@ class TimelinePipeline:
             re.sub(r"[^a-z0-9-]+", "-", self.workspace.video_id.lower()).strip("-")
             or "video"
         )
+        if not video[0].isalpha():
+            video = f"video-{video}"
         video = video[:44]
         sequence = len(existing) + 1
         while True:
-            candidate = f"{video}-candidate-{sequence:04d}"
+            suffix = f"-candidate-{sequence:04d}"
+            candidate = f"{video[: 64 - len(suffix)]}{suffix}"
             if candidate not in existing:
                 return candidate
             sequence += 1
@@ -395,6 +398,12 @@ class TimelinePipeline:
         if active_ref.get("sha256") != expected_active_snapshot_hash:
             raise LifecycleError("candidate snapshot compare-and-swap failed")
         active = self.active_candidate_snapshot() if active_ref else None
+        core = active is not None and (
+            active["candidate"]["sha256"],
+            active["iterationId"],
+            active["proofPlan"],
+            active["materialization"],
+        ) == (candidate_sha256, iteration_id, plan_ref, materialization_ref)
         if state != "rendered":
             if active is None:
                 raise ValueError(
@@ -404,12 +413,6 @@ class TimelinePipeline:
                 raise ValueError(
                     f"invalid candidate transition {active['state']} -> {state}"
                 )
-            core = (
-                active["candidate"]["sha256"] == candidate_sha256
-                and active["iterationId"] == iteration_id
-                and active["proofPlan"] == plan_ref
-                and active["materialization"] == materialization_ref
-            )
             if not core:
                 raise ValueError(
                     "candidate transition mixes active snapshot references"
@@ -436,7 +439,7 @@ class TimelinePipeline:
             candidate_sha256=candidate_sha256,
             label="approval",
         )
-        if active is not None:
+        if active is not None and (state != "rendered" or core):
             for name, value in (
                 ("transcript", transcript_fp),
                 ("review", review_ref),

@@ -1,0 +1,19 @@
+{
+  "name": "braces",
+  "version": "3.0.4",
+  "private": true,
+  "description": "Depth-limited override of braces 3.0.3. Recursive AST walks stop at MAX_BRACE_DEPTH so deeply nested patterns raise RangeError instead of exhausting the stack (GHSA-vfj7-8cjw-p6xm).",
+  "license": "MIT",
+  "main": "index.js",
+  "files": [
+    "index.js",
+    "src",
+    "LICENSE"
+  ],
+  "dependencies": {
+    "fill-range": "^7.1.1"
+  },
+  "engines": {
+    "node": ">=8"
+  }
+}

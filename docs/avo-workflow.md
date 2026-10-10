@@ -344,8 +344,8 @@ Two steps, in order:
      `AUDIO-EDITLOG.md` (dry-run does not write). Do not use migrate-timeline
      for that copy.
    - **Final wrap (REQUIRED):** `<rawDir>/avo.wrap.md` and `avo.wrap.json`
-     (`status: "final"`) with actual freed bytes (inherited from the draft when
-     post-delete candidates are empty) and **sample-capped** deleted file lists
+     (`status: "final"`) with actual freed bytes from the completed
+     `edit/cleanup/cleanup-result.json` receipt and **sample-capped** deleted file lists
      plus `deletedCount`. Draft wrap files are **retained** for audit
      comparison. Re-exports the provider learndown entry with `status: "final"`
      and final wrap copies when present. An existing `EDITLOG.md` lock in that
@@ -372,6 +372,11 @@ Two steps, in order:
 
 Cleanup MUST use cross-platform deletes (`rimraf`), never `rm -rf` / `del`, and
 MUST refuse to delete anything in the preserved set.
+
+Hash verification also requires coverage of current local canonical media and
+authoring/delivery evidence. Additional creator-protected paths can be declared
+with `cleanup.preservePaths`; see [cleanup safety](cleanup-safety.md). Final wrap
+does not infer deletions from a draft or from remaining cleanup candidates.
 
 **Aggregate metrics:** `/avo.stats` (or `python -m avo.stats show`) reads
 local session history only — no network. Privacy: [`SECURITY.md#privacy--telemetry`](../SECURITY.md#privacy--telemetry).

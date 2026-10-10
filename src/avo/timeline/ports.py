@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Any, Protocol, runtime_checkable
 
 
-@dataclass(frozen=True)
+@dataclass
 class ToolError(Exception):
     code: str
     message: str
@@ -147,3 +147,13 @@ class VisionCapabilityPort(Protocol):
 @runtime_checkable
 class MultimodalPassPort(Protocol):
     def review_pass(self, candidate: Path, **request: Any) -> dict[str, Any]: ...
+
+
+@runtime_checkable
+class SpeechAlignmentPort(Protocol):
+    def align(self, source: Path, **request: Any) -> dict[str, Any]: ...
+
+
+@runtime_checkable
+class BoundaryVerificationPort(Protocol):
+    def verify(self, candidate: Path, **request: Any) -> dict[str, Any]: ...

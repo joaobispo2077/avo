@@ -461,6 +461,14 @@ def build_picture_lineage(
     return {**body, "pictureLineageHash": _hash(body)}
 
 
+def _breath_parameters(layer: dict) -> dict:
+    return (
+        {"breathControl": deepcopy(layer["breathControl"])}
+        if "breathControl" in layer
+        else {}
+    )
+
+
 def build_audiovisual_lineage(
     *,
     cmap_revision: dict[str, Any],
@@ -624,6 +632,7 @@ def build_audiovisual_lineage(
                     "channels": deepcopy(layer.get("channels") or []),
                     "fades": deepcopy(layer.get("fades") or {}),
                     "ducking": deepcopy(layer.get("ducking") or {}),
+                    **_breath_parameters(layer),
                 },
             )
         _add_edge(edges, audio_assembly_id, output_id, "encode", {})

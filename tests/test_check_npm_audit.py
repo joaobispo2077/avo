@@ -2,15 +2,21 @@
 
 from __future__ import annotations
 
+import contextlib
 import importlib.util
+import io
 import json
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 MODULE_PATH = ROOT / "scripts" / "ci" / "check_npm_audit.py"
+
+BRACES_GHSA = "GHSA-vfj7-8cjw-p6xm"
+BRACES_URL = f"https://github.com/advisories/{BRACES_GHSA}"
 
 
 def _load_module():
@@ -22,31 +28,199 @@ def _load_module():
     return mod
 
 
+def _braces_chain() -> dict:
+    """Parents name the next package. The GHSA sits on braces."""
+    return {
+        "vulnerabilities": {
+            "@semantic-release/changelog": {
+                "severity": "high",
+                "via": ["semantic-release"],
+                "nodes": ["node_modules/@semantic-release/changelog"],
+            },
+            "semantic-release": {
+                "severity": "high",
+                "via": ["micromatch"],
+                "nodes": ["node_modules/semantic-release"],
+            },
+            "micromatch": {
+                "severity": "high",
+                "via": ["braces"],
+                "nodes": ["node_modules/micromatch"],
+            },
+            "braces": {
+                "severity": "high",
+                "via": [
+                    {
+                        "severity": "high",
+                        "name": "braces",
+                        "url": BRACES_URL,
+                        "range": "<=3.0.3",
+                    }
+                ],
+                "nodes": ["node_modules/braces"],
+            },
+        }
+    }
+
+
 class TestCheckNpmAudit(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.mod = _load_module()
 
-    def test_high_advisory_ids_extracts_ghsa(self) -> None:
-        audit = {
+    def setUp(self) -> None:
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        root = Path(temporary.name)
+        (root / "package-lock.json").write_text('{"packages":{}}', encoding="utf-8")
+        for name, value in (
+            ("ROOT", root),
+            ("FINDINGS_PATH", root / "deps-findings.json"),
+            ("SUMMARY_PATH", root / "npm-audit-summary.json"),
+        ):
+            patcher = mock.patch.object(self.mod, name, value, create=True)
+            patcher.start()
+            self.addCleanup(patcher.stop)
+
+    def _run(
+        self,
+        audit: dict,
+        allow: dict | None = None,
+        lock: dict | None = None,
+    ) -> tuple[int, str, str]:
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        (self.mod.ROOT / "package-lock.json").write_text(
+            json.dumps({"packages": lock or {}}), encoding="utf-8"
+        )
+        with (
+            mock.patch.object(self.mod, "_load_allowlist", return_value=allow or {}),
+            mock.patch.object(self.mod, "_run_npm_audit", return_value=audit),
+            contextlib.redirect_stdout(stdout),
+            contextlib.redirect_stderr(stderr),
+        ):
+            code = self.mod.main()
+        return code, stdout.getvalue(), stderr.getvalue()
+
+    def test_critical_fails(self) -> None:
+        direct = {
             "vulnerabilities": {
-                "brace-expansion": {
-                    "severity": "high",
+                "left-pad": {
+                    "severity": "critical",
                     "via": [
                         {
-                            "severity": "high",
-                            "url": "https://github.com/advisories/GHSA-mh99-v99m-4gvg",
+                            "severity": "critical",
+                            "url": "https://github.com/advisories/GHSA-mwp4-54f8-5fhr",
                         }
                     ],
-                    "nodes": ["node_modules/brace-expansion"],
+                    "nodes": ["node_modules/left-pad"],
                 }
             }
         }
-        found = self.mod._high_advisory_ids(audit)
-        self.assertIn("GHSA-MH99-V99M-4GVG", found)
-        self.assertEqual(found["GHSA-MH99-V99M-4GVG"]["package"], "brace-expansion")
+        code, out, err = self._run(direct)
+        self.assertEqual(code, 1)
+        self.assertIn("GHSA-mwp4-54f8-5fhr", err)
+        self.assertIn("FAIL, 1 critical, 0 high reported", out)
 
-    def test_moderate_only_is_ignored(self) -> None:
+        chained = {
+            "vulnerabilities": {
+                "wrapper": {
+                    "severity": "critical",
+                    "via": ["braces"],
+                    "nodes": ["node_modules/wrapper"],
+                },
+                "braces": _braces_chain()["vulnerabilities"]["braces"],
+            }
+        }
+        lock = {"node_modules/braces": {"version": "3.0.3"}}
+        code, out, err = self._run(chained, lock=lock)
+        self.assertEqual(code, 1)
+        self.assertIn(f"braces@3.0.3 {BRACES_GHSA}", err)
+        self.assertNotIn("without GHSA id", err)
+        self.assertIn("FAIL, 1 critical, 1 high reported", out)
+
+    def test_critical_without_ghsa_fails(self) -> None:
+        audit = {
+            "vulnerabilities": {
+                "left-pad": {
+                    "severity": "critical",
+                    "via": [{"severity": "critical", "source": 1, "title": "no id"}],
+                }
+            }
+        }
+        code, _, error = self._run(audit)
+        self.assertEqual(code, 1)
+        self.assertIn("without GHSA id", error)
+
+    def test_highs_pass_but_are_reported(self) -> None:
+        lock = {"node_modules/braces": {"version": "3.0.3"}}
+        code, out, err = self._run(_braces_chain(), lock=lock)
+        self.assertEqual(code, 0)
+        self.assertEqual(err, "")
+        self.assertIn(f"braces@3.0.3 {BRACES_GHSA}", out)
+        self.assertIn("@semantic-release/changelog", out)
+        self.assertIn("PASS, 0 critical, 4 high reported", out)
+        self.assertNotIn("without GHSA id", out)
+        summary = json.loads(self.mod.SUMMARY_PATH.read_text(encoding="utf-8"))
+        self.assertEqual(summary["ok"], True)
+        self.assertEqual(summary["critical"], 0)
+        self.assertEqual(summary["high"], 4)
+
+    def test_cycle_via_names_root_advisory(self) -> None:
+        braces = _braces_chain()["vulnerabilities"]["braces"]
+        audit = {
+            "vulnerabilities": {
+                "semantic-release": {
+                    "severity": "high",
+                    "via": ["@semantic-release/github", "micromatch"],
+                    "nodes": ["node_modules/semantic-release"],
+                },
+                "@semantic-release/github": {
+                    "severity": "high",
+                    "via": ["semantic-release"],
+                    "nodes": ["node_modules/@semantic-release/github"],
+                },
+                "@semantic-release/release-notes-generator": {
+                    "severity": "high",
+                    "via": ["semantic-release"],
+                    "nodes": ["node_modules/@semantic-release/release-notes-generator"],
+                },
+                "micromatch": {
+                    "severity": "high",
+                    "via": ["braces"],
+                    "nodes": ["node_modules/micromatch"],
+                },
+                "braces": braces,
+            }
+        }
+        lock = {"node_modules/braces": {"version": "3.0.3"}}
+        code, out, err = self._run(audit, lock=lock)
+        self.assertEqual(code, 0)
+        self.assertEqual(err, "")
+        self.assertNotIn("(no GHSA id)", out)
+        self.assertIn(
+            f"high @semantic-release/github via braces@3.0.3 {BRACES_GHSA}",
+            out,
+        )
+        self.assertIn(
+            "high @semantic-release/release-notes-generator via "
+            f"braces@3.0.3 {BRACES_GHSA}",
+            out,
+        )
+        self.assertIn("PASS, 0 critical, 5 high reported", out)
+
+    def test_critical_cycle_without_ghsa_fails(self) -> None:
+        audit = {
+            "vulnerabilities": {
+                "alpha": {"severity": "critical", "via": ["beta"]},
+                "beta": {"severity": "critical", "via": ["alpha"]},
+            }
+        }
+        code, _, error = self._run(audit)
+        self.assertEqual(code, 1)
+        self.assertIn("without GHSA id", error)
+
+    def test_moderate_is_reported_and_passes(self) -> None:
         audit = {
             "vulnerabilities": {
                 "tar": {
@@ -60,42 +234,176 @@ class TestCheckNpmAudit(unittest.TestCase):
                 }
             }
         }
-        self.assertEqual(self.mod._high_advisory_ids(audit), {})
+        code, out, _err = self._run(audit)
+        self.assertEqual(code, 0)
+        self.assertIn("GHSA-r292-9mhp-454m", out)
+        self.assertIn("PASS, 0 critical, 0 high reported", out)
 
-    def test_main_fails_on_unexpected_high(self) -> None:
+    def test_main_passes_when_critical_allowlisted(self) -> None:
         audit = {
             "vulnerabilities": {
-                "ip-address": {
-                    "severity": "high",
+                "left-pad": {
+                    "severity": "critical",
                     "via": [
                         {
-                            "severity": "high",
+                            "severity": "critical",
                             "url": "https://github.com/advisories/GHSA-mwp4-54f8-5fhr",
                         }
                     ],
-                    "nodes": ["node_modules/ip-address"],
+                    "nodes": ["node_modules/left-pad"],
                 }
             }
         }
-        with (
-            mock.patch.object(self.mod, "_load_allowlist", return_value={}),
-            mock.patch.object(self.mod, "_run_npm_audit", return_value=audit),
-        ):
-            self.assertEqual(self.mod.main(), 1)
+        allow = {
+            "GHSA-MWP4-54F8-5FHR": {
+                "id": "GHSA-mwp4-54f8-5fhr",
+                "package": "left-pad",
+                "reason": "documented test exception",
+                "expires": "2099-01-01",
+            }
+        }
+        code, out, err = self._run(audit, allow=allow)
+        self.assertEqual(code, 0)
+        self.assertEqual(err, "")
+        self.assertIn("documented test exception", out)
+        self.assertIn("PASS, 1 critical, 0 high reported", out)
 
-    def test_main_passes_when_allowlisted(self) -> None:
+    def test_main_fails_on_unused_allowlist_entry(self) -> None:
+        allow = {
+            "GHSA-MWP4-54F8-5FHR": {
+                "id": "GHSA-mwp4-54f8-5fhr",
+                "package": "left-pad",
+                "reason": "stale",
+                "expires": "2099-01-01",
+            }
+        }
+        code, _out, err = self._run({"vulnerabilities": {}}, allow=allow)
+        self.assertEqual(code, 1)
+        self.assertIn("unused npm audit allowlist", err)
+
+    def test_missing_or_invalid_audit_json_fails(self) -> None:
+        cases = ("", "not-json{")
+        for stdout in cases:
+            proc = mock.Mock(returncode=1, stdout=stdout, stderr="")
+            with (
+                mock.patch.object(self.mod.subprocess, "run", return_value=proc),
+                mock.patch.object(self.mod, "_npm_executable", return_value="npm"),
+                contextlib.redirect_stderr(io.StringIO()) as error,
+            ):
+                code = self.mod.main()
+            self.assertEqual(code, 1)
+            message = error.getvalue()
+            self.assertTrue(
+                "no JSON" in message or "JSON parse failed" in message,
+                msg=message,
+            )
+
+    def test_no_ghsa_records_package_and_via_then_fails(self) -> None:
+        audit = {
+            "vulnerabilities": {
+                "@jscpd/finder": {
+                    "severity": "critical",
+                    "via": ["fast-glob"],
+                    "nodes": ["node_modules/@jscpd/finder"],
+                }
+            }
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "deps-findings.json"
+            stderr = io.StringIO()
+            with (
+                mock.patch.object(self.mod, "FINDINGS_PATH", path),
+                mock.patch.object(self.mod, "_load_allowlist", return_value={}),
+                mock.patch.object(self.mod, "_run_npm_audit", return_value=audit),
+                contextlib.redirect_stderr(stderr),
+            ):
+                code = self.mod.main()
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        output = stderr.getvalue()
+        self.assertEqual(code, 1)
+        self.assertIn("without GHSA id", output)
+        self.assertIn("package=@jscpd/finder via='fast-glob'", output)
+        self.assertEqual(
+            [
+                {key: row[key] for key in ("package", "id", "via")}
+                for row in payload["findings"]
+            ],
+            [{"package": "@jscpd/finder", "id": None, "via": "fast-glob"}],
+        )
+        allow = json.loads(
+            (ROOT / "scripts/ci/deps-audit-allowlist.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual(allow["npm"]["advisory_ids"], [])
+
+    def test_two_unwaived_findings_are_reported_and_exit_1(self) -> None:
+        """Collect every hit before exiting. Dev paths are not exempt."""
+        audit = {
+            "vulnerabilities": {
+                "@jscpd/finder": {
+                    "severity": "critical",
+                    "dev": True,
+                    "via": ["fast-glob"],
+                    "nodes": ["node_modules/@jscpd/finder"],
+                },
+                "minimatch": {
+                    "severity": "critical",
+                    "via": ["brace-expansion"],
+                    "nodes": ["node_modules/minimatch"],
+                },
+                "tar": {
+                    "severity": "moderate",
+                    "dev": True,
+                    "via": ["other"],
+                },
+            }
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "deps-findings.json"
+            stderr = io.StringIO()
+            with (
+                mock.patch.object(self.mod, "FINDINGS_PATH", path),
+                mock.patch.object(self.mod, "_load_allowlist", return_value={}),
+                mock.patch.object(self.mod, "_run_npm_audit", return_value=audit),
+                contextlib.redirect_stderr(stderr),
+            ):
+                code = self.mod.main()
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        output = stderr.getvalue()
+        self.assertEqual(code, 1)
+        self.assertIn("package=@jscpd/finder via='fast-glob'", output)
+        self.assertIn("package=minimatch via='brace-expansion'", output)
+        self.assertNotIn("tar", output)
+        self.assertEqual(
+            [
+                {key: row[key] for key in ("package", "id", "via")}
+                for row in payload["findings"]
+            ],
+            [
+                {"package": "@jscpd/finder", "id": None, "via": "fast-glob"},
+                {"package": "minimatch", "id": None, "via": "brace-expansion"},
+            ],
+        )
+
+    def test_no_ghsa_id_is_not_waived_by_another_allowlisted_hit(self) -> None:
         audit = {
             "vulnerabilities": {
                 "ip-address": {
-                    "severity": "high",
+                    "severity": "critical",
                     "via": [
                         {
-                            "severity": "high",
+                            "severity": "critical",
+                            "name": "ip-address",
                             "url": "https://github.com/advisories/GHSA-mwp4-54f8-5fhr",
                         }
                     ],
                     "nodes": ["node_modules/ip-address"],
-                }
+                },
+                "@jscpd/finder": {
+                    "severity": "critical",
+                    "dev": True,
+                    "via": ["fast-glob"],
+                    "nodes": ["node_modules/@jscpd/finder"],
+                },
             }
         }
         allow = {
@@ -106,28 +414,66 @@ class TestCheckNpmAudit(unittest.TestCase):
                 "expires": "2099-01-01",
             }
         }
-        with (
-            mock.patch.object(self.mod, "_load_allowlist", return_value=allow),
-            mock.patch.object(self.mod, "_run_npm_audit", return_value=audit),
-        ):
-            self.assertEqual(self.mod.main(), 0)
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "deps-findings.json"
+            stderr = io.StringIO()
+            with (
+                mock.patch.object(self.mod, "FINDINGS_PATH", path),
+                mock.patch.object(self.mod, "_load_allowlist", return_value=allow),
+                mock.patch.object(self.mod, "_run_npm_audit", return_value=audit),
+                contextlib.redirect_stderr(stderr),
+            ):
+                code = self.mod.main()
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        self.assertEqual(code, 1)
+        self.assertIn("package=@jscpd/finder via='fast-glob'", stderr.getvalue())
+        self.assertEqual(
+            [
+                {key: row[key] for key in ("package", "id", "via")}
+                for row in payload["findings"]
+            ],
+            [{"package": "@jscpd/finder", "id": None, "via": "fast-glob"}],
+        )
 
-    def test_main_fails_on_unused_allowlist_entry(self) -> None:
-        allow = {
-            "GHSA-MWP4-54F8-5FHR": {
-                "id": "GHSA-mwp4-54f8-5fhr",
-                "package": "ip-address",
-                "reason": "stale",
-                "expires": "2099-01-01",
-            }
-        }
+    def test_npm_audit_command_keeps_dev_dependencies(self) -> None:
+        completed = mock.Mock(returncode=0, stdout='{"vulnerabilities":{}}', stderr="")
         with (
-            mock.patch.object(self.mod, "_load_allowlist", return_value=allow),
+            mock.patch.object(self.mod.shutil, "which", return_value="npm"),
             mock.patch.object(
-                self.mod, "_run_npm_audit", return_value={"vulnerabilities": {}}
-            ),
+                self.mod.subprocess, "run", return_value=completed
+            ) as run,
         ):
-            self.assertEqual(self.mod.main(), 1)
+            self.mod._run_npm_audit()
+        argv = run.call_args.args[0]
+        self.assertEqual(argv[1:], ["audit", "--json"])
+        self.assertNotIn("--omit=dev", argv)
+        self.assertNotIn("--production", argv)
+
+    def test_record_pip_keeps_pysec_id(self) -> None:
+        payload = {
+            "dependencies": [
+                {
+                    "name": "requests",
+                    "version": "2.0.0",
+                    "vulns": [{"id": "PYSEC-2024-123", "fix_versions": []}],
+                },
+                {"name": "local", "skip_reason": "skip-editable"},
+            ],
+            "fixes": [],
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "deps-findings.json"
+            with mock.patch.object(self.mod, "FINDINGS_PATH", path):
+                code = self.mod.record_pip_payload(payload)
+            written = json.loads(path.read_text(encoding="utf-8"))
+        self.assertEqual(code, 0)
+        self.assertEqual(
+            [
+                {key: row[key] for key in ("package", "id", "via")}
+                for row in written["findings"]
+            ],
+            [{"package": "requests", "id": "PYSEC-2024-123", "via": ""}],
+        )
 
     def test_allowlist_file_schema(self) -> None:
         raw = json.loads(
@@ -137,6 +483,177 @@ class TestCheckNpmAudit(unittest.TestCase):
         self.assertIn("pip", raw)
         self.assertIsInstance(raw["npm"]["advisory_ids"], list)
         self.assertIsInstance(raw["pip"]["ignore_vulns"], list)
+        self.assertEqual(raw["npm"]["advisory_ids"], [])
+        self.assertEqual(raw["pip"]["ignore_vulns"], [])
+
+    def test_invalid_exceptions_fail_with_fresh_evidence(self) -> None:
+        valid = {
+            "id": BRACES_GHSA,
+            "package": "braces",
+            "reason": "fixture",
+            "expires": "2099-01-01",
+        }
+        cases = (
+            [valid, valid],
+            [{**valid, "reason": " "}],
+            [{**valid, "package": ""}],
+            [{**valid, "expires": "2000-01-01"}],
+            [{**valid, "id": "bad"}],
+        )
+        path = self.mod.ROOT / "allowlist.json"
+        for entries in cases:
+            with (
+                self.subTest(entries=entries),
+                mock.patch.object(self.mod, "ALLOWLIST_PATH", path),
+            ):
+                path.write_text(json.dumps({"npm": {"advisory_ids": entries}}))
+                with contextlib.redirect_stderr(io.StringIO()):
+                    self.assertEqual(self.mod.main(), 1)
+                self.assertTrue(json.loads(self.mod.FINDINGS_PATH.read_text())["error"])
+                self.assertIsNone(
+                    json.loads(self.mod.SUMMARY_PATH.read_text())["critical"]
+                )
+
+    def test_duplicate_advisory_paths_produce_one_blocking_finding(self) -> None:
+        root = {
+            "severity": "critical",
+            "via": [{"url": BRACES_URL}],
+            "nodes": ["node_modules/braces"],
+        }
+        audit = {
+            "vulnerabilities": {
+                "braces": root,
+                "wrapper": {"severity": "critical", "via": ["braces", "braces"]},
+            }
+        }
+        self.assertEqual(self._run(audit)[0], 1)
+        findings = json.loads(self.mod.FINDINGS_PATH.read_text())["findings"]
+        self.assertEqual(len(findings), 1)
+        self.assertEqual(findings[0]["nodes"], ["node_modules/braces"])
+
+    def test_failed_pip_command_with_no_findings_is_execution_error(self) -> None:
+        proc = mock.Mock(
+            returncode=2, stdout='{"dependencies":[]}', stderr="network unavailable"
+        )
+        with (
+            mock.patch.object(self.mod.subprocess, "run", return_value=proc),
+            mock.patch.object(self.mod, "_run_npm_audit") as npm,
+            contextlib.redirect_stderr(io.StringIO()),
+        ):
+            self.assertEqual(self.mod.main(["--all"]), 1)
+        npm.assert_not_called()
+        self.assertIn(
+            "network unavailable",
+            json.loads(self.mod.FINDINGS_PATH.read_text())["error"],
+        )
+
+    def test_execution_errors_replace_stale_findings_with_unknown_counts(self) -> None:
+        for audit in ({}, [], {"error": {"code": "ENOAUDIT"}}, {"vulnerabilities": []}):
+            with self.subTest(audit=audit):
+                self.mod.FINDINGS_PATH.write_text('{"findings":[{"package":"stale"}]}')
+                code, _, error = self._run(audit)
+                self.assertEqual(code, 1)
+                self.assertIn("audit", error)
+                findings = json.loads(self.mod.FINDINGS_PATH.read_text())
+                summary = json.loads(self.mod.SUMMARY_PATH.read_text())
+                self.assertEqual(findings["findings"], [])
+                self.assertTrue(findings["error"])
+                self.assertIsNone(summary["critical"])
+                self.assertFalse(summary["ok"])
+
+    def test_lower_severities_without_ids_pass_and_are_recorded(self) -> None:
+        audit = {
+            "vulnerabilities": {
+                severity: {"severity": severity, "via": ["missing"]}
+                for severity in ("high", "moderate", "low")
+            }
+        }
+        code, out, error = self._run(audit)
+        self.assertEqual((code, error), (0, ""))
+        summary = json.loads(self.mod.SUMMARY_PATH.read_text())
+        self.assertEqual(len(summary["reported"]), 3)
+        for severity in ("high", "moderate", "low"):
+            self.assertEqual(summary[severity], 1)
+            self.assertIn(severity, out)
+
+    def test_clean_run_and_unused_exception_clear_old_findings(self) -> None:
+        self.mod.FINDINGS_PATH.write_text('{"findings":[{"package":"stale"}]}')
+        self.assertEqual(self._run({"vulnerabilities": {}})[0], 0)
+        self.assertEqual(json.loads(self.mod.FINDINGS_PATH.read_text())["findings"], [])
+        allow = {"GHSA-AAAA-BBBB-CCCC": {"package": "demo", "reason": "fixture"}}
+        self.assertEqual(self._run({"vulnerabilities": {}}, allow=allow)[0], 1)
+        self.assertIn("unused", json.loads(self.mod.FINDINGS_PATH.read_text())["error"])
+
+    def test_identified_critical_does_not_hide_unknown_branch(self) -> None:
+        audit = {
+            "vulnerabilities": {
+                "demo": {
+                    "severity": "critical",
+                    "via": [{"url": BRACES_URL, "name": "demo"}, "missing"],
+                }
+            }
+        }
+        code, _, error = self._run(
+            audit, allow={BRACES_GHSA.upper(): {"package": "demo", "reason": "fixture"}}
+        )
+        self.assertEqual(code, 1)
+        self.assertIn("without GHSA id", error)
+
+    def test_exception_package_must_match_root(self) -> None:
+        audit = {
+            "vulnerabilities": {
+                "demo": {"severity": "critical", "via": [{"url": BRACES_URL}]}
+            }
+        }
+        code, _, error = self._run(
+            audit,
+            allow={BRACES_GHSA.upper(): {"package": "other", "reason": "fixture"}},
+        )
+        self.assertEqual(code, 1)
+        self.assertIn("mismatch", error)
+
+    def test_combined_audit_stops_on_pip_failure_and_records_pysec(self) -> None:
+        payload = {
+            "dependencies": [
+                {"name": "demo", "version": "1.0", "vulns": [{"id": "PYSEC-2024-123"}]}
+            ]
+        }
+        proc = mock.Mock(returncode=1, stdout=json.dumps(payload), stderr="")
+        with (
+            mock.patch.object(self.mod.subprocess, "run", return_value=proc) as run,
+            mock.patch.object(self.mod, "_run_npm_audit") as npm,
+        ):
+            self.assertEqual(self.mod.main(["--all"]), 1)
+        npm.assert_not_called()
+        self.assertIn("--skip-editable", run.call_args.args[0])
+        self.assertEqual(
+            json.loads(self.mod.FINDINGS_PATH.read_text())["findings"][0]["id"],
+            "PYSEC-2024-123",
+        )
+        self.assertIsNone(json.loads(self.mod.SUMMARY_PATH.read_text())["critical"])
+
+    def test_combined_clean_pip_reaches_npm(self) -> None:
+        proc = mock.Mock(returncode=0, stdout='{"dependencies":[]}', stderr="")
+        with (
+            mock.patch.object(self.mod.subprocess, "run", return_value=proc),
+            mock.patch.object(
+                self.mod, "_run_npm_audit", return_value={"vulnerabilities": {}}
+            ) as npm,
+        ):
+            self.assertEqual(self.mod.main(["--all"]), 0)
+        npm.assert_called_once()
+
+    def test_pip_invalid_and_empty_record_fail_without_stale_data(self) -> None:
+        for raw in ("", "not-json", '{"error":"unavailable"}'):
+            with (
+                self.subTest(raw=raw),
+                mock.patch.object(self.mod.sys, "stdin", io.StringIO(raw)),
+            ):
+                self.assertEqual(self.mod.main(["--record-pip"]), 1)
+                self.assertEqual(
+                    json.loads(self.mod.FINDINGS_PATH.read_text())["findings"], []
+                )
+                self.assertTrue(json.loads(self.mod.FINDINGS_PATH.read_text())["error"])
 
 
 if __name__ == "__main__":

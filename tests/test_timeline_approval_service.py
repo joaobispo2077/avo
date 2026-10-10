@@ -5,12 +5,49 @@ from pathlib import Path
 
 import pytest
 
-from avo.timeline.approval_service import ApprovalService
+from avo.timeline.approval_service import (
+    ApprovalService,
+    _require_complete_automated_review,
+)
 from avo.timeline.cmap_service import CMapService
 from avo.timeline.contracts import content_hash, file_fingerprint
 from avo.timeline.review_runner import ReviewRunner
 from tests.test_timeline_cmap_service import snapshot, workspace
 from tests.test_timeline_review_integration import FakeQc, FakeTranscript, FakeWatch
+
+
+def _automated_review(status: str) -> dict:
+    contract = "d" * 64
+    return {
+        "evidence": [
+            {
+                "kind": "watch",
+                "policy": {"reviewContractHash": contract},
+                "visionCoverageManifest": {
+                    "reviewContractHash": contract,
+                    "aggregateStatus": status,
+                },
+                "coverage": {
+                    "requestedFrames": [0, 1, 2],
+                    "decodedFrames": [0, 1, 2],
+                    "observedFrames": [0, 1, 2],
+                    "failedFrames": [],
+                    "coverageHoles": [],
+                },
+            }
+        ]
+    }
+
+
+@pytest.mark.parametrize("status", ["blocked", "fail"])
+def test_human_gate_stays_closed_until_automation_can_open_it(status: str) -> None:
+    with pytest.raises(ValueError, match="closed"):
+        _require_complete_automated_review(_automated_review(status))
+
+
+@pytest.mark.parametrize("status", ["pass", "needs-human-judgment"])
+def test_complete_automation_can_open_the_human_gate(status: str) -> None:
+    _require_complete_automated_review(_automated_review(status))
 
 
 def approved_review(tmp_path: Path):
