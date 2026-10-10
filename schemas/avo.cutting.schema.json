@@ -1,0 +1,1171 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://avo.local/avo.cutting.schema.json",
+  "title": "AVO cutting evidence and proposals",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {
+      "const": "1.0.0"
+    },
+    "documentType": {
+      "enum": [
+        "policy",
+        "source-analysis",
+        "proposal",
+        "verification",
+        "decision",
+        "repair-reservation"
+      ]
+    },
+    "payload": {
+      "type": "object"
+    },
+    "documentHash": {
+      "$ref": "#/$defs/sha256"
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "documentType",
+    "payload",
+    "documentHash"
+  ],
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "documentType": {
+            "const": "policy"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "#/$defs/policy"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "documentType": {
+            "const": "source-analysis"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "#/$defs/source-analysis"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "documentType": {
+            "const": "proposal"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "#/$defs/proposal"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "documentType": {
+            "const": "verification"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "#/$defs/verification"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "documentType": {
+            "const": "decision"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "#/$defs/decision"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "documentType": {
+            "const": "repair-reservation"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "payload": {
+            "$ref": "#/$defs/repair-reservation"
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "artifactRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "locator": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "sizeBytes": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "locator",
+        "sha256"
+      ]
+    },
+    "timebase": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "num": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "den": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "required": [
+        "num",
+        "den"
+      ]
+    },
+    "sourceRange": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "sourceId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "startTicks": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "endTicksExclusive": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "timebase": {
+          "$ref": "#/$defs/timebase"
+        }
+      },
+      "required": [
+        "sourceId",
+        "startTicks",
+        "endTicksExclusive",
+        "timebase"
+      ]
+    },
+    "protectedEvent": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "eventId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "role": {
+          "type": "string",
+          "minLength": 1
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sourceRange": {
+          "$ref": "#/$defs/sourceRange"
+        },
+        "sourceFingerprint": {
+          "$ref": "#/$defs/artifactRef"
+        },
+        "minimumDurationMs": {
+          "type": "number",
+          "minimum": 0
+        },
+        "minimumDurationTicks": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "manualLock": {
+          "type": "boolean"
+        },
+        "approvalRef": {
+          "$ref": "#/$defs/artifactRef"
+        },
+        "clockBasis": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "eventId",
+        "role",
+        "reason",
+        "sourceRange"
+      ]
+    },
+    "config": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": false
+        },
+        "family": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "intensity": {
+          "enum": [
+            "conservative",
+            "balanced",
+            "dynamic"
+          ]
+        },
+        "guards": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "beforeMs": {
+              "type": "number",
+              "minimum": 120
+            },
+            "afterMs": {
+              "type": "number",
+              "minimum": 180
+            }
+          },
+          "required": []
+        },
+        "language": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "purpose": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "notes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "protectedEvents": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "sections": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object"
+          }
+        },
+        "pauseBands": {
+          "type": "object"
+        },
+        "retention": {
+          "type": "object"
+        },
+        "runtimeRefs": {
+          "type": "object"
+        }
+      },
+      "required": []
+    },
+    "policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": false
+        },
+        "family": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "intensity": {
+          "enum": [
+            "conservative",
+            "balanced",
+            "dynamic"
+          ]
+        },
+        "guards": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "beforeMs": {
+              "type": "number",
+              "minimum": 120
+            },
+            "afterMs": {
+              "type": "number",
+              "minimum": 180
+            }
+          },
+          "required": []
+        },
+        "language": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "purpose": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "notes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "protectedEvents": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "sections": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object"
+          }
+        },
+        "pauseBands": {
+          "type": "object"
+        },
+        "retention": {
+          "type": "object"
+        },
+        "runtimeRefs": {
+          "type": "object"
+        },
+        "effective": {
+          "$ref": "#/$defs/config"
+        },
+        "sources": {
+          "type": "object"
+        },
+        "profile": {
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "policyHash": {
+          "$ref": "#/$defs/sha256"
+        },
+        "provenance": {
+          "type": "object"
+        },
+        "calibrationStatus": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": []
+    },
+    "source-analysis": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "sourceRef": {
+          "$ref": "#/$defs/artifactRef"
+        },
+        "routing": {
+          "type": "object"
+        },
+        "syncRef": {
+          "$ref": "#/$defs/artifactRef"
+        },
+        "preprocessing": {
+          "type": "object"
+        },
+        "language": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "status": {
+          "enum": [
+            "pass",
+            "blocked",
+            "unknown",
+            "fail"
+          ]
+        },
+        "words": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "acousticRanges": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "vad": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "alignment": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "status": {
+              "enum": [
+                "supported",
+                "unsupported",
+                "missing",
+                "conflicting",
+                "pass",
+                "blocked"
+              ]
+            },
+            "characters": {
+              "type": "array",
+              "items": {
+                "type": "object"
+              }
+            },
+            "runtimeRef": {
+              "$ref": "#/$defs/artifactRef"
+            },
+            "uncertainty": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          "required": [
+            "status",
+            "characters"
+          ]
+        },
+        "tools": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "measurements": {
+          "type": "object",
+          "additionalProperties": {
+            "type": [
+              "number",
+              "null"
+            ]
+          }
+        },
+        "coverage": {
+          "type": "object"
+        },
+        "uncertainty": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "pauseCandidates": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "sourceRange": {
+                "$ref": "#/$defs/sourceRange"
+              },
+              "evidence": {
+                "type": "object"
+              }
+            },
+            "required": [
+              "sourceRange",
+              "evidence"
+            ]
+          }
+        }
+      },
+      "required": [
+        "sourceRef",
+        "status"
+      ]
+    },
+    "occurrence": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "editorialApprovalRequired": {
+          "type": "boolean"
+        },
+        "occurrenceId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "anchor": {
+          "type": "object"
+        },
+        "anchorLineage": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "sourceRange": {
+          "$ref": "#/$defs/sourceRange"
+        },
+        "categories": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "conflicts": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "evidenceRefs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/artifactRef"
+          }
+        },
+        "adjacentWords": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "before": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "after": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": []
+        },
+        "alternatives": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "protections": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "disposition": {
+          "enum": [
+            "keep",
+            "shorten",
+            "remove",
+            "replace",
+            "needs-review"
+          ]
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        },
+        "reasons": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "uncertainty": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "mappedRange": {
+          "type": "object"
+        },
+        "selectedAlternativeId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "confidence": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 1
+        }
+      },
+      "required": [
+        "occurrenceId",
+        "categories",
+        "disposition"
+      ]
+    },
+    "proposal": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "proposalId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "frameRate": {
+          "$ref": "#/$defs/timebase"
+        },
+        "baseCMapHash": {
+          "$ref": "#/$defs/sha256"
+        },
+        "baseCMapRevisionId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "syncRef": {
+          "$ref": "#/$defs/artifactRef"
+        },
+        "policyRef": {
+          "$ref": "#/$defs/artifactRef"
+        },
+        "protectionRef": {
+          "$ref": "#/$defs/artifactRef"
+        },
+        "sourceRefs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/artifactRef"
+          }
+        },
+        "occurrences": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/occurrence"
+          }
+        },
+        "edits": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "requiredWindows": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "contentReduction": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "implementationBindings": {
+          "type": "object"
+        },
+        "promptBindings": {
+          "type": "object"
+        },
+        "scope": {
+          "type": "object"
+        },
+        "status": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "baseCMapHash",
+        "syncRef",
+        "policyRef",
+        "sourceRefs",
+        "occurrences",
+        "edits",
+        "requiredWindows"
+      ]
+    },
+    "verification": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "proposalRef": {
+          "$ref": "#/$defs/artifactRef"
+        },
+        "proofPlanRef": {
+          "$ref": "#/$defs/artifactRef"
+        },
+        "graphHash": {
+          "$ref": "#/$defs/sha256"
+        },
+        "candidateRef": {
+          "$ref": "#/$defs/artifactRef"
+        },
+        "dependencies": {
+          "type": "object"
+        },
+        "clockMaps": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "occurrenceCoverage": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "transcriptRef": {
+          "$ref": "#/$defs/artifactRef"
+        },
+        "checks": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "visualEvidence": {
+          "type": "object"
+        },
+        "measurements": {
+          "type": "object",
+          "additionalProperties": {
+            "type": [
+              "number",
+              "null"
+            ]
+          }
+        },
+        "status": {
+          "enum": [
+            "pass",
+            "fail",
+            "blocked",
+            "needs-human",
+            "unknown"
+          ]
+        },
+        "claims": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "proposalRef",
+        "candidateRef",
+        "status"
+      ]
+    },
+    "decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "actor": {
+          "type": "string",
+          "minLength": 1
+        },
+        "decidedAt": {
+          "type": "string",
+          "minLength": 1
+        },
+        "occurrenceId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "disposition": {
+          "enum": [
+            "keep",
+            "shorten",
+            "remove",
+            "replace",
+            "needs-review"
+          ]
+        },
+        "alternativeId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "proposalRef": {
+          "$ref": "#/$defs/artifactRef"
+        },
+        "previewRef": {
+          "$ref": "#/$defs/artifactRef"
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1
+        },
+        "evidenceRefs": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/artifactRef"
+          }
+        },
+        "editorialApproval": {
+          "type": "boolean"
+        },
+        "supersedesRef": {
+          "$ref": "#/$defs/artifactRef"
+        }
+      },
+      "required": [
+        "actor",
+        "decidedAt",
+        "occurrenceId",
+        "disposition",
+        "proposalRef",
+        "previewRef",
+        "reason"
+      ]
+    },
+    "repair-reservation": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "occurrenceId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "ordinal": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 2
+        },
+        "actor": {
+          "type": "string",
+          "minLength": 1
+        },
+        "proposalRef": {
+          "$ref": "#/$defs/artifactRef"
+        },
+        "selectionHash": {
+          "$ref": "#/$defs/sha256"
+        },
+        "reservedAt": {
+          "type": "string",
+          "minLength": 1
+        },
+        "status": {
+          "enum": [
+            "reserved",
+            "completed",
+            "failed",
+            "abandoned"
+          ]
+        },
+        "resultRef": {
+          "$ref": "#/$defs/artifactRef"
+        },
+        "successorRef": {
+          "$ref": "#/$defs/artifactRef"
+        },
+        "originalBinding": {
+          "$ref": "#/$defs/originalBinding"
+        },
+        "budgetOccurrenceId": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "occurrenceId",
+        "ordinal",
+        "actor",
+        "proposalRef",
+        "selectionHash",
+        "reservedAt",
+        "status"
+      ]
+    },
+    "editorialUnit": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "unitId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sectionId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "sourceRange": {
+          "$ref": "#/$defs/sourceRange"
+        },
+        "complete": {
+          "type": "boolean"
+        },
+        "central": {
+          "type": "boolean"
+        },
+        "uniqueQualification": {
+          "type": "boolean"
+        },
+        "meaningfulExample": {
+          "type": "boolean"
+        },
+        "protected": {
+          "type": "boolean"
+        },
+        "tangent": {
+          "type": "boolean"
+        },
+        "rationale": {
+          "type": "string",
+          "minLength": 1
+        },
+        "redundantTo": {
+          "type": "string",
+          "minLength": 1
+        },
+        "dependsOn": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "unitId",
+        "sourceRange",
+        "complete"
+      ]
+    },
+    "analyzeRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "cutting": {
+          "$ref": "#/$defs/config"
+        },
+        "scope": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "segmentIds": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
+              "uniqueItems": true
+            }
+          }
+        },
+        "frameRate": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "num": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "den": {
+              "type": "integer",
+              "minimum": 1
+            }
+          },
+          "required": [
+            "num",
+            "den"
+          ]
+        },
+        "targetDurationMs": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "editorialUnits": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/editorialUnit"
+          }
+        },
+        "segmentSectionIds": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      }
+    },
+    "decisionRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "actor": {
+          "type": "string",
+          "minLength": 1
+        },
+        "previewRef": {
+          "$ref": "#/$defs/artifactRef"
+        },
+        "decisions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "occurrenceId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "disposition": {
+                "enum": [
+                  "keep",
+                  "shorten",
+                  "replace",
+                  "remove",
+                  "needs-review"
+                ]
+              },
+              "reason": {
+                "type": "string",
+                "minLength": 1
+              },
+              "alternativeId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "evidenceRefs": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/artifactRef"
+                }
+              },
+              "editorialApproval": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "occurrenceId",
+              "disposition",
+              "reason"
+            ]
+          }
+        }
+      },
+      "required": [
+        "previewRef",
+        "decisions"
+      ]
+    },
+    "originalBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "sourceSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "sourceRange": {
+          "$ref": "#/$defs/sourceRange"
+        },
+        "unitAnchor": {
+          "oneOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "object",
+              "minProperties": 1
+            }
+          ]
+        }
+      },
+      "required": [
+        "sourceSha256",
+        "sourceRange",
+        "unitAnchor"
+      ]
+    }
+  }
+}

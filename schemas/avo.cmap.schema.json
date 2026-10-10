@@ -501,6 +501,9 @@
         "syncRef": {
           "$ref": "#/$defs/dependencyRef"
         },
+        "cuttingRef": {"$ref": "avo.cutting.schema.json#/$defs/artifactRef"},
+        "protectionRef": {"$ref": "avo.cutting.schema.json#/$defs/artifactRef"},
+        "protectedQuizWindows": {"type": "array", "items": {"type": "object"}},
         "generatedCut": {
           "$ref": "#/$defs/fingerprint"
         }

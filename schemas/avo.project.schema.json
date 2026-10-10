@@ -21,6 +21,7 @@
       "type": "string",
       "description": "Optional working title for this video project."
     },
+    "cutting": {"$ref": "avo.cutting.schema.json#/$defs/config"},
     "cleanup": {
       "type": "object",
       "additionalProperties": false,
