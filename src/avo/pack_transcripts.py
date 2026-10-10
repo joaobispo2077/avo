@@ -3,8 +3,9 @@
 Groups word-level entries into phrase-level lines, breaking on any silence
 >= 0.5s OR speaker change. Each phrase gets a [start-end] prefix. This is
 the PRIMARY artifact the editor sub-agent reads to pick cuts — it fits one
-hour of takes in a tenth the tokens of raw transcript JSON and gives
-word-boundary precision from text alone.
+hour of takes in a tenth the tokens of raw transcript JSON. Its timestamps
+are search hints; precise cuts require original audio, acoustic evidence,
+observed word edges and verification of the encoded result.
 
 Output: <edit>/takes_packed.md
 
@@ -43,7 +44,8 @@ def group_into_phrases(
     OR speaker change. Returns list of {start, end, text, speaker_id}.
 
     Provider-neutral entries may be words, spacing, or audio events. Local PT-BR
-    output uses words only, so direct timestamp gaps carry silence information.
+    output uses words only. Timestamp gaps suggest where to inspect the audio;
+    they do not establish silence or safe word boundaries.
     """
     phrases: list[dict] = []
     current_words: list[dict] = []

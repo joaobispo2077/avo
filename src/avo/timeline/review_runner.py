@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from copy import deepcopy
+from math import isfinite
 from pathlib import Path
 from typing import Any
 
@@ -303,8 +304,59 @@ def _normalized_watch_status(watch: dict[str, Any]) -> str:
 
 
 def _watch_extra(watch: dict[str, Any]) -> dict[str, Any]:
-    fields = ("outcomeKind", "policy", "reviewContext", "promptSha256", "attempts")
+    fields = (
+        "outcomeKind",
+        "policy",
+        "reviewContext",
+        "promptSha256",
+        "attempts",
+        "visionCoverageManifest",
+        "disposition",
+    )
     return {key: watch[key] for key in fields if key in watch}
+
+
+def _automated_review_status(evidence: list[dict[str, Any]]) -> str | None:
+    watch = next((item for item in evidence if item.get("kind") == "watch"), None)
+    if watch is None:
+        return None
+    manifest = watch.get("visionCoverageManifest") or {}
+    return str(manifest.get("aggregateStatus") or "blocked")
+
+
+def _resolved_review_state(
+    evidence: list[dict[str, Any]], findings: list[dict[str, Any]]
+) -> str:
+    automated = _automated_review_status(evidence)
+    if automated in {"fail", "blocked", "needs-human-judgment"}:
+        return automated
+    return classify_findings(findings)
+
+
+def _resolved_review_contract_hash(
+    watch: dict[str, Any], computed_contract_hash: str
+) -> str:
+    contract_hash = str(watch.get("reviewContractHash") or computed_contract_hash)
+    valid = len(contract_hash) == 64 and all(
+        character in "0123456789abcdef" for character in contract_hash
+    )
+    if not valid:
+        raise ToolError(
+            "WATCH_CONTRACT_INVALID",
+            "native review returned an invalid review contract hash",
+            False,
+            "rerun native structured review for the exact candidate",
+        )
+    return contract_hash
+
+
+def _bind_manifest_contract(extra: dict[str, Any], contract_hash: str) -> None:
+    manifest = extra.get("visionCoverageManifest")
+    if isinstance(manifest, dict):
+        extra["visionCoverageManifest"] = {
+            **manifest,
+            "reviewContractHash": contract_hash,
+        }
 
 
 def _normalized_words(transcript: dict[str, Any]) -> list[str]:
@@ -313,6 +365,65 @@ def _normalized_words(transcript: dict[str, Any]) -> list[str]:
         for item in transcript.get("words") or []
         if str(item.get("word") or item.get("text") or "").strip()
     ]
+
+
+def _valid_word_clock(first, last):
+    return (
+        all(
+            not isinstance(value, bool)
+            and isinstance(value, (int, float))
+            and isfinite(value)
+            for value in (first, last)
+        )
+        and 0 <= first < last
+    )
+
+
+def _local_candidate_words(
+    transcript: dict[str, Any], candidate_range: Any
+) -> list[str] | None:
+    """Return words in the exact mapped occurrence; invalid clocks are unknown."""
+    if not isinstance(candidate_range, dict):
+        return None
+    start, end = candidate_range.get("start"), candidate_range.get("end")
+    if not _valid_word_clock(start, end):
+        return None
+    local = []
+    for word in transcript.get("words") or []:
+        first, last = word.get("start"), word.get("end")
+        if not _valid_word_clock(first, last):
+            return None
+        if first < end and last > start:
+            local.append(word)
+    return _normalized_words({"words": local})
+
+
+def _contains_local_phrase(words: list[str], expected: str) -> bool:
+    punctuation = ".,!?;:\"'()[]"
+    tokens = [word.strip(punctuation) for word in words]
+    phrase = [word.strip(punctuation) for word in expected.split()]
+    return bool(phrase) and any(
+        tokens[index : index + len(phrase)] == phrase
+        for index in range(len(tokens) - len(phrase) + 1)
+    )
+
+
+def _boundary_word_match(
+    boundary, transcript, candidate_words, candidate_text, expected
+):
+    if "candidateRange" not in boundary:
+        return candidate_words, False, expected in candidate_text
+    words = _local_candidate_words(transcript, boundary["candidateRange"])
+    return words, words is None, _contains_local_phrase(words or [], expected)
+
+
+def _boundary_regression(kind, expected, phrase_present, local_unknown, check):
+    missing = not local_unknown and kind == "phrase" and expected and not phrase_present
+    return missing or check.get("complete") is False
+
+
+def _boundary_needs_listening(local_unknown, confidence, check):
+    return local_unknown or confidence < 0.5 or check.get("complete") is None
 
 
 def compare_protected_boundaries(
@@ -333,11 +444,10 @@ def compare_protected_boundaries(
         confidence = float(check.get("confidence") or 0)
         kind = str(boundary.get("kind") or "phrase")
         expected = str(boundary.get("text") or "").strip().casefold()
-        phrase_missing = (
-            kind == "phrase" and expected and expected not in candidate_text
+        boundary_words, local_unknown, phrase_present = _boundary_word_match(
+            boundary, candidate_transcript, candidate_words, candidate_text, expected
         )
-        acoustically_incomplete = check.get("complete") is False
-        if phrase_missing or acoustically_incomplete:
+        if _boundary_regression(kind, expected, phrase_present, local_unknown, check):
             findings.append(
                 {
                     "code": "protected-speech-regression",
@@ -345,7 +455,7 @@ def compare_protected_boundaries(
                     "boundaryId": boundary_id,
                     "expected": expected,
                     "sourceWords": source_words,
-                    "candidateWords": candidate_words,
+                    "candidateWords": boundary_words or [],
                     "confidence": confidence,
                     "range": {
                         "start": boundary.get("start"),
@@ -353,7 +463,7 @@ def compare_protected_boundaries(
                     },
                 }
             )
-        elif confidence < 0.5 or check.get("complete") is None:
+        elif _boundary_needs_listening(local_unknown, confidence, check):
             findings.append(
                 {
                     "code": "acoustic-boundary-needs-human",
@@ -637,7 +747,7 @@ class ReviewRunner:
                 (status, fusion["status"]),
                 key=lambda value: precedence.get(value, 3),
             )
-        contract_hash = review_contract_hash(
+        computed_contract_hash = review_contract_hash(
             candidateHash=identity["sha256"],
             dependencyHashes=identity["dependencies"],
             policyHash=str(
@@ -664,7 +774,9 @@ class ReviewRunner:
                 watch.get("estimatorHash") or content_hash({"estimator": "unavailable"})
             ),
         )
+        contract_hash = _resolved_review_contract_hash(watch, computed_contract_hash)
         extra = _watch_extra(watch)
+        _bind_manifest_contract(extra, contract_hash)
         policy = dict(extra.get("policy") or {})
         policy["reviewContractHash"] = contract_hash
         extra["policy"] = policy
@@ -772,6 +884,10 @@ class ReviewRunner:
                 context=policy_context,
                 option_id=model_pin.get("id") or None,
                 model_pin=model_pin or None,
+                contract_context={
+                    "candidateIdentityHash": identity["identityHash"],
+                    "dependencies": identity["dependencies"],
+                },
                 root=getattr(self.watch_policy, "working_directory", None),
                 artifact_dir=self.review_root
                 / checkpoint
@@ -922,7 +1038,7 @@ class ReviewRunner:
         attempts: list[dict[str, Any]],
         findings: list[dict[str, Any]],
     ) -> dict[str, Any] | None:
-        if state == "needs-human-judgment":
+        if state in {"needs-human-judgment", "fail"}:
             return self._write(
                 checkpoint=checkpoint,
                 identity=identity,
@@ -1086,7 +1202,7 @@ class ReviewRunner:
                     blocker=str(error),
                 )
             last_identity, last_evidence, last_findings = identity, evidence, findings
-            state = classify_findings(findings)
+            state = _resolved_review_state(evidence, findings)
             terminal = self._terminal_result(
                 checkpoint=checkpoint,
                 state=state,

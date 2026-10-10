@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from avo.adapters.media.audio_tracks import compile_audio_layers
+import pytest
+
+from avo.adapters.media.audio_tracks import AudioGraphError, compile_audio_layers
 
 
 def layer(layer_id, role, order, start, end, **extra):
@@ -61,3 +63,27 @@ def test_muted_layer_is_traced_but_not_compiled():
     )
     assert compiled["inputs"] == []
     assert compiled["trace"][0]["enabled"] is False
+
+
+def test_ducking_padding_is_bounded_at_absolute_sample_end():
+    compiled = compile_audio_layers(
+        [
+            layer("dialogue", "dialogue", 0, 0, 10000),
+            layer("bed", "music", 1, 3000, 6500, ducking={"amountDb": 8}),
+        ]
+    )
+    graph = ";".join(compiled["filters"])
+    assert "[abed]apad[abedpad]" in graph
+    assert "[dlgsc0]apad[dlgsc0pad]" in graph
+    assert "atrim=end_sample=312000[abedd]" in graph
+    assert "[dlgmix][abedd]amix" in graph
+
+
+def test_ducking_without_a_bounded_region_fails_closed():
+    with pytest.raises(AudioGraphError, match="positive region end"):
+        compile_audio_layers(
+            [
+                layer("dialogue", "dialogue", 0, 0, 10000),
+                layer("bed", "music", 1, 0, 0, ducking={"amountDb": 8}),
+            ]
+        )

@@ -6,7 +6,7 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
-from .contracts import file_fingerprint
+from .contracts import file_fingerprint, validate_document
 from .workspace import TimelineWorkspace
 
 
@@ -99,6 +99,19 @@ def compile_video_layers(layers: list[dict[str, Any]]) -> dict[str, Any]:
     }
 
 
+def _validate_breath_layer(layer: dict) -> None:
+    # breath_control imports numpy. Keep that off the pipeline import path.
+    from avo.breath_control import resolve_control, select_events
+
+    control = layer.get("breathControl")
+    if not resolve_control(control, role=str(layer.get("role") or "")):
+        return
+    validate_document(control, "avo.breath-control.schema.json")
+    if control.get("sourceSha256") != (layer.get("source") or {}).get("sha256"):
+        raise TrackError("breath source fingerprint is missing or stale")
+    select_events(control, 48000)
+
+
 def resolve_tracks(
     snapshot: dict[str, Any],
     cue_ids: set[str],
@@ -121,6 +134,7 @@ def resolve_tracks(
         seen: set[str] = set()
         for layer in layers:
             layer_id = str(layer.get("layerId") or "")
+            _validate_breath_layer(layer)
             if not layer_id or layer_id in seen:
                 raise TrackError("track layer IDs must be unique and stable")
             seen.add(layer_id)

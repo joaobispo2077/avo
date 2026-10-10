@@ -755,6 +755,11 @@ def approval_is_current(
 
 
 def classify_findings(findings: list[dict[str, Any]]) -> str:
+    if any(
+        finding.get("requiresHuman") is True or finding.get("status") == "needs-human"
+        for finding in findings
+    ):
+        return "needs-human-judgment"
     classes = {str(finding.get("classification")) for finding in findings}
     if classes & {
         "meaning",

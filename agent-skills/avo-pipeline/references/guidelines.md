@@ -20,6 +20,7 @@ Load **one** flag per invocation. Guidelines commands diagnose; they do not run 
 | ---- | ---- |
 | `--youtube` | [`guidelines-youtube.md`](guidelines-youtube.md) |
 | `--eq` | [`guidelines-eq.md`](guidelines-eq.md) |
+| `--breathing` | [`guidelines-breathing.md`](guidelines-breathing.md) |
 | `--tiktok` | [`guidelines-tiktok.md`](guidelines-tiktok.md) |
 | `--shorts` | [`guidelines-shorts.md`](guidelines-shorts.md) |
 

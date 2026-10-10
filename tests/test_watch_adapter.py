@@ -367,18 +367,10 @@ class WatchAdapterTests(unittest.TestCase):
             }
             with (
                 mock.patch(_RESOLVE, return_value="bonsai-27b-gguf"),
-                mock.patch.object(
-                    adapter,
-                    "run",
-                    side_effect=[
-                        JobResult(exit_code=0, stdout="video_id `vid-1`"),
-                        JobResult(
-                            exit_code=0,
-                            stdout='{"status":"pass","confidence":1,"findings":[]}',
-                        ),
-                        JobResult(exit_code=0, stdout="1.0"),
-                    ],
-                ) as run,
+                mock.patch(
+                    "avo.adapters.understand.watch_skill._native_review",
+                    return_value={"status": "pass", "tool": "avo-native-vision"},
+                ) as native,
             ):
                 result = adapter.review(
                     candidate,
@@ -387,16 +379,9 @@ class WatchAdapterTests(unittest.TestCase):
                     option_id="qwen3.5-4b",
                     model_pin=endpoint_pin,
                 )
-            assert run.call_count == 3
-            acquisition = run.call_args_list[0].args[0]
-            assert acquisition.env["WATCHSKILL_VISION_CHEAP_PROVIDER"] == "custom"
-            assert acquisition.env["WATCHSKILL_VISION_STRONG_PROVIDER"] == "custom"
-            assert acquisition.env["WATCHSKILL_CUSTOM_BASE_URL"] == (
-                "http://127.0.0.1:1234/v1"
-            )
-            assert acquisition.env["WATCHSKILL_VISION_CHEAP_MODEL"] == "qwen3.5-4b"
-            assert acquisition.env["WATCHSKILL_CUSTOM_API_KEY"] == "lm-studio"
+            native.assert_called_once()
             assert result["status"] == "pass"
+            assert result["tool"] == "avo-native-vision"
 
     def test_bonsai_preflight_missing_mmproj_fails_closed(self):
         with tempfile.TemporaryDirectory() as tmp:

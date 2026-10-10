@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -21,6 +23,59 @@ def _load(name: str, rel: str):
 
 
 class QualityPrReportTests(unittest.TestCase):
+    def test_exception_diagnostic_does_not_hide_blocking_findings(self) -> None:
+        mod = _load("write_quality_pr_report", "scripts/ci/write_quality_pr_report.py")
+        root = self._empty_allowlist_root()
+        path = self._deps_findings(
+            root, [{"package": "demo", "id": "GHSA-aaaa-bbbb-cccc", "via": "wrapper"}]
+        )
+        payload = json.loads(path.read_text())
+        payload["error"] = "unused exception"
+        path.write_text(json.dumps(payload))
+        report = mod.deps_cell("failure", root=root)
+        self.assertIn("unused exception", report)
+        self.assertIn("demo GHSA-aaaa-bbbb-cccc via wrapper", report)
+
+    def test_dependency_execution_error_is_not_zero_or_waiver_count(self) -> None:
+        mod = _load("write_quality_pr_report", "scripts/ci/write_quality_pr_report.py")
+        root = self._empty_allowlist_root()
+        path = self._deps_findings(root, [])
+        path.write_text(
+            json.dumps({"findings": [], "error": "pip-audit network unavailable"})
+        )
+        path.with_name("npm-audit-summary.json").write_text(
+            json.dumps(
+                {
+                    "ok": False,
+                    "critical": None,
+                    "high": None,
+                    "error": "npm audit unavailable",
+                }
+            )
+        )
+        self.assertIn(
+            "pip-audit network unavailable", mod.deps_cell("failure", root=root)
+        )
+        self.assertIn("unknown", mod.npm_audit_reported(root))
+        self.assertNotIn("0 critical", mod.npm_audit_reported(root))
+        skipped = mod.build_markdown(
+            {"deps": "skipped"}, coverage_json=Path("missing"), floor=68, root=root
+        )
+        self.assertNotIn("network unavailable", skipped)
+        self.assertNotIn("npm audit unavailable", skipped)
+
+    def test_successful_dependency_report_includes_all_severities(self) -> None:
+        mod = _load("write_quality_pr_report", "scripts/ci/write_quality_pr_report.py")
+        root = self._empty_allowlist_root()
+        path = self._deps_findings(root, [])
+        path.with_name("npm-audit-summary.json").write_text(
+            json.dumps({"ok": True, "critical": 0, "high": 2, "moderate": 3, "low": 1})
+        )
+        result = mod.deps_cell("success", root=root)
+        self.assertIn("2 high", result)
+        self.assertIn("3 moderate", result)
+        self.assertIn("1 low", result)
+
     def test_quality_table_marks_skipped_after_fail(self) -> None:
         mod = _load("write_quality_pr_report", "scripts/ci/write_quality_pr_report.py")
         text = mod.build_markdown(
@@ -42,6 +97,169 @@ class QualityPrReportTests(unittest.TestCase):
         self.assertIn("68%", text)
         self.assertIn("**Overall: FAIL**", text)
         self.assertNotIn("**Overall: PASS**", text)
+
+    def _empty_allowlist_root(self) -> Path:
+        handle = tempfile.TemporaryDirectory()
+        self.addCleanup(handle.cleanup)
+        root = Path(handle.name)
+        allow = root / "scripts" / "ci"
+        allow.mkdir(parents=True)
+        (allow / "deps-audit-allowlist.json").write_text(
+            json.dumps({"npm": {"advisory_ids": []}, "pip": {"ignore_vulns": []}}),
+            encoding="utf-8",
+        )
+        return root
+
+    def _deps_findings(self, root: Path, findings: list[dict]) -> Path:
+        path = root / "reports" / "quality" / "deps-findings.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            json.dumps({"findings": findings}, indent=2) + "\n",
+            encoding="utf-8",
+        )
+        return path
+
+    def test_deps_fail_without_ghsa_names_package_and_via(self) -> None:
+        mod = _load("write_quality_pr_report", "scripts/ci/write_quality_pr_report.py")
+        root = self._empty_allowlist_root()
+        self._deps_findings(
+            root,
+            [{"package": "@jscpd/finder", "id": None, "via": "fast-glob"}],
+        )
+        text = mod.build_markdown(
+            {
+                "lint": "success",
+                "format": "success",
+                "coverage": "success",
+                "complexity": "success",
+                "deps": "failure",
+                "deadcode": "skipped",
+                "duplication": "skipped",
+                "architecture": "skipped",
+                "tree": "skipped",
+            },
+            coverage_json=Path("missing.json"),
+            floor=68.0,
+            root=root,
+        )
+        self.assertIn(
+            "| Dependency audit | **FAIL** | "
+            "@jscpd/finder via fast-glob has no GHSA id |",
+            text,
+        )
+        self.assertNotIn("npm GHSA exceptions", text)
+        self.assertEqual(
+            mod.gate_metric(
+                "deps",
+                coverage_json=Path("missing.json"),
+                floor=68.0,
+                root=root,
+            ),
+            "0 npm GHSA exceptions",
+        )
+        self.assertIn("| Dead code | **SKIPPED** |", text)
+        self.assertIn("| Duplication | **SKIPPED** |", text)
+        self.assertIn("| Architecture | **SKIPPED** |", text)
+        self.assertIn("| Dependency tree | **SKIPPED** |", text)
+        self.assertIn("**Overall: FAIL**", text)
+
+    def test_deps_pass_with_empty_allowlist_reports_waiver_count(self) -> None:
+        mod = _load("write_quality_pr_report", "scripts/ci/write_quality_pr_report.py")
+        root = self._empty_allowlist_root()
+        self._deps_findings(
+            root,
+            [{"package": "@jscpd/finder", "id": None, "via": "fast-glob"}],
+        )
+        text = mod.build_markdown(
+            {"deps": "success"},
+            coverage_json=Path("missing.json"),
+            floor=68.0,
+            root=root,
+        )
+        self.assertIn(
+            "| Dependency audit | **PASS** | 0 npm GHSA exceptions |",
+            text,
+        )
+        self.assertNotIn("@jscpd/finder", text)
+        self.assertNotIn("fast-glob", text)
+        self.assertNotIn("no GHSA id", text)
+
+    def test_deps_fail_lists_every_unwaived_finding(self) -> None:
+        mod = _load("write_quality_pr_report", "scripts/ci/write_quality_pr_report.py")
+        root = self._empty_allowlist_root()
+        self._deps_findings(
+            root,
+            [
+                {"package": "@jscpd/finder", "id": None, "via": "fast-glob"},
+                {"package": "minimatch", "id": None, "via": "brace-expansion"},
+                {"package": "yaml", "id": None, "via": "lodash"},
+            ],
+        )
+        text = mod.build_markdown(
+            {"deps": "failure"},
+            coverage_json=Path("missing.json"),
+            floor=68.0,
+            root=root,
+        )
+        cell = (
+            "@jscpd/finder via fast-glob has no GHSA id; "
+            "minimatch via brace-expansion has no GHSA id; "
+            "yaml via lodash has no GHSA id"
+        )
+        self.assertIn(f"| Dependency audit | **FAIL** | {cell} |", text)
+        self.assertNotIn("npm GHSA exceptions", text)
+        self.assertLess(text.index("@jscpd/finder"), text.index("minimatch"))
+        self.assertLess(text.index("minimatch"), text.index("yaml via lodash"))
+        self.assertEqual(
+            mod.gate_metric(
+                "deps",
+                coverage_json=Path("missing.json"),
+                floor=68.0,
+                root=root,
+            ),
+            "0 npm GHSA exceptions",
+        )
+
+    def test_deps_fail_with_advisory_id_names_package_and_id(self) -> None:
+        mod = _load("write_quality_pr_report", "scripts/ci/write_quality_pr_report.py")
+        root = self._empty_allowlist_root()
+        cases = (
+            ("ip-address", "GHSA-mwp4-54f8-5fhr"),
+            ("requests", "PYSEC-2024-123"),
+        )
+        for package, advisory in cases:
+            self._deps_findings(
+                root,
+                [{"package": package, "id": advisory, "via": ""}],
+            )
+            text = mod.build_markdown(
+                {"deps": "failure"},
+                coverage_json=Path("missing.json"),
+                floor=68.0,
+                root=root,
+            )
+            self.assertIn(
+                f"| Dependency audit | **FAIL** | {package} {advisory} |",
+                text,
+            )
+            self.assertNotIn("npm GHSA exceptions", text)
+            self.assertNotIn("@jscpd/finder", text)
+
+    def test_deps_fail_without_recorded_finding_does_not_invent_one(self) -> None:
+        mod = _load("write_quality_pr_report", "scripts/ci/write_quality_pr_report.py")
+        root = self._empty_allowlist_root()
+        text = mod.build_markdown(
+            {"deps": "failure"},
+            coverage_json=Path("missing.json"),
+            floor=68.0,
+            root=root,
+        )
+        self.assertIn(
+            "| Dependency audit | **FAIL** | dependency audit failed; no finding evidence available |",
+            text,
+        )
+        self.assertNotIn("@jscpd/finder", text)
+        self.assertNotIn("fast-glob", text)
 
     def test_quality_coverage_detail_from_json(self) -> None:
         mod = _load("write_quality_pr_report", "scripts/ci/write_quality_pr_report.py")
@@ -124,6 +342,168 @@ class QualityPrReportTests(unittest.TestCase):
         )
         self.assertNotIn("score", doc)
 
+    def test_restored_cache_is_not_passing_when_clean_tests_failed(self) -> None:
+        """PR 82: cache restored 207/112 after clean tests never started mutmut."""
+        mod = _load(
+            "write_mutation_pr_report", "scripts/ci/write_mutation_pr_report.py"
+        )
+        current = "b" * 40
+        cached_cases = [
+            {"killed": 207, "survived": 112, "timeout": 0, "total": 319},
+            {
+                "killed": 207,
+                "survived": 112,
+                "timeout": 0,
+                "total": 319,
+                "sha": "a" * 40,
+                "run_id": "111",
+            },
+            {
+                "killed": 207,
+                "survived": 112,
+                "timeout": 0,
+                "total": 319,
+                "sha": current,
+                "run_id": "111",
+            },
+        ]
+        for cached in cached_cases:
+            with self.subTest(cached=cached):
+                text, metrics = mod.compose_report(
+                    cached,
+                    profile="light",
+                    floor=40.0,
+                    timeout_minutes=20,
+                    sha=current,
+                    run_id="222",
+                )
+                self.assertIsNone(metrics)
+                self.assertIn("Did not score", text)
+                self.assertIn("did not score", text)
+                self.assertNotIn("Passing", text)
+                self.assertNotIn("64.89", text)
+                self.assertNotIn("%", text)
+                self.assertNotIn("| Killed | 207 |", text)
+                self.assertNotIn("| Survived | 112 |", text)
+                self.assertNotIn("was not found", text)
+
+    def test_main_does_not_publish_cached_kill_rate(self) -> None:
+        mod = _load(
+            "write_mutation_pr_report_main", "scripts/ci/write_mutation_pr_report.py"
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            stats_path = root / "mutmut-cicd-stats.json"
+            stats_path.write_text(
+                json.dumps(
+                    {"killed": 207, "survived": 112, "timeout": 0, "total": 319}
+                ),
+                encoding="utf-8",
+            )
+            out = root / "reports" / "mutation-report.md"
+            metrics_path = root / "reports" / "mutation-metrics.json"
+            metrics_path.parent.mkdir(parents=True)
+            metrics_path.write_text("{}\n", encoding="utf-8")
+            env = {
+                "GITHUB_SHA": "b" * 40,
+                "GITHUB_RUN_ID": "222",
+                "AVO_MUTATION_PROFILE": "light",
+            }
+            with patch.dict(os.environ, env, clear=False):
+                rc = mod.main(
+                    [
+                        "--out",
+                        str(out),
+                        "--stats",
+                        str(stats_path),
+                        "--profile",
+                        "light",
+                    ]
+                )
+            text = out.read_text(encoding="utf-8")
+        self.assertEqual(rc, 0)
+        self.assertIn("Did not score", text)
+        self.assertNotIn("Passing", text)
+        self.assertNotIn("64.89", text)
+        self.assertNotIn("| Killed | 207 |", text)
+        self.assertFalse(metrics_path.exists())
+
+    def test_stamped_current_run_keeps_kill_rate(self) -> None:
+        mod = _load(
+            "write_mutation_pr_report_stamp", "scripts/ci/write_mutation_pr_report.py"
+        )
+        sha = "c" * 40
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            stats_path = root / "mutmut-cicd-stats.json"
+            stats_path.write_text(
+                json.dumps({"killed": 8, "survived": 2, "timeout": 1, "total": 11}),
+                encoding="utf-8",
+            )
+            out = root / "reports" / "mutation-report.md"
+            env = {
+                "GITHUB_SHA": sha,
+                "GITHUB_RUN_ID": "333",
+                "AVO_MUTATION_PROFILE": "light",
+            }
+            with patch.dict(os.environ, env, clear=False):
+                self.assertEqual(mod.main(["--stamp", str(stats_path)]), 0)
+                rc = mod.main(
+                    [
+                        "--out",
+                        str(out),
+                        "--stats",
+                        str(stats_path),
+                        "--profile",
+                        "light",
+                    ]
+                )
+            text = out.read_text(encoding="utf-8")
+            metrics = json.loads(
+                (root / "reports" / "mutation-metrics.json").read_text(encoding="utf-8")
+            )
+            stamped = json.loads(stats_path.read_text(encoding="utf-8"))
+        self.assertEqual(rc, 0)
+        self.assertEqual(stamped["sha"], sha)
+        self.assertEqual(stamped["run_id"], "333")
+        self.assertEqual(stamped["killed"], 8)
+        self.assertIn("80.00%", text)
+        self.assertIn("Passing (>= 40)", text)
+        self.assertIn("| Killed | 8 |", text)
+        self.assertIn("| Survived | 2 |", text)
+        self.assertEqual(
+            metrics,
+            {"floor": 40.0, "killed": 8, "sha": sha, "survived": 2},
+        )
+
+    def test_stamped_run_below_floor_stays_failing(self) -> None:
+        mod = _load(
+            "write_mutation_pr_report_floor", "scripts/ci/write_mutation_pr_report.py"
+        )
+        sha = "d" * 40
+        stats = {
+            "killed": 1,
+            "survived": 9,
+            "timeout": 0,
+            "total": 10,
+            "sha": sha,
+            "run_id": "444",
+        }
+        text, metrics = mod.compose_report(
+            stats,
+            profile="light",
+            floor=40.0,
+            timeout_minutes=20,
+            sha=sha,
+            run_id="444",
+        )
+        self.assertIn("10.00%", text)
+        self.assertIn("Failing (< 40)", text)
+        self.assertNotIn("Did not score", text)
+        self.assertNotIn("Passing", text)
+        self.assertEqual(metrics["killed"], 1)
+        self.assertEqual(metrics["survived"], 9)
+
     def test_size_signal_summarizes_pack_without_file_dump(self) -> None:
         mod = _load(
             "write_size_signal_report", "scripts/ci/write_size_signal_report.py"
@@ -145,6 +525,62 @@ class QualityPrReportTests(unittest.TestCase):
         self.assertIn("| Files in pack | 42 |", text)
         self.assertNotIn("Tarball Contents", text)
         self.assertNotIn("<details>", text)
+
+    def test_deps_metric_reads_npm_audit_summary(self) -> None:
+        mod = _load("write_quality_pr_report", "scripts/ci/write_quality_pr_report.py")
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            summary = root / "reports" / "quality" / "npm-audit-summary.json"
+            summary.parent.mkdir(parents=True)
+            summary.write_text(
+                json.dumps({"ok": True, "critical": 0, "high": 8}),
+                encoding="utf-8",
+            )
+            metric = mod.gate_metric(
+                "deps",
+                coverage_json=Path("missing.json"),
+                floor=68.0,
+                root=root,
+            )
+            self.assertEqual(metric, "PASS, 0 critical, 8 high reported")
+
+            empty = root / "empty"
+            empty.mkdir()
+            fallback = mod.gate_metric(
+                "deps",
+                coverage_json=Path("missing.json"),
+                floor=68.0,
+                root=empty,
+            )
+        self.assertEqual(fallback, "0 npm GHSA exceptions")
+
+    def test_duplication_metric_shows_measured_percent_beside_ceiling(self) -> None:
+        mod = _load("write_quality_pr_report", "scripts/ci/write_quality_pr_report.py")
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / ".jscpd.json").write_text(
+                json.dumps({"threshold": 2}), encoding="utf-8"
+            )
+            missing = mod.gate_metric(
+                "duplication",
+                coverage_json=Path("missing.json"),
+                floor=68.0,
+                root=root,
+            )
+            self.assertEqual(missing, "ceiling 2%")
+            report = root / "reports" / "quality" / "jscpd" / "jscpd-report.json"
+            report.parent.mkdir(parents=True)
+            report.write_text(
+                json.dumps({"statistics": {"total": {"percentage": 0.97672}}}),
+                encoding="utf-8",
+            )
+            measured = mod.gate_metric(
+                "duplication",
+                coverage_json=Path("missing.json"),
+                floor=68.0,
+                root=root,
+            )
+        self.assertEqual(measured, "0.98% (ceiling 2%)")
 
 
 if __name__ == "__main__":

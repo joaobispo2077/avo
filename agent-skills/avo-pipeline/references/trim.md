@@ -17,15 +17,34 @@ Cut workflow detail: [`cuts.md`](cuts.md).
 
 ## Workflow
 
-1. `transcribe_batch.py` → `pack_transcripts.py`
-2. Strategy conversation → confirmed plan (log cuts in **source time**)
-3. `edl.json` with `blocked_source_ranges` + `anchor_in_source` on overlays
-4. `python -m avo.edl_timeline verify edit/edl.json` → `write-docs`
-5. `render.py --preview`
-6. Transcript read + `/avo.watch` at cut boundaries (see [`cuts.md`](cuts.md))
-7. Human approval gate — only after agent pre-review passes
-8. Final cut export (no motion slots)
+1. Diagnose the format, viewer promise, source limitations and protected holds.
+2. Inventory fingerprinted originals and approve current Sync or explicit N/A.
+3. Transcribe for search; packed timestamps do not prove safe cut edges.
+4. For opted-in cutting, call the shared `trim analyze` operation with effective
+   family/intensity and optional canonical `scope.segmentIds`.
+5. Review immutable proposal classifications, source evidence and every-join audit.
+6. Use `trim preview` for contextual native windows. Unobserved words, unavailable
+   alignment, conflicts and failed encoded checks remain blocked or uncertain.
+7. Use `trim decide` with exact proposal/verification hashes; then `trim apply`
+   authors CMap. EDL is a generated projection, never the selection authority.
+8. Rebuild and verify the complete proof from current canonical originals. Obtain
+   separate exact-candidate human approval before later export stages.
+
+All five operations (`analyze`, `preview`, `decide`, `apply`, `status`) share the
+Python service and command handlers used by the CLI. Evidence lives under the
+footage project, not the repository. Explicitly provision optional local alignment
+resources; missing models must not trigger downloads or a false verification pass.
+Six format families and three intensities are seed presets, pending independent
+PT-BR/English calibration. No profile weakens word guards, quizzes or meaning.
 
 ## Optional window
 
-When `from`/`to` set, limit EDL and transcript analysis to that range only; do not imply content outside the window was reviewed.
+Breathing remains off unless requested. For approved breath duration changes,
+load [breathing guidelines](guidelines-breathing.md). Emit raw-source CMap cut
+proposals, preserve cadence and word guards, and remap dependent cues. Never
+delete time solely from the dialogue track. Attenuation without a duration
+change belongs to `/avo.sound`.
+
+Map `from`/`to` notes to the canonical source units before using
+`scope.segmentIds`. Limit heavy analysis to that scope and report coverage; the
+structural every-join audit does not imply acoustic inspection of the whole video.

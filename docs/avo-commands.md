@@ -42,6 +42,7 @@ Spoken alias: **`/avo --help`** → `/avo.help`
 | ------- | ------- |
 | `/avo.guidelines --youtube` | YouTube format diagnosis + playbooks ([source](../commands/avo/guidelines.md)) |
 | `/avo.guidelines --eq` | Audio EQ, restoration, loudness |
+| `/avo.guidelines --breathing` | Opt-in dialogue breathing policies |
 | `/avo.guidelines --tiktok` | TikTok vertical short-form |
 | `/avo.guidelines --shorts` | YouTube Shorts |
 | `/avo.format` | Format diagnosis before edit ([source](../commands/avo/format.md)) |

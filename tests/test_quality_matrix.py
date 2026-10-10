@@ -248,7 +248,8 @@ class QualityMatrixTests(unittest.TestCase):
             0
         ]
         self.assertIn("Install ffmpeg", quality_block)
-        self.assertIn("apt-get install -y ffmpeg", quality_block)
+        self.assertIn("ensure-ffmpeg.sh", quality_block)
+        self.assertIn("timeout-minutes: 3", quality_block)
 
         pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
         self.assertIn("[tool.coverage.report]", pyproject)
@@ -322,7 +323,7 @@ class QualityMatrixTests(unittest.TestCase):
         )
 
     def test_ci_software_quality_enforces_deps_audit_fail_immediately(self) -> None:
-        """task-011: pip-audit + npm audit high+ wired in npm, scripts, ci.yml."""
+        """task-011: pip-audit + npm audit critical wired in npm, scripts, ci.yml."""
         ci = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
         self.assertIn("quality-deps.sh", ci)
         self.assertIn("Software quality — deps", ci)
@@ -331,7 +332,7 @@ class QualityMatrixTests(unittest.TestCase):
 
         pkg = json.loads((ROOT / "package.json").read_text(encoding="utf-8"))
         deps = pkg["scripts"]["quality:deps"]
-        self.assertIn("pip-audit", deps)
+        self.assertIn("check_npm_audit.py --all", deps)
         self.assertIn("check_npm_audit.py", deps)
         self.assertIn("quality:deps", pkg["scripts"]["quality"])
         self.assertIn("overrides", pkg)
@@ -348,9 +349,9 @@ class QualityMatrixTests(unittest.TestCase):
 
         runner = (ROOT / "scripts/ci/quality-deps.sh").read_text(encoding="utf-8")
         self.assertIn("set -euo pipefail", runner)
-        self.assertIn("uv run --frozen --extra dev pip-audit --skip-editable", runner)
+        self.assertIn("check_npm_audit.py --all", runner)
         self.assertIn("check_npm_audit.py", runner)
-        self.assertIn("uv run --frozen --extra dev pip-audit --skip-editable", deps)
+        self.assertIn("check_npm_audit.py --all", deps)
 
         checker = (ROOT / "scripts/ci/check_npm_audit.py").read_text(encoding="utf-8")
         self.assertIn("deps-audit-allowlist.json", checker)

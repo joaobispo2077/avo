@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://avo.local/avo.breath-control.schema.json",
+  "title": "Opt-in dialogue breath control",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["enabled"],
+  "properties": {
+    "enabled": {"type": "boolean"},
+    "action": {"enum": ["preserve", "attenuate", "fixed", "room-tone", "shorten", "cut", "hybrid"]},
+    "selection": {"enum": ["all", "long", "heavy", "long-or-heavy", "long-and-heavy", "manual"]},
+    "sampleRate": {"type": "integer", "minimum": 1},
+    "sourceSha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "transcriptSha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "analysisSha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "projectionSha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "targetBelowSpeechDb": {"type": "number", "minimum": 0, "maximum": 60},
+    "maxReductionDb": {"type": "number", "minimum": 0, "maximum": 60},
+    "fixedReductionDb": {"type": "number", "minimum": 0, "maximum": 60},
+    "longMs": {"type": "number", "minimum": 0},
+    "heavyBelowSpeechDb": {"type": "number", "minimum": 0},
+    "guardMs": {"type": "number", "minimum": 0},
+    "fadeInMs": {"type": "number", "minimum": 0},
+    "fadeOutMs": {"type": "number", "minimum": 0},
+    "keepPauseMs": {"type": "number", "minimum": 0},
+    "protectedRanges": {"type": "array", "items": {"$ref": "#/$defs/range"}},
+    "events": {"type": "array", "items": {"$ref": "#/$defs/event"}}
+  },
+  "allOf": [{"if": {"properties": {"enabled": {"const": true}}}, "then": {"required": ["sourceSha256", "transcriptSha256", "sampleRate", "events", "protectedRanges"]}}],
+  "$defs": {
+    "range": {
+      "type": "object", "additionalProperties": false,
+      "required": ["startSample", "endSampleExclusive"],
+      "properties": {
+        "startSample": {"type": "integer", "minimum": 0},
+        "endSampleExclusive": {"type": "integer", "minimum": 1}
+      }
+    },
+    "event": {
+      "type": "object", "additionalProperties": false,
+      "required": ["eventId", "startSample", "endSampleExclusive", "status", "breathRmsDb", "speechRmsDb"],
+      "properties": {
+        "eventId": {"type": "string", "minLength": 1},
+        "startSample": {"type": "integer", "minimum": 0},
+        "endSampleExclusive": {"type": "integer", "minimum": 1},
+        "status": {"enum": ["safe", "confirmed", "ambiguous", "rejected"]},
+        "breathRmsDb": {"type": "number"},
+        "speechRmsDb": {"type": "number"},
+        "manual": {"type": "boolean"},
+        "protected": {"type": "boolean"},
+        "reason": {"type": "string"},
+        "rawAnchor": {
+          "type": "object", "additionalProperties": false,
+          "required": ["sourceId", "sampleRate", "startSample", "endSampleExclusive"],
+          "properties": {
+            "sourceId": {"type": "string", "minLength": 1},
+            "sampleRate": {"type": "integer", "minimum": 1},
+            "startSample": {"type": "integer", "minimum": 0},
+            "endSampleExclusive": {"type": "integer", "minimum": 1}
+          }
+        }
+      }
+    }
+  }
+}

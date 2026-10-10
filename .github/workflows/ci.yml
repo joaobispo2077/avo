@@ -79,7 +79,8 @@ jobs:
         run: npm ci
 
       - name: Install ffmpeg
-        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+        timeout-minutes: 3
+        run: bash scripts/ci/ensure-ffmpeg.sh
 
       - name: Run unit tests
         run: bash scripts/ci/run-unit-tests.sh
@@ -119,7 +120,8 @@ jobs:
         run: echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
 
       - name: Install ffmpeg
-        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+        timeout-minutes: 3
+        run: bash scripts/ci/ensure-ffmpeg.sh
 
       - name: Run integration tests
         run: bash scripts/ci/run-integration-tests.sh
@@ -168,7 +170,8 @@ jobs:
         run: npm ci
 
       - name: Install ffmpeg
-        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+        timeout-minutes: 3
+        run: bash scripts/ci/ensure-ffmpeg.sh
 
       # Spec v1.4 / task-013: Phase-1 fast gates — all fail-immediately (no soft stubs).
       # Umbrella scripts match local `npm run quality` / scripts/ci/quality.sh.

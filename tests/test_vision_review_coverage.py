@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from fractions import Fraction
+
+from avo.adapters.understand.watch_skill import _frame_windows
 from avo.timeline.vision_review import compile_review_coverage
 
 
@@ -90,3 +93,19 @@ def test_mandatory_boundary_that_cannot_fit_is_reported_as_hole() -> None:
             "reason": "boundary-endpoints-exceed-pass-budget",
         }
     ]
+
+
+def test_seconds_convert_to_half_open_frames_with_real_fractional_fps() -> None:
+    windows = _frame_windows(
+        [
+            {"start": 0.0, "end": 37.07, "reason": "whole-short"},
+            {"start": 18.10, "end": 18.90, "reason": "caption-seam"},
+        ],
+        fps=Fraction(30000, 1001),
+        duration_frames=1111,
+    )
+    assert windows[0]["startFrame"] == 0
+    assert windows[0]["endFrameExclusive"] == 1111
+    assert windows[1]["startFrame"] == 542
+    assert windows[1]["endFrameExclusive"] == 567
+    assert windows[0]["windowId"] != windows[1]["windowId"]

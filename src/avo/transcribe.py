@@ -384,6 +384,50 @@ class LocalTranscriber:
                 f"local transcription failed for {video.name}: {exc}"
             ) from exc
 
+    def transcribe_audio(
+        self,
+        audio: Path,
+        fingerprint: dict[str, Any],
+        *,
+        source_start: float,
+        analysis_provenance: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Transcribe explicitly routed analysis PCM without hiding short vocals.
+
+        Legacy media transcription retains its VAD defaults. This result carries
+        original-source clocks and derivative provenance instead of pretending
+        the cropped WAV is an original source.
+        """
+        if not analysis_provenance:
+            raise ValueError("analysis-input provenance is required")
+        whisper_lang, language_code, engine_language = resolve_language(self.language)
+        options = {
+            "task": "transcribe",
+            "word_timestamps": True,
+            "vad_filter": False,
+            "condition_on_previous_text": False,
+        }
+        if whisper_lang is not None:
+            options["language"] = whisper_lang
+        segments, info = self.model.transcribe(str(audio), **options)
+        if whisper_lang is None:
+            detected = str(getattr(info, "language", "") or "").strip() or "en"
+            _, language_code, engine_language = resolve_language(detected)
+        payload = build_transcript_payload(
+            list(segments),
+            fingerprint,
+            self.model_name,
+            self.engine_version,
+            language_code=language_code,
+            engine_language=engine_language,
+        )
+        for word in payload["words"]:
+            word["start"] += source_start
+            word["end"] += source_start
+        payload["analysisProvenance"] = analysis_provenance
+        payload["sourceStart"] = source_start
+        return payload
+
 
 def _maybe_ci_transcript_stub(
     video: Path,

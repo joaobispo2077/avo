@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import re
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, ClassVar
 
 
@@ -140,13 +141,30 @@ _PROOF_BUILTINS = {
     "encode": "ffmpeg.encode",
 }
 
+_PROOF_CODE_PATHS = (
+    Path(__file__).parent / "adapters" / "media" / "proof_executor.py",
+    Path(__file__).parent / "adapters" / "media" / "timeline_render.py",
+    Path(__file__).parent / "audio_restoration.py",
+)
+
+
+def _implementation_digest(capability: str, adapter_id: str) -> str:
+    digest = hashlib.sha256(
+        f"avo-proof-capability-v1:{capability}:{adapter_id}".encode()
+    )
+    if adapter_id.startswith("ffmpeg."):
+        for path in _PROOF_CODE_PATHS:
+            data = path.read_bytes()
+            digest.update(path.name.encode())
+            digest.update(len(data).to_bytes(8, "big"))
+            digest.update(data)
+    return digest.hexdigest()
+
 
 def default_proof_capability_registry() -> CapabilityRegistry:
     registry = CapabilityRegistry()
     for capability, adapter_id in sorted(_PROOF_BUILTINS.items()):
-        digest = hashlib.sha256(
-            f"avo-proof-capability-v1:{capability}:{adapter_id}".encode()
-        ).hexdigest()
+        digest = _implementation_digest(capability, adapter_id)
         registry.register(
             CapabilityImplementation(
                 implementation_id=f"impl-{capability}"[:64],

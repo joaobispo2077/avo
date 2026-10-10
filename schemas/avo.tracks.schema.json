@@ -567,6 +567,9 @@
                   "loudnessIntent": {
                     "type": "string"
                   },
+                  "breathControl": {
+                    "$ref": "https://avo.local/avo.breath-control.schema.json"
+                  },
                   "status": {
                     "type": "string"
                   },

@@ -67,6 +67,26 @@ def _coverage(path: Path, percent: float, covered: int, statements: int) -> None
 
 
 class QualityMetricsSnapshotTests(unittest.TestCase):
+    def test_skipped_dependency_gate_ignores_stale_summary_in_all_views(self) -> None:
+        root = self._workspace()
+        self._document(root)
+        summary = root / "reports" / "quality" / "npm-audit-summary.json"
+        summary.parent.mkdir(parents=True)
+        summary.write_text(json.dumps({"ok": True, "critical": 0, "high": 99}))
+        document = self.mod.build_ci_document(
+            self._outcomes(deps="skipped"),
+            coverage_json=root / "coverage.json",
+            floor=68,
+            root=root,
+            sha=SHA,
+            recorded_at=RECORDED,
+        )
+        gate = next(row for row in document["gates"] if row["key"] == "deps")
+        self.assertEqual(gate["status"], "SKIPPED")
+        self.assertEqual(gate["metric"], "not measured")
+        self.assertEqual(document["series"]["deps"]["reported"], "not measured")
+        self.assertNotIn("99 high", json.dumps(document))
+
     def setUp(self) -> None:
         self.mod = _load(
             "write_quality_metrics_snapshot",
@@ -374,9 +394,45 @@ class QualityMetricsSnapshotTests(unittest.TestCase):
     def test_release_workflow_hard_fails_and_prs_do_not_write_the_doc(self) -> None:
         release = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
         self.assertIn("snapshot-release-quality-metrics.sh", release)
+        self.assertEqual(release.count("snapshot-release-quality-metrics.sh"), 1)
         self.assertLess(
             release.index("snapshot-release-quality-metrics.sh"),
             release.index("npm run release"),
+        )
+        jobs = release.split("jobs:", 1)[1]
+        snapshot_job = jobs.split("snapshot-quality-metrics:", 1)[1].split(
+            "\n  release:", 1
+        )[0]
+        publish_job = jobs.split("\n  release:", 1)[1]
+        snapshot_header = snapshot_job.split("steps:", 1)[0]
+        if_lines = [
+            line.strip()
+            for line in snapshot_header.splitlines()
+            if line.strip().startswith("if:")
+        ]
+        self.assertEqual(
+            if_lines,
+            ["if: needs.determine-version.result == 'success'"],
+        )
+        self.assertIn(
+            "ref: ${{ needs.determine-version.outputs.release-sha }}",
+            snapshot_job,
+        )
+        self.assertIn(
+            "No releasable version. docs/quality-metrics.md is not written.",
+            snapshot_job,
+        )
+        self.assertNotIn("snapshot-release-quality-metrics.sh", publish_job)
+        self.assertIn(
+            "if: needs.determine-version.outputs.next-version != ''",
+            publish_job.split("steps:", 1)[0],
+        )
+        self.assertIn("release-quality-snapshot", publish_job)
+        self.assertIn("release-sha", publish_job)
+        script_at = snapshot_job.index("snapshot-release-quality-metrics.sh")
+        self.assertIn(
+            "needs.determine-version.outputs.next-version != ''",
+            snapshot_job[max(0, script_at - 500) : script_at],
         )
         step = release.split("Snapshot release quality metrics", 1)[1].split(
             "- name: Release", 1

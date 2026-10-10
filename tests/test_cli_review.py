@@ -81,6 +81,23 @@ def test_review_run_watch_flags_are_optional() -> None:
     assert args.watch_risk_note is None
 
 
+def test_review_batch_accepts_declarative_manifest_and_force() -> None:
+    args = build_parser().parse_args(
+        [
+            "review",
+            "batch",
+            "--project",
+            "avo.project.json",
+            "--manifest",
+            "edit/review/watch-jobs.json",
+            "--force",
+        ]
+    )
+    assert args.review_command == "batch"
+    assert args.manifest.name == "watch-jobs.json"
+    assert args.force is True
+
+
 def test_final_review_requires_canonical_materialization(monkeypatch) -> None:
     args = build_parser().parse_args(
         [

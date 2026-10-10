@@ -72,16 +72,8 @@ def _charts():
 def chart_series(snapshot: dict) -> dict[str, dict]:
     """Series embedded in Phase A chart PNGs. No extra numbers."""
     coverage = snapshot["coverage"]
-    duplication = snapshot["duplication"]
     return {
-        "status": {
-            "chart": "status",
-            "overall": snapshot["overall"],
-            "gates": [
-                {"title": gate["title"], "status": gate["status"]}
-                for gate in snapshot["gates"]
-            ],
-        },
+        "status": _charts().status_chart_series(snapshot),
         "coverage": {
             "chart": "coverage",
             "measured": coverage["measured"],
@@ -107,11 +99,7 @@ def chart_series(snapshot: dict) -> dict[str, dict]:
             "count": snapshot["deps"]["count"],
             "reported": snapshot["deps"]["reported"],
         },
-        "duplication": {
-            "chart": "duplication",
-            "ceiling": int(duplication["ceiling"]),
-            "reported": duplication["reported"],
-        },
+        "duplication": _charts().duplication_chart_series(snapshot),
         "architecture": {
             "chart": "architecture",
             "count": snapshot["architecture"]["count"],
@@ -142,7 +130,11 @@ def build_ci_document(
                 "title": title,
                 "status": report._label(outcomes.get(key, "")),
                 "metric": report.gate_metric(
-                    key, coverage_json=coverage_json, floor=floor, root=root
+                    key,
+                    coverage_json=coverage_json,
+                    floor=floor,
+                    root=root,
+                    outcome=outcomes.get(key, ""),
                 ),
                 "checks": report.GATE_POLICY.get(key, ""),
             }
@@ -224,7 +216,9 @@ def _chart_tables(series: dict, images: dict[str, str]) -> str:
     ]
     if "status" in images:
         parts.extend([f"![Gate status]({images['status']})", ""])
-    status_rows = [(gate["title"], f"**{gate['status']}**") for gate in status["gates"]]
+    status_rows = [
+        (gate["title"], _charts().status_table_value(gate)) for gate in status["gates"]
+    ]
     status_rows.append(("Overall", f"**{status['overall']}**"))
     parts.extend([_table(status_rows), "", "### Coverage", ""])
     if "coverage" in images:
@@ -294,12 +288,7 @@ def _chart_tables(series: dict, images: dict[str, str]) -> str:
         parts.extend([f"![Duplication ceiling]({images['duplication']})", ""])
     parts.extend(
         [
-            _table(
-                [
-                    ("Ceiling", f"{series['duplication']['ceiling']}%"),
-                    ("Reported", str(series["duplication"]["reported"])),
-                ]
-            ),
+            _table(_charts()._duplication_rows(series["duplication"])),
             "",
             "### Architecture contracts",
             "",

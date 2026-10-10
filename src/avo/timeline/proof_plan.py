@@ -20,6 +20,10 @@ from .iterations import IterationLedgerService
 from .store import StoreError, write_immutable_json
 
 
+def _preview_declaration(request):
+    return {"previewOnly": request["previewOnly"]} if "previewOnly" in request else {}
+
+
 class ProofPlanError(RuntimeError):
     def __init__(
         self,
@@ -52,13 +56,26 @@ class ProofPlanError(RuntimeError):
 
 class ProofPlanCompiler:
     CANONICAL_ARTIFACTS = ("cmap", "bmap", "tracks", "animation", "sync-map")
+    CUT_OPTIONAL_ARTIFACTS = ("bmap", "tracks", "animation")
 
     def __init__(self, workspace: Any, registry: CapabilityRegistry | None = None):
         self.workspace = workspace
         self.registry = registry or default_proof_capability_registry()
         self.directory = Path(workspace.timeline_dir) / "proof-plans"
 
-    def _canonical_lock(self, source_fingerprints: dict[str, str]) -> dict[str, str]:
+    @staticmethod
+    def _empty_index(index: dict[str, Any]) -> bool:
+        return (
+            index.get("headRevisionId") is None
+            and index.get("approvedRevisionId") is None
+            and not index.get("revisionRefs")
+            and not index.get("eventRefs")
+            and index.get("activeState") == "valid"
+        )
+
+    def _canonical_lock(
+        self, source_fingerprints: dict[str, str], *, checkpoint: str
+    ) -> dict[str, str]:
         if not source_fingerprints:
             raise ProofPlanError(
                 "PROOF_SOURCE_LOCK_REQUIRED",
@@ -67,6 +84,14 @@ class ProofPlanCompiler:
             )
         lock: dict[str, str] = {}
         for artifact_type in self.CANONICAL_ARTIFACTS:
+            if (
+                checkpoint == "cut-proof"
+                and artifact_type in self.CUT_OPTIONAL_ARTIFACTS
+            ):
+                index = self.workspace.store(artifact_type).load_index()
+                if self._empty_index(index):
+                    lock[f"absent:{artifact_type}"] = content_hash(index)
+                    continue
             index = self.workspace.require_active(artifact_type)
             revision = self.workspace.store(artifact_type).revision(
                 index["headRevisionId"]
@@ -158,7 +183,10 @@ class ProofPlanCompiler:
                 entity_ref=str(contract.get("contractId")),
                 actual=contract["conflicts"],
             )
-        lock = self._canonical_lock(dict(request.get("sourceFingerprints") or {}))
+        checkpoint = str(request.get("checkpoint", "pre-master"))
+        lock = self._canonical_lock(
+            dict(request.get("sourceFingerprints") or {}), checkpoint=checkpoint
+        )
         video_graph, resolution, implementation_refs = self._resolve_video_graph(
             dict(request.get("videoGraph") or {})
         )
@@ -166,6 +194,7 @@ class ProofPlanCompiler:
             "schemaVersion": "1.0.0",
             "proofPlanId": "proof-plan-pending",
             "iterationId": iteration_id,
+            "checkpoint": checkpoint,
             "canonicalInputLock": lock,
             "regressionContract": self._contract_for_plan(contract),
             "renderProfile": str(request["renderProfile"]),
@@ -203,6 +232,7 @@ class ProofPlanCompiler:
             ),
             "proofPlanHash": "",
         }
+        body.update(_preview_declaration(request))
         identity_seed = deepcopy(body)
         identity_seed.pop("proofPlanHash", None)
         identity_seed.pop("proofPlanId", None)
@@ -283,26 +313,37 @@ class ProofPlanCompiler:
             "actual": actual,
         }
 
-    def preflight(
-        self,
-        plan: dict[str, Any],
-        *,
-        media_inputs: dict[str, Any],
-        tool_readiness: dict[str, bool],
-    ) -> dict[str, Any]:
-        """Return deterministic blockers before any microproof or full render."""
-        blockers: list[dict[str, Any]] = []
-        if plan.get("proofPlanHash") != document_hash_excluding(plan, "proofPlanHash"):
-            blockers.append(
-                self._blocker(
-                    "PROOF_PLAN_HASH_MISMATCH",
-                    "proof plan bytes changed after compilation",
-                    "restore the immutable plan or compile a new plan",
-                    entity_ref=str(plan.get("proofPlanId") or ""),
-                )
+    def _absence_matches(self, plan, artifact_type, lock):
+        absent_key = f"absent:{artifact_type}"
+        try:
+            index = self.workspace.store(artifact_type).load_index()
+            return (
+                plan.get("checkpoint") == "cut-proof"
+                and artifact_type in self.CUT_OPTIONAL_ARTIFACTS
+                and self._empty_index(index)
+                and artifact_type not in lock
+                and lock[absent_key] == content_hash(index)
             )
+        except Exception:
+            return False
+
+    def _canonical_preflight(self, plan: dict[str, Any]) -> list[dict[str, Any]]:
+        blockers = []
         lock = plan.get("canonicalInputLock") or {}
         for artifact_type in self.CANONICAL_ARTIFACTS:
+            absent_key = f"absent:{artifact_type}"
+            if absent_key in lock:
+                valid_absence = self._absence_matches(plan, artifact_type, lock)
+                if not valid_absence:
+                    blockers.append(
+                        self._blocker(
+                            "PROOF_REVISION_STALE",
+                            f"canonical {artifact_type} absence no longer matches the proof plan",
+                            "compile a new proof plan from the current canonical state",
+                            entity_ref=artifact_type,
+                        )
+                    )
+                continue
             try:
                 index = self.workspace.require_active(artifact_type)
                 revision = self.workspace.store(artifact_type).revision(
@@ -331,6 +372,58 @@ class ProofPlanCompiler:
                         actual=actual,
                     )
                 )
+        return blockers
+
+    def _implementation_preflight(self, plan):
+        blockers = []
+        native_registry = default_proof_capability_registry()
+        for item in plan.get("implementationRefs") or []:
+            implementation_id = str(item.get("implementationId") or "")
+            native = next(
+                (
+                    implementation
+                    for implementation in native_registry.implementations()
+                    if implementation.implementation_id == implementation_id
+                ),
+                None,
+            )
+            if (
+                item.get("kind") == "built-in"
+                and native is not None
+                and item != native.proof_reference()
+            ):
+                blockers.append(
+                    self._blocker(
+                        "PROOF_IMPLEMENTATION_STALE",
+                        f"native implementation changed: {implementation_id}",
+                        "compile a new proof plan with the current implementation",
+                        entity_ref=implementation_id,
+                        expected=item.get("sha256"),
+                        actual=native.sha256,
+                    )
+                )
+        return blockers
+
+    def preflight(
+        self,
+        plan: dict[str, Any],
+        *,
+        media_inputs: dict[str, Any],
+        tool_readiness: dict[str, bool],
+    ) -> dict[str, Any]:
+        """Return deterministic blockers before any microproof or full render."""
+        blockers: list[dict[str, Any]] = []
+        if plan.get("proofPlanHash") != document_hash_excluding(plan, "proofPlanHash"):
+            blockers.append(
+                self._blocker(
+                    "PROOF_PLAN_HASH_MISMATCH",
+                    "proof plan bytes changed after compilation",
+                    "restore the immutable plan or compile a new plan",
+                    entity_ref=str(plan.get("proofPlanId") or ""),
+                )
+            )
+        blockers.extend(self._canonical_preflight(plan))
+        lock = plan.get("canonicalInputLock") or {}
         resolved_paths: dict[str, Path] = {}
         for key, expected in sorted(lock.items()):
             if not key.startswith("source:"):
@@ -440,6 +533,7 @@ class ProofPlanCompiler:
                     )
                 )
         required_tools: set[str] = {"proof-plan-executor"}
+        blockers.extend(self._implementation_preflight(plan))
         for item in plan.get("implementationRefs") or []:
             adapter = str(item.get("adapterId") or "").casefold()
             if "ffmpeg" in adapter:

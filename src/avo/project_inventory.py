@@ -12,7 +12,7 @@ import subprocess
 import sys
 from collections.abc import Sequence
 from dataclasses import dataclass, field, replace
-from pathlib import Path
+from pathlib import Path, PureWindowsPath
 from typing import Any
 
 from avo import avo_state
@@ -83,7 +83,7 @@ class PreservedSetResult:
         paths.extend(self.final_transcripts)
         paths.extend(self.final_master)
         paths.extend(self.reconstruction_metadata)
-        return paths
+        return sorted(set(paths))
 
 
 @dataclass
@@ -424,6 +424,7 @@ def resolve_preserved_set(
 
     reconstruction = list(_resolve_reconstruction_metadata(raw_dir))
     reconstruction.extend(preserved_shorts_paths(raw_dir))
+    reconstruction.extend(_retained_paths(raw_dir))
     return PreservedSetResult(
         raw_sources=_resolve_raw_sources(raw_dir),
         initial_transcript=_resolve_initial_transcript(
@@ -433,6 +434,58 @@ def resolve_preserved_set(
         final_master=_resolve_final_master(raw_dir, master_basename),
         reconstruction_metadata=sorted(set(reconstruction)),
     )
+
+
+def _preserve_root(raw_dir: Path, value: str) -> Path:
+    relative = Path(value.replace("\\", "/"))
+    path = (raw_dir / relative).resolve()
+    if (
+        not value
+        or PureWindowsPath(value).drive
+        or relative.is_absolute()
+        or ".." in relative.parts
+        or path == raw_dir
+        or not path.is_relative_to(raw_dir)
+    ):
+        raise PreservedSetViolation(f"unsafe cleanup preserve path: {value}")
+    if not path.exists():
+        raise PreservedSetViolation(f"cleanup preserve path missing: {value}")
+    return path
+
+
+def _files_under(path: Path) -> list[Path]:
+    return (
+        [path]
+        if path.is_file()
+        else [child.resolve() for child in path.rglob("*") if child.is_file()]
+    )
+
+
+def _project_retention(raw_dir: Path) -> list[str]:
+    project = load_project(raw_dir) if (raw_dir / "avo.project.json").is_file() else {}
+    values = (project.get("cleanup") or {}).get("preservePaths", [])
+    if not isinstance(values, list) or any(
+        not isinstance(value, str) for value in values
+    ):
+        raise PreservedSetViolation(
+            "cleanup preservePaths must be an array of relative paths"
+        )
+    return values
+
+
+def _retained_paths(raw_dir: Path) -> list[Path]:
+    paths = [
+        path
+        for value in _project_retention(raw_dir)
+        for path in _files_under(_preserve_root(raw_dir, value))
+    ]
+    cleanup = raw_dir / "edit" / "cleanup"
+    paths.extend(path for path in cleanup.rglob("*") if path.is_file())
+    if any(not path.is_relative_to(raw_dir) for path in paths):
+        raise PreservedSetViolation(
+            "cleanup preserve path contains a link outside project"
+        )
+    return paths
 
 
 def verify_preserved_complete(
@@ -693,6 +746,7 @@ class CleanupRunResult:
     pre_cleanup_project_bytes: int
     delete_candidate_bytes: int
     preserved_bytes: int
+    freed_bytes: int = 0
 
 
 def _safe_rimraf(runner: Any, path: Path) -> None:
@@ -779,12 +833,60 @@ def run_cleanup(
     )
     if dry_run:
         return result
-
-    result.leftover += _execute_deletes(
-        delete_list, rimraf_runner or _default_rimraf_runner
+    _recorded_deletes(
+        raw_dir, master_basename, result, rimraf_runner or _default_rimraf_runner
     )
-    _maybe_purge_session(session_id, purge_session=purge_session)
+    _maybe_purge_session(
+        session_id, purge_session=purge_session and not result.leftover
+    )
     return result
+
+
+def _recorded_deletes(
+    raw_dir: Path, master_basename: str, result: CleanupRunResult, runner: Any
+) -> None:
+    from avo.timeline.store import atomic_write_json
+
+    receipt_path = raw_dir / "edit" / "cleanup" / "cleanup-result.json"
+    if receipt_path.exists():
+        raise PreservedSetViolation(
+            "cleanup receipt already exists; review it before another execution"
+        )
+    planned = [
+        {"path": path.relative_to(raw_dir).as_posix(), "bytes": path.stat().st_size}
+        for path in result.paths
+    ]
+    receipt = {
+        "schemaVersion": 1,
+        "rawDir": str(raw_dir),
+        "masterBasename": master_basename,
+        "generatedAt": avo_state.now_iso(),
+        "status": "in-progress",
+        "preCleanupProjectBytes": result.pre_cleanup_project_bytes,
+        "deleteCandidateBytes": result.delete_candidate_bytes,
+        "planned": planned,
+        "deleted": [],
+        "freedBytes": 0,
+    }
+    # Persist intent before any destructive operation; never infer success from a plan.
+    atomic_write_json(receipt_path, receipt)
+    for path in result.paths:
+        if not path.resolve().is_relative_to(raw_dir / "edit"):
+            raise PreservedSetViolation(
+                f"cleanup target escapes edit directory: {path}"
+            )
+    result.leftover += _execute_deletes(result.paths, runner)
+    receipt["deleted"] = [
+        entry for entry in planned if not _path_still_present(raw_dir / entry["path"])
+    ]
+    result.paths = [raw_dir / entry["path"] for entry in receipt["deleted"]]
+    result.freed_bytes = sum(entry["bytes"] for entry in receipt["deleted"])
+    receipt.update(
+        status="incomplete" if result.leftover else "completed",
+        freedBytes=result.freed_bytes,
+        leftoverCandidates=result.leftover,
+    )
+    atomic_write_json(receipt_path, receipt)
 
 
 def execute_cleanup(
@@ -946,7 +1048,7 @@ def _print_inventory_cleanup_json(
                 "preCleanupProjectBytes": outcome.pre_cleanup_project_bytes,
                 "deleteCandidateBytes": outcome.delete_candidate_bytes,
                 "preservedBytes": outcome.preserved_bytes,
-                "freedBytes": None if dry else outcome.delete_candidate_bytes,
+                "freedBytes": None if dry else outcome.freed_bytes,
             },
             session_id=args.session_id,
             full_paths=bool(getattr(args, "full_paths", False)),
