@@ -62,15 +62,20 @@ comments, and Node 24 / Node 24 action majors. Linux jobs pin `ubuntu-24.04`.
 
 PRs get two short sticky comments (Maxframe shape): **Software metrics** (status,
 numeric metric, and what the gate checks, plus PNG charts for those same
-numbers) and **Mutation tests** (score, floor, killed/survived/timeout). The
-Software quality sticky (`quality-gates-report`) posts on green and red runs.
+numbers) and **Mutation tests** (score, floor, killed/survived/timeout when this
+run actually scored). The Software quality sticky (`quality-gates-report`) posts
+on green and red runs.
 **Overall: PASS** only when every Software quality gate step succeeded;
 otherwise the banner is **Overall: FAIL** and failed or skipped gates are not
 drawn as passes. Coverage charts use the real `fail_under` (**68%**). Mutation
-in this sticky is **—** and points at `mutation-report`. Charts are
-visualization only: they do not change floors, and a missing image is an
-explicit note rather than an empty `![]()`. The GitHub check name stays
-**Software quality**.
+in this sticky is **—** and points at `mutation-report`. The mutation sticky
+prints **Passing** and a kill rate only after this run finishes
+`mutmut export-cicd-stats` and stamps `mutants/mutmut-cicd-stats.json` with this
+commit SHA and GitHub run id. A restored cache, a clean-test failure, or a
+missing score for this SHA is **Did not score**: no Passing banner and no
+killed/survived counts from another run. Charts are visualization only: they do
+not change floors, and a missing image is an explicit note rather than an empty
+`![]()`. The GitHub check name stays **Software quality**.
 
 A release cut writes `docs/quality-metrics.md` from that push's green Software
 quality JSON. Pull-request greens do not write that file. See the release-cut

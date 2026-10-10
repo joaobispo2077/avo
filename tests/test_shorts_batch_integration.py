@@ -275,7 +275,10 @@ class ShortsPlanningIntegrationTests(unittest.TestCase):
 
     def test_one_render_failure_does_not_cancel_approved_siblings(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
+            # The directory name contains "05" so a substring match on the
+            # whole path would fail every sibling, not only short 05.
+            root = Path(tmp) / "lot-05"
+            root.mkdir()
             request_path = self.stage_request(root)
             plan_path = root / "plans" / "shorts.plan-v001.json"
             shorts_plan.resolve_request_file(request_path, plan_path)
@@ -283,9 +286,7 @@ class ShortsPlanningIntegrationTests(unittest.TestCase):
 
             class PartialAdapter:
                 def execute(self, operation, project, *extra, **kwargs):
-                    if operation == "render" and "05" in str(project).replace(
-                        "\\", "/"
-                    ):
+                    if operation == "render" and "05" in Path(project).parts:
                         return JobResult(exit_code=7, stderr="synthetic render failure")
                     if operation == "render":
                         output = Path(extra[extra.index("--output") + 1])

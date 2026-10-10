@@ -17,6 +17,13 @@ uv run --frozen --extra dev python scripts/ci/patch_mutmut_profile.py apply "${A
 uv run --frozen --extra dev mutmut run
 uv run --frozen --extra dev mutmut export-cicd-stats
 
+# Stamp only after export. set -e skips this when clean tests fail, so a
+# restored mutants/ cache cannot be labeled as this run's score.
+if [ -n "${GITHUB_SHA:-}" ] && [ -n "${GITHUB_RUN_ID:-}" ]; then
+  uv run --frozen --extra dev python scripts/ci/write_mutation_pr_report.py \
+    --stamp mutants/mutmut-cicd-stats.json
+fi
+
 mkdir -p reports/mutation
 if [ -f mutants/mutmut-cicd-stats.json ]; then
   cp mutants/mutmut-cicd-stats.json reports/mutation/mutmut-cicd-stats-light.json
