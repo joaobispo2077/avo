@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from avo.proof_composition import create_timeline_render_port, probe_audio_sample_rate
 from avo.timeline.lifecycle import (
     LifecycleError,
     PipelineRunStore,
@@ -694,6 +695,7 @@ def _tracks(args: argparse.Namespace) -> int:
             render_contract=policy["renderContract"],
             delivery_fidelity_policy=policy,
             render_profile=args.profile,
+            render_port=create_timeline_render_port(),
         )
     _emit(result)
     return 0
@@ -772,6 +774,7 @@ def _cmap(args: argparse.Namespace) -> int:
             cmap_revision_id=args.revision_id,
             output_path=args.output,
             render_profile=args.profile,
+            render_port=create_timeline_render_port(),
         )
     _emit(result)
     return 0
@@ -1488,6 +1491,7 @@ def _proof_request_from_cmap(request, args, workspace):
         width=output_contract.get("width", 640),
         height=output_contract.get("height", 360),
         sample_rate=output_contract.get("audioSampleRate", 48000),
+        sample_rate_probe=probe_audio_sample_rate,
     )
 
 
@@ -1609,6 +1613,7 @@ def _proof(args: argparse.Namespace) -> int:
                     proof_plan=plan,
                     media_inputs=media_inputs,
                     microproof_gate=args.microproof_gate,
+                    render_port=create_timeline_render_port(),
                 )
             )
         return 0
@@ -1621,6 +1626,9 @@ def _proof(args: argparse.Namespace) -> int:
                 workspace=workspace,
                 proof_plan=plan,
                 media_inputs=media_inputs,
+                render_port=create_timeline_render_port().for_proof_plan(
+                    workspace, plan
+                ),
             )
         )
         return 0
@@ -1638,6 +1646,7 @@ def _proof(args: argparse.Namespace) -> int:
             proof_plan=plan,
             microproof_gate=args.microproof_gate,
             media_inputs=media_inputs,
+            render_port=create_timeline_render_port(),
             expected_active_snapshot_hash=(
                 active["snapshotHash"] if active is not None else None
             ),
@@ -1650,6 +1659,7 @@ def _proof(args: argparse.Namespace) -> int:
                 workspace=workspace,
                 proof_plan=plan,
                 media_inputs=media_inputs,
+                render_port=create_timeline_render_port(),
             )
         )
         return 0

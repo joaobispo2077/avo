@@ -6,16 +6,8 @@ from fractions import Fraction
 
 from .contracts import content_hash
 from .cutting_contracts import occurrence_id, source_interval
+from .cutting_contracts import selected_source_range as _segment_range
 from .cutting_retakes import group_retakes, select_retake
-
-
-def _segment_range(segment: dict) -> dict:
-    return {
-        "sourceId": segment["sourceId"],
-        "startTicks": segment["in"]["ticks"],
-        "endTicksExclusive": segment["out"]["ticks"],
-        "timebase": segment["in"]["timebase"],
-    }
 
 
 def _word_chunks(words: list[dict]) -> list[list[dict]]:

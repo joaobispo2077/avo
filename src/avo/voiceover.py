@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import argparse
 import json
-import subprocess
 import sys
 from pathlib import Path
 
+from avo.adapters.media.ffprobe import media_duration as _media_duration
 from avo.validate_edl import DEFAULT_SCHEMA, EdlValidationError, load_and_validate
 
 PROGRAM_MODE = "external_voiceover"
@@ -53,25 +53,7 @@ def output_duration_from_edl(edl: dict) -> float:
 
 
 def media_duration(path: Path) -> float | None:
-    try:
-        out = subprocess.run(
-            [
-                "ffprobe",
-                "-v",
-                "error",
-                "-show_entries",
-                "format=duration",
-                "-of",
-                "default=noprint_wrappers=1:nokey=1",
-                str(path),
-            ],
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-        return float(out.stdout.strip())
-    except Exception:
-        return None
+    return _media_duration(path)
 
 
 def preflight(edl: dict, edit_dir: Path) -> list[str]:

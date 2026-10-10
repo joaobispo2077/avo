@@ -3,16 +3,8 @@
 from copy import deepcopy
 
 from .cutting_contracts import occurrence_id, source_interval
+from .cutting_contracts import selected_source_range as _selected_range
 from .cutting_editorial import propose_editorial_shortening
-
-
-def _selected_range(segment):
-    return {
-        "sourceId": segment["sourceId"],
-        "startTicks": segment["in"]["ticks"],
-        "endTicksExclusive": segment["out"]["ticks"],
-        "timebase": segment["in"]["timebase"],
-    }
 
 
 def _owner(interval, segments):
