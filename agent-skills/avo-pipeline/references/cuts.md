@@ -11,7 +11,8 @@ rebase hints only.
 2. When the user reports a problem on a **proof render**, convert with  
    `python -m avo.edl_timeline map <edl.json> <seconds> --from output`  
    before editing ranges.
-3. Split `ranges` at `final_cut_start` / `final_cut_end` (word-boundary pad).
+3. Inspect original audio, waveform, continuous VAD and observed aligned word
+   edges. Locate complete attempts and protected holds before proposing cuts.
 4. Commit the new raw-based CMap revision and render its generated cut output.
 5. Only after exact CMap approval, author overlay/SFX timing in BMap
    **`cmap-output`** time. Preserve raw/transcript anchors only as rebase hints.
@@ -35,16 +36,27 @@ python -m avo.edl_timeline write-docs edit/edl.json
 Before writing `approval-gate.md` or asking the creator to watch:
 
 1. **Canonical lineage/projection validation** — CMap is raw-only, BMap basis is the exact approved cut, and generated EDL hash is current.
-2. **Transcript read** — cut edges land on pauses/word gaps; privacy spans do not
-   remove requested speech; note source times in the review package.
+2. **Local speech evidence** — transcript timestamps locate searches. Original
+   audio, acoustic space, observed word edges and encoded checks establish safe
+   selections; fades cannot recover speech that was removed.
 3. **`/avo.watch` (watch-skill)** on the proof with `--timestamps` at:
    - every range join (±2s),
    - every `blocked_source_ranges` mapped B-window,
    - every overlay `start_in_output`.
-4. Fix → re-render → repeat until watch-skill + transcript checks pass.
+4. Review contextual previews before the full proof. Persist source-bound choices
+   and reserve selection attempts before repair. After two automatic attempts,
+   preserve uncertainty for human disposition instead of repeating indefinitely.
 
 High watch-skill confidence **does not** skip this gate and **does not** replace
 human approval (workflow §4b).
+
+Audit every current join, including inherited selections. Two-frame islands,
+restarts, clipped consonants, disconnected words and unexpected silence require
+source/context evidence; duration alone never authorizes deletion. Preserve valid
+interjections, short inserts, meaningful pauses, introduction cadence and quiz
+response windows. Select complete equivalent retakes by corroborated delivery
+quality rather than always choosing the last attempt. Substantive content reduction
+requires its own explicit editorial approval.
 
 ## Common failure (this project)
 
