@@ -80,7 +80,15 @@
         "format": { "type": ["string", "null"] },
         "language": { "type": ["string", "null"] },
         "acceptanceCriteria": { "type": "array", "items": { "type": "string", "minLength": 1 } },
-        "riskNotes": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+        "riskNotes": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+        "contextLimit": { "type": "integer", "minimum": 1024, "maximum": 131072 },
+        "maxImagesPerPass": { "type": "integer", "minimum": 1, "maximum": 16 },
+        "imageLongSide": { "type": "integer", "minimum": 64, "maximum": 4096 },
+        "maxOutputTokens": { "type": "integer", "minimum": 64, "maximum": 16384 },
+        "timeoutSeconds": { "type": "integer", "minimum": 1, "maximum": 3600 },
+        "concurrency": { "const": 1 },
+        "operatorManagedLifecycle": { "const": true },
+        "vramCeilingBytes": { "type": "integer", "minimum": 1073741824, "maximum": 7516192768 }
       }
     },
     "timeline": {

@@ -2,15 +2,22 @@
 
 from __future__ import annotations
 
+import base64
 import hashlib
 import json
+import math
 import os
 import re
 import shutil
 import subprocess
+import time
+import urllib.request
+from urllib.error import HTTPError
 from collections.abc import Callable
 from copy import deepcopy
 from dataclasses import dataclass
+from datetime import UTC, datetime
+from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
@@ -23,6 +30,8 @@ from avo.timeline.ports import ToolError
 from avo.timeline.vision_review import (
     VisionReviewError,
     build_capability_snapshot,
+    compile_review_coverage,
+    validate_vision_finding,
 )
 
 _BONSAI_OPTION_IDS = frozenset({"bonsai-27b-gguf", "ternary-bonsai-27b-gguf"})
@@ -168,6 +177,7 @@ class _ReviewRequest:
     transcript_ref: str | Path | None
     terms: list[str]
     names: list[str]
+    contract_context: dict[str, Any]
 
 
 @dataclass(frozen=True)
@@ -274,6 +284,7 @@ def _review_request(candidate: Path, request: dict[str, Any]) -> _ReviewRequest:
         transcript_ref=transcript_ref,
         terms=terms,
         names=names,
+        contract_context=dict(request.get("contract_context") or {}),
     )
 
 
@@ -800,6 +811,592 @@ def execute_bounded_passes(
     }
 
 
+def _native_endpoint(model_pin: dict[str, Any] | None) -> tuple[str, str]:
+    source = _dict_at(model_pin, "source")
+    endpoint = _dict_at(source, "endpoint")
+    model = str((model_pin or {}).get("id") or "").strip()
+    served = str(endpoint.get("servedName") or "").strip()
+    base_url = str(endpoint.get("baseUrl") or "").strip().rstrip("/")
+    if source.get("kind") != "endpoint" or not base_url or not model or served != model:
+        raise VisionReviewError(
+            "native vision review requires one exact endpoint model pin"
+        )
+    return base_url, model
+
+
+def _post_json(url: str, payload: dict[str, Any], *, timeout: int) -> dict[str, Any]:
+    body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
+    headers = {"Content-Type": "application/json"}
+    api_key = (os.environ.get("WATCHSKILL_CUSTOM_API_KEY") or "lm-studio").strip()
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+    request = urllib.request.Request(url, data=body, headers=headers, method="POST")
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            result = json.loads(response.read().decode("utf-8"))
+    except HTTPError as error:
+        detail = error.read().decode("utf-8", errors="replace").strip()
+        raise VisionReviewError(
+            f"vision endpoint HTTP {error.code}: {detail or error.reason}"
+        ) from error
+    if not isinstance(result, dict):
+        raise VisionReviewError("vision endpoint returned a non-object response")
+    return result
+
+
+_PROBE_PNG = (
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk"
+    "/wcAAgAB/epv2AAAAABJRU5ErkJggg=="
+)
+
+
+def _live_probe(base_url: str, model: str, effective: dict[str, Any]) -> dict[str, Any]:
+    prompt = 'Inspect the image and return JSON only: {"vision":true}.'
+    payload = {
+        "model": model,
+        "reasoning_effort": "none",
+        "temperature": 0,
+        "max_tokens": 32,
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": prompt},
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": f"data:image/png;base64,{_PROBE_PNG}"},
+                    },
+                ],
+            }
+        ],
+    }
+    started = time.monotonic()
+    response = _post_json(
+        f"{base_url}/chat/completions",
+        payload,
+        timeout=int(effective["timeoutSeconds"]),
+    )
+    served = str(response.get("model") or model)
+    return {
+        "success": bool(response.get("choices")),
+        "servedModel": served,
+        "supportsVision": bool(response.get("choices")),
+        "effectiveContextTokens": int(effective["contextLimit"]),
+        "maxOutputTokens": int(effective["maxOutputTokens"]),
+        "maxImages": int(effective["maxImagesPerPass"]),
+        "maxWidth": int(effective["imageLongSide"]),
+        "maxHeight": int(effective["imageLongSide"]),
+        "detailModes": ["low"],
+        "requestHash": hashlib.sha256(
+            json.dumps(payload, sort_keys=True).encode("utf-8")
+        ).hexdigest(),
+        "responseHash": hashlib.sha256(
+            json.dumps(response, sort_keys=True).encode("utf-8")
+        ).hexdigest(),
+        "probedAt": datetime.now(UTC).isoformat(),
+        "latencyMs": round((time.monotonic() - started) * 1000),
+    }
+
+
+def _ffprobe_video(candidate: Path) -> dict[str, Any]:
+    completed = subprocess.run(
+        [
+            "ffprobe",
+            "-v",
+            "error",
+            "-select_streams",
+            "v:0",
+            "-show_entries",
+            "stream=avg_frame_rate,nb_frames,duration:format=duration",
+            "-of",
+            "json",
+            str(candidate),
+        ],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        check=False,
+    )
+    if completed.returncode != 0:
+        raise VisionReviewError(f"ffprobe failed: {completed.stderr.strip()}")
+    return json.loads(completed.stdout)
+
+
+def _video_geometry(candidate: Path) -> tuple[Fraction, int, float]:
+    data = _ffprobe_video(candidate)
+    streams = data.get("streams") or []
+    if not streams:
+        raise VisionReviewError("candidate has no video stream")
+    stream = streams[0]
+    fps = Fraction(str(stream.get("avg_frame_rate") or "0/1"))
+    duration = float(
+        stream.get("duration") or (data.get("format") or {}).get("duration") or 0
+    )
+    declared_frames = str(stream.get("nb_frames") or "").strip()
+    frames = _declared_or_estimated_frames(declared_frames, duration, fps)
+    _require_positive_geometry(fps, frames, duration)
+    return fps, frames, duration
+
+
+def _declared_or_estimated_frames(
+    declared_frames: str, duration: float, fps: Fraction
+) -> int:
+    if declared_frames.isdigit():
+        return int(declared_frames)
+    return math.ceil(duration * float(fps))
+
+
+def _require_positive_geometry(fps: Fraction, frames: int, duration: float) -> None:
+    if fps <= 0:
+        raise VisionReviewError("candidate has no usable frame rate")
+    if frames <= 0 or duration <= 0:
+        raise VisionReviewError("candidate duration/frame count is invalid")
+
+
+def _frame_windows(
+    windows: list[dict[str, Any]], *, fps: Fraction, duration_frames: int
+) -> list[dict[str, Any]]:
+    result: list[dict[str, Any]] = []
+    for index, window in enumerate(windows, 1):
+        start = max(
+            0, min(duration_frames - 1, math.floor(float(window["start"]) * float(fps)))
+        )
+        end = max(
+            start + 1,
+            min(duration_frames, math.ceil(float(window["end"]) * float(fps))),
+        )
+        result.append(
+            {
+                "windowId": f"required-{index:03d}",
+                "startFrame": start,
+                "endFrameExclusive": end,
+                "mandatory": True,
+                "riskClasses": [str(window.get("reason") or "declared-risk")],
+                "source": deepcopy(window),
+            }
+        )
+    return result
+
+
+def _extract_exact_frame(
+    candidate: Path, frame: int, directory: Path, long_side: int
+) -> Path:
+    directory.mkdir(parents=True, exist_ok=True)
+    path = directory / f"frame-{frame:09d}.png"
+    if path.is_file() and path.stat().st_size:
+        return path
+    completed = subprocess.run(
+        [
+            "ffmpeg",
+            "-v",
+            "error",
+            "-i",
+            str(candidate),
+            "-vf",
+            f"select=eq(n\\,{frame}),scale={long_side}:{long_side}:force_original_aspect_ratio=decrease",
+            "-vsync",
+            "0",
+            "-frames:v",
+            "1",
+            "-y",
+            str(path),
+        ],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        check=False,
+    )
+    if completed.returncode != 0 or not path.is_file() or not path.stat().st_size:
+        path.unlink(missing_ok=True)
+        raise VisionReviewError(
+            completed.stderr.strip() or f"frame {frame} did not decode"
+        )
+    return path
+
+
+def _choice_text(response: dict[str, Any]) -> str:
+    choices = response.get("choices") or []
+    if not choices:
+        raise VisionReviewError("vision response has no choices")
+    content = (choices[0].get("message") or {}).get("content")
+    if not isinstance(content, str) or not content.strip():
+        raise VisionReviewError("vision response has no textual JSON content")
+    return content
+
+
+def _native_findings(
+    raw: Any, *, review_pass: dict[str, Any], frame_refs: list[dict[str, Any]]
+) -> list[dict[str, Any]]:
+    if raw is None:
+        raw = []
+    if not isinstance(raw, list):
+        raise VisionReviewError("vision findings must be a list")
+    frames = list(review_pass.get("sampleFrames") or [])
+    default_range = {
+        "startFrame": min(frames),
+        "endFrameExclusive": max(frames) + 1,
+    }
+    findings: list[dict[str, Any]] = []
+    for index, item in enumerate(raw, 1):
+        findings.append(
+            _native_finding(item, review_pass, index, default_range, frame_refs)
+        )
+    return findings
+
+
+def _native_finding(
+    item: Any,
+    review_pass: dict[str, Any],
+    index: int,
+    default_range: dict[str, int],
+    frame_refs: list[dict[str, Any]],
+) -> dict[str, Any]:
+    item = _require_finding_item(item)
+    severity = str(item.get("severity") or "warning")
+    requires_human = bool(item.get("requiresHuman"))
+    seed = json.dumps([review_pass["passId"], index, item], sort_keys=True)
+    return validate_vision_finding(
+        {
+            "schemaVersion": "1.0.0",
+            "findingId": f"vision-{hashlib.sha256(seed.encode()).hexdigest()[:16]}",
+            "category": str(item.get("category") or "other"),
+            "severity": severity,
+            "confidence": float(item.get("confidence", 0.5)),
+            "programRange": _fallback(item.get("programRange"), default_range),
+            "evidenceRefs": deepcopy(frame_refs),
+            "criterionIds": list(item.get("criterionIds") or []),
+            "obligationIds": list(review_pass.get("requiredWindowIds") or []),
+            "observed": str(item.get("observed") or item["message"]),
+            "expected": str(
+                item.get("expected")
+                or "candidate satisfies the declared review criteria"
+            ),
+            "whyItMatters": str(item.get("whyItMatters") or item["message"]),
+            "alternativeExplanations": list(item.get("alternativeExplanations") or []),
+            "message": str(item["message"]),
+            "suggestedAction": str(
+                item.get("suggestedAction") or "inspect the cited frames"
+            ),
+            "requiresHuman": requires_human,
+            "status": _finding_status(requires_human, severity),
+            "humanDisposition": None,
+        }
+    )
+
+
+def _require_finding_item(item: Any) -> dict[str, Any]:
+    if not isinstance(item, dict) or not str(item.get("message") or "").strip():
+        raise VisionReviewError("vision finding must be an object with a message")
+    return item
+
+
+def _fallback(value: Any, default: Any) -> Any:
+    return value if value not in (None, "", []) else default
+
+
+def _finding_status(requires_human: bool, severity: str) -> str:
+    return {
+        True: "needs-human",
+        False: {"blocking": "corroborated"}.get(severity, "open"),
+    }[requires_human]
+
+
+def _native_review(review: _ReviewRequest, model_pin: dict[str, Any]) -> dict[str, Any]:
+    base_url, model = _native_endpoint(model_pin)
+    effective = review.effective
+    resource_policy = {
+        "operatorManagedLifecycle": bool(effective["operatorManagedLifecycle"]),
+        "concurrency": int(effective["concurrency"]),
+        "vramCeilingBytes": int(effective["vramCeilingBytes"]),
+        "allowedCoResidency": ["cpu-transcription"],
+    }
+    snapshot = probe_vision_capabilities(
+        model_pin=model_pin,
+        probe=lambda url, served: _live_probe(url, served, effective),
+        resource_policy=resource_policy,
+        conservative_context_limit=int(effective["contextLimit"]),
+    )
+    fps, duration_frames, duration_seconds = _video_geometry(review.candidate)
+    windows = _frame_windows(review.windows, fps=fps, duration_frames=duration_frames)
+    coverage_plan = compile_review_coverage(
+        duration_frames=duration_frames,
+        sections=[
+            {
+                "sectionId": "program",
+                "startFrame": 0,
+                "endFrameExclusive": duration_frames,
+            }
+        ],
+        required_windows=windows,
+        max_frames_per_pass=int(effective["maxImagesPerPass"]),
+    )
+    if coverage_plan["coverageHoles"]:
+        raise VisionReviewError("mandatory vision coverage could not be planned")
+    contract_seed = {
+        "candidate": hashlib.sha256(review.candidate.read_bytes()).hexdigest(),
+        "candidateIdentity": review.contract_context.get("candidateIdentityHash"),
+        "dependencies": review.contract_context.get("dependencies") or {},
+        "policy": review.policy_payload.get("policyHash"),
+        "coverage": coverage_plan,
+        "capability": snapshot["identityHash"],
+        "prompt": hashlib.sha256(review.prompt.encode("utf-8")).hexdigest(),
+        "transcript": (
+            hashlib.sha256(Path(review.transcript_ref).read_bytes()).hexdigest()
+            if review.transcript_ref and Path(review.transcript_ref).is_file()
+            else None
+        ),
+        "terms": review.terms,
+        "names": review.names,
+        "tool": "avo-native-vision/1.0.0",
+    }
+    contract_hash = hashlib.sha256(
+        json.dumps(contract_seed, sort_keys=True).encode("utf-8")
+    ).hexdigest()
+    contract_dir = review.artifact_dir / contract_hash
+    frames_dir = contract_dir / "frames"
+    raw_dir = contract_dir / "raw"
+    raw_dir.mkdir(parents=True, exist_ok=True)
+
+    def invoke(_candidate_index: str, review_pass: dict[str, Any]) -> dict[str, Any]:
+        requested = [int(frame) for frame in review_pass.get("sampleFrames") or []]
+        decoded: list[int] = []
+        failed: list[int] = []
+        paths: list[Path] = []
+        for frame in requested:
+            try:
+                paths.append(
+                    _extract_exact_frame(
+                        review.candidate,
+                        frame,
+                        frames_dir,
+                        int(effective["imageLongSide"]),
+                    )
+                )
+                decoded.append(frame)
+            except VisionReviewError:
+                failed.append(frame)
+        if failed:
+            return {
+                "status": "blocked",
+                "model": model,
+                "requestedFrames": requested,
+                "decodedFrames": decoded,
+                "failedFrames": failed,
+                "observedFrames": [],
+                "findings": [],
+            }
+        content: list[dict[str, Any]] = [
+            {
+                "type": "text",
+                "text": review.prompt
+                + "\nThis pass is "
+                + str(review_pass["passId"])
+                + ". Finding fields allowed: category, severity, confidence, message, requiresHuman, observed, expected, whyItMatters, suggestedAction. category must be one of layout, pacing, movement, continuity, privacy, caption, visual-quality, editorial, factual-risk, rights, accessibility, technical, other. severity must be one of info, warning, blocking, unknown.",
+            }
+        ]
+        refs: list[dict[str, Any]] = []
+        for frame, path in zip(decoded, paths, strict=True):
+            data = path.read_bytes()
+            digest = hashlib.sha256(data).hexdigest()
+            refs.append(
+                {
+                    "kind": "decoded-frame",
+                    "artifactId": f"frame-{frame}",
+                    "sha256": digest,
+                    "path": str(path),
+                }
+            )
+            content.append(
+                {
+                    "type": "image_url",
+                    "image_url": {
+                        "url": "data:image/png;base64,"
+                        + base64.b64encode(data).decode("ascii"),
+                        "detail": "low",
+                    },
+                }
+            )
+        payload = {
+            "model": model,
+            "reasoning_effort": "none",
+            "temperature": 0,
+            "max_tokens": int(effective["maxOutputTokens"]),
+            "messages": [{"role": "user", "content": content}],
+        }
+        response = _post_json(
+            f"{base_url}/chat/completions",
+            payload,
+            timeout=int(effective["timeoutSeconds"]),
+        )
+        raw_path = raw_dir / f"{review_pass['passId']}.json"
+        raw_path.write_text(
+            json.dumps(response, indent=2, ensure_ascii=False), encoding="utf-8"
+        )
+        analysis = _extract_json_object(_choice_text(response))
+        status = str(analysis.get("status") or "")
+        if status not in _VALID_WATCH_STATUS:
+            raise VisionReviewError("vision response has an invalid status")
+        response_model = str(response.get("model") or "")
+        return {
+            "status": status,
+            "model": response_model,
+            "capabilityIdentityHash": snapshot["identityHash"],
+            "lifecycleActions": [],
+            "requestedFrames": requested,
+            "decodedFrames": decoded,
+            "failedFrames": [],
+            "observedFrames": decoded,
+            "findings": _native_findings(
+                analysis.get("findings"), review_pass=review_pass, frame_refs=refs
+            ),
+            "rawArtifactRefs": [_raw_artifact_ref(raw_path, kind="endpoint-response")],
+        }
+
+    execution = execute_bounded_passes(
+        candidate_index=hashlib.sha256(review.candidate.read_bytes()).hexdigest(),
+        passes=[
+            {
+                **item,
+                "requiredFrames": item["sampleFrames"],
+                "maxAttempts": int(effective["analysisAttempts"]),
+            }
+            for item in coverage_plan["passes"]
+        ],
+        capability_snapshot=snapshot,
+        invoke=invoke,
+    )
+    required_ids = [item["passId"] for item in coverage_plan["passes"]]
+    statuses = {item["status"] for item in execution["passResults"]}
+    aggregate_status = (
+        "blocked"
+        if "blocked" in statuses
+        else "fail"
+        if "fail" in statuses
+        else "needs-human-judgment"
+        if "needs-human-judgment" in statuses
+        else "pass"
+    )
+    observed = set(execution["observedSamples"])
+    observed_windows = []
+    for window in windows:
+        pass_frames = {
+            frame
+            for item in coverage_plan["passes"]
+            if window["windowId"] in item.get("requiredWindowIds", [])
+            for frame in item["sampleFrames"]
+        }
+        if pass_frames and pass_frames.issubset(observed):
+            observed_windows.append(window["source"])
+    holes = list(coverage_plan["coverageHoles"])
+    if len(observed_windows) != len(windows):
+        holes.append({"reason": "required-window-not-observed", "mandatory": True})
+        aggregate_status = "blocked"
+    coverage_manifest_path = contract_dir / "coverage-manifest.json"
+    coverage_manifest_payload = {
+        "reviewContractHash": contract_hash,
+        "planHash": hashlib.sha256(
+            json.dumps(coverage_plan, sort_keys=True).encode()
+        ).hexdigest(),
+        "requiredPassIds": required_ids,
+        "requestedFrames": execution["requestedSamples"],
+        "decodedFrames": execution["decodedSamples"],
+        "failedFrames": execution["failedSamples"],
+        "observedFrames": execution["observedSamples"],
+        "observedWindows": observed_windows,
+        "coverageHoles": holes,
+        "aggregateStatus": aggregate_status,
+    }
+    coverage_manifest_path.write_text(
+        json.dumps(
+            coverage_manifest_payload, indent=2, ensure_ascii=False, sort_keys=True
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    coverage_ref = _raw_artifact_ref(
+        coverage_manifest_path, kind="vision-coverage-manifest"
+    )
+    coverage_artifact = {key: coverage_ref[key] for key in ("path", "sha256", "kind")}
+    evidence = {
+        "schemaVersion": "1.0.0",
+        "status": aggregate_status,
+        "checkpoint": review.checkpoint,
+        "candidate": str(review.candidate),
+        "coverage": {
+            "mode": "full",
+            "sampling": "native-frames",
+            "samplingMode": coverage_plan["samplingMode"],
+            "durationSeconds": duration_seconds,
+            "frameRate": {"num": fps.numerator, "den": fps.denominator},
+            "requestedWindows": review.windows,
+            "observedWindows": observed_windows,
+            "windows": observed_windows,
+            "requestedFrames": execution["requestedSamples"],
+            "decodedFrames": execution["decodedSamples"],
+            "failedFrames": execution["failedSamples"],
+            "observedFrames": execution["observedSamples"],
+            "inspectedRanges": [
+                {"startFrame": frame, "endFrameExclusive": frame + 1}
+                for frame in execution["observedSamples"]
+            ],
+            "coverageHoles": holes,
+        },
+        "findings": [
+            finding for item in execution["passResults"] for finding in item["findings"]
+        ],
+        "tool": "avo-native-vision",
+        "toolVersion": "1.0.0",
+        "model": model,
+        "policy": review.policy_payload,
+        "reviewContext": review.context,
+        "promptSha256": hashlib.sha256(review.prompt.encode("utf-8")).hexdigest(),
+        "capabilitySnapshot": snapshot,
+        "capabilityIdentityHash": snapshot["identityHash"],
+        "coveragePlan": coverage_plan,
+        "coveragePlanHash": hashlib.sha256(
+            json.dumps(coverage_plan, sort_keys=True).encode()
+        ).hexdigest(),
+        "reviewContractHash": contract_hash,
+        "requiredPassIds": required_ids,
+        "passResults": execution["passResults"],
+        "rawArtifactRefs": [
+            ref for item in execution["passResults"] for ref in item["rawArtifactRefs"]
+        ],
+        "automationComplete": aggregate_status != "blocked" and not holes,
+        "visionCoverageManifest": {
+            "planHash": coverage_manifest_payload["planHash"],
+            "reviewContractHash": contract_hash,
+            "aggregateStatus": aggregate_status,
+            "artifact": coverage_artifact,
+        },
+        "disposition": (
+            "blocked"
+            if aggregate_status == "blocked"
+            else "fail"
+            if aggregate_status in {"fail", "needs-human-judgment"}
+            else "pass"
+        ),
+        "outcomeKind": "uncertainty"
+        if aggregate_status == "needs-human-judgment"
+        else "content",
+    }
+    evidence_path = contract_dir / "watch-evidence.json"
+    evidence_path.write_text(
+        json.dumps(evidence, indent=2, ensure_ascii=False, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    return {
+        **evidence,
+        "artifacts": [
+            str(evidence_path),
+            str(coverage_manifest_path),
+            *[ref["path"] for ref in evidence["rawArtifactRefs"]],
+        ],
+    }
+
+
 class WatchSkillAdapter:
     routing_id = "watch-skill"
 
@@ -916,6 +1513,18 @@ class WatchSkillAdapter:
                 pin = None
         _require_bonsai_runtime(option_id, pin=pin)
         review = _review_request(candidate, request)
+        if pin and _dict_at(pin, "source").get("kind") == "endpoint":
+            try:
+                return _native_review(review, pin)
+            except Exception as error:
+                if isinstance(error, ToolError):
+                    raise
+                raise ToolError(
+                    "WATCH_NATIVE_BLOCKED",
+                    f"native structured vision review blocked: {error}",
+                    True,
+                    "keep the pinned model loaded, verify the endpoint, and rerun the exact candidate",
+                ) from error
         watched, video_id = _acquire_candidate(self, review)
         analysis_run = _analyze_candidate(self, review, video_id)
         report_path, analysis_path, raw_paths = _write_raw_artifacts(

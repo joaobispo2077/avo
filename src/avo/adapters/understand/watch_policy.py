@@ -35,6 +35,14 @@ DEFAULT_WATCH_SETTINGS: dict[str, Any] = {
     "riskNotes": [],
     "sections": [],
     "pacingMetrics": {},
+    "contextLimit": 8192,
+    "maxImagesPerPass": 3,
+    "imageLongSide": 640,
+    "maxOutputTokens": 1024,
+    "timeoutSeconds": 240,
+    "concurrency": 1,
+    "operatorManagedLifecycle": True,
+    "vramCeilingBytes": 7 * 1024**3,
 }
 
 _DEVICE = re.compile(r"^(?:auto|cpu|cuda(?::[0-9]+)?)$")
@@ -195,6 +203,20 @@ def resolve_watch_policy(
         "analysisAttempts", values.get("analysisAttempts"), 1, 3
     )
     tool_attempts = _bounded("toolAttempts", values.get("toolAttempts"), 1, 3)
+    _bounded("contextLimit", values.get("contextLimit"), 1024, 131072)
+    _bounded("maxImagesPerPass", values.get("maxImagesPerPass"), 1, 16)
+    _bounded("imageLongSide", values.get("imageLongSide"), 64, 4096)
+    _bounded("maxOutputTokens", values.get("maxOutputTokens"), 64, 16384)
+    _bounded("timeoutSeconds", values.get("timeoutSeconds"), 1, 3600)
+    if _bounded("concurrency", values.get("concurrency"), 1, 16) != 1:
+        raise WatchPolicyError("watch.concurrency must be 1 for local vision review")
+    if values.get("operatorManagedLifecycle") is not True:
+        raise WatchPolicyError("watch.operatorManagedLifecycle must be true")
+    vram = _bounded(
+        "vramCeilingBytes", values.get("vramCeilingBytes"), 1024**3, 64 * 1024**3
+    )
+    if vram > 7 * 1024**3:
+        raise WatchPolicyError("watch.vramCeilingBytes cannot exceed 7 GiB")
     working_directory = _resolved_working_directory(values, raw_dir)
     context = _validated_context(values)
     effective = {
