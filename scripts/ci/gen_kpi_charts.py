@@ -215,7 +215,11 @@ def build_snapshot(
                 "title": title,
                 "status": report._label(outcome),
                 "metric": report.gate_metric(
-                    key, coverage_json=coverage_json, floor=floor, root=root
+                    key,
+                    coverage_json=coverage_json,
+                    floor=floor,
+                    root=root,
+                    outcome=outcome,
                 ),
             }
         )
@@ -250,7 +254,11 @@ def build_snapshot(
         "deps": _count_block(
             report.npm_exception_count(root),
             report.gate_metric(
-                "deps", coverage_json=coverage_json, floor=floor, root=root
+                "deps",
+                coverage_json=coverage_json,
+                floor=floor,
+                root=root,
+                outcome=outcomes.get("deps", ""),
             ),
         ),
         "duplication": {

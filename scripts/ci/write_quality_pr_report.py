@@ -140,9 +140,20 @@ def npm_audit_reported(root: Path = ROOT) -> str | None:
     if not isinstance(payload, dict):
         return None
     label = "PASS" if payload.get("ok") else "FAIL"
+    if (
+        payload.get("error")
+        or payload.get("critical") is None
+        or payload.get("high") is None
+    ):
+        return (
+            f"FAIL, counts unknown: {payload.get('error') or 'npm audit not completed'}"
+        )
     critical = int(payload.get("critical") or 0)
     high = int(payload.get("high") or 0)
-    return f"{label}, {critical} critical, {high} high reported"
+    result = f"{label}, {critical} critical, {high} high reported"
+    if "moderate" in payload and "low" in payload:
+        result += f", {payload['moderate']} moderate, {payload['low']} low reported"
+    return result
 
 
 def npm_exception_count(root: Path = ROOT) -> int:
@@ -203,10 +214,27 @@ def deps_cell(
     Charts keep using ``gate_metric``.
     """
     path = findings_path if findings_path is not None else deps_findings_path(root)
+    if outcome.strip().lower() not in {"success", "failure"}:
+        return "not measured"
     if outcome.strip().lower() == "failure":
+        diagnostic = None
+        if path.is_file():
+            try:
+                payload = json.loads(path.read_text(encoding="utf-8"))
+            except (OSError, ValueError):
+                return "dependency audit evidence unreadable"
+            if isinstance(payload, dict) and payload.get("error"):
+                diagnostic = str(payload["error"])
         findings = load_deps_findings(path)
         if findings:
-            return "; ".join(format_deps_finding(item) for item in findings)
+            details = "; ".join(format_deps_finding(item) for item in findings)
+            return f"{diagnostic}; {details}" if diagnostic else details
+        if diagnostic:
+            return diagnostic
+        return "dependency audit failed; no finding evidence available"
+    reported = npm_audit_reported(root)
+    if reported:
+        return reported
     return f"{npm_exception_count(root)} npm GHSA exceptions"
 
 
@@ -266,7 +294,10 @@ def gate_metric(
     coverage_json: Path,
     floor: float,
     root: Path = ROOT,
+    outcome: str | None = None,
 ) -> str:
+    if key == "deps" and outcome is not None:
+        return deps_cell(outcome, root=root)
     if key == "coverage":
         return coverage_detail(coverage_json, floor)
     if key == "complexity":
