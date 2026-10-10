@@ -109,7 +109,26 @@ def _video_tail_parameters(metadata):
     return {"videoTailPolicy": deepcopy(policy)}
 
 
-def _protected_windows(snapshot, locator, start_time, end_time, first, last, fps):
+def _clock_boundary(value, precise):
+    if not precise:
+        return round(value)
+    from .event_clock import sample_rate_boundary
+
+    value = Fraction(value)
+    return sample_rate_boundary(
+        value.numerator, source_rate=value.denominator, target_rate=1
+    )
+
+
+def _precise_clock_mode(workspace, snapshot):
+    return bool(
+        snapshot.get("cuttingRef") or getattr(workspace, "cutting_preview", False)
+    )
+
+
+def _protected_windows(
+    snapshot, locator, start_time, end_time, first, last, fps, precise=False
+):
     windows = []
     for protected in snapshot.get("protectedQuizWindows", []):
         if Path(protected["sourceBasename"]).name != locator.name:
@@ -122,9 +141,10 @@ def _protected_windows(snapshot, locator, start_time, end_time, first, last, fps
             raise ValueError("a protected answer window was cut")
         minimum = Fraction(str(protected["minimumAnswerSeconds"]))
         window = {
-            "startFrame": first + round((hold_start - start_time) * fps),
+            "startFrame": first
+            + _clock_boundary((hold_start - start_time) * fps, precise),
             "endFrameExclusive": min(
-                last, first + round((hold_end - start_time) * fps)
+                last, first + _clock_boundary((hold_end - start_time) * fps, precise)
             ),
         }
         if (
@@ -152,6 +172,7 @@ def initial_cut_proof_request(
     index = workspace.require_active("cmap")
     revision = workspace.store("cmap").revision(index["headRevisionId"])
     snapshot = revision["snapshot"]
+    precise = _precise_clock_mode(workspace, snapshot)
     sources = {source["sourceId"]: source for source in snapshot["sources"]}
     fps = Fraction(frame_rate["num"], frame_rate["den"])
     if fps <= 0 or min(width, height, sample_rate) <= 0:
@@ -170,15 +191,19 @@ def initial_cut_proof_request(
         metadata, selection, locator, channel_map = _source_selection(source, workspace)
         native_rate = _cached_native_rate(selection, locator, source_id, native_rates)
         start, end, start_time, end_time = _source_interval(segment)
-        first = round(elapsed * fps)
+        first = _clock_boundary(elapsed * fps, precise)
         elapsed += end_time - start_time
-        last = round(elapsed * fps)
+        last = _clock_boundary(elapsed * fps, precise)
         if last <= first:
             raise ValueError("source interval is shorter than one output frame")
         frame_range = {"startFrame": first, "endFrameExclusive": last}
         sample_range = {
-            "startSample": round(Fraction(first, 1) / fps * sample_rate),
-            "endSampleExclusive": round(Fraction(last, 1) / fps * sample_rate),
+            "startSample": _clock_boundary(
+                Fraction(first, 1) / fps * sample_rate, precise
+            ),
+            "endSampleExclusive": _clock_boundary(
+                Fraction(last, 1) / fps * sample_rate, precise
+            ),
         }
         fingerprint = source["fingerprint"]["sha256"]
         fingerprints[source_id] = fingerprint
@@ -196,8 +221,10 @@ def initial_cut_proof_request(
                 "sourceSampleRate": native_rate,
                 "targetSampleRate": sample_rate,
                 "sourceRange": {
-                    "startSample": round(start_time * native_rate),
-                    "endSampleExclusive": round(end_time * native_rate),
+                    "startSample": _clock_boundary(start_time * native_rate, precise),
+                    "endSampleExclusive": _clock_boundary(
+                        end_time * native_rate, precise
+                    ),
                 },
                 "outputRange": sample_range,
                 "sourceLayout": selection["sourceLayout"],
@@ -254,7 +281,7 @@ def initial_cut_proof_request(
             joins.append(first)
         protected_windows.extend(
             _protected_windows(
-                snapshot, locator, start_time, end_time, first, last, fps
+                snapshot, locator, start_time, end_time, first, last, fps, precise
             )
         )
     if not operations:
@@ -280,7 +307,7 @@ def initial_cut_proof_request(
     windows.extend(protected_windows)
     if len(protected_windows) != len(snapshot.get("protectedQuizWindows", [])):
         raise ValueError("every protected answer window must occur once in the cut")
-    return {
+    result = {
         "checkpoint": "cut-proof",
         "iterationId": iteration_id,
         "sourceFingerprints": fingerprints,
@@ -314,4 +341,35 @@ def initial_cut_proof_request(
             "fullReview": ["transcript", "sequential-decode", "watch", "listening"],
             "historicalRegression": [],
         },
+    }
+    _bind_current_cutting(workspace, snapshot, frame_rate, result)
+    return result
+
+
+def _bind_current_cutting(workspace, snapshot, frame_rate, result):
+    if not snapshot.get("cuttingRef"):
+        return
+    from .cutting_audit import audit_joins
+    from .cutting_contracts import selection_graph_hash
+    from .cutting_store import CuttingStore
+
+    store = CuttingStore(
+        Path(workspace.timeline_dir) / "cutting",
+        video_id=workspace.video_id,
+        provider=workspace.project["provider"],
+    )
+    document = store.load_document(snapshot["cuttingRef"])
+    verified = document["payload"]
+    if (
+        document["documentType"] != "verification"
+        or verified["status"] != "pass"
+        or verified.get("graphHash") != selection_graph_hash(snapshot)
+    ):
+        raise ValueError("canonical cutting verification is missing or stale")
+    result["validationPlan"]["cutting"] = {
+        "required": True,
+        "proposalRef": verified["proposalRef"],
+        "verificationRef": snapshot["cuttingRef"],
+        "graphHash": verified["graphHash"],
+        "joinIds": [join["joinId"] for join in audit_joins(snapshot, frame_rate)],
     }

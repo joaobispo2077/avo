@@ -46,6 +46,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     configure_parser(sub.add_parser("breathing"))
 
+    _trim_parser(sub)
+
     pipeline = sub.add_parser("pipeline")
     pipeline_sub = pipeline.add_subparsers(dest="pipeline_command", required=True)
     for name in ("run", "status", "verify-commands"):
@@ -1696,12 +1698,49 @@ def _still(args: argparse.Namespace) -> int:
     return 0
 
 
+def _trim_parser(sub):
+    trim = sub.add_parser("trim")
+    trim_sub = trim.add_subparsers(dest="trim_command", required=True)
+    for operation in ("analyze", "preview", "decide", "apply", "status"):
+        item = trim_sub.add_parser(operation)
+        _project_arg(item)
+        if operation in {"preview", "decide", "apply", "status"}:
+            item.add_argument("--proposal", type=Path, required=operation != "status")
+        if operation in {"analyze", "decide"}:
+            item.add_argument("--request", type=Path, required=operation == "decide")
+
+
+def _trim(args: argparse.Namespace) -> int:
+    from avo.adapters.registry import build_cutting_service
+    from avo.timeline.command_handlers import CommandHandlers
+    from avo.timeline.pipeline import TimelinePipeline
+
+    workspace = TimelineWorkspace.from_project(
+        args.project, video_id=args.video_id or None
+    )
+    request = _load_json(args.request) if getattr(args, "request", None) else None
+    service = build_cutting_service(workspace, invocation=request)
+    payload = {}
+    if request is not None:
+        payload["request"] = request
+    if getattr(args, "proposal", None) is not None:
+        payload["proposalRef"] = args.proposal
+    if args.trim_command == "apply":
+        payload["mutation"] = "cmap"
+    result = CommandHandlers(
+        TimelinePipeline(workspace), cutting_service=service
+    ).execute("trim", args.trim_command, payload)
+    _emit(result)
+    return 3 if result["result"].get("status") in {"blocked", "fail"} else 0
+
+
 def _run_cli(args: argparse.Namespace) -> int:
     if args.command == "breathing":
         from avo.breathing import run as breathing_run
 
         return breathing_run(args)
     handlers = {
+        "trim": _trim,
         "pipeline": _pipeline,
         "timeline": _timeline,
         "sync": _sync,

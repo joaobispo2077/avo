@@ -11,15 +11,55 @@ from .command_registry import authorize, command_spec
 from .pipeline import TimelinePipeline
 
 
+def _prepare_command(command, operation, payload):
+    payload = dict(payload or {})
+    spec = command_spec(command)
+    mutation = payload.pop("mutation", None)
+    target_scope = str(payload.pop("targetScope", "current"))
+    parent_ref = payload.pop("parentTimelineRef", None)
+    authorize(
+        command,
+        mutation=mutation,
+        writes_evidence=operation == "evidence",
+        target_scope=target_scope,
+        parent_timeline_ref=parent_ref,
+    )
+    return payload, spec, mutation, parent_ref
+
+
+def _execute_cutting(service, operation, payload, spec):
+    if operation not in {"analyze", "preview", "decide", "apply", "status"}:
+        raise ValueError(f"unsupported trim operation: {operation}")
+    if service is None:
+        raise ValueError("trim requires an injected CuttingService")
+    if operation == "analyze":
+        result = service.analyze(payload.pop("request", None))
+    elif operation == "decide":
+        result = service.decide(payload.pop("proposalRef"), payload.pop("request"))
+    elif operation == "status":
+        result = service.status(payload.pop("proposalRef", None))
+    else:
+        result = getattr(service, operation)(payload.pop("proposalRef"))
+    return {
+        "command": "trim",
+        "mode": spec.mode,
+        "operation": operation,
+        "mutated": operation == "apply" and result.get("status") == "applied",
+        "result": result,
+    }
+
+
 class CommandHandlers:
     def __init__(
         self,
         pipeline: TimelinePipeline,
         *,
         evidence_runner: Callable[..., dict[str, Any]] | None = None,
+        cutting_service: Any | None = None,
     ) -> None:
         self.pipeline = pipeline
         self.evidence_runner = evidence_runner
+        self.cutting_service = cutting_service
 
     def _rework_status(self) -> dict[str, Any]:
         """Project current classifications while retaining every prior attribution."""
@@ -61,18 +101,12 @@ class CommandHandlers:
         operation: str,
         payload: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
-        payload = dict(payload or {})
-        spec = command_spec(command)
-        mutation = payload.pop("mutation", None)
-        target_scope = str(payload.pop("targetScope", "current"))
-        parent_ref = payload.pop("parentTimelineRef", None)
-        authorize(
-            command,
-            mutation=mutation,
-            writes_evidence=operation == "evidence",
-            target_scope=target_scope,
-            parent_timeline_ref=parent_ref,
+        payload, spec, mutation, parent_ref = _prepare_command(
+            command, operation, payload
         )
+
+        if command == "trim":
+            return _execute_cutting(self.cutting_service, operation, payload, spec)
 
         if command == "thumbnail" and operation == "extract":
             from .stills import StillExtractionService
