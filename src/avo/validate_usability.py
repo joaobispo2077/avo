@@ -15,28 +15,18 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from avo.paths import config_path, repo_root
+from avo.paths import config_path, repo_root, validation_config_path
 
 
 def load_json(path: Path) -> dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def _config_at(root: Path, name: str) -> Path:
-    nested = root / "config" / name
-    if nested.is_file():
-        return nested
-    legacy = root / name
-    if legacy.is_file():
-        return legacy
-    return nested
-
-
 def check_avo_config(root: Path) -> tuple[str, str]:
     path = (
         config_path("avo.config.json")
         if root.resolve() == repo_root().resolve()
-        else _config_at(root, "avo.config.json")
+        else validation_config_path(root, "avo.config.json")
     )
     if not path.is_file():
         return "FAIL", "avo.config.json missing"
@@ -139,7 +129,7 @@ def run_checks(root: Path, *, ci: bool) -> list[tuple[str, str, str]]:
         ("core-helpers", check_core_helpers_import(root)),
     ]
     if ci:
-        deps_manifest = _config_at(root, "avo.dependencies.json")
+        deps_manifest = validation_config_path(root, "avo.dependencies.json")
         if not deps_manifest.is_file():
             checks.append(
                 ("avo.dependencies", ("FAIL", "avo.dependencies.json missing"))
