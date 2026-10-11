@@ -18,7 +18,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from avo.paths import config_path, repo_root
+from avo.paths import config_path, repo_root, validation_config_path
 
 
 @dataclass
@@ -36,7 +36,7 @@ def load_manifest(root: Path) -> dict[str, Any]:
     path = (
         config_path("avo.dependencies.json")
         if root.resolve() == repo_root().resolve()
-        else _config_at(root, "avo.dependencies.json")
+        else validation_config_path(root, "avo.dependencies.json")
     )
     if not path.is_file():
         raise FileNotFoundError(f"missing dependency manifest: {path}")
@@ -46,21 +46,11 @@ def load_manifest(root: Path) -> dict[str, Any]:
     return data
 
 
-def _config_at(root: Path, name: str) -> Path:
-    nested = root / "config" / name
-    if nested.is_file():
-        return nested
-    legacy = root / name
-    if legacy.is_file():
-        return legacy
-    return nested
-
-
 def load_routing(root: Path) -> dict[str, Any]:
     path = (
         config_path("avo.config.json")
         if root.resolve() == repo_root().resolve()
-        else _config_at(root, "avo.config.json")
+        else validation_config_path(root, "avo.config.json")
     )
     if not path.is_file():
         raise FileNotFoundError(f"missing routing config: {path}")

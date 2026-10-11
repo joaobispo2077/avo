@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any
 
 from .contracts import file_fingerprint
+from .diff import stable_id_diff
 from .lineage import LineageError, validate_cmap_snapshot
 from .workspace import TimelineWorkspace
 
@@ -62,60 +63,14 @@ class CMapService:
     def _diff(
         parent: dict[str, Any] | None, child: dict[str, Any], reason: str
     ) -> list[dict[str, Any]]:
-        before = (parent or {}).get("segments") or []
-        after = child.get("segments") or []
-        before_by = {item["segmentId"]: item for item in before}
-        after_by = {item["segmentId"]: item for item in after}
-        ops = []
-        ordinal = 1
-
-        def add(
-            op,
-            target,
-            before_value=None,
-            after_value=None,
-            from_order=None,
-            to_order=None,
-        ):
-            nonlocal ordinal
-            item = {
-                "opId": f"diff-{ordinal:04d}",
-                "op": op,
-                "target": {"collection": "segments", "stableId": target},
-                "reason": reason,
-                "actorIntent": "preserve approved editorial meaning",
-            }
-            if before_value is not None:
-                item["before"] = before_value
-            if after_value is not None:
-                item["after"] = after_value
-            if from_order is not None:
-                item["fromOrder"] = from_order
-            if to_order is not None:
-                item["toOrder"] = to_order
-            item["affectedTimeRanges"] = []
-            ops.append(item)
-            ordinal += 1
-
-        for sid, item in before_by.items():
-            if sid not in after_by:
-                add("remove", sid, before_value=item)
-        for sid, item in after_by.items():
-            if sid not in before_by:
-                add("add", sid, after_value=item)
-            elif before_by[sid] != item:
-                add("replace", sid, before_value=before_by[sid], after_value=item)
-        before_order = [item["segmentId"] for item in before]
-        after_order = [item["segmentId"] for item in after]
-        for sid in set(before_order) & set(after_order):
-            if before_order.index(sid) != after_order.index(sid):
-                add(
-                    "move",
-                    sid,
-                    from_order=before_order.index(sid),
-                    to_order=after_order.index(sid),
-                )
-        return ops
+        return stable_id_diff(
+            parent,
+            child,
+            reason,
+            collection="segments",
+            id_key="segmentId",
+            actor_intent="preserve approved editorial meaning",
+        )
 
     def author(
         self,

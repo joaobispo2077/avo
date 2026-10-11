@@ -11,7 +11,7 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
-from avo import shorts_captions, shorts_contract, shorts_media, shorts_provider
+from avo import shorts_captions, shorts_contract, shorts_provider, shorts_rules
 
 TranscribeRunner = Callable[[Path, Path], Path]
 
@@ -860,7 +860,7 @@ def resolve_batch(
                 "audioStreamIndex": insertion.get("audioStream"),
                 "targetDurationSec": item["editedDurationSec"],
                 "supportVolume": insertion["supportVolume"],
-                "sourceTimeMap": shorts_media.finite_repeat_map(
+                "sourceTimeMap": shorts_rules.finite_repeat_map(
                     insertion["approvedWindows"], item["editedDurationSec"]
                 ),
                 "rightsReference": insertion["rightsBasis"],

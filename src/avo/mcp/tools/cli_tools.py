@@ -85,14 +85,9 @@ def _tool(
     destructive: bool = False,
     extra_params: Sequence[ParamSpec] = (),
     include_project: bool = True,
-    cli_group: str | None = None,
 ) -> BridgeToolDef:
-    """Build a bridge def.
-
-    ``cli_group`` overrides the argv group token when it differs from the
-    registry ``group`` tag (unused today; keep for hyphenated CLI groups).
-    """
-    cli_prefix = (cli_group or group, subcommand)
+    """Build a bridge def."""
+    cli_prefix = (group, subcommand)
     params = (
         (_project_params() + tuple(extra_params))
         if include_project

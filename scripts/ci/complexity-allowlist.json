@@ -739,20 +739,6 @@
       "reason": "Reporting/inventory/validation aggregation with many optional fields"
     },
     {
-      "path": "src/avo/timeline/bmap_service.py",
-      "name": "_diff",
-      "complexity": 15,
-      "rank": "C",
-      "reason": "Timeline state machine / review gate branching; planned decomposition"
-    },
-    {
-      "path": "src/avo/timeline/cmap_service.py",
-      "name": "_diff",
-      "complexity": 15,
-      "rank": "C",
-      "reason": "Timeline state machine / review gate branching; planned decomposition"
-    },
-    {
       "path": "src/avo/timeline/component_instances.py",
       "name": "resolve_provider_kit",
       "complexity": 15,

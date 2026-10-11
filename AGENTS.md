@@ -227,6 +227,10 @@ Video **export** versions for footage projects remain `YYYYMMDD-video-slug-stage
 
 ### Documentation
 
+Every architectural evolution must be documented in root
+[`ARCHITECTURE.md`](ARCHITECTURE.md), including boundaries, dependency direction,
+compatibility exceptions and validation.
+
 User-requested behavior notes, decisions, and strategies → Markdown under `./docs/`
 (kebab-case). Link from changelog when using scope branches without tickets.
 

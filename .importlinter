@@ -40,5 +40,17 @@ source_modules =
 forbidden_modules =
     avo.adapters
 ignore_imports =
-    avo.timeline.materialize -> avo.adapters.media.sync_materializer
-    avo.timeline.materialize -> avo.adapters.media.timeline_render
+    # Legacy optional dependencies only; CLI passes concrete ports explicitly.
+    avo.timeline.materialize -> avo.proof_composition
+    avo.timeline.initial_cut -> avo.proof_composition
+
+
+[importlinter:contract:shorts-planning-not-preparation]
+name = Shorts planning and pure rules must not import media preparation
+type = forbidden
+source_modules =
+    avo.shorts_plan
+    avo.shorts_rules
+forbidden_modules =
+    avo.shorts_media
+    avo.adapters
