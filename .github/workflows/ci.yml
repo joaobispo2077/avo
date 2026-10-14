@@ -114,7 +114,7 @@ jobs:
           enable-cache: true
 
       - name: Sync Python deps (frozen)
-        run: uv sync --frozen --extra dev
+        run: uv sync --frozen --extra dev --extra mcp
 
       - name: Expose venv on PATH
         run: echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
@@ -155,7 +155,7 @@ jobs:
           enable-cache: true
 
       - name: Sync Python deps (frozen)
-        run: uv sync --frozen --extra dev
+        run: uv sync --frozen --extra dev --extra mcp
 
       - name: Expose venv on PATH
         run: echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
