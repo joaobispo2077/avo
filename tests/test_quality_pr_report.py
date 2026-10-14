@@ -295,7 +295,7 @@ class QualityPrReportTests(unittest.TestCase):
         text = mod.build_markdown(
             profile="light",
             floor=40.0,
-            stats={"killed": 8, "survived": 2, "timeout": 1, "total": 11},
+            stats={"killed": 8, "survived": 2, "timeout": 0, "total": 10},
             timeout_minutes=20,
         )
         self.assertIn("## Mutation tests", text)
@@ -304,7 +304,37 @@ class QualityPrReportTests(unittest.TestCase):
         self.assertIn("Passing (>= 40)", text)
         self.assertIn("| Killed | 8 |", text)
         self.assertIn("| Survived | 2 |", text)
-        self.assertIn("| Timeout | 1 |", text)
+        self.assertIn("| Timeout | 0 |", text)
+
+    def test_mutation_report_never_scores_incomplete_or_invalid_counts(self):
+        mod = _load(
+            "write_mutation_pr_report", "scripts/ci/write_mutation_pr_report.py"
+        )
+        sha = "a" * 40
+        for counters in (
+            {"killed": 8, "survived": 2, "timeout": 90, "total": 100},
+            {"killed": 8, "survived": 2, "no_tests": 1, "total": 11},
+            {"killed": 8, "survived": 2, "total": 11},
+            {"killed": 8, "survived": 2, "total": 1},
+            {"killed": True, "survived": 2, "total": 10},
+        ):
+            with self.subTest(counters=counters):
+                text, metrics = mod.compose_report(
+                    {**counters, "sha": sha, "run_id": "123", "profile": "light"},
+                    profile="light",
+                    floor=40,
+                    timeout_minutes=20,
+                    sha=sha,
+                    run_id="123",
+                )
+                self.assertIn("Mutation score: **unavailable**", text)
+                self.assertNotIn("Passing", text)
+                self.assertNotIn("80.00%", text)
+                self.assertIsNone(metrics["score"])
+                self.assertFalse(metrics["complete"])
+                self.assertIn(metrics["status"], ("INCOMPLETE", "INVALID"))
+                self.assertEqual(metrics["run_id"], "123")
+                self.assertEqual(metrics["profile"], "light")
 
     def test_mutation_report_without_stats(self) -> None:
         mod = _load(
@@ -328,6 +358,8 @@ class QualityPrReportTests(unittest.TestCase):
             mod.mutation_metrics_document(
                 {"score": 99.0},
                 sha=sha,
+                run_id="123",
+                profile="light",
                 floor=40.0,
             )
         )
@@ -335,19 +367,36 @@ class QualityPrReportTests(unittest.TestCase):
             mod.mutation_metrics_document(
                 {"killed": 8, "survived": 2},
                 sha="",
+                run_id="123",
+                profile="light",
                 floor=40.0,
             )
         )
         doc = mod.mutation_metrics_document(
-            {"killed": 8, "survived": 2, "score": 1},
+            {
+                "killed": 8,
+                "survived": 2,
+                "total": 10,
+                "score": 1,
+                "sha": sha,
+                "run_id": "123",
+                "profile": "light",
+            },
             sha=sha,
+            run_id="123",
+            profile="light",
             floor=40.0,
         )
-        self.assertEqual(
-            doc,
-            {"sha": sha, "killed": 8, "survived": 2, "floor": 40.0},
-        )
-        self.assertNotIn("score", doc)
+        self.assertEqual(doc["sha"], sha)
+        self.assertEqual(doc["run_id"], "123")
+        self.assertEqual(doc["profile"], "light")
+        self.assertEqual(doc["killed"], 8)
+        self.assertEqual(doc["survived"], 2)
+        self.assertEqual(doc["floor"], 40.0)
+        self.assertEqual(doc["score"], 80.0)
+        self.assertEqual(doc["status"], "PASS")
+        self.assertTrue(doc["complete"])
+        self.assertEqual(doc["counts"]["total"], 10)
 
     def test_restored_cache_is_not_passing_when_clean_tests_failed(self) -> None:
         """PR 82: cache restored 207/112 after clean tests never started mutmut."""
@@ -364,6 +413,15 @@ class QualityPrReportTests(unittest.TestCase):
                 "total": 319,
                 "sha": "a" * 40,
                 "run_id": "111",
+            },
+            {
+                "killed": 207,
+                "survived": 112,
+                "timeout": 0,
+                "total": 319,
+                "sha": current,
+                "run_id": "222",
+                "profile": "full",
             },
             {
                 "killed": 207,
@@ -444,7 +502,7 @@ class QualityPrReportTests(unittest.TestCase):
             root = Path(tmp)
             stats_path = root / "mutmut-cicd-stats.json"
             stats_path.write_text(
-                json.dumps({"killed": 8, "survived": 2, "timeout": 1, "total": 11}),
+                json.dumps({"killed": 8, "survived": 2, "timeout": 0, "total": 10}),
                 encoding="utf-8",
             )
             out = root / "reports" / "mutation-report.md"
@@ -473,15 +531,21 @@ class QualityPrReportTests(unittest.TestCase):
         self.assertEqual(rc, 0)
         self.assertEqual(stamped["sha"], sha)
         self.assertEqual(stamped["run_id"], "333")
+        self.assertEqual(stamped["profile"], "light")
         self.assertEqual(stamped["killed"], 8)
         self.assertIn("80.00%", text)
         self.assertIn("Passing (>= 40)", text)
         self.assertIn("| Killed | 8 |", text)
         self.assertIn("| Survived | 2 |", text)
-        self.assertEqual(
-            metrics,
-            {"floor": 40.0, "killed": 8, "sha": sha, "survived": 2},
-        )
+        self.assertEqual(metrics["floor"], 40.0)
+        self.assertEqual(metrics["killed"], 8)
+        self.assertEqual(metrics["sha"], sha)
+        self.assertEqual(metrics["survived"], 2)
+        self.assertEqual(metrics["run_id"], "333")
+        self.assertEqual(metrics["profile"], "light")
+        self.assertEqual(metrics["score"], 80.0)
+        self.assertEqual(metrics["status"], "PASS")
+        self.assertTrue(metrics["complete"])
 
     def test_stamped_run_below_floor_stays_failing(self) -> None:
         mod = _load(
@@ -495,6 +559,7 @@ class QualityPrReportTests(unittest.TestCase):
             "total": 10,
             "sha": sha,
             "run_id": "444",
+            "profile": "light",
         }
         text, metrics = mod.compose_report(
             stats,
