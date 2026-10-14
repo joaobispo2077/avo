@@ -10,6 +10,7 @@ on:
   pull_request:
     branches:
       - main
+      - develop
       - release
 
 env:
@@ -406,3 +407,32 @@ jobs:
           path: reports/mutation/mutation-report.md
           header: mutation-report
           recreate: true
+
+  ci-readiness:
+    name: CI readiness
+    if: always()
+    needs:
+      - prerequisites-gate
+      - repo-unit-tests
+      - repo-integration-tests
+      - software-quality
+      - usability-gate
+      - mutation-light
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Require successful mandatory jobs
+        env:
+          CI_NEEDS_JSON: ${{ toJSON(needs) }}
+        run: python scripts/ci/check_ci_readiness.py
+
