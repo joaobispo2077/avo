@@ -27,11 +27,12 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 MISSING = "\u2014"
-SCHEMA = 1
+SCHEMA = 2
 _SHA = re.compile(r"^[0-9a-f]{40}$")
 _RECORDED = re.compile(r"^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$")
 _VERSION = re.compile(r"^[0-9]+\.[0-9]+\.[0-9]+(?:[-+][0-9A-Za-z.-]+)?$")
-CHART_FILES = (
+CHART_FILES = (("dashboard", "dashboard.png"),)
+LEGACY_CHART_FILES = (
     ("status", "status.png"),
     ("coverage", "coverage.png"),
     ("complexity", "complexity.png"),
@@ -67,6 +68,27 @@ def _report():
 
 def _charts():
     return _load("avo_ci_gen_kpi_charts", "gen_kpi_charts.py")
+
+
+def _dashboard():
+    return _load("avo_ci_quality_dashboard", "quality_dashboard.py")
+
+
+def _mutation_policy(root: Path) -> dict:
+    path = root / "scripts" / "ci" / "mutation-config.json"
+    try:
+        config = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as exc:
+        raise SnapshotError(f"mutation policy unavailable: {path}") from exc
+    profile = config.get("light") if isinstance(config, dict) else None
+    floor = (
+        _dashboard().percentage(profile.get("min_killed_percent"))
+        if isinstance(profile, dict)
+        else None
+    )
+    if floor is None:
+        raise SnapshotError("mutation policy light profile has no valid floor")
+    return {"profile": "light", "floor": floor}
 
 
 def chart_series(snapshot: dict) -> dict[str, dict]:
@@ -116,6 +138,7 @@ def build_ci_document(
     root: Path,
     sha: str,
     recorded_at: str,
+    run_id: str = "",
 ) -> dict:
     """Freeze Software quality sticky fields for one commit. Mutation stays null."""
     report = _report()
@@ -139,24 +162,52 @@ def build_ci_document(
                 "checks": report.GATE_POLICY.get(key, ""),
             }
         )
-    return {
+    doc = {
         "schema": SCHEMA,
         "sha": sha.strip().lower(),
+        "run_id": str(run_id or os.environ.get("GITHUB_RUN_ID", "")).strip(),
         "recorded_at": recorded_at,
         "overall": snapshot["overall"],
         "floor": floor,
         "gates": gates,
         "series": chart_series(snapshot),
+        "mutation_policy": _mutation_policy(root),
         "mutation": None,
     }
+    doc["series"]["dashboard"] = _dashboard().build_series(doc)
+    doc["overall"] = doc["series"]["dashboard"]["overall"]
+    return doc
 
 
-def mutation_view(payload: object, sha: str) -> dict | None:
+def mutation_view(
+    payload: object, sha: str, run_id: str = "", policy: object = None
+) -> dict | None:
     """Kill rate from killed/survived counts bound to ``sha``. Never a bare score."""
     if not isinstance(payload, dict):
         return None
     if str(payload.get("sha") or "") != sha:
         return None
+    if run_id:
+        metric = _dashboard().mutation_metric(
+            {
+                "sha": sha,
+                "run_id": run_id,
+                "mutation": payload,
+                "mutation_policy": policy,
+            }
+        )
+        if metric["measured"] is None:
+            return None
+        checker = _dashboard().mutation_checker()
+        evaluation = checker.mutation_evaluation(
+            payload.get("counts", payload), min_killed_percent=metric["threshold"]
+        )
+        return {
+            "killed": evaluation["counts"]["killed"],
+            "survived": evaluation["counts"]["survived"],
+            "score": metric["measured"],
+            "floor": metric["threshold"],
+        }
     killed = payload.get("killed")
     survived = payload.get("survived")
     if type(killed) is not int or type(survived) is not int:
@@ -208,8 +259,10 @@ def _chart_tables(series: dict, images: dict[str, str]) -> str:
     parts = [
         "## Chart series",
         "",
-        "Rows are the JSON series from the green run. "
-        "A PNG ships only when it embeds that same series.",
+        (
+            "Rows are the JSON series from the green run. "
+            "A PNG ships only when it embeds that same series."
+        ),
         "",
         "### Gate status",
         "",
@@ -348,6 +401,33 @@ def render_markdown(
     images: dict[str, str],
     mutation: dict | None,
 ) -> str:
+    metadata = _table(
+        [
+            ("Version", version),
+            ("Tag", tag),
+            ("SHA", f"`{doc['sha']}`"),
+            ("Recorded (UTC)", str(doc["recorded_at"])),
+        ]
+    )
+    if doc["schema"] == SCHEMA:
+        return "\n".join(
+            [
+                "# Quality metrics",
+                "",
+                (
+                    "Release readout of the exact commit and CI run. "
+                    "Measurements and thresholds do not replace mandatory checks."
+                ),
+                "",
+                metadata,
+                "",
+                _dashboard().markdown(
+                    doc,
+                    doc["series"]["dashboard"],
+                    image=images.get("dashboard", ""),
+                ),
+            ]
+        )
     gate_lines = [
         "| Gate | Status | Metric | What this checks |",
         "|---|---|---|---|",
@@ -359,25 +439,22 @@ def render_markdown(
     parts = [
         "# Quality metrics",
         "",
-        "Release-cut readout of the green Software quality JSON for this tip SHA. "
-        "A missing or SHA-mismatched JSON fails the cut. "
-        "These tables and charts do not change floors or replace gates.",
-        "",
-        _table(
-            [
-                ("Version", version),
-                ("Tag", tag),
-                ("SHA", f"`{doc['sha']}`"),
-                ("Recorded (UTC)", str(doc["recorded_at"])),
-            ]
+        (
+            "Release-cut readout of the green Software quality JSON for this tip SHA. "
+            "A missing or SHA-mismatched JSON fails the cut. "
+            "These tables and charts do not change floors or replace gates."
         ),
+        "",
+        metadata,
         "",
         f"**Overall: {doc['overall']}**",
         "",
         "\n".join(gate_lines),
         "",
-        f"Coverage fail-under **{float(doc['floor']):.0f}%**. "
-        "Mutation is separate from Software quality.",
+        (
+            f"Coverage fail-under **{float(doc['floor']):.0f}%**. "
+            "Mutation is separate from Software quality."
+        ),
         "",
         _chart_tables(doc["series"], images),
         _mutation_section(mutation),
@@ -397,9 +474,13 @@ def _load_metrics(path: Path) -> dict:
     return payload
 
 
-def _validate(doc: dict, sha: str, version: str) -> tuple[str, list[dict]]:
-    if doc.get("schema") != SCHEMA:
+def _validate(
+    doc: dict, sha: str, version: str, expected_run_id: str = ""
+) -> tuple[str, list[dict]]:
+    if type(doc.get("schema")) is not int or doc["schema"] not in (1, SCHEMA):
         raise SnapshotError("unsupported quality metrics schema")
+    if doc["schema"] == 1 and expected_run_id:
+        raise SnapshotError("legacy quality metrics cannot validate a current CI run")
     tip = sha.strip().lower()
     if not _SHA.fullmatch(tip):
         raise SnapshotError(f"release tip SHA is not a commit sha: {sha}")
@@ -409,6 +490,12 @@ def _validate(doc: dict, sha: str, version: str) -> tuple[str, list[dict]]:
             f"quality metrics SHA mismatch: json has {bound or '(empty)'}, "
             f"release tip is {tip}"
         )
+    if doc["schema"] == SCHEMA:
+        run_id = doc.get("run_id")
+        if not isinstance(run_id, str) or not run_id.strip():
+            raise SnapshotError("quality metrics run_id missing")
+        if expected_run_id and run_id != str(expected_run_id):
+            raise SnapshotError("quality metrics run_id mismatch")
     if doc.get("overall") != "PASS":
         raise SnapshotError(
             f"quality metrics are not green: overall {doc.get('overall')!r}"
@@ -447,9 +534,38 @@ def _validate(doc: dict, sha: str, version: str) -> tuple[str, list[dict]]:
     series = doc.get("series")
     if not isinstance(series, dict):
         raise SnapshotError("quality metrics chart series missing")
-    for key, _filename in CHART_FILES:
+    for key, _filename in LEGACY_CHART_FILES:
         if not isinstance(series.get(key), dict):
             raise SnapshotError(f"quality metrics series missing {key}")
+    if doc["schema"] == SCHEMA:
+        policy = doc.get("mutation_policy")
+        if (
+            not isinstance(policy, dict)
+            or policy.get("profile") != "light"
+            or _dashboard().percentage(policy.get("floor")) is None
+        ):
+            raise SnapshotError("quality metrics mutation_policy missing or invalid")
+        dashboard = series.get("dashboard")
+        if not isinstance(dashboard, dict):
+            raise SnapshotError("quality metrics series missing dashboard")
+        expected = _dashboard().build_series(doc)
+        if dashboard != expected:
+            raise SnapshotError("quality metrics dashboard does not match its evidence")
+        if expected["overall"] != "PASS":
+            raise SnapshotError("quality metrics dashboard is not green")
+        jobs = doc.get("jobs")
+        readiness = _load("avo_ci_check_ci_readiness", "check_ci_readiness.py")
+        results = (
+            {key: {"result": value} for key, value in jobs.items()}
+            if isinstance(jobs, dict)
+            else None
+        )
+        if failures := readiness.evaluate_needs(results):
+            raise SnapshotError(
+                f"quality metrics mandatory jobs: {'; '.join(failures)}"
+            )
+        if not isinstance(jobs, dict) or jobs.get("ci-readiness") != "success":
+            raise SnapshotError("quality metrics CI readiness did not succeed")
     return tip, rows
 
 
@@ -512,26 +628,30 @@ def _png_series(path: Path) -> dict:
     return payload
 
 
-def _present_charts(src: Path) -> list[tuple[str, str]]:
-    return [(key, name) for key, name in CHART_FILES if (src / name).is_file()]
+def _chart_files(schema: int = SCHEMA) -> tuple[tuple[str, str], ...]:
+    return LEGACY_CHART_FILES if schema == 1 else CHART_FILES
 
 
-def _matching_charts(src: Path, series: dict) -> None:
-    present = _present_charts(src)
+def _present_charts(src: Path, schema: int = SCHEMA) -> list[tuple[str, str]]:
+    return [(key, name) for key, name in _chart_files(schema) if (src / name).is_file()]
+
+
+def _matching_charts(src: Path, series: dict, schema: int = SCHEMA) -> None:
+    present = _present_charts(src, schema)
     if not present:
         return
-    if len(present) != len(CHART_FILES):
+    if len(present) != len(_chart_files(schema)):
         names = ", ".join(name for _key, name in present)
         raise SnapshotError(f"partial quality chart set: {names}")
-    for key, name in CHART_FILES:
+    for key, name in _chart_files(schema):
         got = _png_series(src / name)
         if got != series[key]:
             raise SnapshotError(f"chart {name} does not match quality metrics JSON")
 
 
-def _image_links(out: Path, dest: Path) -> dict[str, str]:
+def _image_links(out: Path, dest: Path, schema: int = SCHEMA) -> dict[str, str]:
     links = {}
-    for key, name in CHART_FILES:
+    for key, name in _chart_files(schema):
         target = dest / name
         rel = Path(os.path.relpath(target, start=out.parent)).as_posix()
         links[key] = rel
@@ -539,7 +659,9 @@ def _image_links(out: Path, dest: Path) -> dict[str, str]:
 
 
 def _resolve_mutation(doc: dict, mutation_path: Path | None, sha: str) -> dict | None:
-    embedded = mutation_view(doc.get("mutation"), sha)
+    run_id = doc.get("run_id", "") if doc["schema"] == SCHEMA else ""
+    policy = doc.get("mutation_policy")
+    embedded = mutation_view(doc.get("mutation"), sha, run_id, policy)
     if embedded is not None:
         return embedded
     if mutation_path is None or not mutation_path.is_file():
@@ -550,7 +672,7 @@ def _resolve_mutation(doc: dict, mutation_path: Path | None, sha: str) -> dict |
         raise SnapshotError(
             f"mutation metrics JSON unreadable: {mutation_path}"
         ) from exc
-    return mutation_view(payload, sha)
+    return mutation_view(payload, sha, run_id, policy)
 
 
 def write_snapshot(
@@ -562,28 +684,33 @@ def write_snapshot(
     charts_src: Path | None = None,
     charts_dir: Path | None = None,
     mutation_path: Path | None = None,
+    expected_run_id: str = "",
 ) -> str:
     """Write the readout. Raises SnapshotError before creating outputs."""
     doc = _load_metrics(metrics_path)
-    tip, _rows = _validate(doc, sha, version)
+    tip, _rows = _validate(doc, sha, version, expected_run_id)
     doc["sha"] = tip
     mutation = _resolve_mutation(doc, mutation_path, tip)
     ship = False
-    if charts_src is not None and _present_charts(charts_src):
+    if charts_src is not None and _present_charts(charts_src, doc["schema"]):
         if charts_dir is None or charts_dir.name != version:
             raise SnapshotError(
                 f"chart directory must be docs/quality/charts/{version}"
             )
-        _matching_charts(charts_src, doc["series"])
+        _matching_charts(charts_src, doc["series"], doc["schema"])
         ship = True
     tag = version if version.startswith("v") else f"v{version}"
-    images = _image_links(out, charts_dir) if ship and charts_dir is not None else {}
+    images = (
+        _image_links(out, charts_dir, doc["schema"])
+        if ship and charts_dir is not None
+        else {}
+    )
     text = render_markdown(
         doc, version=version, tag=tag, images=images, mutation=mutation
     )
     if ship and charts_dir is not None and charts_src is not None:
         charts_dir.mkdir(parents=True, exist_ok=True)
-        for _key, name in CHART_FILES:
+        for _key, name in _chart_files(doc["schema"]):
             (charts_dir / name).write_bytes((charts_src / name).read_bytes())
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(text, encoding="utf-8", newline="\n")
@@ -607,6 +734,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--root", default=str(ROOT))
     parser.add_argument("--floor", type=float, default=None)
     parser.add_argument("--sha", default="")
+    parser.add_argument("--run-id", default="")
     parser.add_argument("--recorded-at", default="")
     parser.add_argument("--version", default="")
     parser.add_argument("--out", default="")
@@ -654,6 +782,7 @@ def _cmd_write_json(args: argparse.Namespace) -> int:
         root=root,
         sha=sha,
         recorded_at=recorded,
+        run_id=args.run_id,
     )
     _write_json_file(Path(args.write_json), doc)
     print(f"wrote {args.write_json}")
@@ -671,6 +800,7 @@ def _cmd_snapshot(args: argparse.Namespace) -> int:
         charts_src=Path(args.charts_src) if args.charts_src else None,
         charts_dir=Path(args.charts_dir) if args.charts_dir else None,
         mutation_path=Path(args.mutation) if args.mutation else None,
+        expected_run_id=args.run_id,
     )
     print(f"wrote {args.out}")
     return 0
