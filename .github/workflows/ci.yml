@@ -134,11 +134,7 @@ jobs:
     runs-on: ubuntu-24.04
     needs: prerequisites-gate
     permissions:
-      # contents: write hosts chart PNGs on ci/quality-kpi-charts so the sticky
-      # can embed them. Gate scripts do not push. The chart uploader refuses
-      # every other branch.
-      contents: write
-      pull-requests: write
+      contents: read
     # Coverage re-runs the unit suite only (tests/integration has its own job).
     timeout-minutes: 35
     steps:
@@ -225,85 +221,19 @@ jobs:
           Q_ARCHITECTURE: ${{ steps.q-architecture.outcome }}
           Q_TREE: ${{ steps.q-tree.outcome }}
         run: |
-          python scripts/ci/write_quality_pr_report.py --out reports/quality/quality-gates.md
-          # Tip-bound artifact for the release cut only. PRs do not publish it
-          # and this step does not render the release readout document.
-          if [ "$GITHUB_REF" = "refs/heads/release" ]; then
-            python scripts/ci/write_quality_metrics_snapshot.py \
-              --write-json reports/quality/quality-metrics.json \
-              --coverage reports/quality/coverage.json
-          fi
+          python scripts/ci/write_quality_metrics_snapshot.py \
+            --write-json reports/quality/quality-metrics.json \
+            --coverage reports/quality/coverage.json
 
-      # Charts are visualization only. They run on red and green (if: always)
-      # and the script exits 0 after writing either PNGs or an explicit failure
-      # note, so a chart problem cannot hide or become a quality gate.
-      - name: Generate KPI charts
+      - name: Upload quality evidence
         if: always()
-        env:
-          Q_LINT: ${{ steps.q-lint.outcome }}
-          Q_FORMAT: ${{ steps.q-format.outcome }}
-          Q_COVERAGE: ${{ steps.q-coverage.outcome }}
-          Q_COMPLEXITY: ${{ steps.q-complexity.outcome }}
-          Q_DEPS: ${{ steps.q-deps.outcome }}
-          Q_DEADCODE: ${{ steps.q-deadcode.outcome }}
-          Q_DUPLICATION: ${{ steps.q-duplication.outcome }}
-          Q_ARCHITECTURE: ${{ steps.q-architecture.outcome }}
-          Q_TREE: ${{ steps.q-tree.outcome }}
-        run: python scripts/ci/gen_kpi_charts.py --append reports/quality/quality-gates.md --coverage reports/quality/coverage.json --out-dir reports/quality/charts
-
-      # Release-branch artifacts for the cut. Not a gate. Missing charts stay
-      # optional; a missing metrics JSON fails this push so the cut cannot stamp
-      # an older tip. Ordinary PRs skip both uploads.
-      - name: Upload release-cut quality metrics
-        if: success() && github.ref == 'refs/heads/release'
         uses: actions/upload-artifact@v7
         with:
-          name: quality-metrics
-          path: reports/quality/quality-metrics.json
-          if-no-files-found: error
+          name: quality-evidence
+          overwrite: true
+          path: reports/quality
+          if-no-files-found: warn
           retention-days: 14
-
-      - name: Upload release-cut quality charts
-        if: success() && github.ref == 'refs/heads/release'
-        uses: actions/upload-artifact@v7
-        with:
-          name: quality-metrics-charts
-          path: reports/quality/charts/*.png
-          if-no-files-found: ignore
-          retention-days: 14
-
-      - name: Upload KPI chart images
-        if: always()
-        env:
-          GH_TOKEN: ${{ github.token }}
-          KPI_CHART_UPLOAD_TOKEN: ${{ secrets.QUALITY_CHARTS_TOKEN }}
-          GITHUB_REPOSITORY: ${{ github.repository }}
-          GITHUB_RUN_ID: ${{ github.run_id }}
-          GITHUB_SHA: ${{ github.sha }}
-        run: python scripts/ci/upload_kpi_chart_images.py --markdown reports/quality/quality-gates.md --charts-dir reports/quality/charts
-
-      - name: Resolve PR number
-        if: always()
-        id: pr
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          if [ -n "${{ github.event.pull_request.number }}" ]; then
-            echo "number=${{ github.event.pull_request.number }}" >> "$GITHUB_OUTPUT"
-          else
-            NUM="$(gh pr list --repo "${{ github.repository }}" --head "${{ github.ref_name }}" --state open --json number --jq '.[0].number // empty')"
-            echo "number=${NUM}" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Publish quality summary to PR
-        if: always() && steps.pr.outputs.number != ''
-        continue-on-error: true
-        uses: marocchino/sticky-pull-request-comment@v3
-        with:
-          number: ${{ steps.pr.outputs.number }}
-          path: reports/quality/quality-gates.md
-          header: quality-gates-report
-          recreate: true
 
   usability-gate:
     name: Gate 2 — Project usability
@@ -381,32 +311,11 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: mutation-reports-light
+          overwrite: true
           path: reports/mutation
           if-no-files-found: warn
           retention-days: 14
 
-      - name: Resolve PR number
-        if: always()
-        id: pr
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          if [ -n "${{ github.event.pull_request.number }}" ]; then
-            echo "number=${{ github.event.pull_request.number }}" >> "$GITHUB_OUTPUT"
-          else
-            NUM="$(gh pr list --repo "${{ github.repository }}" --head "${{ github.ref_name }}" --state open --json number --jq '.[0].number // empty')"
-            echo "number=${NUM}" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Publish mutation summary to PR
-        if: always() && steps.pr.outputs.number != ''
-        continue-on-error: true
-        uses: marocchino/sticky-pull-request-comment@v3
-        with:
-          number: ${{ steps.pr.outputs.number }}
-          path: reports/mutation/mutation-report.md
-          header: mutation-report
-          recreate: true
 
   ci-readiness:
     name: CI readiness
@@ -436,3 +345,122 @@ jobs:
           CI_NEEDS_JSON: ${{ toJSON(needs) }}
         run: python scripts/ci/check_ci_readiness.py
 
+  quality-report:
+    name: Quality report
+    if: always()
+    needs: [prerequisites-gate, repo-unit-tests, repo-integration-tests, software-quality, usability-gate, mutation-light, ci-readiness]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      pull-requests: write
+      actions: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v10.2.0
+        with:
+          enable-cache: true
+
+      - name: Install dashboard runtime
+        continue-on-error: true
+        run: uv sync --frozen
+
+      - name: Download quality evidence
+        continue-on-error: true
+        uses: actions/download-artifact@v7
+        with:
+          name: quality-evidence
+          path: reports/quality/evidence
+
+      - name: Download mutation evidence
+        continue-on-error: true
+        uses: actions/download-artifact@v7
+        with:
+          name: mutation-reports-light
+          path: reports/mutation/evidence
+
+      - name: Build unified quality report
+        env:
+          CI_NEEDS_JSON: ${{ toJSON(needs) }}
+        run: |
+          PY=python
+          if [ -x .venv/bin/python ]; then PY=.venv/bin/python; fi
+          "$PY" scripts/ci/write_unified_quality_report.py
+
+      - name: Host dashboard image
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          KPI_CHART_UPLOAD_TOKEN: ${{ secrets.QUALITY_CHARTS_TOKEN }}
+        run: python scripts/ci/upload_kpi_chart_images.py --markdown reports/quality/quality-gates.md --charts-dir reports/quality/charts --no-summary
+
+      - name: Publish unified job summary
+        run: cat reports/quality/quality-gates.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload unified metrics
+        uses: actions/upload-artifact@v7
+        with:
+          name: quality-metrics
+          overwrite: true
+          path: reports/quality/quality-metrics.json
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload dashboard image
+        continue-on-error: true
+        uses: actions/upload-artifact@v7
+        with:
+          name: quality-metrics-charts
+          overwrite: true
+          path: reports/quality/charts/dashboard.png
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Upload readable quality report
+        uses: actions/upload-artifact@v7
+        with:
+          name: quality-report
+          overwrite: true
+          path: reports/quality/quality-gates.md
+          retention-days: 14
+
+      - name: Resolve PR number
+        id: pr
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_BRANCH: ${{ github.head_ref || github.ref_name }}
+        run: |
+          NUM="$PR_NUMBER"
+          if [ -z "$NUM" ]; then
+            NUM="$(gh pr list --head "$HEAD_BRANCH" --state open --json number --jq '.[0].number // empty')"
+          fi
+          echo "number=${NUM}" >> "$GITHUB_OUTPUT"
+
+      - name: Publish quality summary to PR
+        if: steps.pr.outputs.number != ''
+        continue-on-error: true
+        uses: marocchino/sticky-pull-request-comment@v3
+        with:
+          number: ${{ steps.pr.outputs.number }}
+          path: reports/quality/quality-gates.md
+          header: quality-gates-report
+          recreate: true
+
+      - name: Remove superseded mutation comment
+        if: steps.pr.outputs.number != ''
+        continue-on-error: true
+        uses: marocchino/sticky-pull-request-comment@v3
+        with:
+          number: ${{ steps.pr.outputs.number }}
+          header: mutation-report
+          delete: true
