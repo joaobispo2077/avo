@@ -105,3 +105,25 @@ certificate verification stayed enabled and no dependency manifests changed.
 See [software foundation](docs/software-foundation.md),
 [engine ownership](docs/engine-vs-orchestrator.md) and
 [software quality](docs/software-quality-audit.md).
+
+## Quality evidence boundary
+
+Quality and mutation jobs remain independent measurement producers under
+`scripts/ci/`. The always-run readiness check evaluates mandatory job results;
+the report collector waits for that result and joins artifacts from the same
+commit and workflow run. One normalized dashboard series feeds the text table,
+PNG metadata, and schema 2 release snapshot. Rendering and image hosting are
+optional presentation steps; they cannot substitute for successful checks or
+complete mutation accounting.
+
+Schema 2 freezes the mutation profile/floor and records job results. Current
+release cuts validate commit/run identity, complete measurements, successful
+readiness, and image/data equality. Historical schema 1 readouts remain
+decodable, but cannot satisfy a current run-bound cut. No AVO engine, CLI, MCP,
+media contract, or footage-project dependency is introduced by reporting.
+
+The scheduled safety branch report and package dependency table are diagnostic
+outputs. They do not change existing PR floors or import contracts. Validation
+covers malformed counts, incomplete/stale evidence, skipped and failed jobs,
+legacy snapshots, chart equality, import resolution, and safety rejection paths.
+See [quality reporting](docs/quality-reporting.md).

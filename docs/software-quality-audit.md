@@ -2,6 +2,8 @@
 
 **Task:** `avo-refactoring-software-quality` · **Date:** 2026-08-01
 
+**Updated:** 2026-10-14
+
 Agent- and maintainer-facing map of **what is tested**, **what is gated**, and **where
 instructions live**. See also [software-foundation.md](./software-foundation.md) and
 [ci.md](./ci.md).
@@ -28,31 +30,34 @@ instructions live**. See also [software-foundation.md](./software-foundation.md)
 
 **CI order (`ci.yml`):** Gate 1 → software quality ∥ unit tests (`not project`, ignore `tests/integration`) ∥ integration tests (`tests/integration`) → Gate 2.
 
-**Release order:** Gate 1 → Gate 2 → pytest (AVO core) → version check → GitHub Release.
+**Release order:** successful CI → determine version → exact-run quality snapshot
+→ version checks and semantic-release → GitHub Release.
 
 Gate 1/2 behavior is unchanged. Software quality is **standard CI**, not a separate workflow.
 
 ---
 
-## Software quality concepts (stub)
+## Software quality concepts
 
 Concept-first dashboard: tools may swap; concepts and fail/pass criteria are the product.
 Local umbrella: `npm run quality` (Phase 1 fast gates). Drift lock: `tests/test_quality_matrix.py`.
+The unified report uses one dashboard with raw measurements and collapsed gate
+diagnostics. See [quality reporting](quality-reporting.md).
 
-| Concept | What it proves | Current tool (plan) | Phase |
+| Concept | What it proves | Current tool | Phase |
 | --- | --- | --- | --- |
 | Static lint / format | Machine-consistent Python + JS surface | Ruff; ESLint + Prettier + EditorConfig | 1 Must |
 | Type safety | Contracts at boundaries (lint now; mypy ratchet later) | typescript-eslint; mypy phased | 1–2 |
-| Test coverage floor | Product paths exercised under fail-under **68%** (line; baseline 2026-08-14, floor of ~68.5%) | pytest-cov (`src/avo`; `branch = false`) | 1 Must |
-| Complexity | No god-functions above max-absolute B (allowlisted debt documented); C901 ≤ 31 | xenon via `check_complexity.py` + allowlist; Ruff C901 (`max-complexity = 31`) in lint | 1 Must |
-| Dependency security audit | Critical vulns fail | pip-audit; `npm audit` critical via `check_npm_audit.py` + `deps-audit-allowlist.json` (high, moderate, and low reported); `@semantic-release/npm` file stub (`scripts/ci/semantic-release-npm-stub`) avoids nested vulnerable npm CLI bundles | 1 Must |
+| Test coverage floor | Product paths exercised under fail-under **68%** (line; baseline 2026-08-14, floor of ~68.5%) | pytest-cov (`src/avo`; `branch = false`) through `run-coverage.sh` | 1 Must |
+| Complexity | No god-functions above max-absolute B (allowlisted debt documented); C901 ≤ 31 | xenon via `quality-complexity.sh` / `check_complexity.py` + allowlist; Ruff C901 (`max-complexity = 31`) in lint | 1 Must |
+| Dependency security audit | Unwaived Python advisories and npm criticals fail | `quality-deps.sh`: pip-audit including MCP runtime; `npm audit` critical via `check_npm_audit.py` + `deps-audit-allowlist.json` (npm high, moderate, and low reported); `@semantic-release/npm` file stub (`scripts/ci/semantic-release-npm-stub`) avoids nested vulnerable npm CLI bundles | 1 Must |
 | Lock / install reproducibility | Frozen installs in quality/unit CI | `uv sync --frozen`; `npm ci` | 1 Must |
 | Dependency tree health | Unexpected npm dupes / lock drift visible (`npm find-dupes` dry-run; command failure fails CI; non-empty hoist plan is report-only until `/evolve`) | `quality:tree` / `quality-tree.sh` (`npm find-dupes`); uv lock | 2 Should |
 | Dead code | No unused weight outside allowlist | vulture (`check_deadcode.py`, min_confidence **60** + `deadcode-allowlist.json`) | 2 Should |
 | Duplication | AI copy-paste blocked over threshold (**2%**; baseline ~1.09% lines 2026-08-14) | jscpd (`.jscpd.json` + `quality-duplication.sh`) | 2 Should |
 | Architecture / import boundaries | Forbidden imports fail (layer map + grandfathered CLI/render/shorts/timeline→adapter edges) | import-linter (`.importlinter` + `quality-architecture.sh`); `helpers/` shims are outside `root_package = avo` | 2 Should |
-| Visual dependency graph | Weekly picture of `src/avo` coupling (non-blocking for PRs) | `dependency-graph.yml` + `quality:dep-graph` / `avo_dep_graph.py` (HTML+DOT artifact, 14d) | 3 Should |
-| Mutation testing | Tests catch wrong behavior — **light/PR** + **full/weekly** | mutmut Ubuntu; **20-minute** job timeout on light and full; light mutates a small explicit file set; full mutates the rest of the critical set except `cli_tools.py`; floors 40% / 50% (`mutation-config.json`); per-mutant `timeout_multiplier = 3.0` | 3 Must |
+| Visual dependency graph (DOT export) | Optional package dependency diagnostic, non-blocking for PRs | `dependency-graph.yml` + `quality:dep-graph` / `avo_dep_graph.py` (self-contained HTML table + DOT export; SHA/UTC/scope provenance; 14d) | 3 Should |
+| Mutation testing | Tests catch wrong behavior — **light/PR** + **full/weekly** | mutmut Ubuntu; complete outcome accounting; **20-minute** light/full timeouts; selected validation/MCP files and calibrated timeline mapping in full; floors 40% / 50% (`mutation-config.json`) | 3 Must |
 | Dependency freshness reporting | Staleness visible (report-only v1) | npm/uv outdated | 2–3 Nice |
 | Artifact / install weight | Pack/install footprint signal (informational) | `npm pack --dry-run` / wheel size | 3 Nice |
 
@@ -65,7 +70,7 @@ Local umbrella: `npm run quality` (Phase 1 fast gates). Drift lock: `tests/test_
 | `quality` | Umbrella for Phase 1 fast gates |
 | `quality:lint` | Ruff + ESLint |
 | `quality:format` | Ruff format check + Prettier check |
-| `test:coverage` | pytest-cov `--cov-fail-under=68` (baseline floor; also `[tool.coverage.report]`) |
+| `test:coverage` | pytest-cov uses the authoritative `[tool.coverage.report] fail_under = 68` |
 | `quality:deps` | pip-audit `--skip-editable` + npm critical (`check_npm_audit.py`; allowlist `deps-audit-allowlist.json`; high, moderate, and low reported) |
 | `quality:complexity` | xenon max-absolute **B** via `scripts/ci/check_complexity.py` + `complexity-allowlist.json` (C901 ≤ 31 also enforced in `quality:lint`) |
 | `quality:deadcode` | vulture via `check_deadcode.py` (min_confidence **60** + `deadcode-allowlist.json`) |
@@ -73,16 +78,16 @@ Local umbrella: `npm run quality` (Phase 1 fast gates). Drift lock: `tests/test_
 | `quality:architecture` | import-linter via `.importlinter` (`quality-architecture.sh`; fail-immediately) |
 | `quality:mutation` | mutmut via `quality-mutation.sh` (full profile; `check_mutation.py` floor) |
 | `quality:tree` | npm find-dupes dry-run (`quality-tree.sh`; command failure fails; hoist plan report-only) |
-| `quality:dep-graph` | Visual `src/avo` import graph (`run-dep-graph.sh` / `avo_dep_graph.py`) |
+| `quality:dep-graph` | Self-contained `src/avo` dependency table + DOT export (`run-dep-graph.sh` / `avo_dep_graph.py`); isolated packages included, invalid source fails visibly |
 
 ### Quality in CI (task-005 / task-008 / spec v1.4)
 
 | Workflow | Trigger | Role |
 | --- | --- | --- |
-| `ci.yml` | PR / push | Standard CI **Software quality** job (**blocking** Phase-1 umbrella; branch-protection check name **`Software quality`**): lint + format **fail-immediately** (includes Ruff C901 ≤ 31), coverage fail-under via `run-coverage.sh` (floor **68%**), complexity via `quality-complexity.sh` (xenon max-absolute **B** + allowlist), deps via `quality-deps.sh` (`pip-audit` + npm critical via `check_npm_audit.py`, **fail-immediately**; high, moderate, and low reported; documented GHSA exceptions in `deps-audit-allowlist.json`), deadcode via `quality-deadcode.sh` (vulture min_confidence **60** + `deadcode-allowlist.json`), duplication via `quality-duplication.sh` (jscpd `.jscpd.json` threshold **2%**, baseline ~1.09%), architecture via `quality-architecture.sh` (import-linter `.importlinter`), tree health via `quality-tree.sh` (`npm find-dupes` dry-run). On pull requests the job posts a **sticky Software quality table** (one comment, section per gate) plus KPI charts of those same numbers (visualization only; not a gate; posts on red and green). Gate 2 `needs` this job. Unit + quality jobs install via `uv sync --frozen --extra dev`. Node **24**; GitHub-owned actions on Node 24 majors. |
+| `ci.yml` | PR / push | Standard blocking Software quality gates, parallel unit/runtime integration, light mutation, Gate 2, and always-run **CI readiness**. The final **Quality report** job combines current-run artifacts into one dashboard/comment and release evidence; missing images preserve tables. Unit uses frozen dev dependencies; quality and integration additionally install MCP. See [quality reporting](quality-reporting.md). |
 | `mutation-full.yml` | Weekly + `workflow_dispatch` | Full critical-file mutation (**20-minute** timeout); artifacts 14d; floor **50%** (`mutation-config.json`) |
 | `size-signal.yml` | PR (`feature/*`→`develop`, `develop`→`release`) | Informational pack/install weight sticky comment (non-blocking) |
-| `dependency-graph.yml` | Weekly + `workflow_dispatch` | Visual `src/avo` import graph artifact (14d); not on PR fast path |
+| `dependency-graph.yml` | Weekly + `workflow_dispatch` | HTML dependency table + DOT export (14d), with SHA/UTC/scope; not on PR fast path |
 | `watch-skill-smoke.yml` | Weekly + `workflow_dispatch` | watch-skill runtime invoke + diagnostics on failure (7d) |
 | `quality-toolchain-smoke.yml` | Weekly + `workflow_dispatch` | ruff/xenon/vulture/pip-audit/lint-imports/mutmut/jscpd `--version`/`--help` |
 
@@ -97,7 +102,7 @@ check name in branch protection). HyperFrames exemplar lint stays a **domain** g
 
 | Command | Purpose |
 | --- | --- |
-| `uv sync --frozen --extra dev` | Locked install for quality/unit CI + local quality tools |
+| `uv sync --frozen --extra dev --extra mcp` | Locked install for quality/integration CI + local quality tools (unit CI needs only dev) |
 | `npm run test:unit` | **AVO core units** — ignore `tests/projects` and `tests/integration` |
 | `npm run test:integration` | Runtime/subprocess tests under `tests/integration` |
 | `npm run test:projects` | Footage-project / spec-scoped tests only |
@@ -176,7 +181,7 @@ Run: `npm run test:projects`.
 | `ci.yml` | PR + push main/develop/feature | AVO core pytest + software quality job + light mutation |
 | `mutation-full.yml` | weekly + `workflow_dispatch` | mutmut on critical files (full floor, 20-minute timeout) |
 | `size-signal.yml` | PR (informational) | Pack / install footprint signal |
-| `dependency-graph.yml` | weekly + `workflow_dispatch` | Visual src/avo import graph |
+| `dependency-graph.yml` | weekly + `workflow_dispatch` | Optional HTML package dependency table + DOT export |
 | `watch-skill-smoke.yml` | weekly + `workflow_dispatch` | watch-skill runtime smoke |
 | `quality-toolchain-smoke.yml` | weekly + `workflow_dispatch` | Quality/mutation CLI smokes |
 | `release.yml` | `v*` tags | AVO core pytest + version check + GitHub Release |
@@ -200,7 +205,7 @@ Run: `npm run test:projects`.
 ## Local quality checklist
 
 ```bash
-uv sync --frozen --extra dev
+uv sync --frozen --extra dev --extra mcp
 npm ci
 bash scripts/validate-prerequisites.sh --ci
 bash scripts/ci/run-unit-tests.sh          # AVO core only
@@ -210,7 +215,7 @@ npm run test:unit
 # Software quality (ci.yml job `Software quality` — Phase-1 blocking):
 npm run quality:lint
 npm run quality:format
-npm run test:coverage   # fail_under 68 (pyproject + --cov-fail-under)
+npm run test:coverage   # authoritative fail_under 68 in pyproject
 npm run quality:complexity
 npm run quality:deps
 npm run quality:deadcode   # vulture min_confidence 60 + deadcode-allowlist.json
