@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""PNG charts for the Software quality sticky. Visualization only, not a gate.
+"""One default quality dashboard, plus legacy chart readers/renderers.
 
 Numbers come from the same helpers as ``write_quality_pr_report.py``.
 Coverage floor is pyproject ``fail_under``. Duplication ceiling is ``.jscpd.json``.
@@ -15,6 +15,7 @@ import json
 import os
 import sys
 import traceback
+from datetime import datetime, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -882,12 +883,71 @@ def generate(
     root: Path,
     out_dir: Path,
 ) -> tuple[str, dict]:
+    """Legacy schema 1 gallery; the CLI default uses generate_dashboard."""
     snapshot = build_snapshot(
         outcomes, coverage_json=coverage_json, floor=floor, root=root
     )
     rendered = render_charts(snapshot, out_dir)
     snapshot["charts"] = rendered
     return build_chart_markdown(snapshot, rendered), snapshot
+
+
+def dashboard_module():
+    name = "avo_ci_quality_dashboard"
+    if name not in sys.modules:
+        spec = importlib.util.spec_from_file_location(
+            name, Path(__file__).with_name("quality_dashboard.py")
+        )
+        if spec is None or spec.loader is None:
+            raise RuntimeError("quality dashboard is unavailable")
+        module = importlib.util.module_from_spec(spec)
+        sys.modules[name] = module
+        spec.loader.exec_module(module)
+    return sys.modules[name]
+
+
+def generate_dashboard(
+    outcomes: dict[str, str],
+    *,
+    coverage_json: Path,
+    floor: float,
+    root: Path,
+    out_dir: Path,
+    document: dict | None = None,
+) -> tuple[str, dict]:
+    """Default single-image report; renderer failure leaves the text intact."""
+    if document is None:
+        name = "avo_ci_write_quality_metrics_snapshot"
+        if name not in sys.modules:
+            spec = importlib.util.spec_from_file_location(
+                name, Path(__file__).with_name("write_quality_metrics_snapshot.py")
+            )
+            if spec is None or spec.loader is None:
+                raise RuntimeError("quality metrics producer is unavailable")
+            module = importlib.util.module_from_spec(spec)
+            sys.modules[name] = module
+            spec.loader.exec_module(module)
+        document = sys.modules[name].build_ci_document(
+            outcomes,
+            coverage_json=coverage_json,
+            floor=floor,
+            root=root,
+            sha=os.environ.get("GITHUB_SHA", ""),
+            recorded_at=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        )
+    dashboard = dashboard_module()
+    series = dashboard.build_series(document)
+    document["series"]["dashboard"] = series
+    image = ""
+    try:
+        dashboard.render(series, out_dir / "dashboard.png")
+        image = f"{IMAGE_PREFIX}dashboard.png"
+    except Exception as exc:
+        document["image_error"] = str(exc)
+    text = dashboard.markdown(document, series, image=image)
+    if document.get("image_error"):
+        text += "\nDashboard image unavailable. Measurements remain in the table.\n"
+    return text, document
 
 
 def resolve_outcomes(outcomes_json: Path) -> dict[str, str]:
@@ -938,7 +998,7 @@ def main() -> int:
     )
     outcomes = resolve_outcomes(outcomes_path)
     try:
-        section, snapshot = generate(
+        section, snapshot = generate_dashboard(
             outcomes,
             coverage_json=Path(args.coverage),
             floor=floor,
