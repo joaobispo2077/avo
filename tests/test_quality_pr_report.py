@@ -13,6 +13,13 @@ from unittest.mock import patch
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def test_duplication_threshold_preserves_zero_and_fractional_values(tmp_path):
+    mod = _load("duplication_threshold_report", "scripts/ci/write_quality_pr_report.py")
+    for threshold in (0, 2.75):
+        (tmp_path / ".jscpd.json").write_text(json.dumps({"threshold": threshold}))
+        assert mod.duplication_ceiling(tmp_path) == threshold
+
+
 def _load(name: str, rel: str):
     path = ROOT / rel
     spec = importlib.util.spec_from_file_location(name, path)
