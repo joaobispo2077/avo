@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Weekly visual import graph for src/avo (task-026 / FR-12). Non-blocking for PRs.
+# Weekly HTML dependency table + DOT export for src/avo. Non-blocking for PRs.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT"
