@@ -1048,6 +1048,23 @@ def _native_findings(
     return findings
 
 
+def _native_pass_instruction(pass_id: str) -> str:
+    return (
+        f"\nThis pass is {pass_id}. "
+        "Return findings only for material problems or genuine uncertainty; "
+        "when status is pass, findings must be an empty list. "
+        "For fail or needs-human-judgment, return at most 3 concise findings. "
+        "Use fail only for a confirmed problem. If any finding requires human "
+        "judgment or describes uncertainty, status must be needs-human-judgment, "
+        "not fail. "
+        "Finding fields allowed: category, severity, confidence, message, "
+        "requiresHuman, observed, expected, whyItMatters, suggestedAction. "
+        "category must be one of layout, pacing, movement, continuity, privacy, "
+        "caption, visual-quality, editorial, factual-risk, rights, accessibility, "
+        "technical, other. severity must be one of info, warning, blocking, unknown."
+    )
+
+
 def _native_finding(
     item: Any,
     review_pass: dict[str, Any],
@@ -1144,6 +1161,9 @@ def _native_review(review: _ReviewRequest, model_pin: dict[str, Any]) -> dict[st
         "coverage": coverage_plan,
         "capability": snapshot["identityHash"],
         "prompt": hashlib.sha256(review.prompt.encode("utf-8")).hexdigest(),
+        "nativePassInstruction": hashlib.sha256(
+            _native_pass_instruction("<pass-id>").encode("utf-8")
+        ).hexdigest(),
         "transcript": (
             hashlib.sha256(Path(review.transcript_ref).read_bytes()).hexdigest()
             if review.transcript_ref and Path(review.transcript_ref).is_file()
@@ -1193,9 +1213,7 @@ def _native_review(review: _ReviewRequest, model_pin: dict[str, Any]) -> dict[st
             {
                 "type": "text",
                 "text": review.prompt
-                + "\nThis pass is "
-                + str(review_pass["passId"])
-                + ". Finding fields allowed: category, severity, confidence, message, requiresHuman, observed, expected, whyItMatters, suggestedAction. category must be one of layout, pacing, movement, continuity, privacy, caption, visual-quality, editorial, factual-risk, rights, accessibility, technical, other. severity must be one of info, warning, blocking, unknown.",
+                + _native_pass_instruction(str(review_pass["passId"])),
             }
         ]
         refs: list[dict[str, Any]] = []
