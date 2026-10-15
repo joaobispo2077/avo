@@ -16,8 +16,10 @@ separate workflow. Local umbrella: `npm run quality`. See
 | **Gate 1** | `scripts/validate-prerequisites.sh --ci` | GitHub Spec Kit (`.specify`), video-use engine, ffmpeg (warn in CI), watch-skill, HyperFrames, optional clones — see `avo.dependencies.json` |
 | **Unit tests** | `scripts/ci/run-unit-tests.sh` | AVO core unit pytest (`not project and not integration`); Python via `uv sync --frozen --extra dev` |
 | **Integration tests** | `scripts/ci/run-integration-tests.sh` | `tests/integration` runtime/subprocess boundaries; requires ffmpeg in CI |
-| **Software quality** | `quality-lint.sh` + `quality-format.sh` + `run-coverage.sh` + `quality-complexity.sh` + `quality-deps.sh` + `quality-deadcode.sh` + `quality-duplication.sh` + `quality-architecture.sh` + `quality-tree.sh` (job `Software quality` in `ci.yml`) | Lint/format **fail-immediately** (Ruff C901 ≤ **31**); coverage fail-under **68%** on the **unit** suite only (`--ignore=tests/integration`); complexity xenon max-absolute **B** + `complexity-allowlist.json`; deps **fail-immediately** on critical (`pip-audit` + npm critical via `check_npm_audit.py` / `deps-audit-allowlist.json`; high, moderate, and low reported); deadcode vulture min_confidence **60** + `deadcode-allowlist.json`; duplication jscpd threshold **2%** (`.jscpd.json`); architecture import-linter `.importlinter`; tree health `npm find-dupes` (command failure fails; hoist plan report-only). Python via `uv sync --frozen --extra dev`. Local: `npm run quality:*` / `test:coverage` |
+| **Software quality** | `quality-lint.sh` + `quality-format.sh` + `run-coverage.sh` + `quality-complexity.sh` + `quality-deps.sh` + `quality-deadcode.sh` + `quality-duplication.sh` + `quality-architecture.sh` + `quality-tree.sh` (job `Software quality` in `ci.yml`) | Lint/format **fail-immediately** (Ruff C901 ≤ **31**); coverage fail-under **68%** on the **unit** suite only (`--ignore=tests/integration`); complexity xenon max-absolute **B** + `complexity-allowlist.json`; deps block unwaived Python advisories and npm criticals (`check_npm_audit.py` / `deps-audit-allowlist.json`; npm high, moderate, and low reported); deadcode vulture min_confidence **60** + `deadcode-allowlist.json`; duplication jscpd threshold **2%** (`.jscpd.json`); architecture import-linter `.importlinter`; tree health `npm find-dupes` (command failure fails; hoist plan report-only). Python via `uv sync --frozen --extra dev --extra mcp`. Local: `npm run quality:*` / `test:coverage` |
 | **Gate 2** | `scripts/validate-usability.sh --ci` | `avo.config.json`, provider scaffolds, `setup.sh --dry-run`, scaffold scripts — after Gate 1 + unit tests + software quality |
+| **CI readiness** | `scripts/ci/check_ci_readiness.py` | Always-run check requiring all six mandatory jobs to succeed |
+| **Quality report** | `scripts/ci/write_unified_quality_report.py` | One commit/run-bound summary, dashboard, diagnostics, and release artifact after readiness |
 
 Order in `.github/workflows/ci.yml` is enforced via job `needs:`.
 
@@ -26,7 +28,7 @@ not run `tests/integration`; coverage is the unit suite only.
 
 ### Branch protection — required checks (task-013)
 
-On `main` / `release` (and any PR target that uses this workflow), require these
+On `develop` / `release` / `main`, require these
 **exact** GitHub Actions check names (job `name:` fields from `ci.yml`):
 
 | Required check name | Job id | Role |
@@ -35,8 +37,9 @@ On `main` / `release` (and any PR target that uses this workflow), require these
 | `Unit tests (AVO repo)` | `repo-unit-tests` | AVO core unit pytest + install/hf smokes |
 | `Integration tests (AVO repo)` | `repo-integration-tests` | `tests/integration` subprocess/runtime lane |
 | `Software quality` | `software-quality` | **Phase-1 fast gates** (lint, format, coverage, complexity, deps) + deadcode, duplication, architecture, tree — fail-immediately |
-| `Mutation tests (light)` | `mutation-light` | Scoped mutmut after unit tests (**20-minute** timeout); `mutmut run` then `mutmut export-cicd-stats` (mutmut 3.x does not write `mutants/mutmut-cicd-stats.json` during `run`); fails below `mutation-config.json` light floor (Ubuntu); posts a sticky mutation table on PRs |
+| `Mutation tests (light)` | `mutation-light` | Scoped mutmut after unit tests (**20-minute** timeout); complete validated outcome accounting and profile floor (Ubuntu); evidence feeds the unified report |
 | `Gate 2 — Project usability` | `usability-gate` | Project usability; `needs` includes `software-quality` |
+| `CI readiness` | `ci-readiness` | Always-run readiness check; skipped, absent, failed, or cancelled mandatory jobs do not pass |
 
 Do **not** require a separate Gate 3 / quality workflow check — software quality is
 the `Software quality` job inside workflow **CI**.
@@ -48,41 +51,101 @@ the `Software quality` job inside workflow **CI**.
 | `ci.yml` | Standard CI: Gate 1 → unit tests ∥ software quality → Gate 2; light mutation job after unit tests |
 | `mutation-full.yml` | Weekly + dispatch full mutation (slow lane) |
 | `size-signal.yml` | Informational PR size/weight signal (non-blocking) |
-| `dependency-graph.yml` | Weekly visual `src/avo` import graph artifact |
+| `dependency-graph.yml` | Weekly self-contained HTML dependency table + DOT export for `src/avo`; SHA/UTC/scope recorded |
 | `watch-skill-smoke.yml` | Manual/weekly watch-skill invoke (beyond Gate 1 clone) |
 | `quality-toolchain-smoke.yml` | Manual/weekly ruff/xenon/mutmut/jscpd CLI smokes |
 
 Drift lock: `tests/test_quality_matrix.py` asserts npm quality script names,
 `ci.yml` quality job + hard lint/format/coverage/complexity/deps steps, coverage
-fail-under 68, `uv sync --frozen --extra dev` on quality/unit jobs, Phase-1
+fail-under 68, frozen dev dependencies on unit jobs and dev + MCP on quality jobs, Phase-1
 blocking posture (`usability-gate` `needs` `software-quality` + required check
 name **`Software quality`**), no separate Gate 3 workflow file, slow-lane
-workflow basenames, **20-minute** mutation timeouts, sticky quality/mutation PR
-comments, and Node 24 / Node 24 action majors. Linux jobs pin `ubuntu-24.04`.
+workflow basenames, **20-minute** mutation timeouts, the single sticky quality PR
+comment and removal of the mutation sticky, and Node 24 / Node 24 action majors.
+Linux jobs pin `ubuntu-24.04`.
 
-PRs get two short sticky comments (Maxframe shape): **Software metrics** (status,
-numeric metric, and what the gate checks, plus PNG charts for those same
-numbers) and **Mutation tests** (score, floor, killed/survived/timeout when this
-run actually scored). The Software quality sticky (`quality-gates-report`) posts
-on green and red runs.
-**Overall: PASS** only when every Software quality gate step succeeded;
-otherwise the banner is **Overall: FAIL** and failed or skipped gates are not
-drawn as passes. Coverage charts use the real `fail_under` (**68%**). Mutation
-in this sticky is **—** and points at `mutation-report`. The mutation sticky
-prints **Passing** and a kill rate only after this run finishes
-`mutmut export-cicd-stats` and stamps `mutants/mutmut-cicd-stats.json` with this
-commit SHA and GitHub run id. A restored cache, a clean-test failure, or a
-missing score for this SHA is **Did not score**: no Passing banner and no
-killed/survived counts from another run. Charts are visualization only: they do
-not change floors, and a missing image is an explicit note rather than an empty
-`![]()`. The GitHub check name stays **Software quality**.
+PRs get one `quality-gates-report` comment with overall status, commit/run
+identity, required actions, one dashboard, a measurements table, a gate-decision
+table, an execution table, and collapsed diagnostics. The dashboard plots raw
+coverage/duplication/mutation percentages on separate scales; thresholds belong
+to the gate policies. The collector joins
+current-run producer artifacts after readiness; stale or incomplete evidence
+cannot yield PASS. Image failures preserve the text table. Existing Software
+quality and mutation checks remain separate. See
+[quality reporting](quality-reporting.md) for evidence and schema details.
 
-A release cut writes `docs/quality-metrics.md` from that push's green Software
-quality JSON. Pull-request greens do not write that file. See the release-cut
-section below.
+### Measurements, gates, and execution evidence
+
+The measurements table reports observed values with their scope, input counts,
+artifact files, and SHA-256 references. The gate table retains all nine fast
+checks and light mutation, their policies, and PASS/FAIL decisions. The execution
+table records required job outcomes and observed unit/integration testcase
+counts. Configured exceptions and import-contract definitions are diagnostics;
+their configured counts are not measured findings or executed checks.
+
+CI runs each fast check through `scripts/ci/run_quality_gate.py`. Under
+`reports/quality/gates/<gate>/`, `gate.json` records the exact argument list,
+commit/run identity, UTC timestamps, duration, command exit code or signal, log
+hash, produced-file hashes, and source fingerprints before and after execution.
+`gate.log` captures combined stdout/stderr. The wrapper preserves command
+failure; it does not soften any gate. Missing or old outputs have an explicit
+reason and cannot provide a successful zero measurement.
+
+The `quality-evidence` artifact contains these captures and measured inputs:
+
+| Input under `reports/quality/` | Observed evidence |
+| --- | --- |
+| `coverage.json` | Unit-suite executable/covered statement counts and raw coverage |
+| `jscpd/jscpd-report.json` | Duplicated/total source lines and clone pairs |
+| `complexity.json` | Measured block locations, cyclomatic scores/ranks, actually matched exception reasons/ceilings, unwaived or worsened findings, stale entries, and scan errors |
+| `deadcode.json` | Actual Vulture locations, kinds/confidence, matched exception reasons, unwaived findings, stale entries, and scan errors |
+| `pip-audit-raw.json`, `npm-audit-raw.json` | Sanitized audit JSON, advisory details/fix versions, dependency paths, exact commands, provenance, and frozen audit policy; unrun/error scans remain explicit |
+| `deps-findings.json`, `npm-audit-summary.json` | Blocking findings and npm severity totals under the existing Python/npm policy |
+| `dependency-tree.json` | Actual npm dry-run add/remove/change proposals, without applying them |
+| `code-risk.json` | Informational function complexity/CRAP inputs and package CA/CE counts |
+
+Unit and integration CI use `PYTEST_ADDOPTS` to capture native JUnit events in
+`unit-tests.xml` and `integration-tests.xml`. Their receipts/logs and XML are
+uploaded as `unit-test-evidence` and `integration-test-evidence` even after a
+failure, when files exist. `test_execution_evidence.py` counts actual passed,
+failed, error, and skipped testcase events independently of the job result.
+Failed or interrupted executions can supply partial counts; absent or invalid
+XML supplies no count. These are test execution observations, not a repair-success
+percentage.
+
+The publisher downloads the exact current-run producer artifacts and rechecks
+identity and file hashes. Artifact URLs come from the corresponding upload
+actions. A successful job cannot substitute for a missing receipt or changed
+measurement file; local captures with a local run identifier remain local
+preview evidence.
+
+### Informational function and package diagnostics
+
+`measure_code_risk.py` computes function/method CRAP from measured cyclomatic
+complexity and that function's own statement coverage:
+`CC² × (1 − covered statements / statements)³ + CC`. The coverage capture must
+have succeeded for the same SHA/run, with the recorded raw coverage hash and
+unchanged source fingerprints. Repository/file averages do not replace function
+coverage. Unmatched, ambiguous, excluded, and zero-statement functions remain
+unmeasured; the summary labels its maximum **max observed** and reports both
+measured and unmeasured function counts. Reference 30 is informational and adds
+no gate or floor.
+
+The static import graph also measures CA (distinct incoming packages) and CE
+(distinct outgoing packages), aggregated at `avo.<package>`, plus instability
+`CE / (CA + CE)`. A package without edges has undefined instability. Within-package
+edges and dynamic imports are outside this measurement. These review
+signals do not establish god classes; abstractness and coupling-quadrant rules
+remain unmeasured. Existing xenon B/exception ceilings, Ruff C901 ≤31, coverage
+68%, duplication 2%, and mutation 40%/50% policies continue to determine gates.
+
+### Publishing the report
+
+A release cut writes `docs/quality-metrics.md` from that push's green unified
+JSON for the exact SHA and run. Pull-request greens do not write that file.
 
 Comments post on `pull_request` **and** on `push` to a branch that already has
-an open PR (`gh pr list --head`). Size-signal is a third sticky: packed/unpacked
+an open PR (`gh pr list --head`). Size-signal remains a separate sticky: packed/unpacked
 bytes and file count only — no `npm pack` file listing. Publish steps
 `continue-on-error` so a fork without comment permission does not fail the gate.
 
@@ -98,7 +161,7 @@ Every `job` in `config/avo.dependencies.json` must exist under `config/avo.confi
 ## Release automation
 
 - Config: [`release.config.mjs`](../release.config.mjs) (semantic-release plugins)
-- Workflow: `.github/workflows/release.yml` runs after **CI** succeeds on `develop` (alpha) or `release` (stable)
+- Workflow: `.github/workflows/release.yml` runs after **CI** succeeds on `release` (stable), or by manual dispatch
 - Secret: `GH_TOKEN` with `contents: write` (see [versioning.md](./versioning.md))
 
 ### Release-cut quality metrics snapshot
@@ -107,8 +170,9 @@ Every `job` in `config/avo.dependencies.json` must exist under `config/avo.confi
 a release cut runs (semantic-release has a version to publish). The snapshot
 is its own job. It checks out the green CI head SHA (the release tip) and
 downloads artifact `quality-metrics` for that **exact tip
-SHA**. It fails the job if that JSON is missing, not overall PASS, bound to
-a different SHA, or any Software quality gate is not PASS. There is no soft
+SHA and CI run**. It fails the job if that JSON is missing, not overall PASS, bound to
+a different commit/run, or any mandatory check or policy-bearing gate measurement is not PASS. Informational
+CRAP and CA/CE observations do not introduce release thresholds. There is no soft
 warning that still publishes. The job does
 not re-measure gates and does not copy the previous release's numbers.
 When the dry-run has no next version, the snapshot job exits without writing
@@ -118,18 +182,18 @@ When the dry-run has no next version, the snapshot job exits without writing
 `develop` does not change the workflow the next cut executes. This job runs
 on a cut only after the file is on `main`.
 
-Software quality writes that JSON only on a push to `release`, then uploads it.
-Ordinary pull requests and other branches do not upload it and do not write
-`docs/quality-metrics.md`. Phase A sticky comments and KPI charts on pull
-requests are unchanged. The snapshot does not change floors or replace gates.
+Every CI run publishes unified measurement evidence and one dashboard. Only a
+release cut writes `docs/quality-metrics.md`. Reporting does not change floors
+or replace gates.
 
-Optional PNGs from the same run are copied to `docs/quality/charts/<version>/`.
-If any chart ships, every chart's embedded series must match the JSON and the
-tables, or the cut fails. Missing charts leave tables only.
+The optional dashboard PNG from the same run is copied to
+`docs/quality/charts/<version>/`. Its embedded series must match the JSON and
+tables or the cut fails. Missing images leave tables only.
 
-Mutation uses `killed` and `survived` from that cut's `mutation-metrics.json`
-when the SHA matches. Otherwise the snapshot prints **—** and says see Mutation
-sticky. It never invents a kill rate.
+Schema 2 mutation evidence must match the frozen profile/floor, SHA, and workflow
+run, with complete integer outcome accounting. Incomplete evidence cannot
+satisfy a green current release snapshot. Schema 1 historical readouts remain
+supported, without satisfying current run-bound validation.
 
 Template note: [`docs/templates/quality-metrics.md`](./templates/quality-metrics.md).
 
@@ -140,7 +204,7 @@ Template note: [`docs/templates/quality-metrics.md`](./templates/quality-metrics
 | `ci.yml` | PR + push to `main`, `release`, `develop`, `feature/**` | Gate 1 → unit tests + `hf:doctor` ∥ software quality → Gate 2; light mutation |
 | `mutation-full.yml` | weekly + `workflow_dispatch` | Full critical-package mutation (mutmut); artifacts |
 | `size-signal.yml` | PR | Informational pack/install footprint (non-blocking) |
-| `dependency-graph.yml` | weekly + `workflow_dispatch` | Visual `src/avo` import graph (`quality:dep-graph`) |
+| `dependency-graph.yml` | weekly + `workflow_dispatch` | Optional HTML dependency table + DOT export (`quality:dep-graph`), with SHA/UTC/scope provenance |
 | `watch-skill-smoke.yml` | weekly + `workflow_dispatch` | watch-skill clone + CLI/help invoke |
 | `quality-toolchain-smoke.yml` | weekly + `workflow_dispatch` | ruff, xenon, vulture, pip-audit, lint-imports, mutmut, jscpd |
 | `setup-smoke.yml` | `workflow_dispatch` | Full `setup.sh` on ubuntu + windows |
@@ -156,7 +220,7 @@ Reference: [maxframe workflows](https://github.com/joaobispo2077/maxframe/tree/m
 ```bash
 npm ci
 # Quality/unit CI path (locked — matches ci.yml repo-unit-tests + software-quality):
-uv sync --frozen --extra dev
+uv sync --frozen --extra dev --extra mcp
 # Gate 2 still uses unlocked editable without extras in CI:
 # pip install -e .
 
@@ -216,33 +280,44 @@ npm run validate:usability -- --ci
 
 ## Branch protection (block merge until CI passes)
 
-`main` and `release` should require these **CI** job checks before merge. GitHub
+`develop`, `release`, and `main` should require these **CI** job checks before merge. GitHub
 shows them under the commit/PR checks tab with these exact names:
 
 - `Gate 1 — Orchestrator prerequisites`
 - `Unit tests (AVO repo)`
+- `Integration tests (AVO repo)`
 - `Software quality`
 - `Mutation tests (light)`
 - `Gate 2 — Project usability`
+- `CI readiness`
+
+`CI readiness` always evaluates all six mandatory jobs, including integration and
+light mutation. A failed, cancelled, skipped, or missing result fails readiness;
+a skipped dependent Gate 2 cannot make a failed upstream job mergeable. PRs into
+`develop` run the same checks as PRs into `release` and `main`. The integration
+lane installs the MCP extra, and missing MCP dependencies fail its runtime smoke
+in CI instead of silently skipping it. Local environments may still skip that
+optional smoke when MCP is absent.
 
 ### GitHub UI
 
 1. **Settings → Rules → Rulesets → New branch ruleset**
-2. **Target branches:** `main`, `release`
+2. **Target branches:** `develop`, `release`, `main`
 3. Enable **Require status checks to pass**
-4. Search and add the **five** job names above (pick the GitHub Actions ones), including **`Software quality`** and **`Mutation tests (light)`**
+4. Add the **seven** job names above, including **`CI readiness`** and **`Integration tests (AVO repo)`**
 5. Enable **Require branches to be up to date before merging** (recommended)
 6. Save — set enforcement to **Active**
 
-Repo already has ruleset `no-delete-no-force` on `main` (blocks delete/force-push only).
-Add a separate ruleset or extend targets; do not rely on that ruleset for CI gating.
+Remote rulesets must be inspected by a maintainer before rollout. This repository
+change does not alter them. A delete/force-push restriction alone does not enforce
+CI readiness.
 
 ### `gh` CLI (repository ruleset)
 
 Run from a machine with admin access to `joaobispo2077/avo`:
 
 ```bash
-gh api repos/joaobispo2077/avo/rulesets -X POST -f name="require-ci" -f target=branch -f enforcement=active -f bypass_actors='[]' -F 'conditions={"ref_name":{"include":["refs/heads/main","refs/heads/release"],"exclude":[]}}' -F 'rules=[{"type":"pull_request","parameters":{"required_approving_review_count":0,"dismiss_stale_reviews_on_push":false,"require_code_owner_review":false,"require_last_push_approval":false,"required_review_thread_resolution":false}},{"type":"required_status_checks","parameters":{"strict_required_status_checks_policy":true,"required_status_checks":[{"context":"Gate 1 — Orchestrator prerequisites"},{"context":"Unit tests (AVO repo)"},{"context":"Software quality"},{"context":"Mutation tests (light)"},{"context":"Gate 2 — Project usability"}]}}]'
+gh api repos/joaobispo2077/avo/rulesets -X POST -f name="require-ci" -f target=branch -f enforcement=active -f bypass_actors='[]' -F 'conditions={"ref_name":{"include":["refs/heads/develop","refs/heads/release","refs/heads/main"],"exclude":[]}}' -F 'rules=[{"type":"pull_request","parameters":{"required_approving_review_count":0,"dismiss_stale_reviews_on_push":false,"require_code_owner_review":false,"require_last_push_approval":false,"required_review_thread_resolution":false}},{"type":"required_status_checks","parameters":{"strict_required_status_checks_policy":true,"required_status_checks":[{"context":"Gate 1 — Orchestrator prerequisites"},{"context":"Unit tests (AVO repo)"},{"context":"Integration tests (AVO repo)"},{"context":"Software quality"},{"context":"Mutation tests (light)"},{"context":"Gate 2 — Project usability"},{"context":"CI readiness"}]}}]'
 ```
 
 After the first CI run on a PR, if a check name is missing from the picker, merge one

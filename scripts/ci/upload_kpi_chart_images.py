@@ -421,6 +421,7 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--markdown", required=True)
     parser.add_argument("--charts-dir", default="reports/quality/charts")
+    parser.add_argument("--no-summary", action="store_true")
     args = parser.parse_args()
     path = Path(args.markdown)
     if not path.is_file():
@@ -429,7 +430,8 @@ def main() -> int:
     text = path.read_text(encoding="utf-8")
     names = referenced_charts(text)
     if not names:
-        _append_summary(text)
+        if not args.no_summary:
+            _append_summary(text)
         print("no chart images to host")
         return 0
     try:
@@ -441,7 +443,8 @@ def main() -> int:
     if "kpi-chart:" in updated or "![](" in updated:
         updated = strip_unresolved(updated)
     path.write_text(updated, encoding="utf-8", newline="\n")
-    _append_summary(updated)
+    if not args.no_summary:
+        _append_summary(updated)
     print(f"updated chart images in {path}")
     return 0
 
