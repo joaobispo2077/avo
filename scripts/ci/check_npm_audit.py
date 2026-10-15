@@ -5,12 +5,14 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import shutil
 import subprocess
 import sys
 from datetime import UTC, date, datetime
 from pathlib import Path
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 ROOT = Path(__file__).resolve().parents[2]
 ALLOWLIST_PATH = Path(__file__).resolve().parent / "deps-audit-allowlist.json"
@@ -20,6 +22,91 @@ GHSA_RE = re.compile(r"GHSA-[a-z0-9]{4}-[a-z0-9]{4}-[a-z0-9]{4}", re.IGNORECASE)
 FAIL_SEVERITIES = frozenset({"critical"})
 REPORT_SEVERITIES = frozenset({"high", "moderate", "low"})
 _COUNT_KEYS = ("critical", "high", "moderate", "low")
+_RAW_DETAILS: dict[str, dict] = {}
+_SECRET_KEY = re.compile(
+    r"token|password|secret|authorization|credential|api[_-]?key|^env(?:ironment)?$",
+    re.IGNORECASE,
+)
+
+
+def _sanitize_url(value: str) -> str:
+    try:
+        parts = urlsplit(value)
+    except ValueError:
+        return "[REDACTED INVALID URL]"
+    host = parts.netloc.rsplit("@", 1)[-1]
+    query = urlencode(
+        [
+            (key, "[REDACTED]" if _SECRET_KEY.search(key) else item)
+            for key, item in parse_qsl(parts.query, keep_blank_values=True)
+        ]
+    )
+    return urlunsplit((parts.scheme, host, parts.path, query, parts.fragment))
+
+
+def _sanitize(value: object) -> object:
+    """Keep advisory detail without persisting credentials or environment data."""
+    if isinstance(value, dict):
+        return {
+            str(key): "[REDACTED]" if _SECRET_KEY.search(str(key)) else _sanitize(item)
+            for key, item in value.items()
+        }
+    if isinstance(value, list):
+        return [_sanitize(item) for item in value]
+    if isinstance(value, str):
+        return re.sub(
+            r"https?://[^\s\"']+", lambda match: _sanitize_url(match.group()), value
+        )
+    return value
+
+
+def _policy(tool: str, allowlist: dict | None = None) -> dict:
+    raw = json.loads(ALLOWLIST_PATH.read_text(encoding="utf-8"))
+    if tool == "npm":
+        return {
+            "blocking_severities": sorted(FAIL_SEVERITIES),
+            "reported_severities": sorted(REPORT_SEVERITIES),
+            "include_dev_dependencies": True,
+            "fail_on_unknown_critical_advisory": True,
+            "fail_on_unused_allowlist": True,
+            "advisory_exceptions": list(allowlist.values())
+            if allowlist is not None
+            else raw.get("npm", {}).get("advisory_ids", []),
+        }
+    return {
+        "scope": "installed interpreter environment",
+        "skip_editable": True,
+        "blocking_severities": "all unignored advisories",
+        "ignore_vulns": raw.get("pip", {}).get("ignore_vulns", []),
+    }
+
+
+def _write_raw(
+    tool: str,
+    payload: object = None,
+    *,
+    status: str = "COMPLETE",
+    error: str | None = None,
+    policy: dict | None = None,
+) -> None:
+    details = _RAW_DETAILS.get(tool, {})
+    _write_json(
+        SUMMARY_PATH.with_name(f"{tool}-audit-raw.json"),
+        {
+            "schema_version": 1,
+            "tool": tool,
+            "sha": os.environ.get("AVO_QUALITY_SHA") or os.environ.get("GITHUB_SHA"),
+            "run_id": os.environ.get("AVO_QUALITY_RUN_ID")
+            or os.environ.get("GITHUB_RUN_ID"),
+            "recorded_at": datetime.now(UTC).isoformat(),
+            "status": status,
+            "exit_code": details.get("exit_code"),
+            "command": details.get("command"),
+            "policy": _sanitize(policy) if policy is not None else None,
+            "payload": _sanitize(payload),
+            "error": _sanitize(error),
+        },
+    )
 
 
 def _load_allowlist() -> dict[str, dict]:
@@ -130,7 +217,7 @@ def _validate_audit(audit: object) -> dict:
         or not isinstance(audit.get("vulnerabilities"), dict)
     ):
         raise ValueError(
-            f"npm audit JSON missing vulnerabilities object or execution error: {audit!r}"
+            "npm audit JSON missing vulnerabilities object or execution error"
         )
     vulns = audit["vulnerabilities"]
     for name, entry in vulns.items():
@@ -199,24 +286,50 @@ def _npm_executable() -> str:
 
 
 def _run_npm_audit() -> dict:
+    command = [_npm_executable(), "audit", "--json"]
     proc = subprocess.run(
-        [_npm_executable(), "audit", "--json"],
+        command,
         cwd=ROOT,
         capture_output=True,
         text=True,
         check=False,
     )
+    _RAW_DETAILS["npm"] = {"command": command, "exit_code": proc.returncode}
     raw = proc.stdout.strip() or proc.stderr.strip()
     if not raw:
+        _write_raw(
+            "npm",
+            status="ERROR",
+            error="npm audit produced no JSON",
+            policy=_policy("npm"),
+        )
         raise ValueError(
             f"npm audit produced no JSON (exit {proc.returncode}): {proc.stderr}"
         )
     try:
         audit = json.loads(raw)
     except json.JSONDecodeError as exc:
+        _write_raw(
+            "npm",
+            status="ERROR",
+            error=f"npm audit JSON parse failed: {exc}",
+            policy=_policy("npm"),
+        )
         raise ValueError(f"npm audit JSON parse failed: {exc}") from exc
-    _validate_audit(audit)
+    _write_raw("npm", audit, policy=_policy("npm"))
+    try:
+        _validate_audit(audit)
+    except ValueError as exc:
+        _write_raw("npm", audit, status="ERROR", error=str(exc), policy=_policy("npm"))
+        raise
     if proc.returncode not in (0, 1):
+        _write_raw(
+            "npm",
+            audit,
+            status="ERROR",
+            error=f"npm audit execution failed (exit {proc.returncode})",
+            policy=_policy("npm"),
+        )
         raise ValueError(
             f"npm audit execution failed (exit {proc.returncode}): {proc.stderr}"
         )
@@ -257,7 +370,15 @@ def pip_findings(payload: dict) -> list[dict]:
 
 
 def record_pip_payload(payload: dict) -> int:
-    write_deps_findings(pip_findings(payload))
+    try:
+        findings = pip_findings(payload)
+    except ValueError as exc:
+        _write_raw(
+            "pip", payload, status="ERROR", error=str(exc), policy=_policy("pip")
+        )
+        raise
+    _write_raw("pip", payload, policy=_policy("pip"))
+    write_deps_findings(findings)
     return 0
 
 
@@ -274,13 +395,29 @@ def _run_pip_audit() -> int:
             raise ValueError("pip audit ignore entry missing id")
         argv += ["--ignore-vuln", advisory]
     proc = subprocess.run(argv, cwd=ROOT, capture_output=True, text=True, check=False)
+    _RAW_DETAILS["pip"] = {"command": argv, "exit_code": proc.returncode}
     try:
-        findings = pip_findings(json.loads(proc.stdout))
+        payload = json.loads(proc.stdout)
+        _write_raw("pip", payload, policy=_policy("pip"))
+        findings = pip_findings(payload)
     except (ValueError, TypeError) as exc:
+        _write_raw(
+            "pip",
+            status="ERROR",
+            error=f"pip-audit execution failed: {exc}",
+            policy=_policy("pip"),
+        )
         raise ValueError(
             f"pip-audit execution failed: {proc.stderr.strip() or exc}"
         ) from exc
     if proc.returncode and not findings:
+        _write_raw(
+            "pip",
+            payload,
+            status="ERROR",
+            error=f"pip-audit execution failed (exit {proc.returncode})",
+            policy=_policy("pip"),
+        )
         raise ValueError(
             f"pip-audit execution failed (exit {proc.returncode}): {proc.stderr.strip()}"
         )
@@ -299,7 +436,19 @@ def _label(hit: dict) -> str:
 
 def _npm_gate() -> int:
     allowlist = _load_allowlist()
-    vulns = _validate_audit(_run_npm_audit())
+    audit = _run_npm_audit()
+    _write_raw("npm", audit, policy=_policy("npm", allowlist))
+    try:
+        vulns = _validate_audit(audit)
+    except ValueError as exc:
+        _write_raw(
+            "npm",
+            audit,
+            status="ERROR",
+            error=str(exc),
+            policy=_policy("npm", allowlist),
+        )
+        raise
     counts = {
         key: sum(entry["severity"] == key for entry in vulns.values())
         for key in _COUNT_KEYS
@@ -362,6 +511,9 @@ def main(argv: list[str] | None = None) -> int:
         "--record-pip", action="store_true", help="Record pip-audit JSON from stdin."
     )
     args = parser.parse_args([] if argv is None else argv)
+    _RAW_DETAILS.clear()
+    _write_raw("npm", status="NOT_RUN", error="npm audit has not run")
+    _write_raw("pip", status="NOT_RUN", error="pip audit has not run")
     write_deps_findings([])
     _write_summary(None, ok=False)
     try:
