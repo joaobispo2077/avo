@@ -423,7 +423,13 @@ class QualityMatrixTests(unittest.TestCase):
         # Fail-immediately: no soft/continue-on-error escape hatch on the gate steps.
         # Sticky PR comment publish may continue-on-error so fork PRs still gate.
         gate_block = quality_block.split("Build quality PR report", 1)[0]
-        self.assertNotIn("continue-on-error:", gate_block)
+        required_steps, measurement = gate_block.split(
+            "- name: Measure function risk and coupling", 1
+        )
+        self.assertNotIn("continue-on-error:", required_steps)
+        self.assertIn("continue-on-error: true", measurement)
+        self.assertIn("measure_code_risk.py", measurement)
+        self.assertIn("--coverage-receipt", measurement)
         quality_lower = quality_block.lower()
         self.assertNotIn("soft until enablement", quality_lower)
         self.assertNotIn("non-failing until enablement", quality_lower)

@@ -256,10 +256,22 @@ class QualityMetricsSnapshotTests(unittest.TestCase):
         )
         for field in ("Version", "Tag", "SHA", "Recorded (UTC)"):
             self.assertIn(f"| {field} |", text)
-        self.assertIn("<summary>Gate diagnostics and artifacts</summary>", text)
-        self.assertIn("| Coverage | 71.25% | Minimum 68% | **PASS** |", text)
-        self.assertIn("| Duplication | 1.00% | Maximum 2% | **PASS** |", text)
-        self.assertIn("| Mutation | 75.00% | Minimum 40% | **PASS** |", text)
+        self.assertIn("<summary>Metric diagnostics and artifacts</summary>", text)
+        self.assertIn("<summary>Execution results</summary>", text)
+        self.assertIn("| Gate | Decision | Policy | Execution evidence |", text)
+        self.assertIn("| Metric | Measured | Scope | Evidence |", text)
+        self.assertNotIn("| Metric | Measured | Threshold | Status |", text)
+        self.assertIn("| Coverage | 71.25% | unit-suite line coverage;", text)
+        self.assertIn(
+            "| Coverage | **PASS** | pytest-cov fail-under on `src/avo`; Minimum 68% |",
+            text,
+        )
+        self.assertIn("| Duplication | 1.00% | duplicated source lines;", text)
+        self.assertIn(
+            "| Duplication | **PASS** | jscpd on `src/avo`; Maximum 2% |", text
+        )
+        self.assertIn("| Mutation | 75.00% | light profile;", text)
+        self.assertIn("| Mutation | **PASS** | Complete accounting; Minimum 40%;", text)
         self.assertNotIn("### Complexity allowlist", text)
         self.assertNotIn("### Gate status", text)
         self.assertNotIn("![", text)
@@ -333,7 +345,8 @@ class QualityMetricsSnapshotTests(unittest.TestCase):
             out=tmp / "quality-metrics.md",
             expected_run_id=RUN_ID,
         )
-        self.assertIn("| Mutation | 75.00% | Minimum 40% | **PASS** |", text)
+        self.assertIn("| Mutation | 75.00% | light profile;", text)
+        self.assertIn("| Mutation | **PASS** | Complete accounting; Minimum 40%;", text)
 
     def test_producer_cannot_invent_a_missing_policy(self) -> None:
         tmp = self._workspace()
@@ -432,6 +445,43 @@ class QualityMetricsSnapshotTests(unittest.TestCase):
                 out=tmp / "quality-metrics.md",
                 expected_run_id="another-run",
             )
+
+    def test_release_rejects_malformed_or_unbound_measurement_extension(self) -> None:
+        tmp = self._workspace()
+        doc = self._document(tmp)
+        collector = self.mod._measurements()
+        capture = collector.collect(doc, tmp / "missing-captures")
+        for evidence in (None, {"schema": 2}, {**capture, "metrics": []}):
+            with self.subTest(evidence=evidence):
+                doc["measurement_evidence"] = evidence
+                with self.assertRaisesRegex(
+                    self.mod.SnapshotError, "measurement evidence"
+                ):
+                    self.mod._validate(doc, SHA, "1.2.3", RUN_ID)
+        doc["measurement_evidence"] = capture
+        doc["series"]["dashboard"] = self.mod._dashboard().build_series(doc)
+        with self.assertRaisesRegex(self.mod.SnapshotError, "dashboard is not green"):
+            self.mod._validate(doc, SHA, "1.2.3", RUN_ID)
+
+    def test_new_capture_freezes_configured_coverage_precision(self) -> None:
+        tmp = self._workspace()
+        _fixture_root(tmp)
+        config = tmp / "pyproject.toml"
+        config.write_text("[tool.coverage.report]\nfail_under = 68\nprecision = 2\n")
+        coverage = tmp / "coverage.json"
+        _coverage(coverage, 71.25, 712, 1000)
+        doc = self.mod.build_ci_document(
+            self._outcomes(),
+            coverage_json=coverage,
+            floor=68,
+            root=tmp,
+            sha=SHA,
+            recorded_at=RECORDED,
+            run_id=RUN_ID,
+            collect_evidence=True,
+        )
+        config.write_text("[tool.coverage.report]\nfail_under = 68\nprecision = 0\n")
+        self.assertEqual(doc["coverage_precision"], 2)
         self.assertFalse((tmp / "quality-metrics.md").exists())
 
     def test_missing_json_fails_and_leaves_the_doc_untouched(self) -> None:

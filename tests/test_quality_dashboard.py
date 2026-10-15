@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import json
 from pathlib import Path
@@ -230,3 +231,252 @@ def test_plot_failure_retains_text_table(tmp_path, monkeypatch):
     assert "Minimum 68%" in text
     assert "![" not in text
     assert "Measurements remain in the table" in text
+
+
+def measured_document():
+    titles = {
+        "coverage": "Line coverage",
+        "duplication": "Duplication",
+        "mutation": "Mutation efficacy",
+        "complexity": "Cyclomatic complexity",
+        "crap": "CRAP",
+        "coupling": "Coupling (CA / CE)",
+        "dependencies": "Dependency findings",
+        "deadcode": "Dead-code findings",
+        "architecture": "Import boundaries",
+        "tree": "Dependency hoist plan",
+        "branches": "Safety branch coverage",
+    }
+    metrics = [
+        {
+            "key": key,
+            "title": title,
+            "state": "MEASURED",
+            "value": "Measured finding",
+            "number": None,
+            "unit": None,
+            "scope": "src/avo",
+            "basis": "Verified analyzer output.",
+            "sources": [
+                {
+                    "artifact": "quality-evidence",
+                    "path": f"{key}.json",
+                    "sha256": hashlib.sha256(key.encode()).hexdigest(),
+                }
+            ],
+        }
+        for key, title in titles.items()
+    ]
+    for row, number in zip(metrics[:2], (63.0, 0.75), strict=True):
+        row.update(number=number, value=f"{number:.2f}%", unit="percent")
+    doc = document(
+        repository="owner/avo",
+        artifact_urls={
+            "quality-evidence": "https://github.com/owner/avo/actions/runs/42/artifacts/7"
+        },
+        jobs={"repo-unit-tests": "success", "repo-integration-tests": "success"},
+        measurement_evidence={
+            "schema": 1,
+            "metrics": metrics,
+            "gates": {
+                key: {"verified": True, "sources": []}
+                for key in ("coverage", "duplication")
+            },
+            "diagnostics": {
+                "code_risk": {
+                    "functions": [
+                        {
+                            "path": "src/avo/sample.py",
+                            "line": 17,
+                            "qualname": "Service.choose",
+                            "complexity": 7,
+                            "function_coverage": {"percent": 50},
+                            "crap": {"value": 13.125},
+                        }
+                    ]
+                }
+            },
+        },
+        test_evidence={
+            "repo-unit-tests": {
+                "state": "PARTIAL",
+                "counts": {
+                    "total": 4,
+                    "passed": 2,
+                    "failed": 1,
+                    "errors": 0,
+                    "skipped": 1,
+                },
+                "sources": [],
+            },
+            "repo-integration-tests": {"state": "UNAVAILABLE", "counts": None},
+        },
+    )
+    return doc
+
+
+def test_measurements_gates_and_execution_have_distinct_evidence():
+    doc = measured_document()
+    mod = dashboard()
+    text = mod.markdown(doc, mod.build_series(doc))
+    observations = text.split("**Measurements**", 1)[1].split("**Gate decisions**", 1)[
+        0
+    ]
+    decisions = text.split("**Gate decisions**", 1)[1].split(
+        "<summary>Execution results</summary>", 1
+    )[0]
+    execution = text.split("<summary>Execution results</summary>", 1)[1].split(
+        "</details>", 1
+    )[0]
+    assert "**PASS**" not in observations and "SUCCESS" not in observations
+    assert "**PASS**" in decisions and "Minimum 68%" in decisions
+    assert "2 passed / 1 failed / 0 errors / 1 skipped; 4 JUnit testcases" in execution
+    assert "PARTIAL:" in execution and "UNAVAILABLE:" in execution
+    assert "testcase counts not captured" in execution
+    assert "0 JUnit testcases" not in execution
+    for row in doc["measurement_evidence"]["metrics"]:
+        source = row["sources"][0]
+        assert f"| {row['title']} |" in observations
+        assert (
+            f"[{source['path']}]({doc['artifact_urls']['quality-evidence']})"
+            in observations
+        )
+        assert f"SHA-256 `{source['sha256'][:12]}`" in observations
+    assert f"https://github.com/owner/avo/blob/{SHA}/src/avo/sample.py#L17" in text
+    assert "CRAP reference 30 is informational" in text
+
+
+def test_normalized_values_replace_cached_series_in_plot():
+    doc = measured_document()
+    series = dashboard().build_series(doc)
+    assert [row["measured"] for row in series["metrics"][:2]] == [63.0, 0.75]
+    assert series["metrics"][0]["status"] == "FAIL"
+    assert series["presentation"] == "measurements"
+    assert all(row["measurement_state"] == "MEASURED" for row in series["metrics"][:2])
+
+
+@pytest.mark.parametrize(
+    ("measured", "floor", "precision"),
+    [
+        (67.49, 68, 0),
+        (67.5, 68, 0),
+        (67.6, 68, 0),
+        (67.6, 68, 2),
+        (67.994, 68, 2),
+        (67.999, 68, 2),
+        (99.999, 100, 0),
+        (99.999, 100, 2),
+        (100, 100, 2),
+    ],
+)
+def test_coverage_rounding_matches_installed_gate_without_changing_measurement(
+    measured, floor, precision
+):
+    from coverage.results import should_fail_under
+
+    doc = measured_document()
+    doc["coverage_precision"] = precision
+    doc["series"]["coverage"].update(measured=99, floor=floor)
+    observations = doc["measurement_evidence"]["metrics"]
+    observations[0].update(number=measured, value=f"{measured:.2f}%")
+    observations[1].update(number=2.004, value="2.004%")
+    mod = dashboard()
+    series = mod.build_series(doc)
+    assert series["metrics"][0]["status"] == (
+        "FAIL" if should_fail_under(measured, floor, precision) else "PASS"
+    )
+    assert series["metrics"][0]["measured"] == measured
+    assert series["measurements"][0]["number"] == measured
+    assert series["metrics"][1]["status"] == "FAIL"  # Duplication stays unrounded.
+    text = mod.markdown(doc, series)
+    assert f"comparison rounded to {precision} decimal places" in text
+    assert f"| Line coverage | {measured:.2f}% |" in text
+
+
+@pytest.mark.parametrize("binding", ["missing", "unavailable", "contradictory"])
+def test_unbound_mutation_does_not_supply_a_plot_value(binding):
+    doc = measured_document()
+    doc["mutation"] = {
+        "sha": SHA,
+        "run_id": "42",
+        "profile": "light",
+        "floor": 40,
+        "killed": 3,
+        "survived": 1,
+        "total": 4,
+    }
+    metrics = doc["measurement_evidence"]["metrics"]
+    mutation = next(row for row in metrics if row["key"] == "mutation")
+    mutation.update(number=75, value="75.00%", unit="percent")
+    if binding == "missing":
+        metrics.remove(mutation)
+    elif binding == "unavailable":
+        mutation.update(state="UNAVAILABLE")
+    else:
+        mutation.update(number=70)
+    row = dashboard().build_series(doc)["metrics"][2]
+    assert row["measured"] is None
+    assert row["status"] != "PASS"
+
+
+@pytest.mark.parametrize("missing", [False, True])
+def test_uncaptured_crap_provenance_suppresses_function_scores(missing):
+    doc = measured_document()
+    metrics = doc["measurement_evidence"]["metrics"]
+    crap = next(row for row in metrics if row["key"] == "crap")
+    if missing:
+        metrics.remove(crap)
+    else:
+        crap.update(state="UNAVAILABLE", value="Unavailable", sources=[])
+    mod = dashboard()
+    text = mod.markdown(doc, mod.build_series(doc))
+    assert "highest observed function scores" not in text
+    assert "Service.choose" not in text
+    assert "13.12" not in text
+
+
+@pytest.mark.parametrize("problem", ["failed", "errors", "incomplete"])
+def test_successful_job_cannot_hide_failed_or_partial_junit(problem):
+    mod = dashboard()
+    doc = measured_document()
+    names = mod.ci_module("avo_ci_readiness", "check_ci_readiness.py").MANDATORY_JOBS
+    doc["jobs"] = dict.fromkeys((*names, "ci-readiness"), "success")
+    doc["test_evidence"] = {}
+    doc["mutation"] = {
+        "sha": SHA,
+        "run_id": "42",
+        "profile": "light",
+        "floor": 40,
+        "killed": 3,
+        "survived": 1,
+        "total": 4,
+    }
+    metrics = {row["key"]: row for row in doc["measurement_evidence"]["metrics"]}
+    metrics["coverage"].update(number=80, value="80.00%")
+    metrics["mutation"].update(number=75, value="75.00%", unit="percent")
+    assert mod.build_series(doc)["overall"] == "PASS"
+
+    counts = (
+        None
+        if problem == "incomplete"
+        else {
+            "total": 1,
+            "passed": 0,
+            "failed": int(problem == "failed"),
+            "errors": int(problem == "errors"),
+            "skipped": 0,
+        }
+    )
+    reason = "Test receipt or testcase events are incomplete."
+    doc["test_evidence"]["repo-unit-tests"] = {
+        "state": "PARTIAL",
+        "counts": counts,
+        "reason": reason,
+        "sources": [],
+    }
+    series = mod.build_series(doc)
+    assert series["overall"] == ("INCOMPLETE" if counts is None else "FAIL")
+    assert any("partial test evidence" in action for action in series["actions"])
+    text = mod.markdown(doc, series)
+    assert "| repo-unit-tests | **SUCCESS** |" in text
+    assert f"PARTIAL: {reason}" in text
