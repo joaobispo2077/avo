@@ -50,6 +50,8 @@ jobs:
     runs-on: ubuntu-24.04
     needs: prerequisites-gate
     timeout-minutes: 12
+    outputs:
+      evidence_url: ${{ steps.unit-evidence.outputs.artifact-url }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -84,7 +86,20 @@ jobs:
         run: bash scripts/ci/ensure-ffmpeg.sh
 
       - name: Run unit tests
-        run: bash scripts/ci/run-unit-tests.sh
+        env:
+          PYTEST_ADDOPTS: --junitxml=reports/quality/unit-tests.xml
+        run: python scripts/ci/run_quality_gate.py --gate unit-tests --artifact reports/quality/unit-tests.xml -- bash scripts/ci/run-unit-tests.sh
+
+      - name: Upload unit execution evidence
+        id: unit-evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: unit-test-evidence
+          overwrite: true
+          path: reports/quality
+          if-no-files-found: warn
+          retention-days: 14
 
       - name: Install script dry-run smoke
         run: bash scripts/ci/install-smoke.sh
@@ -100,6 +115,8 @@ jobs:
     runs-on: ubuntu-24.04
     needs: prerequisites-gate
     timeout-minutes: 20
+    outputs:
+      evidence_url: ${{ steps.integration-evidence.outputs.artifact-url }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -125,7 +142,20 @@ jobs:
         run: bash scripts/ci/ensure-ffmpeg.sh
 
       - name: Run integration tests
-        run: bash scripts/ci/run-integration-tests.sh
+        env:
+          PYTEST_ADDOPTS: --junitxml=reports/quality/integration-tests.xml
+        run: python scripts/ci/run_quality_gate.py --gate integration-tests --artifact reports/quality/integration-tests.xml -- bash scripts/ci/run-integration-tests.sh
+
+      - name: Upload integration execution evidence
+        id: integration-evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: integration-test-evidence
+          overwrite: true
+          path: reports/quality
+          if-no-files-found: warn
+          retention-days: 14
 
   software-quality:
     # GitHub check name for branch protection: "Software quality"
@@ -137,6 +167,8 @@ jobs:
       contents: read
     # Coverage re-runs the unit suite only (tests/integration has its own job).
     timeout-minutes: 35
+    outputs:
+      evidence_url: ${{ steps.quality-evidence.outputs.artifact-url }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -174,39 +206,48 @@ jobs:
       # Umbrella scripts match local `npm run quality` / scripts/ci/quality.sh.
       - name: Software quality — lint
         id: q-lint
-        run: bash scripts/ci/quality-lint.sh
+        run: python scripts/ci/run_quality_gate.py --gate lint -- bash scripts/ci/quality-lint.sh
 
       - name: Software quality — format
         id: q-format
-        run: bash scripts/ci/quality-format.sh
+        run: python scripts/ci/run_quality_gate.py --gate format -- bash scripts/ci/quality-format.sh
 
       - name: Software quality — coverage
         id: q-coverage
-        run: bash scripts/ci/run-coverage.sh
+        run: python scripts/ci/run_quality_gate.py --gate coverage --artifact reports/quality/coverage.json -- bash scripts/ci/run-coverage.sh
 
       - name: Software quality — complexity
         id: q-complexity
-        run: bash scripts/ci/quality-complexity.sh
+        run: python scripts/ci/run_quality_gate.py --gate complexity --artifact reports/quality/complexity.json -- bash scripts/ci/quality-complexity.sh
 
       - name: Software quality — deps
         id: q-deps
-        run: bash scripts/ci/quality-deps.sh
+        run: python scripts/ci/run_quality_gate.py --gate deps --artifact reports/quality/deps-findings.json --artifact reports/quality/npm-audit-summary.json --artifact reports/quality/pip-audit-raw.json --artifact reports/quality/npm-audit-raw.json -- bash scripts/ci/quality-deps.sh
 
       - name: Software quality — deadcode
         id: q-deadcode
-        run: bash scripts/ci/quality-deadcode.sh
+        run: python scripts/ci/run_quality_gate.py --gate deadcode --artifact reports/quality/deadcode.json -- bash scripts/ci/quality-deadcode.sh
 
       - name: Software quality — duplication
         id: q-duplication
-        run: bash scripts/ci/quality-duplication.sh
+        run: python scripts/ci/run_quality_gate.py --gate duplication --artifact reports/quality/jscpd/jscpd-report.json -- bash scripts/ci/quality-duplication.sh
 
       - name: Software quality — architecture
         id: q-architecture
-        run: bash scripts/ci/quality-architecture.sh
+        run: python scripts/ci/run_quality_gate.py --gate architecture -- bash scripts/ci/quality-architecture.sh
 
       - name: Software quality — tree
         id: q-tree
-        run: bash scripts/ci/quality-tree.sh
+        run: python scripts/ci/run_quality_gate.py --gate tree --artifact reports/quality/dependency-tree.json --artifact reports/quality/dependency-tree-raw.log -- bash scripts/ci/quality-tree.sh
+
+      - name: Measure function risk and coupling
+        if: always()
+        continue-on-error: true
+        run: |
+          python scripts/ci/run_quality_gate.py --gate code-risk --artifact reports/quality/code-risk.json -- \
+            python scripts/ci/measure_code_risk.py \
+            --coverage-receipt reports/quality/gates/coverage/gate.json \
+            --test-outcome '${{ steps.q-coverage.outcome }}'
 
       - name: Build quality PR report
         if: always()
@@ -226,6 +267,7 @@ jobs:
             --coverage reports/quality/coverage.json
 
       - name: Upload quality evidence
+        id: quality-evidence
         if: always()
         uses: actions/upload-artifact@v7
         with:
@@ -264,6 +306,8 @@ jobs:
     runs-on: ubuntu-24.04
     needs: [prerequisites-gate, repo-unit-tests]
     timeout-minutes: 20
+    outputs:
+      evidence_url: ${{ steps.mutation-evidence.outputs.artifact-url }}
     permissions:
       contents: read
       pull-requests: write
@@ -307,6 +351,7 @@ jobs:
         run: python scripts/ci/write_mutation_pr_report.py --out reports/mutation/mutation-report.md
 
       - name: Upload light mutation reports
+        id: mutation-evidence
         if: always()
         uses: actions/upload-artifact@v7
         with:
@@ -386,6 +431,20 @@ jobs:
         with:
           name: mutation-reports-light
           path: reports/mutation/evidence
+
+      - name: Download unit execution evidence
+        continue-on-error: true
+        uses: actions/download-artifact@v7
+        with:
+          name: unit-test-evidence
+          path: reports/quality/unit-evidence
+
+      - name: Download integration execution evidence
+        continue-on-error: true
+        uses: actions/download-artifact@v7
+        with:
+          name: integration-test-evidence
+          path: reports/quality/integration-evidence
 
       - name: Build unified quality report
         env:
