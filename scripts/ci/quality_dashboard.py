@@ -99,12 +99,32 @@ def measured_metric(doc: dict, key: str, title: str, direction: str, scope: str)
     status = gate.get("status", "UNKNOWN")
     threshold = percentage(data.get("floor" if direction == "minimum" else "ceiling"))
     measured = percentage(data.get("measured"))
+    evidence = doc.get("measurement_evidence")
+    if isinstance(evidence, dict):
+        observation = next(
+            (row for row in evidence.get("metrics", []) if row.get("key") == key), {}
+        )
+        measured = percentage(observation.get("number"))
+        if observation.get("state") not in {"MEASURED", "PARTIAL"}:
+            measured = None
     if status not in {"PASS", "FAIL"}:
         measured = None
     elif measured is None or threshold is None:
         status = "UNAVAILABLE"
-    elif measured < threshold if direction == "minimum" else measured > threshold:
-        status = "FAIL"
+    else:
+        precision = doc.get("coverage_precision")
+        compared = (
+            round(measured, precision)
+            if key == "coverage" and type(precision) is int and 0 <= precision <= 9
+            else measured
+        )
+        violates = (
+            compared < threshold if direction == "minimum" else compared > threshold
+        )
+        if key == "coverage" and threshold == 100 and measured != 100:
+            violates = True
+        if violates:
+            status = "FAIL"
     return {
         "title": title,
         "measured": measured,
@@ -130,6 +150,35 @@ def build_series(doc: dict) -> dict:
         ),
         mutation_metric(doc),
     ]
+    evidence = doc.get("measurement_evidence")
+    if isinstance(evidence, dict):
+        observation = next(
+            (
+                row
+                for row in evidence.get("metrics", [])
+                if row.get("key") == "mutation"
+            ),
+            {},
+        )
+        actual = metrics[-1]
+        number = (
+            percentage(observation.get("number"))
+            if observation.get("state") in {"MEASURED", "PARTIAL"}
+            and observation.get("unit") == "percent"
+            else None
+        )
+        if number is None:
+            actual.update(
+                measured=None,
+                status="UNAVAILABLE",
+                detail=observation.get("basis", "Mutation input proof is unavailable."),
+            )
+        elif number != actual["measured"]:
+            actual.update(
+                measured=None,
+                status="INVALID",
+                detail="Mutation display does not match validated outcome counters.",
+            )
     actions = [
         f"{row['title']}: {row['status']}. {row.get('metric') or 'Inspect this gate in the run logs.'}"
         for row in doc.get("gates", [])
@@ -148,15 +197,34 @@ def build_series(doc: dict) -> dict:
         for name, result in jobs.items()
         if result != "success"
     )
+    executions = doc.get("test_evidence", {})
+    actions.extend(
+        f"{name}: partial test evidence. {execution.get('reason', '')}"
+        for name, execution in executions.items()
+        if execution.get("state") == "PARTIAL"
+    )
+    evidence = doc.get("measurement_evidence")
+    if isinstance(evidence, dict):
+        actions.extend(
+            f"{gate['title']}: execution proof unavailable. {evidence.get('gates', {}).get(gate['key'], {}).get('reason', 'No current-run capture log.')}"
+            for gate in doc.get("gates", [])
+            if gate["status"] == "PASS"
+            and not evidence.get("gates", {}).get(gate["key"], {}).get("verified")
+        )
     statuses = [row["status"] for row in metrics]
     failed = doc.get("overall") == "FAIL" or "FAIL" in statuses or "INVALID" in statuses
     failed = failed or any(row["status"] == "FAIL" for row in doc.get("gates", []))
     failed = failed or any(
         result in {"failure", "cancelled"} for result in jobs.values()
     )
+    failed = failed or any(
+        execution.get("counts")
+        and (execution["counts"]["failed"] or execution["counts"]["errors"])
+        for execution in executions.values()
+    )
     incomplete = bool(actions) or any(status != "PASS" for status in statuses)
     overall = "FAIL" if failed else "INCOMPLETE" if incomplete else "PASS"
-    return {
+    series = {
         "chart": "dashboard",
         "overall": overall,
         "sha": doc.get("sha", ""),
@@ -164,6 +232,17 @@ def build_series(doc: dict) -> dict:
         "metrics": metrics,
         "actions": list(dict.fromkeys(actions)),
     }
+    if isinstance(evidence, dict):
+        for metric in metrics:
+            key = metric["title"].lower()
+            observation = next(
+                (row for row in evidence.get("metrics", []) if row.get("key") == key),
+                {},
+            )
+            metric["measurement_state"] = observation.get("state", "UNAVAILABLE")
+        series["presentation"] = "measurements"
+        series["measurements"] = evidence.get("metrics", [])
+    return series
 
 
 def value_text(value: object) -> str:
@@ -172,6 +251,50 @@ def value_text(value: object) -> str:
 
 def safe_text(value: object) -> str:
     return str(value).replace("|", "\\|").replace("\n", " ")
+
+
+def evidence_links(doc: dict, sources: list[dict]) -> str:
+    urls = doc.get("artifact_urls", {})
+    links = []
+    for source in sources:
+        name = source.get("path", "Unavailable")
+        url = urls.get(source.get("artifact", ""), "")
+        label = f"[{safe_text(name)}]({url})" if url else f"`{safe_text(name)}`"
+        digest = source.get("sha256")
+        if digest:
+            label += f" (SHA-256 `{digest[:12]}`)"
+        links.append(label)
+    return "; ".join(links) or "Not captured"
+
+
+def source_link(doc: dict, path: str, line: int, name: str = "") -> str:
+    repository = doc.get("repository", "")
+    label = safe_text(name or f"{path}:{line}")
+    if (
+        repository
+        and len(str(doc.get("sha", ""))) == 40
+        and path.startswith("src/avo/")
+        and ".." not in path.split("/")
+    ):
+        return f"[{label}](https://github.com/{repository}/blob/{doc['sha']}/{path}#L{line})"
+    return f"`{label}`"
+
+
+def measurement_rows(doc: dict, series: dict) -> list[dict]:
+    if "measurements" in series:
+        return series["measurements"]
+    return [
+        {
+            "key": metric["title"].lower(),
+            "title": metric["title"],
+            "value": value_text(metric["measured"]),
+            "scope": metric["scope"],
+            "state": "MEASURED" if metric["measured"] is not None else "UNAVAILABLE",
+            "basis": "Historical summary; raw-input capture is unavailable.",
+            "sources": [],
+        }
+        for metric in series["metrics"]
+    ]
 
 
 def markdown(doc: dict, series: dict, *, image: str = "") -> str:
@@ -188,49 +311,182 @@ def markdown(doc: dict, series: dict, *, image: str = "") -> str:
         lines.extend(f"- {safe_text(item)}" for item in series["actions"])
         lines.append("")
     else:
-        lines.extend(["All reported mandatory checks and measurements passed.", ""])
+        lines.extend(["All mandatory gate decisions and required jobs passed.", ""])
     if image:
         lines.extend([f"![Quality dashboard]({image})", ""])
+    observations = measurement_rows(doc, series)
+    measured = sum(row.get("state") == "MEASURED" for row in observations)
+    partial = sum(row.get("state") == "PARTIAL" for row in observations)
+    missing = len(observations) - measured - partial
     lines.extend(
-        ["| Metric | Measured | Threshold | Status | Scope |", "|---|---:|---|---|---|"]
+        [
+            "**Measurements**",
+            "",
+            f"Evidence completeness: {measured} measured, {partial} partial, {missing} unavailable. Gate decisions are below.",
+            "",
+            "| Metric | Measured | Scope | Evidence |",
+            "|---|---|---|---|",
+        ]
     )
-    for metric in series["metrics"]:
-        direction = "Minimum" if metric["direction"] == "minimum" else "Maximum"
-        threshold = (
-            "Unavailable"
-            if metric["threshold"] is None
-            else f"{direction} {metric['threshold']:g}%"
-        )
+    for metric in observations:
+        suffix = " (partial)" if metric.get("state") == "PARTIAL" else ""
         lines.append(
-            f"| {metric['title']} | {value_text(metric['measured'])} | {threshold} | **{metric['status']}** | {safe_text(metric['scope'])} |"
+            f"| {safe_text(metric['title'])} | {safe_text(metric['value'])}{suffix} | {safe_text(metric['scope'])} | {safe_text(metric['basis'])} {evidence_links(doc, metric.get('sources', []))} |"
         )
+    evidence = doc.get("measurement_evidence", {})
+    policy = ci_module(
+        "avo_ci_write_quality_pr_report", "write_quality_pr_report.py"
+    ).GATE_POLICY
+    lines.extend(
+        [
+            "",
+            "**Gate decisions**",
+            "",
+            "| Gate | Decision | Policy | Execution evidence |",
+            "|---|---|---|---|",
+        ]
+    )
+    for gate in doc.get("gates", []):
+        proof = evidence.get("gates", {}).get(gate["key"], {})
+        checks = gate.get("checks") or policy.get(gate["key"], "Unavailable")
+        if gate["key"] in {"coverage", "duplication"}:
+            metric = next(
+                row for row in series["metrics"] if row["title"].lower() == gate["key"]
+            )
+            if metric["threshold"] is not None:
+                checks += f"; {'Minimum' if gate['key'] == 'coverage' else 'Maximum'} {metric['threshold']:g}%"
+                if gate["key"] == "coverage" and "coverage_precision" in doc:
+                    checks += f"; comparison rounded to {doc['coverage_precision']} decimal places"
+        links = evidence_links(doc, proof.get("sources", []))
+        if not proof.get("verified"):
+            links = f"Unverified capture: {safe_text(proof.get('reason', 'Historical execution summary only.'))}"
+        lines.append(
+            f"| {safe_text(gate['title'])} | **{gate['status']}** | {safe_text(checks)} | {links} |"
+        )
+    mutation = next(row for row in series["metrics"] if row["title"] == "Mutation")
+    mutation_proof = next((row for row in observations if row["key"] == "mutation"), {})
+    threshold = (
+        f"Minimum {mutation['threshold']:g}%"
+        if mutation["threshold"] is not None
+        else "threshold unavailable"
+    )
+    lines.append(
+        f"| Mutation | **{mutation['status']}** | Complete accounting; {threshold}; {safe_text(mutation['scope'])} | {evidence_links(doc, mutation_proof.get('sources', []))} |"
+    )
     lines.extend(
         [
             "",
             "<details>",
-            "<summary>Gate diagnostics and artifacts</summary>",
+            "<summary>Execution results</summary>",
             "",
-            "| Gate | Status | Evidence |",
+            "| Required job | Result | Test evidence |",
             "|---|---|---|",
         ]
     )
-    for gate in doc.get("gates", []):
-        lines.append(
-            f"| {safe_text(gate['title'])} | **{gate['status']}** | {safe_text(gate.get('metric', 'Unavailable'))} |"
-        )
     for job, result in doc.get("jobs", {}).items():
-        lines.append(f"| {safe_text(job)} | **{result.upper()}** | Required CI job |")
+        execution = doc.get("test_evidence", {}).get(job, {})
+        counts = execution.get("counts")
+        detail = "Job result; testcase counts not captured."
+        if isinstance(counts, dict):
+            detail = f"{counts['passed']} passed / {counts['failed']} failed / {counts['errors']} errors / {counts['skipped']} skipped; {counts['total']} JUnit testcases."
+        if execution:
+            detail += f" {execution.get('state', 'UNAVAILABLE')}: {safe_text(execution.get('reason', ''))}"
+        lines.append(
+            f"| {safe_text(job)} | **{result.upper()}** | {detail} {evidence_links(doc, execution.get('sources', []))} |"
+        )
     lines.extend(
         [
             "",
-            "Exception and contract counts describe configuration, not a quality score.",
+            "Successful execution is not a measured quality score. Uncaptured counts remain unavailable.",
             "",
         ]
     )
     run_url = doc.get("run_url", "")
     if run_url.startswith("https://github.com/"):
         lines.append(f"[Run logs and downloadable artifacts]({run_url})")
-    lines.extend(["", "</details>", ""])
+    lines.extend(
+        [
+            "",
+            "</details>",
+            "",
+            "<details>",
+            "<summary>Metric diagnostics and artifacts</summary>",
+            "",
+        ]
+    )
+    risk = evidence.get("diagnostics", {}).get("code_risk", {})
+    crap_observation = next((row for row in observations if row["key"] == "crap"), {})
+    verified_crap = crap_observation.get("state") in {"MEASURED", "PARTIAL"}
+    functions = sorted(
+        (
+            row
+            for row in risk.get("functions", [])
+            if verified_crap and row.get("crap", {}).get("value") is not None
+        ),
+        key=lambda row: row["crap"]["value"],
+        reverse=True,
+    )
+    if functions:
+        lines.extend(
+            [
+                "CRAP reference 30 is informational. These are the highest observed function scores; unmatched functions remain unmeasured.",
+                "",
+                "| Function | CC | Function line coverage | CRAP |",
+                "|---|---:|---:|---:|",
+            ]
+        )
+        for row in functions[:10]:
+            label = f"{row['path']}:{row['line']} {row['qualname']}"
+            lines.append(
+                f"| {source_link(doc, row['path'], row['line'], label)} | {row['complexity']} | {row['function_coverage']['percent']:.2f}% | {row['crap']['value']:.2f} |"
+            )
+        lines.append("")
+    packages = sorted(
+        risk.get("coupling", {}).get("packages", []),
+        key=lambda row: row.get("ca", 0) + row.get("ce", 0),
+        reverse=True,
+    )
+    if packages:
+        lines.extend(
+            [
+                "Static package coupling is a review signal. Intra-package and dynamic imports are not measured; no quadrant cutoffs or abstractness score are adopted.",
+                "",
+                "| Package | CA (used by) | CE (depends on) | Instability |",
+                "|---|---:|---:|---:|",
+            ]
+        )
+        for row in packages[:10]:
+            instability = (
+                "Undefined (no edges)"
+                if row.get("instability") is None
+                else f"{row['instability']:.3f}"
+            )
+            lines.append(
+                f"| `{safe_text(row['package'])}` | {row['ca']} | {row['ce']} | {instability} |"
+            )
+        lines.append("")
+    if "measurement_evidence" not in doc:
+        lines.extend(
+            [
+                "Historical recorded summaries predate raw-input capture. These values are preserved as legacy diagnostics, including configuration counts.",
+                "",
+                "| Recorded field | Legacy value |",
+                "|---|---|",
+            ]
+        )
+        lines.extend(
+            f"| {safe_text(row['title'])} | {safe_text(row.get('metric', 'Unavailable'))} |"
+            for row in doc.get("gates", [])
+        )
+        lines.append("")
+    lines.extend(
+        [
+            "Exception lists and contract definitions are configuration. Observed findings, source locations, waiver reasons, full function tables, raw audits and capture logs are retained in the linked artifacts.",
+            "",
+            "</details>",
+            "",
+        ]
+    )
     return "\n".join(lines)
 
 
@@ -240,13 +496,16 @@ def render(series: dict, path: Path) -> dict:
 
     fig, axes = plt.subplots(3, 1, figsize=(5.8, 6.4), dpi=160)
     fig.patch.set_facecolor("#f8fafc")
+    measurements_view = series.get("presentation") == "measurements"
     fig.suptitle(
-        f"AVO quality  ·  {series['overall']}",
+        "AVO measurements"
+        if measurements_view
+        else f"AVO quality  ·  {series['overall']}",
         x=0.08,
         ha="left",
         fontsize=21,
         fontweight="bold",
-        color=COLORS.get(series["overall"], MUTED),
+        color="#101828" if measurements_view else COLORS.get(series["overall"], MUTED),
     )
     fig.text(
         0.08,
@@ -257,7 +516,11 @@ def render(series: dict, path: Path) -> dict:
     )
     for ax, metric in zip(axes, series["metrics"], strict=True):
         measured, threshold = metric["measured"], metric["threshold"]
-        color = COLORS.get(metric["status"], MUTED)
+        color = (
+            "#175cd3"
+            if measurements_view and measured is not None
+            else COLORS.get(metric["status"], MUTED)
+        )
         limit = (
             100
             if metric["direction"] == "minimum"
@@ -279,7 +542,9 @@ def render(series: dict, path: Path) -> dict:
         ax.text(
             1,
             0.94,
-            metric["status"],
+            metric.get("measurement_state", "UNAVAILABLE")
+            if measurements_view
+            else metric["status"],
             transform=ax.transAxes,
             ha="right",
             fontsize=13,
@@ -298,13 +563,17 @@ def render(series: dict, path: Path) -> dict:
         ax.barh(0, limit, color="#e4e7ec", height=0.13)
         if measured is not None:
             ax.barh(0, measured, color=color, height=0.13)
-        if threshold is not None:
+        if threshold is not None and not measurements_view:
             ax.vlines(threshold, -0.14, 0.14, color="#344054", linewidth=2)
         direction = "Minimum" if metric["direction"] == "minimum" else "Maximum"
         target = (
-            "Threshold unavailable"
-            if threshold is None
-            else f"{direction} {threshold:g}%"
+            "Measured value"
+            if measurements_view
+            else (
+                "Threshold unavailable"
+                if threshold is None
+                else f"{direction} {threshold:g}%"
+            )
         )
         ax.text(0, 0.08, target, transform=ax.transAxes, fontsize=13, color="#344054")
         ax.text(

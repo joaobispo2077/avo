@@ -74,6 +74,10 @@ def _dashboard():
     return _load("avo_ci_quality_dashboard", "quality_dashboard.py")
 
 
+def _measurements():
+    return _load("avo_ci_quality_measurements", "quality_measurements.py")
+
+
 def _mutation_policy(root: Path) -> dict:
     path = root / "scripts" / "ci" / "mutation-config.json"
     try:
@@ -139,6 +143,7 @@ def build_ci_document(
     sha: str,
     recorded_at: str,
     run_id: str = "",
+    collect_evidence: bool = False,
 ) -> dict:
     """Freeze Software quality sticky fields for one commit. Mutation stays null."""
     report = _report()
@@ -174,6 +179,16 @@ def build_ci_document(
         "mutation_policy": _mutation_policy(root),
         "mutation": None,
     }
+    if collect_evidence:
+        from coverage import Coverage
+
+        coverage_config = root / "pyproject.toml"
+        doc["coverage_precision"] = Coverage(
+            config_file=str(coverage_config) if coverage_config.is_file() else False
+        ).config.precision
+        doc["measurement_evidence"] = _measurements().collect(
+            doc, root / "reports/quality"
+        )
     doc["series"]["dashboard"] = _dashboard().build_series(doc)
     doc["overall"] = doc["series"]["dashboard"]["overall"]
     return doc
@@ -474,6 +489,38 @@ def _load_metrics(path: Path) -> dict:
     return payload
 
 
+def _validate_measurements(doc: dict) -> None:
+    if "coverage_precision" in doc and (
+        type(doc["coverage_precision"]) is not int
+        or not 0 <= doc["coverage_precision"] <= 9
+    ):
+        raise SnapshotError("quality coverage comparison precision invalid")
+    if "measurement_evidence" not in doc:
+        return
+    evidence = doc["measurement_evidence"]
+    if (
+        not isinstance(evidence, dict)
+        or type(evidence.get("schema")) is not int
+        or evidence["schema"] != 1
+        or not isinstance(evidence.get("metrics"), list)
+        or not isinstance(evidence.get("gates"), dict)
+        or not isinstance(evidence.get("diagnostics"), dict)
+    ):
+        raise SnapshotError("quality measurement evidence schema invalid")
+    observations = evidence["metrics"]
+    if not all(
+        isinstance(row, dict)
+        and row.get("state") in {"MEASURED", "PARTIAL", "UNAVAILABLE"}
+        and all(
+            isinstance(row.get(field), str)
+            for field in ("title", "value", "scope", "basis")
+        )
+        and isinstance(row.get("sources"), list)
+        for row in observations
+    ) or [row.get("key") for row in observations] != list(_measurements().KEYS):
+        raise SnapshotError("quality measurement evidence catalog invalid")
+
+
 def _validate(
     doc: dict, sha: str, version: str, expected_run_id: str = ""
 ) -> tuple[str, list[dict]]:
@@ -538,6 +585,7 @@ def _validate(
         if not isinstance(series.get(key), dict):
             raise SnapshotError(f"quality metrics series missing {key}")
     if doc["schema"] == SCHEMA:
+        _validate_measurements(doc)
         policy = doc.get("mutation_policy")
         if (
             not isinstance(policy, dict)
@@ -783,6 +831,7 @@ def _cmd_write_json(args: argparse.Namespace) -> int:
         sha=sha,
         recorded_at=recorded,
         run_id=args.run_id,
+        collect_evidence=True,
     )
     _write_json_file(Path(args.write_json), doc)
     print(f"wrote {args.write_json}")

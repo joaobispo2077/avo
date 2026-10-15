@@ -45,6 +45,11 @@ def quality_evidence(payload: dict | None, sha: str, run_id: str) -> bool:
         return False
     if payload.get("sha") != sha or str(payload.get("run_id") or "") != run_id:
         return False
+    if "coverage_precision" in payload and (
+        type(payload["coverage_precision"]) is not int
+        or not 0 <= payload["coverage_precision"] <= 9
+    ):
+        return False
     gates, series = payload.get("gates"), payload.get("series")
     if not isinstance(gates, list) or not isinstance(series, dict):
         return False
@@ -57,6 +62,11 @@ def quality_evidence(payload: dict | None, sha: str, run_id: str) -> bool:
     report = load_module("avo_ci_write_quality_pr_report", "write_quality_pr_report.py")
     if [(row["key"], row["title"]) for row in gates] != list(report.GATES):
         return False
+    if "measurement_evidence" in payload and (
+        not isinstance(payload["measurement_evidence"], dict)
+        or payload["measurement_evidence"].get("schema") != 1
+    ):
+        return False
     return all(isinstance(series.get(key), dict) for key in ("coverage", "duplication"))
 
 
@@ -67,6 +77,8 @@ def combine(
     sha: str,
     run_id: str,
     needs: dict,
+    unit_path: Path | None = None,
+    integration_path: Path | None = None,
 ) -> dict:
     doc = read_json(quality_path)
     if not quality_evidence(doc, sha, run_id):
@@ -88,6 +100,7 @@ def combine(
                 for key, title in report.GATES
             ],
             "series": {},
+            "measurement_evidence": {"schema": 1},
         }
     statuses = [row["status"] for row in doc["gates"]]
     doc["overall"] = (
@@ -111,6 +124,62 @@ def combine(
     repository = os.environ.get("GITHUB_REPOSITORY", "")
     if repository and run_id:
         doc["run_url"] = f"https://github.com/{repository}/actions/runs/{run_id}"
+        doc["repository"] = repository
+    if "measurement_evidence" in doc:
+        measurements = load_module(
+            "avo_ci_quality_measurements", "quality_measurements.py"
+        )
+        doc["measurement_evidence"] = measurements.collect(doc, quality_path.parent)
+        measurements.add_mutation(doc["measurement_evidence"], doc, mutation_path)
+    doc["artifact_urls"] = {}
+    for job, artifact in (
+        ("software-quality", "quality-evidence"),
+        ("mutation-light", "mutation-reports-light"),
+        ("repo-unit-tests", "unit-test-evidence"),
+        ("repo-integration-tests", "integration-test-evidence"),
+    ):
+        outcome = needs.get(job, {})
+        outputs = outcome.get("outputs", {}) if isinstance(outcome, dict) else {}
+        url = outputs.get("evidence_url", "") if isinstance(outputs, dict) else ""
+        prefix = doc.get("run_url", "") + "/artifacts/"
+        if (
+            isinstance(url, str)
+            and doc.get("run_url")
+            and url.startswith(prefix)
+            and url.removeprefix(prefix).isdigit()
+        ):
+            doc["artifact_urls"][artifact] = url
+    if unit_path is not None or integration_path is not None:
+        executions = load_module(
+            "avo_ci_test_execution_evidence", "test_execution_evidence.py"
+        )
+        doc["test_evidence"] = {
+            job: executions.read_test_evidence(
+                path,
+                sha=sha,
+                run_id=run_id,
+                gate=gate,
+                artifact=artifact,
+                junit_name=filename,
+            )
+            for job, path, gate, artifact, filename in (
+                (
+                    "repo-unit-tests",
+                    unit_path,
+                    "unit-tests",
+                    "unit-test-evidence",
+                    "unit-tests.xml",
+                ),
+                (
+                    "repo-integration-tests",
+                    integration_path,
+                    "integration-tests",
+                    "integration-test-evidence",
+                    "integration-tests.xml",
+                ),
+            )
+            if path is not None
+        }
     dashboard = load_module("avo_ci_quality_dashboard", "quality_dashboard.py")
     doc["series"]["dashboard"] = dashboard.build_series(doc)
     doc["overall"] = doc["series"]["dashboard"]["overall"]
@@ -128,6 +197,10 @@ def main() -> int:
     parser.add_argument("--out", default="reports/quality/quality-gates.md")
     parser.add_argument("--metrics", default="reports/quality/quality-metrics.json")
     parser.add_argument("--charts-dir", default="reports/quality/charts")
+    parser.add_argument("--unit-evidence", default="reports/quality/unit-evidence")
+    parser.add_argument(
+        "--integration-evidence", default="reports/quality/integration-evidence"
+    )
     args = parser.parse_args()
     try:
         needs = json.loads(os.environ.get("CI_NEEDS_JSON", "{}"))
@@ -141,6 +214,8 @@ def main() -> int:
         sha=os.environ.get("GITHUB_SHA", ""),
         run_id=os.environ.get("GITHUB_RUN_ID", ""),
         needs=needs,
+        unit_path=Path(args.unit_evidence),
+        integration_path=Path(args.integration_evidence),
     )
     dashboard = load_module("avo_ci_quality_dashboard", "quality_dashboard.py")
     series = doc["series"]["dashboard"]

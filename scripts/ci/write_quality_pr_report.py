@@ -36,7 +36,7 @@ GATE_POLICY = {
     "format": "Ruff format --check + Prettier --check",
     "coverage": "pytest-cov fail-under on `src/avo`",
     "complexity": "xenon max-absolute **B** · Ruff C901 ≤ 31",
-    "deps": "pip-audit + npm critical (`deps-audit-allowlist.json`); high/moderate/low reported",
+    "deps": "pip-audit on dev + MCP; unwaived Python advisories and npm critical block (`deps-audit-allowlist.json`); npm high/moderate/low reported",
     "deadcode": "vulture confidence ≥ 60 (`deadcode-allowlist.json`)",
     "duplication": "jscpd on `src/avo`",
     "architecture": "import-linter (`.importlinter`)",
