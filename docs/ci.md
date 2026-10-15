@@ -60,16 +60,86 @@ Drift lock: `tests/test_quality_matrix.py` asserts npm quality script names,
 fail-under 68, frozen dev dependencies on unit jobs and dev + MCP on quality jobs, Phase-1
 blocking posture (`usability-gate` `needs` `software-quality` + required check
 name **`Software quality`**), no separate Gate 3 workflow file, slow-lane
-workflow basenames, **20-minute** mutation timeouts, sticky quality/mutation PR
-comments, and Node 24 / Node 24 action majors. Linux jobs pin `ubuntu-24.04`.
+workflow basenames, **20-minute** mutation timeouts, the single sticky quality PR
+comment and removal of the mutation sticky, and Node 24 / Node 24 action majors.
+Linux jobs pin `ubuntu-24.04`.
 
 PRs get one `quality-gates-report` comment with overall status, commit/run
-identity, required actions, one dashboard, raw coverage/duplication/mutation
-percentages and thresholds, and collapsed diagnostics. The collector joins
+identity, required actions, one dashboard, a measurements table, a gate-decision
+table, an execution table, and collapsed diagnostics. The dashboard plots raw
+coverage/duplication/mutation percentages on separate scales; thresholds belong
+to the gate policies. The collector joins
 current-run producer artifacts after readiness; stale or incomplete evidence
 cannot yield PASS. Image failures preserve the text table. Existing Software
 quality and mutation checks remain separate. See
 [quality reporting](quality-reporting.md) for evidence and schema details.
+
+### Measurements, gates, and execution evidence
+
+The measurements table reports observed values with their scope, input counts,
+artifact files, and SHA-256 references. The gate table retains all nine fast
+checks and light mutation, their policies, and PASS/FAIL decisions. The execution
+table records required job outcomes and observed unit/integration testcase
+counts. Configured exceptions and import-contract definitions are diagnostics;
+their configured counts are not measured findings or executed checks.
+
+CI runs each fast check through `scripts/ci/run_quality_gate.py`. Under
+`reports/quality/gates/<gate>/`, `gate.json` records the exact argument list,
+commit/run identity, UTC timestamps, duration, command exit code or signal, log
+hash, produced-file hashes, and source fingerprints before and after execution.
+`gate.log` captures combined stdout/stderr. The wrapper preserves command
+failure; it does not soften any gate. Missing or old outputs have an explicit
+reason and cannot provide a successful zero measurement.
+
+The `quality-evidence` artifact contains these captures and measured inputs:
+
+| Input under `reports/quality/` | Observed evidence |
+| --- | --- |
+| `coverage.json` | Unit-suite executable/covered statement counts and raw coverage |
+| `jscpd/jscpd-report.json` | Duplicated/total source lines and clone pairs |
+| `complexity.json` | Measured block locations, cyclomatic scores/ranks, actually matched exception reasons/ceilings, unwaived or worsened findings, stale entries, and scan errors |
+| `deadcode.json` | Actual Vulture locations, kinds/confidence, matched exception reasons, unwaived findings, stale entries, and scan errors |
+| `pip-audit-raw.json`, `npm-audit-raw.json` | Sanitized audit JSON, advisory details/fix versions, dependency paths, exact commands, provenance, and frozen audit policy; unrun/error scans remain explicit |
+| `deps-findings.json`, `npm-audit-summary.json` | Blocking findings and npm severity totals under the existing Python/npm policy |
+| `dependency-tree.json` | Actual npm dry-run add/remove/change proposals, without applying them |
+| `code-risk.json` | Informational function complexity/CRAP inputs and package CA/CE counts |
+
+Unit and integration CI use `PYTEST_ADDOPTS` to capture native JUnit events in
+`unit-tests.xml` and `integration-tests.xml`. Their receipts/logs and XML are
+uploaded as `unit-test-evidence` and `integration-test-evidence` even after a
+failure, when files exist. `test_execution_evidence.py` counts actual passed,
+failed, error, and skipped testcase events independently of the job result.
+Failed or interrupted executions can supply partial counts; absent or invalid
+XML supplies no count. These are test execution observations, not a repair-success
+percentage.
+
+The publisher downloads the exact current-run producer artifacts and rechecks
+identity and file hashes. Artifact URLs come from the corresponding upload
+actions. A successful job cannot substitute for a missing receipt or changed
+measurement file; local captures with a local run identifier remain local
+preview evidence.
+
+### Informational function and package diagnostics
+
+`measure_code_risk.py` computes function/method CRAP from measured cyclomatic
+complexity and that function's own statement coverage:
+`CC² × (1 − covered statements / statements)³ + CC`. The coverage capture must
+have succeeded for the same SHA/run, with the recorded raw coverage hash and
+unchanged source fingerprints. Repository/file averages do not replace function
+coverage. Unmatched, ambiguous, excluded, and zero-statement functions remain
+unmeasured; the summary labels its maximum **max observed** and reports both
+measured and unmeasured function counts. Reference 30 is informational and adds
+no gate or floor.
+
+The static import graph also measures CA (distinct incoming packages) and CE
+(distinct outgoing packages), aggregated at `avo.<package>`, plus instability
+`CE / (CA + CE)`. A package without edges has undefined instability. Within-package
+edges and dynamic imports are outside this measurement. These review
+signals do not establish god classes; abstractness and coupling-quadrant rules
+remain unmeasured. Existing xenon B/exception ceilings, Ruff C901 ≤31, coverage
+68%, duplication 2%, and mutation 40%/50% policies continue to determine gates.
+
+### Publishing the report
 
 A release cut writes `docs/quality-metrics.md` from that push's green unified
 JSON for the exact SHA and run. Pull-request greens do not write that file.
@@ -101,7 +171,8 @@ a release cut runs (semantic-release has a version to publish). The snapshot
 is its own job. It checks out the green CI head SHA (the release tip) and
 downloads artifact `quality-metrics` for that **exact tip
 SHA and CI run**. It fails the job if that JSON is missing, not overall PASS, bound to
-a different commit/run, or any mandatory check or normalized measurement is not PASS. There is no soft
+a different commit/run, or any mandatory check or policy-bearing gate measurement is not PASS. Informational
+CRAP and CA/CE observations do not introduce release thresholds. There is no soft
 warning that still publishes. The job does
 not re-measure gates and does not copy the previous release's numbers.
 When the dry-run has no next version, the snapshot job exits without writing

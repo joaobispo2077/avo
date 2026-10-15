@@ -117,7 +117,7 @@ optional presentation steps; they cannot substitute for successful checks or
 complete mutation accounting.
 
 Schema 2 freezes the mutation profile/floor and records job results. Current
-release cuts validate commit/run identity, complete measurements, successful
+release cuts validate commit/run identity, complete mandatory measurements, successful
 readiness, and image/data equality. Historical schema 1 readouts remain
 decodable, but cannot satisfy a current run-bound cut. No AVO engine, CLI, MCP,
 media contract, or footage-project dependency is introduced by reporting.
@@ -127,3 +127,12 @@ outputs. They do not change existing PR floors or import contracts. Validation
 covers malformed counts, incomplete/stale evidence, skipped and failed jobs,
 legacy snapshots, chart equality, import resolution, and safety rejection paths.
 See [quality reporting](docs/quality-reporting.md).
+
+Measured values, gate decisions, and required-job results have distinct readouts.
+Capture receipts bind actual commands and output hashes to the commit/run and
+source fingerprints. The report revalidates downloaded inputs and uses the same
+normalized observations for tables, PNG metadata and release snapshots.
+Informational function CRAP uses exact statement coverage and Radon complexity;
+static CA/CE reuses the internal package graph. JUnit case counts remain execution
+evidence. Unmatched inputs stay unmeasured, and these diagnostic metrics do not
+introduce new enforcement thresholds.

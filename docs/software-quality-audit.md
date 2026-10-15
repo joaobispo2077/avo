@@ -41,15 +41,19 @@ Gate 1/2 behavior is unchanged. Software quality is **standard CI**, not a separ
 
 Concept-first dashboard: tools may swap; concepts and fail/pass criteria are the product.
 Local umbrella: `npm run quality` (Phase 1 fast gates). Drift lock: `tests/test_quality_matrix.py`.
-The unified report uses one dashboard with raw measurements and collapsed gate
-diagnostics. See [quality reporting](quality-reporting.md).
+The unified report separates observed measurements, policy-based gate decisions,
+and execution results. One dashboard shows raw coverage/duplication/mutation
+percentages on separate scales; other units and source locations belong in the
+measurements table and diagnostics. See [quality reporting](quality-reporting.md).
 
 | Concept | What it proves | Current tool | Phase |
 | --- | --- | --- | --- |
 | Static lint / format | Machine-consistent Python + JS surface | Ruff; ESLint + Prettier + EditorConfig | 1 Must |
 | Type safety | Contracts at boundaries (lint now; mypy ratchet later) | typescript-eslint; mypy phased | 1–2 |
 | Test coverage floor | Product paths exercised under fail-under **68%** (line; baseline 2026-08-14, floor of ~68.5%) | pytest-cov (`src/avo`; `branch = false`) through `run-coverage.sh` | 1 Must |
-| Complexity | No god-functions above max-absolute B (allowlisted debt documented); C901 ≤ 31 | xenon via `quality-complexity.sh` / `check_complexity.py` + allowlist; Ruff C901 (`max-complexity = 31`) in lint | 1 Must |
+| Complexity | New/worsened measured complexity above max-absolute B fails outside documented exception ceilings; C901 ≤ 31 | xenon via `quality-complexity.sh` / `check_complexity.py` + allowlist; Ruff C901 (`max-complexity = 31`) in lint | 1 Must |
+| Function CRAP | Observed complexity and each function's statement coverage identify review candidates; reference 30 is informational | `measure_code_risk.py` + verified same-run `coverage.json`; complete function inputs in `code-risk.json` | Informational |
+| Package CA/CE | Distinct incoming/outgoing package counts and instability describe static coupling | Reused internal import graph in `code-risk.json`, aggregated at `avo.<package>` | Informational |
 | Dependency security audit | Unwaived Python advisories and npm criticals fail | `quality-deps.sh`: pip-audit including MCP runtime; `npm audit` critical via `check_npm_audit.py` + `deps-audit-allowlist.json` (npm high, moderate, and low reported); `@semantic-release/npm` file stub (`scripts/ci/semantic-release-npm-stub`) avoids nested vulnerable npm CLI bundles | 1 Must |
 | Lock / install reproducibility | Frozen installs in quality/unit CI | `uv sync --frozen`; `npm ci` | 1 Must |
 | Dependency tree health | Unexpected npm dupes / lock drift visible (`npm find-dupes` dry-run; command failure fails CI; non-empty hoist plan is report-only until `/evolve`) | `quality:tree` / `quality-tree.sh` (`npm find-dupes`); uv lock | 2 Should |
@@ -62,6 +66,60 @@ diagnostics. See [quality reporting](quality-reporting.md).
 | Artifact / install weight | Pack/install footprint signal (informational) | `npm pack --dry-run` / wheel size | 3 Nice |
 
 **Python Ruff scope (task-006):** `src/avo/`, `tests/`, and `helpers/` share the same Ruff rule set (`pyproject.toml` `[tool.ruff]`). Coverage remains `--cov=avo` (helpers shims are linted, not coverage-primary). Prefer new code under `src/avo/`.
+
+### Measured inputs and execution captures
+
+The gate table retains all nine fast gates plus light mutation. PASS/FAIL labels
+and policy limits are decisions, not metric values. The measurements table shows
+observed numbers with scope, input counts, artifact references, and hashes;
+missing or incomplete observations stay unavailable or partial. Configured
+allowlist/contract counts remain configuration diagnostics.
+
+`run_quality_gate.py` wraps the CI commands without changing their failure
+behavior. Each `reports/quality/gates/<gate>/gate.json` binds the exact command,
+SHA/run, UTC time/duration, exit outcome or signal, source fingerprints, log hash,
+and produced-file hashes to `gate.log` (combined stdout/stderr). The publisher
+revalidates downloaded receipts and files from that run. Missing, stale,
+modified, or malformed output cannot masquerade as a successful zero; an
+unavailable measurement can coexist with a recorded command outcome.
+
+| Measured input | Contents and limits |
+| --- | --- |
+| `complexity.json` | Actual block locations, scores/ranks, matched exception reasons/ceilings, unwaived/worsened findings, stale entries, and errors; configured exception count is separate |
+| `deadcode.json` | Actual Vulture locations/kinds/confidence, matched reasons, unwaived findings, stale entries, and errors; scan failure is incomplete, not zero findings |
+| `pip-audit-raw.json` / `npm-audit-raw.json` | Sanitized tool JSON retaining advisory descriptions/fix versions and dependency paths, command/provenance, and exact audit policy; absent scans are explicit |
+| `deps-findings.json` / `npm-audit-summary.json` | Blocking findings and npm severity totals; all unignored Python advisories block, npm criticals block, and high/moderate/low remain reported |
+| `coverage.json` / `jscpd-report.json` | Actual covered/executable and duplicated/total line counts with clone pairs, under existing 68%/2% policies |
+| `dependency-tree.json` | Proposed add/remove/change counts from npm's dry run; proposals are not applied and remain report-only |
+| `code-risk.json` | Per-function identity/source line, cyclomatic complexity, statement coverage, CRAP inputs/results, and static package CA/CE counts |
+
+Unit and integration lanes capture `unit-tests.xml` / `integration-tests.xml`
+through `PYTEST_ADDOPTS` and publish separate `unit-test-evidence` /
+`integration-test-evidence` artifacts containing XML, receipts, and logs.
+`test_execution_evidence.py` counts actual testcase events (passed, failed,
+errors, skipped), independently of job status. Failed/interrupted runs can retain
+partial counts; missing or invalid XML provides no count. These observations
+do not imply a safe-fix or repair-success percentage. Artifact URLs identify the
+current upload, and local run identifiers designate local previews.
+
+### Informational CRAP and package coupling
+
+Function/method CRAP is `CC² × (1 − covered statements / statements)³ + CC`.
+It uses the function's own statement counts, including when coverage has branch
+instrumentation. The raw coverage hash, SHA/run, successful coverage execution,
+and unchanged source fingerprints must agree. File/repository averages do not
+substitute for function coverage. Ambiguous, unmatched, excluded, or
+zero-statement functions remain unmeasured. The report labels its maximum
+**max observed** and includes measured/unmeasured counts plus exact location
+inputs. Reference 30 is a review aid, not a new gate; existing complexity
+ceilings and coverage floors stay authoritative.
+
+Package CA counts distinct incoming packages; CE counts distinct outgoing
+packages. Aggregation is `avo.<package>`, using the repaired static internal
+import graph. Instability is `CE / (CA + CE)` and is undefined without edges.
+Within-package and dynamic imports are outside scope. These observations
+identify review candidates, without proving god classes or introducing
+abstractness, main-sequence distance, or quadrant policy.
 
 ### npm quality scripts (task-003)
 
@@ -132,6 +190,10 @@ Provider instances (e.g. `providers/bishop/`) are **gitignored** and never requi
 | `test_software_foundation` | Foundation file layout |
 | `test_quality_matrix` | Doc/workflow drift guard |
 | `test_deadcode_gate` | Vulture dead-code gate + allowlist contract |
+| `test_gate_evidence` | Command outcomes, receipt identity, raw logs, hashes, and signals |
+| `test_quality_measurements` | Measured inputs and their separation from gate/configuration values |
+| `test_test_execution_evidence` | Native JUnit events, partial captures, and unavailable evidence |
+| `test_code_risk_metrics` | Function coverage/CRAP provenance and static package coupling |
 | `test_init_project` | `src/avo/init_project.py` scaffold |
 
 ### Tier B — Engine core (AVO core pytest, PR CI)

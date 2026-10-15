@@ -19,3 +19,10 @@ profile/floor, and matching commit/run identity, plus successful mandatory jobs
 and readiness. Unfinished or stale evidence cannot satisfy a green release cut.
 The snapshot does not invent a score or change floors. See
 [quality reporting](../quality-reporting.md).
+
+Current reports separate observed measurements and their raw-input proof from
+gate decisions and required-job outcomes. The versioned measurement extension
+includes function CRAP/complexity and static CA/CE diagnostics; CRAP reference 30
+is informational. Raw capture logs, input counts, source locations, exact artifact
+URLs and SHA-256 references support each available value. Historical records
+without captures identify that limitation rather than inventing evidence.

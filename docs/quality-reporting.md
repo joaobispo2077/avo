@@ -13,18 +13,27 @@ workflow run. One `quality-gates-report` PR comment and the job summary show the
 overall result, full commit and run identity, required actions, one dashboard,
 and a metric table. The previous standalone mutation comment is removed.
 
-Coverage, duplication, and mutation have separate scales, explicit scope, raw
-percentages, and threshold labels. Duplication is displayed directly. Gate
-evidence, exceptions, contract counts, and downloadable artifacts live in
-collapsed diagnostics; configuration counts are not quality scores. Missing,
-skipped, cancelled, invalid, and unfinished evidence cannot yield a green
-dashboard. Failed image generation or hosting leaves the text table available.
+The report separates **measurements**, **gate decisions**, and **execution
+results**. The measurements table contains observed values, scope, input counts,
+artifact links, and SHA-256 references. All nine fast gates plus mutation remain
+visible in their own decision table with policy and captured execution evidence.
+Required job results and JUnit testcase counts have a separate execution table.
+Exception lists and contract definitions remain configuration diagnostics.
+
+One image shows the three percentage measurements on separate scales. It does
+not use PASS/FAIL labels or gate thresholds as measurement values. CRAP,
+complexity, dependency findings, debt, and coupling use their own units in the
+table and source-location diagnostics. Missing, skipped, cancelled, invalid, and
+unfinished evidence stays unavailable or partial. Failed image generation or
+hosting leaves the text tables available.
 
 Coverage reads its floor from `[tool.coverage.report]` in `pyproject.toml` in
 both local and CI execution. Duplication uses `.jscpd.json`. The quality artifact
 freezes the mutation profile and floor from `mutation-config.json`; the mutation
 artifact must match that policy, commit, and run. The current floors remain
 68% line coverage and 40%/50% light/full mutation, with a 2% duplication ceiling.
+The artifact also freezes coverage.py's comparison precision. Coverage gate
+decisions apply its rounding rule while the measurement retains the actual ratio.
 
 Mutation efficacy is killed divided by killed plus survived, and is reported
 only after validating complete, nonnegative integer outcome accounting. Timeout,
@@ -37,13 +46,82 @@ Gate jobs produce measurements. `write_unified_quality_report.py` combines their
 evidence and required-job outcomes, then `quality_dashboard.py` supplies one
 normalized series for both the text table and PNG. It never reruns gates.
 
+`run_quality_gate.py` captures the exact command, exit outcome, timestamps,
+stdout/stderr log, input source fingerprints, and produced-file hashes. It
+returns the original command's failure. The publisher revalidates these captures
+after downloading them; a matching job result alone cannot validate an input
+file. Stale, changed, missing, and malformed captures cannot supply a zero result
+or a successful measurement. Every artifact link comes from the upload action's
+current-run URL, with the exact file and hash identified in the readout.
+
 Schema 2 `quality-metrics` artifacts include commit, workflow run, mutation
 policy, required-job results, counts, and the normalized dashboard series. The
 release cut requires current-run green evidence; an older run or malformed
 measurement cannot substitute for it. If a dashboard image is included, its
 embedded series must exactly match the artifact. Historical schema 1 readouts
 retain their decoding and chart validation, but cannot satisfy a request for a
-current run-bound release. PRs do not write `docs/quality-metrics.md`.
+current run-bound release. The versioned `measurement_evidence` extension records
+normalized observations, capture proofs, and diagnostics. Older schema 2 records
+remain readable and explicitly identify legacy summaries without raw capture.
+PRs do not write `docs/quality-metrics.md`.
+
+## CRAP, complexity, and coupling
+
+`measure_code_risk.py` reuses installed Radon and coverage.py. Each function and
+method has a module-qualified identity, source path, definition line, measured
+cyclomatic complexity, and its own statement coverage. CRAP is:
+
+`CC² × (1 − covered function statements / function statements)³ + CC`
+
+The formula follows the [original CRAP proposal](https://www.artima.com/weblogs/viewpost.jsp?thread=210575).
+AVO uses the function line-coverage variant, also supported by
+[GMetrics](https://dx42.github.io/gmetrics/metrics/CrapMetric.html). Basis-path
+coverage from the original proposal remains unmeasured. Radon supplies
+[per-function cyclomatic complexity](https://radon.readthedocs.io/en/stable/api.html).
+
+The inputs must share a successful coverage execution, SHA/run identity, raw
+coverage hash, and unchanged source fingerprints. File or repository averages
+never substitute for function coverage. Branch-instrumented profiles still use
+the statement counts, not the combined line/branch percentage. Ambiguous,
+unmatched, excluded, or zero-statement functions remain unmeasured. The maximum
+is therefore labelled **max observed**, with measured and unmeasured function
+counts. Source links, exact inputs, and the complete table live in `code-risk.json`.
+
+Reference 30 is informational. This change does not add a CRAP gate or silently
+adopt the manual's thresholds. Existing complexity gate limits and documented
+exception ceilings still control enforcement.
+
+The same report reuses the repaired static import graph for package CA (distinct
+incoming packages), CE (distinct outgoing packages), and instability
+`CE / (CA + CE)`. Instability is undefined for a package with no edges.
+Aggregation is `avo.<package>`; intra-package and dynamic imports are not
+measured. These counts identify review candidates, not proven god classes.
+Abstractness, main-sequence distance, and quadrant cutoffs remain unmeasured.
+
+## Coverage of the discussed catalog
+
+| Concept | AVO treatment and evidence |
+|---|---|
+| Line coverage | Current unit-suite statement counts and percentage; `coverage.json`; unchanged 68% gate |
+| Mutation | Current light profile counts with complete accounting; `mutation-metrics.json`; full profile remains a separately identified scheduled run |
+| Duplication | Actual duplicated/total lines and clone pairs; `jscpd-report.json`; unchanged 2% gate |
+| Cyclomatic complexity | Actual per-function scores and observed gate blocks; `code-risk.json` and `complexity.json` |
+| CRAP | Informational per-function calculation from verified same-run inputs; explicit unmeasured functions |
+| CA/CE coupling | Current static package graph, counts, and instability; `code-risk.json`; no speculative quadrant policy |
+| Lint and formatting | Qualitative gate decisions and capture logs, not invented percentage metrics |
+| Security | Actual Python/npm audits, advisory descriptions and fix versions, findings, policy, and command receipts |
+| Dead code | Actual Vulture findings, unwaived count, matched exceptions, reasons and source lines; `deadcode.json` |
+| Import boundaries | Executed kept/broken contract counts and capture log; configured contract count remains configuration |
+| Dependency tree | Actual proposed add/remove/change counts from npm's dry run; `dependency-tree.json`; proposals are not applied or automatically blocking |
+| Safety branches | Existing scheduled/manual safety measurement with its own commit/run identity; current PR line profiles explicitly do not measure branches |
+| Unit and CLI/MCP/media integration | Actual JUnit testcase outcomes with raw XML and execution captures; no fabricated repair-success percentage |
+| Fuzz/property smoke | Existing boundary and corrupt-input tests remain; no systematic fuzz-run metric or new testing dependency is claimed |
+| Python type checking | Existing lint constraints remain; full Python type-check coverage is not measured |
+| Browser/mobile E2E | AVO's CLI/MCP/media runtime coverage applies; blanket browser testing is not adopted |
+| Trends | No historical trend infrastructure or manually entered KPI values are introduced |
+
+The manual remains reference material. Its blanket 80% floors, mandatory test
+ladder for every feature, and replacement of human review are not AVO policy.
 
 ## Safety measurements and staged improvement
 
@@ -62,9 +140,10 @@ debt reductions. The full mutation profile now includes pure timeline mapping,
 selected through a complete timed Linux calibration with the locked tooling;
 the light profile is unchanged. Its tests cover exact timebase conversion,
 boundaries, and accumulated offsets. Additional mutation batches require their
-own runtime calibration within the existing 20-minute budget. CRAP, coupling quadrants, blanket 80%
-targets, trend infrastructure, browser/mobile E2E for every feature, and new
-property-testing dependencies are outside this change.
+own runtime calibration within the existing 20-minute budget. CRAP and CA/CE
+are now measured informationally. Coupling quadrants, blanket 80% targets, trend
+infrastructure, browser/mobile E2E for every feature, and new property-testing
+dependencies remain outside this change.
 
 The mapping-only calibration on 2026-10-14 used locked mutmut 3.7.0, pytest
 9.1.1, and pytest-cov 7.1.0 in an isolated Linux environment: 175 killed and
@@ -107,8 +186,12 @@ The rendered [quality comment on PR #89](https://github.com/joaobispo2077/avo/pu
 was also inspected. Its seven images were unavailable after a non-fast-forward
 hosting failure, leaving repeated tables and the inverted duplication score.
 The replacement keeps one metric table usable when image hosting fails. Its
-local preview is verified at native and 390-pixel widths; its first published
-GitHub run remains a rollout check.
+initial local preview was verified at native and 390-pixel widths.
+The [first published CI run](https://github.com/joaobispo2077/avo/actions/runs/38649097425)
+passed all mandatory jobs on commit `e7eca7fc048edade8c8e55c297d5bf949bcb7aac`.
+Its 71.42% coverage and complete 64.89% light mutation evidence belong to that
+run. The follow-up capture, CRAP, and coupling changes require their own published
+run; the historical measurements are not relabelled as fresh evidence.
 
 ## Validation evidence
 
@@ -122,9 +205,40 @@ GitHub run remains a rollout check.
   dependency tree, and dependency security checks passed. The MCP-inclusive audit
   found no unwaived Python advisories and no npm criticals; two npm high and seven
   moderate findings remain reported under the existing policy.
-- Core line measurement: 71.32%, above the unchanged 68% floor. The broad core
-  run had 17 reporting-fixture failures; those fixtures were corrected and their
-  affected suites passed in the final cohort above. A full final-tree repeat
-  remains for published CI; this is not a claim that one final full run was green.
+- Initial local core line measurement: 71.32%, above the unchanged 68% floor.
+  The broad local run had 17 reporting-fixture failures; those fixtures were
+  corrected before the successful published run above, which measured 71.42%.
 - Mapping mutation calibration: 175/178 killed (98.31%) with complete accounting;
   this is module-specific evidence, not the light/full CI profile's score.
+
+### Measurement/evidence follow-up
+
+The local `local-evidence-followup` run on 2026-10-14/15 used unchanged engine
+sources from baseline commit `e7eca7fc048edade8c8e55c297d5bf949bcb7aac` and the
+working-tree reporting changes. It is a local validation record, not a published
+CI result for a new commit.
+
+- Core execution: 1,875 tests and 103 subtests passed; 18,447/25,794 executable
+  lines covered (71.52%). Runtime integration: 115 tests passed. Raw JUnit events
+  independently confirmed the passing testcase counts with no failed/error/skipped
+  events. The affected reporting/evidence cohort passed 279 tests and 34 subtests.
+- All nine fast checks have validated current-run receipts. Complexity measured
+  2,454 blocks with 178 matched exceptions and no unwaived/worsened/stale results.
+  Vulture reported 150 findings with no unwaived findings. Duplication measured
+  440/56,949 lines across 41 clone pairs (0.77%). Import-linter executed five kept
+  and zero broken contracts; npm proposed 26 unapplied package changes.
+- Verified function analysis observed 2,277 functions/methods, maximum CC 51.
+  Exact coverage joins measured CRAP for 2,227 functions; 50 remain unmeasured.
+  Maximum observed CRAP was 2,450, with 192 above informational reference 30.
+  Static coupling measured 73 packages and 191 distinct internal edges, maximum
+  CA 21 and CE 14. These are diagnostics, not newly adopted gate ceilings.
+- The fresh Python audit found no unwaived advisories; npm reported zero critical,
+  two high, seven moderate, and zero low findings under its existing policy.
+- Native and 390-pixel preview checks found no clipped dashboard labels, page
+  overflow, or color-only status. Narrow tables retain horizontal scrolling for
+  their raw-evidence columns. Image metadata matches the normalized data exactly.
+
+The local preview deliberately leaves mutation, safety branch coverage, and CI
+job outcomes unavailable. The separate published/scheduled measurements retain
+their own identities. The follow-up workflow still needs its own published CI
+run after the scoped commits are approved and pushed.
