@@ -136,3 +136,10 @@ Informational function CRAP uses exact statement coverage and Radon complexity;
 static CA/CE reuses the internal package graph. JUnit case counts remain execution
 evidence. Unmatched inputs stay unmeasured, and these diagnostic metrics do not
 introduce new enforcement thresholds.
+
+CI report publication stores the dashboard PNG and normalized JSON in Actions
+artifacts and links those exact-run downloads from one updated PR comment.
+`link_quality_artifacts.py` only rewrites local report text; it has no network
+or Git write path. The report job uses read-only repository contents permission.
+Missing uploads preserve the text evidence, and deliberate release snapshots
+retain their existing identity and image/data validation.

@@ -10,8 +10,9 @@ human architecture, safety, and editorial review.
 The `Quality report` job waits for the mandatory jobs and `CI readiness`. It
 combines the `quality-evidence` and `mutation-reports-light` artifacts from that
 workflow run. One `quality-gates-report` PR comment and the job summary show the
-overall result, full commit and run identity, required actions, one dashboard,
-and a metric table. The previous standalone mutation comment is removed.
+overall result, full commit and run identity, required actions, a dashboard
+download, and a metric table. Each run updates the same PR comment in place.
+The previous standalone mutation comment is removed.
 
 The report separates **measurements**, **gate decisions**, and **execution
 results**. The measurements table contains observed values, scope, input counts,
@@ -25,7 +26,17 @@ not use PASS/FAIL labels or gate thresholds as measurement values. CRAP,
 complexity, dependency findings, debt, and coupling use their own units in the
 table and source-location diagnostics. Missing, skipped, cancelled, invalid, and
 unfinished evidence stays unavailable or partial. Failed image generation or
-hosting leaves the text tables available.
+artifact uploading leaves the text tables available.
+
+The PNG and normalized JSON are Actions artifacts linked from the comment and
+job summary. Download links require GitHub sign-in and expire after the current
+14-day retention period; the text measurements and gate decisions remain in the
+comment. Artifact URLs are accepted only for the same repository and run.
+CI reporting has read-only repository contents permission and never creates
+chart branches, Git objects, commits, or pushes. No chart-upload token is needed.
+The old `ci/quality-kpi-charts` branch is historical storage, not a source feature
+to merge into `develop`. Existing branch history is left for the repository owner
+to manage. Intentional release-cut snapshots retain their separate policy below.
 
 Coverage reads its floor from `[tool.coverage.report]` in `pyproject.toml` in
 both local and CI execution. Duplication uses `.jscpd.json`. The quality artifact
