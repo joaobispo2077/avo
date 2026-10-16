@@ -7,6 +7,8 @@ import hashlib
 import importlib.util
 import io
 import json
+import os
+import time
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -100,6 +102,9 @@ def execution(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
                     path.write_text(payload, encoding="utf-8")
                 else:
                     _write_json(path, payload)
+                # Real analyzers take time; fake outputs must share the capture clock.
+                now_ns = time.time_ns()
+                os.utime(path, ns=(now_ns, now_ns))
             return SimpleNamespace(stdout=io.BytesIO(log.encode()), wait=lambda: code)
 
         monkeypatch.setattr(wrapper.subprocess, "Popen", process)
@@ -122,6 +127,9 @@ def execution(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
             receipt, sha=SHA, run_id=RUN_ID, gate=gate, artifact_root=directory
         )
         assert checked["valid"], checked["reason"]
+        assert all(not item["reason"] for item in checked["receipt"]["artifacts"]), (
+            checked["receipt"]["artifacts"]
+        )
         for row in doc["gates"]:
             if row["key"] == gate:
                 row["status"] = "PASS" if code == 0 else "FAIL"
@@ -139,6 +147,24 @@ def _coverage() -> dict:
 
 def _metrics(evidence: dict) -> dict:
     return {row["key"]: row for row in evidence["metrics"]}
+
+
+def test_fixture_outputs_are_fresh_with_coarse_filesystem_timestamps(
+    execution, monkeypatch
+):
+    collector, doc, directory, produce = execution
+    write_text = Path.write_text
+    coarse_ns = time.time_ns() // 2_000_000_000 * 2_000_000_000
+
+    def coarse_write(path, *args, **kwargs):
+        result = write_text(path, *args, **kwargs)
+        if path == directory / "coverage.json":
+            os.utime(path, ns=(coarse_ns, coarse_ns))
+        return result
+
+    monkeypatch.setattr(Path, "write_text", coarse_write)
+    produce("coverage", {"coverage.json": _coverage()})
+    assert _metrics(collector.collect(doc, directory))["coverage"]["number"] == 70.0
 
 
 def _audit(tool: str, payload: dict) -> dict:

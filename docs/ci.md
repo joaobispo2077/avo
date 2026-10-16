@@ -141,6 +141,15 @@ remain unmeasured. Existing xenon B/exception ceilings, Ruff C901 ≤31, coverag
 
 ### Publishing the report
 
+CI updates one `quality-gates-report` PR comment in place with measurements,
+gate decisions, evidence, commit/run identity, and links to the normalized JSON
+and dashboard PNG artifacts. It does not commit generated charts or write to
+repository branches. The report job needs `contents: read`, `actions: read`, and
+`pull-requests: write`; `QUALITY_CHARTS_TOKEN` is no longer used. Downloads require
+GitHub sign-in and follow the existing 14-day retention period. Missing uploads
+leave explicit unavailable notes and the text report intact. The historical
+`ci/quality-kpi-charts` storage branch should not be merged as a source feature.
+
 A release cut writes `docs/quality-metrics.md` from that push's green unified
 JSON for the exact SHA and run. Pull-request greens do not write that file.
 
