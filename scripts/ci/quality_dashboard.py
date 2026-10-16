@@ -11,6 +11,7 @@ from pathlib import Path
 
 COLORS = {"PASS": "#18794e", "FAIL": "#b42318"}
 MUTED = "#667085"
+BAND_COLORS = {"red": "#b42318", "yellow": "#f0b400", "green": "#18794e"}
 
 
 def ci_module(name: str, filename: str):
@@ -35,6 +36,23 @@ def percentage(value: object) -> float | None:
         return None
     value = float(value)
     return value if math.isfinite(value) and 0 <= value <= 100 else None
+
+
+def threshold_band(metric: dict) -> str:
+    """Show raw measurement margin without changing the gate's decision policy."""
+    measured = percentage(metric.get("measured"))
+    threshold = percentage(metric.get("threshold"))
+    if measured is None or threshold is None:
+        return "unknown"
+    if metric.get("direction") == "minimum":
+        if measured < threshold:
+            return "red"
+        return "yellow" if measured < threshold + 0.25 * (100 - threshold) else "green"
+    if metric.get("direction") == "maximum":
+        if measured > threshold:
+            return "red"
+        return "yellow" if measured > 0.75 * threshold else "green"
+    return "unknown"
 
 
 def mutation_metric(doc: dict) -> dict:
@@ -179,6 +197,8 @@ def build_series(doc: dict) -> dict:
                 status="INVALID",
                 detail="Mutation display does not match validated outcome counters.",
             )
+    for metric in metrics:
+        metric["band"] = threshold_band(metric)
     actions = [
         f"{row['title']}: {row['status']}. {row.get('metric') or 'Inspect this gate in the run logs.'}"
         for row in doc.get("gates", [])
@@ -516,11 +536,18 @@ def render(series: dict, path: Path) -> dict:
     )
     for ax, metric in zip(axes, series["metrics"], strict=True):
         measured, threshold = metric["measured"], metric["threshold"]
-        color = (
-            "#175cd3"
-            if measurements_view and measured is not None
-            else COLORS.get(metric["status"], MUTED)
-        )
+        band = metric.get("band", threshold_band(metric))
+        color = BAND_COLORS.get(band, MUTED)
+        text_color = "#855d00" if band == "yellow" else color
+        direction = "Minimum" if metric["direction"] == "minimum" else "Maximum"
+        margin = {
+            "red": "Below minimum"
+            if metric["direction"] == "minimum"
+            else "Above maximum",
+            "yellow": f"Near {direction.lower()}",
+            "green": "Clear margin",
+            "unknown": "Unavailable" if measured is None else "Threshold unavailable",
+        }.get(band, "Unavailable")
         limit = (
             100
             if metric["direction"] == "minimum"
@@ -549,7 +576,7 @@ def render(series: dict, path: Path) -> dict:
             ha="right",
             fontsize=13,
             fontweight="bold",
-            color=color,
+            color=MUTED if measurements_view else COLORS.get(metric["status"], MUTED),
         )
         ax.text(
             0,
@@ -558,22 +585,27 @@ def render(series: dict, path: Path) -> dict:
             transform=ax.transAxes,
             fontsize=25,
             fontweight="bold",
-            color=color,
+            color=text_color,
+        )
+        ax.text(
+            1,
+            0.6,
+            margin,
+            transform=ax.transAxes,
+            ha="right",
+            fontsize=12,
+            fontweight="bold",
+            color=text_color,
         )
         ax.barh(0, limit, color="#e4e7ec", height=0.13)
         if measured is not None:
             ax.barh(0, measured, color=color, height=0.13)
-        if threshold is not None and not measurements_view:
+        if threshold is not None:
             ax.vlines(threshold, -0.14, 0.14, color="#344054", linewidth=2)
-        direction = "Minimum" if metric["direction"] == "minimum" else "Maximum"
         target = (
-            "Measured value"
-            if measurements_view
-            else (
-                "Threshold unavailable"
-                if threshold is None
-                else f"{direction} {threshold:g}%"
-            )
+            "Threshold unavailable"
+            if threshold is None
+            else f"{direction} {threshold:g}%"
         )
         ax.text(0, 0.08, target, transform=ax.transAxes, fontsize=13, color="#344054")
         ax.text(
@@ -588,7 +620,21 @@ def render(series: dict, path: Path) -> dict:
         ax.text(
             0, -0.08, metric["scope"], transform=ax.transAxes, fontsize=13, color=MUTED
         )
-    fig.subplots_adjust(left=0.08, right=0.92, top=0.84, bottom=0.08, hspace=0.42)
+    fig.text(
+        0.08,
+        0.055,
+        "Red: outside threshold · Yellow: near · Green: clear margin",
+        fontsize=10,
+        color="#344054",
+    )
+    fig.text(
+        0.08,
+        0.025,
+        "Colors compare raw values; gate decisions remain separate.",
+        fontsize=9,
+        color=MUTED,
+    )
+    fig.subplots_adjust(left=0.08, right=0.92, top=0.84, bottom=0.13, hspace=0.42)
     path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(
         path,
