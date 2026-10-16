@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
-"""Link current-run Actions artifacts in the quality report without Git writes.
+"""Embed a verified native chart attachment and link current-run artifacts.
 
-The workflow uploads the PNG and normalized JSON first. Their artifact URLs are
-download links, not embeddable images. Missing uploads leave the measurements
-and gate decisions readable in the PR comment and job summary.
+The attachment uploader performs the only network operation. This linker checks
+its receipt offline. Missing uploads leave measurements and decisions readable.
 """
 
 from __future__ import annotations
 
 import argparse
+import hashlib
+import json
 import os
 import re
 from pathlib import Path
@@ -16,6 +17,10 @@ from pathlib import Path
 _IMAGE = re.compile(r"!\[([^\]]*)\]\(kpi-chart:([A-Za-z0-9._-]+)\)")
 START = "<!-- quality-artifacts:start -->"
 END = "<!-- quality-artifacts:end -->"
+ASSET_URL = re.compile(
+    r"https://github\.com/user-attachments/assets/"
+    r"[0-9a-fA-F]{8}(?:-[0-9a-fA-F]{4}){3}-[0-9a-fA-F]{12}"
+)
 
 
 def current_artifact_url(value: str) -> str:
@@ -32,12 +37,52 @@ def current_artifact_url(value: str) -> str:
     return value if re.fullmatch(re.escape(prefix) + r"[0-9]+", value) else ""
 
 
-def link_artifacts(markdown: str, *, charts_url: str, metrics_url: str) -> str:
+def read_attachment(path: Path | None, chart: Path) -> str:
+    """Accept an upload receipt only for these exact commit/run and PNG bytes."""
+    if path is None:
+        return ""
+    try:
+        receipt = json.loads(path.read_text(encoding="utf-8"))
+        sha, run_id = (
+            os.environ.get("GITHUB_SHA", ""),
+            os.environ.get("GITHUB_RUN_ID", ""),
+        )
+        url = receipt.get("url", "")
+        if (
+            re.fullmatch(r"[0-9a-f]{40}", sha)
+            and re.fullmatch(r"[0-9]{1,20}", run_id)
+            and receipt.get("sha") == sha
+            and str(receipt.get("run_id")) == run_id
+            and not receipt.get("error")
+            and receipt.get("chart_sha256")
+            == hashlib.sha256(chart.read_bytes()).hexdigest()
+            and isinstance(url, str)
+            and ASSET_URL.fullmatch(url)
+        ):
+            return url
+    except (OSError, ValueError, TypeError, AttributeError):
+        pass
+    return ""
+
+
+def link_artifacts(
+    markdown: str, *, charts_url: str, metrics_url: str, image_url: str = ""
+) -> str:
     charts_url = current_artifact_url(charts_url)
     metrics_url = current_artifact_url(metrics_url)
+    image_url = (
+        image_url
+        if isinstance(image_url, str) and ASSET_URL.fullmatch(image_url)
+        else ""
+    )
 
     def replace(match: re.Match[str]) -> str:
         label = match.group(1) or match.group(2)
+        if image_url and match.group(2) == "dashboard.png":
+            image = f"![{label}]({image_url})"
+            if charts_url:
+                image += f"\n\n[Download {label} (PNG archive)]({charts_url})"
+            return image
         if charts_url and match.group(2) == "dashboard.png":
             return f"[Download {label} (PNG archive)]({charts_url})"
         return (
@@ -73,6 +118,10 @@ def link_artifacts(markdown: str, *, charts_url: str, metrics_url: str) -> str:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--markdown", required=True)
+    parser.add_argument("--attachment", type=Path)
+    parser.add_argument(
+        "--chart", type=Path, default=Path("reports/quality/charts/dashboard.png")
+    )
     parser.add_argument("--no-summary", action="store_true")
     args = parser.parse_args()
     path = Path(args.markdown)
@@ -83,6 +132,7 @@ def main() -> int:
         path.read_text(encoding="utf-8"),
         charts_url=os.environ.get("QUALITY_CHARTS_ARTIFACT_URL", ""),
         metrics_url=os.environ.get("QUALITY_METRICS_ARTIFACT_URL", ""),
+        image_url=read_attachment(args.attachment, args.chart),
     )
     path.write_text(updated, encoding="utf-8", newline="\n")
     summary = os.environ.get("GITHUB_STEP_SUMMARY")
