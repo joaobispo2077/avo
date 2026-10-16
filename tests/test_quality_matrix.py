@@ -791,7 +791,14 @@ class QualityMatrixTests(unittest.TestCase):
         self.assertIn("path: reports/mutation/evidence", job)
         self.assertNotIn("pattern:", job)
         self.assertIn("scripts/ci/write_unified_quality_report.py", job)
-        self.assertIn("scripts/ci/upload_kpi_chart_images.py", job)
+        self.assertIn("scripts/ci/link_quality_artifacts.py", job)
+        self.assertIn("contents: read", configuration)
+        self.assertNotIn("contents: write", configuration)
+        self.assertNotIn("QUALITY_CHARTS_TOKEN", job)
+        self.assertNotIn("upload_kpi_chart_images.py", job)
+        self.assertNotIn("recreate: true", job)
+        self.assertIn("${{ steps.quality_metrics.outputs.artifact-url }}", job)
+        self.assertIn("${{ steps.quality_charts.outputs.artifact-url }}", job)
         self.assertIn("path: reports/quality/charts/dashboard.png", job)
         self.assertNotIn("path: reports/quality/charts/*.png", job)
         self.assertIn("path: reports/quality/quality-gates.md", job)
@@ -801,12 +808,27 @@ class QualityMatrixTests(unittest.TestCase):
         self.assertIn("delete: true", retired)
         self.assertLess(
             job.index("write_unified_quality_report.py"),
-            job.index("upload_kpi_chart_images.py"),
+            job.index("link_quality_artifacts.py"),
         )
         self.assertLess(
-            job.index("upload_kpi_chart_images.py"),
+            job.index("link_quality_artifacts.py"),
             job.index("header: quality-gates-report"),
         )
+        for upload in (
+            "Upload unified metrics",
+            "Upload dashboard image",
+            "Upload readable quality report",
+        ):
+            self.assertLess(job.index(upload), job.index("Resolve PR number"))
+            step = job.split(f"- name: {upload}", 1)[1].split("- name:", 1)[0]
+            self.assertIn("continue-on-error: true", step)
+        for upload in ("Upload unified metrics", "Upload dashboard image"):
+            self.assertLess(job.index(upload), job.index("link_quality_artifacts.py"))
+        for publish in (
+            "Publish unified job summary",
+            "Upload readable quality report",
+        ):
+            self.assertLess(job.index("link_quality_artifacts.py"), job.index(publish))
         self.assertNotIn("run-mutation", job)
         self.assertNotIn("--floor 80", job)
         self.assertNotIn("fail_under = 80", (ROOT / "pyproject.toml").read_text())

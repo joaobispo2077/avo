@@ -109,10 +109,10 @@ def test_unreadable_evidence_stays_actionable(tmp_path):
     assert doc["overall"] == "INCOMPLETE"
 
 
-def test_hosting_does_not_duplicate_the_unified_summary(tmp_path, monkeypatch):
+def test_artifact_linking_does_not_duplicate_the_unified_summary(tmp_path, monkeypatch):
     import sys
 
-    from scripts.ci import upload_kpi_chart_images as uploader
+    from scripts.ci import link_quality_artifacts as linker
 
     markdown = tmp_path / "report.md"
     markdown.write_text("One text report.\n")
@@ -121,9 +121,9 @@ def test_hosting_does_not_duplicate_the_unified_summary(tmp_path, monkeypatch):
     monkeypatch.setattr(
         sys,
         "argv",
-        ["upload_kpi_chart_images.py", "--markdown", str(markdown), "--no-summary"],
+        ["link_quality_artifacts.py", "--markdown", str(markdown), "--no-summary"],
     )
-    assert uploader.main() == 0
+    assert linker.main() == 0
     assert not summary.exists()
 
 
