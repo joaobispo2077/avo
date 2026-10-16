@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import unittest
+from copy import deepcopy
 
 from avo.timeline.mapping import (
+    MappingError,
     cmap_output_duration,
     cmap_output_to_raw,
     cmap_raw_to_output,
@@ -59,6 +61,35 @@ class TimelineMappingTests(unittest.TestCase):
 
     def test_duration_uses_integer_ticks(self) -> None:
         self.assertEqual(cmap_output_duration(SNAPSHOT), 4000)
+
+    def test_output_timebase_comes_from_first_segment_with_mixed_source_rates(self):
+        snapshot = deepcopy(SNAPSHOT)
+        for endpoint in ("in", "out"):
+            value = snapshot["segments"][1][endpoint]
+            value["ticks"] *= 2
+            value["timebase"] = {"num": 1, "den": 2000}
+        self.assertEqual(cmap_output_duration(snapshot), 4000)
+        self.assertEqual(cmap_raw_to_output(snapshot, "cam2", 2000), 2500)
+        self.assertEqual(cmap_output_to_raw(snapshot, 2500), ("cam2", 2000))
+
+    def test_raw_segment_start_and_end_map_to_exact_output_boundaries(self):
+        self.assertEqual(cmap_raw_to_output(SNAPSHOT, "cam2", 500), 2000)
+        self.assertEqual(cmap_raw_to_output(SNAPSHOT, "cam2", 1500), 3000)
+
+    def test_third_reordered_segment_accumulates_all_previous_durations(self):
+        self.assertEqual(cmap_raw_to_output(SNAPSHOT, "cam1", 500), 3500)
+        self.assertEqual(cmap_output_to_raw(SNAPSHOT, 3500), ("cam1", 500))
+
+    def test_last_join_selects_next_source_and_final_endpoint_is_inclusive(self):
+        self.assertEqual(cmap_output_to_raw(SNAPSHOT, 3000), ("cam1", 0))
+        self.assertEqual(cmap_output_to_raw(SNAPSHOT, 4000), ("cam1", 1000))
+        self.assertIsNone(cmap_output_to_raw(SNAPSHOT, 4001))
+
+    def test_raw_half_tick_cannot_be_rounded_into_output_timebase(self) -> None:
+        with self.assertRaisesRegex(MappingError, "represented exactly"):
+            cmap_raw_to_output(
+                SNAPSHOT, "cam1", 2001, raw_timebase={"num": 1, "den": 2000}
+            )
 
 
 if __name__ == "__main__":

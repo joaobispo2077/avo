@@ -655,6 +655,92 @@ class TestCheckNpmAudit(unittest.TestCase):
                 )
                 self.assertTrue(json.loads(self.mod.FINDINGS_PATH.read_text())["error"])
 
+    def test_raw_pip_preserves_fix_versions_and_scan_provenance(self) -> None:
+        payload = {
+            "dependencies": [
+                {
+                    "name": "demo",
+                    "version": "1.0",
+                    "vulns": [
+                        {
+                            "id": "PYSEC-2024-123",
+                            "fix_versions": ["1.1"],
+                            "description": "actual advisory detail",
+                        }
+                    ],
+                }
+            ]
+        }
+        proc = mock.Mock(returncode=1, stdout=json.dumps(payload), stderr="")
+        with (
+            mock.patch.object(self.mod.subprocess, "run", return_value=proc),
+            mock.patch.dict(
+                self.mod.os.environ,
+                {"AVO_QUALITY_SHA": "a" * 40, "AVO_QUALITY_RUN_ID": "77"},
+            ),
+        ):
+            self.assertEqual(self.mod.main(["--all"]), 1)
+        raw = json.loads(
+            self.mod.SUMMARY_PATH.with_name("pip-audit-raw.json").read_text()
+        )
+        npm = json.loads(
+            self.mod.SUMMARY_PATH.with_name("npm-audit-raw.json").read_text()
+        )
+        self.assertEqual(raw["payload"], payload)
+        self.assertEqual(
+            (raw["sha"], raw["run_id"], raw["exit_code"]), ("a" * 40, "77", 1)
+        )
+        self.assertIn("--skip-editable", raw["command"])
+        self.assertEqual(
+            raw["policy"]["blocking_severities"], "all unignored advisories"
+        )
+        self.assertEqual(npm["status"], "NOT_RUN")
+        self.assertIsNone(npm["payload"])
+
+    def test_raw_npm_contains_real_dependency_paths_and_exact_policy(self) -> None:
+        audit = _braces_chain()
+        self.assertEqual(self._run(audit)[0], 0)
+        raw = json.loads(
+            self.mod.SUMMARY_PATH.with_name("npm-audit-raw.json").read_text()
+        )
+        self.assertEqual(raw["payload"], audit)
+        self.assertEqual(raw["policy"]["blocking_severities"], ["critical"])
+        self.assertEqual(
+            raw["policy"]["reported_severities"], ["high", "low", "moderate"]
+        )
+        self.assertTrue(raw["policy"]["include_dev_dependencies"])
+        self.assertEqual(raw["status"], "COMPLETE")
+
+    def test_raw_error_cannot_be_a_clean_dependency_scan(self) -> None:
+        proc = mock.Mock(
+            returncode=2, stdout='{"dependencies":[]}', stderr="network unavailable"
+        )
+        with mock.patch.object(self.mod.subprocess, "run", return_value=proc):
+            self.assertEqual(self.mod.main(["--all"]), 1)
+        raw = json.loads(
+            self.mod.SUMMARY_PATH.with_name("pip-audit-raw.json").read_text()
+        )
+        self.assertEqual(raw["status"], "ERROR")
+        self.assertEqual(raw["exit_code"], 2)
+        self.assertTrue(raw["error"])
+
+    def test_raw_artifacts_redact_sensitive_fields_and_url_credentials(self) -> None:
+        payload = {
+            "dependencies": [],
+            "environment": {"SECRET": "private-env"},
+            "api_key": "private-key",
+            "details": {
+                "url": "https://user:private-pass@example.com/advisory?token=private-token&package=demo",
+                "description": "See https://user:private-pass@example.com/advisory?token=private-token",
+            },
+        }
+        self.mod.record_pip_payload(payload)
+        text = self.mod.SUMMARY_PATH.with_name("pip-audit-raw.json").read_text()
+        for secret in ("private-env", "private-key", "private-pass", "private-token"):
+            self.assertNotIn(secret, text)
+        self.assertIn("package=demo", text)
+        self.assertIn("REDACTED", text)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -152,9 +152,6 @@ class KpiChartTests(unittest.TestCase):
     def setUp(self) -> None:
         self.charts = _load("gen_kpi_charts", "scripts/ci/gen_kpi_charts.py")
         self.report = self.charts._report()
-        self.host = _load(
-            "upload_kpi_chart_images", "scripts/ci/upload_kpi_chart_images.py"
-        )
 
     def _workspace(self) -> Path:
         handle = tempfile.TemporaryDirectory()
@@ -306,60 +303,6 @@ class KpiChartTests(unittest.TestCase):
         status = tmp / "charts" / "status.png"
         self.assertTrue(_has_color(status, CHIP_PASS_RGB))
         self.assertFalse(_has_color(status, FAIL_RGB))
-
-    def test_upload_rewrites_urls_and_never_leaves_an_empty_image(self) -> None:
-        source = (
-            "### Coverage\n"
-            "\n"
-            "![Coverage](kpi-chart:coverage.png)\n"
-            "\n"
-            "| Field | Value |\n"
-            "| Line coverage | 71.25% |"
-        )
-        hosted = self.host.apply_image_urls(
-            source,
-            {"coverage.png": "https://github.com/user-attachments/assets/abc"},
-            {},
-        )
-        self.assertIn(
-            "![Coverage](https://github.com/user-attachments/assets/abc)",
-            hosted,
-        )
-        self.assertNotIn("kpi-chart:", hosted)
-        self.assertNotIn("![](", hosted)
-        self.assertIn("71.25%", hosted)
-
-        failed = self.host.apply_image_urls(
-            source,
-            {},
-            {"coverage.png": "user-attachments HTTP 404"},
-        )
-        self.assertIn("**Chart image unavailable (Coverage):**", failed)
-        self.assertIn("71.25%", failed)
-        self.assertNotIn("![", failed)
-        self.assertNotIn("kpi-chart:", failed)
-        self.assertNotIn("![](", failed)
-
-    def test_chart_host_refuses_other_branches(self) -> None:
-        self.assertEqual(
-            self.host.guarded_branch("ci/quality-kpi-charts"), "ci/quality-kpi-charts"
-        )
-        with self.assertRaises(ValueError):
-            self.host.guarded_branch("feature/avo-kpi-charts")
-        with self.assertRaises(ValueError):
-            self.host.guarded_branch("develop")
-        with self.assertRaises(ValueError):
-            self.host.chart_object_path("12", "../secrets.png")
-        url = self.host.raw_githubusercontent_url(
-            "joaobispo2077/avo",
-            "ci/quality-kpi-charts",
-            "quality-kpi-charts/12/coverage.png",
-        )
-        self.assertEqual(
-            url,
-            "https://raw.githubusercontent.com/joaobispo2077/avo/"
-            "ci/quality-kpi-charts/quality-kpi-charts/12/coverage.png",
-        )
 
     def test_failure_note_has_no_image(self) -> None:
         note = self.charts.failure_section("FAIL", "matplotlib missing")

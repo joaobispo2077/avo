@@ -76,7 +76,7 @@ def package(index: int):
     }
 
 
-def test_five_review_packages_expose_comprehension_fields_under_120_seconds(
+def test_five_review_packages_generate_required_fields_under_120_seconds(
     tmp_path: Path,
 ):
     successful = 0
@@ -101,7 +101,7 @@ def test_five_review_packages_expose_comprehension_fields_under_120_seconds(
     assert max(timings) < 120
 
 
-def test_human_study_records_anonymous_four_of_five_result(tmp_path: Path):
+def test_study_workflow_records_anonymous_four_of_five_result(tmp_path: Path):
     review_paths = []
     manifests = []
     for index in range(5):

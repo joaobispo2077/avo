@@ -1,4 +1,4 @@
-# Weekly visual import graph of src/avo (task-026 / FR-12). Not on the PR fast path.
+# Weekly HTML dependency table + DOT export for src/avo. Not on the PR fast path.
 
 name: Dependency graph
 
@@ -17,7 +17,7 @@ env:
 
 jobs:
   dependency-graph:
-    name: Visual dependency graph
+    name: Package dependency diagnostic
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:

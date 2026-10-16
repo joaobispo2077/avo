@@ -257,14 +257,14 @@ class QualityMatrixTests(unittest.TestCase):
 
         pkg = json.loads((ROOT / "package.json").read_text(encoding="utf-8"))
         coverage_script = pkg["scripts"]["test:coverage"]
-        self.assertIn("--cov-fail-under=68", coverage_script)
+        self.assertNotIn("--cov-fail-under", coverage_script)
         self.assertIn("quality", pkg["scripts"]["quality"])
         self.assertIn("test:coverage", pkg["scripts"]["quality"])
 
         runner = (ROOT / "scripts/ci/run-coverage.sh").read_text(encoding="utf-8")
         self.assertIn("set -euo pipefail", runner)
-        self.assertIn("--cov-fail-under", runner)
-        self.assertIn("COV_FAIL_UNDER:-68", runner)
+        self.assertNotIn("--cov-fail-under", runner)
+        self.assertNotIn("COV_FAIL_UNDER", runner)
         self.assertIn("--ignore=tests/integration", runner)
         self.assertIn("not integration", runner)
         self.assertIn("--ignore=tests/integration", coverage_script)
@@ -332,6 +332,7 @@ class QualityMatrixTests(unittest.TestCase):
 
         pkg = json.loads((ROOT / "package.json").read_text(encoding="utf-8"))
         deps = pkg["scripts"]["quality:deps"]
+        self.assertIn("--extra mcp", deps)
         self.assertIn("check_npm_audit.py --all", deps)
         self.assertIn("check_npm_audit.py", deps)
         self.assertIn("quality:deps", pkg["scripts"]["quality"])
@@ -348,6 +349,7 @@ class QualityMatrixTests(unittest.TestCase):
         )
 
         runner = (ROOT / "scripts/ci/quality-deps.sh").read_text(encoding="utf-8")
+        self.assertIn("--extra mcp", runner)
         self.assertIn("set -euo pipefail", runner)
         self.assertIn("check_npm_audit.py --all", runner)
         self.assertIn("check_npm_audit.py", runner)
@@ -421,7 +423,13 @@ class QualityMatrixTests(unittest.TestCase):
         # Fail-immediately: no soft/continue-on-error escape hatch on the gate steps.
         # Sticky PR comment publish may continue-on-error so fork PRs still gate.
         gate_block = quality_block.split("Build quality PR report", 1)[0]
-        self.assertNotIn("continue-on-error:", gate_block)
+        required_steps, measurement = gate_block.split(
+            "- name: Measure function risk and coupling", 1
+        )
+        self.assertNotIn("continue-on-error:", required_steps)
+        self.assertIn("continue-on-error: true", measurement)
+        self.assertIn("measure_code_risk.py", measurement)
+        self.assertIn("--coverage-receipt", measurement)
         quality_lower = quality_block.lower()
         self.assertNotIn("soft until enablement", quality_lower)
         self.assertNotIn("non-failing until enablement", quality_lower)
@@ -719,37 +727,29 @@ class QualityMatrixTests(unittest.TestCase):
         docs_ci = (ROOT / "docs/ci.md").read_text(encoding="utf-8")
         self.assertIn("Mutation tests (light)", docs_ci)
 
-    def test_ci_posts_quality_and_mutation_pr_comments(self) -> None:
-        """ci-quality-hardening: Maxframe-style sticky summaries, not pack dumps."""
+    def test_ci_posts_one_evidence_bound_quality_report(self) -> None:
+        """One always-run report joins producer artifacts and retires old comments."""
         ci = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
-        self.assertIn("write_quality_pr_report.py", ci)
+        self.assertIn("write_quality_metrics_snapshot.py", ci)
         self.assertIn("write_mutation_pr_report.py", ci)
         self.assertIn("marocchino/sticky-pull-request-comment@v3", ci)
-        self.assertIn("header: quality-gates-report", ci)
-        self.assertIn("header: mutation-report", ci)
-        self.assertIn("reports/quality/quality-gates.md", ci)
         self.assertIn("gh pr list", ci)
         self.assertIn("steps.pr.outputs.number", ci)
-        self.assertGreaterEqual(ci.count("continue-on-error: true"), 2)
         coverage = (ROOT / "scripts/ci/run-coverage.sh").read_text(encoding="utf-8")
         self.assertIn("reports/quality/coverage.json", coverage)
-        writer = (ROOT / "scripts/ci/write_quality_pr_report.py").read_text(
+        legacy_writer = (ROOT / "scripts/ci/write_quality_pr_report.py").read_text(
             encoding="utf-8"
         )
-        self.assertIn("## Software metrics", writer)
-        self.assertIn("What this checks", writer)
-        self.assertIn("overall_label", writer)
-        self.assertIn("gate-outcomes.json", writer)
+        self.assertIn("## Software metrics", legacy_writer)
+        self.assertIn("What this checks", legacy_writer)
+        self.assertIn("overall_label", legacy_writer)
+        self.assertIn("gate-outcomes.json", legacy_writer)
         self.assertIn(
             "load_gate_outcomes",
             (ROOT / "scripts/ci/gen_kpi_charts.py").read_text(encoding="utf-8"),
         )
-        job = ci.split("  software-quality:", 1)[1].split("\n  usability-gate:", 1)[0]
-        chart_step = job.split("- name: Generate KPI charts", 1)[1].split(
-            "- name: Upload KPI chart images", 1
-        )[0]
-        report_step = job.split("- name: Build quality PR report", 1)[1].split(
-            "- name: Generate KPI charts", 1
+        producer = ci.split("  software-quality:", 1)[1].split(
+            "\n  usability-gate:", 1
         )[0]
         for name in (
             "Q_LINT",
@@ -762,23 +762,112 @@ class QualityMatrixTests(unittest.TestCase):
             "Q_ARCHITECTURE",
             "Q_TREE",
         ):
-            self.assertIn(f"{name}:", chart_step)
-            self.assertIn(f"{name}:", report_step)
-        self.assertIn("scripts/ci/gen_kpi_charts.py", job)
-        self.assertIn("scripts/ci/upload_kpi_chart_images.py", job)
-        self.assertLess(job.index("quality-lint.sh"), job.index("gen_kpi_charts.py"))
+            self.assertIn(f"{name}:", producer)
+        self.assertIn("if: always()", producer)
+        self.assertIn("--write-json reports/quality/quality-metrics.json", producer)
+        self.assertIn("name: quality-evidence", producer)
+        self.assertNotIn("gen_kpi_charts.py", producer)
+        self.assertNotIn("sticky-pull-request-comment", producer)
+        mutation = ci.split("  mutation-light:", 1)[1].split("\n  ci-readiness:", 1)[0]
+        self.assertIn("name: mutation-reports-light", mutation)
+        self.assertNotIn("sticky-pull-request-comment", mutation)
+        job = ci.split("  quality-report:", 1)[1]
+        configuration = job.split("steps:", 1)[0]
+        self.assertIn("if: always()", configuration)
+        for required in (
+            "prerequisites-gate",
+            "repo-unit-tests",
+            "repo-integration-tests",
+            "software-quality",
+            "usability-gate",
+            "mutation-light",
+            "ci-readiness",
+        ):
+            self.assertIn(required, configuration)
+        self.assertIn("CI_NEEDS_JSON: ${{ toJSON(needs) }}", job)
+        self.assertIn("name: quality-evidence", job)
+        self.assertIn("path: reports/quality/evidence", job)
+        self.assertIn("name: mutation-reports-light", job)
+        self.assertIn("path: reports/mutation/evidence", job)
+        self.assertNotIn("pattern:", job)
+        self.assertIn("scripts/ci/write_unified_quality_report.py", job)
+        self.assertIn("scripts/ci/link_quality_artifacts.py", job)
+        self.assertIn("contents: read", configuration)
+        self.assertNotIn("contents: write", configuration)
+        self.assertIn(
+            "environment:\n      name: RELEASE\n      deployment: false", configuration
+        )
+        self.assertIn("scripts/ci/upload_quality_chart.py", job)
+        attachment = job.split("- name: Attach inline quality dashboard", 1)[1].split(
+            "- name: Link quality chart", 1
+        )[0]
+        self.assertIn("continue-on-error: true", attachment)
+        self.assertIn("steps.pr.outputs.number != ''", attachment)
+        self.assertIn(
+            "github.event.pull_request.head.repo.full_name == github.repository",
+            attachment,
+        )
+        self.assertIn("QUALITY_CHARTS_TOKEN: ${{ secrets.GH_TOKEN }}", attachment)
+        self.assertNotIn("secrets.QUALITY_CHARTS_TOKEN", job)
+        self.assertNotIn("${{ github.token }}", attachment)
+        self.assertIn("--attachment reports/quality/chart-attachment.json", job)
+        self.assertNotIn("upload_kpi_chart_images.py", job)
+        self.assertNotIn("recreate: true", job)
+        self.assertIn("${{ steps.quality_metrics.outputs.artifact-url }}", job)
+        self.assertIn("${{ steps.quality_charts.outputs.artifact-url }}", job)
+        self.assertIn("path: reports/quality/charts/dashboard.png", job)
+        self.assertNotIn("path: reports/quality/charts/*.png", job)
+        self.assertIn("path: reports/quality/quality-gates.md", job)
+        self.assertEqual(ci.count("header: quality-gates-report"), 1)
+        retired = job.split("- name: Remove superseded mutation comment", 1)[1]
+        self.assertIn("header: mutation-report", retired)
+        self.assertIn("delete: true", retired)
         self.assertLess(
-            job.index("gen_kpi_charts.py"),
-            job.index("upload_kpi_chart_images.py"),
+            job.index("write_unified_quality_report.py"),
+            job.index("link_quality_artifacts.py"),
         )
         self.assertLess(
-            job.index("upload_kpi_chart_images.py"),
+            job.index("link_quality_artifacts.py"),
             job.index("header: quality-gates-report"),
         )
-        self.assertEqual(job.count("continue-on-error: true"), 1)
+        for upload in (
+            "Upload unified metrics",
+            "Upload dashboard image",
+            "Upload readable quality report",
+        ):
+            step = job.split(f"- name: {upload}", 1)[1].split("- name:", 1)[0]
+            self.assertIn("continue-on-error: true", step)
+        self.assertLess(
+            job.index("Resolve PR number"), job.index("Attach inline quality dashboard")
+        )
+        for upload in ("Upload unified metrics", "Upload dashboard image"):
+            self.assertLess(job.index(upload), job.index("link_quality_artifacts.py"))
+        for publish in (
+            "Publish unified job summary",
+            "Upload readable quality report",
+        ):
+            self.assertLess(job.index("link_quality_artifacts.py"), job.index(publish))
+            self.assertLess(
+                job.index("header: quality-gates-report"), job.index(publish)
+            )
+        summary = job.split("- name: Publish unified job summary", 1)[1].split(
+            "- name:", 1
+        )[0]
+        self.assertIn("COMMENT_RESULT: ${{ steps.quality_comment.outcome }}", summary)
+        self.assertIn('if [ "$COMMENT_RESULT" != "success" ]', summary)
+        self.assertIn("quality-gates-base.md", summary)
+        self.assertNotIn("--attachment", summary)
         self.assertNotIn("run-mutation", job)
         self.assertNotIn("--floor 80", job)
         self.assertNotIn("fail_under = 80", (ROOT / "pyproject.toml").read_text())
+        snapshot = (ROOT / "scripts/ci/write_quality_metrics_snapshot.py").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn('os.environ.get("GITHUB_RUN_ID", "")', snapshot)
+        release_snapshot = (
+            ROOT / "scripts/ci/snapshot-release-quality-metrics.sh"
+        ).read_text(encoding="utf-8")
+        self.assertIn('--run-id "$RUN_ID"', release_snapshot)
 
     def test_workflows_use_node24_action_runtimes(self) -> None:
         """ci-quality-hardening: Node 24 + Node 24 GitHub-owned action majors."""

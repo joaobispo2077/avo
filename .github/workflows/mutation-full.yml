@@ -64,3 +64,68 @@ jobs:
           path: reports/mutation
           if-no-files-found: warn
           retention-days: 14
+
+  branch-risk:
+    # Report-only safety measurement, separate from PR coverage and mutation floors.
+    name: Safety branch coverage (informational)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v10.2.0
+        with:
+          enable-cache: true
+
+      - name: Sync Python deps (frozen)
+        run: uv sync --frozen --extra dev
+
+      - name: Expose venv on PATH
+        run: echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+
+      - name: Install Node dependencies
+        run: npm ci
+
+      - name: Install ffmpeg
+        timeout-minutes: 3
+        run: bash scripts/ci/ensure-ffmpeg.sh
+
+      - name: Measure core unit branches
+        id: branch-tests
+        run: |
+          mkdir -p reports/quality
+          pytest --ignore=tests/projects --ignore=tests/integration \
+            -m "not project and not integration" \
+            --cov=avo --cov-branch --cov-fail-under=0 \
+            --cov-report=json:reports/quality/branch-coverage.json
+
+      - name: Report safety branch gaps
+        if: always()
+        run: |
+          python scripts/ci/report_branch_coverage.py \
+            --test-outcome '${{ steps.branch-tests.outcome }}'
+
+      - name: Upload safety branch reports
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: branch-risk-reports
+          path: |
+            reports/quality/branch-coverage.json
+            reports/quality/branch-risk.json
+            reports/quality/branch-risk.md
+          if-no-files-found: warn
+          retention-days: 14

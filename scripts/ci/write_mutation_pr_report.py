@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import importlib.util
 import json
 import os
 import re
@@ -12,13 +13,13 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 CONFIG_PATH = ROOT / "scripts/ci/mutation-config.json"
-
-
-def _count(stats: dict[str, object], *keys: str) -> int:
-    for key in keys:
-        if key in stats and stats[key] is not None:
-            return int(stats[key])
-    return 0
+_SPEC = importlib.util.spec_from_file_location(
+    "avo_ci_check_mutation", Path(__file__).with_name("check_mutation.py")
+)
+assert _SPEC and _SPEC.loader
+_CHECKER = importlib.util.module_from_spec(_SPEC)
+_SPEC.loader.exec_module(_CHECKER)
+mutation_evaluation = _CHECKER.mutation_evaluation
 
 
 def _intro_lines(*, profile: str, timeout_minutes: int) -> list[str]:
@@ -39,6 +40,7 @@ def stats_for_this_run(
     *,
     sha: str,
     run_id: str,
+    profile: str,
 ) -> dict[str, object] | None:
     """Trust stats only when this run stamped them after export.
 
@@ -54,12 +56,14 @@ def stats_for_this_run(
         return None
     stamped_sha = str(stats.get("sha", "")).strip().lower()
     stamped_run = str(stats.get("run_id", "")).strip()
-    if stamped_sha != sha or stamped_run != run_id:
+    if stamped_sha != sha or stamped_run != run_id or stats.get("profile") != profile:
         return None
     return stats
 
 
-def stamp_stats_file(path: Path, *, sha: str, run_id: str) -> dict[str, object]:
+def stamp_stats_file(
+    path: Path, *, sha: str, run_id: str, profile: str
+) -> dict[str, object]:
     """Record the commit and workflow run that just exported these stats."""
     sha = sha.strip().lower()
     run_id = run_id.strip()
@@ -69,11 +73,14 @@ def stamp_stats_file(path: Path, *, sha: str, run_id: str) -> dict[str, object]:
         )
     if not run_id:
         raise ValueError("refusing to stamp mutation stats without a workflow run id")
+    if profile not in {"light", "full"}:
+        raise ValueError(f"refusing to stamp unknown mutation profile: {profile!r}")
     stats = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(stats, dict):
         raise ValueError("mutation stats JSON must be an object")
     stats["sha"] = sha
     stats["run_id"] = run_id
+    stats["profile"] = profile
     path.write_text(
         json.dumps(stats, indent=2) + "\n",
         encoding="utf-8",
@@ -124,24 +131,27 @@ def mutation_metrics_document(
     stats: dict[str, object] | None,
     *,
     sha: str,
+    run_id: str,
+    profile: str,
     floor: float,
 ) -> dict | None:
-    """SHA-bound killed/survived counts for the release snapshot. No bare score."""
-    if not isinstance(stats, dict):
+    """Run-bound counters and validated completion, including failed runs."""
+    sha = sha.strip().lower()
+    run_id = run_id.strip()
+    trusted = stats_for_this_run(stats, sha=sha, run_id=run_id, profile=profile)
+    if trusted is None:
         return None
-    if not re.fullmatch(r"[0-9a-f]{40}", sha):
-        return None
-    killed = stats.get("killed")
-    survived = stats.get("survived")
-    if type(killed) is not int or type(survived) is not int:
-        return None
-    if killed < 0 or survived < 0 or killed + survived <= 0:
-        return None
+    result = mutation_evaluation(trusted, min_killed_percent=floor)
+    counts = result["counts"]
     return {
         "sha": sha,
-        "killed": killed,
-        "survived": survived,
+        "run_id": run_id,
+        "profile": profile,
+        "killed": counts.get("killed"),
+        "survived": counts.get("survived"),
+        "total": counts.get("total"),
         "floor": floor,
+        **result,
     }
 
 
@@ -160,34 +170,44 @@ def build_markdown(
         )
 
     header = _intro_lines(profile=profile, timeout_minutes=timeout_minutes)
-    killed = _count(stats, "killed")
-    survived = _count(stats, "survived")
-    timeout = _count(stats, "timeout", "timeouts")
-    total = _count(stats, "total")
-    denom = killed + survived
-    score = (100.0 * killed / denom) if denom else 0.0
+    result = mutation_evaluation(stats, min_killed_percent=floor)
+    counts = result["counts"]
+    score = result["score"]
     status = (
         f"Passing (>= {floor:.0f})"
-        if denom and score >= floor
+        if result["status"] == "PASS"
         else f"Failing (< {floor:.0f})"
-        if denom
-        else "No scored mutants"
+        if result["status"] == "FAIL"
+        else str(result["status"]).capitalize()
     )
+    efficacy = f"{score:.2f}%" if score is not None else "unavailable"
     lines = header + [
-        f"- Mutation score: **{score:.2f}%**",
+        f"- Mutation score: **{efficacy}**",
         f"- Threshold: **{floor:.0f}**",
         f"- Status: **{status}**",
         "",
-        "| Metric | Count |",
-        "|---|---:|",
-        f"| Killed | {killed} |",
-        f"| Survived | {survived} |",
-        f"| Timeout | {timeout} |",
-        f"| Total | {total} |",
-        "",
-        "_Generated from `mutants/mutmut-cicd-stats.json`_",
-        "",
     ]
+    if counts:
+        verdicts = counts["killed"] + counts["survived"]
+        lines += [
+            f"- Test verdicts: **{verdicts}/{counts['total']}**",
+            "",
+            "| Metric | Count |",
+            "|---|---:|",
+            f"| Killed | {counts['killed']} |",
+            f"| Survived | {counts['survived']} |",
+            f"| Timeout | {counts['timeout']} |",
+            f"| Total | {counts['total']} |",
+        ]
+        lines += [
+            f"| {name.replace('_', ' ').capitalize()} | {count} |"
+            for name, count in counts.items()
+            if name not in {"killed", "survived", "timeout", "total"} and count
+        ]
+        lines.append("")
+    if not result["complete"]:
+        lines += [str(result["reason"]), ""]
+    lines += ["_Generated from `mutants/mutmut-cicd-stats.json`_", ""]
     return "\n".join(lines)
 
 
@@ -203,7 +223,7 @@ def compose_report(
     """Sticky markdown plus SHA-bound metrics. Unstamped cache yields neither score."""
     sha = sha.strip().lower()
     run_id = run_id.strip()
-    trusted = stats_for_this_run(stats, sha=sha, run_id=run_id)
+    trusted = stats_for_this_run(stats, sha=sha, run_id=run_id, profile=profile)
     if trusted is None:
         text = unscored_markdown(
             profile=profile,
@@ -217,7 +237,9 @@ def compose_report(
         stats=trusted,
         timeout_minutes=timeout_minutes,
     )
-    return text, mutation_metrics_document(trusted, sha=sha, floor=floor)
+    return text, mutation_metrics_document(
+        trusted, sha=sha, run_id=run_id, profile=profile, floor=floor
+    )
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -240,7 +262,9 @@ def main(argv: list[str] | None = None) -> int:
     run_id = os.environ.get("GITHUB_RUN_ID", "").strip()
     if args.stamp:
         try:
-            stamp_stats_file(Path(args.stamp), sha=sha, run_id=run_id)
+            stamp_stats_file(
+                Path(args.stamp), sha=sha, run_id=run_id, profile=args.profile
+            )
         except ValueError as exc:
             print(str(exc), file=sys.stderr)
             return 2

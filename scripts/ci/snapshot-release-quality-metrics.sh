@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Release-cut readout. Downloads the green Software quality JSON for RELEASE_SHA
+# Release-cut readout. Downloads the green unified quality JSON for RELEASE_SHA
 # and writes docs/quality-metrics.md. Missing JSON or a SHA mismatch exits 1.
 # Does not re-run gates and does not keep going after a snapshot failure.
 set -euo pipefail
@@ -106,6 +106,7 @@ fi
 "$PY" scripts/ci/write_quality_metrics_snapshot.py \
   --metrics "$METRICS" \
   --sha "$RELEASE_SHA" \
+  --run-id "$RUN_ID" \
   --version "$RELEASE_VERSION" \
   --out docs/quality-metrics.md \
   "${CHART_ARGS[@]}" \
