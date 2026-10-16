@@ -16,6 +16,9 @@ a bundled Python editing engine (fork lineage from video-use) plus external tool
 
 ## Layer model
 
+The current architecture and its evolution are recorded in root
+[`ARCHITECTURE.md`](../ARCHITECTURE.md).
+
 | Layer | Purpose | Canonical source |
 | ----- | ------- | ---------------- |
 | **Software foundation** | TDD, SemVer, branches, KISS/DRY, docs | `AGENTS.md` § Software Engineering Foundation + `.cursor/rules/00-core-behavior.mdc` … `50-documentation-policy.mdc` |

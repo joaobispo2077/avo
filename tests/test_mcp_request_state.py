@@ -250,6 +250,26 @@ def test_reject_wrong_key() -> None:
         verify_request_state(token, tool="avo_cleanup_execute", args={}, key=key_b)
 
 
+def test_reject_valid_token_for_another_confirmation_intent() -> None:
+    key = generate_key()
+    token = encode_request_state(
+        tool="avo_cleanup_execute",
+        intent="preview_only",
+        args={},
+        key=key,
+        now=1_700_000_000.0,
+    )
+    with pytest.raises(RequestStateError, match="intent binding mismatch"):
+        verify_request_state(
+            token,
+            tool="avo_cleanup_execute",
+            intent="confirm_destructive",
+            args={},
+            key=key,
+            now=1_700_000_000.0,
+        )
+
+
 def test_resolve_signing_key_from_env(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv(request_state.SECRET_ENV, "unit-test-secret")
     token = encode_request_state(tool="avo_cleanup_execute", args={})

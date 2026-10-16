@@ -74,3 +74,13 @@ def assert_layout() -> None:
         raise FileNotFoundError(
             "AVO orchestrator layout incomplete; missing: " + ", ".join(missing)
         )
+
+
+def validation_config_path(root: Path, name: str) -> Path:
+    nested = root / "config" / name
+    if nested.is_file():
+        return nested
+    legacy = root / name
+    if legacy.is_file():
+        return legacy
+    return nested

@@ -118,3 +118,12 @@ def make_document(kind: str, payload: dict[str, Any]) -> dict[str, Any]:
     }
     document["documentHash"] = content_hash(document)
     return validate_cutting_document(document, kind)
+
+
+def selected_source_range(segment: dict) -> dict:
+    return {
+        "sourceId": segment["sourceId"],
+        "startTicks": segment["in"]["ticks"],
+        "endTicksExclusive": segment["out"]["ticks"],
+        "timebase": segment["in"]["timebase"],
+    }

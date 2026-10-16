@@ -2,7 +2,11 @@ from __future__ import annotations
 
 import pytest
 
-from avo.adapters.understand.watch_skill import _live_probe, probe_vision_capabilities
+from avo.adapters.understand.watch_skill import (
+    _live_probe,
+    _native_pass_instruction,
+    probe_vision_capabilities,
+)
 from avo.timeline.vision_review import VisionReviewError, build_capability_snapshot
 
 
@@ -147,3 +151,12 @@ def test_live_probe_disables_reasoning(monkeypatch) -> None:
     )
     assert result["success"] is True
     assert captured["payload"]["reasoning_effort"] == "none"
+
+
+def test_native_pass_instruction_bounds_findings_for_small_output_budget() -> None:
+    instruction = _native_pass_instruction("dense-required-001")
+    assert "when status is pass, findings must be an empty list" in instruction
+    assert "at most 3 concise findings" in instruction
+    assert "Use fail only for a confirmed problem" in instruction
+    assert "status must be needs-human-judgment, not fail" in instruction
+    assert "dense-required-001" in instruction

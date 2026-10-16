@@ -36,7 +36,7 @@ GATE_POLICY = {
     "format": "Ruff format --check + Prettier --check",
     "coverage": "pytest-cov fail-under on `src/avo`",
     "complexity": "xenon max-absolute **B** · Ruff C901 ≤ 31",
-    "deps": "pip-audit + npm critical (`deps-audit-allowlist.json`); high/moderate/low reported",
+    "deps": "pip-audit on dev + MCP; unwaived Python advisories and npm critical block (`deps-audit-allowlist.json`); npm high/moderate/low reported",
     "deadcode": "vulture confidence ≥ 60 (`deadcode-allowlist.json`)",
     "duplication": "jscpd on `src/avo`",
     "architecture": "import-linter (`.importlinter`)",
@@ -238,13 +238,13 @@ def deps_cell(
     return f"{npm_exception_count(root)} npm GHSA exceptions"
 
 
-def duplication_ceiling(root: Path = ROOT) -> int:
-    threshold = 2
+def duplication_ceiling(root: Path = ROOT) -> float | int:
+    threshold = 2.0
     jscpd = root / ".jscpd.json"
     if jscpd.is_file():
-        raw = json.loads(jscpd.read_text(encoding="utf-8")).get("threshold") or 2
-        threshold = int(raw)
-    return threshold
+        raw = json.loads(jscpd.read_text(encoding="utf-8")).get("threshold", 2)
+        threshold = float(raw)
+    return int(threshold) if threshold.is_integer() else threshold
 
 
 def duplication_measured(root: Path = ROOT) -> float | None:

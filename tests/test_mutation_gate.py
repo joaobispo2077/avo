@@ -52,6 +52,77 @@ class MutationGateTests(unittest.TestCase):
         )
         self.assertFalse(ok)
 
+    def test_unresolved_mutants_never_pass_or_publish_efficacy(self) -> None:
+        mod = _load()
+        for state in (
+            "timeout",
+            "suspicious",
+            "not_checked",
+            "check_was_interrupted_by_user",
+            "check_was_interrupted",
+            "no_tests",
+            "untested",
+            "skipped",
+            "segfault",
+            "caught_by_type_check",
+        ):
+            with self.subTest(state=state):
+                stats = {"killed": 8, "survived": 2, state: 90, "total": 100}
+                ok, message = mod.evaluate(stats, min_killed_percent=40)
+                self.assertFalse(ok)
+                self.assertIn("incomplete", message)
+                result = mod.mutation_evaluation(stats, min_killed_percent=40)
+                self.assertEqual(result["status"], "INCOMPLETE")
+                self.assertFalse(result["complete"])
+                self.assertIsNone(result["score"])
+                self.assertEqual(result["unresolved"], 90)
+
+    def test_counts_are_genuine_nonnegative_integers_and_account_for_total(self):
+        mod = _load()
+        for invalid in (True, False, -1, 1.5, "8", None):
+            for key in ("killed", "survived", "total", "timeout"):
+                with self.subTest(key=key, invalid=invalid):
+                    stats = {"killed": 8, "survived": 2, "total": 10, key: invalid}
+                    result = mod.mutation_evaluation(stats, min_killed_percent=40)
+                    self.assertEqual(result["status"], "INVALID")
+                    self.assertFalse(result["complete"])
+                    self.assertIsNone(result["score"])
+        excessive = mod.mutation_evaluation(
+            {"killed": 8, "survived": 2, "total": 1}, min_killed_percent=40
+        )
+        self.assertEqual(excessive["status"], "INVALID")
+        missing = mod.mutation_evaluation(
+            {"killed": 8, "survived": 2, "total": 11}, min_killed_percent=40
+        )
+        self.assertEqual(missing["status"], "INCOMPLETE")
+        self.assertEqual(missing["unresolved"], 1)
+        self.assertIn("unaccounted", missing["reason"])
+        self.assertIsNone(missing["score"])
+
+    def test_missing_required_counts_and_conflicting_aliases_fail(self):
+        mod = _load()
+        for missing in ("killed", "survived", "total"):
+            stats = {"killed": 8, "survived": 2, "total": 10}
+            del stats[missing]
+            result = mod.mutation_evaluation(stats, min_killed_percent=40)
+            self.assertEqual(result["status"], "INVALID")
+        result = mod.mutation_evaluation(
+            {"killed": 8, "survived": 2, "total": 11, "timeout": 1, "timeouts": 2},
+            min_killed_percent=40,
+        )
+        self.assertEqual(result["status"], "INVALID")
+
+    def test_completed_evaluation_preserves_existing_floor(self):
+        mod = _load()
+        result = mod.mutation_evaluation(
+            {"killed": 4, "survived": 6, "total": 10}, min_killed_percent=40
+        )
+        self.assertEqual(result["status"], "PASS")
+        self.assertTrue(result["complete"])
+        self.assertEqual(result["score"], 40.0)
+        self.assertEqual(result["unresolved"], 0)
+        self.assertEqual(result["counts"]["total"], 10)
+
     def test_profiles_exclude_cli_tools_and_mcp_directory(self) -> None:
         raw = json.loads(
             (ROOT / "scripts/ci/mutation-config.json").read_text(encoding="utf-8")

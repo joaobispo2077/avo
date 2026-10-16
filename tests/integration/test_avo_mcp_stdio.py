@@ -10,12 +10,14 @@ from __future__ import annotations
 import asyncio
 import io
 import json
+import os
 from contextlib import redirect_stdout
 from pathlib import Path
 
 import pytest
 
-pytest.importorskip("mcp")
+if os.environ.get("AVO_CI") != "1":
+    pytest.importorskip("mcp")
 
 from mcp.client import Client
 

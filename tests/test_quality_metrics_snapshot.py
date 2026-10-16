@@ -15,6 +15,7 @@ ROOT = Path(__file__).resolve().parents[1]
 SHA = "0123456789abcdef0123" * 2
 OTHER = "fedcba9876543210fedc" * 2
 RECORDED = "2026-10-02T20:03:00Z"
+RUN_ID = "1234567"
 
 
 def _load(name: str, rel: str):
@@ -41,11 +42,20 @@ def _fixture_root(tmp: Path) -> None:
         json.dumps({"npm": {"advisory_ids": ["GHSA-test"]}}),
         encoding="utf-8",
     )
+    (ci / "mutation-config.json").write_text(
+        json.dumps({"light": {"min_killed_percent": 40}}), encoding="utf-8"
+    )
     (tmp / ".jscpd.json").write_text(json.dumps({"threshold": 2}), encoding="utf-8")
     (tmp / ".importlinter").write_text(
         "[importlinter:contract:one]\n"
         "[importlinter:contract:two]\n"
         "[importlinter:contract:three]\n",
+        encoding="utf-8",
+    )
+    duplication = tmp / "reports" / "quality" / "jscpd" / "jscpd-report.json"
+    duplication.parent.mkdir(parents=True)
+    duplication.write_text(
+        json.dumps({"statistics": {"total": {"percentage": 1.0}}}),
         encoding="utf-8",
     )
 
@@ -71,7 +81,7 @@ class QualityMetricsSnapshotTests(unittest.TestCase):
         root = self._workspace()
         self._document(root)
         summary = root / "reports" / "quality" / "npm-audit-summary.json"
-        summary.parent.mkdir(parents=True)
+        summary.parent.mkdir(parents=True, exist_ok=True)
         summary.write_text(json.dumps({"ok": True, "critical": 0, "high": 99}))
         document = self.mod.build_ci_document(
             self._outcomes(deps="skipped"),
@@ -105,18 +115,53 @@ class QualityMetricsSnapshotTests(unittest.TestCase):
         outcomes.update(overrides)
         return outcomes
 
-    def _document(self, tmp: Path, **overrides: str) -> dict:
+    def _document(self, tmp: Path, *, legacy: bool = False, **overrides: str) -> dict:
         _fixture_root(tmp)
         coverage = tmp / "coverage.json"
         _coverage(coverage, 71.25, 712, 1000)
-        return self.mod.build_ci_document(
+        document = self.mod.build_ci_document(
             self._outcomes(**overrides),
             coverage_json=coverage,
             floor=68.0,
             root=tmp,
             sha=SHA,
             recorded_at=RECORDED,
+            run_id=RUN_ID,
         )
+        if legacy:
+            document["schema"] = 1
+            document.pop("run_id")
+            document.pop("mutation_policy")
+            document["series"].pop("dashboard")
+            document["overall"] = self.report.overall_label(self._outcomes(**overrides))
+            return document
+        document["jobs"] = {
+            job: "success"
+            for job in (
+                "prerequisites-gate",
+                "repo-unit-tests",
+                "repo-integration-tests",
+                "software-quality",
+                "usability-gate",
+                "mutation-light",
+                "ci-readiness",
+            )
+        }
+        document["mutation"] = self._mutation()
+        document["series"]["dashboard"] = self.mod._dashboard().build_series(document)
+        document["overall"] = document["series"]["dashboard"]["overall"]
+        return document
+
+    def _mutation(self, **overrides) -> dict:
+        mutation = {
+            "sha": SHA,
+            "run_id": RUN_ID,
+            "floor": 40,
+            "profile": "light",
+            "counts": {"killed": 3, "survived": 1, "total": 4},
+        }
+        mutation.update(overrides)
+        return mutation
 
     def _write_doc(self, tmp: Path, doc: dict) -> Path:
         path = tmp / "quality-metrics.json"
@@ -139,13 +184,18 @@ class QualityMetricsSnapshotTests(unittest.TestCase):
             root=tmp,
             sha=SHA,
             recorded_at=RECORDED,
+            run_id=RUN_ID,
         )
         sticky = self.report.build_markdown(
             outcomes, coverage_json=coverage, floor=68.0, root=tmp
         )
         self.assertEqual(doc["sha"], SHA)
         self.assertEqual(doc["recorded_at"], RECORDED)
-        self.assertEqual(doc["overall"], "PASS")
+        self.assertEqual(doc["schema"], 2)
+        self.assertEqual(doc["run_id"], RUN_ID)
+        self.assertEqual(doc["mutation_policy"], {"profile": "light", "floor": 40})
+        self.assertEqual(doc["overall"], "INCOMPLETE")
+        self.assertEqual(doc["series"]["dashboard"]["overall"], "INCOMPLETE")
         self.assertIsNone(doc["mutation"])
         self.assertNotIn("killed", json.dumps(doc))
         self.assertNotIn("score", json.dumps(doc))
@@ -161,7 +211,7 @@ class QualityMetricsSnapshotTests(unittest.TestCase):
 
     def test_tables_match_fixture_json(self) -> None:
         tmp = self._workspace()
-        doc = self._document(tmp)
+        doc = self._document(tmp, legacy=True)
         metrics = self._write_doc(tmp, doc)
         out = tmp / "docs" / "quality-metrics.md"
         text = self.mod.write_snapshot(
@@ -191,6 +241,248 @@ class QualityMetricsSnapshotTests(unittest.TestCase):
         self.assertIn("| Mutation | \u2014 |", mutation)
         self.assertIn("see Mutation sticky", mutation)
         self.assertNotIn("%", mutation)
+
+    def test_schema_two_readout_uses_shared_dashboard_and_collapsed_diagnostics(
+        self,
+    ) -> None:
+        tmp = self._workspace()
+        doc = self._document(tmp)
+        text = self.mod.write_snapshot(
+            self._write_doc(tmp, doc),
+            sha=SHA,
+            version="1.2.3",
+            out=tmp / "quality-metrics.md",
+            expected_run_id=RUN_ID,
+        )
+        for field in ("Version", "Tag", "SHA", "Recorded (UTC)"):
+            self.assertIn(f"| {field} |", text)
+        self.assertIn("<summary>Metric diagnostics and artifacts</summary>", text)
+        self.assertIn("<summary>Execution results</summary>", text)
+        self.assertIn("| Gate | Decision | Policy | Execution evidence |", text)
+        self.assertIn("| Metric | Measured | Scope | Evidence |", text)
+        self.assertNotIn("| Metric | Measured | Threshold | Status |", text)
+        self.assertIn("| Coverage | 71.25% | unit-suite line coverage;", text)
+        self.assertIn(
+            "| Coverage | **PASS** | pytest-cov fail-under on `src/avo`; Minimum 68% |",
+            text,
+        )
+        self.assertIn("| Duplication | 1.00% | duplicated source lines;", text)
+        self.assertIn(
+            "| Duplication | **PASS** | jscpd on `src/avo`; Maximum 2% |", text
+        )
+        self.assertIn("| Mutation | 75.00% | light profile;", text)
+        self.assertIn("| Mutation | **PASS** | Complete accounting; Minimum 40%;", text)
+        self.assertNotIn("### Complexity allowlist", text)
+        self.assertNotIn("### Gate status", text)
+        self.assertNotIn("![", text)
+
+    def test_schema_two_mutation_requires_complete_counts_and_matching_run(
+        self,
+    ) -> None:
+        self.assertEqual(
+            self.mod.mutation_view(
+                self._mutation(), SHA, RUN_ID, {"profile": "light", "floor": 40}
+            )["score"],
+            75,
+        )
+        invalid = (
+            self._mutation(sha=OTHER),
+            self._mutation(run_id="another-run"),
+            {"sha": SHA, "run_id": RUN_ID, "floor": 40, "score": 99.9},
+            self._mutation(
+                counts={"killed": 1, "survived": 0, "total": 100, "timeout": 99}
+            ),
+            self._mutation(counts={"killed": 10, "survived": 0, "total": 1}),
+            self._mutation(counts={"killed": True, "survived": 0, "total": 1}),
+        )
+        for payload in invalid:
+            with self.subTest(payload=payload):
+                self.assertIsNone(
+                    self.mod.mutation_view(
+                        payload, SHA, RUN_ID, {"profile": "light", "floor": 40}
+                    )
+                )
+
+    def test_current_mutation_cannot_change_the_frozen_policy(self) -> None:
+        policy = {"profile": "light", "floor": 40}
+        for payload in (
+            self._mutation(profile="full"),
+            self._mutation(profile="unknown"),
+            self._mutation(floor=0),
+        ):
+            with self.subTest(payload=payload):
+                self.assertIsNone(self.mod.mutation_view(payload, SHA, RUN_ID, policy))
+
+    def test_missing_or_unknown_snapshot_policy_cannot_be_green(self) -> None:
+        tmp = self._workspace()
+        doc = self._document(tmp)
+        for policy in (None, {}, {"profile": "unknown", "floor": 40}):
+            broken = json.loads(json.dumps(doc))
+            broken["mutation_policy"] = policy
+            with (
+                self.subTest(policy=policy),
+                self.assertRaisesRegex(self.mod.SnapshotError, "mutation_policy"),
+            ):
+                self.mod.write_snapshot(
+                    self._write_doc(tmp, broken),
+                    sha=SHA,
+                    version="1.2.3",
+                    out=tmp / "quality-metrics.md",
+                    expected_run_id=RUN_ID,
+                )
+        self.assertFalse((tmp / "quality-metrics.md").exists())
+
+    def test_policy_is_frozen_and_snapshot_does_not_read_current_config(self) -> None:
+        tmp = self._workspace()
+        doc = self._document(tmp)
+        (tmp / "scripts" / "ci" / "mutation-config.json").write_text(
+            json.dumps({"light": {"min_killed_percent": 90}}), encoding="utf-8"
+        )
+        text = self.mod.write_snapshot(
+            self._write_doc(tmp, doc),
+            sha=SHA,
+            version="1.2.3",
+            out=tmp / "quality-metrics.md",
+            expected_run_id=RUN_ID,
+        )
+        self.assertIn("| Mutation | 75.00% | light profile;", text)
+        self.assertIn("| Mutation | **PASS** | Complete accounting; Minimum 40%;", text)
+
+    def test_producer_cannot_invent_a_missing_policy(self) -> None:
+        tmp = self._workspace()
+        self._document(tmp)
+        (tmp / "scripts" / "ci" / "mutation-config.json").unlink()
+        with self.assertRaisesRegex(
+            self.mod.SnapshotError, "mutation policy unavailable"
+        ):
+            self.mod.build_ci_document(
+                self._outcomes(),
+                coverage_json=tmp / "coverage.json",
+                floor=68,
+                root=tmp,
+                sha=SHA,
+                recorded_at=RECORDED,
+                run_id=RUN_ID,
+            )
+
+    def test_snapshot_requires_successful_readiness_job(self) -> None:
+        tmp = self._workspace()
+        doc = self._document(tmp)
+        for result in (None, "skipped", "cancelled", "failure", "unknown"):
+            broken = json.loads(json.dumps(doc))
+            if result is None:
+                del broken["jobs"]["ci-readiness"]
+            else:
+                broken["jobs"]["ci-readiness"] = result
+            with self.subTest(result=result), self.assertRaises(self.mod.SnapshotError):
+                self.mod.write_snapshot(
+                    self._write_doc(tmp, broken),
+                    sha=SHA,
+                    version="1.2.3",
+                    out=tmp / "quality-metrics.md",
+                    expected_run_id=RUN_ID,
+                )
+        self.assertFalse((tmp / "quality-metrics.md").exists())
+
+    def test_schema_one_cannot_validate_a_current_run(self) -> None:
+        tmp = self._workspace()
+        doc = self._document(tmp, legacy=True)
+        with self.assertRaisesRegex(self.mod.SnapshotError, "legacy quality metrics"):
+            self.mod.write_snapshot(
+                self._write_doc(tmp, doc),
+                sha=SHA,
+                version="1.2.3",
+                out=tmp / "quality-metrics.md",
+                expected_run_id=RUN_ID,
+            )
+        self.assertFalse((tmp / "quality-metrics.md").exists())
+
+    def test_schema_two_rejects_tampered_dashboard_before_writing(self) -> None:
+        tmp = self._workspace()
+        doc = self._document(tmp)
+        doc["series"]["dashboard"]["metrics"][0]["measured"] = 99.9
+        out = tmp / "quality-metrics.md"
+        out.write_text("keep\n", encoding="utf-8")
+        with self.assertRaisesRegex(
+            self.mod.SnapshotError, "does not match its evidence"
+        ):
+            self.mod.write_snapshot(
+                self._write_doc(tmp, doc), sha=SHA, version="1.2.3", out=out
+            )
+        self.assertEqual(out.read_text(encoding="utf-8"), "keep\n")
+
+    def test_schema_two_rejects_untrusted_mutation_and_missing_mandatory_job(
+        self,
+    ) -> None:
+        tmp = self._workspace()
+        doc = self._document(tmp)
+        for problem in ("mutation", "jobs"):
+            broken = json.loads(json.dumps(doc))
+            if problem == "mutation":
+                broken["mutation"]["run_id"] = "another-run"
+            else:
+                del broken["jobs"]["repo-integration-tests"]
+            with (
+                self.subTest(problem=problem),
+                self.assertRaises(self.mod.SnapshotError),
+            ):
+                self.mod.write_snapshot(
+                    self._write_doc(tmp, broken),
+                    sha=SHA,
+                    version="1.2.3",
+                    out=tmp / "quality-metrics.md",
+                )
+        self.assertFalse((tmp / "quality-metrics.md").exists())
+
+    def test_schema_two_requires_the_expected_run_id(self) -> None:
+        tmp = self._workspace()
+        doc = self._document(tmp)
+        with self.assertRaisesRegex(self.mod.SnapshotError, "run_id mismatch"):
+            self.mod.write_snapshot(
+                self._write_doc(tmp, doc),
+                sha=SHA,
+                version="1.2.3",
+                out=tmp / "quality-metrics.md",
+                expected_run_id="another-run",
+            )
+
+    def test_release_rejects_malformed_or_unbound_measurement_extension(self) -> None:
+        tmp = self._workspace()
+        doc = self._document(tmp)
+        collector = self.mod._measurements()
+        capture = collector.collect(doc, tmp / "missing-captures")
+        for evidence in (None, {"schema": 2}, {**capture, "metrics": []}):
+            with self.subTest(evidence=evidence):
+                doc["measurement_evidence"] = evidence
+                with self.assertRaisesRegex(
+                    self.mod.SnapshotError, "measurement evidence"
+                ):
+                    self.mod._validate(doc, SHA, "1.2.3", RUN_ID)
+        doc["measurement_evidence"] = capture
+        doc["series"]["dashboard"] = self.mod._dashboard().build_series(doc)
+        with self.assertRaisesRegex(self.mod.SnapshotError, "dashboard is not green"):
+            self.mod._validate(doc, SHA, "1.2.3", RUN_ID)
+
+    def test_new_capture_freezes_configured_coverage_precision(self) -> None:
+        tmp = self._workspace()
+        _fixture_root(tmp)
+        config = tmp / "pyproject.toml"
+        config.write_text("[tool.coverage.report]\nfail_under = 68\nprecision = 2\n")
+        coverage = tmp / "coverage.json"
+        _coverage(coverage, 71.25, 712, 1000)
+        doc = self.mod.build_ci_document(
+            self._outcomes(),
+            coverage_json=coverage,
+            floor=68,
+            root=tmp,
+            sha=SHA,
+            recorded_at=RECORDED,
+            run_id=RUN_ID,
+            collect_evidence=True,
+        )
+        config.write_text("[tool.coverage.report]\nfail_under = 68\nprecision = 0\n")
+        self.assertEqual(doc["coverage_precision"], 2)
+        self.assertFalse((tmp / "quality-metrics.md").exists())
 
     def test_missing_json_fails_and_leaves_the_doc_untouched(self) -> None:
         tmp = self._workspace()
@@ -244,7 +536,7 @@ class QualityMetricsSnapshotTests(unittest.TestCase):
 
     def test_bare_mutation_score_is_not_used(self) -> None:
         tmp = self._workspace()
-        doc = self._document(tmp)
+        doc = self._document(tmp, legacy=True)
         doc["mutation"] = {"sha": SHA, "score": 99.9}
         metrics = self._write_doc(tmp, doc)
         side = tmp / "mutation-metrics.json"
@@ -267,7 +559,7 @@ class QualityMetricsSnapshotTests(unittest.TestCase):
 
     def test_mutation_counts_for_the_same_sha_are_shown(self) -> None:
         tmp = self._workspace()
-        doc = self._document(tmp)
+        doc = self._document(tmp, legacy=True)
         metrics = self._write_doc(tmp, doc)
         side = tmp / "mutation-metrics.json"
         side.write_text(
@@ -297,7 +589,7 @@ class QualityMetricsSnapshotTests(unittest.TestCase):
 
     def test_mutation_from_another_sha_is_a_dash(self) -> None:
         tmp = self._workspace()
-        doc = self._document(tmp)
+        doc = self._document(tmp, legacy=True)
         metrics = self._write_doc(tmp, doc)
         side = tmp / "mutation-metrics.json"
         side.write_text(
@@ -322,14 +614,15 @@ class QualityMetricsSnapshotTests(unittest.TestCase):
         metrics = self._write_doc(tmp, doc)
         coverage = tmp / "coverage.json"
         chart_dir = tmp / "charts"
-        _snapshot_section, snapshot = self.charts.generate(
+        _snapshot_section, snapshot = self.charts.generate_dashboard(
             self._outcomes(),
             coverage_json=coverage,
             floor=68.0,
             root=tmp,
             out_dir=chart_dir,
+            document=doc,
         )
-        self.assertEqual(self.mod.chart_series(snapshot), doc["series"])
+        self.assertEqual(snapshot["series"], doc["series"])
         for key, name in self.mod.CHART_FILES:
             self.assertEqual(self.mod._png_series(chart_dir / name), doc["series"][key])
         out = tmp / "docs" / "quality-metrics.md"
@@ -342,16 +635,19 @@ class QualityMetricsSnapshotTests(unittest.TestCase):
             charts_src=chart_dir,
             charts_dir=dest,
         )
-        self.assertIn("quality/charts/1.2.3/coverage.png", text)
-        self.assertTrue((dest / "coverage.png").is_file())
+        self.assertIn("quality/charts/1.2.3/dashboard.png", text)
+        self.assertEqual(text.count("!["), 1)
+        self.assertTrue((dest / "dashboard.png").is_file())
         self.assertEqual(
-            self.mod._png_series(dest / "coverage.png"),
-            doc["series"]["coverage"],
+            self.mod._png_series(dest / "dashboard.png"),
+            doc["series"]["dashboard"],
         )
         for row in doc["gates"]:
             self.assertIn(row["metric"], text)
-        broken = chart_dir / "coverage.png"
-        broken.write_bytes((chart_dir / "status.png").read_bytes())
+        broken = chart_dir / "dashboard.png"
+        self.mod._dashboard().render(
+            {**doc["series"]["dashboard"], "sha": OTHER}, broken
+        )
         rejected = tmp / "docs" / "rejected.md"
         rejected.write_text("keep\n", encoding="utf-8")
         with self.assertRaises(self.mod.SnapshotError) as caught:
@@ -365,6 +661,46 @@ class QualityMetricsSnapshotTests(unittest.TestCase):
             )
         self.assertIn("does not match", str(caught.exception))
         self.assertEqual(rejected.read_text(encoding="utf-8"), "keep\n")
+
+    def test_schema_one_retains_exact_seven_chart_validation(self) -> None:
+        tmp = self._workspace()
+        doc = self._document(tmp, legacy=True)
+        chart_dir = tmp / "charts"
+        _, snapshot = self.charts.generate(
+            self._outcomes(),
+            coverage_json=tmp / "coverage.json",
+            floor=68.0,
+            root=tmp,
+            out_dir=chart_dir,
+        )
+        self.assertEqual(self.mod.chart_series(snapshot), doc["series"])
+        metrics = self._write_doc(tmp, doc)
+        out = tmp / "docs" / "quality-metrics.md"
+        dest = tmp / "docs" / "quality" / "charts" / "1.2.3"
+        text = self.mod.write_snapshot(
+            metrics,
+            sha=SHA,
+            version="1.2.3",
+            out=out,
+            charts_src=chart_dir,
+            charts_dir=dest,
+        )
+        self.assertEqual(text.count("!["), 7)
+        for key, name in self.mod.LEGACY_CHART_FILES:
+            self.assertEqual(self.mod._png_series(dest / name), doc["series"][key])
+        (chart_dir / "coverage.png").unlink()
+        with self.assertRaisesRegex(
+            self.mod.SnapshotError, "partial quality chart set"
+        ):
+            self.mod.write_snapshot(
+                metrics,
+                sha=SHA,
+                version="1.2.3",
+                out=out,
+                charts_src=chart_dir,
+                charts_dir=dest,
+            )
+        self.assertEqual(out.read_text(encoding="utf-8"), text)
 
     def test_cli_missing_json_exits_nonzero(self) -> None:
         tmp = self._workspace()
@@ -448,10 +784,17 @@ class QualityMetricsSnapshotTests(unittest.TestCase):
         ci = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
         self.assertNotIn("docs/quality-metrics.md", ci)
         self.assertNotIn("snapshot-release-quality-metrics.sh", ci)
-        self.assertIn("github.ref == 'refs/heads/release'", ci)
+        producer = ci.split("  software-quality:\n", 1)[1].split(
+            "  usability-gate:\n", 1
+        )[0]
+        self.assertNotIn("refs/heads/release", producer)
         self.assertIn("--write-json reports/quality/quality-metrics.json", ci)
-        self.assertIn("name: quality-metrics", ci)
-        self.assertIn("if-no-files-found: error", ci)
+        unified = ci.split("  quality-report:\n", 1)[1]
+        self.assertIn("if: always()", unified)
+        self.assertIn("write_unified_quality_report.py", unified)
+        self.assertIn("name: quality-metrics", unified)
+        self.assertIn("if-no-files-found: error", unified)
+        self.assertIn('--run-id "$RUN_ID"', shell)
         config = (ROOT / "release.config.mjs").read_text(encoding="utf-8")
         self.assertIn("docs/quality-metrics.md", config)
         self.assertIn("docs/quality/charts/**/*.png", config)
@@ -470,6 +813,7 @@ class QualityMetricsSnapshotTests(unittest.TestCase):
         out = tmp / "quality-metrics.json"
         env = os.environ.copy()
         env["GITHUB_SHA"] = SHA
+        env["GITHUB_RUN_ID"] = RUN_ID
         env.pop("GITHUB_ACTIONS", None)
         for key, _title in self.report.GATES:
             env[f"Q_{key.upper()}"] = "success"
@@ -497,8 +841,9 @@ class QualityMetricsSnapshotTests(unittest.TestCase):
         self.assertEqual(proc.returncode, 0, msg=proc.stderr)
         doc = json.loads(out.read_text(encoding="utf-8"))
         self.assertEqual(doc["sha"], SHA)
+        self.assertEqual(doc["run_id"], RUN_ID)
         self.assertIsNone(doc["mutation"])
-        self.assertEqual(doc["overall"], "PASS")
+        self.assertEqual(doc["overall"], "INCOMPLETE")
 
 
 if __name__ == "__main__":

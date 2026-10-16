@@ -16,7 +16,7 @@ from typing import Any, ClassVar
 from avo import shorts_contract
 from avo.adapters.base import JobRequest, JobResult
 from avo.paths import repo_root
-from avo.shorts_media import SFX_ASSET_KEY, SFX_FILE_NAME, SFX_VOLUME
+from avo.shorts_rules import SFX_ASSET_KEY, SFX_FILE_NAME, SFX_VOLUME
 
 Runner = Callable[..., subprocess.CompletedProcess[str]]
 TEMPLATE_VERSION = "shorts-anchor-rail-v4"
