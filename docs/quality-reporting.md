@@ -29,6 +29,18 @@ table and source-location diagnostics. Missing, skipped, cancelled, invalid, and
 unfinished evidence stays unavailable or partial. Failed image generation or
 artifact uploading leaves the text tables available.
 
+Each percentage panel shows its real minimum or maximum as a vertical line.
+Bar colors describe the raw measurement's margin to that threshold: red is below
+a minimum or above a maximum; yellow is within the first quarter of the available
+passing headroom; green is beyond it. With current policy, coverage is yellow
+from 68% to below 76% and green at 76%; light mutation is yellow from 40% to below
+55% and green at 55%. Duplication stays on its direct percentage scale: yellow
+above 1.5% through its 2% ceiling, green at 1.5% or less. Unavailable values or
+thresholds remain neutral. The normalized series records each band, and the PNG
+embeds that same series. Text labels identify the margin without relying on color.
+These bands do not change gates: coverage rounding can accept a raw value just
+below the floor while its chart still correctly shows red below the line.
+
 `upload_quality_chart.py` uploads the PNG as a native GitHub image attachment
 after verifying its embedded series against the normalized measurements and
 current commit/run. A receipt records that identity, the image SHA-256, and the
