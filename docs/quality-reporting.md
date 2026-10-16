@@ -36,15 +36,18 @@ receipt matches; the existing bot-owned sticky comment remains the publisher.
 CI reporting keeps read-only repository contents permission and never creates
 chart branches, Git objects, commits, or pushes.
 
-Native uploads need a dedicated repository Actions secret `QUALITY_CHARTS_TOKEN`
-with a supported user credential (OAuth, classic PAT, or fine-grained PAT) and
+The report job uses the existing `GH_TOKEN` secret from the `RELEASE`
+environment, referenced with `deployment: false` to avoid deployment records.
+`QUALITY_CHARTS_TOKEN` is only the uploader's private environment alias for that
+credential; no new secret, token, or credential copy is required. Native uploads
+support user credentials (OAuth, classic PAT, or fine-grained PAT) with
 repository write access. The default installation `GITHUB_TOKEN` is unsupported
-for attachments; see the [official CLI upload client](https://github.com/cli/cli/blob/v2.102.0/internal/attachments/client.go#L65).
-Configure a dedicated credential rather than copying a developer's local OAuth
-token. Only trusted repository runs receive the upload secret; fork PRs retain
-the text and artifact-download fallback. Missing credentials, upload failures,
-and missing/stale image evidence cannot remove the measured values or change
-gate decisions.
+for attachments and remains responsible for the bot-owned comment; see the
+[official CLI upload client](https://github.com/cli/cli/blob/v2.102.0/internal/attachments/client.go#L65).
+Only trusted repository runs may use the upload credential. Fork PRs retain the
+text and artifact-download fallback without receiving it. Missing credentials,
+upload failures, and missing/stale image evidence cannot remove the measured
+values or change gate decisions.
 
 The raw PNG and normalized JSON also remain Actions artifacts linked from the
 comment and job summary. Download links require GitHub sign-in and expire after

@@ -151,14 +151,18 @@ bot identity continues to update the sticky comment.
 current commit/run and normalized measurements before uploading it as a native
 GitHub attachment. Its receipt binds the returned URL to the image digest and
 commit/run identity. The offline report linker embeds only a matching receipt.
-Native uploads require the repository Actions secret `QUALITY_CHARTS_TOKEN`,
-containing a dedicated supported user credential with repository write access
-(OAuth, classic PAT, or fine-grained PAT). The installation token `GITHUB_TOKEN`
-cannot perform these uploads. The upload protocol and token restrictions follow
-the [official GitHub CLI client](https://github.com/cli/cli/blob/v2.102.0/internal/attachments/client.go#L65).
-Use a dedicated credential; do not copy a developer's local OAuth token into CI.
-Expose the secret only to trusted repository runs. Fork PRs do not receive it
-and retain the text report and artifact-download fallback.
+The report job references the existing `RELEASE` environment with
+[`deployment: false`](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idenvironment),
+accessing its existing `GH_TOKEN` secret without creating deployment records.
+The uploader receives that credential through the private environment alias
+`QUALITY_CHARTS_TOKEN`; this is not a separate secret. No new token, secret, or
+credential copy is needed. Supported user credentials include OAuth, classic
+PATs, and fine-grained PATs with repository write access. The installation
+`GITHUB_TOKEN` cannot upload attachments and remains the bot comment publisher's
+credential; token restrictions follow the
+[official GitHub CLI client](https://github.com/cli/cli/blob/v2.102.0/internal/attachments/client.go#L65).
+Only trusted repository runs may use the upload credential. Fork PRs do not
+receive it and retain the text report and artifact-download fallback.
 
 The normalized JSON and raw dashboard PNG remain Actions artifacts. Their
 downloads require GitHub sign-in and follow the existing 14-day retention
@@ -302,7 +306,7 @@ npm run validate:usability -- --ci
 | --- | --- |
 | `AVO_CI=1` | Set in workflows; reserved for future setup-script CI behavior |
 | `PY` / `PYTHON` | Override Python binary for gate scripts |
-| `QUALITY_CHARTS_TOKEN` | Dedicated repository Actions secret for trusted native dashboard uploads; supported user credential with repository write access. Unavailable on fork PRs; text and artifact downloads remain available. |
+| `QUALITY_CHARTS_TOKEN` | Private uploader environment alias for the existing `GH_TOKEN` secret in `RELEASE`, not a new secret. Used only for trusted native dashboard uploads; fork PRs retain text and artifact downloads. |
 | `NODE_VERSION` | `24` in all workflows (npm/eslint/jscpd). GitHub-owned actions are Node 24 majors (`checkout@v6`, `setup-node@v6`, `setup-python@v6`, `cache@v5`, `upload-artifact@v7`). `astral-sh/setup-uv@v10.2.0` runs on Node 24 (`runs.using: node24` since v7). Workflows that already set `enable-cache: true` keep that explicit value. `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24` covers leftover third-party JS actions. |
 | Linux runner | `ubuntu-24.04` on every Linux job under `.github/workflows/` (including the engine-binary Linux matrix entry). Pinned so those jobs do not follow `ubuntu-latest` onto Ubuntu 26. Windows stays `windows-latest`. Engine macOS stays `macos-14`. |
 
