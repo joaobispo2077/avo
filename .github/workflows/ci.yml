@@ -397,7 +397,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
-      contents: write
+      contents: read
       pull-requests: write
       actions: read
     steps:
@@ -454,17 +454,9 @@ jobs:
           if [ -x .venv/bin/python ]; then PY=.venv/bin/python; fi
           "$PY" scripts/ci/write_unified_quality_report.py
 
-      - name: Host dashboard image
-        continue-on-error: true
-        env:
-          GH_TOKEN: ${{ github.token }}
-          KPI_CHART_UPLOAD_TOKEN: ${{ secrets.QUALITY_CHARTS_TOKEN }}
-        run: python scripts/ci/upload_kpi_chart_images.py --markdown reports/quality/quality-gates.md --charts-dir reports/quality/charts --no-summary
-
-      - name: Publish unified job summary
-        run: cat reports/quality/quality-gates.md >> "$GITHUB_STEP_SUMMARY"
-
       - name: Upload unified metrics
+        id: quality_metrics
+        continue-on-error: true
         uses: actions/upload-artifact@v7
         with:
           name: quality-metrics
@@ -474,6 +466,7 @@ jobs:
           retention-days: 14
 
       - name: Upload dashboard image
+        id: quality_charts
         continue-on-error: true
         uses: actions/upload-artifact@v7
         with:
@@ -483,7 +476,17 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
+      - name: Link quality artifact downloads
+        env:
+          QUALITY_METRICS_ARTIFACT_URL: ${{ steps.quality_metrics.outputs.artifact-url }}
+          QUALITY_CHARTS_ARTIFACT_URL: ${{ steps.quality_charts.outputs.artifact-url }}
+        run: python scripts/ci/link_quality_artifacts.py --markdown reports/quality/quality-gates.md --no-summary
+
+      - name: Publish unified job summary
+        run: cat reports/quality/quality-gates.md >> "$GITHUB_STEP_SUMMARY"
+
       - name: Upload readable quality report
+        continue-on-error: true
         uses: actions/upload-artifact@v7
         with:
           name: quality-report
@@ -513,7 +516,6 @@ jobs:
           number: ${{ steps.pr.outputs.number }}
           path: reports/quality/quality-gates.md
           header: quality-gates-report
-          recreate: true
 
       - name: Remove superseded mutation comment
         if: steps.pr.outputs.number != ''
