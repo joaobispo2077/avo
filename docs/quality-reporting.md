@@ -10,8 +10,8 @@ human architecture, safety, and editorial review.
 The `Quality report` job waits for the mandatory jobs and `CI readiness`. It
 combines the `quality-evidence` and `mutation-reports-light` artifacts from that
 workflow run. One `quality-gates-report` PR comment and the job summary show the
-overall result, full commit and run identity, required actions, a dashboard
-download, and a metric table. Each run updates the same PR comment in place.
+overall result, full commit and run identity, required actions, one inline
+dashboard, and a metric table. Each run updates the same PR comment in place.
 The previous standalone mutation comment is removed.
 
 The report separates **measurements**, **gate decisions**, and **execution
@@ -28,12 +28,33 @@ table and source-location diagnostics. Missing, skipped, cancelled, invalid, and
 unfinished evidence stays unavailable or partial. Failed image generation or
 artifact uploading leaves the text tables available.
 
-The PNG and normalized JSON are Actions artifacts linked from the comment and
-job summary. Download links require GitHub sign-in and expire after the current
-14-day retention period; the text measurements and gate decisions remain in the
-comment. Artifact URLs are accepted only for the same repository and run.
-CI reporting has read-only repository contents permission and never creates
-chart branches, Git objects, commits, or pushes. No chart-upload token is needed.
+`upload_quality_chart.py` uploads the PNG as a native GitHub image attachment
+after verifying its embedded series against the normalized measurements and
+current commit/run. A receipt records that identity, the image SHA-256, and the
+returned attachment URL. The offline linker embeds the image only when the
+receipt matches; the existing bot-owned sticky comment remains the publisher.
+CI reporting keeps read-only repository contents permission and never creates
+chart branches, Git objects, commits, or pushes.
+
+The report job uses the existing `GH_TOKEN` secret from the `RELEASE`
+environment, referenced with `deployment: false` to avoid deployment records.
+`QUALITY_CHARTS_TOKEN` is only the uploader's private environment alias for that
+credential; no new secret, token, or credential copy is required. Native uploads
+support user credentials (OAuth, classic PAT, or fine-grained PAT) with
+repository write access. The default installation `GITHUB_TOKEN` is unsupported
+for attachments and remains responsible for the bot-owned comment; see the
+[official CLI upload client](https://github.com/cli/cli/blob/v2.102.0/internal/attachments/client.go#L65).
+Only trusted repository runs may use the upload credential. Fork PRs retain the
+text and artifact-download fallback without receiving it. Missing credentials,
+upload failures, and missing/stale image evidence cannot remove the measured
+values or change gate decisions.
+
+The raw PNG and normalized JSON also remain Actions artifacts linked from the
+comment and job summary. Download links require GitHub sign-in and expire after
+the current 14-day retention period; the text measurements and gate decisions
+remain in the comment. Native attachments are separate from Actions artifacts
+and do not inherit that expiry. Artifact URLs are accepted only for the same
+repository and run.
 The old `ci/quality-kpi-charts` branch is historical storage, not a source feature
 to merge into `develop`. Existing branch history is left for the repository owner
 to manage. Intentional release-cut snapshots retain their separate policy below.

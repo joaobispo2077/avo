@@ -142,13 +142,35 @@ remain unmeasured. Existing xenon B/exception ceilings, Ruff C901 ≤31, coverag
 ### Publishing the report
 
 CI updates one `quality-gates-report` PR comment in place with measurements,
-gate decisions, evidence, commit/run identity, and links to the normalized JSON
-and dashboard PNG artifacts. It does not commit generated charts or write to
-repository branches. The report job needs `contents: read`, `actions: read`, and
-`pull-requests: write`; `QUALITY_CHARTS_TOKEN` is no longer used. Downloads require
-GitHub sign-in and follow the existing 14-day retention period. Missing uploads
-leave explicit unavailable notes and the text report intact. The historical
-`ci/quality-kpi-charts` storage branch should not be merged as a source feature.
+gate decisions, evidence, commit/run identity, and one inline dashboard. It does
+not commit generated charts or write to repository branches. The report job
+keeps `contents: read`, `actions: read`, and `pull-requests: write`; the existing
+bot identity continues to update the sticky comment.
+
+`scripts/ci/upload_quality_chart.py` verifies the dashboard PNG against the
+current commit/run and normalized measurements before uploading it as a native
+GitHub attachment. Its receipt binds the returned URL to the image digest and
+commit/run identity. The offline report linker embeds only a matching receipt.
+The report job references the existing `RELEASE` environment with
+[`deployment: false`](https://docs.github.com/en/actions/reference/workflows-and-actions/workflow-syntax#jobsjob_idenvironment),
+accessing its existing `GH_TOKEN` secret without creating deployment records.
+The uploader receives that credential through the private environment alias
+`QUALITY_CHARTS_TOKEN`; this is not a separate secret. No new token, secret, or
+credential copy is needed. Supported user credentials include OAuth, classic
+PATs, and fine-grained PATs with repository write access. The installation
+`GITHUB_TOKEN` cannot upload attachments and remains the bot comment publisher's
+credential; token restrictions follow the
+[official GitHub CLI client](https://github.com/cli/cli/blob/v2.102.0/internal/attachments/client.go#L65).
+Only trusted repository runs may use the upload credential. Fork PRs do not
+receive it and retain the text report and artifact-download fallback.
+
+The normalized JSON and raw dashboard PNG remain Actions artifacts. Their
+downloads require GitHub sign-in and follow the existing 14-day retention
+period. Native image attachments are separate from these artifacts and do not
+inherit that expiry. Missing credentials, authentication/network failures, or
+missing/stale image evidence leave explicit unavailable notes and preserve the
+text report and available downloads. The historical `ci/quality-kpi-charts`
+storage branch should not be merged as a source feature.
 
 A release cut writes `docs/quality-metrics.md` from that push's green unified
 JSON for the exact SHA and run. Pull-request greens do not write that file.
@@ -284,6 +306,7 @@ npm run validate:usability -- --ci
 | --- | --- |
 | `AVO_CI=1` | Set in workflows; reserved for future setup-script CI behavior |
 | `PY` / `PYTHON` | Override Python binary for gate scripts |
+| `QUALITY_CHARTS_TOKEN` | Private uploader environment alias for the existing `GH_TOKEN` secret in `RELEASE`, not a new secret. Used only for trusted native dashboard uploads; fork PRs retain text and artifact downloads. |
 | `NODE_VERSION` | `24` in all workflows (npm/eslint/jscpd). GitHub-owned actions are Node 24 majors (`checkout@v6`, `setup-node@v6`, `setup-python@v6`, `cache@v5`, `upload-artifact@v7`). `astral-sh/setup-uv@v10.2.0` runs on Node 24 (`runs.using: node24` since v7). Workflows that already set `enable-cache: true` keep that explicit value. `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24` covers leftover third-party JS actions. |
 | Linux runner | `ubuntu-24.04` on every Linux job under `.github/workflows/` (including the engine-binary Linux matrix entry). Pinned so those jobs do not follow `ubuntu-latest` onto Ubuntu 26. Windows stays `windows-latest`. Engine macOS stays `macos-14`. |
 
