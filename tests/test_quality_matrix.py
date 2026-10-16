@@ -794,6 +794,9 @@ class QualityMatrixTests(unittest.TestCase):
         self.assertIn("scripts/ci/link_quality_artifacts.py", job)
         self.assertIn("contents: read", configuration)
         self.assertNotIn("contents: write", configuration)
+        self.assertIn(
+            "environment:\n      name: RELEASE\n      deployment: false", configuration
+        )
         self.assertIn("scripts/ci/upload_quality_chart.py", job)
         attachment = job.split("- name: Attach inline quality dashboard", 1)[1].split(
             "- name: Link quality chart", 1
@@ -804,9 +807,8 @@ class QualityMatrixTests(unittest.TestCase):
             "github.event.pull_request.head.repo.full_name == github.repository",
             attachment,
         )
-        self.assertIn(
-            "QUALITY_CHARTS_TOKEN: ${{ secrets.QUALITY_CHARTS_TOKEN }}", attachment
-        )
+        self.assertIn("QUALITY_CHARTS_TOKEN: ${{ secrets.GH_TOKEN }}", attachment)
+        self.assertNotIn("secrets.QUALITY_CHARTS_TOKEN", job)
         self.assertNotIn("${{ github.token }}", attachment)
         self.assertIn("--attachment reports/quality/chart-attachment.json", job)
         self.assertNotIn("upload_kpi_chart_images.py", job)
