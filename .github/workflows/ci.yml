@@ -3,8 +3,6 @@ name: CI
 on:
   push:
     branches:
-      - main
-      - develop
       - release
       - 'feature/**'
   pull_request:
@@ -13,6 +11,11 @@ on:
       - develop
       - release
 
+concurrency:
+  # Release certification must retain every exact-commit run, even while pending.
+  group: ci-${{ github.event_name }}-${{ (github.event_name == 'push' && github.ref_name == 'release') && github.run_id || github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || (github.event_name == 'push' && startsWith(github.ref_name, 'feature/')) }}
+
 env:
   PYTHON_VERSION: '3.12'
   NODE_VERSION: '24'
@@ -20,8 +23,30 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
 
 jobs:
+  select-run:
+    name: Select CI work
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      run_full_ci: ${{ steps.select.outputs.run_full_ci }}
+      reason: ${{ steps.select.outputs.reason }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Select validation
+        id: select
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/ci/select_ci_run.py --workflow ci
+
   prerequisites-gate:
     name: Gate 1 — Orchestrator prerequisites
+    needs: select-run
+    if: needs.select-run.outputs.run_full_ci == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -92,7 +117,7 @@ jobs:
 
       - name: Upload unit execution evidence
         id: unit-evidence
-        if: always()
+        if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v7
         with:
           name: unit-test-evidence
@@ -148,7 +173,7 @@ jobs:
 
       - name: Upload integration execution evidence
         id: integration-evidence
-        if: always()
+        if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v7
         with:
           name: integration-test-evidence
@@ -241,7 +266,7 @@ jobs:
         run: python scripts/ci/run_quality_gate.py --gate tree --artifact reports/quality/dependency-tree.json --artifact reports/quality/dependency-tree-raw.log -- bash scripts/ci/quality-tree.sh
 
       - name: Measure function risk and coupling
-        if: always()
+        if: ${{ !cancelled() }}
         continue-on-error: true
         run: |
           python scripts/ci/run_quality_gate.py --gate code-risk --artifact reports/quality/code-risk.json -- \
@@ -250,7 +275,7 @@ jobs:
             --test-outcome '${{ steps.q-coverage.outcome }}'
 
       - name: Build quality PR report
-        if: always()
+        if: ${{ !cancelled() }}
         env:
           Q_LINT: ${{ steps.q-lint.outcome }}
           Q_FORMAT: ${{ steps.q-format.outcome }}
@@ -268,7 +293,7 @@ jobs:
 
       - name: Upload quality evidence
         id: quality-evidence
-        if: always()
+        if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v7
         with:
           name: quality-evidence
@@ -345,14 +370,14 @@ jobs:
         run: bash scripts/ci/run-mutation-light.sh
 
       - name: Build mutation PR report
-        if: always()
+        if: ${{ !cancelled() }}
         env:
           AVO_MUTATION_PROFILE: light
         run: python scripts/ci/write_mutation_pr_report.py --out reports/mutation/mutation-report.md
 
       - name: Upload light mutation reports
         id: mutation-evidence
-        if: always()
+        if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v7
         with:
           name: mutation-reports-light
@@ -364,8 +389,10 @@ jobs:
 
   ci-readiness:
     name: CI readiness
-    if: always()
+    # Only an explicit successful suppression may skip the required readiness check.
+    if: ${{ !cancelled() && !(needs.select-run.result == 'success' && needs.select-run.outputs.run_full_ci == 'false') }}
     needs:
+      - select-run
       - prerequisites-gate
       - repo-unit-tests
       - repo-integration-tests
@@ -392,8 +419,8 @@ jobs:
 
   quality-report:
     name: Quality report
-    if: always()
-    needs: [prerequisites-gate, repo-unit-tests, repo-integration-tests, software-quality, usability-gate, mutation-light, ci-readiness]
+    if: ${{ !cancelled() && !(needs.select-run.result == 'success' && needs.select-run.outputs.run_full_ci == 'false') }}
+    needs: [select-run, prerequisites-gate, repo-unit-tests, repo-integration-tests, software-quality, usability-gate, mutation-light, ci-readiness]
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     environment:
@@ -480,24 +507,18 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
-      - name: Resolve PR number
+      - name: Check current PR before chart upload
         id: pr
+        if: ${{ success() && !cancelled() && github.event_name == 'pull_request' }}
         continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-          HEAD_BRANCH: ${{ github.head_ref || github.ref_name }}
-        run: |
-          NUM="$PR_NUMBER"
-          if [ -z "$NUM" ]; then
-            NUM="$(gh pr list --head "$HEAD_BRANCH" --state open --json number --jq '.[0].number // empty')"
-          fi
-          echo "number=${NUM}" >> "$GITHUB_OUTPUT"
+        run: python scripts/ci/select_ci_run.py --workflow ci --check-pr-current
 
       - name: Attach inline quality dashboard
         continue-on-error: true
         # User credentials are never exposed to a fork's pull request code.
-        if: steps.pr.outputs.number != '' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+        if: ${{ success() && !cancelled() && github.event_name == 'pull_request' && steps.pr.outputs.number != '' && github.event.pull_request.head.repo.full_name == github.repository }}
         env:
           QUALITY_CHARTS_TOKEN: ${{ secrets.GH_TOKEN }}
           GITHUB_REPOSITORY_ID: ${{ github.repository_id }}
@@ -512,13 +533,21 @@ jobs:
           QUALITY_CHARTS_ARTIFACT_URL: ${{ steps.quality_charts.outputs.artifact-url }}
         run: python scripts/ci/link_quality_artifacts.py --markdown reports/quality/quality-gates.md --attachment reports/quality/chart-attachment.json --no-summary
 
+      - name: Check current PR before commenting
+        id: current_pr
+        if: ${{ success() && !cancelled() && github.event_name == 'pull_request' && steps.pr.outputs.number != '' }}
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python scripts/ci/select_ci_run.py --workflow ci --check-pr-current
+
       - name: Publish quality summary to PR
         id: quality_comment
-        if: steps.pr.outputs.number != ''
+        if: ${{ success() && !cancelled() && github.event_name == 'pull_request' && steps.current_pr.outputs.number != '' }}
         continue-on-error: true
         uses: marocchino/sticky-pull-request-comment@v3
         with:
-          number: ${{ steps.pr.outputs.number }}
+          number: ${{ steps.current_pr.outputs.number }}
           path: reports/quality/quality-gates.md
           header: quality-gates-report
 
@@ -545,10 +574,10 @@ jobs:
           retention-days: 14
 
       - name: Remove superseded mutation comment
-        if: steps.pr.outputs.number != ''
+        if: ${{ success() && !cancelled() && github.event_name == 'pull_request' && steps.current_pr.outputs.number != '' }}
         continue-on-error: true
         uses: marocchino/sticky-pull-request-comment@v3
         with:
-          number: ${{ steps.pr.outputs.number }}
+          number: ${{ steps.current_pr.outputs.number }}
           header: mutation-report
           delete: true
