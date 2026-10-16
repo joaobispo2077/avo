@@ -794,7 +794,21 @@ class QualityMatrixTests(unittest.TestCase):
         self.assertIn("scripts/ci/link_quality_artifacts.py", job)
         self.assertIn("contents: read", configuration)
         self.assertNotIn("contents: write", configuration)
-        self.assertNotIn("QUALITY_CHARTS_TOKEN", job)
+        self.assertIn("scripts/ci/upload_quality_chart.py", job)
+        attachment = job.split("- name: Attach inline quality dashboard", 1)[1].split(
+            "- name: Link quality chart", 1
+        )[0]
+        self.assertIn("continue-on-error: true", attachment)
+        self.assertIn("steps.pr.outputs.number != ''", attachment)
+        self.assertIn(
+            "github.event.pull_request.head.repo.full_name == github.repository",
+            attachment,
+        )
+        self.assertIn(
+            "QUALITY_CHARTS_TOKEN: ${{ secrets.QUALITY_CHARTS_TOKEN }}", attachment
+        )
+        self.assertNotIn("${{ github.token }}", attachment)
+        self.assertIn("--attachment reports/quality/chart-attachment.json", job)
         self.assertNotIn("upload_kpi_chart_images.py", job)
         self.assertNotIn("recreate: true", job)
         self.assertIn("${{ steps.quality_metrics.outputs.artifact-url }}", job)
@@ -819,9 +833,11 @@ class QualityMatrixTests(unittest.TestCase):
             "Upload dashboard image",
             "Upload readable quality report",
         ):
-            self.assertLess(job.index(upload), job.index("Resolve PR number"))
             step = job.split(f"- name: {upload}", 1)[1].split("- name:", 1)[0]
             self.assertIn("continue-on-error: true", step)
+        self.assertLess(
+            job.index("Resolve PR number"), job.index("Attach inline quality dashboard")
+        )
         for upload in ("Upload unified metrics", "Upload dashboard image"):
             self.assertLess(job.index(upload), job.index("link_quality_artifacts.py"))
         for publish in (
@@ -829,6 +845,16 @@ class QualityMatrixTests(unittest.TestCase):
             "Upload readable quality report",
         ):
             self.assertLess(job.index("link_quality_artifacts.py"), job.index(publish))
+            self.assertLess(
+                job.index("header: quality-gates-report"), job.index(publish)
+            )
+        summary = job.split("- name: Publish unified job summary", 1)[1].split(
+            "- name:", 1
+        )[0]
+        self.assertIn("COMMENT_RESULT: ${{ steps.quality_comment.outcome }}", summary)
+        self.assertIn('if [ "$COMMENT_RESULT" != "success" ]', summary)
+        self.assertIn("quality-gates-base.md", summary)
+        self.assertNotIn("--attachment", summary)
         self.assertNotIn("run-mutation", job)
         self.assertNotIn("--floor 80", job)
         self.assertNotIn("fail_under = 80", (ROOT / "pyproject.toml").read_text())
