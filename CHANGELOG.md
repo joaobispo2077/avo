@@ -1,3 +1,27 @@
+# [1.15.0](https://github.com/joaobispo2077/avo/compare/v1.14.0...v1.15.0) (2026-10-16)
+
+
+### Bug Fixes
+
+* **vision:** bound native review findings ([bf0271d](https://github.com/joaobispo2077/avo/commit/bf0271d1e1a6f9b41f9494467c97ee085c22bedf))
+* **mutation:** reject incomplete mutation runs ([5247f78](https://github.com/joaobispo2077/avo/commit/5247f78a0fc2373a29f860915d29e173e71a1a5a))
+* **quality:** replace chart commits with links ([dbc5026](https://github.com/joaobispo2077/avo/commit/dbc5026e7235071f86cea3684a0fd5805841515b))
+* **release:** require matching quality evidence ([de15454](https://github.com/joaobispo2077/avo/commit/de15454145d55ffb9c259d1e85f8e29264aa12fb))
+* **deps:** require patched MCP 2.2 runtime ([ca5fc42](https://github.com/joaobispo2077/avo/commit/ca5fc42850c038a27b09f505994f8304ccc30cc7)), closes [#98](https://github.com/joaobispo2077/avo/issues/98)
+* **deps:** resolve internal import dependencies ([f4af954](https://github.com/joaobispo2077/avo/commit/f4af954992808c766675f3c8fa98f5d73a02d6a6))
+* **quality:** restore inline dashboard images ([cb11fbf](https://github.com/joaobispo2077/avo/commit/cb11fbf96d7609197a69651284e860418e1dd3fa)), closes [#98](https://github.com/joaobispo2077/avo/issues/98)
+
+
+### Features
+
+* **quality:** add compact normalized dashboard ([cfa3076](https://github.com/joaobispo2077/avo/commit/cfa30767475017bdfb92a11b9932dbf29cf71a08))
+* **ci:** aggregate required quality evidence ([dd358d5](https://github.com/joaobispo2077/avo/commit/dd358d50930f434464a234680f1abf0ab32188d8))
+* **quality:** measure CRAP and coupling ([8ae6fc8](https://github.com/joaobispo2077/avo/commit/8ae6fc80dc92868275e4de9a7bef38626829ca37))
+* **quality:** normalize verified metrics ([359d4ca](https://github.com/joaobispo2077/avo/commit/359d4ca44c65cdc6ed4034f697b96b0f426fc932))
+* **safety:** report critical branch coverage ([305d8ef](https://github.com/joaobispo2077/avo/commit/305d8ef74aca84a391318fe29937c66b7ec91c53))
+* **quality:** retain actual analyzer findings ([e10ef35](https://github.com/joaobispo2077/avo/commit/e10ef35e4f3e42cfc1bcbcb8ed92c578d0c6eee8))
+* **reporting:** separate metrics and decisions ([818130c](https://github.com/joaobispo2077/avo/commit/818130cd6af8caee3764b5a3e3fe4f83939d82a7))
+
 # [1.14.0](https://github.com/joaobispo2077/avo/compare/v1.13.1...v1.14.0) (2026-10-10)
 
 
