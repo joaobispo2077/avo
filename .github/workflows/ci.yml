@@ -453,6 +453,7 @@ jobs:
           PY=python
           if [ -x .venv/bin/python ]; then PY=.venv/bin/python; fi
           "$PY" scripts/ci/write_unified_quality_report.py
+          cp reports/quality/quality-gates.md reports/quality/quality-gates-base.md
 
       - name: Upload unified metrics
         id: quality_metrics
@@ -476,24 +477,6 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
-      - name: Link quality artifact downloads
-        env:
-          QUALITY_METRICS_ARTIFACT_URL: ${{ steps.quality_metrics.outputs.artifact-url }}
-          QUALITY_CHARTS_ARTIFACT_URL: ${{ steps.quality_charts.outputs.artifact-url }}
-        run: python scripts/ci/link_quality_artifacts.py --markdown reports/quality/quality-gates.md --no-summary
-
-      - name: Publish unified job summary
-        run: cat reports/quality/quality-gates.md >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Upload readable quality report
-        continue-on-error: true
-        uses: actions/upload-artifact@v7
-        with:
-          name: quality-report
-          overwrite: true
-          path: reports/quality/quality-gates.md
-          retention-days: 14
-
       - name: Resolve PR number
         id: pr
         continue-on-error: true
@@ -508,7 +491,26 @@ jobs:
           fi
           echo "number=${NUM}" >> "$GITHUB_OUTPUT"
 
+      - name: Attach inline quality dashboard
+        continue-on-error: true
+        # User credentials are never exposed to a fork's pull request code.
+        if: steps.pr.outputs.number != '' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+        env:
+          QUALITY_CHARTS_TOKEN: ${{ secrets.QUALITY_CHARTS_TOKEN }}
+          GITHUB_REPOSITORY_ID: ${{ github.repository_id }}
+        run: |
+          PY=python
+          if [ -x .venv/bin/python ]; then PY=.venv/bin/python; fi
+          "$PY" scripts/ci/upload_quality_chart.py
+
+      - name: Link quality chart and artifact downloads
+        env:
+          QUALITY_METRICS_ARTIFACT_URL: ${{ steps.quality_metrics.outputs.artifact-url }}
+          QUALITY_CHARTS_ARTIFACT_URL: ${{ steps.quality_charts.outputs.artifact-url }}
+        run: python scripts/ci/link_quality_artifacts.py --markdown reports/quality/quality-gates.md --attachment reports/quality/chart-attachment.json --no-summary
+
       - name: Publish quality summary to PR
+        id: quality_comment
         if: steps.pr.outputs.number != ''
         continue-on-error: true
         uses: marocchino/sticky-pull-request-comment@v3
@@ -516,6 +518,28 @@ jobs:
           number: ${{ steps.pr.outputs.number }}
           path: reports/quality/quality-gates.md
           header: quality-gates-report
+
+      - name: Publish unified job summary
+        env:
+          COMMENT_RESULT: ${{ steps.quality_comment.outcome }}
+          QUALITY_METRICS_ARTIFACT_URL: ${{ steps.quality_metrics.outputs.artifact-url }}
+          QUALITY_CHARTS_ARTIFACT_URL: ${{ steps.quality_charts.outputs.artifact-url }}
+        run: |
+          # Native attachments become readable when associated with a comment.
+          if [ "$COMMENT_RESULT" != "success" ]; then
+            cp reports/quality/quality-gates-base.md reports/quality/quality-gates.md
+            python scripts/ci/link_quality_artifacts.py --markdown reports/quality/quality-gates.md --no-summary
+          fi
+          cat reports/quality/quality-gates.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload readable quality report
+        continue-on-error: true
+        uses: actions/upload-artifact@v7
+        with:
+          name: quality-report
+          overwrite: true
+          path: reports/quality/quality-gates.md
+          retention-days: 14
 
       - name: Remove superseded mutation comment
         if: steps.pr.outputs.number != ''
