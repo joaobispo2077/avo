@@ -480,3 +480,223 @@ def test_successful_job_cannot_hide_failed_or_partial_junit(problem):
     text = mod.markdown(doc, series)
     assert "| repo-unit-tests | **SUCCESS** |" in text
     assert f"PARTIAL: {reason}" in text
+
+
+@pytest.mark.parametrize(
+    ("direction", "threshold", "measured", "expected"),
+    [
+        ("minimum", 68, 67.99, "red"),
+        ("minimum", 68, 68, "yellow"),
+        ("minimum", 68, 75.99, "yellow"),
+        ("minimum", 68, 76, "green"),
+        ("maximum", 2, 2.01, "red"),
+        ("maximum", 2, 2, "yellow"),
+        ("maximum", 2, 1.51, "yellow"),
+        ("maximum", 2, 1.5, "green"),
+        ("minimum", 40, 39.99, "red"),
+        ("minimum", 40, 40, "yellow"),
+        ("minimum", 40, 54.99, "yellow"),
+        ("minimum", 40, 55, "green"),
+        ("minimum", 100, 100, "green"),
+        ("minimum", 100, 99.999, "red"),
+        ("maximum", 0, 0, "green"),
+        ("maximum", 0, 0.001, "red"),
+    ],
+)
+def test_threshold_bands_preserve_the_agreed_margin_boundaries(
+    direction, threshold, measured, expected
+):
+    metric = {"direction": direction, "threshold": threshold, "measured": measured}
+    assert dashboard().threshold_band(metric) == expected
+
+
+@pytest.mark.parametrize("field", ["measured", "threshold"])
+@pytest.mark.parametrize(
+    "invalid", [None, "68", True, {}, float("nan"), float("inf"), -1, 101]
+)
+def test_threshold_bands_require_valid_numeric_inputs(field, invalid):
+    metric = {"direction": "minimum", "threshold": 68, "measured": 76}
+    metric[field] = invalid
+    assert dashboard().threshold_band(metric) == "unknown"
+
+
+@pytest.mark.parametrize("missing", ["measured", "threshold", "direction"])
+def test_threshold_bands_do_not_invent_missing_policy_or_values(missing):
+    metric = {"direction": "minimum", "threshold": 68, "measured": 76}
+    del metric[missing]
+    assert dashboard().threshold_band(metric) == "unknown"
+
+
+def test_threshold_bands_reject_unknown_comparison_directions():
+    metric = {"direction": "sideways", "threshold": 68, "measured": 76}
+    assert dashboard().threshold_band(metric) == "unknown"
+
+
+def test_bands_use_raw_measurements_without_changing_rounded_gate_decisions():
+    doc = measured_document()
+    doc["coverage_precision"] = 0
+    doc["measurement_evidence"]["metrics"][0].update(number=67.6, value="67.60%")
+    series = dashboard().build_series(doc)
+    coverage = series["metrics"][0]
+    assert coverage["measured"] == 67.6
+    assert coverage["status"] == "PASS"
+    assert coverage["band"] == "red"
+    assert series["measurements"][0]["number"] == 67.6
+
+
+@pytest.fixture
+def rendered_measurements(tmp_path, monkeypatch):
+    import matplotlib.pyplot as plt
+
+    captured = []
+    close = plt.close
+
+    def capture(figure=None):
+        if hasattr(figure, "axes"):
+            captured.append(figure)
+        close(figure)
+
+    monkeypatch.setattr(plt, "close", capture)
+
+    def render(doc=None, *, old_series=False, frozen_bands=None):
+        doc = measured_document() if doc is None else doc
+        observations = doc["measurement_evidence"]["metrics"]
+        if doc["mutation"] is None:
+            doc["mutation"] = {
+                "sha": SHA,
+                "run_id": "42",
+                "profile": "light",
+                "floor": 40,
+                "killed": 3999,
+                "survived": 6001,
+                "total": 10000,
+            }
+            observations[2].update(number=39.99, value="39.99%", unit="percent")
+        module = dashboard()
+        series = module.build_series(doc)
+        if old_series:
+            for metric in series["metrics"]:
+                metric.pop("band", None)
+        if frozen_bands is not None:
+            for metric, band in zip(series["metrics"], frozen_bands, strict=True):
+                metric["band"] = band
+        path = tmp_path / "dashboard.png"
+        module.render(series, path)
+        assert len(captured) == 1
+        return series, captured.pop(), path
+
+    return render
+
+
+@pytest.mark.parametrize("old_series", [False, True])
+def test_active_chart_draws_margin_colors_and_preserves_series(
+    rendered_measurements, old_series
+):
+    from matplotlib.colors import to_hex
+    from PIL import Image
+
+    doc = measured_document()
+    doc["measurement_evidence"]["metrics"][0].update(number=71.25, value="71.25%")
+    series, figure, path = rendered_measurements(doc, old_series=old_series)
+    expected = ["#f0b400", "#18794e", "#b42318"]
+    for axis, metric, color in zip(
+        figure.axes, series["metrics"], expected, strict=True
+    ):
+        bar = next(
+            patch for patch in axis.patches if patch.get_width() == metric["measured"]
+        )
+        assert to_hex(bar.get_facecolor()) == color
+        labels = [text.get_text() for text in axis.texts]
+        assert any("MEASURED" in label for label in labels)
+        assert not any(label in {"PASS", "FAIL"} for label in labels)
+    number = next(text for text in figure.axes[0].texts if text.get_text() == "71.25%")
+    assert to_hex(number.get_color()) == "#855d00"
+    for axis, margin in zip(
+        figure.axes, ("Near minimum", "Clear margin", "Below minimum"), strict=True
+    ):
+        assert margin in [text.get_text() for text in axis.texts]
+    assert series["metrics"][1]["measured"] == 0.75
+    if not old_series:
+        assert [metric["band"] for metric in series["metrics"]] == [
+            "yellow",
+            "green",
+            "red",
+        ]
+    with Image.open(path) as image:
+        assert json.loads(image.info["Description"]) == series
+
+
+def test_active_chart_keeps_threshold_marks_and_labels_in_measurement_view(
+    rendered_measurements,
+):
+    from matplotlib.collections import LineCollection
+
+    series, figure, _ = rendered_measurements()
+    assert series["presentation"] == "measurements"
+    for axis, metric in zip(figure.axes, series["metrics"], strict=True):
+        segments = [
+            segment
+            for collection in axis.collections
+            if isinstance(collection, LineCollection)
+            for segment in collection.get_segments()
+        ]
+        assert any(
+            segment[:, 0].tolist() == [metric["threshold"], metric["threshold"]]
+            and segment[0, 1] != segment[1, 1]
+            for segment in segments
+        )
+        direction = "Minimum" if metric["direction"] == "minimum" else "Maximum"
+        assert any(
+            f"{direction} {metric['threshold']:g}%" in text.get_text()
+            for text in axis.texts
+        )
+
+
+def test_chart_uses_frozen_bands_instead_of_gate_status(rendered_measurements):
+    from matplotlib.colors import to_hex
+
+    _, figure, _ = rendered_measurements(frozen_bands=("green", "yellow", "red"))
+    assert [to_hex(axis.patches[-1].get_facecolor()) for axis in figure.axes] == [
+        "#18794e",
+        "#f0b400",
+        "#b42318",
+    ]
+
+
+@pytest.mark.parametrize("invalid", [None, float("nan"), True, -1, 101])
+def test_unavailable_measurements_stay_neutral_without_a_measured_bar(
+    rendered_measurements, invalid
+):
+    from matplotlib.colors import to_hex
+
+    doc = measured_document()
+    doc["measurement_evidence"]["metrics"][0]["number"] = invalid
+    series, figure, _ = rendered_measurements(doc)
+    assert series["metrics"][0]["measured"] is None
+    assert series["metrics"][0]["band"] == "unknown"
+    assert len(figure.axes[0].patches) == 1
+    unavailable = [
+        text for text in figure.axes[0].texts if text.get_text() == "Unavailable"
+    ]
+    assert unavailable
+    assert all(to_hex(text.get_color()) == "#667085" for text in unavailable)
+
+
+@pytest.mark.parametrize("invalid", [None, "68", True, float("nan"), -1, 101])
+def test_unknown_thresholds_preserve_measurements_without_quality_colors(
+    rendered_measurements, invalid
+):
+    from matplotlib.colors import to_hex
+
+    doc = measured_document()
+    doc["series"]["coverage"]["floor"] = invalid
+    series, figure, _ = rendered_measurements(doc)
+    metric = series["metrics"][0]
+    assert metric["measured"] == 63.0
+    assert metric["threshold"] is None
+    assert metric["band"] == "unknown"
+    assert to_hex(figure.axes[0].patches[-1].get_facecolor()) == "#667085"
+    assert not figure.axes[0].collections
+    assert any(
+        text.get_text() == "Threshold unavailable" for text in figure.axes[0].texts
+    )
