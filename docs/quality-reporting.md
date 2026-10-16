@@ -11,8 +11,9 @@ The `Quality report` job waits for the mandatory jobs and `CI readiness`. It
 combines the `quality-evidence` and `mutation-reports-light` artifacts from that
 workflow run. One `quality-gates-report` PR comment and the job summary show the
 overall result, full commit and run identity, required actions, one inline
-dashboard, and a metric table. Each run updates the same PR comment in place.
-The previous standalone mutation comment is removed.
+dashboard, and a metric table. Current PR runs update the same comment in place;
+selected full push runs retain their own summaries and artifacts. The previous
+standalone mutation comment is removed.
 
 The report separates **measurements**, **gate decisions**, and **execution
 results**. The measurements table contains observed values, scope, input counts,
@@ -71,6 +72,35 @@ Mutation efficacy is killed divided by killed plus survived, and is reported
 only after validating complete, nonnegative integer outcome accounting. Timeout,
 skipped, no-test, interrupted, crash, suspicious, or unaccounted outcomes make
 the evidence incomplete. They are not kills or proven equivalent mutants.
+
+## Run selection and publication ownership
+
+The shared lightweight selector runs full feature-push validation before a PR
+exists. Once an eligible open PR matches the exact repository, head branch, and
+current head SHA, it suppresses the duplicate push execution. Drafts count;
+uncertain or failed API lookups keep full validation. CI replacement PRs target
+`develop`, `release`, or `main`; Engine retains its existing PR path filters and
+accepts any base. A fresh lookup must confirm mergeability; conflicts or unknown
+mergeability retain full push validation because
+[GitHub does not start PR workflows with merge conflicts](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#pull_request).
+Both workflows retain `feature/**` push triggers. CI also
+retains every `release` push for exact-tip release certification; neither runs
+standalone `develop` or `main` pushes, and Engine does not build `release` pushes.
+Engine published-release and manual freezing/upload remain unchanged. See
+[run selection](ci.md#run-selection-and-duplicate-suppression).
+
+An intentionally suppressed push provides no measured quality result or green
+report. The selected PR runs all existing mandatory checks; its synthetic merge
+SHA is not relabelled as branch-tip evidence. Same-event concurrency supersedes
+older feature/PR updates, while release CI and Engine release/manual runs use
+unique groups and remain uncancelled. A full feature run that started before PR
+creation can overlap the first PR run; later pushes select the PR execution.
+
+Only an uncancelled PR run whose head and base still match the open PR may
+publish its native chart and update the sticky comment. Feature and release
+push evidence stays in its own job summary and artifacts. Stale or cancelled
+runs cannot replace the current PR report. These changes add no secrets,
+publication commits, or branch operations and do not change gate thresholds.
 
 ## Artifact ownership and release compatibility
 
@@ -193,8 +223,9 @@ checkout SHA and UTC generation time and remains outside the PR fast path.
 
 ## GitHub enforcement
 
-`CI readiness` runs even when dependencies fail and requires successful Gate 1,
-unit tests, integration tests, Software quality, Gate 2, and light mutation.
+In selected full CI, `CI readiness` runs even when dependencies fail and requires
+successful Gate 1, unit tests, integration tests, Software quality, Gate 2, and
+light mutation.
 PR targets include `develop`, `release`, and `main`. Supported MCP integration
 tests require the MCP extra in CI instead of silently skipping.
 
