@@ -728,12 +728,14 @@ class QualityMatrixTests(unittest.TestCase):
         self.assertIn("Mutation tests (light)", docs_ci)
 
     def test_ci_posts_one_evidence_bound_quality_report(self) -> None:
-        """One always-run report joins producer artifacts and retires old comments."""
+        """One selected report retains failures and guards current PR publication."""
         ci = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
         self.assertIn("write_quality_metrics_snapshot.py", ci)
         self.assertIn("write_mutation_pr_report.py", ci)
         self.assertIn("marocchino/sticky-pull-request-comment@v3", ci)
-        self.assertIn("gh pr list", ci)
+        self.assertIn(
+            "scripts/ci/select_ci_run.py --workflow ci --check-pr-current", ci
+        )
         self.assertIn("steps.pr.outputs.number", ci)
         coverage = (ROOT / "scripts/ci/run-coverage.sh").read_text(encoding="utf-8")
         self.assertIn("reports/quality/coverage.json", coverage)
@@ -763,7 +765,7 @@ class QualityMatrixTests(unittest.TestCase):
             "Q_TREE",
         ):
             self.assertIn(f"{name}:", producer)
-        self.assertIn("if: always()", producer)
+        self.assertIn("if: ${{ !cancelled() }}", producer)
         self.assertIn("--write-json reports/quality/quality-metrics.json", producer)
         self.assertIn("name: quality-evidence", producer)
         self.assertNotIn("gen_kpi_charts.py", producer)
@@ -773,8 +775,14 @@ class QualityMatrixTests(unittest.TestCase):
         self.assertNotIn("sticky-pull-request-comment", mutation)
         job = ci.split("  quality-report:", 1)[1]
         configuration = job.split("steps:", 1)[0]
-        self.assertIn("if: always()", configuration)
+        self.assertIn("!cancelled()", configuration)
+        self.assertIn(
+            "!(needs.select-run.result == 'success' && "
+            "needs.select-run.outputs.run_full_ci == 'false')",
+            configuration,
+        )
         for required in (
+            "select-run",
             "prerequisites-gate",
             "repo-unit-tests",
             "repo-integration-tests",
@@ -838,8 +846,20 @@ class QualityMatrixTests(unittest.TestCase):
             step = job.split(f"- name: {upload}", 1)[1].split("- name:", 1)[0]
             self.assertIn("continue-on-error: true", step)
         self.assertLess(
-            job.index("Resolve PR number"), job.index("Attach inline quality dashboard")
+            job.index("Check current PR before chart upload"),
+            job.index("Attach inline quality dashboard"),
         )
+        self.assertLess(
+            job.index("Check current PR before commenting"),
+            job.index("Publish quality summary to PR"),
+        )
+        publication = job.split("- name: Publish quality summary to PR", 1)[1].split(
+            "- name:", 1
+        )[0]
+        self.assertIn("!cancelled()", publication)
+        self.assertIn("github.event_name == 'pull_request'", publication)
+        self.assertIn("steps.current_pr.outputs.number != ''", publication)
+        self.assertIn("number: ${{ steps.current_pr.outputs.number }}", publication)
         for upload in ("Upload unified metrics", "Upload dashboard image"):
             self.assertLess(job.index(upload), job.index("link_quality_artifacts.py"))
         for publish in (

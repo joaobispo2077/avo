@@ -790,7 +790,13 @@ class QualityMetricsSnapshotTests(unittest.TestCase):
         self.assertNotIn("refs/heads/release", producer)
         self.assertIn("--write-json reports/quality/quality-metrics.json", ci)
         unified = ci.split("  quality-report:\n", 1)[1]
-        self.assertIn("if: always()", unified)
+        configuration = unified.split("    steps:\n", 1)[0]
+        self.assertIn("!cancelled()", configuration)
+        self.assertIn(
+            "!(needs.select-run.result == 'success' && "
+            "needs.select-run.outputs.run_full_ci == 'false')",
+            configuration,
+        )
         self.assertIn("write_unified_quality_report.py", unified)
         self.assertIn("name: quality-metrics", unified)
         self.assertIn("if-no-files-found: error", unified)
