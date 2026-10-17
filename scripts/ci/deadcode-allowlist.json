@@ -1197,6 +1197,14 @@
       "kind": "function",
       "confidence": 60,
       "reason": "Public external benchmark evaluation API used by tests and evaluation protocol; private held-out datasets stay outside AVO, with no runtime inference side effects."
+    },
+    {
+      "path": "src/avo/direction/store.py",
+      "name": "recover_lock",
+      "kind": "method",
+      "lineno": 286,
+      "confidence": 60,
+      "reason": "Public operator maintenance API for explicit, exact-hash local lock recovery; intentionally not an automatic CLI override. Covered by test_direction_store.py and test_direction_recovery.py."
     }
   ]
 }
