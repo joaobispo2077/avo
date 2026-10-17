@@ -10,6 +10,15 @@ original failed job outcome. Local indexed coupling/CRAP previews require owner
 review before supporting images are enabled in CI. Definition and fixed-case
 snapshots detect reviewed semantic/policy changes without per-run Git writes.
 
+The approved mutation and gate-decision views add optional `quality-mutation`
+and `quality-gate-decisions` archives/native images. Mutation retains per-source
+outcomes and raw metadata from the existing execution; the collector verifies
+their hashes and aggregate totals. The light/full floors remain aggregate-only.
+Gate badges show categorical outcomes, existing policy and execution proof;
+required CI jobs remain a separate execution population. All five image roles
+retain independent text/artifact fallbacks and the same current-PR/cancel guards.
+Release snapshots continue to require only the primary dashboard.
+
 ## Standard CI validation model (+ software quality)
 
 AVO is an **orchestrator**. CI must validate **external toolchain prerequisites**

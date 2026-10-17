@@ -171,9 +171,21 @@ New PR runs receive distinct run-keyed comments; retries update only their own.
 Freshness and cancellation guards precede publication, with exact head/base/tested
 identities explaining any historical in-flight result. A fatal builder failure
 uses a standard-library Markdown-only path and restores the original job failure
-after delivery. Native images are restricted to three fixed roles, independently
+after delivery. Native images are restricted to five fixed roles, independently
 validated against current-run frozen data. No reporting path creates Git commits,
 branches, tags, public engine interfaces or new credentials. Verification covers
 source/receipt corruption, unknown states, definition drift, frozen history,
 image failures, optional roles and PR freshness; live delivery is verified only
 after approved publication. See [quality reporting](docs/quality-reporting.md).
+
+The mutation job additionally retains per-source mutmut outcomes and exact raw
+metadata, without another mutation execution. `mutation_scopes.py` validates
+active-profile membership and complete outcome accounting; the report collector
+rechecks retained hashes, aggregate reconciliation and available source hashes.
+`quality_mutation_dashboard.py` consumes that normalized evidence and keeps the
+existing profile floor aggregate-only. `quality_gate_decisions.py` renders
+categorical decisions, policy and execution proof separately from measurements
+and required jobs. Both views have complete Markdown/JSON indexes, independent
+image fallbacks and definition/fixed-case baselines. Historical catalogs retain
+their original optional view set; release validation still requires only the
+dashboard image. No public product or measurement gate changes are introduced.

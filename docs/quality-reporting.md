@@ -1,5 +1,45 @@
 # Quality reporting and evidence
 
+## Mutation and gate decision views
+
+The primary three-metric chart keeps its existing appearance. Two approved
+supporting views provide mutation efficacy/outcome accounting and categorical
+gate decisions, alongside complete text tables and JSON indexes.
+
+`mutation_scopes.py` reads the existing active-profile mutmut metadata after a
+successful execution/export. It retains each source's killed, survived and
+unresolved outcomes, source hash, raw metadata and aggregate proof. The report
+collector verifies those bytes and hashes, reconciles source totals to the
+aggregate, and checks available source-manifest hashes. Missing metadata, zero
+mutants and unresolved executions remain distinct; none produces an invented
+zero or 100% efficacy. Export failures preserve the independent aggregate gate.
+Old aggregate stats are removed before export so a no-data export cannot stamp
+a restored cache as fresh evidence.
+
+The mutation view uses path-sorted M IDs and shows at most 12 source rows:
+missing/incomplete first, then lowest measured efficacy, with full path order
+as the tie rule. Its complete Markdown/JSON index retains every source and
+outcome. Existing light/full floors are aggregate gates. Their line and margin
+colors on per-source rows are informational references, with no per-source
+PASS/FAIL enforcement.
+
+The gate view shows the nine existing quality checks and the aggregate mutation
+gate. Equal status badges carry categorical decisions and execution-proof
+state. A recorded PASS with missing proof is visibly incomplete. Failed,
+skipped, canceled and timed-out results stay distinct. Accepted complexity and
+dead-code debt, report-only dependency severities and unapplied hoist proposals
+remain visible under their existing policies. Required jobs are a separate
+execution population, never additional quality percentages.
+
+The optional `quality-mutation` and `quality-gate-decisions` archives contain
+`mutation-efficacy.{png,md,json}` and `gate-decisions.{png,md,json}` respectively.
+The fixed `mutation_scopes` and `gate_decisions` native roles use independent
+receipts, current-PR/head/base/cancel checks, existing credentials and text/
+download fallbacks. Definition revisions and fixed behavior cases cover both
+views. Historical catalogs retain their available original view set; optional
+views do not change dashboard-only release snapshot requirements. Publishing
+creates no Git commits or new credentials.
+
 AVO adapts quality measurements to its local CLI, MCP, and media-processing
 risks. Existing lint, formatting, coverage, complexity, security, dead-code,
 duplication, and import-boundary checks remain in place. Automated tests support
