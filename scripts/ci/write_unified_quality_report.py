@@ -144,6 +144,11 @@ def combine(
     if "measurement_evidence" in doc:
         doc["measurement_evidence"] = measurements.collect(doc, quality_path.parent)
         measurements.add_mutation(doc["measurement_evidence"], doc, mutation_path)
+        measurements.add_mutation_scopes(
+            doc["measurement_evidence"],
+            doc,
+            mutation_path.with_name("mutation-scopes.json") if mutation_path else None,
+        )
     doc["artifact_urls"] = {}
     for job, artifact in (
         ("software-quality", "quality-evidence"),

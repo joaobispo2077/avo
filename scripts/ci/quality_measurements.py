@@ -844,21 +844,125 @@ def add_mutation(evidence: dict, doc: dict, path: Path | None) -> None:
     metric = next(row for row in evidence["metrics"] if row["key"] == "mutation")
     dashboard = module("avo_ci_quality_dashboard", "quality_dashboard.py")
     result = dashboard.mutation_metric(doc)
-    if result["measured"] is None or path is None or not path.is_file():
+    if result["status"] == "UNAVAILABLE" or path is None or not path.is_file():
         metric["basis"] = result["detail"]
         return
     payload = read_json(path)
     if payload is None or payload != doc.get("mutation"):
         metric["basis"] = "Mutation artifact does not match the frozen counters."
         return
-    counts = dashboard.mutation_checker().mutation_evaluation(
+    evaluation = dashboard.mutation_checker().mutation_evaluation(
         payload.get("counts", payload), min_killed_percent=result["threshold"]
-    )["counts"]
+    )
+    counts = evaluation["counts"]
+    sources = [reference(path, path.parent, f"mutation-reports-{payload['profile']}")]
+    if not evaluation["complete"]:
+        metric.update(
+            state="UNAVAILABLE",
+            number=None,
+            value="Unavailable",
+            basis=evaluation["reason"],
+            sources=sources,
+        )
+        return
     measured(
         metric,
         f"{result['measured']:.2f}%",
         f"{counts['killed']} killed / {counts['survived']} survived / {counts['total']} total; 0 unresolved",
-        [reference(path, path.parent, "mutation-reports-light")],
+        sources,
         number=result["measured"],
         unit="percent",
     )
+
+
+def add_mutation_scopes(evidence: dict, doc: dict, path: Path | None) -> None:
+    """Normalize optional scope proof once, without changing aggregate gates."""
+    profile = mapping(doc.get("mutation_policy")).get("profile")
+    result = {
+        "schema": 1,
+        "state": "UNAVAILABLE",
+        "reason": "Per-source mutation results were not retained for this run.",
+        "profile": profile,
+        "threshold_scope": "aggregate",
+        "sources": [],
+        "source_fingerprint": None,
+        "scopes": [],
+    }
+    evidence["mutation_scopes"] = result
+    if path is None or not path.is_file():
+        return
+    helper = module("avo_ci_mutation_scopes", "mutation_scopes.py")
+    artifact = f"mutation-reports-{profile}"
+    try:
+        payload, digest = helper._read(path)
+        checked = helper.validate_scopes(
+            payload,
+            sha=doc.get("sha", ""),
+            run_id=str(doc.get("run_id") or ""),
+            profile=profile,
+            aggregate=doc.get("mutation"),
+        )
+        sources = [reference(path, path.parent, artifact)]
+        require(sources[0]["sha256"] == digest)
+        if checked["state"] == "UNAVAILABLE" and not checked["scopes"]:
+            result.update(reason=checked["reason"], sources=sources)
+            result["source_fingerprint"] = canonical_digest(sources)
+            return
+        raw_stats_path = path.parent / (
+            "mutmut-cicd-stats-light.json"
+            if profile == "light"
+            else "mutmut-cicd-stats.json"
+        )
+        raw_stats, stats_digest = helper._read(raw_stats_path)
+        require(stats_digest == checked["aggregate"]["sha256"])
+        require(
+            all(
+                raw_stats.get(key) == doc["mutation"].get(key)
+                for key in ("sha", "run_id", "profile")
+            )
+            and helper._aggregate_counts(raw_stats) == checked["aggregate"]["counts"]
+        )
+        sources.append(reference(raw_stats_path, path.parent, artifact))
+        graph = mapping(mapping(evidence.get("supporting")).get("coupling"))
+        manifest = (
+            {
+                row["path"]: row.get("sha256")
+                for row in graph.get("modules", [])
+                if row.get("path") is not None
+            }
+            if graph.get("state") == "MEASURED"
+            else {}
+        )
+        for row in checked["scopes"]:
+            if manifest:
+                require(manifest.get(row["path"]) == row["source_sha256"])
+            metadata = row.get("metadata")
+            if metadata is None:
+                continue
+            relative = metadata.get("artifact_path", "")
+            require(
+                relative == "scope-evidence/" + row["path"] + ".meta"
+                and not Path(relative).is_absolute()
+                and (path.parent / relative)
+                .resolve()
+                .is_relative_to(path.parent.resolve())
+            )
+            raw, raw_digest = helper._read(path.parent / relative)
+            outcomes = raw.get("exit_code_by_key")
+            require(
+                raw_digest == metadata["sha256"]
+                and isinstance(outcomes, dict)
+                and all(code is None or type(code) is int for code in outcomes.values())
+                and outcomes
+                == {mutant["id"]: mutant["exit_code"] for mutant in row["mutants"]}
+            )
+            sources.append(reference(path.parent / relative, path.parent, artifact))
+        result.update(
+            state=checked["state"],
+            reason=checked["reason"],
+            scopes=checked["scopes"],
+            sources=sources,
+            source_fingerprint=canonical_digest(sources),
+        )
+    except (OSError, ValueError, TypeError, KeyError, AttributeError) as exc:
+        result["reason"] = f"Per-source mutation evidence unavailable: {exc}"

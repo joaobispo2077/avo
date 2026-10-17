@@ -906,6 +906,18 @@ def dashboard_module():
     return sys.modules[name]
 
 
+def _report_roles(document: dict) -> tuple:
+    """New optional views exist only in catalogs that define their meaning."""
+    identifiers = {
+        row.get("id")
+        for row in document.get("metric_definitions", {}).get("entries", [])
+        if isinstance(row, dict)
+    }
+    return ("dashboard", "coupling_files", "hotspots") + tuple(
+        role for role in ("mutation_scopes", "gate_decisions") if role in identifiers
+    )
+
+
 def _frozen_report_series(document: dict, dashboard, measurements) -> dict:
     """Retained definitions authorize readout, never today's reinterpretation."""
     if "metric_definitions" not in document:
@@ -917,7 +929,12 @@ def _frozen_report_series(document: dict, dashboard, measurements) -> dict:
     collection = document.get("series", {})
     if not isinstance(collection, dict):
         raise ValueError("Invalid frozen report series collection")
-    roles = ("dashboard", "coupling_files", "hotspots")
+    roles = _report_roles(document)
+    if any(
+        role in collection and role not in roles
+        for role in ("mutation_scopes", "gate_decisions")
+    ):
+        raise ValueError("Supporting series has no matching frozen metric definition")
     frozen = {role: collection[role] for role in roles if role in collection}
     shared = dashboard.ci_module("avo_ci_coupling_dashboard", "coupling_dashboard.py")
     for role, series in frozen.items():
@@ -942,6 +959,16 @@ def _frozen_report_series(document: dict, dashboard, measurements) -> dict:
                 and [row.get("title") for row in series["metrics"]]
                 == ["Coverage", "Duplication", "Mutation"]
             )
+        elif valid and role in {"mutation_scopes", "gate_decisions"}:
+            helper = dashboard.ci_module(
+                "avo_ci_quality_mutation_dashboard"
+                if role == "mutation_scopes"
+                else "avo_ci_quality_gate_decisions",
+                "quality_mutation_dashboard.py"
+                if role == "mutation_scopes"
+                else "quality_gate_decisions.py",
+            )
+            valid = helper.validate_frozen_series(series, document)
         elif valid:
             required = (
                 {
@@ -1046,7 +1073,8 @@ def generate_dashboard(
     frozen = (
         {} if generated else _frozen_report_series(document, dashboard, measurements)
     )
-    if not all(role in frozen for role in ("coupling_files", "hotspots")):
+    expected = _report_roles(document)
+    if not all(role in frozen for role in expected if role != "dashboard"):
         dashboard.build_supporting(document)
         document["series"].update(frozen)
     dashboard.render_supporting(document, out_dir.parent)

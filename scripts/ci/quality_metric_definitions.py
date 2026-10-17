@@ -30,7 +30,9 @@ REVISIONS = {
     "dependencies": 1,
     "duplication": 1,
     "execution_events": 1,
+    "gate_decisions": 1,
     "mutation": 1,
+    "mutation_scopes": 1,
     "tree": 1,
 }
 
@@ -167,6 +169,16 @@ DEFINITIONS = {
         "Repeated executions are not additional unique tests. Success is execution evidence, not a quality percentage; missing reasons remain unavailable.",
         ("scripts/ci/test_execution_evidence.py",),
     ),
+    "gate_decisions": (
+        "execution observation",
+        "categorical decisions",
+        "nine software-quality checks and the applicable aggregate mutation gate",
+        "existing gate decision with execution-proof state",
+        "Retain recorded gate outcomes, existing policy and verified capture state; count decisions by category without a numeric quality score.",
+        "A recorded PASS without verified current evidence is incomplete. Failed, skipped, canceled, timed-out and unavailable results stay distinct; required CI jobs form a separate execution population.",
+        "Equal-size status badges carry text and color. Accepted exceptions and report-only findings remain visible; no gate, threshold or quality percentage is introduced.",
+        ("scripts/ci/quality_gate_decisions.py", "scripts/ci/quality_dashboard.py"),
+    ),
     "mutation": (
         "measurement",
         "percent",
@@ -179,6 +191,20 @@ DEFINITIONS = {
             "scripts/ci/check_mutation.py",
             "scripts/ci/quality_dashboard.py",
             "scripts/ci/mutation-config.json",
+        ),
+    ),
+    "mutation_scopes": (
+        "measurement",
+        "percent and mutant outcome counts",
+        "active frozen mutation profile; distinct configured Python source files",
+        "mutant verdict within its actual source file",
+        "Per source: 100 * killed / (killed + survived) only for a positive complete population. Retain every outcome bucket and reconcile source totals with aggregate counters.",
+        "Require matching commit/run/profile, source hashes, retained metadata hashes and raw aggregate proof. Missing metadata, zero mutants and unresolved outcomes withhold a source score; configuration paths alone are not measured results.",
+        "M IDs sort by source path. Display missing/incomplete sources first, then lowest measured efficacy, capped at 12 with a complete index. Existing profile floor and margin colors are informational references for sources; enforcement remains aggregate-only.",
+        (
+            "scripts/ci/mutation_scopes.py",
+            "scripts/ci/quality_mutation_dashboard.py",
+            "scripts/ci/quality_measurements.py",
         ),
     ),
     "tree": (

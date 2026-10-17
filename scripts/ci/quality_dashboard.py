@@ -190,7 +190,9 @@ def build_series(doc: dict) -> dict:
         if number is None:
             actual.update(
                 measured=None,
-                status="UNAVAILABLE",
+                status=actual["status"]
+                if actual["status"] in {"INCOMPLETE", "INVALID"}
+                else "UNAVAILABLE",
                 detail=observation.get("basis", "Mutation input proof is unavailable."),
             )
         elif number != actual["measured"]:
@@ -220,6 +222,7 @@ def build_series(doc: dict) -> dict:
         if result != "success"
     )
     executions = doc.get("test_evidence", {})
+    captured_failures = []
     actions.extend(
         f"{name}: partial test evidence. {execution.get('reason', '')}"
         for name, execution in executions.items()
@@ -233,8 +236,26 @@ def build_series(doc: dict) -> dict:
             if gate["status"] == "PASS"
             and not evidence.get("gates", {}).get(gate["key"], {}).get("verified")
         )
+        for gate in doc.get("gates", []):
+            proof = evidence.get("gates", {}).get(gate["key"], {})
+            receipt = proof.get("receipt", {})
+            if gate["status"] != "PASS" or proof.get("verified") is not True:
+                continue
+            status, code = receipt.get("status"), receipt.get("exit_code")
+            if (status and status != "PASS") or (type(code) is int and code != 0):
+                action = f"{gate['title']}: captured execution {status or 'nonzero exit'} (exit {code}) conflicts with reported PASS."
+                actions.append(action)
+                if status in {"FAIL", "ERROR", "TIMEOUT", "CANCELLED", "CANCELED"} or (
+                    type(code) is int and code != 0
+                ):
+                    captured_failures.append(action)
     statuses = [row["status"] for row in metrics]
-    failed = doc.get("overall") == "FAIL" or "FAIL" in statuses or "INVALID" in statuses
+    failed = (
+        doc.get("overall") == "FAIL"
+        or "FAIL" in statuses
+        or "INVALID" in statuses
+        or bool(captured_failures)
+    )
     failed = failed or any(row["status"] == "FAIL" for row in doc.get("gates", []))
     failed = failed or any(
         result in {"failure", "cancelled"} for result in jobs.values()
@@ -330,6 +351,10 @@ def measurement_rows(doc: dict, series: dict) -> list[dict]:
 def build_supporting(doc: dict) -> None:
     coupling = ci_module("avo_ci_coupling_dashboard", "coupling_dashboard.py")
     hotspots = ci_module("avo_ci_quality_hotspots", "quality_hotspots.py")
+    mutation = ci_module(
+        "avo_ci_quality_mutation_dashboard", "quality_mutation_dashboard.py"
+    )
+    decisions = ci_module("avo_ci_quality_gate_decisions", "quality_gate_decisions.py")
     measurements = ci_module("avo_ci_quality_measurements", "quality_measurements.py")
     safe_doc = doc
     if "metric_definitions" in doc and (error := measurements.definition_error(doc)):
@@ -340,6 +365,8 @@ def build_supporting(doc: dict) -> None:
     doc.setdefault("series", {}).update(
         coupling_files=coupling.build_coupling_series(safe_doc),
         hotspots=hotspots.build_hotspot_series(safe_doc),
+        mutation_scopes=mutation.build_mutation_series(safe_doc),
+        gate_decisions=decisions.build_gate_series(safe_doc),
     )
 
 
@@ -365,6 +392,26 @@ def render_supporting(doc: dict, directory: Path) -> None:
             "write_coupling_indexes",
             "render_coupling",
             "coupling_image_error",
+        ),
+        (
+            "mutation_scopes",
+            "quality_mutation_dashboard.py",
+            "avo_ci_quality_mutation_dashboard",
+            "mutation",
+            "mutation-efficacy.png",
+            "write_mutation_indexes",
+            "render_mutation",
+            "mutation_image_error",
+        ),
+        (
+            "gate_decisions",
+            "quality_gate_decisions.py",
+            "avo_ci_quality_gate_decisions",
+            "decisions",
+            "gate-decisions.png",
+            "write_gate_indexes",
+            "render_gates",
+            "gate_decisions_image_error",
         ),
     )
     doc["support_images"] = {}
@@ -400,9 +447,71 @@ def coupling_spacing(series: dict) -> str:
 def supporting_markdown(doc: dict) -> list[str]:
     lines = []
     series = doc.get("series", {})
+    mutation = series.get("mutation_scopes", {})
     hotspots = series.get("hotspots", {})
     coupling = series.get("coupling_files", {})
     shared = ci_module("avo_ci_coupling_dashboard", "coupling_dashboard.py")
+    if mutation:
+        lines.extend(["", "### Mutation efficacy by source", ""])
+        lines.extend(
+            [
+                f"{safe_text(mutation.get('state', 'UNAVAILABLE'))}: {safe_text(mutation.get('reason', 'Per-source evidence unavailable.'))}",
+                "Existing mutation enforcement applies to the aggregate profile. Source colors and the aggregate floor line are informational comparisons.",
+                "",
+            ]
+        )
+        image = doc.get("support_images", {}).get("mutation_scopes")
+        if image:
+            lines.extend([f"![Mutation efficacy and outcome accounting]({image})", ""])
+        elif doc.get("mutation_image_error"):
+            lines.extend(
+                [
+                    "Mutation image unavailable; the same counts and source lookup remain below.",
+                    "",
+                ]
+            )
+        counts = mutation.get("counts", {})
+        if counts:
+            lines.extend(
+                [
+                    f"Aggregate: {counts['killed']} killed / {counts['survived']} survived / {counts['total']} total; {mutation.get('unresolved')} unresolved. Complete execution: {mutation.get('complete') is True}.",
+                    "",
+                ]
+            )
+        by_id = {row["id"]: row for row in mutation.get("scopes", [])}
+        display = mutation.get("display", {})
+        lines.extend(
+            [
+                f"Source excerpt: {display.get('shown', 0)}/{display.get('total', 0)}. Missing/incomplete first, then lowest measured efficacy; M IDs sort by full source path.",
+                "",
+                "| Source ID and full path | Efficacy / state | Actual outcome counts |",
+                "|---|---|---|",
+            ]
+        )
+        for identifier in display.get("ids", []):
+            row = by_id[identifier]
+            measured = row.get("score")
+            label = (
+                f"{measured:.2f}%"
+                if measured is not None
+                else row.get("reason", "Unavailable")
+            )
+            counts = row.get("counts")
+            observed = (
+                f"{counts['killed']} killed / {counts['survived']} survived / {counts['total']} total; {row.get('unresolved')} unresolved"
+                if counts is not None
+                else "Unavailable: per-source outcomes not retained"
+            )
+            lines.append(
+                f"| {identifier}: {shared.source_label(row)} | {safe_text(label)} | {observed} |"
+            )
+        lines.extend(
+            [
+                "",
+                "[Complete mutation source index and outcome proof (text archive)](kpi-detail:mutation-efficacy.md)",
+                "",
+            ]
+        )
     if hotspots:
         lines.extend(["", "### Complexity and CRAP review", ""])
         if hotspots.get("state") not in {"MEASURED", "PARTIAL"}:
@@ -696,6 +805,30 @@ def definition_markdown(doc: dict) -> list[str]:
     return lines
 
 
+def gate_view_markdown(doc: dict, decisions: dict) -> list[str]:
+    lines = []
+    image = doc.get("support_images", {}).get("gate_decisions")
+    if image:
+        lines.extend([f"![Gate decisions, policies and execution proof]({image})", ""])
+    elif doc.get("gate_decisions_image_error"):
+        lines.extend(
+            [
+                "Gate decision image unavailable; all decisions and proof remain in the table.",
+                "",
+            ]
+        )
+    if decisions:
+        lines.extend(
+            [
+                "Status badges are categorical. Missing execution proof cannot certify a recorded PASS; recorded results stay labeled separately. Required jobs are listed separately below.",
+                "",
+                "[Complete gate decisions and proof (text archive)](kpi-detail:gate-decisions.md)",
+                "",
+            ]
+        )
+    return lines
+
+
 def markdown(doc: dict, series: dict, *, image: str = "") -> str:
     lines = [
         "## AVO quality",
@@ -774,9 +907,13 @@ def markdown(doc: dict, series: dict, *, image: str = "") -> str:
             "",
             "**Gate decisions**",
             "",
-            "| Gate | Decision | Policy | Execution evidence |",
-            "|---|---|---|---|",
         ]
+    )
+    decisions = doc.get("series", {}).get("gate_decisions", {})
+    decision_rows = {row["key"]: row for row in decisions.get("rows", [])}
+    lines.extend(gate_view_markdown(doc, decisions))
+    lines.extend(
+        ["| Gate | Decision | Policy | Execution evidence |", "|---|---|---|---|"]
     )
     for gate in doc.get("gates", []):
         proof = evidence.get("gates", {}).get(gate["key"], {})
@@ -792,8 +929,14 @@ def markdown(doc: dict, series: dict, *, image: str = "") -> str:
         links = evidence_links(doc, proof.get("sources", []))
         if not proof.get("verified"):
             links = f"Unverified capture: {safe_text(proof.get('reason', 'Historical execution summary only.'))}"
+        frozen_gate = decision_rows.get(gate["key"], {})
+        decision = frozen_gate.get("decision", gate["status"])
+        if decision != gate["status"]:
+            decision += f" (reported {gate['status']})"
+        if frozen_gate.get("observed"):
+            links = safe_text(frozen_gate["observed"]) + ". " + links
         lines.append(
-            f"| {safe_text(gate['title'])} | **{gate['status']}** | {safe_text(checks)} | {links} |"
+            f"| {safe_text(gate['title'])} | **{safe_text(decision)}** | {safe_text(checks)} | {links} |"
         )
     mutation = next(row for row in series["metrics"] if row["title"] == "Mutation")
     mutation_proof = next((row for row in observations if row["key"] == "mutation"), {})
@@ -802,8 +945,13 @@ def markdown(doc: dict, series: dict, *, image: str = "") -> str:
         if mutation["threshold"] is not None
         else "threshold unavailable"
     )
+    mutation_decision = decision_rows.get("mutation", {}).get(
+        "decision", mutation["status"]
+    )
+    if mutation_decision != mutation["status"]:
+        mutation_decision += f" (reported {mutation['status']})"
     lines.append(
-        f"| Mutation | **{mutation['status']}** | Complete accounting; {threshold}; {safe_text(mutation['scope'])} | {evidence_links(doc, mutation_proof.get('sources', []))} |"
+        f"| Mutation | **{safe_text(mutation_decision)}** | Complete accounting; {threshold}; {safe_text(mutation['scope'])} | {evidence_links(doc, mutation_proof.get('sources', []))} |"
     )
     lines.extend(
         [
