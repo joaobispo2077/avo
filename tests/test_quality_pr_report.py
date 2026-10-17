@@ -81,6 +81,71 @@ def test_job_summary_names_publication_outcomes_and_preserves_archive_fallback()
     assert "--attachment" not in summary
 
 
+def test_support_archives_are_full_run_outputs_and_not_release_requirements():
+    workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+    for name, identifier, artifact, directory in (
+        ("Upload hotspot evidence", "quality_hotspots", "quality-hotspots", "hotspots"),
+        (
+            "Upload coupling evidence",
+            "quality_coupling",
+            "quality-coupling",
+            "coupling",
+        ),
+    ):
+        step = workflow.split(f"- name: {name}\n", 1)[1].split("- name:", 1)[0]
+        assert f"id: {identifier}" in step and f"name: {artifact}" in step
+        assert f"path: reports/quality/{directory}" in step
+        assert "steps.report_build.outcome == 'success'" in step
+        assert "!cancelled()" in step and "github.event_name" not in step
+        assert "continue-on-error: true" in step and "retention-days: 14" in step
+    snapshot = _load(
+        "support_release_roles", "scripts/ci/write_quality_metrics_snapshot.py"
+    )
+    assert dict(snapshot.CHART_FILES) == {"dashboard": "dashboard.png"}
+
+
+def test_each_support_attachment_has_a_fresh_guard_and_independent_link_route():
+    workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+    for name, identifier, role in (
+        ("hotspot", "pr_hotspots", "hotspots"),
+        ("coupling", "pr_coupling", "coupling_files"),
+    ):
+        guard = workflow.split(f"- name: Check current PR before {name} upload\n", 1)[
+            1
+        ].split("- name:", 1)[0]
+        assert f"id: {identifier}" in guard and "--check-pr-current" in guard
+        attachment = workflow.split(f"- name: Attach inline {name} chart\n", 1)[
+            1
+        ].split("- name:", 1)[0]
+        assert f"steps.{identifier}.outputs.number != ''" in attachment
+        assert "steps.report_build.outcome == 'success'" in attachment
+        assert (
+            "!cancelled()" in attachment
+            and "github.event_name == 'pull_request'" in attachment
+        )
+        assert (
+            "github.event.pull_request.head.repo.full_name == github.repository"
+            in attachment
+        )
+        assert "continue-on-error: true" in attachment
+        assert "QUALITY_CHARTS_TOKEN: ${{ secrets.GH_TOKEN }}" in attachment
+        assert f"upload_quality_chart.py --role {role}" in attachment
+    linking = workflow.split("- name: Link quality chart and artifact downloads", 1)[
+        1
+    ].split("- name:", 1)[0]
+    summary = workflow.split("- name: Publish unified job summary", 1)[1].split(
+        "- name:", 1
+    )[0]
+    for name, identifier in (
+        ("HOTSPOTS", "quality_hotspots"),
+        ("COUPLING", "quality_coupling"),
+    ):
+        route = f"QUALITY_{name}_ARTIFACT_URL: ${{{{ steps.{identifier}.outputs.artifact-url }}}}"
+        assert route in linking and route in summary
+    assert "--hotspots-attachment reports/quality/hotspots-attachment.json" in linking
+    assert "--coupling-attachment reports/quality/coupling-attachment.json" in linking
+
+
 def _load(name: str, rel: str):
     path = ROOT / rel
     spec = importlib.util.spec_from_file_location(name, path)

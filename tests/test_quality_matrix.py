@@ -807,7 +807,7 @@ class QualityMatrixTests(unittest.TestCase):
         )
         self.assertIn("scripts/ci/upload_quality_chart.py", job)
         attachment = job.split("- name: Attach inline quality dashboard", 1)[1].split(
-            "- name: Link quality chart", 1
+            "- name:", 1
         )[0]
         self.assertIn("continue-on-error: true", attachment)
         self.assertIn("steps.pr.outputs.number != ''", attachment)
