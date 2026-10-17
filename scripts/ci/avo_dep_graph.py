@@ -68,19 +68,34 @@ def _targets(
     return internal
 
 
-def collect_edges(source: Path = SRC) -> tuple[set[str], set[tuple[str, str]]]:
+def collect_edges(
+    source: Path = SRC, *, granularity: str = "package"
+) -> tuple[set[str], set[tuple[str, str]]]:
+    """Collect static internal imports at package or module granularity."""
+    if granularity not in {"package", "module"}:
+        raise ValueError(f"unsupported dependency granularity: {granularity}")
     modules = iter_modules(source)
     if not modules:
         raise ValueError(f"dependency source has no Python modules: {source}")
+    if granularity == "module":
+        seen = set()
+        for module, path in modules:
+            if module in seen:
+                raise ValueError(f"ambiguous module {module}: {path}")
+            seen.add(module)
     known = {
         ".".join(module.split(".")[:length])
         for module, _path in modules
         for length in range(1, len(module.split(".")) + 1)
     }
-    nodes = {_pkg(module) for module, _path in modules}
+    nodes = (
+        known.copy()
+        if granularity == "module"
+        else {_pkg(module) for module, _path in modules}
+    )
     edges: set[tuple[str, str]] = set()
     for module, path in modules:
-        src_pkg = _pkg(module)
+        origin = module if granularity == "module" else _pkg(module)
         package = module if path.name == "__init__.py" else module.rsplit(".", 1)[0]
         try:
             text = path.read_text(encoding="utf-8")
@@ -90,10 +105,10 @@ def collect_edges(source: Path = SRC) -> tuple[set[str], set[tuple[str, str]]]:
         for node in ast.walk(tree):
             if isinstance(node, (ast.Import, ast.ImportFrom)):
                 for target in _targets(node, package, known, path):
-                    dst_pkg = _pkg(target)
-                    if dst_pkg != src_pkg:
-                        nodes.add(dst_pkg)
-                        edges.add((src_pkg, dst_pkg))
+                    destination = target if granularity == "module" else _pkg(target)
+                    if destination != origin:
+                        nodes.add(destination)
+                        edges.add((origin, destination))
     return nodes, edges
 
 

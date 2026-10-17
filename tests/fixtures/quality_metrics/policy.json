@@ -1,0 +1,7 @@
+{
+  "schema": 1,
+  "coverage_floor": 68.0,
+  "coverage_precision": 0,
+  "duplication_ceiling": 2.0,
+  "mutation_profiles": {"light": 40.0, "full": 50.0}
+}

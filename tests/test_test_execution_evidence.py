@@ -259,3 +259,178 @@ def test_absent_receipt_is_unavailable(tmp_path):
     result = evidence(tmp_path)
     assert result["counts"] is None
     assert result["state"] == "UNAVAILABLE"
+
+
+def test_case_events_retain_actual_identity_and_outcome_reasons(tmp_path):
+    fixture(
+        tmp_path,
+        """<testsuites><testsuite name="outer">
+          <testcase classname="tests.unit" name="passed"/>
+          <testsuite name="inner">
+            <testcase classname="tests.media" name="skipped">
+              <skipped message="ffmpeg unavailable">dependency not installed</skipped>
+            </testcase>
+            <testcase classname="tests.mcp" name="error">
+              <error message="runtime failed">captured traceback</error>
+            </testcase>
+            <testcase classname="tests.unit" name="failed">
+              <failure message="first subtest"/><failure>second subtest</failure>
+            </testcase>
+          </testsuite>
+        </testsuite></testsuites>""",
+        status="FAIL",
+        code=1,
+    )
+    result = evidence(tmp_path)
+    assert result["counting_unit"] == "testcase events"
+    cases = result["cases"]
+    assert cases == [
+        {
+            "suite": "outer",
+            "classname": "tests.unit",
+            "name": "passed",
+            "outcome": "passed",
+            "reason": None,
+            "reason_truncated": False,
+        },
+        {
+            "suite": "inner",
+            "classname": "tests.media",
+            "name": "skipped",
+            "outcome": "skipped",
+            "reason": "ffmpeg unavailable\ndependency not installed",
+            "reason_truncated": False,
+        },
+        {
+            "suite": "inner",
+            "classname": "tests.mcp",
+            "name": "error",
+            "outcome": "errors",
+            "reason": "runtime failed\ncaptured traceback",
+            "reason_truncated": False,
+        },
+        {
+            "suite": "inner",
+            "classname": "tests.unit",
+            "name": "failed",
+            "outcome": "failed",
+            "reason": "first subtest\nsecond subtest",
+            "reason_truncated": False,
+        },
+    ]
+    assert len(cases) == result["counts"]["total"]
+    for outcome in ("passed", "failed", "errors", "skipped"):
+        assert (
+            sum(case["outcome"] == outcome for case in cases)
+            == result["counts"][outcome]
+        )
+
+
+def test_repeated_case_identities_remain_repeated_events_not_unique_tests(tmp_path):
+    fixture(
+        tmp_path,
+        '<testsuite name="repeat"><testcase classname="a" name="one"/>'
+        '<testcase classname="a" name="one"/></testsuite>',
+    )
+    result = evidence(tmp_path)
+    assert result["counting_unit"] == "testcase events"
+    assert result["counts"]["total"] == 2
+    assert len(result["cases"]) == 2
+    assert result["cases"][0] == result["cases"][1]
+
+
+def test_missing_case_identity_and_reason_are_not_invented(tmp_path):
+    fixture(tmp_path, "<testsuite><testcase><skipped/></testcase></testsuite>")
+    result = evidence(tmp_path)
+    assert result["cases"] == [
+        {
+            "suite": None,
+            "classname": None,
+            "name": None,
+            "outcome": "skipped",
+            "reason": None,
+            "reason_truncated": False,
+        }
+    ]
+
+
+def test_reason_excerpt_discloses_truncation_and_retains_full_raw_evidence(tmp_path):
+    reason = "x" * 1001 + " actual ending"
+    fixture(
+        tmp_path,
+        f'<testsuite><testcase name="skip"><skipped>{reason}</skipped></testcase></testsuite>',
+    )
+    result = evidence(tmp_path)
+    assert result["cases"][0]["reason"] == reason[:1000]
+    assert result["cases"][0]["reason_truncated"] is True
+    assert reason in (tmp_path / result["sources"][0]["path"]).read_text(
+        encoding="utf-8"
+    )
+
+
+def test_same_message_and_body_are_not_duplicated_within_one_outcome(tmp_path):
+    fixture(
+        tmp_path,
+        '<testsuite><testcase name="skip">'
+        '<skipped message="recorded reason">recorded reason</skipped>'
+        "</testcase></testsuite>",
+    )
+    assert evidence(tmp_path)["cases"][0]["reason"] == "recorded reason"
+
+
+def test_verified_reader_parses_xml_once_and_counts_api_remains_compatible(
+    tmp_path, monkeypatch
+):
+    module = reader()
+    raw = b'<testsuite name="unit"><testcase name="pass"/></testsuite>'
+    fixture(tmp_path, raw)
+    assert module._counts(raw) == {
+        "total": 1,
+        "passed": 1,
+        "failed": 0,
+        "errors": 0,
+        "skipped": 0,
+    }
+    original = module.ET.fromstring
+    parsed = []
+
+    def once(*args, **kwargs):
+        parsed.append(1)
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(module.ET, "fromstring", once)
+    result = module.read_test_evidence(
+        tmp_path,
+        sha=SHA,
+        run_id=RUN_ID,
+        gate=GATE,
+        artifact=ARTIFACT,
+        junit_name=JUNIT,
+    )
+    assert parsed == [1]
+    assert result["counts"]["passed"] == 1
+    assert result["cases"][0]["name"] == "pass"
+
+
+def test_empty_and_unavailable_cases_remain_distinct(tmp_path):
+    unavailable = evidence(tmp_path)
+    assert unavailable["cases"] is None
+    assert unavailable["counting_unit"] == "testcase events"
+    fixture(tmp_path, "<testsuite/>")
+    empty = evidence(tmp_path)
+    assert empty["cases"] == []
+    assert empty["counts"]["total"] == 0
+
+
+def test_namespaced_junit_and_markup_text_are_recorded_without_execution(tmp_path):
+    fixture(
+        tmp_path,
+        '<testsuites xmlns="urn:junit"><testsuite name="&lt;script&gt;">'
+        '<testcase classname="safe" name="&lt;img onerror=&quot;bad&quot;&gt;">'
+        '<skipped message="&lt;script&gt;bad&lt;/script&gt;"/>'
+        "</testcase></testsuite></testsuites>",
+    )
+    case = evidence(tmp_path)["cases"][0]
+    assert case["suite"] == "<script>"
+    assert case["name"] == '<img onerror="bad">'
+    assert case["reason"] == "<script>bad</script>"

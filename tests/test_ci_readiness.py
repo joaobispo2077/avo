@@ -58,6 +58,16 @@ def test_missing_or_malformed_mandatory_job_fails_closed():
         assert checker.evaluate_needs(malformed)
 
 
+def test_selector_outputs_cannot_excuse_missing_mandatory_evidence():
+    needs = successful_jobs()
+    needs["select-run"] = {
+        "result": "success",
+        "outputs": {"run_full_ci": "false"},
+    }
+    needs["mutation-light"]["result"] = "skipped"
+    assert "mutation-light" in load_checker().evaluate_needs(needs)[0]
+
+
 @pytest.mark.parametrize("payload", ("", "not-json", "null", "[]", "{}"))
 def test_cli_rejects_missing_or_invalid_evidence(payload):
     env = {**os.environ, "CI_NEEDS_JSON": payload}
@@ -124,9 +134,17 @@ def test_workflow_wires_readiness_after_all_mandatory_jobs():
     workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
     readiness = workflow.split("  ci-readiness:\n", 1)[1]
     assert "name: CI readiness" in readiness
-    assert "if: always()" in readiness
+    configuration = readiness.split("    steps:\n", 1)[0]
+    assert "!cancelled()" in configuration
+    assert (
+        "!(needs.select-run.result == 'success' && "
+        "needs.select-run.outputs.run_full_ci == 'false')"
+    ) in configuration
     needs = readiness.split("    needs:\n", 1)[1].split("    runs-on:", 1)[0]
-    assert {line.strip()[2:] for line in needs.splitlines()} == set(MANDATORY_JOBS)
+    assert {line.strip()[2:] for line in needs.splitlines()} == {
+        "select-run",
+        *MANDATORY_JOBS,
+    }
     assert "CI_NEEDS_JSON: ${{ toJSON(needs) }}" in readiness
     assert "run: python scripts/ci/check_ci_readiness.py" in readiness
     integration = workflow.split("  repo-integration-tests:\n", 1)[1].split(
