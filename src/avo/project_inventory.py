@@ -410,9 +410,21 @@ def resolve_preserved_set(
     initial_transcript: Path | None = None,
 ) -> PreservedSetResult:
     raw_dir = raw_dir.resolve()
+    reconstruction = list(_resolve_reconstruction_metadata(raw_dir))
+    return _preserved_from_metadata(
+        raw_dir, master_basename, reconstruction, initial_transcript=initial_transcript
+    )
+
+
+def _preserved_from_metadata(
+    raw_dir: Path,
+    master_basename: str,
+    reconstruction: list[Path],
+    *,
+    initial_transcript: Path | None = None,
+) -> PreservedSetResult:
     from avo.shorts_delivery import preserved_shorts_paths
 
-    reconstruction = list(_resolve_reconstruction_metadata(raw_dir))
     reconstruction.extend(preserved_shorts_paths(raw_dir))
     reconstruction.extend(_retained_paths(raw_dir))
     return PreservedSetResult(
@@ -1054,6 +1066,45 @@ def _maybe_purge_session(session_id: str | None, *, purge_session: bool) -> None
         print(f"scratch purged: session {session_id}")
 
 
+def _cleanup_preserved_set(
+    raw_dir: Path, master_basename: str, initial_transcript: Path | None
+) -> PreservedSetResult:
+    """Verify once here; never consume an externally cached reconstruction pass."""
+    if not raw_dir.is_dir():
+        raise SystemExit(f"rawDir does not exist: {raw_dir}")
+    timeline = raw_dir / "edit" / "timeline"
+    if not all((timeline / f"{name}.json").is_file() for name in CANONICAL_INDEX_NAMES):
+        errors = verify_preserved_complete(
+            raw_dir, master_basename, initial_transcript=initial_transcript
+        )
+        if errors:
+            raise SystemExit("\n".join(errors))
+        return resolve_preserved_set(
+            raw_dir, master_basename, initial_transcript=initial_transcript
+        )
+    from avo.timeline.reconstruction import verify_reconstruction_bundle
+
+    try:
+        bundle = verify_reconstruction_bundle(raw_dir)
+    except Exception as error:
+        raise SystemExit(
+            f"invalid or missing reconstruction bundle: {error}"
+        ) from error
+    preserved = _preserved_from_metadata(
+        raw_dir,
+        master_basename,
+        [
+            timeline / "reconstruction-bundle.json",
+            *(raw_dir / entry["path"] for entry in bundle["files"]),
+        ],
+        initial_transcript=initial_transcript,
+    )
+    errors = _preserved_artifact_errors(raw_dir, master_basename, preserved)
+    if errors:
+        raise SystemExit("\n".join(errors))
+    return preserved
+
+
 def run_cleanup(
     raw_dir: Path,
     master_basename: str,
@@ -1065,19 +1116,10 @@ def run_cleanup(
     purge_session: bool = True,
 ) -> CleanupRunResult:
     raw_dir = Path(raw_dir).resolve()
-    errors = verify_preserved_complete(
-        raw_dir, master_basename, initial_transcript=initial_transcript
-    )
-    if errors:
-        raise SystemExit("\n".join(errors))
+    preserved = _cleanup_preserved_set(raw_dir, master_basename, initial_transcript)
 
     dests = promote_legacy_reconstruction(raw_dir, apply=not dry_run)
-    preserved = _merge_legacy_dests(
-        resolve_preserved_set(
-            raw_dir, master_basename, initial_transcript=initial_transcript
-        ),
-        dests,
-    )
+    preserved = _merge_legacy_dests(preserved, dests)
     delete_list, leftover = scan_delete_candidates(raw_dir, preserved)
     assert_no_preserved_in_delete_list(preserved, delete_list)
 
