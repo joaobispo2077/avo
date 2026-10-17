@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import copy
+import hashlib
 import importlib.util
 import json
 import os
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from PIL import Image
 
@@ -162,6 +165,185 @@ class KpiChartTests(unittest.TestCase):
         outcomes = {key: "success" for key, _title in self.report.GATES}
         outcomes.update(overrides)
         return outcomes
+
+    def _frozen_dashboard(self, *, historical: bool = False) -> dict:
+        from tests.test_quality_dashboard import support_document
+
+        doc = support_document()
+        doc["schema"] = 2
+        dashboard = self.charts.dashboard_module()
+        measurements = dashboard.ci_module(
+            "avo_ci_quality_measurements", "quality_measurements.py"
+        )
+        measurements.freeze_definitions(doc)
+        if historical:
+            block = doc["metric_definitions"]
+            entry = next(row for row in block["entries"] if row["id"] == "coverage")
+            entry["revision"] = 7
+            entry["interpretation"] = "Historical band interpretation."
+
+            def digest(value: object) -> str:
+                return hashlib.sha256(
+                    json.dumps(value, sort_keys=True, separators=(",", ":")).encode()
+                ).hexdigest()
+
+            entry["sha256"] = digest(
+                {key: value for key, value in entry.items() if key != "sha256"}
+            )
+            block["catalog_sha256"] = digest(
+                {
+                    "schema": 1,
+                    "entries": [
+                        {key: value for key, value in row.items() if key != "sha256"}
+                        for row in block["entries"]
+                    ],
+                }
+            )
+        dashboard.build_supporting(doc)
+        doc["series"]["dashboard"] = dashboard.build_series(doc)
+        return doc
+
+    def _render_dashboard(self, doc: dict, tmp: Path) -> tuple[str, dict]:
+        return self.charts.generate_dashboard(
+            {},
+            coverage_json=tmp / "unused.json",
+            floor=68,
+            root=tmp,
+            out_dir=tmp / "charts",
+            document=doc,
+        )
+
+    def test_historical_series_are_rendered_without_current_reinterpretation(self):
+        doc = self._frozen_dashboard(historical=True)
+        doc["series"]["dashboard"]["metrics"][0]["band"] = "green"
+        doc["series"]["coupling_files"]["references"].update(ce=2, ca=2)
+        doc["series"]["hotspots"]["rankings"]["complexity"]["selection"] = (
+            "historical top five"
+        )
+        expected = copy.deepcopy(doc["series"])
+        definitions = copy.deepcopy(doc["metric_definitions"])
+        tmp = self._workspace()
+        dashboard = self.charts.dashboard_module()
+        with (
+            patch.object(
+                dashboard,
+                "build_supporting",
+                side_effect=AssertionError("current supporting rules were used"),
+            ),
+            patch.object(
+                dashboard,
+                "build_series",
+                side_effect=AssertionError("current dashboard rules were used"),
+            ),
+        ):
+            text, actual = self._render_dashboard(doc, tmp)
+        self.assertEqual(actual["series"], expected)
+        self.assertEqual(actual["metric_definitions"], definitions)
+        self.assertIn("historical top five", text)
+        self.assertEqual(
+            _png_series(tmp / "charts/dashboard.png"), expected["dashboard"]
+        )
+        self.assertEqual(
+            json.loads((tmp / "coupling/coupling-index.json").read_text()),
+            expected["coupling_files"],
+        )
+        self.assertEqual(
+            json.loads((tmp / "hotspots/hotspots.json").read_text()),
+            expected["hotspots"],
+        )
+
+    def test_frozen_series_reject_stale_or_invalid_identity(self):
+        changes = (
+            [
+                (role, field, value)
+                for role in ("dashboard", "coupling_files", "hotspots")
+                for field, value in (
+                    ("sha", "b" * 40),
+                    ("run_id", "43"),
+                    ("chart", "wrong"),
+                )
+            ]
+            + [
+                (role, field, value)
+                for role in ("coupling_files", "hotspots")
+                for field, value in (
+                    ("schema", True),
+                    ("mode", "ci"),
+                    ("source_fingerprint", "b" * 64),
+                    ("sources", [{"path": "other.json", "sha256": "a" * 64}]),
+                    ("definition_identity", {"catalog_sha256": "b" * 64}),
+                )
+            ]
+            + [
+                ("dashboard", "schema", True),
+                ("dashboard", "metrics", []),
+                ("dashboard", "actions", "not a list"),
+                ("coupling_files", "files", {}),
+                ("coupling_files", "references", []),
+                ("hotspots", "functions", {}),
+                ("hotspots", "rankings", []),
+            ]
+        )
+        for role, field, value in changes:
+            with self.subTest(role=role, field=field):
+                doc = self._frozen_dashboard()
+                doc["series"][role][field] = value
+                with self.assertRaisesRegex(ValueError, "frozen.*" + role):
+                    self._render_dashboard(doc, self._workspace())
+
+    def test_frozen_source_links_must_match_the_report_context(self):
+        for role, population in (
+            ("coupling_files", "files"),
+            ("hotspots", "functions"),
+        ):
+            with self.subTest(role=role):
+                doc = self._frozen_dashboard()
+                doc["series"][role][population][0]["source_url"] = (
+                    "https://github.com/other/repo/blob/"
+                    + "b" * 40
+                    + "/src/avo/sample.py"
+                )
+                with self.assertRaisesRegex(ValueError, "frozen.*" + role):
+                    self._render_dashboard(doc, self._workspace())
+
+    def test_invalid_definition_block_cannot_label_frozen_series(self):
+        doc = self._frozen_dashboard()
+        doc["metric_definitions"]["catalog_sha256"] = "b" * 64
+        with self.assertRaisesRegex(ValueError, "definition"):
+            self._render_dashboard(doc, self._workspace())
+
+    def test_missing_historical_series_cannot_acquire_current_rules(self):
+        doc = self._frozen_dashboard(historical=True)
+        del doc["series"]["hotspots"]
+        with self.assertRaisesRegex(ValueError, "missing.*historical"):
+            self._render_dashboard(doc, self._workspace())
+
+    def test_unfrozen_document_builds_with_current_definition_identity(self):
+        doc = self._frozen_dashboard(historical=True)
+        old_hash = doc["metric_definitions"]["catalog_sha256"]
+        for role in ("dashboard", "coupling_files", "hotspots"):
+            del doc["series"][role]
+        _text, actual = self._render_dashboard(doc, self._workspace())
+        self.assertNotEqual(actual["metric_definitions"]["catalog_sha256"], old_hash)
+        for role in ("coupling_files", "hotspots"):
+            self.assertEqual(
+                actual["series"][role]["definition_identity"]["catalog_sha256"],
+                actual["metric_definitions"]["catalog_sha256"],
+            )
+
+    def test_missing_current_series_build_without_replacing_frozen_series(self):
+        doc = self._frozen_dashboard()
+        expected = copy.deepcopy(doc["series"]["dashboard"])
+        del doc["series"]["hotspots"]
+        dashboard = self.charts.dashboard_module()
+        with patch.object(
+            dashboard,
+            "build_series",
+            side_effect=AssertionError("frozen dashboard was rebuilt"),
+        ):
+            _text, actual = self._render_dashboard(doc, self._workspace())
+        self.assertEqual(actual["series"]["dashboard"], expected)
+        self.assertEqual(actual["series"]["hotspots"]["state"], "MEASURED")
 
     def test_real_coverage_floor_is_68(self) -> None:
         floor = self.report.coverage_floor_from_pyproject(ROOT / "pyproject.toml")
