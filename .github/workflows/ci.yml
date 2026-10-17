@@ -477,6 +477,8 @@ jobs:
           path: reports/quality/integration-evidence
 
       - name: Build unified quality report
+        id: report_build
+        continue-on-error: true
         env:
           CI_NEEDS_JSON: ${{ toJSON(needs) }}
         run: |
@@ -485,8 +487,17 @@ jobs:
           "$PY" scripts/ci/write_unified_quality_report.py
           cp reports/quality/quality-gates.md reports/quality/quality-gates-base.md
 
+      - name: Build text-only failure report
+        if: ${{ !cancelled() && steps.report_build.outcome == 'failure' }}
+        env:
+          CI_NEEDS_JSON: ${{ toJSON(needs) }}
+        run: |
+          python scripts/ci/write_unified_quality_report.py --text-only-fallback
+          cp reports/quality/quality-gates.md reports/quality/quality-gates-base.md
+
       - name: Upload unified metrics
         id: quality_metrics
+        if: ${{ success() && !cancelled() && steps.report_build.outcome == 'success' }}
         continue-on-error: true
         uses: actions/upload-artifact@v7
         with:
@@ -498,6 +509,7 @@ jobs:
 
       - name: Upload dashboard image
         id: quality_charts
+        if: ${{ success() && !cancelled() && steps.report_build.outcome == 'success' }}
         continue-on-error: true
         uses: actions/upload-artifact@v7
         with:
@@ -518,7 +530,7 @@ jobs:
       - name: Attach inline quality dashboard
         continue-on-error: true
         # User credentials are never exposed to a fork's pull request code.
-        if: ${{ success() && !cancelled() && github.event_name == 'pull_request' && steps.pr.outputs.number != '' && github.event.pull_request.head.repo.full_name == github.repository }}
+        if: ${{ success() && !cancelled() && steps.report_build.outcome == 'success' && github.event_name == 'pull_request' && steps.pr.outputs.number != '' && github.event.pull_request.head.repo.full_name == github.repository }}
         env:
           QUALITY_CHARTS_TOKEN: ${{ secrets.GH_TOKEN }}
           GITHUB_REPOSITORY_ID: ${{ github.repository_id }}
@@ -528,6 +540,7 @@ jobs:
           "$PY" scripts/ci/upload_quality_chart.py
 
       - name: Link quality chart and artifact downloads
+        if: ${{ success() && !cancelled() && steps.report_build.outcome == 'success' }}
         env:
           QUALITY_METRICS_ARTIFACT_URL: ${{ steps.quality_metrics.outputs.artifact-url }}
           QUALITY_CHARTS_ARTIFACT_URL: ${{ steps.quality_charts.outputs.artifact-url }}
@@ -549,19 +562,33 @@ jobs:
         with:
           number: ${{ steps.current_pr.outputs.number }}
           path: reports/quality/quality-gates.md
-          header: quality-gates-report
+          header: quality-gates-report-${{ github.run_id }}
 
       - name: Publish unified job summary
         env:
           COMMENT_RESULT: ${{ steps.quality_comment.outcome }}
+          REPORT_BUILD_RESULT: ${{ steps.report_build.outcome }}
+          REPORT_EVENT: ${{ github.event_name }}
           QUALITY_METRICS_ARTIFACT_URL: ${{ steps.quality_metrics.outputs.artifact-url }}
           QUALITY_CHARTS_ARTIFACT_URL: ${{ steps.quality_charts.outputs.artifact-url }}
         run: |
           # Native attachments become readable when associated with a comment.
           if [ "$COMMENT_RESULT" != "success" ]; then
             cp reports/quality/quality-gates-base.md reports/quality/quality-gates.md
-            python scripts/ci/link_quality_artifacts.py --markdown reports/quality/quality-gates.md --no-summary
+            if [ "$REPORT_BUILD_RESULT" = "success" ]; then
+              python scripts/ci/link_quality_artifacts.py --markdown reports/quality/quality-gates.md --no-summary
+            fi
           fi
+          if [ "$REPORT_EVENT" != "pull_request" ]; then
+            NOTICE="PR publication not requested for this event."
+          elif [ "$COMMENT_RESULT" = "success" ]; then
+            NOTICE="PR comment delivered."
+          elif [ "$COMMENT_RESULT" = "failure" ]; then
+            NOTICE="PR comment unavailable: permission or service failure."
+          else
+            NOTICE="PR publication skipped: stale identity or freshness lookup unavailable."
+          fi
+          printf '\n%s\n' "$NOTICE" >> reports/quality/quality-gates.md
           cat reports/quality/quality-gates.md >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload readable quality report
@@ -581,3 +608,9 @@ jobs:
           number: ${{ steps.current_pr.outputs.number }}
           header: mutation-report
           delete: true
+
+      - name: Preserve report builder failure
+        if: ${{ !cancelled() && steps.report_build.outcome == 'failure' }}
+        run: |
+          echo "Quality report builder failed; fallback delivery does not certify this job."
+          exit 1
