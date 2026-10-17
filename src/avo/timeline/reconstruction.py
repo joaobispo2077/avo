@@ -6,6 +6,8 @@ import json
 from pathlib import Path
 from typing import Any
 
+from avo.master_artifacts import resolve_final_masters
+
 from .contracts import (
     content_hash,
     document_hash_excluding,
@@ -169,8 +171,7 @@ def _raw_sources(raw_dir: Path) -> list[Path]:
 
 
 def _final_artifacts(raw_dir: Path, master_basename: str) -> tuple[Path, Path]:
-    candidates = sorted((raw_dir / "edit" / "masters").glob(f"{master_basename}.*"))
-    masters = [path for path in candidates if path.is_file()]
+    masters = resolve_final_masters(raw_dir, master_basename)
     if not masters:
         raise ReconstructionError("final master is missing")
     master = masters[0]

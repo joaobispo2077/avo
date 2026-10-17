@@ -16,6 +16,7 @@ from pathlib import Path, PureWindowsPath
 from typing import Any
 
 from avo import avo_state
+from avo.master_artifacts import resolve_final_masters
 from avo.session import diff_inventories as _session_diff_inventories
 from avo.session import scan_inventory as _session_scan_inventory
 from avo.telemetry import dir_size
@@ -357,19 +358,6 @@ def _resolve_final_transcripts(raw_dir: Path, master_basename: str) -> list[Path
     return sorted(paths)
 
 
-def _resolve_final_master(raw_dir: Path, master_basename: str) -> list[Path]:
-    masters_dir = raw_dir / "edit" / "masters"
-    if not masters_dir.is_dir():
-        return []
-
-    paths = sorted(
-        path
-        for path in masters_dir.glob(f"{master_basename}.*")
-        if path.is_file() and not path.is_symlink()
-    )
-    return paths
-
-
 def _resolve_reconstruction_metadata(raw_dir: Path) -> list[Path]:
     bundle_path = raw_dir / "edit" / "timeline" / "reconstruction-bundle.json"
     if bundle_path.is_file():
@@ -431,7 +419,7 @@ def resolve_preserved_set(
             raw_dir, master_basename, override=initial_transcript
         ),
         final_transcripts=_resolve_final_transcripts(raw_dir, master_basename),
-        final_master=_resolve_final_master(raw_dir, master_basename),
+        final_master=resolve_final_masters(raw_dir, master_basename),
         reconstruction_metadata=sorted(set(reconstruction)),
     )
 
@@ -527,7 +515,8 @@ def verify_preserved_complete(
 
     if not preserved.final_master:
         errors.append(
-            f"missing final master under edit/masters/ for basename {master_basename!r}"
+            "missing final master in edit/masters/ or delivery manifests "
+            f"for basename {master_basename!r}"
         )
     else:
         for path in preserved.final_master:

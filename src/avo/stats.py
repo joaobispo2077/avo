@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from avo import avo_state
+from avo.master_artifacts import resolve_final_masters
 from avo.paths import config_path
 from avo.project_inventory import resolve_preserved_set
 from avo.session import normalize_path
@@ -440,12 +441,8 @@ def _probe_source_duration(raw_dir: Path, master_basename: str) -> float | None:
 def _probe_master_duration(raw_dir: Path, master_basename: str) -> float | None:
     if media_duration is None:
         return None
-    masters_dir = raw_dir / "edit" / "masters"
-    if not masters_dir.is_dir():
-        return None
-    for path in sorted(masters_dir.glob(f"{master_basename}.*")):
-        if path.is_file():
-            return media_duration(path)
+    for path in resolve_final_masters(raw_dir, master_basename):
+        return media_duration(path)
     return None
 
 
