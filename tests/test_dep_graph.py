@@ -188,3 +188,82 @@ def test_main_reports_errors_without_creating_a_partial_diagnostic(
     assert GRAPH.main() == 1
     assert "bad.py:1" in capsys.readouterr().err
     assert not GRAPH.OUT_DIR.exists()
+
+
+def test_module_graph_keeps_file_edges_namespaces_and_isolates(tmp_path: Path) -> None:
+    source = _source(
+        tmp_path,
+        {
+            "__init__.py": "ROOT = 1\n",
+            "group/__init__.py": "TOKEN = 1\n",
+            "group/reader.py": (
+                "import avo.group.target as alias\n"
+                "from . import target\n"
+                "from .target import VALUE\n"
+                "import avo.group.reader\n"
+                "from .. import ROOT\n"
+                "import avo.namespace\n"
+            ),
+            "group/target.py": "VALUE = 1\n",
+            "group/isolated.py": "",
+            "namespace/helper.py": "",
+        },
+    )
+    nodes, edges = GRAPH.collect_edges(source, granularity="module")
+    assert nodes == {
+        "avo",
+        "avo.group",
+        "avo.group.reader",
+        "avo.group.target",
+        "avo.group.isolated",
+        "avo.namespace",
+        "avo.namespace.helper",
+    }
+    assert edges == {
+        ("avo.group.reader", "avo.group.target"),
+        ("avo.group.reader", "avo"),
+        ("avo.group.reader", "avo.namespace"),
+    }
+    expected_packages = (
+        {"avo", "avo.group", "avo.namespace"},
+        {("avo.group", "avo"), ("avo.group", "avo.namespace")},
+    )
+    assert GRAPH.collect_edges(source) == expected_packages
+    assert GRAPH.collect_edges(source, granularity="package") == expected_packages
+
+
+def test_module_graph_retains_unreferenced_namespace_parents(tmp_path: Path) -> None:
+    source = _source(tmp_path, {"nested/deeper/isolated.py": ""})
+    assert GRAPH.collect_edges(source, granularity="module") == (
+        {"avo", "avo.nested", "avo.nested.deeper", "avo.nested.deeper.isolated"},
+        set(),
+    )
+
+
+def test_module_graph_rejects_ambiguous_real_module_names(tmp_path: Path) -> None:
+    source = _source(tmp_path, {"group.py": "", "group/__init__.py": ""})
+    with pytest.raises(ValueError, match=r"ambiguous.*avo\.group"):
+        GRAPH.collect_edges(source, granularity="module")
+    assert GRAPH.collect_edges(source) == ({"avo.group"}, set())
+
+
+@pytest.mark.parametrize(
+    ("statement", "error", "message"),
+    [
+        ("import avo.missing", ValueError, r"bad\.py:1.*avo\.missing"),
+        ("from .. import value", ValueError, r"bad\.py:1.*relative"),
+        ("def broken(:", SyntaxError, r"invalid syntax"),
+    ],
+)
+def test_module_graph_preserves_source_errors(
+    tmp_path: Path, statement: str, error: type[Exception], message: str
+) -> None:
+    source = _source(tmp_path, {"__init__.py": "", "bad.py": statement})
+    with pytest.raises(error, match=message):
+        GRAPH.collect_edges(source, granularity="module")
+
+
+def test_graph_rejects_unknown_granularity(tmp_path: Path) -> None:
+    source = _source(tmp_path, {"__init__.py": ""})
+    with pytest.raises(ValueError, match="granularity"):
+        GRAPH.collect_edges(source, granularity="file")

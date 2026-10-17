@@ -764,3 +764,316 @@ def test_untrusted_or_incomplete_mutation_is_not_a_zero_score(
     row = _metrics(result)["mutation"]
     assert row["state"] == "UNAVAILABLE" and row["number"] is None
     assert row["sources"] == []
+
+
+def test_reporting_context_has_one_canonical_identity(tmp_path, monkeypatch):
+    collector = _load()
+    event = tmp_path / "event.json"
+    _write_json(
+        event,
+        {
+            "number": 100,
+            "pull_request": {"head": {"sha": "b" * 40}, "base": {"sha": "c" * 40}},
+        },
+    )
+    monkeypatch.setenv("GITHUB_ACTIONS", "true")
+    monkeypatch.setenv("GITHUB_EVENT_NAME", "pull_request")
+    monkeypatch.setenv("GITHUB_EVENT_PATH", str(event))
+    monkeypatch.setenv("GITHUB_RUN_ATTEMPT", "2")
+    context = collector.reporting_context(
+        sha=SHA, run_id=RUN_ID, repository="owner/avo"
+    )
+    assert context == {
+        "schema": 1,
+        "mode": "ci",
+        "pr_number": 100,
+        "head_sha": "b" * 40,
+        "base_sha": "c" * 40,
+        "run_attempt": 2,
+    }
+    assert (
+        collector.validate_reporting_context(
+            {
+                "sha": SHA,
+                "run_id": RUN_ID,
+                "repository": "owner/avo",
+                "reporting": context,
+            }
+        )
+        is None
+    )
+
+
+@pytest.mark.parametrize(
+    "context",
+    [
+        {"schema": 2, "mode": "ci"},
+        {"schema": 1, "mode": "unknown"},
+        {"schema": 1, "mode": "ci", "run_id": "another"},
+        {"schema": 1, "mode": "ci", "head_sha": "invalid"},
+        {"schema": 1, "mode": "ci", "run_attempt": True},
+        {"schema": 1, "mode": "ci", "pr_number": 100},
+    ],
+)
+def test_invalid_reporting_context_is_not_publication_authority(context):
+    assert _load().validate_reporting_context(
+        {"sha": SHA, "run_id": RUN_ID, "repository": "owner/avo", "reporting": context}
+    )
+
+
+def test_legacy_and_explicit_preview_context_remain_distinct(monkeypatch):
+    collector = _load()
+    monkeypatch.delenv("GITHUB_ACTIONS", raising=False)
+    assert collector.validate_reporting_context({}) is None
+    assert (
+        collector.reporting_context(sha=SHA, run_id="local", repository="")["mode"]
+        == "local-preview"
+    )
+
+
+@pytest.mark.parametrize(
+    "damage",
+    [
+        "fingerprint",
+        "receipt_source",
+        "changed",
+        "unsafe_path",
+        "duplicate",
+        "negative_cc",
+    ],
+)
+def test_supporting_functions_require_independent_source_binding(execution, damage):
+    collector, doc, directory, produce = execution
+    produce("coverage", {"coverage.json": _coverage()})
+    risk = _risk(directory)
+    if damage == "fingerprint":
+        risk["provenance"]["sources"]["sha256"] = "0" * 64
+    elif damage == "unsafe_path":
+        risk["functions"][0]["path"] = "src/avo/../private.py"
+    elif damage == "duplicate":
+        risk["functions"].append(copy.deepcopy(risk["functions"][0]))
+    elif damage == "negative_cc":
+        risk["functions"][0]["complexity"] = -1
+    path = produce("code-risk", {"code-risk.json": risk})
+    if damage in {"receipt_source", "changed"}:
+        receipt = json.loads(path.read_text())
+        if damage == "changed":
+            receipt["source"]["unchanged"] = False
+        else:
+            receipt["source"]["start"]["sha256"] = "0" * 64
+        _write_json(path, receipt)
+    functions = collector.collect(doc, directory)["supporting"]["functions"]
+    assert functions["state"] == "UNAVAILABLE"
+    assert functions["records"] == []
+
+
+def test_supporting_functions_are_frozen_with_source_hash_and_partial_population(
+    execution,
+):
+    collector, doc, directory, produce = execution
+    produce("coverage", {"coverage.json": _coverage()})
+    risk = _risk(directory)
+    risk["source_errors"] = ["src/avo/unreadable.py: parse failed"]
+    produce("code-risk", {"code-risk.json": risk})
+    support = collector.collect(doc, directory)["supporting"]
+    assert support["functions"]["state"] == "PARTIAL"
+    assert support["functions"]["observed_functions"] == 2
+    assert support["functions"]["total_population_known"] is False
+    assert support["functions"]["records"][0]["source_sha256"]
+    assert support["coupling"]["state"] == "UNAVAILABLE"
+
+
+def test_function_crap_is_reconciled_instead_of_trusting_summary(execution):
+    collector, doc, directory, produce = execution
+    produce("coverage", {"coverage.json": _coverage()})
+    risk = _risk(directory)
+    risk["functions"][0]["crap"]["value"] = 0
+    produce("code-risk", {"code-risk.json": risk})
+    result = collector.collect(doc, directory)
+    functions = result["supporting"]["functions"]
+    assert functions["records"][0]["crap"]["value"] is None
+    assert functions["measured_crap_functions"] == 1
+    assert _metrics(result)["crap"]["number"] == 1.0
+
+
+def _module_graph(risk):
+    files = risk["provenance"]["sources"]["files"]
+    nodes = [
+        {
+            "module": "avo" if row["path"].endswith("__init__.py") else "avo.sample",
+            "kind": "file",
+            "path": row["path"],
+            "sha256": row["sha256"],
+            "ca": 0,
+            "ce": 0,
+            "instability": None,
+        }
+        for row in files
+    ]
+    topology = {"nodes": sorted(node["module"] for node in nodes), "edges": []}
+    return {
+        "schema": 1,
+        "status": "MEASURED",
+        "modules": nodes,
+        "edges": [],
+        "node_count": len(nodes),
+        "edge_count": 0,
+        "topology_sha256": hashlib.sha256(
+            json.dumps(topology, sort_keys=True, separators=(",", ":")).encode()
+        ).hexdigest(),
+    }
+
+
+def test_module_graph_matches_complete_captured_source_population(execution):
+    collector, doc, directory, produce = execution
+    produce("coverage", {"coverage.json": _coverage()})
+    risk = _risk(directory)
+    risk["coupling_modules"] = _module_graph(risk)
+    produce("code-risk", {"code-risk.json": risk})
+    result = collector.collect(doc, directory)["supporting"]["coupling"]
+    assert result["state"] == "MEASURED"
+    assert len(result["modules"]) == 2 and result["edges"] == []
+
+
+@pytest.mark.parametrize(
+    "damage",
+    [
+        "hash",
+        "missing_file",
+        "duplicate",
+        "degree",
+        "topology",
+        "unknown_endpoint",
+        "self_edge",
+        "fake_namespace",
+        "boolean_schema",
+    ],
+)
+def test_invalid_module_graph_cannot_supply_file_positions(execution, damage):
+    collector, doc, directory, produce = execution
+    produce("coverage", {"coverage.json": _coverage()})
+    risk = _risk(directory)
+    graph = _module_graph(risk)
+    if damage == "hash":
+        graph["modules"][0]["sha256"] = "0" * 64
+    elif damage == "missing_file":
+        graph["modules"].pop()
+    elif damage == "duplicate":
+        graph["modules"].append(copy.deepcopy(graph["modules"][0]))
+    elif damage == "degree":
+        graph["modules"][0]["ce"] = 1
+    elif damage == "topology":
+        graph["topology_sha256"] = "0" * 64
+    elif damage == "unknown_endpoint":
+        graph["edges"] = [["avo", "avo.unknown"]]
+    elif damage == "self_edge":
+        graph["edges"] = [["avo", "avo"]]
+    elif damage == "fake_namespace":
+        graph["modules"][0].update(kind="namespace", path="src/avo/fake.py")
+    elif damage == "boolean_schema":
+        graph["schema"] = True
+    risk["coupling_modules"] = graph
+    produce("code-risk", {"code-risk.json": risk})
+    support = collector.collect(doc, directory)["supporting"]
+    assert support["coupling"]["state"] == "UNAVAILABLE"
+    assert support["functions"]["state"] == "MEASURED"
+
+
+def test_exception_counts_distinguish_configuration_matches_and_overlap():
+    summary = _load().exception_summary(
+        "complexity",
+        {
+            "policy": {"configured_allowlist_entries": 3},
+            "findings": [{"path": "src/avo/sample.py", "name": "run", "line": 1}],
+            "allowlisted": [
+                {
+                    "path": "src/avo/sample.py",
+                    "name": "run",
+                    "line": 1,
+                    "reason": "legacy boundary",
+                }
+            ],
+            "worsened": [{"path": "src/avo/sample.py", "name": "run", "line": 1}],
+            "stale": [{"path": "src/avo/old.py", "name": "old"}],
+            "violations": [],
+        },
+    )
+    assert summary["configured_entries"] == 3
+    assert summary["matched_findings"] == 1
+    assert summary["unique_affected"] == 1
+    assert summary["stale_entries"] == 1
+    assert summary["non_additive"] is True
+    assert summary["members"][0]["reason"] == "legacy boundary"
+
+
+def test_missing_exception_observations_are_unavailable_not_zero():
+    summary = _load().exception_summary(
+        "deadcode", {"policy": {"configured_allowlist_entries": 150}}
+    )
+    assert summary["configured_entries"] == 150
+    assert summary["matched_findings"] is None
+    assert summary["unique_affected"] is None
+    assert summary["stale_entries"] is None
+
+
+def test_malformed_risk_summary_is_unavailable_instead_of_crashing(execution):
+    collector, doc, directory, produce = execution
+    produce("coverage", {"coverage.json": _coverage()})
+    risk = _risk(directory)
+    risk["summary"] = []
+    produce("code-risk", {"code-risk.json": risk})
+    assert (
+        collector.collect(doc, directory)["supporting"]["functions"]["state"]
+        == "UNAVAILABLE"
+    )
+
+
+@pytest.mark.parametrize("damage", ["object_edge", "boolean_instability"])
+def test_graph_edge_shape_and_instability_are_not_coerced(execution, damage):
+    collector, _doc, directory, produce = execution
+    produce("coverage", {"coverage.json": _coverage()})
+    risk = _risk(directory)
+    graph = _module_graph(risk)
+    graph["edges"] = [["avo", "avo.sample"]]
+    graph["edge_count"] = 1
+    graph["modules"][0].update(ce=1, instability=1.0)
+    graph["modules"][1].update(ca=1, instability=0.0)
+    graph["topology_sha256"] = collector.canonical_digest(
+        {"nodes": ["avo", "avo.sample"], "edges": graph["edges"]}
+    )
+    manifest = {
+        row["path"]: row["sha256"] for row in risk["provenance"]["sources"]["files"]
+    }
+    assert collector.validated_graph(graph, manifest)["state"] == "MEASURED"
+    if damage == "object_edge":
+        graph["edges"] = [{"avo": "ignored", "avo.sample": "ignored"}]
+    else:
+        graph["modules"][0]["instability"] = True
+    assert collector.validated_graph(graph, manifest)["state"] == "UNAVAILABLE"
+
+
+def test_graph_cannot_omit_unreferenced_namespace_parents():
+    collector = _load()
+    manifest = {"src/avo/ns/one.py": "d" * 64}
+    graph = {
+        "schema": 1,
+        "status": "MEASURED",
+        "modules": [
+            {
+                "module": "avo.ns.one",
+                "kind": "file",
+                "path": "src/avo/ns/one.py",
+                "sha256": "d" * 64,
+                "ca": 0,
+                "ce": 0,
+                "instability": None,
+            }
+        ],
+        "edges": [],
+        "node_count": 1,
+        "edge_count": 0,
+        "topology_sha256": collector.canonical_digest(
+            {"nodes": ["avo.ns.one"], "edges": []}
+        ),
+    }
+    assert collector.validated_graph(graph, manifest)["state"] == "UNAVAILABLE"
