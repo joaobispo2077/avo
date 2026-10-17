@@ -195,6 +195,7 @@ def _raw_sources(raw_dir: Path) -> list[Path]:
         if path.is_file()
         and path.name not in excluded
         and not path.name.startswith(".")
+        and not path.name.startswith("avo.wrap.")
     )
 
 
@@ -502,6 +503,28 @@ def build_reconstruction_bundle(
     return body
 
 
+def _verify_bundle_files(raw_dir: Path, bundle: dict[str, Any]) -> dict[str, Any]:
+    """Return only the master fingerprint freshly verified in this file pass."""
+    verified_master = None
+    for entry in bundle["files"]:
+        path = _bundled_path(raw_dir, entry["path"])
+        if not path.is_file():
+            raise ReconstructionError(f"reconstruction file missing: {entry['path']}")
+        current = file_fingerprint(path)
+        if (
+            current["sha256"] != entry["sha256"]
+            or current["sizeBytes"] != entry["sizeBytes"]
+        ):
+            raise ReconstructionError(f"reconstruction file changed: {entry['path']}")
+        if entry["path"] == bundle["master"]["path"]:
+            verified_master = current
+    if verified_master is None or any(
+        verified_master[key] != bundle["master"][key] for key in ("sha256", "sizeBytes")
+    ):
+        raise ReconstructionError("reconstruction master entry is missing or stale")
+    return verified_master
+
+
 def verify_reconstruction_bundle(
     raw_dir: Path, bundle_path: Path | None = None
 ) -> dict[str, Any]:
@@ -522,24 +545,12 @@ def verify_reconstruction_bundle(
     )
     if expected != actual:
         raise ReconstructionError("reconstruction bundle hash mismatch")
-    for entry in bundle["files"]:
-        path = _bundled_path(raw_dir, entry["path"])
-        if not path.is_file():
-            raise ReconstructionError(f"reconstruction file missing: {entry['path']}")
-        current = file_fingerprint(path)
-        if (
-            current["sha256"] != entry["sha256"]
-            or current["sizeBytes"] != entry["sizeBytes"]
-        ):
-            raise ReconstructionError(f"reconstruction file changed: {entry['path']}")
+    verified_master = _verify_bundle_files(raw_dir, bundle)
     _verify_coverage(raw_dir, bundle)
-    master = raw_dir / bundle["master"]["path"]
     transcript = json.loads(
         (raw_dir / bundle["finalTranscript"]["path"]).read_text(encoding="utf-8")
     )
-    if (transcript.get("source") or {}).get("sha256") != file_fingerprint(master)[
-        "sha256"
-    ]:
+    if (transcript.get("source") or {}).get("sha256") != verified_master["sha256"]:
         raise ReconstructionError(
             "reconstruction final transcript/master binding is stale"
         )

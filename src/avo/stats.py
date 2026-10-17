@@ -112,7 +112,7 @@ def _session_contribution(session: dict[str, Any]) -> dict[str, int]:
     est = session.get("estimatedMinutesSaved")
     return {
         "videosCompleted": 1,
-        "bytesFreed": int(bytes_block.get("freed", 0)),
+        "bytesFreed": int(bytes_block.get("freed") or 0),
         "preservedBytes": int(bytes_block.get("preserved", 0)),
         "estimatedMinutesSaved": int(est) if est is not None else 0,
     }
@@ -446,6 +446,12 @@ def _probe_master_duration(raw_dir: Path, master_basename: str) -> float | None:
     return None
 
 
+def _preservation_statistics(wrap: dict[str, Any], session: dict[str, Any]) -> None:
+    if (wrap.get("closure") or {}).get("mode") == "preservation":
+        session["bytes"]["freed"] = None
+        session["closure"] = {"mode": "preservation", "cleanupExecuted": False}
+
+
 def session_from_wrap(
     wrap: dict[str, Any], *, wrap_path: Path | None = None
 ) -> dict[str, Any]:
@@ -496,6 +502,7 @@ def session_from_wrap(
         "wrapPath": str(wrap_file.resolve()),
         "pathStatus": path_status,
     }
+    _preservation_statistics(wrap, session)
     provider_slug = str(wrap.get("provider") or session["provider"])
     try:
         from avo import video_registry

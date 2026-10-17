@@ -8,6 +8,7 @@ from __future__ import annotations
 import argparse
 import json
 import shutil
+import stat
 import subprocess
 import sys
 from collections.abc import Sequence
@@ -47,6 +48,7 @@ LEGACY_NAMED_SOURCES = (
     "project.md",
 )
 CLEANUP_SAMPLE_DEFAULT = 50
+PRESERVATION_RECEIPT = "edit/cleanup/preservation-result.json"
 
 
 class PreservedSetViolation(Exception):
@@ -489,6 +491,24 @@ def verify_preserved_complete(
     preserved = resolve_preserved_set(
         raw_dir, master_basename, initial_transcript=initial_transcript
     )
+    errors = _preserved_artifact_errors(raw_dir, master_basename, preserved)
+
+    timeline = raw_dir / "edit" / "timeline"
+    canonical = [timeline / f"{name}.json" for name in CANONICAL_INDEX_NAMES]
+    if all(path.is_file() for path in canonical):
+        try:
+            from avo.timeline.reconstruction import verify_reconstruction_bundle
+
+            verify_reconstruction_bundle(raw_dir)
+        except Exception as error:
+            errors.append(f"invalid or missing reconstruction bundle: {error}")
+
+    return errors
+
+
+def _preserved_artifact_errors(
+    raw_dir: Path, master_basename: str, preserved: PreservedSetResult
+) -> list[str]:
     errors: list[str] = []
 
     if not preserved.raw_sources:
@@ -523,17 +543,266 @@ def verify_preserved_complete(
             if not path.is_file():
                 errors.append(f"missing final master: {_relative_posix(raw_dir, path)}")
 
-    timeline = raw_dir / "edit" / "timeline"
-    canonical = [timeline / f"{name}.json" for name in CANONICAL_INDEX_NAMES]
-    if all(path.is_file() for path in canonical):
-        try:
-            from avo.timeline.reconstruction import verify_reconstruction_bundle
-
-            verify_reconstruction_bundle(raw_dir)
-        except Exception as error:
-            errors.append(f"invalid or missing reconstruction bundle: {error}")
-
     return errors
+
+
+def _preservation_inventory(
+    raw_dir: Path, master_basename: str, *, pre_json_path: Path | None = None
+) -> tuple[InventoryReport, dict[str, Any]]:
+    """Verify exact reconstruction bytes once, then inventory the retained scope."""
+    from avo.shorts_delivery import preserved_shorts_paths
+    from avo.timeline.contracts import file_fingerprint
+    from avo.timeline.reconstruction import verify_reconstruction_bundle
+
+    _require_integral_retention(raw_dir)
+    try:
+        bundle = verify_reconstruction_bundle(raw_dir)
+    except (OSError, ValueError, RuntimeError) as error:
+        raise PreservedSetViolation(
+            f"preservation reconstruction verification failed: {error}"
+        ) from error
+    bundle_path = raw_dir / "edit" / "timeline" / "reconstruction-bundle.json"
+    preserved = PreservedSetResult(
+        raw_sources=_resolve_raw_sources(raw_dir),
+        initial_transcript=_resolve_initial_transcript(raw_dir, master_basename),
+        final_transcripts=_resolve_final_transcripts(raw_dir, master_basename),
+        final_master=resolve_final_masters(raw_dir, master_basename),
+        reconstruction_metadata=sorted(
+            {
+                bundle_path,
+                *(raw_dir / item["path"] for item in bundle["files"]),
+                *preserved_shorts_paths(raw_dir),
+                *_retained_paths(raw_dir),
+            }
+        ),
+    )
+    errors = _preserved_artifact_errors(raw_dir, master_basename, preserved)
+    masters = {path.resolve() for path in preserved.final_master}
+    if masters != {(raw_dir / bundle["master"]["path"]).resolve()}:
+        errors.append("preservation master does not match exact reconstruction master")
+    if errors:
+        raise PreservedSetViolation("; ".join(errors))
+    candidates, leftover = scan_delete_candidates(raw_dir, preserved)
+    if candidates or leftover:
+        raise PreservedSetViolation(
+            "preservation closure requires zero delete candidates and scan errors"
+        )
+    report = _preservation_report(raw_dir, master_basename, preserved, pre_json_path)
+    identity = {
+        "project": file_fingerprint(raw_dir / "avo.project.json"),
+        "master": bundle["master"],
+        "reconstructionBundle": {
+            **file_fingerprint(bundle_path),
+            "bundleSha256": bundle["bundleSha256"],
+        },
+        "retainedFiles": _preservation_file_metadata(raw_dir, preserved.all_paths),
+    }
+    return report, identity
+
+
+def _require_integral_retention(raw_dir: Path) -> None:
+    from avo.timeline.workspace import resolve_project_raw_dir
+
+    edit = raw_dir / "edit"
+    if edit.is_symlink() or any(path.is_symlink() for path in edit.rglob("*")):
+        raise PreservedSetViolation("preservation closure rejects links in edit/")
+    roots = [_preserve_root(raw_dir, value) for value in _project_retention(raw_dir)]
+    if edit not in roots:
+        raise PreservedSetViolation(
+            "preservation closure requires cleanup.preservePaths to retain all of edit/"
+        )
+    project_path = raw_dir / "avo.project.json"
+    declared = load_project(raw_dir).get("rawDir", str(raw_dir))
+    if resolve_project_raw_dir(project_path, declared) != raw_dir:
+        raise PreservedSetViolation("preservation project points to another rawDir")
+
+
+def _preservation_report(
+    raw_dir: Path,
+    master_basename: str,
+    preserved: PreservedSetResult,
+    pre_json_path: Path | None,
+) -> InventoryReport:
+    pre_inventory, degraded_mode = _load_pre_inventory(pre_json_path)
+    return InventoryReport(
+        raw_dir=raw_dir,
+        master_basename=master_basename,
+        preserved=preserved,
+        delete_candidates=[],
+        verify_errors=[],
+        degraded_mode=degraded_mode,
+        pre_cleanup_project_bytes=(
+            sum(pre_inventory.values())
+            if pre_inventory is not None
+            else dir_size(raw_dir)
+        ),
+        delete_candidate_bytes=0,
+        preserved_bytes=measure_footprint(preserved.all_paths),
+        file_diff=(
+            diff_inventories(pre_inventory, scan_inventory(raw_dir))
+            if pre_inventory is not None
+            else None
+        ),
+    )
+
+
+def _preservation_file_metadata(
+    raw_dir: Path, paths: list[Path]
+) -> list[dict[str, Any]]:
+    """Metadata coverage complements exact byte verification of the bundle inputs."""
+    files = []
+    receipt = raw_dir / PRESERVATION_RECEIPT
+    for path in paths:
+        if path == receipt:
+            continue  # A receipt cannot fingerprint its own bytes.
+        if path.is_symlink() or not path.is_relative_to(raw_dir) or not path.is_file():
+            raise PreservedSetViolation(f"unsafe or missing preserved file: {path}")
+        stat = path.stat()
+        files.append(
+            {
+                "path": path.relative_to(raw_dir).as_posix(),
+                "sizeBytes": stat.st_size,
+                "modifiedNs": stat.st_mtime_ns,
+            }
+        )
+    return sorted(files, key=lambda entry: entry["path"])
+
+
+def record_preservation_closure(
+    raw_dir: Path, master_basename: str, *, pre_json_path: Path | None = None
+) -> tuple[InventoryReport, dict[str, Any]]:
+    """Record verified retention without deleting, copying, or purging anything.
+
+    No cleanup execution receipt is created. Existing evidence is verified, never
+    silently replaced. The returned report and receipt are verified in this call;
+    a later consumer must use ``verify_preservation_closure`` again.
+    """
+    from avo.timeline.contracts import content_hash
+    from avo.timeline.store import write_immutable_json
+
+    path = _preservation_receipt_path(raw_dir)
+    raw_dir = Path(raw_dir).resolve()
+    if path.exists():
+        return verify_preservation_closure(
+            raw_dir, master_basename, pre_json_path=pre_json_path
+        )
+    report, identity = _preservation_inventory(
+        raw_dir, master_basename, pre_json_path=pre_json_path
+    )
+    receipt = {
+        "schemaVersion": 1,
+        "status": "preservation-verified",
+        "mode": "preservation",
+        "rawDir": str(raw_dir),
+        "masterBasename": master_basename,
+        "generatedAt": avo_state.now_iso(),
+        "cleanupExecuted": False,
+        "candidateCount": 0,
+        "leftoverCandidates": 0,
+        "freedBytes": None,
+        "verificationScope": "reconstruction-bytes-and-retained-file-metadata",
+        "selfExcluded": PRESERVATION_RECEIPT,
+        **identity,
+    }
+    receipt["receiptSha256"] = content_hash(receipt)
+    path = _preservation_receipt_path(raw_dir)
+    write_immutable_json(path, receipt)
+    report.preserved.reconstruction_metadata.append(path)
+    size = path.stat().st_size
+    report.preserved_bytes += size
+    if report.degraded_mode:
+        report.pre_cleanup_project_bytes += size
+    return report, receipt
+
+
+def verify_preservation_closure(
+    raw_dir: Path, master_basename: str, *, pre_json_path: Path | None = None
+) -> tuple[InventoryReport, dict[str, Any]]:
+    """Reject stale/tampered evidence using native exact-byte verification."""
+    from avo.timeline.contracts import content_hash
+
+    path = _preservation_receipt_path(raw_dir)
+    raw_dir = Path(raw_dir).resolve()
+    try:
+        receipt = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as error:
+        raise PreservedSetViolation("valid preservation receipt required") from error
+    if not isinstance(receipt, dict):
+        raise PreservedSetViolation("valid preservation receipt object required")
+    expected = {
+        "schemaVersion": 1,
+        "status": "preservation-verified",
+        "mode": "preservation",
+        "rawDir": str(raw_dir),
+        "masterBasename": master_basename,
+        "cleanupExecuted": False,
+        "candidateCount": 0,
+        "leftoverCandidates": 0,
+        "freedBytes": None,
+        "verificationScope": "reconstruction-bytes-and-retained-file-metadata",
+        "selfExcluded": PRESERVATION_RECEIPT,
+    }
+    actual_hash = content_hash(
+        {key: value for key, value in receipt.items() if key != "receiptSha256"}
+    )
+    if receipt.get("receiptSha256") != actual_hash or any(
+        (type(receipt.get(key)), receipt.get(key)) != (type(value), value)
+        for key, value in expected.items()
+    ):
+        raise PreservedSetViolation(
+            "preservation receipt changed or belongs to another master/project"
+        )
+    report, identity = _preservation_inventory(
+        raw_dir, master_basename, pre_json_path=pre_json_path
+    )
+    if any(receipt.get(key) != value for key, value in identity.items()):
+        raise PreservedSetViolation("preservation receipt is stale")
+    return report, receipt
+
+
+def _preservation_receipt_path(raw_dir: Path) -> Path:
+    return preservation_output_path(raw_dir, PRESERVATION_RECEIPT)
+
+
+def preservation_output_path(raw_dir: Path, relative: str) -> Path:
+    """Fail closed before following output symlinks, junctions, or reparse points."""
+    relative_path = Path(relative.replace("\\", "/"))
+    if (
+        not relative_path.parts
+        or PureWindowsPath(relative).drive
+        or relative_path.is_absolute()
+        or ".." in relative_path.parts
+    ):
+        raise PreservedSetViolation(f"unsafe preservation output path: {relative}")
+    path = Path(raw_dir).absolute() / relative_path
+    for part in (path, *path.parents):
+        if _is_link_or_reparse(part):
+            raise PreservedSetViolation(
+                f"unsafe preservation output link/reparse: {part}"
+            )
+    _require_single_link_output(path)
+    return path.resolve()
+
+
+def _is_link_or_reparse(path: Path) -> bool:
+    try:
+        metadata = path.lstat()
+    except FileNotFoundError:
+        return False
+    return stat.S_ISLNK(metadata.st_mode) or bool(
+        getattr(metadata, "st_file_attributes", 0) & stat.FILE_ATTRIBUTE_REPARSE_POINT
+    )
+
+
+def _require_single_link_output(path: Path) -> None:
+    try:
+        metadata = path.lstat()
+    except FileNotFoundError:
+        return
+    if not stat.S_ISREG(metadata.st_mode) or metadata.st_nlink > 1:
+        raise PreservedSetViolation(
+            f"unsafe non-file or hard-linked preservation output: {path}"
+        )
 
 
 def _normalized_path_set(paths: list[Path]) -> set[str]:
