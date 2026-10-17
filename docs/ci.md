@@ -3,6 +3,13 @@
 Dense reference for the GitHub Actions pipeline and local gate commands. User-facing
 summary: README **Built on** section only; this doc is for agents and maintainers.
 
+Quality reporting feature 010 keeps existing gates, thresholds and selection.
+New current PR runs use separate report comments; retries refresh that run's
+comment. Fatal report construction retains dependency-independent text and the
+original failed job outcome. Local indexed coupling/CRAP previews require owner
+review before supporting images are enabled in CI. Definition and fixed-case
+snapshots detect reviewed semantic/policy changes without per-run Git writes.
+
 ## Standard CI validation model (+ software quality)
 
 AVO is an **orchestrator**. CI must validate **external toolchain prerequisites**
@@ -102,11 +109,11 @@ Drift lock: `tests/test_quality_matrix.py` asserts npm quality script names,
 fail-under 68, frozen dev dependencies on unit jobs and dev + MCP on quality jobs, Phase-1
 blocking posture (`usability-gate` `needs` `software-quality` + required check
 name **`Software quality`**), no separate Gate 3 workflow file, slow-lane
-workflow basenames, **20-minute** mutation timeouts, the single sticky quality PR
-comment and removal of the mutation sticky, and Node 24 / Node 24 action majors.
+workflow basenames, **20-minute** mutation timeouts, run-scoped quality PR
+comments and removal of the mutation sticky, and Node 24 / Node 24 action majors.
 Linux jobs pin `ubuntu-24.04`.
 
-PRs get one `quality-gates-report` comment with overall status, commit/run
+Each current PR run gets a `quality-gates-report-<run_id>` comment with overall status, commit/run
 identity, required actions, one dashboard, a measurements table, a gate-decision
 table, an execution table, and collapsed diagnostics. The dashboard plots raw
 coverage/duplication/mutation percentages on separate scales; thresholds belong
@@ -177,17 +184,22 @@ The static import graph also measures CA (distinct incoming packages) and CE
 (distinct outgoing packages), aggregated at `avo.<package>`, plus instability
 `CE / (CA + CE)`. A package without edges has undefined instability. Within-package
 edges and dynamic imports are outside this measurement. These review
-signals do not establish god classes; abstractness and coupling-quadrant rules
-remain unmeasured. Existing xenon B/exception ceilings, Ruff C901 ≤31, coverage
+signals do not establish god classes; abstractness remains unmeasured. The separate
+file-level quadrant uses static module edges, actual-file median references and
+indexed coincident positions. Its descriptive regions add no gate. Complexity
+and CRAP review views retain complete source-indexed Markdown/JSON, with partial
+and unknown populations explicit. Existing xenon B/exception ceilings, Ruff C901 ≤31, coverage
 68%, duplication 2%, and mutation 40%/50% policies continue to determine gates.
 
 ### Publishing the report
 
-CI updates one `quality-gates-report` PR comment in place with measurements,
+CI creates a `quality-gates-report-<run_id>` PR comment for every new current run with measurements,
 gate decisions, evidence, commit/run identity, and one inline dashboard. It does
 not commit generated charts or write to repository branches. The report job
 keeps `contents: read`, `actions: read`, and `pull-requests: write`; the existing
-bot identity continues to update the sticky comment.
+bot identity creates/updates the run-specific comment. A retry refreshes only
+that run's comment and latest-attempt label; earlier distinct-run reports remain
+historical. Failed mandatory jobs still produce an honest current report.
 
 `scripts/ci/upload_quality_chart.py` verifies the dashboard PNG against the
 current commit/run and normalized measurements before uploading it as a native
@@ -213,6 +225,15 @@ inherit that expiry. Missing credentials, authentication/network failures, or
 missing/stale image evidence leave explicit unavailable notes and preserve the
 text report and available downloads. The historical `ci/quality-kpi-charts`
 storage branch should not be merged as a source feature.
+
+After owner preview review, the same full report also produces optional
+`quality-hotspots` and `quality-coupling` archives, each containing a complete
+Markdown/JSON index and its PNG when rendering succeeds. Selected feature and
+release pushes retain these archives; native attachments remain PR-only. Each
+native role has its own immediate freshness check, fixed filename, independently
+validated receipt and download fallback. One role failing leaves the other views
+and inline text useful. Fatal report-builder fallback uploads only readable text.
+The existing release image requirement remains `dashboard.png` alone.
 
 A release cut writes `docs/quality-metrics.md` from that push's green unified
 JSON for the exact SHA and run. Pull-request greens do not write that file.

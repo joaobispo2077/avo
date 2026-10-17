@@ -133,13 +133,47 @@ Capture receipts bind actual commands and output hashes to the commit/run and
 source fingerprints. The report revalidates downloaded inputs and uses the same
 normalized observations for tables, PNG metadata and release snapshots.
 Informational function CRAP uses exact statement coverage and Radon complexity;
-static CA/CE reuses the internal package graph. JUnit case counts remain execution
+static package CA/CE retains its original projection. JUnit testcase-event counts remain execution
 evidence. Unmatched inputs stay unmeasured, and these diagnostic metrics do not
 introduce new enforcement thresholds.
 
 CI report publication stores the dashboard PNG and normalized JSON in Actions
-artifacts and links those exact-run downloads from one updated PR comment.
+artifacts and links those exact-run downloads from a comment per current PR run.
 `link_quality_artifacts.py` only rewrites local report text; it has no network
 or Git write path. The report job uses read-only repository contents permission.
 Missing uploads preserve the text evidence, and deliberate release snapshots
 retain their existing identity and image/data validation.
+
+Feature 010 adds an optional reporting context and verified supporting observations
+inside the existing schema 2 artifact. Dependency direction remains producers
+and capture receipts -> `quality_measurements.py` -> frozen view series ->
+text/index/PNG renderers -> offline linker -> guarded publisher. The module
+graph is separate from the package projection: real files retain exact static
+degrees, namespace targets are not file points, and same-package imports remain
+visible. Function records reconcile source identity, CC and same-function line
+coverage before CRAP can be measured. Invalid or unknown population stays explicit.
+
+`coupling_dashboard.py` and `quality_hotspots.py` consume frozen verified data;
+they never reread source or rerun analyzers. Full Markdown/JSON indexes precede
+optional PNGs, with deterministic file/group/function IDs and identical embedded
+series. Reference medians, disclosed piecewise log spacing and CRAP 30 are descriptive diagnostics,
+not gate policy. Primary chart rendering and dashboard-only release requirements
+remain compatible. Live supporting presentation requires owner preview approval.
+
+The code-backed metric-definition catalog is independent of reviewed test
+baselines. Reports freeze semantic revisions, catalog/policy hashes and a
+measured-commit reference; historical series retain their original interpretation.
+Ordinary unit verification runs fixed independent behavior cases without writing
+baselines. Producer, policy and analyzer changes require an explicit reviewed
+semantic diff, separate from changing live measurements.
+
+New PR runs receive distinct run-keyed comments; retries update only their own.
+Freshness and cancellation guards precede publication, with exact head/base/tested
+identities explaining any historical in-flight result. A fatal builder failure
+uses a standard-library Markdown-only path and restores the original job failure
+after delivery. Native images are restricted to three fixed roles, independently
+validated against current-run frozen data. No reporting path creates Git commits,
+branches, tags, public engine interfaces or new credentials. Verification covers
+source/receipt corruption, unknown states, definition drift, frozen history,
+image failures, optional roles and PR freshness; live delivery is verified only
+after approved publication. See [quality reporting](docs/quality-reporting.md).

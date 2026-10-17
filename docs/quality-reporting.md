@@ -5,13 +5,23 @@ risks. Existing lint, formatting, coverage, complexity, security, dead-code,
 duplication, and import-boundary checks remain in place. Automated tests support
 human architecture, safety, and editorial review.
 
-## One report, one dashboard
+## One report, a primary dashboard and focused review views
+
+Feature 010 extends this reporting boundary with local, source-indexed file
+coupling and complexity/CRAP previews, paired with complete text indexes. The
+accepted three-percentage dashboard remains the visual anchor. Supporting
+graphics require owner desktop/phone preview approval before CI rollout.
+Metric definitions and independent fixed-input/output expectations are stored
+as reviewed source fixtures, separate from generated run/release snapshots.
+Ordinary verification must report semantic changes without rewriting baselines.
 
 The `Quality report` job waits for the mandatory jobs and `CI readiness`. It
 combines the `quality-evidence` and `mutation-reports-light` artifacts from that
-workflow run. One `quality-gates-report` PR comment and the job summary show the
-overall result, full commit and run identity, required actions, one inline
-dashboard, and a metric table. Current PR runs update the same comment in place;
+workflow run. A `quality-gates-report-<run_id>` PR comment and the job summary show the
+overall result, full commit and run identity, required actions, the primary
+dashboard, and a metric table. Each new current PR run creates a new comment;
+retrying that same run updates only its comment and latest-attempt label.
+Different older run comments remain historical, with their original identities;
 selected full push runs retain their own summaries and artifacts. The previous
 standalone mutation comment is removed.
 
@@ -109,10 +119,20 @@ unique groups and remain uncancelled. A full feature run that started before PR
 creation can overlap the first PR run; later pushes select the PR execution.
 
 Only an uncancelled PR run whose head and base still match the open PR may
-publish its native chart and update the sticky comment. Feature and release
+publish its native chart and create/update its run's comment. A freshness check
+cannot transactionally cancel an API write already in flight; visible exact
+head/base, tested revision and run labels keep that result historical. Feature and release
 push evidence stays in its own job summary and artifacts. Stale or cancelled
 runs cannot replace the current PR report. These changes add no secrets,
 publication commits, or branch operations and do not change gate thresholds.
+
+A fatal report-builder failure uses the unified writer's standard-library
+`--text-only-fallback` before loading normalization/rendering. It retains known
+job results and unavailable measurement labels, writes only Markdown, and skips
+partial metrics/index/image uploads and attachment receipts. Delivery of this
+fallback does not clear the original report job failure. Comment permission or
+service failures retain explicit summary/text-artifact fallback under existing
+permissions; normal push runs do not attempt PR publication.
 
 ## Artifact ownership and release compatibility
 
@@ -169,8 +189,61 @@ The same report reuses the repaired static import graph for package CA (distinct
 incoming packages), CE (distinct outgoing packages), and instability
 `CE / (CA + CE)`. Instability is undefined for a package with no edges.
 Aggregation is `avo.<package>`; intra-package and dynamic imports are not
-measured. These counts identify review candidates, not proven god classes.
-Abstractness, main-sequence distance, and quadrant cutoffs remain unmeasured.
+measured in this historical package projection. These counts identify review
+candidates, not proven god classes. Abstractness and main-sequence distance
+remain unmeasured.
+
+The separate `coupling_modules` observation measures distinct static imports
+between actual Python modules, including same-package imports. Namespace targets
+contribute to degrees but have no file point. The file view uses CE horizontally
+and CA vertically; every actual file, including isolates, contributes to the two
+raw medians. Equality stays on the lower side. Each side of the median has its
+own disclosed `log2(1 + count)` display scale, placing the median lines at the
+center of four equal-area regions. Raw-count ticks disclose unequal numeric
+ranges; a zero median leaves the lower numeric half empty. This retains raw
+values and exact coincident groups. Descriptive colored regions are
+informational, with no new architecture gate or health verdict.
+
+Path-sorted F IDs identify files; coordinate-sorted G IDs identify coincident
+positions with explicit member counts. Simple numbered dots map to a compact
+position index beneath the plot; every name remains in the text companion.
+The complete bidirectional `coupling-index.md`/`.json` contains every
+file, group, degree, source and graph edge. Complexity and CRAP have separate
+top-ten rankings with canonical U IDs, full `hotspots.md`/`.json` indexes, and
+observed/measured/unmeasured counts. A source-analysis error makes the total
+population unknown. No file or function disappears merely because the image
+shows a bounded ranking or the inline table shows an excerpt.
+
+These optional images and indexes are generated independently after the text
+series are frozen. One image failure retains its full text index and the other
+views. Local previews identify their working-tree/fixture mode and never claim
+committed source links. The release cut still requires only the existing primary
+dashboard; supporting images introduce no new release requirement.
+
+## Metric definition regression snapshots
+
+`tests/fixtures/quality_metrics/definitions.json` records stable metric IDs,
+semantic revisions, units, grain, scope, calculations, states and interpretation.
+`policy.json` freezes the separately resolved gate policy. The fixed cases run
+real production calculations against independently reviewed expected results;
+ordinary tests and CI never rewrite either baseline. This tests meaning and
+behavior, rather than live scores or PNG bytes.
+
+An intentional semantic change requires a scoped baseline diff, a semantic
+revision increment and a written rationale. A policy-only change is reviewed in
+the separate policy projection and its existing source configuration. Review
+analyzer upgrades against the fixed cases even when catalog text is unchanged.
+Keep the baseline/test/implementation changes in the same PR but separate atomic
+commits. There is no automatic accept command. The fixture README describes the
+independent arithmetic and exact numeric tolerances.
+
+Each new report freezes the definition entries, their per-entry and catalog
+SHA-256 values, the policy digest, and a reference to the baseline at its measured
+commit. Full identity is readable in collapsed diagnostics and supporting series.
+Historical records retain their original valid definitions and frozen series;
+missing or invalid metadata is disclosed without substituting today's rules or
+changing release acceptance. These finite cases and hashes expose regression
+evidence; they do not prove correctness for every possible input.
 
 ## Coverage of the discussed catalog
 
@@ -215,9 +288,9 @@ selected through a complete timed Linux calibration with the locked tooling;
 the light profile is unchanged. Its tests cover exact timebase conversion,
 boundaries, and accumulated offsets. Additional mutation batches require their
 own runtime calibration within the existing 20-minute budget. CRAP and CA/CE
-are now measured informationally. Coupling quadrants, blanket 80% targets, trend
-infrastructure, browser/mobile E2E for every feature, and new property-testing
-dependencies remain outside this change.
+are now measured informationally. The reviewed file quadrant extends those
+diagnostics. Blanket 80% targets, trend infrastructure, browser/mobile E2E for
+every feature and new property-testing dependencies remain outside this change.
 
 The mapping-only calibration on 2026-10-14 used locked mutmut 3.7.0, pytest
 9.1.1, and pytest-cov 7.1.0 in an isolated Linux environment: 175 killed and
