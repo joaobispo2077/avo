@@ -298,8 +298,43 @@ class TimelinePipeline:
 
     def status(self) -> dict[str, Any]:
         status = self.workspace.status()
-        status["candidate"] = self.candidate_status()
+        status["candidate"] = (
+            self.candidate_status()
+            if self.workspace.pipeline_run_path.is_file()
+            else None
+        )
+        status["briefing"] = self.briefing_status()
         return status
+
+    def briefing_status(self) -> dict[str, Any]:
+        """Derive guidance from the sole selected-brief index, without activation."""
+        from avo.direction.brief import BriefService
+
+        service = BriefService(self.workspace.project_path)
+        shown = service.show()
+        stages = ("structure", "cmap", "bmap", "motion", "sound")
+        contexts = (
+            {stage: self.authoring_context(stage) for stage in stages}
+            if shown.get("selection")
+            else {}
+        )
+        return {**shown, "stageContexts": contexts}
+
+    def authoring_context(self, stage: str) -> dict[str, Any]:
+        """Offer selected guidance, never edit/render approval or timeline changes."""
+        from avo.direction.brief import BriefService
+        from avo.direction.rules import DirectionError
+
+        service = BriefService(self.workspace.project_path)
+        result = service.stage_context(
+            stage, self.workspace.active_dependency_snapshot(), record=False
+        )
+        if result.get("context") and service.video_id != self.workspace.video_id:
+            raise DirectionError(
+                "DIR_INVALID_REFERENCE",
+                "Selected brief and workspace video identity differ",
+            )
+        return result
 
     @property
     def candidate_snapshots_dir(self) -> Path:

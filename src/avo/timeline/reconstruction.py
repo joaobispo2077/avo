@@ -96,6 +96,7 @@ def _authoring_files(raw_dir: Path):
         "learndown",
         "motion",
         "intermediates",
+        "briefstart",
     ):
         for path in (raw_dir / "edit" / name).rglob("*"):
             if (
