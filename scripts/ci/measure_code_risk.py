@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Informational callable complexity, function CRAP, and package coupling."""
+"""Informational callable complexity, function CRAP, and package/file coupling."""
 
 from __future__ import annotations
 
@@ -376,6 +376,59 @@ def _coupling(source: Path) -> dict:
     return result
 
 
+def _module_coupling(source: Path, manifest: list[dict[str, str]]) -> dict:
+    result = {
+        "schema": 1,
+        "status": "UNAVAILABLE",
+        "scope": "src/avo/**/*.py",
+        "modules": [],
+        "edges": [],
+        "node_count": None,
+        "edge_count": None,
+        "topology_sha256": None,
+        "reason": "",
+    }
+    try:
+        nodes, edges = _graph().collect_edges(source, granularity="module")
+        files = dict(_graph().iter_modules(source))
+        hashes = {row["path"]: row["sha256"] for row in manifest}
+        modules = []
+        for node in sorted(nodes):
+            path = files.get(node)
+            relative = (
+                (Path("src/avo") / path.relative_to(source)).as_posix()
+                if path is not None
+                else None
+            )
+            ca = sum(target == node for _origin, target in edges)
+            ce = sum(origin == node for origin, _target in edges)
+            modules.append(
+                {
+                    "module": node,
+                    "kind": "file" if path is not None else "namespace",
+                    "path": relative,
+                    "sha256": hashes[relative] if relative is not None else None,
+                    "ca": ca,
+                    "ce": ce,
+                    "instability": ce / (ca + ce) if ca + ce else None,
+                }
+            )
+    except (OSError, SyntaxError, ValueError, KeyError) as exc:
+        result["reason"] = str(exc)
+        return result
+    topology = {"nodes": sorted(nodes), "edges": sorted(edges)}
+    result.update(
+        status="MEASURED",
+        modules=modules,
+        edges=[list(edge) for edge in sorted(edges)],
+        node_count=len(nodes),
+        edge_count=len(edges),
+        topology_sha256=source_fingerprint(topology),
+        reason="Distinct internal AST module-import edges; dynamic imports are not measured.",
+    )
+    return result
+
+
 def build_report(
     *,
     root: Path,
@@ -408,6 +461,7 @@ def build_report(
     reason = evidence["reason"] if evidence["status"] != "AVAILABLE" else ""
     functions, errors = _function_rows(root, files, reason)
     coupling = _coupling(root / "src" / "avo")
+    coupling_modules = _module_coupling(root / "src" / "avo", manifest)
     if source_manifest(root) != manifest:
         raise ValueError("source changed during code risk measurement")
     measured = [
@@ -446,6 +500,7 @@ def build_report(
         "functions": functions,
         "summary": summary,
         "coupling": coupling,
+        "coupling_modules": coupling_modules,
         "source_errors": errors,
     }
 
