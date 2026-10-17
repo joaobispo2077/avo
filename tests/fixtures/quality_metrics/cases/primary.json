@@ -1,0 +1,13 @@
+[
+  {"id":"coverage-raw-rounding","metric":"coverage","counts":{"covered_lines":169,"num_statements":250},"threshold":68,"precision":0,"expected":{"state":"MEASURED","number":67.6,"gate_status":"PASS","band":"red"}},
+  {"id":"coverage-limit","metric":"coverage","counts":{"covered_lines":68,"num_statements":100},"threshold":68,"precision":0,"expected":{"state":"MEASURED","number":68.0,"gate_status":"PASS","band":"yellow"}},
+  {"id":"coverage-green-margin","metric":"coverage","counts":{"covered_lines":76,"num_statements":100},"threshold":68,"precision":0,"expected":{"state":"MEASURED","number":76.0,"gate_status":"PASS","band":"green"}},
+  {"id":"coverage-zero","metric":"coverage","counts":{"covered_lines":0,"num_statements":100},"threshold":68,"precision":0,"expected":{"state":"MEASURED","number":0.0,"gate_status":"FAIL","band":"red"}},
+  {"id":"coverage-invalid","metric":"coverage","counts":{"covered_lines":101,"num_statements":100},"threshold":68,"precision":0,"expected":{"state":"UNAVAILABLE","number":null,"gate_status":"UNAVAILABLE","band":"unknown"}},
+  {"id":"duplication-zero","metric":"duplication","counts":{"duplicatedLines":0,"lines":100,"percentage":0},"threshold":2,"expected":{"state":"MEASURED","number":0.0,"gate_status":"PASS","band":"green"}},
+  {"id":"duplication-green-margin","metric":"duplication","counts":{"duplicatedLines":3,"lines":200,"percentage":1.5},"threshold":2,"expected":{"state":"MEASURED","number":1.5,"gate_status":"PASS","band":"green"}},
+  {"id":"duplication-yellow","metric":"duplication","counts":{"duplicatedLines":151,"lines":10000,"percentage":1.51},"threshold":2,"expected":{"state":"MEASURED","number":1.51,"gate_status":"PASS","band":"yellow"}},
+  {"id":"duplication-ceiling","metric":"duplication","counts":{"duplicatedLines":2,"lines":100,"percentage":2},"threshold":2,"expected":{"state":"MEASURED","number":2.0,"gate_status":"PASS","band":"yellow"}},
+  {"id":"duplication-failure","metric":"duplication","counts":{"duplicatedLines":201,"lines":10000,"percentage":2.01},"threshold":2,"expected":{"state":"MEASURED","number":2.01,"gate_status":"FAIL","band":"red"}},
+  {"id":"duplication-inconsistent","metric":"duplication","counts":{"duplicatedLines":1,"lines":100,"percentage":9},"threshold":2,"expected":{"state":"UNAVAILABLE","number":null,"gate_status":"UNAVAILABLE","band":"unknown"}}
+]
