@@ -763,7 +763,16 @@ def test_untrusted_or_incomplete_mutation_is_not_a_zero_score(
     collector.add_mutation(result, doc, path)
     row = _metrics(result)["mutation"]
     assert row["state"] == "UNAVAILABLE" and row["number"] is None
-    assert row["sources"] == []
+    if damage in {"unaccounted", "timeout"}:
+        assert row["sources"] == [
+            {
+                "artifact": "mutation-reports-light",
+                "path": "mutation-metrics.json",
+                "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+            }
+        ]
+    else:
+        assert row["sources"] == []
 
 
 def test_reporting_context_has_one_canonical_identity(tmp_path, monkeypatch):
