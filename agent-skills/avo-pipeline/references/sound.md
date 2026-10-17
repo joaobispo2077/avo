@@ -69,3 +69,7 @@ See [`sound-create.md`](sound-create.md) for designed SFX (NS2-style cinematic b
 ## Canonical track integration
 
 Inspect audioTracks before render: dialogue priority and channel mapping, music/SFX purpose, source fingerprint, regions, gains, fades, ducking, mute, loudness intent, and BMap cue links. Audio changes invalidate candidate-bound audio and composite evidence.
+
+## Selected artistic guidance
+
+Before style-dependent authoring, run the shared native pipeline status for this project (checkout: `python -m avo.cli pipeline status --project <project> --json`; installed: `avo cli pipeline status --project <project> --json`). Read `briefing.stageContexts.sound` and its exact selected brief, treatment, constraints, exclusions and current canonical-head identities. Treat this context as offered guidance, never proof that a choice was applied, an approval, or permission to change protected content. Current creator instructions and integrity/accessibility/rights rules take precedence. A bypassed or unselected brief adds no creative gate. Do not discover provider history or select a latest profile independently. See [briefstart](briefstart.md).

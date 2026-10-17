@@ -118,3 +118,9 @@ and parameters as the full proof. Missing, stale, ambiguous, or failed required
 microproof evidence blocks the full render. `/avo.pipeline` status must report
 the plan hash, preflight state, microproof gate hash, blockers, and the minimum
 remediation without claiming that a complete render started.
+
+## Optional artistic start
+
+Accept `--direction none|builtin:<id>@<version>|provider:<id>@r0001|references`, `--brief-context <json>` and repeatable `--direction-reference <descriptor-json>`. Delegate to native pipeline run/briefstart. No selector on an unbound project means raw startup; omission on a bound project retains its exact selected brief. A requested change stays proposed until an exact project decision; never auto-accept or silently choose latest. Present up to three material context questions and two or three concrete options (or a justified singleton), with the complete short view at most 600 visible words.
+
+Before structure/CMap/BMap/motion/sound authoring, read `pipeline status` and `briefing.stageContexts` for the corresponding stage. Honor current instructions, scoped exclusions and protected content. Context is offered, never proof of implementation or media approval. Frozen authorial sources stay in `edit/briefstart` and never authorize historical media reuse.

@@ -171,3 +171,7 @@ Arrays replace earlier arrays. Use an invocation flag for one run; persist only
 stable policy at the narrowest reusable scope. Inspect Watch resolution with
 `avo review policy --project <avo.project.json>` before expensive work. See
 [`docs/optional-capabilities.md`](../../../docs/optional-capabilities.md).
+
+## Optional artistic references
+
+`--direction` accepts `none`, `references`, exact `builtin:id@1.0.0`, or exact `provider:id@r0001`. `--brief-context` is bounded JSON; repeat `--direction-reference` for bounded JSON descriptors. Locators are provenance, not authorization to fetch/play/execute them. Project `direction.contextFile` and `referenceFiles` stay inside `edit/briefstart`. Omission preserves the selected local brief. No-reference startup remains valid.
