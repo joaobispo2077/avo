@@ -289,6 +289,10 @@ def _html(markdown: str, *, title: str, images: bool = True) -> str:
         "kpi-chart:coupling-files.png": "coupling/coupling-files.png",
         "kpi-detail:hotspots.md": "hotspots/hotspots.md",
         "kpi-detail:coupling-index.md": "coupling/coupling-index.md",
+        "kpi-chart:mutation-efficacy.png": "mutation/mutation-efficacy.png",
+        "kpi-chart:gate-decisions.png": "decisions/gate-decisions.png",
+        "kpi-detail:mutation-efficacy.md": "mutation/mutation-efficacy.md",
+        "kpi-detail:gate-decisions.md": "decisions/gate-decisions.md",
     }
     for original, relative in replacements.items():
         markdown = markdown.replace(original, relative)
@@ -357,6 +361,23 @@ def export_preview(
                 "render_hotspots",
                 unavailable,
             )
+            for module_name, filename, function in (
+                (
+                    "avo_ci_quality_mutation_dashboard",
+                    "quality_mutation_dashboard.py",
+                    "render_mutation",
+                ),
+                (
+                    "avo_ci_quality_gate_decisions",
+                    "quality_gate_decisions.py",
+                    "render_gates",
+                ),
+            ):
+                patch.setattr(
+                    quality_dashboard.ci_module(module_name, filename),
+                    function,
+                    unavailable,
+                )
         try:
             quality_dashboard.render(
                 document["series"]["dashboard"], directory / "dashboard.png"
