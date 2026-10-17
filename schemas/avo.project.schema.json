@@ -22,6 +22,20 @@
       "description": "Optional working title for this video project."
     },
     "cutting": {"$ref": "avo.cutting.schema.json#/$defs/config"},
+    "direction": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["selector"],
+      "properties": {
+        "selector": {
+          "type": "string",
+          "pattern": "^(none|references|builtin:[a-z0-9][a-z0-9-]*@[0-9]+\\.[0-9]+\\.[0-9]+|provider:[a-z0-9][a-z0-9-]*@r[0-9]{4})$"
+        },
+        "contextFile": { "type": "string", "minLength": 1 },
+        "referenceFiles": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+      },
+      "description": "Optional initial creative reference. A selected local brief takes precedence; this declaration grants no approval. Input paths must remain inside edit/briefstart."
+    },
     "cleanup": {
       "type": "object",
       "additionalProperties": false,
