@@ -224,6 +224,12 @@ class KpiChartTests(unittest.TestCase):
         definitions = copy.deepcopy(doc["metric_definitions"])
         tmp = self._workspace()
         dashboard = self.charts.dashboard_module()
+        mutation = dashboard.ci_module(
+            "avo_ci_quality_mutation_dashboard", "quality_mutation_dashboard.py"
+        )
+        decisions = dashboard.ci_module(
+            "avo_ci_quality_gate_decisions", "quality_gate_decisions.py"
+        )
         with (
             patch.object(
                 dashboard,
@@ -234,6 +240,16 @@ class KpiChartTests(unittest.TestCase):
                 dashboard,
                 "build_series",
                 side_effect=AssertionError("current dashboard rules were used"),
+            ),
+            patch.object(
+                mutation,
+                "build_mutation_series",
+                side_effect=AssertionError("current mutation rules were used"),
+            ),
+            patch.object(
+                decisions,
+                "build_gate_series",
+                side_effect=AssertionError("current gate rules were used"),
             ),
         ):
             text, actual = self._render_dashboard(doc, tmp)
@@ -321,7 +337,7 @@ class KpiChartTests(unittest.TestCase):
     def test_unfrozen_document_builds_with_current_definition_identity(self):
         doc = self._frozen_dashboard(historical=True)
         old_hash = doc["metric_definitions"]["catalog_sha256"]
-        for role in ("dashboard", "coupling_files", "hotspots"):
+        for role in self.charts._report_roles(doc):
             del doc["series"][role]
         _text, actual = self._render_dashboard(doc, self._workspace())
         self.assertNotEqual(actual["metric_definitions"]["catalog_sha256"], old_hash)
@@ -344,6 +360,29 @@ class KpiChartTests(unittest.TestCase):
             _text, actual = self._render_dashboard(doc, self._workspace())
         self.assertEqual(actual["series"]["dashboard"], expected)
         self.assertEqual(actual["series"]["hotspots"]["state"], "MEASURED")
+
+    def test_missing_current_optional_view_preserves_frozen_primary(self):
+        for role in ("mutation_scopes", "gate_decisions"):
+            with self.subTest(role=role):
+                doc = self._frozen_dashboard()
+                expected = copy.deepcopy(doc["series"])
+                del doc["series"][role]
+                dashboard = self.charts.dashboard_module()
+                with patch.object(
+                    dashboard,
+                    "build_series",
+                    side_effect=AssertionError("frozen primary was rebuilt"),
+                ):
+                    _text, actual = self._render_dashboard(doc, self._workspace())
+                self.assertEqual(actual["series"], expected)
+
+    def test_missing_historical_optional_views_cannot_acquire_current_rules(self):
+        for role in ("mutation_scopes", "gate_decisions"):
+            with self.subTest(role=role):
+                doc = self._frozen_dashboard(historical=True)
+                del doc["series"][role]
+                with self.assertRaisesRegex(ValueError, "missing.*historical"):
+                    self._render_dashboard(doc, self._workspace())
 
     def test_real_coverage_floor_is_68(self) -> None:
         floor = self.report.coverage_floor_from_pyproject(ROOT / "pyproject.toml")

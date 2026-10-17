@@ -292,6 +292,65 @@ def test_complete_indexes_and_png_keep_the_exact_frozen_series(tmp_path):
     assert mod.validate_frozen_series(series, doc) is True
 
 
+def test_frozen_validation_never_rebuilds_current_presentations(monkeypatch):
+    mod = helper()
+    doc = document()
+    series = mod.build_mutation_series(doc)
+    series["aggregate"].update(band="yellow", detail="Historical description.")
+    series["scopes"][0]["reference_band"] = "yellow"
+    series["display"].update(ids=["M001"], shown=1, selection="Historical selection.")
+    series["policy"].update(clear_percent=90, band_rule="retained-margin-rule")
+    before = copy.deepcopy(series)
+
+    def fail(*_args, **_kwargs):
+        raise AssertionError("Current mutation presentation was rebuilt")
+
+    monkeypatch.setattr(mod, "build_mutation_series", fail)
+    monkeypatch.setattr(mod.load("quality_dashboard"), "build_series", fail)
+    assert mod.validate_frozen_series(series, doc) is True
+    assert series == before
+
+
+def test_frozen_unavailable_null_mutation_does_not_require_reconstruction(monkeypatch):
+    mod = helper()
+    doc = document()
+    doc["mutation"] = None
+    doc["measurement_evidence"]["metrics"][0].update(state="UNAVAILABLE", number=None)
+    series = mod.build_mutation_series(doc)
+    monkeypatch.setattr(
+        mod, "build_mutation_series", lambda *_a, **_kw: pytest.fail("rebuilt")
+    )
+    assert series["aggregate"]["status"] == "UNAVAILABLE"
+    assert mod.validate_frozen_series(series, doc) is True
+
+
+@pytest.mark.parametrize("field", ["counts", "unresolved"])
+def test_frozen_aggregate_accounting_rejects_boolean_numbers(field):
+    mod = helper()
+    doc = document()
+    series = mod.build_mutation_series(doc)
+    if field == "counts":
+        series["counts"]["timeout"] = False
+    else:
+        series["unresolved"] = False
+    with pytest.raises(ValueError, match="accounting"):
+        mod.validate_frozen_series(series, doc)
+
+
+def test_frozen_display_cannot_exceed_the_version_one_twelve_source_limit():
+    mod = helper()
+    doc = document()
+    doc["mutation"]["counts"] = counts(13, 0)
+    doc["measurement_evidence"]["metrics"][0]["number"] = 100
+    doc["measurement_evidence"]["mutation_scopes"]["scopes"] = [
+        scope(f"src/avo/source_{index:02}.py", 1, 0) for index in range(13)
+    ]
+    series = mod.build_mutation_series(doc)
+    series["display"].update(ids=[row["id"] for row in series["scopes"]], shown=13)
+    with pytest.raises(ValueError, match="display"):
+        mod.validate_frozen_series(series, doc)
+
+
 @pytest.mark.parametrize("change", ["id", "score", "fingerprint", "aggregate"])
 def test_frozen_validation_rejects_changed_id_score_binding_or_aggregate(change):
     mod = helper()

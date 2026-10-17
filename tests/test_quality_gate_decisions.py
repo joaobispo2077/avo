@@ -303,6 +303,61 @@ def test_text_and_png_bind_the_same_decisions_and_dynamic_policy(tmp_path):
     assert mod.validate_frozen_series(series, doc) is True
 
 
+def test_frozen_validation_never_rebuilds_current_presentations(monkeypatch):
+    mod = helper()
+    doc = document()
+    series = mod.build_gate_series(doc)
+    series["rows"].reverse()
+    series["rows"][0].update(
+        title="Historical mutation label", policy="Historical policy wording."
+    )
+    before = copy.deepcopy(series)
+
+    def fail(*_args, **_kwargs):
+        raise AssertionError("Current gate presentation was rebuilt")
+
+    monkeypatch.setattr(mod, "build_gate_series", fail)
+    monkeypatch.setattr(mod._view(), "build_mutation_series", fail)
+    monkeypatch.setattr(mod._view().load("quality_dashboard"), "build_series", fail)
+    assert mod.validate_frozen_series(series, doc) is True
+    assert series == before
+
+
+def test_frozen_unavailable_null_mutation_does_not_require_reconstruction(monkeypatch):
+    mod = helper()
+    doc = document()
+    doc["mutation"] = None
+    doc["measurement_evidence"]["metrics"][0].update(state="UNAVAILABLE", number=None)
+    series = mod.build_gate_series(doc)
+    monkeypatch.setattr(
+        mod, "build_gate_series", lambda *_a, **_kw: pytest.fail("rebuilt")
+    )
+    assert series["rows"][-1]["decision"] == "UNAVAILABLE"
+    assert mod.validate_frozen_series(series, doc) is True
+
+
+def test_frozen_required_job_population_cannot_hide_a_captured_failure():
+    mod = helper()
+    doc = document()
+    doc["jobs"]["repo-unit-tests"] = "failure"
+    series = mod.build_gate_series(doc)
+    del series["required_jobs"]["repo-unit-tests"]
+    with pytest.raises(ValueError, match="required-job"):
+        mod.validate_frozen_series(series, doc)
+
+
+def test_frozen_gate_population_cannot_hide_a_missing_capture():
+    mod = helper()
+    doc = document()
+    doc["gates"] = [gate for gate in doc["gates"] if gate["key"] != "architecture"]
+    series = mod.build_gate_series(doc)
+    series["rows"] = [row for row in series["rows"] if row["key"] != "architecture"]
+    del series["counts"]["MISSING"]
+    series.update(total=9, state="MEASURED")
+    with pytest.raises(ValueError, match="population"):
+        mod.validate_frozen_series(series, doc)
+
+
 @pytest.mark.parametrize("change", ["proof", "status", "counts", "fingerprint"])
 def test_frozen_validation_rejects_false_proof_decision_or_summary(change):
     mod = helper()
