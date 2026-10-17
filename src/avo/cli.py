@@ -216,6 +216,11 @@ def build_parser() -> argparse.ArgumentParser:
     run_review.add_argument("--term", action="append", default=[])
     run_review.add_argument("--name", action="append", default=[])
     run_review.add_argument("--profile", default="draft")
+    run_review.add_argument(
+        "--reuse-transcript",
+        action="store_true",
+        help="require an existing exact transcript; never start ASR",
+    )
     _watch_policy_args(run_review)
     batch_review = review_sub.add_parser("batch")
     _project_arg(batch_review)
@@ -980,7 +985,10 @@ def _review(args: argparse.Namespace) -> int:
     )
     result = ReviewRunner(
         review_root=workspace.review_dir,
-        transcription=CandidateTranscriptionAdapter(model=watch_policy.whisper_model),
+        transcription=CandidateTranscriptionAdapter(
+            model=watch_policy.whisper_model,
+            reuse_only=args.reuse_transcript,
+        ),
         watch=WatchSkillAdapter(),
         deterministic_qc=CheckpointQcRegistry(),
         workspace=workspace,
