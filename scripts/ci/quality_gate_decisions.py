@@ -21,6 +21,30 @@ GATES = (
     ("architecture", "Architecture"),
     ("tree", "Dependency tree"),
 )
+# gate_decisions revision 1 retains this population when live CI policy changes.
+GATE_KEYS_V1 = frozenset(
+    {
+        "lint",
+        "format",
+        "coverage",
+        "complexity",
+        "deps",
+        "deadcode",
+        "duplication",
+        "architecture",
+        "tree",
+        "mutation",
+    }
+)
+REQUIRED_JOBS_V1 = (
+    "prerequisites-gate",
+    "repo-unit-tests",
+    "repo-integration-tests",
+    "software-quality",
+    "usability-gate",
+    "mutation-light",
+    "ci-readiness",
+)
 
 
 def _view():
@@ -127,16 +151,18 @@ def _observed(document: dict, key: str, proof: dict) -> str:
     )
 
 
-def build_gate_series(document: dict) -> dict:
+def build_gate_series(document: dict, *, primary_series: dict | None = None) -> dict:
     view = _view()
     shared = view.load("coupling_dashboard")
     series = shared.context(document, "gate_decisions")
     gates = {row["key"]: row for row in document.get("gates", [])}
     proofs = document.get("measurement_evidence", {}).get("gates", {})
-    measured = {
-        metric["title"].lower(): metric
-        for metric in view.load("quality_dashboard").build_series(document)["metrics"]
-    }
+    primary = (
+        primary_series
+        if primary_series is not None
+        else view.load("quality_dashboard").build_series(document)
+    )
+    measured = {metric["title"].lower(): metric for metric in primary["metrics"]}
     rows = []
     for key, title in GATES:
         gate = gates.get(key, {"key": key, "title": title, "status": "MISSING"})
@@ -170,7 +196,7 @@ def build_gate_series(document: dict) -> dict:
                 "sources": copy.deepcopy(proof.get("sources", [])),
             }
         )
-    metric, evaluation, mutation_refs = view.aggregate(document)
+    metric, evaluation, mutation_refs = view.aggregate(document, primary_series=primary)
     verified = bool(evaluation.get("counts") and mutation_refs)
     floor = metric["threshold"]
     rows.append(
@@ -228,21 +254,161 @@ def validate_frozen_series(series: dict, document: dict) -> bool:
 
 
 def _validate_frozen_series(series: dict, document: dict) -> bool:
-    _view()._check_context(series, document, "gate_decisions")
-    expected = build_gate_series(document)
-    for key in (
-        "rows",
-        "required_jobs",
-        "counts",
-        "verified_proofs",
-        "total",
-        "state",
-        "sources",
-        "decision_grain",
+    view = _view()
+    view._check_context(series, document, "gate_decisions")
+    rows = series["rows"]
+    keys = [row["key"] for row in rows]
+    gates = {row["key"]: row for row in document.get("gates", [])}
+    if (
+        not isinstance(rows, list)
+        or not rows
+        or len(keys) != len(set(keys))
+        or set(keys) != GATE_KEYS_V1
     ):
-        if series.get(key) != expected.get(key):
-            raise ValueError(f"Frozen gate {key} disagrees with captured evidence")
+        raise ValueError("Frozen gate population does not cover captured decisions")
+    for row in rows:
+        _validate_decision_row(row, document, gates)
+    verified = sum(row["proof"] == "VERIFIED" for row in rows)
+    known = all(
+        row["decision"] not in {"UNKNOWN", "MISSING", "UNAVAILABLE"} for row in rows
+    )
+    state = (
+        "MEASURED"
+        if verified == len(rows) and known
+        else "PARTIAL"
+        if verified
+        else "UNAVAILABLE"
+    )
+    if (
+        series.get("counts") != dict(Counter(row["decision"] for row in rows))
+        or any(type(count) is not int for count in series["counts"].values())
+        or type(series.get("total")) is not int
+        or series["total"] != len(rows)
+        or type(series.get("verified_proofs")) is not int
+        or series["verified_proofs"] != verified
+        or series.get("state") != state
+        or series.get("sources")
+        != view.sources(*(row["sources"] for row in rows if row["proof"] == "VERIFIED"))
+        or series.get("decision_grain") != "categorical; no percent score"
+    ):
+        raise ValueError("Frozen gate summary disagrees with its captured decisions")
+    jobs = series["required_jobs"]
+    if (
+        not isinstance(jobs, dict)
+        or set(jobs) != set(REQUIRED_JOBS_V1)
+        or any(
+            value != document.get("jobs", {}).get(key, "unknown")
+            for key, value in jobs.items()
+        )
+    ):
+        raise ValueError(
+            "Frozen gate required-job evidence disagrees with its document"
+        )
     return True
+
+
+def _validate_decision_row(row: dict, document: dict, gates: dict) -> None:
+    if any(
+        not isinstance(row.get(key), str)
+        for key in ("title", "policy", "observed", "proof_reason")
+    ):
+        raise ValueError("Frozen gate labels have an invalid shape")
+    key = row["key"]
+    if key == "mutation":
+        _validate_mutation_decision(row, document)
+        return
+    gate = gates.get(key, {"status": "MISSING"})
+    proof = (
+        document.get("measurement_evidence", {}).get("gates", {}).get(key, {})
+        if key in gates
+        else {}
+    )
+    receipt = proof.get("receipt", {})
+    reported = _status(gate.get("status"))
+    decision = _decision(reported, proof)
+    if (
+        key in {"coverage", "duplication"}
+        and _captured_limit_failed(document, key)
+        and decision in {"PASS", "INCOMPLETE", "UNKNOWN", "MISSING", "UNAVAILABLE"}
+    ):
+        decision = "FAIL"
+    if (
+        row.get("reported_decision") != reported
+        or row.get("decision") != decision
+        or row.get("proof")
+        != (
+            "VERIFIED"
+            if proof.get("verified") is True
+            else "UNVERIFIED"
+            if proof
+            else "MISSING"
+        )
+        or row.get("receipt_status") != receipt.get("status")
+        or row.get("exit_code") != receipt.get("exit_code")
+        or type(row.get("exit_code")) is not type(receipt.get("exit_code"))
+        or row.get("sources") != proof.get("sources", [])
+    ):
+        raise ValueError(
+            "Frozen gate decision or proof disagrees with its captured receipt"
+        )
+
+
+def _captured_limit_failed(document: dict, key: str) -> bool:
+    observation = next(
+        (
+            row
+            for row in document.get("measurement_evidence", {}).get("metrics", [])
+            if row.get("key") == key
+        ),
+        {},
+    )
+    percentage = _view().load("quality_dashboard").percentage
+    value = percentage(observation.get("number"))
+    values = document.get("series", {}).get(key, {})
+    limit = percentage(values.get("floor" if key == "coverage" else "ceiling"))
+    if (
+        observation.get("state") not in {"MEASURED", "PARTIAL"}
+        or value is None
+        or limit is None
+    ):
+        return False
+    precision = document.get("coverage_precision")
+    compared = (
+        round(value, precision)
+        if key == "coverage" and type(precision) is int and 0 <= precision <= 9
+        else value
+    )
+    return (
+        (compared < limit or (limit == 100 and value != 100))
+        if key == "coverage"
+        else value > limit
+    )
+
+
+def _validate_mutation_decision(row: dict, document: dict) -> None:
+    view = _view()
+    evaluation, refs = view._aggregate_accounting(document)
+    if evaluation.get("status") not in {"PASS", "FAIL", "INCOMPLETE"}:
+        evaluation = {}
+    saved = document.get("series", {}).get("mutation_scopes", {}).get("aggregate", {})
+    expected = saved.get("status") or evaluation.get("status")
+    decision = row.get("decision")
+    if (
+        row.get("reported_decision") != decision
+        or (expected is not None and decision != expected)
+        or (
+            expected is None
+            and decision not in {"UNAVAILABLE", "INVALID", "INCOMPLETE"}
+        )
+        or row.get("proof")
+        != ("VERIFIED" if evaluation.get("counts") and refs else "UNVERIFIED")
+        or row.get("receipt_status") != evaluation.get("status")
+        or row.get("exit_code") is not None
+        or row.get("sources") != refs
+    ):
+        raise ValueError(
+            "Frozen mutation decision disagrees with its captured outcomes"
+        )
 
 
 def write_gate_indexes(series: dict, directory: Path) -> dict:

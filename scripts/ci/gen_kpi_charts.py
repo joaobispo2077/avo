@@ -1074,9 +1074,13 @@ def generate_dashboard(
         {} if generated else _frozen_report_series(document, dashboard, measurements)
     )
     expected = _report_roles(document)
-    if not all(role in frozen for role in expected if role != "dashboard"):
-        dashboard.build_supporting(document)
-        document["series"].update(frozen)
+    missing = tuple(
+        role for role in expected if role != "dashboard" and role not in frozen
+    )
+    if missing:
+        dashboard.build_supporting(
+            document, roles=missing, primary_series=frozen.get("dashboard")
+        )
     dashboard.render_supporting(document, out_dir.parent)
     series = frozen.get("dashboard")
     if series is None:

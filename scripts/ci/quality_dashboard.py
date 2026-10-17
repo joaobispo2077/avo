@@ -348,7 +348,12 @@ def measurement_rows(doc: dict, series: dict) -> list[dict]:
     ]
 
 
-def build_supporting(doc: dict) -> None:
+def build_supporting(
+    doc: dict,
+    *,
+    roles: tuple[str, ...] | None = None,
+    primary_series: dict | None = None,
+) -> None:
     coupling = ci_module("avo_ci_coupling_dashboard", "coupling_dashboard.py")
     hotspots = ci_module("avo_ci_quality_hotspots", "quality_hotspots.py")
     mutation = ci_module(
@@ -362,12 +367,19 @@ def build_supporting(doc: dict) -> None:
         safe_doc = {
             key: value for key, value in doc.items() if key != "metric_definitions"
         }
-    doc.setdefault("series", {}).update(
-        coupling_files=coupling.build_coupling_series(safe_doc),
-        hotspots=hotspots.build_hotspot_series(safe_doc),
-        mutation_scopes=mutation.build_mutation_series(safe_doc),
-        gate_decisions=decisions.build_gate_series(safe_doc),
-    )
+    builders = {
+        "coupling_files": coupling.build_coupling_series,
+        "hotspots": hotspots.build_hotspot_series,
+        "mutation_scopes": mutation.build_mutation_series,
+        "gate_decisions": decisions.build_gate_series,
+    }
+    for role in builders if roles is None else roles:
+        arguments = (
+            {"primary_series": primary_series}
+            if role in {"mutation_scopes", "gate_decisions"}
+            else {}
+        )
+        doc.setdefault("series", {})[role] = builders[role](safe_doc, **arguments)
 
 
 def render_supporting(doc: dict, directory: Path) -> None:

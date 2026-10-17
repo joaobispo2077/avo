@@ -49,14 +49,17 @@ def fingerprint(refs: list) -> str | None:
     )
 
 
-def aggregate(document: dict) -> tuple[dict, dict, list]:
+def aggregate(
+    document: dict, *, primary_series: dict | None = None
+) -> tuple[dict, dict, list]:
     dashboard = load("quality_dashboard")
+    primary = (
+        primary_series
+        if primary_series is not None
+        else dashboard.build_series(document)
+    )
     metric = copy.deepcopy(
-        next(
-            row
-            for row in dashboard.build_series(document)["metrics"]
-            if row["title"] == "Mutation"
-        )
+        next(row for row in primary["metrics"] if row["title"] == "Mutation")
     )
     observation = next(
         (
@@ -132,9 +135,13 @@ def _scope_data(document: dict) -> dict:
     return data
 
 
-def build_mutation_series(document: dict) -> dict:
+def build_mutation_series(
+    document: dict, *, primary_series: dict | None = None
+) -> dict:
     data = _scope_data(document)
-    metric, evaluation, aggregate_refs = aggregate(document)
+    metric, evaluation, aggregate_refs = aggregate(
+        document, primary_series=primary_series
+    )
     refs = sources(aggregate_refs, data.get("sources", []))
     series = load("coupling_dashboard").context(document, "mutation_scopes")
     floor = metric["threshold"]
@@ -199,6 +206,8 @@ def build_mutation_series(document: dict) -> dict:
 
 
 def _check_context(series: dict, document: dict, chart: str) -> None:
+    if type(series.get("schema")) is not int or series["schema"] != 1:
+        raise ValueError(f"{chart}: frozen schema is invalid")
     expected = load("coupling_dashboard").context(document, chart)
     for key in ("schema", "chart", "sha", "run_id", "mode", "definition_identity"):
         if series.get(key) != expected.get(key):
@@ -217,34 +226,176 @@ def validate_frozen_series(series: dict, document: dict) -> bool:
 
 def _validate_frozen_series(series: dict, document: dict) -> bool:
     _check_context(series, document, "mutation_scopes")
-    paths = [row["path"] for row in series.get("scopes", [])]
-    if paths != sorted(set(paths)):
-        raise ValueError("Frozen mutation source paths are not unique and ordered")
-    for row in series["scopes"]:
-        _scope_accounting(row)
+    data = _scope_data(document)
+    _validate_scope_bindings(series, document, data)
     if series.get("counts") and series["scopes"]:
         producer = load("mutation_scopes")
         producer._reconcile(
             series["scopes"], producer._aggregate_counts(document["mutation"])
         )
-    expected = build_mutation_series(document)
-    # The explicit frozen rule is versioned independently of future defaults.
-    if series.get("policy", {}).get("band_rule") != "minimum-quarter-remaining-v1":
-        raise ValueError("Unsupported frozen mutation margin rule")
-    for key in (
-        "state",
-        "aggregate",
-        "counts",
-        "complete",
-        "unresolved",
-        "policy",
-        "scopes",
-        "display",
-        "sources",
+    refs = _validate_aggregate(series, document)
+    available = series["aggregate"]["measured"] is not None
+    state = (
+        "MEASURED"
+        if available and data.get("state") == "MEASURED"
+        else "PARTIAL"
+        if available or series["scopes"]
+        else "UNAVAILABLE"
+    )
+    if series.get("state") != state or series.get("sources") != sources(
+        refs, data.get("sources", [])
     ):
-        if series.get(key) != expected.get(key):
-            raise ValueError(f"Frozen mutation {key} disagrees with captured evidence")
+        raise ValueError(
+            "Frozen mutation state or sources disagree with captured evidence"
+        )
+    display = series["display"]
+    ids = [row["id"] for row in series["scopes"]]
+    selected = display["ids"]
+    if (
+        not isinstance(selected, list)
+        or len(selected) > 12
+        or len(selected) != len(set(selected))
+        or any(value not in ids for value in selected)
+        or type(display.get("shown")) is not int
+        or display["shown"] != len(selected)
+        or type(display.get("total")) is not int
+        or display["total"] != len(ids)
+        or not isinstance(display.get("selection"), str)
+    ):
+        raise ValueError("Frozen mutation display does not identify retained sources")
     return True
+
+
+def _validate_scope_bindings(series: dict, document: dict, data: dict) -> None:
+    rows = series["scopes"]
+    captured = sorted(data.get("scopes", []), key=lambda row: row["path"])
+    if not isinstance(rows, list) or len(rows) != len(captured):
+        raise ValueError(
+            "Frozen mutation source population differs from captured evidence"
+        )
+    for index, (row, original) in enumerate(zip(rows, captured, strict=True), 1):
+        _scope_accounting(row)
+        if (
+            any(row.get(key) != value for key, value in original.items())
+            or row.get("id") != f"M{index:03}"
+            or row.get("gate") is not None
+            or row.get("reference_band") not in {"red", "yellow", "green", "unknown"}
+            or not isinstance(row.get("reference_role"), str)
+            or row.get("source_url")
+            != (
+                load("coupling_dashboard").source_url(document, row["path"])
+                if row.get("source_sha256")
+                else None
+            )
+        ):
+            raise ValueError(
+                "Frozen mutation source binding differs from captured evidence"
+            )
+    paths = [row["path"] for row in rows]
+    if paths != sorted(set(paths)):
+        raise ValueError("Frozen mutation source paths are not unique and ordered")
+
+
+def _aggregate_accounting(document: dict) -> tuple[dict, list]:
+    """Read captured outcomes and policy, without rebuilding presentation rules."""
+    policy = document.get("mutation_policy") or {}
+    payload = document.get("mutation") or {}
+    observation = next(
+        (
+            row
+            for row in document.get("measurement_evidence", {}).get("metrics", [])
+            if row.get("key") == "mutation"
+        ),
+        {},
+    )
+    refs = observation.get("sources", [])
+    valid = (
+        bool(document.get("sha"))
+        and payload.get("sha") == document["sha"]
+        and bool(document.get("run_id"))
+        and str(payload.get("run_id") or "") == str(document["run_id"])
+        and policy.get("profile") in {"light", "full"}
+        and payload.get("profile") == policy.get("profile")
+        and type(payload.get("floor")) in {int, float}
+        and payload.get("floor") == policy.get("floor")
+        and bool(refs)
+    )
+    result = (
+        load("check_mutation").mutation_evaluation(
+            payload.get("counts", payload), min_killed_percent=policy.get("floor")
+        )
+        if valid
+        else {}
+    )
+    if result.get("status") in {"PASS", "FAIL"} and (
+        observation.get("state") not in {"MEASURED", "PARTIAL"}
+        or observation.get("unit") != "percent"
+        or type(observation.get("number")) not in {int, float}
+        or observation["number"] != result["score"]
+    ):
+        return {}, sources(refs)
+    return result, sources(refs)
+
+
+def _validate_aggregate(series: dict, document: dict) -> list:
+    metric, policy = series["aggregate"], series["policy"]
+    expected_policy = document.get("mutation_policy", {})
+    floor = load("quality_dashboard").percentage(expected_policy.get("floor"))
+    if (
+        metric.get("status")
+        not in {"PASS", "FAIL", "INCOMPLETE", "INVALID", "UNAVAILABLE"}
+        or (
+            policy.get("floor") is not None
+            and type(policy["floor"]) not in {int, float}
+        )
+        or (
+            metric.get("threshold") is not None
+            and type(metric["threshold"]) not in {int, float}
+        )
+        or policy.get("floor") != floor
+        or policy.get("profile") != expected_policy.get("profile")
+        or policy.get("threshold_scope") != "aggregate"
+        or not isinstance(policy.get("band_rule"), str)
+        or not policy["band_rule"]
+        or (
+            policy.get("clear_percent") is not None
+            and load("quality_dashboard").percentage(policy["clear_percent"]) is None
+        )
+        or metric.get("threshold") != floor
+        or metric.get("direction") != "minimum"
+        or metric.get("band") not in {"red", "yellow", "green", "unknown"}
+    ):
+        raise ValueError("Frozen mutation policy differs from its captured policy")
+    evaluation, refs = _aggregate_accounting(document)
+    expected = (
+        evaluation if metric.get("status") in {"PASS", "FAIL", "INCOMPLETE"} else {}
+    )
+    if metric.get("status") in {"PASS", "FAIL", "INCOMPLETE"} and (
+        not expected or metric["status"] != expected["status"]
+    ):
+        raise ValueError(
+            "Frozen mutation aggregate decision disagrees with captured evidence"
+        )
+    if (
+        metric.get("measured") != expected.get("score")
+        or (
+            metric.get("measured") is not None
+            and type(metric["measured"]) not in {int, float}
+        )
+        or series.get("counts") != expected.get("counts", {})
+        or any(type(count) is not int for count in series["counts"].values())
+        or type(series.get("complete")) is not bool
+        or series["complete"] != expected.get("complete", False)
+        or series.get("unresolved") != expected.get("unresolved")
+        or (
+            series.get("unresolved") is not None
+            and type(series["unresolved"]) is not int
+        )
+    ):
+        raise ValueError(
+            "Frozen mutation aggregate accounting disagrees with captured evidence"
+        )
+    return refs
 
 
 def _scope_accounting(row: dict) -> None:
