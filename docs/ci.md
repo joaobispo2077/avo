@@ -3,6 +3,22 @@
 Dense reference for the GitHub Actions pipeline and local gate commands. User-facing
 summary: README **Built on** section only; this doc is for agents and maintainers.
 
+Quality reporting feature 010 keeps existing gates, thresholds and selection.
+New current PR runs use separate report comments; retries refresh that run's
+comment. Fatal report construction retains dependency-independent text and the
+original failed job outcome. Local indexed coupling/CRAP previews require owner
+review before supporting images are enabled in CI. Definition and fixed-case
+snapshots detect reviewed semantic/policy changes without per-run Git writes.
+
+The approved mutation and gate-decision views add optional `quality-mutation`
+and `quality-gate-decisions` archives/native images. Mutation retains per-source
+outcomes and raw metadata from the existing execution; the collector verifies
+their hashes and aggregate totals. The light/full floors remain aggregate-only.
+Gate badges show categorical outcomes, existing policy and execution proof;
+required CI jobs remain a separate execution population. All five image roles
+retain independent text/artifact fallbacks and the same current-PR/cancel guards.
+Release snapshots continue to require only the primary dashboard.
+
 ## Standard CI validation model (+ software quality)
 
 AVO is an **orchestrator**. CI must validate **external toolchain prerequisites**
@@ -18,13 +34,55 @@ separate workflow. Local umbrella: `npm run quality`. See
 | **Integration tests** | `scripts/ci/run-integration-tests.sh` | `tests/integration` runtime/subprocess boundaries; requires ffmpeg in CI |
 | **Software quality** | `quality-lint.sh` + `quality-format.sh` + `run-coverage.sh` + `quality-complexity.sh` + `quality-deps.sh` + `quality-deadcode.sh` + `quality-duplication.sh` + `quality-architecture.sh` + `quality-tree.sh` (job `Software quality` in `ci.yml`) | Lint/format **fail-immediately** (Ruff C901 ≤ **31**); coverage fail-under **68%** on the **unit** suite only (`--ignore=tests/integration`); complexity xenon max-absolute **B** + `complexity-allowlist.json`; deps block unwaived Python advisories and npm criticals (`check_npm_audit.py` / `deps-audit-allowlist.json`; npm high, moderate, and low reported); deadcode vulture min_confidence **60** + `deadcode-allowlist.json`; duplication jscpd threshold **2%** (`.jscpd.json`); architecture import-linter `.importlinter`; tree health `npm find-dupes` (command failure fails; hoist plan report-only). Python via `uv sync --frozen --extra dev --extra mcp`. Local: `npm run quality:*` / `test:coverage` |
 | **Gate 2** | `scripts/validate-usability.sh --ci` | `avo.config.json`, provider scaffolds, `setup.sh --dry-run`, scaffold scripts — after Gate 1 + unit tests + software quality |
-| **CI readiness** | `scripts/ci/check_ci_readiness.py` | Always-run check requiring all six mandatory jobs to succeed |
+| **CI readiness** | `scripts/ci/check_ci_readiness.py` | Always-run check within selected full CI; all six mandatory jobs must succeed |
 | **Quality report** | `scripts/ci/write_unified_quality_report.py` | One commit/run-bound summary, dashboard, diagnostics, and release artifact after readiness |
 
 Order in `.github/workflows/ci.yml` is enforced via job `needs:`.
 
 Unit and integration lanes run in parallel after Gate 1. Software quality does
 not run `tests/integration`; coverage is the unit suite only.
+
+### Run selection and duplicate suppression
+
+CI validates PRs targeting `develop`, `release`, or `main`. Push triggers cover
+`feature/**` and `release`; `develop` and `main` use PR validation only. Engine
+binary keeps its existing path filters and PR triggers, but push builds run only
+on `feature/**`. Its published-release and manual build/upload paths remain.
+
+Both workflows use a lightweight selector before their expensive jobs:
+
+| Event | Full execution |
+| --- | --- |
+| Eligible PR | Always, including drafts; existing checks and path filters apply |
+| Feature push without an eligible open PR | Run the existing full workflow |
+| Feature push with an eligible open PR at the exact current head | Suppress the duplicate push execution; the PR owns validation |
+| CI push to `release` | Always run, even while a promotion PR is open |
+| Engine published-release or manual dispatch | Run the existing freeze/smoke and optional release upload |
+
+The selector matches repository, head branch, and full current head SHA before
+suppressing a feature push. CI accepts replacement PRs only when their base is
+`develop`, `release`, or `main`; Engine accepts any PR base because its PR
+trigger has no branch filter. Draft PRs count. An API error or uncertain lookup
+keeps the full push execution. A fresh PR lookup must also confirm `mergeable:
+true`; conflicts or unknown mergeability retain full push validation because
+[GitHub does not start PR workflows with merge conflicts](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#pull_request).
+An intentionally suppressed push publishes no
+measurements or successful quality report. Selected full CI keeps the existing
+job names, gate commands, thresholds, and strict readiness evaluation.
+
+Concurrency supersedes older feature-push and PR updates within the same
+workflow, event, and branch/PR. It does not use cross-event cancellation to choose
+between push and PR evidence. Release CI and Engine published-release/manual
+runs use unique run groups and are not cancelled by this deduplication policy.
+If a full feature run starts before a PR opens, it may overlap the initial PR
+run; subsequent pushes use the PR execution. This opening race is bounded, and
+the two runs retain their own identities.
+
+The release exception is required: `release.yml` consumes a successful **push**
+CI run and its artifacts for the exact release-tip SHA and run ID. A PR's
+synthetic merge evidence cannot replace that certification. Engine release
+publication builds its zips in its own release/manual run rather than consuming
+an earlier protected-branch push build.
 
 ### Branch protection — required checks (task-013)
 
@@ -39,7 +97,7 @@ On `develop` / `release` / `main`, require these
 | `Software quality` | `software-quality` | **Phase-1 fast gates** (lint, format, coverage, complexity, deps) + deadcode, duplication, architecture, tree — fail-immediately |
 | `Mutation tests (light)` | `mutation-light` | Scoped mutmut after unit tests (**20-minute** timeout); complete validated outcome accounting and profile floor (Ubuntu); evidence feeds the unified report |
 | `Gate 2 — Project usability` | `usability-gate` | Project usability; `needs` includes `software-quality` |
-| `CI readiness` | `ci-readiness` | Always-run readiness check; skipped, absent, failed, or cancelled mandatory jobs do not pass |
+| `CI readiness` | `ci-readiness` | Full-run readiness check; skipped, absent, failed, or cancelled mandatory jobs do not pass |
 
 Do **not** require a separate Gate 3 / quality workflow check — software quality is
 the `Software quality` job inside workflow **CI**.
@@ -60,11 +118,11 @@ Drift lock: `tests/test_quality_matrix.py` asserts npm quality script names,
 fail-under 68, frozen dev dependencies on unit jobs and dev + MCP on quality jobs, Phase-1
 blocking posture (`usability-gate` `needs` `software-quality` + required check
 name **`Software quality`**), no separate Gate 3 workflow file, slow-lane
-workflow basenames, **20-minute** mutation timeouts, the single sticky quality PR
-comment and removal of the mutation sticky, and Node 24 / Node 24 action majors.
+workflow basenames, **20-minute** mutation timeouts, run-scoped quality PR
+comments and removal of the mutation sticky, and Node 24 / Node 24 action majors.
 Linux jobs pin `ubuntu-24.04`.
 
-PRs get one `quality-gates-report` comment with overall status, commit/run
+Each current PR run gets a `quality-gates-report-<run_id>` comment with overall status, commit/run
 identity, required actions, one dashboard, a measurements table, a gate-decision
 table, an execution table, and collapsed diagnostics. The dashboard plots raw
 coverage/duplication/mutation percentages on separate scales; thresholds belong
@@ -135,17 +193,22 @@ The static import graph also measures CA (distinct incoming packages) and CE
 (distinct outgoing packages), aggregated at `avo.<package>`, plus instability
 `CE / (CA + CE)`. A package without edges has undefined instability. Within-package
 edges and dynamic imports are outside this measurement. These review
-signals do not establish god classes; abstractness and coupling-quadrant rules
-remain unmeasured. Existing xenon B/exception ceilings, Ruff C901 ≤31, coverage
+signals do not establish god classes; abstractness remains unmeasured. The separate
+file-level quadrant uses static module edges, actual-file median references and
+indexed coincident positions. Its descriptive regions add no gate. Complexity
+and CRAP review views retain complete source-indexed Markdown/JSON, with partial
+and unknown populations explicit. Existing xenon B/exception ceilings, Ruff C901 ≤31, coverage
 68%, duplication 2%, and mutation 40%/50% policies continue to determine gates.
 
 ### Publishing the report
 
-CI updates one `quality-gates-report` PR comment in place with measurements,
+CI creates a `quality-gates-report-<run_id>` PR comment for every new current run with measurements,
 gate decisions, evidence, commit/run identity, and one inline dashboard. It does
 not commit generated charts or write to repository branches. The report job
 keeps `contents: read`, `actions: read`, and `pull-requests: write`; the existing
-bot identity continues to update the sticky comment.
+bot identity creates/updates the run-specific comment. A retry refreshes only
+that run's comment and latest-attempt label; earlier distinct-run reports remain
+historical. Failed mandatory jobs still produce an honest current report.
 
 `scripts/ci/upload_quality_chart.py` verifies the dashboard PNG against the
 current commit/run and normalized measurements before uploading it as a native
@@ -172,13 +235,26 @@ missing/stale image evidence leave explicit unavailable notes and preserve the
 text report and available downloads. The historical `ci/quality-kpi-charts`
 storage branch should not be merged as a source feature.
 
+After owner preview review, the same full report also produces optional
+`quality-hotspots` and `quality-coupling` archives, each containing a complete
+Markdown/JSON index and its PNG when rendering succeeds. Selected feature and
+release pushes retain these archives; native attachments remain PR-only. Each
+native role has its own immediate freshness check, fixed filename, independently
+validated receipt and download fallback. One role failing leaves the other views
+and inline text useful. Fatal report-builder fallback uploads only readable text.
+The existing release image requirement remains `dashboard.png` alone.
+
 A release cut writes `docs/quality-metrics.md` from that push's green unified
 JSON for the exact SHA and run. Pull-request greens do not write that file.
 
-Comments post on `pull_request` **and** on `push` to a branch that already has
-an open PR (`gh pr list --head`). Size-signal remains a separate sticky: packed/unpacked
-bytes and file count only — no `npm pack` file listing. Publish steps
-`continue-on-error` so a fork without comment permission does not fail the gate.
+Only `pull_request` runs publish the native dashboard and sticky comment.
+Publication checks that the PR remains open, its head and base still match the
+run, and the run has not been cancelled. Stale or cancelled runs leave the
+existing comment intact. Feature and release push runs retain their own job
+summaries and downloadable artifacts without overwriting PR merge evidence.
+Size-signal remains a separate sticky: packed/unpacked bytes and file count only
+— no `npm pack` file listing. Publish steps `continue-on-error` so a fork without
+comment permission does not fail the gate.
 
 ## Manifests
 
@@ -213,9 +289,9 @@ When the dry-run has no next version, the snapshot job exits without writing
 `develop` does not change the workflow the next cut executes. This job runs
 on a cut only after the file is on `main`.
 
-Every CI run publishes unified measurement evidence and one dashboard. Only a
-release cut writes `docs/quality-metrics.md`. Reporting does not change floors
-or replace gates.
+Every selected full CI run publishes unified measurement evidence and one
+dashboard. Only a release cut writes `docs/quality-metrics.md`. Reporting does
+not change floors or replace gates.
 
 The optional dashboard PNG from the same run is copied to
 `docs/quality/charts/<version>/`. Its embedded series must match the JSON and
@@ -232,7 +308,7 @@ Template note: [`docs/templates/quality-metrics.md`](./templates/quality-metrics
 
 | Workflow | Trigger | Purpose |
 | --- | --- | --- |
-| `ci.yml` | PR + push to `main`, `release`, `develop`, `feature/**` | Gate 1 → unit tests + `hf:doctor` ∥ software quality → Gate 2; light mutation |
+| `ci.yml` | PRs targeting `develop`/`release`/`main`; push to `release` or `feature/**` | Selector suppresses duplicate feature pushes with a matching open PR; selected full runs keep Gate 1 → unit tests + `hf:doctor` ∥ software quality → Gate 2 and light mutation. Release push certification always runs. |
 | `mutation-full.yml` | weekly + `workflow_dispatch` | Full critical-package mutation (mutmut); artifacts |
 | `size-signal.yml` | PR | Informational pack/install footprint (non-blocking) |
 | `dependency-graph.yml` | weekly + `workflow_dispatch` | Optional HTML dependency table + DOT export (`quality:dep-graph`), with SHA/UTC/scope provenance |
@@ -242,7 +318,7 @@ Template note: [`docs/templates/quality-metrics.md`](./templates/quality-metrics
 | `orchestrator-smoke.yml` | manual + weekly cron | Gate 1 (+ optional) + Whisper tiny model + Gate 2 |
 | `ffmpeg-whisper-smoke.yml` | `workflow_dispatch` | Binary/import smoke (like maxframe `yt-dlp-smoke.yml`) |
 | `release.yml` | After **CI** on `release` (+ manual) | semantic-release dry-run → publish, then `workflow_dispatch` Engine binary to attach platform zips (`GITHUB_TOKEN` does not fire `on: release`). The snapshot job checks out the green CI head SHA. With a next version it hard-fails unless that SHA's Software quality JSON is PASS, then the publish job commits `docs/quality-metrics.md`. No next version exits without writing the file and does not fail the workflow. `workflow_run` reads this file from the default branch. |
-| `engine-binary.yml` | path-filtered push/PR + `workflow_dispatch` (`attach_tag`) + manual `release` | PyInstaller zip smoke; attach `avo-$VERSION-$platform.zip` + SHA256SUMS to the GitHub release |
+| `engine-binary.yml` | Existing path-filtered PRs; path-filtered `feature/**` pushes; `workflow_dispatch` (`attach_tag`); `release: published` | Selector suppresses duplicate feature builds with a matching open PR on any base. PyInstaller zip smoke and release/manual zip + SHA256SUMS upload remain. |
 
 Reference: [maxframe workflows](https://github.com/joaobispo2077/maxframe/tree/main/.github/workflows).
 
@@ -323,8 +399,9 @@ shows them under the commit/PR checks tab with these exact names:
 - `Gate 2 — Project usability`
 - `CI readiness`
 
-`CI readiness` always evaluates all six mandatory jobs, including integration and
-light mutation. A failed, cancelled, skipped, or missing result fails readiness;
+In selected full CI, `CI readiness` always evaluates all six mandatory jobs,
+including integration and light mutation. A failed, cancelled, skipped, or
+missing result fails readiness;
 a skipped dependent Gate 2 cannot make a failed upstream job mergeable. PRs into
 `develop` run the same checks as PRs into `release` and `main`. The integration
 lane installs the MCP extra, and missing MCP dependencies fail its runtime smoke

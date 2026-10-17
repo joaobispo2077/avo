@@ -326,4 +326,212 @@ def test_publisher_cli_reads_junit_and_leaves_missing_counts_unavailable(
     assert "1 passed / 0 failed / 0 errors / 1 skipped; 2 JUnit testcases" in text
     assert "0 JUnit testcases" not in text and "999" not in text
     assert "UNAVAILABLE" in text and "counts not captured" in text
-    assert "Measurements remain in the table" in text
+    assert "Dashboard image unavailable; current measurements remain in text." in text
+
+
+def pr_environment(tmp_path, monkeypatch, *, attempt="2"):
+    event = tmp_path / "event.json"
+    event.write_text(
+        json.dumps(
+            {
+                "number": 100,
+                "pull_request": {
+                    "head": {"sha": "b" * 40},
+                    "base": {"sha": "c" * 40},
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    for key, value in {
+        "GITHUB_ACTIONS": "true",
+        "GITHUB_EVENT_NAME": "pull_request",
+        "GITHUB_EVENT_PATH": str(event),
+        "GITHUB_SHA": SHA,
+        "GITHUB_RUN_ID": "42",
+        "GITHUB_RUN_ATTEMPT": attempt,
+        "GITHUB_REPOSITORY": "owner/avo",
+    }.items():
+        monkeypatch.setenv(key, value)
+
+
+def test_writer_captures_event_context_without_replacing_tested_merge(
+    tmp_path, monkeypatch
+):
+    pr_environment(tmp_path, monkeypatch)
+    doc = load().combine(evidence(tmp_path), None, sha=SHA, run_id="42", needs={})
+    assert doc["sha"] == SHA
+    assert doc["run_id"] == "42"
+    assert doc["reporting"] == {
+        "schema": 1,
+        "mode": "ci",
+        "pr_number": 100,
+        "head_sha": "b" * 40,
+        "base_sha": "c" * 40,
+        "run_attempt": 2,
+    }
+    assert doc["repository"] == "owner/avo"
+
+
+@pytest.mark.parametrize(
+    "reporting",
+    [
+        {"schema": 1, "mode": "fixture"},
+        {"schema": 99, "mode": "ci"},
+        {"schema": 1, "mode": "ci", "run_id": "different-run"},
+    ],
+)
+def test_writer_cannot_promote_invalid_or_preview_evidence_to_current_ci(
+    tmp_path, monkeypatch, reporting
+):
+    pr_environment(tmp_path, monkeypatch)
+    path = evidence(tmp_path)
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    payload["reporting"] = reporting
+    path.write_text(json.dumps(payload), encoding="utf-8")
+    doc = load().combine(path, None, sha=SHA, run_id="42", needs={})
+    assert doc["overall"] != "PASS"
+    assert doc["series"]["dashboard"]["metrics"][0]["measured"] is None
+
+
+@pytest.mark.parametrize(
+    "job",
+    [
+        "prerequisites-gate",
+        "repo-unit-tests",
+        "repo-integration-tests",
+        "software-quality",
+        "usability-gate",
+        "mutation-light",
+    ],
+)
+@pytest.mark.parametrize("result", ["failure", "skipped", "cancelled", "unknown"])
+def test_each_unsuccessful_required_job_retains_report_and_action(
+    tmp_path, job, result
+):
+    mod = load()
+    needs = {
+        name: {"result": "success"}
+        for name in (*mod.readiness().MANDATORY_JOBS, "ci-readiness")
+    }
+    needs[job] = {"result": result}
+    doc = mod.combine(evidence(tmp_path), None, sha=SHA, run_id="42", needs=needs)
+    dashboard = mod.load_module("avo_ci_quality_dashboard", "quality_dashboard.py")
+    text = dashboard.markdown(doc, doc["series"]["dashboard"])
+    assert doc["overall"] != "PASS"
+    assert doc["jobs"][job] == result
+    assert job in text
+    assert any(job in action for action in doc["series"]["dashboard"]["actions"])
+
+
+@pytest.mark.parametrize("result", ["failure", "skipped", "cancelled", "unknown"])
+def test_fatal_builder_fallback_is_dependency_isolated_and_markdown_only(
+    tmp_path, monkeypatch, result
+):
+    import sys
+
+    mod = load()
+    pr_environment(tmp_path, monkeypatch)
+    original_loader = mod.load_module
+    loaded = []
+
+    def isolated_loader(name, filename):
+        loaded.append(filename)
+        if filename != "check_ci_readiness.py":
+            raise ImportError("normalization and rendering deliberately unavailable")
+        return original_loader(name, filename)
+
+    monkeypatch.setattr(mod, "load_module", isolated_loader)
+    monkeypatch.setenv(
+        "CI_NEEDS_JSON",
+        json.dumps({"repo-integration-tests": {"result": result}}),
+    )
+    output = tmp_path / "fallback" / "report.md"
+    metrics = tmp_path / "must-not-touch.json"
+    metrics.write_text('{"previous":"partial"}', encoding="utf-8")
+    charts = tmp_path / "charts"
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "write_unified_quality_report.py",
+            "--text-only-fallback",
+            "--out",
+            str(output),
+            "--metrics",
+            str(metrics),
+            "--charts-dir",
+            str(charts),
+        ],
+    )
+    assert mod.main() == 0
+    text = output.read_text(encoding="utf-8")
+    assert "Overall: FAIL" in text
+    assert "report builder failed" in text.lower()
+    assert f"| repo-integration-tests | {result.upper()} |" in text
+    assert SHA in text and "b" * 40 in text and "c" * 40 in text
+    assert "42" in text and "Attempt: 2" in text
+    assert "Unavailable" in text and "Overall: PASS" not in text
+    assert "kpi-chart:" not in text and "![" not in text
+    assert metrics.read_text(encoding="utf-8") == '{"previous":"partial"}'
+    assert not charts.exists()
+    assert set(loaded) <= {"check_ci_readiness.py"}
+
+
+def test_fallback_does_not_claim_green_when_every_mandatory_job_passed(
+    tmp_path, monkeypatch
+):
+    import sys
+
+    mod = load()
+    pr_environment(tmp_path, monkeypatch, attempt="not-an-attempt")
+    monkeypatch.setenv(
+        "CI_NEEDS_JSON",
+        json.dumps(
+            {
+                name: {"result": "success"}
+                for name in (*mod.readiness().MANDATORY_JOBS, "ci-readiness")
+            }
+        ),
+    )
+    output = tmp_path / "report.md"
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["writer", "--text-only-fallback", "--out", str(output)],
+    )
+    assert mod.main() == 0
+    text = output.read_text(encoding="utf-8")
+    assert "Overall: FAIL" in text and "Overall: PASS" not in text
+    assert "Attempt: Unavailable" in text
+
+
+@pytest.mark.parametrize("needs", ["not json", "[]", "null", "{}"])
+def test_fallback_local_identity_and_malformed_jobs_remain_unavailable(
+    tmp_path, monkeypatch, needs
+):
+    import sys
+
+    for name in (
+        "GITHUB_ACTIONS",
+        "GITHUB_EVENT_NAME",
+        "GITHUB_EVENT_PATH",
+        "GITHUB_REPOSITORY",
+        "GITHUB_SHA",
+        "GITHUB_RUN_ID",
+        "GITHUB_RUN_ATTEMPT",
+    ):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("CI_NEEDS_JSON", needs)
+    output = tmp_path / "report.md"
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["writer", "--text-only-fallback", "--out", str(output)],
+    )
+    assert load().main() == 0
+    text = output.read_text(encoding="utf-8")
+    assert "Local preview" in text
+    assert "Tested revision: Unavailable" in text
+    assert "| repo-integration-tests | UNKNOWN |" in text
+    assert "https://github.com" not in text

@@ -1,0 +1,7 @@
+{
+  "formula_cases":[{"complexity":6,"coverage":0,"expected":42},{"complexity":10,"coverage":50,"expected":22.5},{"complexity":10,"coverage":100,"expected":10}],
+  "source":"def choose(value):\n    if value:\n        return 1\n    return 0\n",
+  "function_region":{"start_line":1,"executed_lines":[2,3],"missing_lines":[4],"excluded_lines":[],"summary":{"covered_lines":2,"num_statements":3,"missing_lines":1}},
+  "expected":{"complexity":2,"coverage":66.66666666666667,"crap":2.1481481481481484},
+  "support_expected":{"complexity_ids":["U0001","U0002"],"crap_ids":["U0001"],"observed":2,"measured":1,"unmeasured":1,"known":false}
+}

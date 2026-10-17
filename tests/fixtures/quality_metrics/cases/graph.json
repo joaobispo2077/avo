@@ -1,0 +1,19 @@
+{
+  "files":{"__init__.py":"","group/__init__.py":"","group/reader.py":"import avo.group.target as alias\nfrom . import target\nimport avo.group.reader\nimport avo.namespace\n","group/target.py":"","isolated.py":"","namespace/helper.py":""},
+  "expected":{"nodes":["avo","avo.group","avo.group.reader","avo.group.target","avo.isolated","avo.namespace","avo.namespace.helper"],"edges":[["avo.group.reader","avo.group.target"],["avo.group.reader","avo.namespace"]],"degrees":{"avo":[0,0],"avo.group":[0,0],"avo.group.reader":[0,2],"avo.group.target":[1,0],"avo.isolated":[0,0],"avo.namespace":[1,0],"avo.namespace.helper":[0,0]}},
+  "package_expected":{"nodes":["avo","avo.group","avo.isolated","avo.namespace"],"edges":[["avo.group","avo.namespace"]]},
+  "support_expected":{"ce_median":0.0,"ca_median":0.0,"file_count":6,"namespace_count":1,"axes":{"x":"ce","y":"ca","transform":"piecewise log2(1 + count) around raw median","ticks":"raw counts","quadrants":"equal display area","median_position":0.5,"zero_median":"zero at division; lower numeric range empty","equality":"lower"},"groups":[{"id":"G01","ce":0,"ca":0,"file_ids":["F001","F002","F005","F006"]},{"id":"G02","ce":0,"ca":1,"file_ids":["F004"]},{"id":"G03","ce":2,"ca":0,"file_ids":["F003"]}]},
+  "axis_cases":[
+    {"id":"lower-origin","count":0,"reference":3,"maximum":15,"expected":0},
+    {"id":"lower-log-midpoint","count":1,"reference":3,"maximum":15,"expected":0.25},
+    {"id":"median-division","count":3,"reference":3,"maximum":15,"expected":0.5},
+    {"id":"upper-log-midpoint","count":7,"reference":3,"maximum":15,"expected":0.75},
+    {"id":"upper-bound","count":15,"reference":3,"maximum":15,"expected":1},
+    {"id":"zero-median-at-division","count":0,"reference":0,"maximum":7,"expected":0.5},
+    {"id":"zero-median-first-positive","count":1,"reference":0,"maximum":7,"expected":0.6666666666666666},
+    {"id":"maximum-at-median","count":3,"reference":3,"maximum":3,"expected":0.5},
+    {"id":"all-zero","count":0,"reference":0,"maximum":0,"expected":0.5},
+    {"id":"fractional-median-origin","count":0,"reference":1.5,"maximum":3,"expected":0},
+    {"id":"fractional-median-upper-bound","count":3,"reference":1.5,"maximum":3,"expected":1}
+  ]
+}

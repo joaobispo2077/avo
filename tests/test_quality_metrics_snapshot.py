@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import json
 import os
@@ -10,12 +11,44 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
+
+import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 SHA = "0123456789abcdef0123" * 2
 OTHER = "fedcba9876543210fedc" * 2
 RECORDED = "2026-10-02T20:03:00Z"
 RUN_ID = "1234567"
+
+
+@pytest.mark.parametrize(
+    "context",
+    [
+        {"schema": 1, "mode": "fixture"},
+        {"schema": 1, "mode": "local-preview"},
+        {"schema": 2, "mode": "ci"},
+        {"schema": 1, "mode": "ci", "run_id": "duplicate"},
+    ],
+)
+def test_release_refuses_non_ci_or_invalid_explicit_context(context):
+    module = _load(
+        "quality_snapshot_context", "scripts/ci/write_quality_metrics_snapshot.py"
+    )
+    with pytest.raises(
+        module.SnapshotError, match="[Cc]ontext|[Pp]review|[Cc][Ii]|[Rr]eporting"
+    ):
+        module._validate(
+            {
+                "schema": 2,
+                "sha": SHA,
+                "run_id": RUN_ID,
+                "repository": "owner/avo",
+                "reporting": context,
+            },
+            SHA,
+            "1.0.0",
+        )
 
 
 def _load(name: str, rel: str):
@@ -76,7 +109,20 @@ def _coverage(path: Path, percent: float, covered: int, statements: int) -> None
     )
 
 
+def _definition_digest(value: object) -> str:
+    return hashlib.sha256(
+        json.dumps(value, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+
+
 class QualityMetricsSnapshotTests(unittest.TestCase):
+    def test_schema_one_discloses_absent_metric_definition_identity(self) -> None:
+        doc = self._document(self._workspace(), legacy=True)
+        text = self.mod.render_markdown(
+            doc, version="1.2.3", tag="v1.2.3", images={}, mutation=None
+        )
+        self.assertIn("Legacy or missing metric-definition identity", text)
+
     def test_skipped_dependency_gate_ignores_stale_summary_in_all_views(self) -> None:
         root = self._workspace()
         self._document(root)
@@ -171,6 +217,180 @@ class QualityMetricsSnapshotTests(unittest.TestCase):
         )
         return path
 
+    def _historical_definitions(self, doc: dict) -> dict:
+        self.mod._measurements().freeze_definitions(doc)
+        block = doc["metric_definitions"]
+        entry = next(item for item in block["entries"] if item["id"] == "coverage")
+        entry.update(
+            revision=7, calculation="Reviewed historical statement accounting."
+        )
+        entry["sha256"] = _definition_digest(
+            {key: value for key, value in entry.items() if key != "sha256"}
+        )
+        block["catalog_sha256"] = _definition_digest(
+            {
+                "schema": 1,
+                "entries": [
+                    {key: value for key, value in item.items() if key != "sha256"}
+                    for item in block["entries"]
+                ],
+            }
+        )
+        return block
+
+    def test_release_preserves_original_definition_revision_and_frozen_policy(
+        self,
+    ) -> None:
+        tmp = self._workspace()
+        doc = self._document(tmp)
+        doc["coverage_precision"] = 2
+        doc["series"]["dashboard"] = self.mod._dashboard().build_series(doc)
+        block = self._historical_definitions(doc)
+        original = json.loads(json.dumps(block))
+        coverage = next(item for item in block["entries"] if item["id"] == "coverage")
+        self.assertIsNone(self.mod._measurements().definition_error(doc))
+        metrics = self._write_doc(tmp, doc)
+        before = metrics.read_bytes()
+        (tmp / "scripts/ci/mutation-config.json").unlink()
+        (tmp / ".jscpd.json").unlink()
+        helper = self.mod._measurements().module(
+            "avo_ci_quality_metric_definitions", "quality_metric_definitions.py"
+        )
+        current_catalog = dict(helper.DEFINITIONS)
+        fields = list(current_catalog["coverage"])
+        fields[4] = "A future calculation must not replace the historical definition."
+        current_catalog["coverage"] = tuple(fields)
+        with (
+            patch.object(helper, "DEFINITIONS", current_catalog),
+            patch.object(
+                self.mod,
+                "_mutation_policy",
+                side_effect=AssertionError("current configuration was read"),
+            ),
+            patch.object(
+                self.report,
+                "coverage_floor_from_pyproject",
+                side_effect=AssertionError("current configuration was read"),
+            ),
+            patch.object(
+                self.report,
+                "duplication_ceiling",
+                side_effect=AssertionError("current configuration was read"),
+            ),
+        ):
+            rendered = self.mod.render_markdown(
+                json.loads(metrics.read_text(encoding="utf-8")),
+                version="1.2.3",
+                tag="v1.2.3",
+                images={},
+                mutation=self.mod.mutation_view(
+                    doc["mutation"], SHA, RUN_ID, doc["mutation_policy"]
+                ),
+            )
+            text = self.mod.write_snapshot(
+                metrics,
+                sha=SHA,
+                version="1.2.3",
+                out=tmp / "quality-metrics.md",
+                expected_run_id=RUN_ID,
+            )
+        self.assertEqual(text, rendered)
+        self.assertIn(f"| coverage | 7 | `{coverage['sha256']}` |", text)
+        self.assertIn(block["catalog_sha256"], text)
+        self.assertIn(block["policy_sha256"], text)
+        self.assertIn("tests/fixtures/quality_metrics/definitions.json", text)
+        self.assertIn("| Mutation | **PASS** | Complete accounting; Minimum 40%;", text)
+        self.assertIn("comparison rounded to 2 decimal places", text)
+        self.assertNotIn("Metric-definition identity unavailable", text)
+        self.assertNotIn("future calculation", text)
+        self.assertEqual(doc["metric_definitions"], original)
+        self.assertEqual(metrics.read_bytes(), before)
+
+    def test_legacy_definition_absence_is_disclosed_without_changing_release_acceptance(
+        self,
+    ) -> None:
+        tmp = self._workspace()
+        doc = self._document(tmp)
+        doc.pop("metric_definitions", None)
+        text = self.mod.write_snapshot(
+            self._write_doc(tmp, doc),
+            sha=SHA,
+            version="1.2.3",
+            out=tmp / "quality-metrics.md",
+            expected_run_id=RUN_ID,
+        )
+        self.assertIn("**Overall: PASS**", text)
+        self.assertIn("Metric-definition identity unavailable", text)
+        self.assertIn("Legacy or missing metric-definition identity", text)
+        self.assertNotIn("**Metric definitions used**", text)
+
+    def test_invalid_definition_metadata_is_disclosed_without_inventing_a_gate(
+        self,
+    ) -> None:
+        tmp = self._workspace()
+        original = self._document(tmp)
+        self.mod._measurements().freeze_definitions(original)
+        for damage in ("hash", "reference", "policy"):
+            with self.subTest(damage=damage):
+                doc = json.loads(json.dumps(original))
+                block = doc["metric_definitions"]
+                if damage == "hash":
+                    block["entries"][0]["unit"] = "incorrect count unit"
+                elif damage == "reference":
+                    block["reference"]["sha"] = OTHER
+                else:
+                    block["policy"]["coverage_floor"] = 69.0
+                    block["policy_sha256"] = _definition_digest(block["policy"])
+                self.assertIsNotNone(self.mod._measurements().definition_error(doc))
+                metrics = self._write_doc(tmp, doc)
+                before = metrics.read_bytes()
+                text = self.mod.write_snapshot(
+                    metrics,
+                    sha=SHA,
+                    version="1.2.3",
+                    out=tmp / f"{damage}.md",
+                    expected_run_id=RUN_ID,
+                )
+                self.assertIn("**Overall: PASS**", text)
+                self.assertIn("Metric-definition identity unavailable", text)
+                self.assertNotIn("**Metric definitions used**", text)
+                self.assertEqual(metrics.read_bytes(), before)
+                self.assertEqual(doc["gates"], original["gates"])
+
+    def test_optional_support_images_do_not_expand_required_release_chart_set(
+        self,
+    ) -> None:
+        tmp = self._workspace()
+        doc = self._document(tmp)
+        self.mod._measurements().freeze_definitions(doc)
+        doc["series"].update(
+            hotspots={"state": "UNAVAILABLE", "reason": "No supporting measurement."},
+            coupling_files={
+                "state": "UNAVAILABLE",
+                "reason": "No supporting measurement.",
+            },
+        )
+        charts = tmp / "charts"
+        self.mod._dashboard().render(
+            doc["series"]["dashboard"], charts / "dashboard.png"
+        )
+        destination = tmp / "release-charts" / "1.2.3"
+        text = self.mod.write_snapshot(
+            self._write_doc(tmp, doc),
+            sha=SHA,
+            version="1.2.3",
+            out=tmp / "quality-metrics.md",
+            charts_src=charts,
+            charts_dir=destination,
+            expected_run_id=RUN_ID,
+        )
+        self.assertEqual(self.mod.CHART_FILES, (("dashboard", "dashboard.png"),))
+        self.assertEqual(
+            sorted(path.name for path in destination.iterdir()), ["dashboard.png"]
+        )
+        self.assertIn("**Overall: PASS**", text)
+        self.assertIn("No supporting measurement", text)
+
     def test_ci_json_matches_sticky_and_does_not_invent_mutation(self) -> None:
         tmp = self._workspace()
         _fixture_root(tmp)
@@ -263,12 +483,12 @@ class QualityMetricsSnapshotTests(unittest.TestCase):
         self.assertNotIn("| Metric | Measured | Threshold | Status |", text)
         self.assertIn("| Coverage | 71.25% | unit-suite line coverage;", text)
         self.assertIn(
-            "| Coverage | **PASS** | pytest-cov fail-under on `src/avo`; Minimum 68% |",
+            "| Coverage | **PASS** | pytest-cov fail-under on &#96;src/avo&#96;; Minimum 68% |",
             text,
         )
         self.assertIn("| Duplication | 1.00% | duplicated source lines;", text)
         self.assertIn(
-            "| Duplication | **PASS** | jscpd on `src/avo`; Maximum 2% |", text
+            "| Duplication | **PASS** | jscpd on &#96;src/avo&#96;; Maximum 2% |", text
         )
         self.assertIn("| Mutation | 75.00% | light profile;", text)
         self.assertIn("| Mutation | **PASS** | Complete accounting; Minimum 40%;", text)
@@ -790,7 +1010,13 @@ class QualityMetricsSnapshotTests(unittest.TestCase):
         self.assertNotIn("refs/heads/release", producer)
         self.assertIn("--write-json reports/quality/quality-metrics.json", ci)
         unified = ci.split("  quality-report:\n", 1)[1]
-        self.assertIn("if: always()", unified)
+        configuration = unified.split("    steps:\n", 1)[0]
+        self.assertIn("!cancelled()", configuration)
+        self.assertIn(
+            "!(needs.select-run.result == 'success' && "
+            "needs.select-run.outputs.run_full_ci == 'false')",
+            configuration,
+        )
         self.assertIn("write_unified_quality_report.py", unified)
         self.assertIn("name: quality-metrics", unified)
         self.assertIn("if-no-files-found: error", unified)
