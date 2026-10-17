@@ -826,7 +826,9 @@ class QualityMatrixTests(unittest.TestCase):
         self.assertIn("path: reports/quality/charts/dashboard.png", job)
         self.assertNotIn("path: reports/quality/charts/*.png", job)
         self.assertIn("path: reports/quality/quality-gates.md", job)
-        self.assertEqual(ci.count("header: quality-gates-report"), 1)
+        self.assertEqual(
+            ci.count("header: quality-gates-report-${{ github.run_id }}"), 1
+        )
         retired = job.split("- name: Remove superseded mutation comment", 1)[1]
         self.assertIn("header: mutation-report", retired)
         self.assertIn("delete: true", retired)
@@ -836,7 +838,7 @@ class QualityMatrixTests(unittest.TestCase):
         )
         self.assertLess(
             job.index("link_quality_artifacts.py"),
-            job.index("header: quality-gates-report"),
+            job.index("header: quality-gates-report-${{ github.run_id }}"),
         )
         for upload in (
             "Upload unified metrics",
@@ -868,7 +870,8 @@ class QualityMatrixTests(unittest.TestCase):
         ):
             self.assertLess(job.index("link_quality_artifacts.py"), job.index(publish))
             self.assertLess(
-                job.index("header: quality-gates-report"), job.index(publish)
+                job.index("header: quality-gates-report-${{ github.run_id }}"),
+                job.index(publish),
             )
         summary = job.split("- name: Publish unified job summary", 1)[1].split(
             "- name:", 1

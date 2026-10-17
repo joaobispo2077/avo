@@ -20,6 +20,67 @@ def test_duplication_threshold_preserves_zero_and_fractional_values(tmp_path):
         assert mod.duplication_ceiling(tmp_path) == threshold
 
 
+def test_unified_comment_identity_is_per_run_and_not_per_retry_or_previous_report():
+    workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+    publication = workflow.split("- name: Publish quality summary to PR", 1)[1].split(
+        "- name:", 1
+    )[0]
+    assert "header: quality-gates-report-${{ github.run_id }}" in publication
+    assert "github.run_attempt" not in publication
+    for option in ("recreate:", "append:", "hide_and_recreate:", "only_update:"):
+        assert option not in publication
+    selector = (ROOT / "scripts/ci/select_ci_run.py").read_text(encoding="utf-8")
+    assert "quality-gates-report" not in selector
+    assert "comments" not in selector
+
+
+def test_failed_report_build_publishes_only_fallback_text_then_restores_failure():
+    workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+    report = workflow.split("  quality-report:", 1)[1]
+
+    def step(name):
+        return report.split(f"- name: {name}\n", 1)[1].split("- name:", 1)[0]
+
+    builder = step("Build unified quality report")
+    assert "id: report_build" in builder and "continue-on-error: true" in builder
+    fallback = step("Build text-only failure report")
+    assert "steps.report_build.outcome == 'failure'" in fallback
+    assert "!cancelled()" in fallback and "--text-only-fallback" in fallback
+    for name in (
+        "Upload unified metrics",
+        "Upload dashboard image",
+        "Attach inline quality dashboard",
+        "Link quality chart and artifact downloads",
+    ):
+        assert "steps.report_build.outcome == 'success'" in step(name)
+    publication = step("Publish quality summary to PR")
+    assert "steps.current_pr.outputs.number != ''" in publication
+    assert "steps.report_build.outcome == 'success'" not in publication
+    final = step("Preserve report builder failure")
+    assert "steps.report_build.outcome == 'failure'" in final
+    assert "!cancelled()" in final and "exit 1" in final
+    assert report.index("Upload readable quality report") < report.index(
+        "Preserve report builder failure"
+    )
+
+
+def test_job_summary_names_publication_outcomes_and_preserves_archive_fallback():
+    workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+    summary = workflow.split("- name: Publish unified job summary", 1)[1].split(
+        "- name:", 1
+    )[0]
+    assert "PR comment delivered." in summary
+    assert "PR comment unavailable: permission or service failure." in summary
+    assert (
+        "PR publication skipped: stale identity or freshness lookup unavailable."
+        in summary
+    )
+    assert "PR publication not requested for this event." in summary
+    assert "REPORT_BUILD_RESULT: ${{ steps.report_build.outcome }}" in summary
+    assert 'if [ "$REPORT_BUILD_RESULT" = "success" ]' in summary
+    assert "--attachment" not in summary
+
+
 def _load(name: str, rel: str):
     path = ROOT / rel
     spec = importlib.util.spec_from_file_location(name, path)
