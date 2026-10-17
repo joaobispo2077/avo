@@ -268,14 +268,6 @@
       "reason": "MCP bridge/registry/CLI surface (dynamic tool registration)"
     },
     {
-      "path": "src/avo/mcp/tools/cli_tools.py",
-      "name": "remaining_bridge_defs",
-      "kind": "function",
-      "lineno": 637,
-      "confidence": 60,
-      "reason": "MCP bridge/registry/CLI surface (dynamic tool registration)"
-    },
-    {
       "path": "src/avo/models.py",
       "name": "all_options",
       "kind": "variable",
@@ -514,14 +506,6 @@
       "lineno": 146,
       "confidence": 60,
       "reason": "Timeline domain/API surface (dynamic CLI and future stages)"
-    },
-    {
-      "path": "src/avo/timeline/lineage.py",
-      "name": "lineage_from_materialization",
-      "kind": "function",
-      "lineno": 21,
-      "confidence": 60,
-      "reason": "Feature 006 public/dynamic contract covered by focused tests and runtime registration"
     },
     {
       "path": "src/avo/timeline/lineage.py",
