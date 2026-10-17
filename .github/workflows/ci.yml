@@ -539,12 +539,76 @@ jobs:
           if [ -x .venv/bin/python ]; then PY=.venv/bin/python; fi
           "$PY" scripts/ci/upload_quality_chart.py
 
+      - name: Upload hotspot evidence
+        id: quality_hotspots
+        if: ${{ success() && !cancelled() && steps.report_build.outcome == 'success' }}
+        continue-on-error: true
+        uses: actions/upload-artifact@v7
+        with:
+          name: quality-hotspots
+          overwrite: true
+          path: reports/quality/hotspots
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Upload coupling evidence
+        id: quality_coupling
+        if: ${{ success() && !cancelled() && steps.report_build.outcome == 'success' }}
+        continue-on-error: true
+        uses: actions/upload-artifact@v7
+        with:
+          name: quality-coupling
+          overwrite: true
+          path: reports/quality/coupling
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Check current PR before hotspot upload
+        id: pr_hotspots
+        if: ${{ success() && !cancelled() && steps.report_build.outcome == 'success' && github.event_name == 'pull_request' }}
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python scripts/ci/select_ci_run.py --workflow ci --check-pr-current
+
+      - name: Attach inline hotspot chart
+        continue-on-error: true
+        if: ${{ success() && !cancelled() && steps.report_build.outcome == 'success' && github.event_name == 'pull_request' && steps.pr_hotspots.outputs.number != '' && github.event.pull_request.head.repo.full_name == github.repository }}
+        env:
+          QUALITY_CHARTS_TOKEN: ${{ secrets.GH_TOKEN }}
+          GITHUB_REPOSITORY_ID: ${{ github.repository_id }}
+        run: |
+          PY=python
+          if [ -x .venv/bin/python ]; then PY=.venv/bin/python; fi
+          "$PY" scripts/ci/upload_quality_chart.py --role hotspots
+
+      - name: Check current PR before coupling upload
+        id: pr_coupling
+        if: ${{ success() && !cancelled() && steps.report_build.outcome == 'success' && github.event_name == 'pull_request' }}
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python scripts/ci/select_ci_run.py --workflow ci --check-pr-current
+
+      - name: Attach inline coupling chart
+        continue-on-error: true
+        if: ${{ success() && !cancelled() && steps.report_build.outcome == 'success' && github.event_name == 'pull_request' && steps.pr_coupling.outputs.number != '' && github.event.pull_request.head.repo.full_name == github.repository }}
+        env:
+          QUALITY_CHARTS_TOKEN: ${{ secrets.GH_TOKEN }}
+          GITHUB_REPOSITORY_ID: ${{ github.repository_id }}
+        run: |
+          PY=python
+          if [ -x .venv/bin/python ]; then PY=.venv/bin/python; fi
+          "$PY" scripts/ci/upload_quality_chart.py --role coupling_files
+
       - name: Link quality chart and artifact downloads
         if: ${{ success() && !cancelled() && steps.report_build.outcome == 'success' }}
         env:
           QUALITY_METRICS_ARTIFACT_URL: ${{ steps.quality_metrics.outputs.artifact-url }}
           QUALITY_CHARTS_ARTIFACT_URL: ${{ steps.quality_charts.outputs.artifact-url }}
-        run: python scripts/ci/link_quality_artifacts.py --markdown reports/quality/quality-gates.md --attachment reports/quality/chart-attachment.json --no-summary
+          QUALITY_HOTSPOTS_ARTIFACT_URL: ${{ steps.quality_hotspots.outputs.artifact-url }}
+          QUALITY_COUPLING_ARTIFACT_URL: ${{ steps.quality_coupling.outputs.artifact-url }}
+        run: python scripts/ci/link_quality_artifacts.py --markdown reports/quality/quality-gates.md --attachment reports/quality/chart-attachment.json --hotspots-attachment reports/quality/hotspots-attachment.json --coupling-attachment reports/quality/coupling-attachment.json --no-summary
 
       - name: Check current PR before commenting
         id: current_pr
@@ -571,6 +635,8 @@ jobs:
           REPORT_EVENT: ${{ github.event_name }}
           QUALITY_METRICS_ARTIFACT_URL: ${{ steps.quality_metrics.outputs.artifact-url }}
           QUALITY_CHARTS_ARTIFACT_URL: ${{ steps.quality_charts.outputs.artifact-url }}
+          QUALITY_HOTSPOTS_ARTIFACT_URL: ${{ steps.quality_hotspots.outputs.artifact-url }}
+          QUALITY_COUPLING_ARTIFACT_URL: ${{ steps.quality_coupling.outputs.artifact-url }}
         run: |
           # Native attachments become readable when associated with a comment.
           if [ "$COMMENT_RESULT" != "success" ]; then
