@@ -7,6 +7,7 @@ import pytest
 
 from avo import project_inventory
 from avo.timeline.contracts import content_hash, file_fingerprint
+from avo.timeline.iterations import IterationLedgerService
 from avo.timeline.reconstruction import (
     ReconstructionError,
     build_reconstruction_bundle,
@@ -15,7 +16,7 @@ from avo.timeline.reconstruction import (
 from avo.timeline.workspace import TimelineWorkspace
 
 
-def canonical_project(tmp_path: Path):
+def canonical_project(tmp_path: Path, *, master_subdir: str = "masters"):
     raw = tmp_path / "raw.bin"
     raw.write_bytes(b"raw-original")
     project = tmp_path / "avo.project.json"
@@ -39,7 +40,7 @@ def canonical_project(tmp_path: Path):
             reason="fixture",
         )
     basename = "reconstruct-master-v001"
-    master = tmp_path / "edit" / "masters" / f"{basename}.mp4"
+    master = tmp_path / "edit" / master_subdir / f"{basename}.mp4"
     master.parent.mkdir(parents=True)
     master.write_bytes(b"master-bytes")
     transcript = tmp_path / "edit" / "transcripts" / f"{basename}.json"
@@ -57,6 +58,203 @@ def canonical_project(tmp_path: Path):
     initial = transcript.parent / "initial.json"
     initial.write_text("{}", encoding="utf-8")
     return workspace, basename
+
+
+def test_wrap_sidecars_are_not_reconstruction_sources(tmp_path: Path):
+    workspace, basename = canonical_project(tmp_path)
+    sidecars = [
+        tmp_path / "avo.wrap.json",
+        tmp_path / "avo.wrap.md",
+        tmp_path / "avo.wrap.draft.json",
+    ]
+    for path in sidecars:
+        path.write_text("pending closure", encoding="utf-8")
+    bundle = build_reconstruction_bundle(
+        workspace, master_basename=basename, actor="creator"
+    )
+    assert not {path.name for path in sidecars} & {
+        entry["path"] for entry in bundle["files"]
+    }
+    for path in sidecars:
+        assert path.read_text(encoding="utf-8") == "pending closure"
+        path.write_text("final closure", encoding="utf-8")
+    assert (
+        verify_reconstruction_bundle(tmp_path)["bundleSha256"] == bundle["bundleSha256"]
+    )
+
+
+def test_verifier_hashes_master_once_in_its_own_file_loop(tmp_path, monkeypatch):
+    from avo.timeline import reconstruction
+
+    workspace, basename = canonical_project(tmp_path)
+    bundle = build_reconstruction_bundle(
+        workspace, master_basename=basename, actor="creator"
+    )
+    master = tmp_path / bundle["master"]["path"]
+    original = reconstruction.file_fingerprint
+    calls = []
+
+    def counted(path):
+        calls.append(Path(path).resolve())
+        return original(path)
+
+    monkeypatch.setattr(reconstruction, "file_fingerprint", counted)
+    verify_reconstruction_bundle(tmp_path)
+    assert calls.count(master.resolve()) == 1
+    assert sorted(calls) == sorted(
+        (tmp_path / entry["path"]).resolve() for entry in bundle["files"]
+    )
+
+
+def test_verification_rereads_changed_master_with_same_size_and_date(tmp_path):
+    import os
+
+    workspace, basename = canonical_project(tmp_path)
+    bundle = build_reconstruction_bundle(
+        workspace, master_basename=basename, actor="creator"
+    )
+    master = tmp_path / bundle["master"]["path"]
+    before = master.stat()
+    master.write_bytes(b"MASTER-BYTES")
+    os.utime(master, ns=(before.st_atime_ns, before.st_mtime_ns))
+    assert master.stat().st_size == before.st_size
+    assert master.stat().st_mtime_ns == before.st_mtime_ns
+    with pytest.raises(ReconstructionError, match="file changed"):
+        verify_reconstruction_bundle(tmp_path)
+
+
+def human_final_authority_files(workspace):
+    raw_dir = workspace.raw_dir
+    decision = raw_dir / "edit" / "cleanup" / "closure" / "decision.json"
+    original = raw_dir / "edit" / "reference" / "original-acceptance.json"
+    report = raw_dir / "edit" / "cleanup" / "closure" / "transcript-analysis.json"
+    disposition = workspace.timeline_dir / "approvals" / "human-final-fixture.json"
+    for path in (decision, original, report, disposition):
+        path.parent.mkdir(parents=True, exist_ok=True)
+    decision.write_text('{"decision":"approved"}', encoding="utf-8")
+    original.write_text('{"type":"approved"}', encoding="utf-8")
+    report.write_text('{"status":"fail"}', encoding="utf-8")
+
+    def reference(path):
+        return {"path": str(path), **file_fingerprint(path)}
+
+    disposition.write_text(
+        json.dumps(
+            {
+                "authority": "human-final",
+                "decisionRef": reference(decision),
+                "sourceApprovalRef": reference(original),
+                "automatedEvidence": {
+                    "transcript-analysis": {**reference(report), "status": "fail"}
+                },
+                "automatedOutcomesReclassified": False,
+            }
+        ),
+        encoding="utf-8",
+    )
+    (raw_dir / "edit" / "delivery-manifest.json").write_text(
+        json.dumps(
+            {
+                "state": "delivered",
+                "adoption": {"humanFinalDisposition": reference(disposition)},
+            }
+        ),
+        encoding="utf-8",
+    )
+    return [decision, original, report, disposition]
+
+
+def test_human_final_authority_and_original_decision_are_required_inputs(tmp_path):
+    workspace, basename = canonical_project(tmp_path)
+    authority = human_final_authority_files(workspace)
+    original = {path: path.read_bytes() for path in authority}
+    bundle = build_reconstruction_bundle(
+        workspace, master_basename=basename, actor="creator"
+    )
+    assert {path.relative_to(tmp_path).as_posix() for path in authority} <= {
+        entry["path"] for entry in bundle["files"]
+    }
+    verify_reconstruction_bundle(tmp_path)
+    assert all(path.read_bytes() == data for path, data in original.items())
+
+
+@pytest.mark.parametrize("change", ["changed-decision", "omitted-decision"])
+def test_human_final_authority_cannot_disappear_from_verified_bundle(tmp_path, change):
+    workspace, basename = canonical_project(tmp_path)
+    decision, *_ = human_final_authority_files(workspace)
+    bundle = build_reconstruction_bundle(
+        workspace, master_basename=basename, actor="creator"
+    )
+    if change == "changed-decision":
+        decision.write_text('{"decision":"rejected"}', encoding="utf-8")
+    else:
+        bundle["files"] = [
+            entry
+            for entry in bundle["files"]
+            if entry["path"] != decision.relative_to(tmp_path).as_posix()
+        ]
+        bundle["bundleSha256"] = content_hash(
+            {key: value for key, value in bundle.items() if key != "bundleSha256"}
+        )
+        (workspace.timeline_dir / "reconstruction-bundle.json").write_text(
+            json.dumps(bundle), encoding="utf-8"
+        )
+    with pytest.raises(ReconstructionError):
+        verify_reconstruction_bundle(tmp_path)
+
+
+@pytest.mark.parametrize("change", ["missing-file-entry", "wrong-master-digest"])
+def test_master_must_match_the_entry_verified_in_the_file_loop(tmp_path, change):
+    workspace, basename = canonical_project(tmp_path)
+    bundle = build_reconstruction_bundle(
+        workspace, master_basename=basename, actor="creator"
+    )
+    if change == "missing-file-entry":
+        bundle["files"] = [
+            entry
+            for entry in bundle["files"]
+            if entry["path"] != bundle["master"]["path"]
+        ]
+    else:
+        bundle["master"]["sha256"] = "f" * 64
+    bundle["bundleSha256"] = content_hash(
+        {key: value for key, value in bundle.items() if key != "bundleSha256"}
+    )
+    (workspace.timeline_dir / "reconstruction-bundle.json").write_text(
+        json.dumps(bundle), encoding="utf-8"
+    )
+    with pytest.raises(ReconstructionError, match="master"):
+        verify_reconstruction_bundle(tmp_path)
+
+
+@pytest.mark.parametrize("tampered", [False, True])
+def test_explicit_export_location_keeps_exact_transcript_hash_gate(
+    tmp_path: Path, tampered: bool
+):
+    workspace, basename = canonical_project(tmp_path, master_subdir="proofs")
+    master = tmp_path / "edit" / "proofs" / f"{basename}.mp4"
+    fingerprint = file_fingerprint(master)
+    (tmp_path / "edit" / "delivery-manifest.json").write_text(
+        json.dumps({"master": {**fingerprint, "path": str(master)}}),
+        encoding="utf-8",
+    )
+    if tampered:
+        master.write_bytes(b"MASTER-BYTES")
+        with pytest.raises(ReconstructionError, match="exact master bytes"):
+            build_reconstruction_bundle(
+                workspace, master_basename=basename, actor="creator"
+            )
+        assert not (workspace.timeline_dir / "reconstruction-bundle.json").exists()
+    else:
+        bundle = build_reconstruction_bundle(
+            workspace, master_basename=basename, actor="creator"
+        )
+        assert bundle["master"]["path"] == f"edit/proofs/{basename}.mp4"
+        assert bundle["master"]["sha256"] == fingerprint["sha256"]
+        assert verify_reconstruction_bundle(tmp_path)["master"] == bundle["master"]
+        assert project_inventory.resolve_preserved_set(
+            tmp_path, basename
+        ).final_master == [master]
 
 
 def test_bundle_verifies_graph_and_cleanup_preserves_only_graph(tmp_path: Path):
@@ -218,6 +416,111 @@ def test_bundle_preserves_current_media_and_delivery_receipt(tmp_path: Path):
         verify_reconstruction_bundle(tmp_path)
 
 
+def historical_request_ledger(workspace: TimelineWorkspace) -> Path:
+    request = workspace.review_dir / "historical-cut" / "request.json"
+    request.parent.mkdir(parents=True)
+    ledger = IterationLedgerService(workspace)
+    for version in ("first request", "revised request"):
+        request.write_text(version, encoding="utf-8")
+        ledger.record_iteration(
+            {
+                "intent": {"request": file_fingerprint(request)},
+                "canonicalBasis": {"cmap": workspace.store("cmap").head_hash()},
+                "proofPlanRef": {"artifactId": "historical-plan", "sha256": "a" * 64},
+            },
+            actor="agent",
+            reason="historical request fixture",
+        )
+    ledger.store.set_active_state(
+        "valid", reason="fixture history event", actor="agent"
+    )
+    return request
+
+
+def ledger_file_bytes(workspace: TimelineWorkspace) -> dict[str, bytes]:
+    index_path = workspace.timeline_dir / "iteration-ledger.json"
+    index = json.loads(index_path.read_text(encoding="utf-8"))
+    paths = [
+        index_path,
+        *[
+            workspace.timeline_dir / ref["path"]
+            for ref in [*index["revisionRefs"], *index["eventRefs"]]
+        ],
+    ]
+    return {
+        path.relative_to(workspace.raw_dir).as_posix(): path.read_bytes()
+        for path in paths
+    }
+
+
+@pytest.mark.parametrize("request_exists", [True, False])
+def test_historical_ledger_refs_are_not_current_media_requirements(
+    tmp_path: Path, request_exists: bool
+):
+    workspace, basename = canonical_project(tmp_path)
+    request = historical_request_ledger(workspace)
+    if not request_exists:
+        request.unlink()
+    original_ledger = ledger_file_bytes(workspace)
+
+    bundle = build_reconstruction_bundle(
+        workspace, master_basename=basename, actor="creator"
+    )
+    assert ledger_file_bytes(workspace) == original_ledger
+    assert {entry["path"] for entry in bundle["iterationLedgers"]} == set(
+        original_ledger
+    )
+    files = {entry["path"]: entry for entry in bundle["files"]}
+    assert set(original_ledger) <= files.keys()
+    request_relative = request.relative_to(tmp_path).as_posix()
+    if request_exists:
+        assert files[request_relative]["sha256"] == file_fingerprint(request)["sha256"]
+    else:
+        assert request_relative not in files
+    assert (
+        verify_reconstruction_bundle(tmp_path)["bundleSha256"] == bundle["bundleSha256"]
+    )
+
+
+@pytest.mark.parametrize("role", ["revision", "event"])
+@pytest.mark.parametrize("change", ["changed", "missing"])
+def test_ledger_archive_integrity_remains_required(
+    tmp_path: Path, change: str, role: str
+):
+    workspace, basename = canonical_project(tmp_path)
+    historical_request_ledger(workspace)
+    bundle = build_reconstruction_bundle(
+        workspace, master_basename=basename, actor="creator"
+    )
+    entry = next(
+        item for item in bundle["iterationLedgers"] if item["role"].endswith(role)
+    )
+    path = tmp_path / entry["path"]
+    if change == "changed":
+        path.write_bytes(b"changed historical record")
+    else:
+        path.unlink()
+    with pytest.raises(ReconstructionError):
+        verify_reconstruction_bundle(tmp_path)
+
+
+def test_conflicting_current_media_heads_still_block_bundle(tmp_path: Path):
+    workspace, basename = canonical_project(tmp_path)
+    media = tmp_path / "edit" / "current-input.bin"
+    media.write_bytes(b"first selected input")
+    workspace.store("tracks").append_revision(
+        snapshot={"source": file_fingerprint(media)}, actor="agent", reason="fixture"
+    )
+    media.write_bytes(b"other selected input")
+    workspace.store("animation").append_revision(
+        snapshot={"source": file_fingerprint(media)}, actor="agent", reason="fixture"
+    )
+    with pytest.raises(ReconstructionError, match="conflicting canonical media"):
+        build_reconstruction_bundle(
+            workspace, master_basename=basename, actor="creator"
+        )
+
+
 def test_cleanup_respects_project_retention_and_actual_deletions(tmp_path: Path):
     workspace, basename = canonical_project(tmp_path)
     keep = tmp_path / "edit" / "preview" / "approved.mp4"
@@ -330,11 +633,16 @@ def test_successful_cleanup_receipt_drives_final_metrics(tmp_path: Path):
         project_inventory.run_cleanup(tmp_path, basename)
 
 
-def test_missing_or_changed_canonical_media_blocks_bundle(tmp_path: Path):
+@pytest.mark.parametrize(
+    "artifact_type", ["cmap", "bmap", "tracks", "animation", "sync-map"]
+)
+def test_missing_or_changed_canonical_media_blocks_bundle(
+    tmp_path: Path, artifact_type: str
+):
     workspace, basename = canonical_project(tmp_path)
     media = tmp_path / "edit" / "dialogue.wav"
     media.write_bytes(b"dialogue")
-    workspace.store("tracks").append_revision(
+    workspace.store(artifact_type).append_revision(
         snapshot={"source": file_fingerprint(media)}, actor="agent", reason="fixture"
     )
     media.write_bytes(b"changed")
