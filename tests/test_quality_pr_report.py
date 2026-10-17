@@ -83,6 +83,11 @@ def test_job_summary_names_publication_outcomes_and_preserves_archive_fallback()
 
 def test_support_archives_are_full_run_outputs_and_not_release_requirements():
     workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+    report = workflow.split("  quality-report:", 1)[1]
+    assert (
+        "if: ${{ !cancelled() && !(needs.select-run.result == 'success' && needs.select-run.outputs.run_full_ci == 'false') }}"
+        in report
+    )
     for name, identifier, artifact, directory in (
         ("Upload hotspot evidence", "quality_hotspots", "quality-hotspots", "hotspots"),
         (
@@ -90,6 +95,18 @@ def test_support_archives_are_full_run_outputs_and_not_release_requirements():
             "quality_coupling",
             "quality-coupling",
             "coupling",
+        ),
+        (
+            "Upload mutation evidence",
+            "quality_mutation",
+            "quality-mutation",
+            "mutation",
+        ),
+        (
+            "Upload gate decision evidence",
+            "quality_gate_decisions",
+            "quality-gate-decisions",
+            "decisions",
         ),
     ):
         step = workflow.split(f"- name: {name}\n", 1)[1].split("- name:", 1)[0]
@@ -109,11 +126,25 @@ def test_each_support_attachment_has_a_fresh_guard_and_independent_link_route():
     for name, identifier, role in (
         ("hotspot", "pr_hotspots", "hotspots"),
         ("coupling", "pr_coupling", "coupling_files"),
+        ("mutation", "pr_mutation", "mutation_scopes"),
+        ("gate decisions", "pr_gate_decisions", "gate_decisions"),
     ):
+        guard_name = f"- name: Check current PR before {name} upload\n"
+        assert workflow.count(guard_name) == 1
+        after_guard = workflow.split(guard_name, 1)[1]
+        assert after_guard.split("- name:", 1)[1].startswith(
+            f" Attach inline {name} chart\n"
+        )
         guard = workflow.split(f"- name: Check current PR before {name} upload\n", 1)[
             1
         ].split("- name:", 1)[0]
         assert f"id: {identifier}" in guard and "--check-pr-current" in guard
+        assert "steps.report_build.outcome == 'success'" in guard
+        assert (
+            "!cancelled()" in guard and "github.event_name == 'pull_request'" in guard
+        )
+        assert "GH_TOKEN: ${{ github.token }}" in guard
+        assert "secrets.GH_TOKEN" not in guard
         attachment = workflow.split(f"- name: Attach inline {name} chart\n", 1)[
             1
         ].split("- name:", 1)[0]
@@ -139,11 +170,18 @@ def test_each_support_attachment_has_a_fresh_guard_and_independent_link_route():
     for name, identifier in (
         ("HOTSPOTS", "quality_hotspots"),
         ("COUPLING", "quality_coupling"),
+        ("MUTATION", "quality_mutation"),
+        ("GATE_DECISIONS", "quality_gate_decisions"),
     ):
         route = f"QUALITY_{name}_ARTIFACT_URL: ${{{{ steps.{identifier}.outputs.artifact-url }}}}"
         assert route in linking and route in summary
     assert "--hotspots-attachment reports/quality/hotspots-attachment.json" in linking
     assert "--coupling-attachment reports/quality/coupling-attachment.json" in linking
+    assert "--mutation-attachment reports/quality/mutation-attachment.json" in linking
+    assert (
+        "--gate-decisions-attachment reports/quality/gate-decisions-attachment.json"
+        in linking
+    )
 
 
 def _load(name: str, rel: str):

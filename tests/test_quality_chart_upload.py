@@ -24,6 +24,12 @@ TOKEN = "ghp_" + "x" * 36
 ASSET = (
     "https://github.com/user-attachments/assets/12345678-1234-4234-8234-123456789abc"
 )
+SUPPORT_FILES = {
+    "hotspots": ("hotspots.png", "hotspots_image_error"),
+    "coupling_files": ("coupling-files.png", "coupling_image_error"),
+    "mutation_scopes": ("mutation-efficacy.png", "mutation_image_error"),
+    "gate_decisions": ("gate-decisions.png", "gate_decisions_image_error"),
+}
 
 
 def chunk(kind, content):
@@ -244,12 +250,14 @@ def test_untrusted_or_malformed_attachment_urls_are_rejected(monkeypatch, url):
         uploader.upload_chart(b"png", token=TOKEN, repository_id=REPOSITORY_ID)
 
 
-def run_main(monkeypatch, chart, metrics, receipt):
+def run_main(monkeypatch, chart, metrics, receipt, *, role="dashboard"):
     monkeypatch.setattr(
         sys,
         "argv",
         [
             "upload_quality_chart.py",
+            "--role",
+            role,
             "--chart",
             str(chart),
             "--metrics",
@@ -281,10 +289,13 @@ def test_success_receipt_binds_native_url_to_current_png_without_git_or_comments
 
 
 @pytest.mark.parametrize("failure", ["denied", "timeout", "missing", "no-token"])
+@pytest.mark.parametrize("role", ["dashboard", "mutation_scopes", "gate_decisions"])
 def test_failed_upload_is_nonfatal_and_receipt_never_exposes_credentials(
-    chart_files, tmp_path, monkeypatch, capsys, failure
+    chart_files, tmp_path, monkeypatch, capsys, failure, role
 ):
-    chart, metrics, _ = chart_files
+    chart, metrics, _ = (
+        chart_files if role == "dashboard" else support_files(chart_files, role)
+    )
     calls = []
 
     def request(*args, **kwargs):
@@ -307,8 +318,9 @@ def test_failed_upload_is_nonfatal_and_receipt_never_exposes_credentials(
     elif failure == "no-token":
         monkeypatch.delenv("QUALITY_CHARTS_TOKEN")
     receipt_path = tmp_path / "receipt.json"
-    receipt = run_main(monkeypatch, chart, metrics, receipt_path)
+    receipt = run_main(monkeypatch, chart, metrics, receipt_path, role=role)
     assert receipt["sha"] == SHA and receipt["run_id"] == RUN_ID
+    assert receipt["role"] == role
     assert set(receipt) >= {"sha", "run_id", "chart_sha256", "url", "error"}
     assert not receipt["url"] and receipt["error"]
     assert len(calls) == (0 if failure in {"missing", "no-token"} else 1)
@@ -329,15 +341,13 @@ def support_files(chart_files, role, *, state="MEASURED"):
         "run_id": RUN_ID,
     }
     document["series"][role] = series
-    chart = chart.with_name(
-        "hotspots.png" if role == "hotspots" else "coupling-files.png"
-    )
+    chart = chart.with_name(SUPPORT_FILES[role][0])
     chart.write_bytes(png(series))
     metrics.write_text(json.dumps(document), encoding="utf-8")
     return chart, metrics, document
 
 
-@pytest.mark.parametrize("role", ["hotspots", "coupling_files"])
+@pytest.mark.parametrize("role", SUPPORT_FILES)
 @pytest.mark.parametrize("state", ["MEASURED", "PARTIAL"])
 def test_support_images_accept_exact_ci_series_without_requiring_green_gates(
     chart_files, role, state
@@ -349,7 +359,7 @@ def test_support_images_accept_exact_ci_series_without_requiring_green_gates(
     )
 
 
-@pytest.mark.parametrize("role", ["hotspots", "coupling_files"])
+@pytest.mark.parametrize("role", SUPPORT_FILES)
 @pytest.mark.parametrize(
     "problem",
     [
@@ -360,9 +370,13 @@ def test_support_images_accept_exact_ci_series_without_requiring_green_gates(
         "schema",
         "sha",
         "run_id",
+        "document-sha",
+        "document-run_id",
         "filename",
         "image-error",
         "metadata",
+        "missing-image",
+        "corrupt-image",
     ],
 )
 def test_support_upload_rejects_missing_invalid_or_mismatched_evidence(
@@ -384,14 +398,20 @@ def test_support_upload_rejects_missing_invalid_or_mismatched_evidence(
         series["sha"] = "b" * 40
     elif problem == "run_id":
         series["run_id"] = "41"
+    elif problem == "document-sha":
+        document["sha"] = "b" * 40
+    elif problem == "document-run_id":
+        document["run_id"] = "41"
     elif problem == "filename":
         wrong_name = chart.with_name("arbitrary.png")
         wrong_name.write_bytes(chart.read_bytes())
         chart = wrong_name
     elif problem == "image-error":
-        document[
-            "hotspots_image_error" if role == "hotspots" else "coupling_image_error"
-        ] = "render failed"
+        document[SUPPORT_FILES[role][1]] = "render failed"
+    elif problem == "missing-image":
+        chart.unlink()
+    elif problem == "corrupt-image":
+        chart.write_bytes(b"not a PNG")
     else:
         chart.write_bytes(png({**series, "state": "PARTIAL"}))
     metrics.write_text(json.dumps(document), encoding="utf-8")
@@ -399,19 +419,29 @@ def test_support_upload_rejects_missing_invalid_or_mismatched_evidence(
         uploader.validate_chart(chart, metrics, sha=SHA, run_id=RUN_ID, role=role)
 
 
-def test_support_render_error_does_not_disable_other_image_roles(chart_files):
-    chart, metrics, document = support_files(chart_files, "hotspots")
+@pytest.mark.parametrize("role", SUPPORT_FILES)
+def test_support_render_error_does_not_disable_other_image_roles(chart_files, role):
+    chart, metrics, document = support_files(chart_files, role)
     document["image_error"] = "primary image failed"
-    document["coupling_image_error"] = "coupling failed independently"
+    for other, (_, error_field) in SUPPORT_FILES.items():
+        if other != role:
+            document[error_field] = "other image failed independently"
     metrics.write_text(json.dumps(document), encoding="utf-8")
     assert (
-        uploader.validate_chart(chart, metrics, sha=SHA, run_id=RUN_ID, role="hotspots")
+        uploader.validate_chart(chart, metrics, sha=SHA, run_id=RUN_ID, role=role)
         == chart.read_bytes()
     )
 
 
 @pytest.mark.parametrize(
-    "name", ["dashboard.png", "hotspots.png", "coupling-files.png"]
+    "name",
+    [
+        "dashboard.png",
+        "hotspots.png",
+        "coupling-files.png",
+        "mutation-efficacy.png",
+        "gate-decisions.png",
+    ],
 )
 def test_native_upload_accepts_only_bounded_chart_names(monkeypatch, name):
     calls = mock_response(monkeypatch, {"url": ASSET})
@@ -441,6 +471,16 @@ def test_native_upload_refuses_unbounded_names_before_network(monkeypatch, name)
         ("dashboard", "charts/dashboard.png", "chart-attachment.json"),
         ("hotspots", "hotspots/hotspots.png", "hotspots-attachment.json"),
         ("coupling_files", "coupling/coupling-files.png", "coupling-attachment.json"),
+        (
+            "mutation_scopes",
+            "mutation/mutation-efficacy.png",
+            "mutation-attachment.json",
+        ),
+        (
+            "gate_decisions",
+            "decisions/gate-decisions.png",
+            "gate-decisions-attachment.json",
+        ),
     ],
 )
 def test_role_cli_uses_fixed_paths_and_records_role_and_filename(
