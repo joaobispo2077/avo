@@ -33,6 +33,18 @@ CHART_ROLES = {
         "coupling",
         "coupling-attachment.json",
     ),
+    "mutation_scopes": (
+        "mutation-efficacy.png",
+        "mutation_image_error",
+        "mutation",
+        "mutation-attachment.json",
+    ),
+    "gate_decisions": (
+        "gate-decisions.png",
+        "gate_decisions_image_error",
+        "decisions",
+        "gate-decisions-attachment.json",
+    ),
 }
 
 

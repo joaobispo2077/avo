@@ -15,11 +15,15 @@ import re
 from pathlib import Path
 
 _IMAGE = re.compile(r"!\[([^\]]*)\]\(kpi-chart:([A-Za-z0-9._-]+)\)")
-_DETAIL = re.compile(r"\[([^\]]*)\]\(kpi-detail:(hotspots\.md|coupling-index\.md)\)")
+_DETAIL = re.compile(
+    r"\[([^\]]*)\]\(kpi-detail:(hotspots\.md|coupling-index\.md|mutation-efficacy\.md|gate-decisions\.md)\)"
+)
 CHART_FILES = {
     "dashboard": "dashboard.png",
     "hotspots": "hotspots.png",
     "coupling_files": "coupling-files.png",
+    "mutation_scopes": "mutation-efficacy.png",
+    "gate_decisions": "gate-decisions.png",
 }
 START = "<!-- quality-artifacts:start -->"
 END = "<!-- quality-artifacts:end -->"
@@ -90,15 +94,23 @@ def link_artifacts(
     coupling_url: str = "",
     hotspots_image_url: str = "",
     coupling_image_url: str = "",
+    mutation_url: str = "",
+    gate_decisions_url: str = "",
+    mutation_image_url: str = "",
+    gate_decisions_image_url: str = "",
 ) -> str:
     charts_url = current_artifact_url(charts_url)
     metrics_url = current_artifact_url(metrics_url)
     hotspots_url = current_artifact_url(hotspots_url)
     coupling_url = current_artifact_url(coupling_url)
+    mutation_url = current_artifact_url(mutation_url)
+    gate_decisions_url = current_artifact_url(gate_decisions_url)
     images = {
         "dashboard.png": (image_url, charts_url),
         "hotspots.png": (hotspots_image_url, hotspots_url),
         "coupling-files.png": (coupling_image_url, coupling_url),
+        "mutation-efficacy.png": (mutation_image_url, mutation_url),
+        "gate-decisions.png": (gate_decisions_image_url, gate_decisions_url),
     }
     images = {
         filename: (
@@ -129,7 +141,12 @@ def link_artifacts(
         )
 
     updated = _IMAGE.sub(replace, markdown)
-    details = {"hotspots.md": hotspots_url, "coupling-index.md": coupling_url}
+    details = {
+        "hotspots.md": hotspots_url,
+        "coupling-index.md": coupling_url,
+        "mutation-efficacy.md": mutation_url,
+        "gate-decisions.md": gate_decisions_url,
+    }
 
     def detail(match: re.Match[str]) -> str:
         label, filename = match.groups()
@@ -175,6 +192,8 @@ def main() -> int:
     )
     parser.add_argument("--hotspots-attachment", type=Path)
     parser.add_argument("--coupling-attachment", type=Path)
+    parser.add_argument("--mutation-attachment", type=Path)
+    parser.add_argument("--gate-decisions-attachment", type=Path)
     parser.add_argument(
         "--hotspots-chart",
         type=Path,
@@ -184,6 +203,16 @@ def main() -> int:
         "--coupling-chart",
         type=Path,
         default=Path("reports/quality/coupling/coupling-files.png"),
+    )
+    parser.add_argument(
+        "--mutation-chart",
+        type=Path,
+        default=Path("reports/quality/mutation/mutation-efficacy.png"),
+    )
+    parser.add_argument(
+        "--gate-decisions-chart",
+        type=Path,
+        default=Path("reports/quality/decisions/gate-decisions.png"),
     )
     parser.add_argument("--no-summary", action="store_true")
     args = parser.parse_args()
@@ -198,11 +227,21 @@ def main() -> int:
         image_url=read_attachment(args.attachment, args.chart),
         hotspots_url=os.environ.get("QUALITY_HOTSPOTS_ARTIFACT_URL", ""),
         coupling_url=os.environ.get("QUALITY_COUPLING_ARTIFACT_URL", ""),
+        mutation_url=os.environ.get("QUALITY_MUTATION_ARTIFACT_URL", ""),
+        gate_decisions_url=os.environ.get("QUALITY_GATE_DECISIONS_ARTIFACT_URL", ""),
         hotspots_image_url=read_attachment(
             args.hotspots_attachment, args.hotspots_chart, role="hotspots"
         ),
         coupling_image_url=read_attachment(
             args.coupling_attachment, args.coupling_chart, role="coupling_files"
+        ),
+        mutation_image_url=read_attachment(
+            args.mutation_attachment, args.mutation_chart, role="mutation_scopes"
+        ),
+        gate_decisions_image_url=read_attachment(
+            args.gate_decisions_attachment,
+            args.gate_decisions_chart,
+            role="gate_decisions",
         ),
     )
     path.write_text(updated, encoding="utf-8", newline="\n")
