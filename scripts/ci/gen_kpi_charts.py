@@ -906,6 +906,96 @@ def dashboard_module():
     return sys.modules[name]
 
 
+def _frozen_report_series(document: dict, dashboard, measurements) -> dict:
+    """Retained definitions authorize readout, never today's reinterpretation."""
+    if "metric_definitions" not in document:
+        return {}
+    if error := measurements.definition_error(document):
+        raise ValueError(f"Invalid frozen metric definitions: {error}")
+    if error := measurements.validate_reporting_context(document):
+        raise ValueError(f"Invalid frozen reporting context: {error}")
+    collection = document.get("series", {})
+    if not isinstance(collection, dict):
+        raise ValueError("Invalid frozen report series collection")
+    roles = ("dashboard", "coupling_files", "hotspots")
+    frozen = {role: collection[role] for role in roles if role in collection}
+    shared = dashboard.ci_module("avo_ci_coupling_dashboard", "coupling_dashboard.py")
+    for role, series in frozen.items():
+        valid = (
+            type(document.get("schema")) is int
+            and document["schema"] == 2
+            and isinstance(series, dict)
+            and series.get("chart") == role
+            and series.get("sha") == document.get("sha")
+            and series.get("run_id") == str(document.get("run_id") or "")
+        )
+        if valid and role == "dashboard":
+            valid = (
+                "schema" not in series
+                or (type(series["schema"]) is int and series["schema"] == 1)
+            ) and (
+                series.get("overall") in ("PASS", "FAIL", "INCOMPLETE")
+                and isinstance(series.get("actions"), list)
+                and all(isinstance(action, str) for action in series["actions"])
+                and isinstance(series.get("metrics"), list)
+                and all(isinstance(row, dict) for row in series["metrics"])
+                and [row.get("title") for row in series["metrics"]]
+                == ["Coverage", "Duplication", "Mutation"]
+            )
+        elif valid:
+            required = (
+                {
+                    "files": list,
+                    "groups": list,
+                    "namespaces": list,
+                    "references": dict,
+                    "axes": dict,
+                }
+                if role == "coupling_files"
+                else {"functions": list, "population": dict, "rankings": dict}
+            )
+            valid = (
+                type(series.get("schema")) is int
+                and series["schema"] == 1
+                and series.get("state") in ("MEASURED", "PARTIAL", "UNAVAILABLE")
+                and all(
+                    series.get(key) == value
+                    for key, value in shared.context(document, role).items()
+                )
+                and all(
+                    isinstance(series.get(key), kind) for key, kind in required.items()
+                )
+            )
+            if valid:
+                rows = series["files" if role == "coupling_files" else "functions"]
+                valid = all(
+                    isinstance(row, dict)
+                    and measurements.source_path(row.get("path"))
+                    and row.get("source_url")
+                    == shared.source_url(
+                        document,
+                        row["path"],
+                        row.get("line") if role == "hotspots" else None,
+                    )
+                    for row in rows
+                )
+        if not valid:
+            raise ValueError(f"Invalid frozen {role} series identity or structure")
+    if len(frozen) < len(roles):
+        current = dict(document)
+        measurements.freeze_definitions(current)
+        if not frozen:
+            document["metric_definitions"] = current["metric_definitions"]
+        elif (
+            current["metric_definitions"]["catalog_sha256"]
+            != document["metric_definitions"]["catalog_sha256"]
+        ):
+            raise ValueError(
+                "Cannot build missing series using historical metric definitions"
+            )
+    return frozen
+
+
 def generate_dashboard(
     outcomes: dict[str, str],
     *,
@@ -916,6 +1006,7 @@ def generate_dashboard(
     document: dict | None = None,
 ) -> tuple[str, dict]:
     """Default single-image report; renderer failure leaves the text intact."""
+    generated = document is None
     if document is None:
         name = "avo_ci_write_quality_metrics_snapshot"
         if name not in sys.modules:
@@ -936,7 +1027,32 @@ def generate_dashboard(
             recorded_at=datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         )
     dashboard = dashboard_module()
-    series = dashboard.build_series(document)
+    measurements = dashboard.ci_module(
+        "avo_ci_quality_measurements", "quality_measurements.py"
+    )
+    if generated:
+        repository = os.environ.get("GITHUB_REPOSITORY", "")
+        if repository:
+            document["repository"] = repository
+            document["run_url"] = (
+                f"https://github.com/{repository}/actions/runs/{document.get('run_id', '')}"
+            )
+        document["reporting"] = measurements.reporting_context(
+            sha=document.get("sha", ""),
+            run_id=document.get("run_id", ""),
+            repository=os.environ.get("GITHUB_REPOSITORY", ""),
+        )
+        measurements.freeze_definitions(document)
+    frozen = (
+        {} if generated else _frozen_report_series(document, dashboard, measurements)
+    )
+    if not all(role in frozen for role in ("coupling_files", "hotspots")):
+        dashboard.build_supporting(document)
+        document["series"].update(frozen)
+    dashboard.render_supporting(document, out_dir.parent)
+    series = frozen.get("dashboard")
+    if series is None:
+        series = dashboard.build_series(document)
     document["series"]["dashboard"] = series
     image = ""
     try:
@@ -944,9 +1060,8 @@ def generate_dashboard(
         image = f"{IMAGE_PREFIX}dashboard.png"
     except Exception as exc:
         document["image_error"] = str(exc)
+        (out_dir / "dashboard.png").unlink(missing_ok=True)
     text = dashboard.markdown(document, series, image=image)
-    if document.get("image_error"):
-        text += "\nDashboard image unavailable. Measurements remain in the table.\n"
     return text, document
 
 

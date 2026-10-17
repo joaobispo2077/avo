@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import html
 import importlib.util
 import json
 import math
 import os
+import re
 import sys
 from pathlib import Path
 
@@ -270,7 +272,10 @@ def value_text(value: object) -> str:
 
 
 def safe_text(value: object) -> str:
-    return str(value).replace("|", "\\|").replace("\n", " ")
+    text = html.escape(str(value), quote=False).replace("\r", " ").replace("\n", " ")
+    for character in ("\\", "|", "[", "]"):
+        text = text.replace(character, "\\" + character)
+    return text.replace("`", "&#96;")
 
 
 def evidence_links(doc: dict, sources: list[dict]) -> str:
@@ -288,16 +293,21 @@ def evidence_links(doc: dict, sources: list[dict]) -> str:
 
 
 def source_link(doc: dict, path: str, line: int, name: str = "") -> str:
-    repository = doc.get("repository", "")
     label = safe_text(name or f"{path}:{line}")
-    if (
-        repository
-        and len(str(doc.get("sha", ""))) == 40
-        and path.startswith("src/avo/")
-        and ".." not in path.split("/")
-    ):
-        return f"[{label}](https://github.com/{repository}/blob/{doc['sha']}/{path}#L{line})"
-    return f"`{label}`"
+    historical = dict(doc)
+    historical.setdefault("reporting", {"mode": "ci"})
+    url = ci_module("avo_ci_coupling_dashboard", "coupling_dashboard.py").source_url(
+        historical, path, line
+    )
+    return f"[{label}]({url})" if url else f"`{label}`"
+
+
+def evidence_description(value: object) -> str:
+    """Omit an oversized optional description as a whole, preserving its record."""
+    text = safe_text(value)
+    if len(text) > 2000:
+        return "Description excerpt omitted for publication size; complete evidence remains in quality-metrics.json."
+    return text
 
 
 def measurement_rows(doc: dict, series: dict) -> list[dict]:
@@ -317,6 +327,375 @@ def measurement_rows(doc: dict, series: dict) -> list[dict]:
     ]
 
 
+def build_supporting(doc: dict) -> None:
+    coupling = ci_module("avo_ci_coupling_dashboard", "coupling_dashboard.py")
+    hotspots = ci_module("avo_ci_quality_hotspots", "quality_hotspots.py")
+    measurements = ci_module("avo_ci_quality_measurements", "quality_measurements.py")
+    safe_doc = doc
+    if "metric_definitions" in doc and (error := measurements.definition_error(doc)):
+        doc["metric_definitions_error"] = error
+        safe_doc = {
+            key: value for key, value in doc.items() if key != "metric_definitions"
+        }
+    doc.setdefault("series", {}).update(
+        coupling_files=coupling.build_coupling_series(safe_doc),
+        hotspots=hotspots.build_hotspot_series(safe_doc),
+    )
+
+
+def render_supporting(doc: dict, directory: Path) -> None:
+    """Save complete text first; optional images fail independently."""
+    roles = (
+        (
+            "hotspots",
+            "quality_hotspots.py",
+            "avo_ci_quality_hotspots",
+            "hotspots",
+            "hotspots.png",
+            "write_hotspot_indexes",
+            "render_hotspots",
+            "hotspots_image_error",
+        ),
+        (
+            "coupling_files",
+            "coupling_dashboard.py",
+            "avo_ci_coupling_dashboard",
+            "coupling",
+            "coupling-files.png",
+            "write_coupling_indexes",
+            "render_coupling",
+            "coupling_image_error",
+        ),
+    )
+    doc["support_images"] = {}
+    for role, filename, name, folder, image, write, render, error in roles:
+        series = doc.get("series", {}).get(role)
+        if not series:
+            continue
+        doc.pop(error, None)
+        helper = ci_module(name, filename)
+        target = directory / folder
+        try:
+            getattr(helper, write)(series, target)
+            if series.get("state") in {"MEASURED", "PARTIAL"}:
+                getattr(helper, render)(series, target / image)
+                doc["support_images"][role] = f"kpi-chart:{image}"
+            else:
+                (target / image).unlink(missing_ok=True)
+        except Exception as exc:
+            (target / image).unlink(missing_ok=True)
+            doc[error] = f"{type(exc).__name__}: supporting image unavailable"
+
+
+def coupling_spacing(series: dict) -> str:
+    axes = series.get("axes", {})
+    text = f"Spacing: {safe_text(axes.get('transform', 'Unavailable'))}; ticks show raw counts."
+    if axes.get("quadrants") == "equal display area":
+        text += " Equal-area halves use independent scales around each median; equal areas do not mean equal numeric ranges."
+        if any(series.get("references", {}).get(axis) == 0 for axis in ("ce", "ca")):
+            text += " At a zero median the lower numeric range is empty."
+    return text
+
+
+def supporting_markdown(doc: dict) -> list[str]:
+    lines = []
+    series = doc.get("series", {})
+    hotspots = series.get("hotspots", {})
+    coupling = series.get("coupling_files", {})
+    shared = ci_module("avo_ci_coupling_dashboard", "coupling_dashboard.py")
+    if hotspots:
+        lines.extend(["", "### Complexity and CRAP review", ""])
+        if hotspots.get("state") not in {"MEASURED", "PARTIAL"}:
+            lines.append(
+                f"Unavailable: {safe_text(hotspots.get('reason', 'No verified function evidence.'))}"
+            )
+        else:
+            population = hotspots["population"]
+            lines.extend(
+                [
+                    f"{population['observed_functions']} observed functions; {population['measured_crap_functions']} measured CRAP; {population['unmeasured_observed_functions']} observed functions unmeasured; {population['source_error_count']} source-analysis errors. "
+                    + (
+                        "Total population known."
+                        if population["total_population_known"]
+                        else "Total population unknown beyond observed functions."
+                    ),
+                    "CRAP reference 30 is informational. Existing complexity policy and exceptions remain separate.",
+                    "",
+                ]
+            )
+            image = doc.get("support_images", {}).get("hotspots")
+            if image:
+                lines.extend([f"![Complexity and CRAP hotspots]({image})", ""])
+            elif doc.get("hotspots_image_error"):
+                lines.extend(
+                    [
+                        "Hotspot image unavailable; values and source lookup remain below.",
+                        "",
+                    ]
+                )
+            by_id = {row["id"]: row for row in hotspots["functions"]}
+            for key, title in (
+                ("complexity", "Cyclomatic complexity"),
+                ("crap", "CRAP"),
+            ):
+                ranking = hotspots["rankings"][key]
+                lines.extend(
+                    [
+                        f"**{title}: {ranking['shown']}/{ranking['eligible']} eligible candidates shown**. {ranking['selection']}; ties: {ranking['tie_rule']}.",
+                        "",
+                        "| ID | Full source identity | Observed value | Unit |",
+                        "|---|---|---:|---|",
+                    ]
+                )
+                for identifier in ranking["ids"]:
+                    row = by_id[identifier]
+                    value = (
+                        row["complexity"]
+                        if key == "complexity"
+                        else row["crap"]["value"]
+                    )
+                    lines.append(
+                        f"| {identifier} | {shared.source_label(row, function=True)} | {value:g} | {ranking['unit']} |"
+                    )
+                lines.append("")
+        lines.extend(
+            [
+                "",
+                "[Complete function index: hotspots.md (text archive)](kpi-detail:hotspots.md)",
+                "",
+            ]
+        )
+    if coupling:
+        lines.extend(["", "### File coupling: CE / CA", ""])
+        if coupling.get("state") != "MEASURED":
+            lines.append(
+                f"Unavailable: {safe_text(coupling.get('reason', 'No verified file/module evidence.'))}"
+            )
+        else:
+            refs = coupling["references"]
+            lines.extend(
+                [
+                    f"{coupling['file_count']} actual files at {len(coupling['groups'])} positions; {coupling['edge_count']} distinct internal module edges; {coupling['namespace_count']} namespace containers excluded from file points.",
+                    f"CE is horizontal (uses others); CA is vertical (used by others). Median references: CE {refs['ce']:g}, CA {refs['ca']:g}; all measured actual files including isolates, equality on the lower side. {coupling_spacing(coupling)} Regions describe connectivity, not architectural health or gate status.",
+                    "",
+                ]
+            )
+            image = doc.get("support_images", {}).get("coupling_files")
+            if image:
+                lines.extend([f"![Indexed file coupling]({image})", ""])
+            elif doc.get("coupling_image_error"):
+                lines.extend(
+                    [
+                        "Coupling image unavailable; exact positions and source lookup remain below.",
+                        "",
+                    ]
+                )
+            # Keep displayed coordinates and their complete memberships together.
+            # Large populations use a deterministic group excerpt with the full text route.
+            groups = coupling["groups"]
+            selected = []
+            member_count = 0
+            for group in groups:
+                if selected and member_count + group["member_count"] > 80:
+                    break
+                selected.append(group)
+                member_count += group["member_count"]
+            lines.extend(
+                [
+                    f"Lookup excerpt: {len(selected)}/{len(groups)} coordinate groups; {member_count}/{coupling['file_count']} files. Groups ordered by CE then CA; all members of each shown group are retained.",
+                    "",
+                    "<details>",
+                    "<summary>Indexed positions and files (bidirectional lookup)</summary>",
+                    "",
+                    "| Position | CE | CA | Members | File ID and complete source identity |",
+                    "|---|---:|---:|---:|---|",
+                ]
+            )
+            by_id = {row["id"]: row for row in coupling["files"]}
+            for group in selected:
+                for identifier in group["file_ids"]:
+                    row = by_id[identifier]
+                    lines.append(
+                        f"| {group['id']} | {group['ce']} | {group['ca']} | {group['member_count']} | {identifier}: {shared.source_label(row)} |"
+                    )
+            lines.extend(["", "</details>", ""])
+        lines.extend(
+            [
+                "",
+                "[Complete bidirectional file index: coupling-index.md (text archive)](kpi-detail:coupling-index.md)",
+                "",
+            ]
+        )
+    return lines
+
+
+def bounded_report(lines: list[str], *, limit: int = 48000) -> str:
+    """Bound whole diagnostic sections/rows without dropping essential overview."""
+    text = "\n".join(lines)
+    if len(text) <= limit:
+        return text
+    # Existing artifacts retain exact full observations and complete supporting indexes.
+    # Reduce diagnostics first; do not silently slice a table row or source identity.
+    start = text.find("<details>\n<summary>Metric diagnostics and artifacts</summary>")
+    if start >= 0:
+        end = text.find("</details>", start)
+        if end >= 0:
+            text = (
+                text[:start]
+                + "Diagnostic excerpt omitted for publication size. Complete observations and reasons remain in normalized JSON and linked text artifacts.\n"
+                + text[end + len("</details>") :]
+            )
+    for summary, route in (
+        (
+            "Execution results",
+            "complete testcase events and raw JUnit execution artifacts",
+        ),
+        (
+            "Indexed positions and files (bidirectional lookup)",
+            "[complete coupling-index.md text archive](kpi-detail:coupling-index.md)",
+        ),
+    ):
+        if len(text) <= limit:
+            break
+        pattern = (
+            r"(?:Lookup excerpt:[^\n]*\n\n)?<details>\s*<summary>"
+            + re.escape(summary)
+            + r"</summary>.*?</details>"
+        )
+        text = re.sub(
+            pattern,
+            f"Inline detail excerpt omitted for publication size; inspect {route}. Full normalized measurements retain all records.",
+            text,
+            flags=re.DOTALL,
+        )
+    if len(text) > limit:
+        raise ValueError(
+            "Essential quality report exceeds publication budget; text fallback required"
+        )
+    return text
+
+
+def context_markdown(doc: dict, series: dict) -> list[str]:
+    lines = []
+    context = doc.get("reporting", {})
+    if context:
+        if context.get("mode") != "ci":
+            lines.extend(
+                [
+                    "**Local / fixture preview**. This is not CI or release certification.",
+                    "",
+                ]
+            )
+        if context.get("pr_number"):
+            lines.extend([f"PR: #{context['pr_number']}", ""])
+        lines.extend(
+            [
+                f"PR head: `{context.get('head_sha') or 'Unavailable'}`",
+                f"PR base: `{context.get('base_sha') or 'Unavailable'}`",
+                f"Tested revision: `{series['sha'] or 'Unavailable'}`",
+                f"Attempt: {context.get('run_attempt', 'Unavailable')}. Passed producer evidence may come from earlier attempts of the same run.",
+                "",
+            ]
+        )
+    return lines
+
+
+def execution_case_markdown(execution: dict) -> list[str]:
+    lines = []
+    cases = execution.get("cases") or []
+    noteworthy = [case for case in cases if case["outcome"] != "passed"]
+    if noteworthy:
+        lines.extend(
+            [
+                "",
+                f"Recorded skip/failure reasons: {min(30, len(noteworthy))}/{len(noteworthy)} non-passing testcase events shown; complete events and full reasons remain in the raw JUnit evidence.",
+                "",
+                "| Suite / case | Outcome | Recorded reason |",
+                "|---|---|---|",
+            ]
+        )
+        for case in noteworthy[:30]:
+            identity = ":".join(
+                str(case.get(key) or "Unavailable")
+                for key in ("suite", "classname", "name")
+            )
+            reason = case.get("reason") or "Reason unavailable"
+            suffix = (
+                " (excerpt; full reason in JUnit evidence)"
+                if case.get("reason_truncated")
+                else ""
+            )
+            lines.append(
+                f"| {safe_text(identity)} | {case['outcome']} | {safe_text(reason)}{suffix} |"
+            )
+        lines.append("")
+    return lines
+
+
+def findings_markdown(
+    doc: dict, observations: list[dict], summaries: list[dict]
+) -> list[str]:
+    lines = []
+    findings = [
+        row
+        for row in observations
+        if row.get("key") in {"dependencies", "deadcode", "architecture", "tree"}
+    ]
+    if findings or summaries:
+        lines.extend(["", "**Findings and accepted debt**", ""])
+        for row in findings:
+            lines.append(
+                f"- {safe_text(row['title'])}: {safe_text(row['value'])} ({safe_text(row.get('state', 'UNAVAILABLE'))}). {evidence_links(doc, row.get('sources', []))}"
+            )
+        for summary in summaries:
+
+            def shown(key, summary=summary):
+                value = summary.get(key)
+                return "Unavailable" if value is None else str(value)
+
+            lines.append(
+                f"- {safe_text(summary['tool'])}: {shown('configured_entries')} configured entries; {shown('matched_findings')} matched findings; {shown('unique_affected')} unique affected path/name identities; stale: {shown('stale_entries')}; {shown('unwaived_findings')} unwaived findings. Groups are non-additive; these counts are not defect removal."
+            )
+    return lines
+
+
+def definition_markdown(doc: dict) -> list[str]:
+    measurements = ci_module("avo_ci_quality_measurements", "quality_measurements.py")
+    if error := measurements.definition_error(doc):
+        return ["", f"Metric-definition identity unavailable: {safe_text(error)}", ""]
+    block = doc["metric_definitions"]
+    reference = block["reference"]
+    path, sha = reference["path"], reference["sha"]
+    route = f"`{path}` at `{sha}`"
+    if (
+        doc.get("reporting", {}).get("mode") == "ci"
+        and measurements.validate_reporting_context(doc) is None
+    ):
+        route = f"[{path}](https://github.com/{doc['repository']}/blob/{sha}/{path})"
+    lines = [
+        "",
+        "**Metric definitions used**",
+        "",
+        f"Catalog SHA-256: `{block['catalog_sha256']}`. Effective-policy SHA-256: `{block['policy_sha256']}`.",
+        f"Reviewed definition source: {route}. Full semantic definitions and frozen policy are retained in the normalized JSON.",
+        "",
+        "| Metric ID | Definition revision | Definition SHA-256 | Classification / unit |",
+        "|---|---:|---|---|",
+    ]
+    for entry in block["entries"]:
+        lines.append(
+            f"| {entry['id']} | {entry['revision']} | `{entry['sha256']}` | {safe_text(entry['classification'])}; {safe_text(entry['unit'])} |"
+        )
+    lines.extend(
+        [
+            "",
+            "Definition revision, artifact schema and measured repository values are separate. Ordinary snapshot tests never rewrite their reviewed baselines.",
+            "",
+        ]
+    )
+    return lines
+
+
 def markdown(doc: dict, series: dict, *, image: str = "") -> str:
     lines = [
         "## AVO quality",
@@ -326,6 +705,7 @@ def markdown(doc: dict, series: dict, *, image: str = "") -> str:
         f"Commit: `{series['sha'] or 'unavailable'}` · Run: `{series['run_id'] or 'unavailable'}`",
         "",
     ]
+    lines.extend(context_markdown(doc, series))
     if series["actions"]:
         lines.extend(["**Required action**", ""])
         lines.extend(f"- {safe_text(item)}" for item in series["actions"])
@@ -334,6 +714,10 @@ def markdown(doc: dict, series: dict, *, image: str = "") -> str:
         lines.extend(["All mandatory gate decisions and required jobs passed.", ""])
     if image:
         lines.extend([f"![Quality dashboard]({image})", ""])
+    elif doc.get("image_error"):
+        lines.extend(
+            ["Dashboard image unavailable; current measurements remain in text.", ""]
+        )
     observations = measurement_rows(doc, series)
     measured = sum(row.get("state") == "MEASURED" for row in observations)
     partial = sum(row.get("state") == "PARTIAL" for row in observations)
@@ -344,19 +728,47 @@ def markdown(doc: dict, series: dict, *, image: str = "") -> str:
             "",
             f"Evidence completeness: {measured} measured, {partial} partial, {missing} unavailable. Gate decisions are below.",
             "",
-            "| Metric | Measured | Scope | Evidence |",
-            "|---|---|---|---|",
         ]
     )
+    unavailable = [
+        safe_text(row["title"])
+        for row in observations
+        if row.get("state") not in {"MEASURED", "PARTIAL"}
+    ]
+    if unavailable:
+        lines.extend(["Unavailable evidence: " + "; ".join(unavailable) + ".", ""])
+    lines.extend(["| Metric | Measured | Scope | Evidence |", "|---|---|---|---|"])
     for metric in observations:
+        if "hotspots" in doc.get("series", {}) and metric.get("key") not in {
+            "coverage",
+            "duplication",
+            "mutation",
+        }:
+            continue
         suffix = " (partial)" if metric.get("state") == "PARTIAL" else ""
         lines.append(
-            f"| {safe_text(metric['title'])} | {safe_text(metric['value'])}{suffix} | {safe_text(metric['scope'])} | {safe_text(metric['basis'])} {evidence_links(doc, metric.get('sources', []))} |"
+            f"| {safe_text(metric['title'])} | {safe_text(metric['value'])}{suffix} | {safe_text(metric['scope'])} | {evidence_description(metric['basis'])} {evidence_links(doc, metric.get('sources', []))} |"
         )
+    lines.extend(supporting_markdown(doc))
     evidence = doc.get("measurement_evidence", {})
+    summaries = evidence.get("diagnostics", {}).get("exception_summaries", [])
+    lines.extend(findings_markdown(doc, observations, summaries))
     policy = ci_module(
         "avo_ci_write_quality_pr_report", "write_quality_pr_report.py"
     ).GATE_POLICY
+    executions = doc.get("test_evidence", {})
+    if executions:
+        lines.extend(["", "**Executed test evidence**", ""])
+        for job, execution in executions.items():
+            counts = execution.get("counts")
+            summary = (
+                f"{counts['passed']} passed / {counts['failed']} failed / {counts['errors']} errors / {counts['skipped']} skipped; {counts['total']} testcase events"
+                if counts
+                else "Testcase counts unavailable"
+            )
+            lines.append(
+                f"- {safe_text(job)}: {summary}. {safe_text(execution.get('state', 'UNAVAILABLE'))}. Repeated events are not additional unique tests."
+            )
     lines.extend(
         [
             "",
@@ -414,6 +826,8 @@ def markdown(doc: dict, series: dict, *, image: str = "") -> str:
         lines.append(
             f"| {safe_text(job)} | **{result.upper()}** | {detail} {evidence_links(doc, execution.get('sources', []))} |"
         )
+    for job in doc.get("jobs", {}):
+        lines.extend(execution_case_markdown(doc.get("test_evidence", {}).get(job, {})))
     lines.extend(
         [
             "",
@@ -434,6 +848,40 @@ def markdown(doc: dict, series: dict, *, image: str = "") -> str:
             "",
         ]
     )
+    secondary = [
+        row
+        for row in observations
+        if row.get("key") not in {"coverage", "duplication", "mutation"}
+    ]
+    lines.extend(definition_markdown(doc))
+    if secondary and "hotspots" in doc.get("series", {}):
+        lines.extend(
+            [
+                "| Informational observation | Measured | Scope / completeness | Evidence |",
+                "|---|---|---|---|",
+            ]
+        )
+        for row in secondary:
+            lines.append(
+                f"| {safe_text(row['title'])} | {safe_text(row['value'])} ({safe_text(row.get('state', 'UNAVAILABLE'))}) | {safe_text(row['scope'])}. {safe_text(row['basis'])} | {evidence_links(doc, row.get('sources', []))} |"
+            )
+        lines.append("")
+    for summary in summaries:
+        members = summary.get("members", [])
+        lines.extend(
+            [
+                f"**{safe_text(summary['tool'])} accepted exceptions: {min(30, len(members))}/{len(members)} observed matches shown**; order retained from analyzer. Complete entries/reasons are in its evidence artifact.",
+                "",
+                "| Source identity | Disposition | Recorded rationale |",
+                "|---|---|---|",
+            ]
+        )
+        for member in members[:30]:
+            identity = f"{member.get('path', 'Unavailable')}:{member.get('line', 'Unavailable')} {member.get('name', 'Unavailable')}"
+            lines.append(
+                f"| {safe_text(identity)} | {safe_text(member.get('disposition', 'Unavailable'))} | {safe_text(member.get('reason') or 'Rationale unavailable')} |"
+            )
+        lines.append("")
     risk = evidence.get("diagnostics", {}).get("code_risk", {})
     crap_observation = next((row for row in observations if row["key"] == "crap"), {})
     verified_crap = crap_observation.get("state") in {"MEASURED", "PARTIAL"}
@@ -446,7 +894,7 @@ def markdown(doc: dict, series: dict, *, image: str = "") -> str:
         key=lambda row: row["crap"]["value"],
         reverse=True,
     )
-    if functions:
+    if functions and "hotspots" not in doc.get("series", {}):
         lines.extend(
             [
                 "CRAP reference 30 is informational. These are the highest observed function scores; unmatched functions remain unmeasured.",
@@ -507,7 +955,7 @@ def markdown(doc: dict, series: dict, *, image: str = "") -> str:
             "",
         ]
     )
-    return "\n".join(lines)
+    return bounded_report(lines)
 
 
 def render(series: dict, path: Path) -> dict:
