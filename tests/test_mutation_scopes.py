@@ -124,6 +124,27 @@ def test_exports_measured_file_counts_and_hashes_without_new_file_gate(scopes):
     assert validated(module, payload) == payload
 
 
+@pytest.mark.parametrize(
+    ("relative_root", "relative_stats"), [(False, True), (True, False), (True, True)]
+)
+def test_capture_normalizes_repository_and_stats_paths(
+    scopes, monkeypatch, relative_root, relative_stats
+):
+    module, root = scopes
+    metadata(root, "a", [1])
+    metadata(root, "b", [0])
+    stats = stats_file(root, killed=1, survived=1, total=2)
+    monkeypatch.chdir(root)
+    payload = capture(
+        module,
+        Path(".") if relative_root else root,
+        stats.relative_to(root) if relative_stats else stats,
+    )
+    assert payload["state"] == "MEASURED"
+    assert payload["aggregate"]["path"] == "mutants/mutmut-cicd-stats.json"
+    assert validated(module, payload) == payload
+
+
 def test_unknown_and_all_mutmut_outcomes_remain_unresolved(scopes):
     module, root = scopes
     outcomes = [None, 5, 33, 34, 35, 36, 2, 37, -24, 24, 152, 255, -11, -9, 77]
@@ -333,8 +354,9 @@ def test_cli_overwrites_stale_scope_file_with_honest_diagnostic(scopes, monkeypa
     assert validated(module, payload)["state"] == "UNAVAILABLE"
 
 
+@pytest.mark.parametrize("relative_paths", [False, True])
 def test_cli_retains_exact_metadata_bytes_for_independent_verification(
-    scopes, monkeypatch
+    scopes, monkeypatch, relative_paths
 ):
     module, root = scopes
     metadata(root, "a", [1])
@@ -343,8 +365,13 @@ def test_cli_retains_exact_metadata_bytes_for_independent_verification(
     monkeypatch.setenv("GITHUB_SHA", SHA)
     monkeypatch.setenv("GITHUB_RUN_ID", "123")
     output = root / "reports/mutation/mutation-scopes.json"
+    monkeypatch.chdir(root)
+    stats_arg = stats.relative_to(root) if relative_paths else stats
+    output_arg = output.relative_to(root) if relative_paths else output
     assert (
-        module.main(["--stats", str(stats), "--profile", "light", "--out", str(output)])
+        module.main(
+            ["--stats", str(stats_arg), "--profile", "light", "--out", str(output_arg)]
+        )
         == 0
     )
     payload = json.loads(output.read_text(encoding="utf-8"))
