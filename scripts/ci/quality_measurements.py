@@ -68,6 +68,29 @@ def canonical_digest(value: object) -> str:
     ).hexdigest()
 
 
+def freeze_definitions(doc: dict) -> None:
+    doc["metric_definitions"] = module(
+        "avo_ci_quality_metric_definitions", "quality_metric_definitions.py"
+    ).build_definitions(doc)
+
+
+def definition_error(doc: dict) -> str | None:
+    block = doc.get("metric_definitions")
+    if block is None:
+        return "Legacy or missing metric-definition identity."
+    helper = module(
+        "avo_ci_quality_metric_definitions", "quality_metric_definitions.py"
+    )
+    error = helper.validate_definitions(block)
+    if error:
+        return error
+    if block["reference"]["sha"] != doc.get("sha"):
+        return "Metric definition reference belongs to another measured revision."
+    if block["policy"] != helper.build_definitions(doc)["policy"]:
+        return "Metric definition policy disagrees with this report's frozen policy."
+    return None
+
+
 def reporting_context(*, sha: str, run_id: str, repository: str) -> dict:
     context = {
         "schema": 1,
