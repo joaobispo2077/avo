@@ -222,7 +222,8 @@ def capture_scopes(
     *, root: Path, stats_path: Path, profile: str, sha: str, run_id: str, config=None
 ) -> dict:
     floor, paths = _profile(profile, config)
-    if not stats_path.resolve().is_relative_to(root.resolve()):
+    root, stats_path = root.resolve(), stats_path.resolve()
+    if not stats_path.is_relative_to(root):
         raise ValueError("aggregate mutation evidence path escapes repository")
     stats, stats_digest = _read(stats_path)
     _identity(stats, sha=sha, run_id=run_id, profile=profile)
