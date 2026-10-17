@@ -5,6 +5,7 @@ from __future__ import annotations
 import copy
 import html
 import json
+import os
 import re
 import sys
 from pathlib import Path
@@ -497,13 +498,32 @@ def test_preview_source_function_values_have_independent_small_expectations(
     assert core["ca"] == 1 and core["ce"] == 0
 
 
+@pytest.mark.parametrize("host_actions", ["false", "true"], ids=["local", "hosted"])
 def test_both_reporting_entrypoints_consume_actual_captured_support(
-    tmp_path, monkeypatch
+    tmp_path, monkeypatch, host_actions
 ):
     from PIL import Image
     from scripts.ci import gen_kpi_charts, write_unified_quality_report
     from scripts.ci.write_quality_pr_report import GATES
 
+    monkeypatch.setenv("GITHUB_ACTIONS", host_actions)
+    monkeypatch.setenv("GITHUB_REPOSITORY", "host/avo")
+    monkeypatch.setenv("GITHUB_RUN_ATTEMPT", "3")
+    monkeypatch.setenv("GITHUB_EVENT_NAME", "pull_request")
+    event = tmp_path / "host-event.json"
+    event.write_text(
+        json.dumps(
+            {
+                "number": 100,
+                "pull_request": {
+                    "head": {"sha": "b" * 40},
+                    "base": {"sha": "c" * 40},
+                },
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("GITHUB_EVENT_PATH", str(event))
     document, evidence = _produce_evidence(CASES[0], tmp_path / "source", monkeypatch)
     document.pop(
         "reporting", None
@@ -519,9 +539,21 @@ def test_both_reporting_entrypoints_consume_actual_captured_support(
     )
     quality = evidence / "quality-metrics.json"
     quality.write_text(json.dumps(document), encoding="utf-8")
-    combined = write_unified_quality_report.combine(
-        quality, None, sha=SHA, run_id=document["run_id"], needs={}
-    )
+    with monkeypatch.context() as preview:
+        preview.setenv("GITHUB_ACTIONS", "false")
+        for name in (
+            "GITHUB_REPOSITORY",
+            "GITHUB_EVENT_NAME",
+            "GITHUB_EVENT_PATH",
+            "GITHUB_RUN_ATTEMPT",
+        ):
+            preview.delenv(name, raising=False)
+        combined = write_unified_quality_report.combine(
+            quality, None, sha=SHA, run_id=document["run_id"], needs={}
+        )
+    assert combined["reporting"] == {"schema": 1, "mode": "local-preview"}
+    assert os.environ["GITHUB_ACTIONS"] == host_actions
+    assert os.environ["GITHUB_EVENT_NAME"] == "pull_request"
     assert combined["overall"] != "PASS"  # Missing jobs never become fixture success.
     assert combined["series"]["coupling_files"]["file_count"] == 5
     assert combined["series"]["hotspots"]["population"]["observed_functions"] == 5
