@@ -17,8 +17,11 @@ from .source_fidelity import media_from_probe, source_fidelity_evidence
 class CheckpointQcRegistry:
     """Produce the full deterministic evidence bundle for a review checkpoint."""
 
-    def __init__(self, *, rights_policy: Any | None = None) -> None:
+    def __init__(
+        self, *, rights_policy: Any | None = None, adoption: bool = False
+    ) -> None:
         self.rights_policy = rights_policy
+        self.adoption = adoption
 
     @staticmethod
     def _probe(candidate: Path) -> dict[str, Any]:
@@ -244,7 +247,7 @@ class CheckpointQcRegistry:
         request: dict[str, Any],
     ) -> list[dict[str, Any]]:
         evidence: list[dict[str, Any]] = []
-        if checkpoint == "motion-proof":
+        if checkpoint == "motion-proof" or self.adoption:
             evidence.extend(
                 self._active_evidence(workspace, artifact_type, dependencies)
                 for artifact_type in ("bmap", "tracks", "animation")
@@ -270,8 +273,16 @@ class CheckpointQcRegistry:
         checkpoint: str,
         evidence: list[dict[str, Any]],
         windows: list[dict[str, Any]],
+        adoption: bool = False,
     ) -> dict[str, Any]:
         required = CHECKPOINT_POLICIES[checkpoint]["required"]
+        if adoption:
+            required = set().union(
+                *(
+                    CHECKPOINT_POLICIES[name]["required"]
+                    for name in ("motion-proof", "pre-master", "deliver")
+                )
+            )
         selected = [item for item in evidence if item["kind"] in required]
         findings = [
             finding for item in selected for finding in item.get("findings") or []
@@ -289,6 +300,8 @@ class CheckpointQcRegistry:
 
     def check(self, candidate: Path, **request: Any) -> dict[str, Any]:
         checkpoint = str(request.get("checkpoint") or "cut-proof")
+        if self.adoption and checkpoint != "deliver":
+            raise ValueError("existing-master adoption requires deliver checkpoint")
         if checkpoint not in CHECKPOINT_POLICIES:
             raise ValueError(f"unknown review checkpoint: {checkpoint}")
         base = CutProofQcAdapter().check(candidate, **request)
@@ -318,4 +331,6 @@ class CheckpointQcRegistry:
                 request=request,
             )
         )
-        return self._filtered_result(base, checkpoint, evidence, required_windows)
+        return self._filtered_result(
+            base, checkpoint, evidence, required_windows, adoption=self.adoption
+        )

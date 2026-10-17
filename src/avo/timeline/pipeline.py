@@ -120,6 +120,172 @@ def _transcript_fingerprint(
     return actual
 
 
+def _adoption_document(workspace, path):
+    path = Path(path)
+    if path.is_symlink() or not path.resolve().is_relative_to(
+        workspace.raw_dir.resolve()
+    ):
+        raise ValueError("delivery adoption evidence must remain inside the project")
+    document = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(document, dict):
+        raise ValueError("delivery adoption evidence must be an object")
+    return document
+
+
+def _adoption_reference(path, document):
+    return {
+        "path": str(Path(path).resolve()),
+        **file_fingerprint(Path(path)),
+        "contentHash": content_hash(document),
+    }
+
+
+def _human_archive_policy(workspace):
+    project = _adoption_document(workspace, workspace.project_path)
+    paths = (project.get("cleanup") or {}).get("preservePaths") or []
+    roots = {(workspace.raw_dir / str(value)).resolve() for value in paths}
+    if (workspace.raw_dir / "edit").resolve() not in roots:
+        raise ValueError("human-final archive requires preserving all of edit")
+    return _adoption_reference(workspace.project_path, project)
+
+
+def _require_adoption_approval(workspace, snapshot, manifest, review, approval_path):
+    from .approval_service import _source_approval_reference
+
+    expected_path = (
+        workspace.timeline_dir
+        / "approvals"
+        / f"{snapshot['approval']['artifactId']}.json"
+    )
+    if Path(approval_path).resolve() != expected_path.resolve():
+        raise ValueError(
+            "delivery adoption requires the native candidate approval path"
+        )
+    approval = _adoption_document(workspace, approval_path)
+    references = (
+        content_hash(approval) == snapshot["approval"]["sha256"],
+        approval.get("approvalId") == snapshot["approval"]["artifactId"],
+        content_hash(review) == snapshot["review"]["sha256"],
+        (approval.get("review") or {}).get("contentHash") == content_hash(review),
+        (approval.get("regressionResult") or {}).get("sha256")
+        == snapshot["regressionResult"]["sha256"],
+        (approval.get("actor") or {}).get("type") == "user",
+        approval.get("decisionBasis")
+        == "prior-exact-master-acceptance-and-current-native-authorization",
+    )
+    if not all(references) or not approval_is_current(
+        approval,
+        checkpoint="deliver",
+        candidate_identity_hash=review["candidate"]["identityHash"],
+        candidate_sha256=manifest["master"]["sha256"],
+        dependency_lock_sha256=review["dependencyLockSha256"],
+    ):
+        raise ValueError("delivery adoption native approval is stale or incomplete")
+    _require_adoption_approval_artifacts(approval, manifest)
+    reference = approval.get("sourceApprovalRef")
+    if not reference:
+        raise ValueError("delivery adoption requires exact original creator acceptance")
+    _adoption_document(workspace, reference["path"])
+    source = _source_approval_reference(reference, manifest["master"]["sha256"])
+    if source != reference:
+        raise ValueError("delivery adoption requires exact original creator acceptance")
+    return approval, source
+
+
+def _require_adoption_approval_artifacts(approval, manifest):
+    for key in ("review", "materialization"):
+        reference = approval[key]
+        if Path(reference["path"]).resolve() != Path(manifest[key]["path"]).resolve():
+            raise ValueError(f"delivery adoption approval {key} path differs")
+        actual = file_fingerprint(Path(reference["path"]))
+        if any(actual[field] != reference[field] for field in ("sha256", "sizeBytes")):
+            raise ValueError(f"delivery adoption approval {key} artifact changed")
+
+
+def _adoption_regression(
+    workspace, snapshot, review, materialization, approval, regression_path
+):
+    from .approval_service import require_candidate_regression
+
+    external = regression_path or approval["regressionResult"].get("path")
+    if external:
+        reference = approval["regressionResult"]
+        if (
+            not reference.get("path")
+            or Path(reference["path"]).resolve() != Path(external).resolve()
+        ):
+            raise ValueError("delivery adoption external regression path changed")
+        _adoption_document(workspace, external)
+        if file_fingerprint(Path(external))["sha256"] != reference.get("fileSha256"):
+            raise ValueError("delivery adoption external regression artifact changed")
+    result = require_candidate_regression(
+        workspace,
+        snapshot,
+        review,
+        regression_path=Path(external) if external else None,
+        materialization=materialization,
+    )
+    if content_hash(result) != snapshot["regressionResult"]["sha256"]:
+        raise ValueError("delivery adoption regression result changed")
+    return result
+
+
+def _require_adoption_gates(workspace, manifest, snapshot, review, materialization):
+    from .approval_service import (
+        require_candidate_review,
+        require_current_candidate_dependencies,
+    )
+    from .review import evaluate_gate, validate_evidence_integrity
+
+    dependencies = manifest["dependencies"]
+    current = workspace.active_dependency_snapshot()
+    if not {"cmap", "sync-map", "bmap", "tracks", "animation"}.issubset(current):
+        raise ValueError("delivery adoption requires every current canonical head")
+    require_current_candidate_dependencies(workspace, materialization, dependencies)
+    require_candidate_review(
+        review,
+        checkpoint="deliver",
+        candidate=Path(manifest["master"]["path"]),
+        fingerprint=manifest["master"],
+        dependencies=dependencies,
+    )
+    for checkpoint in ("motion-proof", "pre-master", "deliver"):
+        arguments = {
+            "candidate_identity_hash": review["candidate"]["identityHash"],
+            "dependency_lock_sha256": review["dependencyLockSha256"],
+        }
+        validate_evidence_integrity(
+            checkpoint,
+            manifest["master"]["sha256"],
+            dependencies,
+            review["evidence"],
+            **arguments,
+        )
+        evaluate_gate(
+            checkpoint,
+            manifest["master"]["sha256"],
+            dependencies,
+            review["evidence"],
+            **arguments,
+        )
+    exact = (
+        snapshot["state"] == "approved",
+        snapshot["candidate"]["sha256"] == manifest["master"]["sha256"],
+        snapshot["candidate"]["sizeBytes"] == manifest["master"]["sizeBytes"],
+        snapshot["materialization"]["sha256"] == materialization["materializationHash"],
+        snapshot["proofPlan"]["sha256"] == dependencies.get("proof-plan"),
+        approval_is_current(
+            manifest.get("approval"),
+            checkpoint="deliver",
+            candidate_identity_hash=review["candidate"]["identityHash"],
+            candidate_sha256=manifest["master"]["sha256"],
+            dependency_lock_sha256=review["dependencyLockSha256"],
+        ),
+    )
+    if not all(exact):
+        raise ValueError("delivery adoption candidate lifecycle is stale")
+
+
 class TimelinePipeline:
     def __init__(self, workspace: TimelineWorkspace):
         self.workspace = workspace
@@ -680,6 +846,175 @@ class TimelinePipeline:
             reason=str(payload.get("reason") or f"pipeline advanced to {stage}"),
             active_refs=active_refs,
         )
+        return result
+
+    def adopt_delivery(
+        self,
+        *,
+        approval_path: Path,
+        actor: str,
+        reason: str,
+        regression_path: Path | None = None,
+    ) -> dict[str, Any]:
+        """Adopt one existing approved master after a real combined final review.
+
+        This is an explicit administrative migration. Earlier lifecycle history
+        is preserved and no earlier checkpoint execution is invented.
+        """
+        from .delivery import DeliveryService
+
+        current = self.run_store.load()
+        if current["sideState"] is not None:
+            raise LifecycleError(
+                "delivery adoption requires explicit side-state recovery"
+            )
+        service = DeliveryService(self.workspace)
+        manifest = service.validate_current()
+        if (
+            manifest.get("state") != "delivered"
+            or manifest.get("adoption", {}).get("mode") != "existing-master"
+        ):
+            raise ValueError(
+                "delivery adoption requires a delivered existing-master manifest"
+            )
+        snapshot = self.active_candidate_snapshot()
+        if snapshot is None or snapshot["state"] != "approved":
+            raise ValueError("delivery adoption requires the active approved candidate")
+        review_path = Path(manifest["review"]["path"])
+        review = _adoption_document(self.workspace, review_path)
+        validate_document(review, "avo.review-evidence.schema.json")
+        materialization = _adoption_document(
+            self.workspace, manifest["materialization"]["path"]
+        )
+        _require_adoption_gates(
+            self.workspace, manifest, snapshot, review, materialization
+        )
+        approval, source = _require_adoption_approval(
+            self.workspace, snapshot, manifest, review, approval_path
+        )
+        _adoption_regression(
+            self.workspace, snapshot, review, materialization, approval, regression_path
+        )
+        identity = {
+            "mode": "existing-approved-master",
+            "scope": "current-union-gates-and-existing-creator-acceptance; no-historical-stage-backfill",
+            "candidateSnapshot": {
+                "snapshotId": snapshot["snapshotId"],
+                "sha256": snapshot["snapshotHash"],
+            },
+            "candidateSha256": manifest["master"]["sha256"],
+            "candidateSizeBytes": manifest["master"]["sizeBytes"],
+            "proofPlan": snapshot["proofPlan"],
+            "materialization": snapshot["materialization"],
+            "review": _adoption_reference(review_path, review),
+            "approval": _adoption_reference(approval_path, approval),
+            "sourceApprovalRef": source,
+            "deliveryManifest": _adoption_reference(service.manifest_path, manifest),
+            "dependencyLockSha256": review["dependencyLockSha256"],
+            "dependencies": manifest["dependencies"],
+            "verifiedCheckpointPolicies": ["motion-proof", "pre-master", "deliver"],
+        }
+        active_refs = dict(current["activeRefs"])
+        for name in ("cmap", "sync-map", "bmap", "tracks", "animation"):
+            prefix = "sync" if name == "sync-map" else name
+            active_refs[f"{prefix}RevisionId"] = self.workspace.require_active(name)[
+                "headRevisionId"
+            ]
+        active_refs["masterSha256"] = manifest["master"]["sha256"]
+        return self.run_store.adopt_delivery(
+            identity,
+            actor=actor,
+            reason=reason,
+            active_refs=active_refs,
+            expected_updated_at=current["updatedAt"],
+        )
+
+    def adopt_human_final_delivery(
+        self,
+        *,
+        human_final_disposition_path: Path,
+        actor: str,
+        reason: str,
+        archive: bool = False,
+    ) -> dict[str, Any]:
+        """Adopt explicit human authority while preserving failed/incomplete automation."""
+        from .approval_service import require_human_final_disposition
+        from .delivery import DeliveryService
+
+        current = self.run_store.load()
+        if current["sideState"] is not None:
+            raise LifecycleError(
+                "human-final adoption requires explicit side-state recovery"
+            )
+        policy = _human_archive_policy(self.workspace) if archive else None
+        service = DeliveryService(self.workspace)
+        manifest = service.validate_current()
+        reference = manifest.get("adoption", {}).get("humanFinalDisposition")
+        if manifest.get("state") != "delivered" or not reference:
+            raise ValueError("human-final adoption requires its delivered manifest")
+        if (
+            Path(reference["path"]).resolve()
+            != Path(human_final_disposition_path).resolve()
+        ):
+            raise ValueError("human-final delivery disposition path differs")
+        materialization = _adoption_document(
+            self.workspace, manifest["materialization"]["path"]
+        )
+        disposition = require_human_final_disposition(
+            self.workspace,
+            human_final_disposition_path,
+            candidate=Path(manifest["master"]["path"]),
+            fingerprint=manifest["master"],
+            materialization=materialization,
+            dependencies=manifest["dependencies"],
+        )
+        disposition_ref = _adoption_reference(human_final_disposition_path, disposition)
+        prior = (
+            (current.get("extensions") or {})
+            .get("deliveryAdoption", {})
+            .get("identity", {})
+        )
+        identity = {
+            "mode": "existing-approved-master",
+            "authority": "human-final",
+            "scope": "explicit-human-final-authority; automated-outcomes-retained; no-historical-stage-backfill",
+            "priorCandidateSnapshot": prior.get(
+                "priorCandidateSnapshot",
+                current["activeRefs"].get("activeCandidateSnapshot"),
+            ),
+            "candidateSha256": manifest["master"]["sha256"],
+            "candidateSizeBytes": manifest["master"]["sizeBytes"],
+            "humanFinalDisposition": disposition_ref,
+            "deliveryManifest": _adoption_reference(service.manifest_path, manifest),
+            "dependencies": manifest["dependencies"],
+            "dependencyLockSha256": disposition["dependencyLockSha256"],
+            "automatedGatePassAsserted": False,
+            "regressionPassAsserted": False,
+        }
+        active = dict(current["activeRefs"])
+        active.pop("activeCandidateSnapshot", None)
+        for name in ("cmap", "sync-map", "bmap", "tracks", "animation"):
+            prefix = "sync" if name == "sync-map" else name
+            active[f"{prefix}RevisionId"] = self.workspace.require_active(name)[
+                "headRevisionId"
+            ]
+        active["masterSha256"] = manifest["master"]["sha256"]
+        active["humanFinalDisposition"] = disposition_ref
+        result = self.run_store.adopt_delivery(
+            identity,
+            actor=actor,
+            reason=reason,
+            active_refs=active,
+            expected_updated_at=current["updatedAt"],
+        )
+        if archive:
+            return self.run_store.archive_human_final_delivery(
+                disposition_ref,
+                policy,
+                actor=actor,
+                reason=reason,
+                expected_updated_at=result["updatedAt"],
+            )
         return result
 
     def enter_blocked(

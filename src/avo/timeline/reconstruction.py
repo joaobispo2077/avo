@@ -109,11 +109,35 @@ def _authoring_files(raw_dir: Path):
             yield path.resolve()
 
 
+def _human_final_inputs(raw_dir: Path) -> dict[Path, str]:
+    """Keep the delivered authority and its JSON evidence without adopting its claims."""
+    manifest = raw_dir / "edit" / "delivery-manifest.json"
+    if not manifest.is_file():
+        return {}
+    payload = json.loads(manifest.read_text(encoding="utf-8"))
+    reference = (payload.get("adoption") or {}).get("humanFinalDisposition")
+    if not reference:
+        return {}
+    disposition = _bundled_path(raw_dir, str(reference["path"]))
+    payload = json.loads(disposition.read_text(encoding="utf-8"))
+    required = {}
+    for ref in [reference, *_fingerprinted_refs(payload)]:
+        path = _bundled_path(raw_dir, str(ref.get("locator") or ref["path"]))
+        if path.suffix.lower() != ".json":
+            raise ReconstructionError("human-final authority requires JSON evidence")
+        expected = str(ref["sha256"])
+        if path in required and required[path] != expected:
+            raise ReconstructionError(f"conflicting human-final fingerprints: {path}")
+        required[path] = expected
+    return required
+
+
 def _required_files(
     raw_dir: Path, canonical: list[dict[str, Any]]
 ) -> dict[Path, str | None]:
     """Current local media plus authoring/delivery evidence, not disposable caches."""
     required: dict[Path, str | None] = dict.fromkeys(_authoring_files(raw_dir))
+    required.update(_human_final_inputs(raw_dir))
     for artifact in canonical:
         for ref in _head_media_refs(raw_dir, artifact):
             path = _local_media_path(raw_dir, ref)
