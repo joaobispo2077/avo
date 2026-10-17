@@ -47,6 +47,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     configure_parser(sub.add_parser("breathing"))
 
+    from avo.direction_cli import configure as configure_direction
+
+    configure_direction(sub)
+
     _trim_parser(sub)
 
     pipeline = sub.add_parser("pipeline")
@@ -54,6 +58,7 @@ def build_parser() -> argparse.ArgumentParser:
     for name in ("run", "status", "verify-commands"):
         item = pipeline_sub.add_parser(name)
         _project_arg(item)
+        _add_pipeline_entry_args(item, name)
     pipeline_resume = pipeline_sub.add_parser("resume")
     _project_arg(pipeline_resume)
     pipeline_resume.add_argument("--actor", required=True)
@@ -352,6 +357,13 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _add_pipeline_entry_args(parser, operation):
+    if operation == "run":
+        parser.add_argument("--direction")
+        parser.add_argument("--brief-context", type=Path)
+        parser.add_argument("--direction-reference", type=Path, action="append")
+
+
 def _add_cleanup_subparsers(cleanup: argparse.ArgumentParser) -> None:
     cleanup_sub = cleanup.add_subparsers(dest="cleanup_command", required=True)
     for operation in ("verify", "bundle", "dry-run", "execute"):
@@ -403,7 +415,11 @@ def _pipeline(args: argparse.Namespace) -> int:
     )
     pipeline = TimelinePipeline(workspace)
     if args.pipeline_command == "run":
+        from avo.direction_cli import prepare_pipeline
+
+        preparation = prepare_pipeline(args)
         result = pipeline.initialize()
+        result["briefingPreparation"] = preparation
     elif args.pipeline_command == "status":
         result = pipeline.status()
     elif args.pipeline_command == "verify-commands":
@@ -1929,6 +1945,10 @@ def _trim(args: argparse.Namespace) -> int:
 
 
 def _run_cli(args: argparse.Namespace) -> int:
+    if args.command in {"direction", "briefstart"}:
+        from avo.direction_cli import run as direction_run
+
+        return direction_run(args)
     if args.command == "breathing":
         from avo.breathing import run as breathing_run
 
@@ -1961,6 +1981,12 @@ def main(argv: list[str] | None = None) -> int:
     try:
         return _run_cli(args)
     except Exception as exc:
+        from avo.direction.rules import DirectionError
+
+        if isinstance(exc, DirectionError):
+            from avo.direction_cli import emit_error
+
+            return emit_error(exc, args.command)
         if hasattr(exc, "to_dict") and callable(exc.to_dict):
             print(json.dumps(exc.to_dict(), ensure_ascii=False), file=sys.stderr)
             return 3
