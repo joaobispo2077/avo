@@ -189,3 +189,95 @@ and required jobs. Both views have complete Markdown/JSON indexes, independent
 image fallbacks and definition/fixed-case baselines. Historical catalogs retain
 their original optional view set; release validation still requires only the
 dashboard image. No public product or measurement gate changes are introduced.
+
+## Evolution: final-master detection (2026-10-15)
+
+`avo.master_artifacts` owns the shared metadata-only final-export locator used
+by project inventory, reconstruction and duration statistics. Legacy
+`edit/masters` lookup remains compatible; an explicit delivery-manifest reference
+can locate an existing export elsewhere inside the footage project when its
+identity agrees with the final transcript. No export is moved or copied, and
+the locator does not confer approval or replace reconstruction's byte checks.
+The module uses only the standard library, with no CLI or adapter dependency.
+Validation covers legacy lookup, documented exports, unsafe or ambiguous
+references, source-bound transcripts and the independent reconstruction gates.
+See [cleanup safety](docs/cleanup-safety.md).
+
+Reconstruction distinguishes media-owning indexes from archival iteration
+history using the validated index's `artifactType`. Only CMap, BMap, Tracks,
+Animation and Sync contribute current media fingerprint constraints. The ledger
+and all of its revisions/events remain archived unchanged, while review
+authoring documents are preserved under their current byte identities. The
+shared scanner enforces this boundary during both bundle construction and
+coverage verification; historical request versions cannot invalidate one another
+or weaken current media checks. Regression coverage includes conflicting
+historical references, archive integrity and all five current-media index types.
+
+## Evolution: existing-master adoption and preservation closure (2026-10-16)
+
+Timeline delivery can adopt an existing project-local master using current
+canonical assembly, native candidate, real review and existing transcript
+sidecars. Adoption performs validation and metadata registration; it does not
+call rendering, copying or ASR services. The normal delivery-preparation route
+is unchanged. Candidate transcription has an explicit reuse-only mode that
+fails closed instead of starting ASR. Native Watch hashes large candidates by
+streaming through the shared fingerprint function rather than loading the whole
+export into memory.
+
+Visual frame acquisition batches the sorted unique frame indexes into one
+FFmpeg selection pass. A bounded standard-library PNG reader validates framing,
+dimensions and CRCs before mapping outputs to those indexes. Existing caches
+must equal freshly decoded bytes and are rechecked before inference. Tiny CFR
+and VFR parity tests verify equality with the original exact-frame extractor;
+malformed streams, excess/missing images and cache tampering fail closed.
+
+The QC registry can explicitly collect the union of motion, pre-master and
+delivery evidence. Timeline approval validates the exact candidate, frozen
+regression contract, artifacts and structured visual coverage; historical
+creator acceptance remains a separately fingerprinted input. A single explicit
+administrative adoption event preserves old pipeline history, rather than
+fabricating sequential gate approvals. Normal lifecycle guards are unchanged.
+Assembly QC validates its persisted canonical graph and fidelity contract
+directly, without requiring the legacy projection format.
+
+Project inventory owns distinct preservation evidence: exact reconstruction
+verification plus zero-candidate scanning, explicit whole-edit retention and a
+retained metadata snapshot. Wrap can finalize from this in-process verified
+result or revalidate a persisted receipt. Preservation is separate from cleanup
+execution and records null freed space. It cannot create a cleanup receipt or
+inherit an unverified dry-run pass. Output path guards prevent redirection through
+links or reparse points. Dependencies retain their existing direction:
+timeline delivery uses approval/contracts; wrap uses inventory; neither delegates
+trust decisions to documentary reports. Tests cover stale identities, incomplete
+gates, forbidden ASR/copy paths, retention scope, receipt tampering and unchanged
+legacy routes. See [adoption](docs/native-master-adoption.md) and
+[cleanup safety](docs/cleanup-safety.md).
+
+An explicit human-final disposition is a separate authority path for adopting
+an already reviewed master. The current creator instruction, exact candidate,
+canonical owners, frozen plan, prior acceptance and original automated evidence
+are fingerprinted together. Failed or interrupted automatic judgments remain
+unchanged; human acceptance is never serialized as an AI pass or a successful
+regression. Strict automatic approval remains the default. Human authority does
+not replace byte identity, source lineage or transcript provenance checks.
+
+Human-final delivery and administrative archive events retain the historical
+candidate references and identify the final master directly. Administrative
+archive records the creator's whole-project retention decision; actual byte
+verification is recorded separately in the final preservation receipt. All
+native mutations precede the final reconstruction build and preservation
+verification, so the archive event cannot stale the receipt. Wrap sidecars are
+administrative outputs rather than reconstruction inputs. The verifier reuses
+only fingerprints computed during its own current loop; no persistent cache
+or historical hash substitutes for fresh verification. See
+[preservation closure](docs/preservation-closure.md).
+
+## Evolution: single-pass cleanup verification (2026-10-16)
+
+Canonical cleanup verifies reconstruction bytes and dependency coverage once per
+`run_cleanup` call. The inventory service retains that freshly verified protected
+set inside the same invocation for presence checks, candidate scanning and native
+deletion. It accepts no external cached pass. Independent inventory and verify
+commands retain their own validation, and legacy reconstruction promotion is
+unchanged. Missing or changed dependencies still block before deletion; the native
+receipt records intent first and counts only files actually absent afterward.
