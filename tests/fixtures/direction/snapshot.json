@@ -1,0 +1,60 @@
+{
+  "schemaVersion": "1.0.0",
+  "snapshotId": "timeline-learning-neutral-analysis",
+  "videoId": "neutral-analysis-original",
+  "provider": "neutral",
+  "status": "final",
+  "masterFingerprint": {
+    "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "sizeBytes": 1200
+  },
+  "candidateSnapshotHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "iterationLedgerHash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+  "reconstructionBundleHash": null,
+  "decisionOutcomes": [
+    {
+      "id": "neutral-natural-pauses",
+      "summary": "Keep a short pause when the audience needs to read a comparison.",
+      "status": "active",
+      "evidenceClasses": [
+        "review-note"
+      ],
+      "impact": {
+        "scope": "project",
+        "format": "analysis-review"
+      },
+      "recurrence": 9
+    },
+    {
+      "id": "neutral-overprocessed-voice",
+      "summary": "An earlier strong cleanup sounded artificial and was replaced.",
+      "status": "superseded",
+      "evidenceClasses": [
+        "review-note"
+      ],
+      "impact": {
+        "scope": "project"
+      }
+    },
+    {
+      "id": "neutral-unknown-use",
+      "summary": "A restrained overlay was proposed; execution was not recorded.",
+      "status": "awaiting-human",
+      "evidenceClasses": [],
+      "impact": {
+        "scope": "project"
+      }
+    }
+  ],
+  "reworkGroups": [],
+  "preventionRules": [],
+  "capabilityGaps": [],
+  "costSignals": {
+    "iterations": 3,
+    "reworkGroups": 0
+  },
+  "techniqueCandidates": [],
+  "uncertainties": [],
+  "createdAt": "2026-01-03T12:00:00Z",
+  "snapshotHash": "5518fa3da5028289cc7e56b29da586a237cab7842103b54fc205d9c112c25eae"
+}
