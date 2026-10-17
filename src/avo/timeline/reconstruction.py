@@ -48,6 +48,9 @@ def _fingerprinted_refs(value: Any):
 def _head_media_refs(raw_dir: Path, artifact: dict[str, Any]):
     store = ArtifactStore(raw_dir / artifact["path"])
     index = store.load_index()
+    if index["artifactType"] not in ("cmap", "bmap", "tracks", "animation", "sync-map"):
+        # Ledger snapshots retain historical identities, not current media requirements.
+        return
     head = next(
         (
             ref
@@ -87,6 +90,7 @@ def _authoring_files(raw_dir: Path):
     }
     for name in (
         "delivery",
+        "review",
         "tools",
         "animations",
         "learndown",
@@ -437,7 +441,12 @@ def build_reconstruction_bundle(
     _validate_active_candidate_snapshot(workspace, state_groups["candidateSnapshots"])
     for entries in state_groups.values():
         graph_files.extend(entries)
-    graph_files.extend(_required_entries(raw_dir, canonical))
+    graph_paths = {entry["path"] for entry in graph_files}
+    graph_files.extend(
+        entry
+        for entry in _required_entries(raw_dir, canonical)
+        if entry["path"] not in graph_paths
+    )
 
     raw_entries = [
         _entry(raw_dir, path, "raw-source") for path in _raw_sources(raw_dir)
