@@ -91,7 +91,12 @@ def catalog_projection(block):
 def test_reviewed_catalog_covers_every_published_metric_and_diagnostic():
     expected = read("definitions.json")
     actual = catalog_projection(definitions.build_definitions(document()))
-    required = set(quality_measurements.KEYS) | {"coupling_files", "execution_events"}
+    required = set(quality_measurements.KEYS) | {
+        "coupling_files",
+        "execution_events",
+        "mutation_scopes",
+        "gate_decisions",
+    }
     assert {entry["id"] for entry in actual["entries"]} == required
     for expected_entry, actual_entry in zip(
         expected["entries"], actual["entries"], strict=True
@@ -107,6 +112,8 @@ def test_reviewed_catalog_covers_every_published_metric_and_diagnostic():
             "coupling",
             "coupling_files",
             "execution_events",
+            "mutation_scopes",
+            "gate_decisions",
         }
         | set(read("cases/counts.json")["expected"])
     )
@@ -133,6 +140,117 @@ def test_resolved_policy_matches_independently_reviewed_baseline():
         },
     }
     compare(config, actual, "effective policy")
+
+
+def reporting_document():
+    doc = document()
+    doc.update(reporting={"schema": 1, "mode": "fixture"}, jobs={})
+    doc["measurement_evidence"] = {"schema": 1, "metrics": [], "gates": {}}
+    return doc
+
+
+@pytest.mark.parametrize(
+    "case", read("cases/reporting-views.json")["mutation_scopes"], ids=lambda c: c["id"]
+)
+def test_reviewed_scope_behavior_cases_use_the_production_view(case):
+    from scripts.ci import mutation_scopes, quality_mutation_dashboard
+
+    doc = reporting_document()
+    doc["mutation"] = {
+        "sha": SHA,
+        "run_id": "42",
+        "profile": "light",
+        "floor": 40,
+        "counts": case["counts"],
+    }
+    doc["measurement_evidence"]["metrics"] = [
+        {
+            "key": "mutation",
+            "state": case["state"],
+            "number": case["score"],
+            "unit": "percent",
+            "sources": [
+                {
+                    "artifact": "mutation-reports-light",
+                    "path": "mutation-metrics.json",
+                    "sha256": "b" * 64,
+                }
+            ],
+        }
+    ]
+    normalized = check_mutation.normalize_mutation_counts(case["counts"])
+    normalized["unaccounted"] = normalized["total"] - sum(
+        normalized[key] for key in check_mutation.MUTANT_STATUSES
+    )
+    row = mutation_scopes._measurement(normalized)
+    compare(
+        {key: case[key] for key in ("state", "score", "complete", "unresolved")},
+        {key: row[key] for key in ("state", "score", "complete", "unresolved")},
+        f"mutation_scopes:{case['id']}:derived-outcomes",
+    )
+    row.update(path="src/avo/a.py", reason=case["id"], source_sha256="c" * 64)
+    refs = [
+        {
+            "artifact": "mutation-reports-light",
+            "path": "mutation-scopes.json",
+            "sha256": "e" * 64,
+        }
+    ]
+    doc["measurement_evidence"]["mutation_scopes"] = {
+        "schema": 1,
+        "state": case["state"],
+        "reason": case["id"],
+        "profile": "light",
+        "threshold_scope": "aggregate",
+        "sources": refs,
+        "source_fingerprint": quality_mutation_dashboard.fingerprint(refs),
+        "scopes": [row],
+    }
+    actual = quality_mutation_dashboard.build_mutation_series(doc)["scopes"][0]
+    compare(
+        case["expected"],
+        {key: actual[key] for key in case["expected"]},
+        f"mutation_scopes:{case['id']}",
+    )
+
+
+@pytest.mark.parametrize(
+    "case", read("cases/reporting-views.json")["gate_decisions"], ids=lambda c: c["id"]
+)
+def test_reviewed_gate_decision_cases_use_the_production_view(case):
+    from scripts.ci import quality_gate_decisions
+
+    doc = reporting_document()
+    doc["gates"] = [
+        {
+            "key": "lint",
+            "title": "Lint",
+            "status": case["reported"],
+            "checks": "Existing lint policy",
+        }
+    ]
+    doc["measurement_evidence"]["gates"]["lint"] = {
+        "verified": case["verified"],
+        "reason": "Fixed captured-proof case",
+        "receipt": {"status": case["receipt_status"], "exit_code": case["exit_code"]},
+        "sources": [
+            {
+                "artifact": "quality-evidence",
+                "path": "gates/lint/gate.json",
+                "sha256": "d" * 64,
+            }
+        ],
+    }
+    actual = next(
+        row
+        for row in quality_gate_decisions.build_gate_series(doc)["rows"]
+        if row["key"] == "lint"
+    )
+    compare(
+        case["expected"],
+        {key: actual[key] for key in case["expected"]},
+        f"gate_decisions:{case['id']}",
+    )
 
 
 def test_runtime_policy_uses_only_frozen_applicable_fields():
