@@ -1,3 +1,26 @@
+# [1.16.0](https://github.com/joaobispo2077/avo/compare/v1.15.0...v1.16.0) (2026-10-18)
+
+
+### Bug Fixes
+
+* **ci:** add conservative run selection ([4757b06](https://github.com/joaobispo2077/avo/commit/4757b061adc024093f475463e76600de4e94b207))
+* **quality:** normalize mutation export paths ([210e50e](https://github.com/joaobispo2077/avo/commit/210e50e15af5f4f45f8b767db77579df0c0c83a9))
+* **quality:** preserve frozen report readout ([11564e8](https://github.com/joaobispo2077/avo/commit/11564e8dcde68787cf4c3b3386b1bdf47ab26a5d))
+* **quality:** restore threshold chart colors ([f8f55c3](https://github.com/joaobispo2077/avo/commit/f8f55c37df5f77bb8b9e6c8ed836e1bc06317413))
+
+
+### Features
+
+* **quality:** add indexed review renderers ([b641ff9](https://github.com/joaobispo2077/avo/commit/b641ff96a9a4f18efd05aba73399acaf02fd0aae))
+* **quality:** assemble readable run reports ([529d627](https://github.com/joaobispo2077/avo/commit/529d627a8840c55487bf80ffafed819d5d5f8af1))
+* **quality:** bind supporting report evidence ([a453530](https://github.com/joaobispo2077/avo/commit/a45353025cc2a003a478501243f6f817556c11fd))
+* **quality:** freeze metric definitions ([849f81f](https://github.com/joaobispo2077/avo/commit/849f81f126595d6ce03fdc8ec5df8de3c618d9d7))
+* **quality:** render mutation and gate views ([9b7271f](https://github.com/joaobispo2077/avo/commit/9b7271f46128b41d53ab09cb7d5c612a3eeaf276))
+* **quality:** retain per-source mutation data ([62dc010](https://github.com/joaobispo2077/avo/commit/62dc010dfa7b376c5f03b46459971daed85440fd))
+* **ci:** support additional chart roles ([4e704e3](https://github.com/joaobispo2077/avo/commit/4e704e3a539ae402adbc67c7337690febef1016b))
+* **ci:** support bounded quality chart roles ([1abd393](https://github.com/joaobispo2077/avo/commit/1abd3935c6602739a4a654668ac1ebd0d839eee4))
+* **quality:** verify file and function evidence ([7554445](https://github.com/joaobispo2077/avo/commit/7554445ac53b5b4921836bcc29a25886b1aedf00))
+
 # [1.15.0](https://github.com/joaobispo2077/avo/compare/v1.14.0...v1.15.0) (2026-10-16)
 
 
