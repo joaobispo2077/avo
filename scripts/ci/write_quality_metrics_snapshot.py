@@ -473,6 +473,7 @@ def render_markdown(
         "",
         _chart_tables(doc["series"], images),
         _mutation_section(mutation),
+        "\n".join(_dashboard().definition_markdown(doc)),
     ]
     return "\n".join(parts)
 
@@ -524,6 +525,10 @@ def _validate_measurements(doc: dict) -> None:
 def _validate(
     doc: dict, sha: str, version: str, expected_run_id: str = ""
 ) -> tuple[str, list[dict]]:
+    if error := _measurements().validate_reporting_context(doc):
+        raise SnapshotError(error)
+    if "reporting" in doc and doc["reporting"]["mode"] != "ci":
+        raise SnapshotError("Preview reporting context cannot certify release evidence")
     if type(doc.get("schema")) is not int or doc["schema"] not in (1, SCHEMA):
         raise SnapshotError("unsupported quality metrics schema")
     if doc["schema"] == 1 and expected_run_id:

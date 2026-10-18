@@ -20,6 +20,170 @@ def test_duplication_threshold_preserves_zero_and_fractional_values(tmp_path):
         assert mod.duplication_ceiling(tmp_path) == threshold
 
 
+def test_unified_comment_identity_is_per_run_and_not_per_retry_or_previous_report():
+    workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+    publication = workflow.split("- name: Publish quality summary to PR", 1)[1].split(
+        "- name:", 1
+    )[0]
+    assert "header: quality-gates-report-${{ github.run_id }}" in publication
+    assert "github.run_attempt" not in publication
+    for option in ("recreate:", "append:", "hide_and_recreate:", "only_update:"):
+        assert option not in publication
+    selector = (ROOT / "scripts/ci/select_ci_run.py").read_text(encoding="utf-8")
+    assert "quality-gates-report" not in selector
+    assert "comments" not in selector
+
+
+def test_failed_report_build_publishes_only_fallback_text_then_restores_failure():
+    workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+    report = workflow.split("  quality-report:", 1)[1]
+
+    def step(name):
+        return report.split(f"- name: {name}\n", 1)[1].split("- name:", 1)[0]
+
+    builder = step("Build unified quality report")
+    assert "id: report_build" in builder and "continue-on-error: true" in builder
+    fallback = step("Build text-only failure report")
+    assert "steps.report_build.outcome == 'failure'" in fallback
+    assert "!cancelled()" in fallback and "--text-only-fallback" in fallback
+    for name in (
+        "Upload unified metrics",
+        "Upload dashboard image",
+        "Attach inline quality dashboard",
+        "Link quality chart and artifact downloads",
+    ):
+        assert "steps.report_build.outcome == 'success'" in step(name)
+    publication = step("Publish quality summary to PR")
+    assert "steps.current_pr.outputs.number != ''" in publication
+    assert "steps.report_build.outcome == 'success'" not in publication
+    final = step("Preserve report builder failure")
+    assert "steps.report_build.outcome == 'failure'" in final
+    assert "!cancelled()" in final and "exit 1" in final
+    assert report.index("Upload readable quality report") < report.index(
+        "Preserve report builder failure"
+    )
+
+
+def test_job_summary_names_publication_outcomes_and_preserves_archive_fallback():
+    workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+    summary = workflow.split("- name: Publish unified job summary", 1)[1].split(
+        "- name:", 1
+    )[0]
+    assert "PR comment delivered." in summary
+    assert "PR comment unavailable: permission or service failure." in summary
+    assert (
+        "PR publication skipped: stale identity or freshness lookup unavailable."
+        in summary
+    )
+    assert "PR publication not requested for this event." in summary
+    assert "REPORT_BUILD_RESULT: ${{ steps.report_build.outcome }}" in summary
+    assert 'if [ "$REPORT_BUILD_RESULT" = "success" ]' in summary
+    assert "--attachment" not in summary
+
+
+def test_support_archives_are_full_run_outputs_and_not_release_requirements():
+    workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+    report = workflow.split("  quality-report:", 1)[1]
+    assert (
+        "if: ${{ !cancelled() && !(needs.select-run.result == 'success' && needs.select-run.outputs.run_full_ci == 'false') }}"
+        in report
+    )
+    for name, identifier, artifact, directory in (
+        ("Upload hotspot evidence", "quality_hotspots", "quality-hotspots", "hotspots"),
+        (
+            "Upload coupling evidence",
+            "quality_coupling",
+            "quality-coupling",
+            "coupling",
+        ),
+        (
+            "Upload mutation evidence",
+            "quality_mutation",
+            "quality-mutation",
+            "mutation",
+        ),
+        (
+            "Upload gate decision evidence",
+            "quality_gate_decisions",
+            "quality-gate-decisions",
+            "decisions",
+        ),
+    ):
+        step = workflow.split(f"- name: {name}\n", 1)[1].split("- name:", 1)[0]
+        assert f"id: {identifier}" in step and f"name: {artifact}" in step
+        assert f"path: reports/quality/{directory}" in step
+        assert "steps.report_build.outcome == 'success'" in step
+        assert "!cancelled()" in step and "github.event_name" not in step
+        assert "continue-on-error: true" in step and "retention-days: 14" in step
+    snapshot = _load(
+        "support_release_roles", "scripts/ci/write_quality_metrics_snapshot.py"
+    )
+    assert dict(snapshot.CHART_FILES) == {"dashboard": "dashboard.png"}
+
+
+def test_each_support_attachment_has_a_fresh_guard_and_independent_link_route():
+    workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+    for name, identifier, role in (
+        ("hotspot", "pr_hotspots", "hotspots"),
+        ("coupling", "pr_coupling", "coupling_files"),
+        ("mutation", "pr_mutation", "mutation_scopes"),
+        ("gate decisions", "pr_gate_decisions", "gate_decisions"),
+    ):
+        guard_name = f"- name: Check current PR before {name} upload\n"
+        assert workflow.count(guard_name) == 1
+        after_guard = workflow.split(guard_name, 1)[1]
+        assert after_guard.split("- name:", 1)[1].startswith(
+            f" Attach inline {name} chart\n"
+        )
+        guard = workflow.split(f"- name: Check current PR before {name} upload\n", 1)[
+            1
+        ].split("- name:", 1)[0]
+        assert f"id: {identifier}" in guard and "--check-pr-current" in guard
+        assert "steps.report_build.outcome == 'success'" in guard
+        assert (
+            "!cancelled()" in guard and "github.event_name == 'pull_request'" in guard
+        )
+        assert "GH_TOKEN: ${{ github.token }}" in guard
+        assert "secrets.GH_TOKEN" not in guard
+        attachment = workflow.split(f"- name: Attach inline {name} chart\n", 1)[
+            1
+        ].split("- name:", 1)[0]
+        assert f"steps.{identifier}.outputs.number != ''" in attachment
+        assert "steps.report_build.outcome == 'success'" in attachment
+        assert (
+            "!cancelled()" in attachment
+            and "github.event_name == 'pull_request'" in attachment
+        )
+        assert (
+            "github.event.pull_request.head.repo.full_name == github.repository"
+            in attachment
+        )
+        assert "continue-on-error: true" in attachment
+        assert "QUALITY_CHARTS_TOKEN: ${{ secrets.GH_TOKEN }}" in attachment
+        assert f"upload_quality_chart.py --role {role}" in attachment
+    linking = workflow.split("- name: Link quality chart and artifact downloads", 1)[
+        1
+    ].split("- name:", 1)[0]
+    summary = workflow.split("- name: Publish unified job summary", 1)[1].split(
+        "- name:", 1
+    )[0]
+    for name, identifier in (
+        ("HOTSPOTS", "quality_hotspots"),
+        ("COUPLING", "quality_coupling"),
+        ("MUTATION", "quality_mutation"),
+        ("GATE_DECISIONS", "quality_gate_decisions"),
+    ):
+        route = f"QUALITY_{name}_ARTIFACT_URL: ${{{{ steps.{identifier}.outputs.artifact-url }}}}"
+        assert route in linking and route in summary
+    assert "--hotspots-attachment reports/quality/hotspots-attachment.json" in linking
+    assert "--coupling-attachment reports/quality/coupling-attachment.json" in linking
+    assert "--mutation-attachment reports/quality/mutation-attachment.json" in linking
+    assert (
+        "--gate-decisions-attachment reports/quality/gate-decisions-attachment.json"
+        in linking
+    )
+
+
 def _load(name: str, rel: str):
     path = ROOT / rel
     spec = importlib.util.spec_from_file_location(name, path)

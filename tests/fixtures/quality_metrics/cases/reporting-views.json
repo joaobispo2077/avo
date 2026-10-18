@@ -1,0 +1,170 @@
+{
+  "schema": 1,
+  "mutation_scopes": [
+    {
+      "id": "per-source-reference-is-informational",
+      "counts": {
+        "killed": 0,
+        "survived": 2,
+        "total": 2
+      },
+      "state": "MEASURED",
+      "score": 0.0,
+      "complete": true,
+      "unresolved": 0,
+      "expected": {
+        "score": 0.0,
+        "gate": null,
+        "reference_role": "informational; aggregate reference only",
+        "reference_band": "red"
+      }
+    },
+    {
+      "id": "complete-midpoint",
+      "counts": {
+        "killed": 1,
+        "survived": 1,
+        "total": 2
+      },
+      "state": "MEASURED",
+      "score": 50.0,
+      "complete": true,
+      "unresolved": 0,
+      "expected": {
+        "score": 50.0,
+        "gate": null,
+        "reference_role": "informational; aggregate reference only",
+        "reference_band": "yellow"
+      }
+    },
+    {
+      "id": "timeout-withholds-score",
+      "counts": {
+        "killed": 1,
+        "survived": 0,
+        "timeout": 1,
+        "total": 2
+      },
+      "state": "PARTIAL",
+      "score": null,
+      "complete": false,
+      "unresolved": 1,
+      "expected": {
+        "score": null,
+        "gate": null,
+        "reference_role": "informational; aggregate reference only",
+        "reference_band": "unknown"
+      }
+    },
+    {
+      "id": "zero-mutant-scope",
+      "counts": {
+        "killed": 0,
+        "survived": 0,
+        "total": 0
+      },
+      "state": "UNAVAILABLE",
+      "score": null,
+      "complete": false,
+      "unresolved": 0,
+      "expected": {
+        "score": null,
+        "gate": null,
+        "reference_role": "informational; aggregate reference only",
+        "reference_band": "unknown"
+      }
+    },
+    {
+      "id": "fractional-efficacy-retains-raw-ratio",
+      "counts": {
+        "killed": 1,
+        "survived": 2,
+        "total": 3
+      },
+      "state": "MEASURED",
+      "score": 33.333333333333336,
+      "complete": true,
+      "unresolved": 0,
+      "expected": {
+        "score": 33.333333333333336,
+        "gate": null,
+        "reference_role": "informational; aggregate reference only",
+        "reference_band": "red"
+      }
+    }
+  ],
+  "gate_decisions": [
+    {
+      "id": "verified-pass",
+      "reported": "PASS",
+      "verified": true,
+      "receipt_status": "PASS",
+      "exit_code": 0,
+      "expected": {
+        "reported_decision": "PASS",
+        "decision": "PASS",
+        "proof": "VERIFIED"
+      }
+    },
+    {
+      "id": "unverified-pass-is-incomplete",
+      "reported": "PASS",
+      "verified": false,
+      "receipt_status": "PASS",
+      "exit_code": 0,
+      "expected": {
+        "reported_decision": "PASS",
+        "decision": "INCOMPLETE",
+        "proof": "UNVERIFIED"
+      }
+    },
+    {
+      "id": "verified-failure",
+      "reported": "FAIL",
+      "verified": true,
+      "receipt_status": "FAIL",
+      "exit_code": 1,
+      "expected": {
+        "reported_decision": "FAIL",
+        "decision": "FAIL",
+        "proof": "VERIFIED"
+      }
+    },
+    {
+      "id": "timeout-is-not-success",
+      "reported": "TIMEOUT",
+      "verified": true,
+      "receipt_status": "TIMEOUT",
+      "exit_code": 124,
+      "expected": {
+        "reported_decision": "TIMEOUT",
+        "decision": "TIMEOUT",
+        "proof": "VERIFIED"
+      }
+    },
+    {
+      "id": "skipped-is-not-success",
+      "reported": "SKIPPED",
+      "verified": false,
+      "receipt_status": "SKIPPED",
+      "exit_code": null,
+      "expected": {
+        "reported_decision": "SKIPPED",
+        "decision": "SKIPPED",
+        "proof": "UNVERIFIED"
+      }
+    },
+    {
+      "id": "captured-failure-overrides-reported-pass",
+      "reported": "PASS",
+      "verified": true,
+      "receipt_status": "FAIL",
+      "exit_code": 1,
+      "expected": {
+        "reported_decision": "PASS",
+        "decision": "FAIL",
+        "proof": "VERIFIED"
+      }
+    }
+  ]
+}

@@ -3,8 +3,6 @@ name: CI
 on:
   push:
     branches:
-      - main
-      - develop
       - release
       - 'feature/**'
   pull_request:
@@ -13,6 +11,11 @@ on:
       - develop
       - release
 
+concurrency:
+  # Release certification must retain every exact-commit run, even while pending.
+  group: ci-${{ github.event_name }}-${{ (github.event_name == 'push' && github.ref_name == 'release') && github.run_id || github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || (github.event_name == 'push' && startsWith(github.ref_name, 'feature/')) }}
+
 env:
   PYTHON_VERSION: '3.12'
   NODE_VERSION: '24'
@@ -20,8 +23,30 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
 
 jobs:
+  select-run:
+    name: Select CI work
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      run_full_ci: ${{ steps.select.outputs.run_full_ci }}
+      reason: ${{ steps.select.outputs.reason }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Select validation
+        id: select
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/ci/select_ci_run.py --workflow ci
+
   prerequisites-gate:
     name: Gate 1 — Orchestrator prerequisites
+    needs: select-run
+    if: needs.select-run.outputs.run_full_ci == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -92,7 +117,7 @@ jobs:
 
       - name: Upload unit execution evidence
         id: unit-evidence
-        if: always()
+        if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v7
         with:
           name: unit-test-evidence
@@ -148,7 +173,7 @@ jobs:
 
       - name: Upload integration execution evidence
         id: integration-evidence
-        if: always()
+        if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v7
         with:
           name: integration-test-evidence
@@ -241,7 +266,7 @@ jobs:
         run: python scripts/ci/run_quality_gate.py --gate tree --artifact reports/quality/dependency-tree.json --artifact reports/quality/dependency-tree-raw.log -- bash scripts/ci/quality-tree.sh
 
       - name: Measure function risk and coupling
-        if: always()
+        if: ${{ !cancelled() }}
         continue-on-error: true
         run: |
           python scripts/ci/run_quality_gate.py --gate code-risk --artifact reports/quality/code-risk.json -- \
@@ -250,7 +275,7 @@ jobs:
             --test-outcome '${{ steps.q-coverage.outcome }}'
 
       - name: Build quality PR report
-        if: always()
+        if: ${{ !cancelled() }}
         env:
           Q_LINT: ${{ steps.q-lint.outcome }}
           Q_FORMAT: ${{ steps.q-format.outcome }}
@@ -268,7 +293,7 @@ jobs:
 
       - name: Upload quality evidence
         id: quality-evidence
-        if: always()
+        if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v7
         with:
           name: quality-evidence
@@ -345,14 +370,14 @@ jobs:
         run: bash scripts/ci/run-mutation-light.sh
 
       - name: Build mutation PR report
-        if: always()
+        if: ${{ !cancelled() }}
         env:
           AVO_MUTATION_PROFILE: light
         run: python scripts/ci/write_mutation_pr_report.py --out reports/mutation/mutation-report.md
 
       - name: Upload light mutation reports
         id: mutation-evidence
-        if: always()
+        if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v7
         with:
           name: mutation-reports-light
@@ -364,8 +389,10 @@ jobs:
 
   ci-readiness:
     name: CI readiness
-    if: always()
+    # Only an explicit successful suppression may skip the required readiness check.
+    if: ${{ !cancelled() && !(needs.select-run.result == 'success' && needs.select-run.outputs.run_full_ci == 'false') }}
     needs:
+      - select-run
       - prerequisites-gate
       - repo-unit-tests
       - repo-integration-tests
@@ -392,8 +419,8 @@ jobs:
 
   quality-report:
     name: Quality report
-    if: always()
-    needs: [prerequisites-gate, repo-unit-tests, repo-integration-tests, software-quality, usability-gate, mutation-light, ci-readiness]
+    if: ${{ !cancelled() && !(needs.select-run.result == 'success' && needs.select-run.outputs.run_full_ci == 'false') }}
+    needs: [select-run, prerequisites-gate, repo-unit-tests, repo-integration-tests, software-quality, usability-gate, mutation-light, ci-readiness]
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     environment:
@@ -450,6 +477,8 @@ jobs:
           path: reports/quality/integration-evidence
 
       - name: Build unified quality report
+        id: report_build
+        continue-on-error: true
         env:
           CI_NEEDS_JSON: ${{ toJSON(needs) }}
         run: |
@@ -458,8 +487,17 @@ jobs:
           "$PY" scripts/ci/write_unified_quality_report.py
           cp reports/quality/quality-gates.md reports/quality/quality-gates-base.md
 
+      - name: Build text-only failure report
+        if: ${{ !cancelled() && steps.report_build.outcome == 'failure' }}
+        env:
+          CI_NEEDS_JSON: ${{ toJSON(needs) }}
+        run: |
+          python scripts/ci/write_unified_quality_report.py --text-only-fallback
+          cp reports/quality/quality-gates.md reports/quality/quality-gates-base.md
+
       - name: Upload unified metrics
         id: quality_metrics
+        if: ${{ success() && !cancelled() && steps.report_build.outcome == 'success' }}
         continue-on-error: true
         uses: actions/upload-artifact@v7
         with:
@@ -471,6 +509,7 @@ jobs:
 
       - name: Upload dashboard image
         id: quality_charts
+        if: ${{ success() && !cancelled() && steps.report_build.outcome == 'success' }}
         continue-on-error: true
         uses: actions/upload-artifact@v7
         with:
@@ -480,24 +519,18 @@ jobs:
           if-no-files-found: ignore
           retention-days: 14
 
-      - name: Resolve PR number
+      - name: Check current PR before chart upload
         id: pr
+        if: ${{ success() && !cancelled() && github.event_name == 'pull_request' }}
         continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
-          PR_NUMBER: ${{ github.event.pull_request.number }}
-          HEAD_BRANCH: ${{ github.head_ref || github.ref_name }}
-        run: |
-          NUM="$PR_NUMBER"
-          if [ -z "$NUM" ]; then
-            NUM="$(gh pr list --head "$HEAD_BRANCH" --state open --json number --jq '.[0].number // empty')"
-          fi
-          echo "number=${NUM}" >> "$GITHUB_OUTPUT"
+        run: python scripts/ci/select_ci_run.py --workflow ci --check-pr-current
 
       - name: Attach inline quality dashboard
         continue-on-error: true
         # User credentials are never exposed to a fork's pull request code.
-        if: steps.pr.outputs.number != '' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+        if: ${{ success() && !cancelled() && steps.report_build.outcome == 'success' && github.event_name == 'pull_request' && steps.pr.outputs.number != '' && github.event.pull_request.head.repo.full_name == github.repository }}
         env:
           QUALITY_CHARTS_TOKEN: ${{ secrets.GH_TOKEN }}
           GITHUB_REPOSITORY_ID: ${{ github.repository_id }}
@@ -506,33 +539,188 @@ jobs:
           if [ -x .venv/bin/python ]; then PY=.venv/bin/python; fi
           "$PY" scripts/ci/upload_quality_chart.py
 
+      - name: Upload hotspot evidence
+        id: quality_hotspots
+        if: ${{ success() && !cancelled() && steps.report_build.outcome == 'success' }}
+        continue-on-error: true
+        uses: actions/upload-artifact@v7
+        with:
+          name: quality-hotspots
+          overwrite: true
+          path: reports/quality/hotspots
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Upload coupling evidence
+        id: quality_coupling
+        if: ${{ success() && !cancelled() && steps.report_build.outcome == 'success' }}
+        continue-on-error: true
+        uses: actions/upload-artifact@v7
+        with:
+          name: quality-coupling
+          overwrite: true
+          path: reports/quality/coupling
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Upload mutation evidence
+        id: quality_mutation
+        if: ${{ success() && !cancelled() && steps.report_build.outcome == 'success' }}
+        continue-on-error: true
+        uses: actions/upload-artifact@v7
+        with:
+          name: quality-mutation
+          overwrite: true
+          path: reports/quality/mutation
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Upload gate decision evidence
+        id: quality_gate_decisions
+        if: ${{ success() && !cancelled() && steps.report_build.outcome == 'success' }}
+        continue-on-error: true
+        uses: actions/upload-artifact@v7
+        with:
+          name: quality-gate-decisions
+          overwrite: true
+          path: reports/quality/decisions
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Check current PR before hotspot upload
+        id: pr_hotspots
+        if: ${{ success() && !cancelled() && steps.report_build.outcome == 'success' && github.event_name == 'pull_request' }}
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python scripts/ci/select_ci_run.py --workflow ci --check-pr-current
+
+      - name: Attach inline hotspot chart
+        continue-on-error: true
+        if: ${{ success() && !cancelled() && steps.report_build.outcome == 'success' && github.event_name == 'pull_request' && steps.pr_hotspots.outputs.number != '' && github.event.pull_request.head.repo.full_name == github.repository }}
+        env:
+          QUALITY_CHARTS_TOKEN: ${{ secrets.GH_TOKEN }}
+          GITHUB_REPOSITORY_ID: ${{ github.repository_id }}
+        run: |
+          PY=python
+          if [ -x .venv/bin/python ]; then PY=.venv/bin/python; fi
+          "$PY" scripts/ci/upload_quality_chart.py --role hotspots
+
+      - name: Check current PR before coupling upload
+        id: pr_coupling
+        if: ${{ success() && !cancelled() && steps.report_build.outcome == 'success' && github.event_name == 'pull_request' }}
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python scripts/ci/select_ci_run.py --workflow ci --check-pr-current
+
+      - name: Attach inline coupling chart
+        continue-on-error: true
+        if: ${{ success() && !cancelled() && steps.report_build.outcome == 'success' && github.event_name == 'pull_request' && steps.pr_coupling.outputs.number != '' && github.event.pull_request.head.repo.full_name == github.repository }}
+        env:
+          QUALITY_CHARTS_TOKEN: ${{ secrets.GH_TOKEN }}
+          GITHUB_REPOSITORY_ID: ${{ github.repository_id }}
+        run: |
+          PY=python
+          if [ -x .venv/bin/python ]; then PY=.venv/bin/python; fi
+          "$PY" scripts/ci/upload_quality_chart.py --role coupling_files
+
+      - name: Check current PR before mutation upload
+        id: pr_mutation
+        if: ${{ success() && !cancelled() && steps.report_build.outcome == 'success' && github.event_name == 'pull_request' }}
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python scripts/ci/select_ci_run.py --workflow ci --check-pr-current
+
+      - name: Attach inline mutation chart
+        continue-on-error: true
+        if: ${{ success() && !cancelled() && steps.report_build.outcome == 'success' && github.event_name == 'pull_request' && steps.pr_mutation.outputs.number != '' && github.event.pull_request.head.repo.full_name == github.repository }}
+        env:
+          QUALITY_CHARTS_TOKEN: ${{ secrets.GH_TOKEN }}
+          GITHUB_REPOSITORY_ID: ${{ github.repository_id }}
+        run: |
+          PY=python
+          if [ -x .venv/bin/python ]; then PY=.venv/bin/python; fi
+          "$PY" scripts/ci/upload_quality_chart.py --role mutation_scopes
+
+      - name: Check current PR before gate decisions upload
+        id: pr_gate_decisions
+        if: ${{ success() && !cancelled() && steps.report_build.outcome == 'success' && github.event_name == 'pull_request' }}
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python scripts/ci/select_ci_run.py --workflow ci --check-pr-current
+
+      - name: Attach inline gate decisions chart
+        continue-on-error: true
+        if: ${{ success() && !cancelled() && steps.report_build.outcome == 'success' && github.event_name == 'pull_request' && steps.pr_gate_decisions.outputs.number != '' && github.event.pull_request.head.repo.full_name == github.repository }}
+        env:
+          QUALITY_CHARTS_TOKEN: ${{ secrets.GH_TOKEN }}
+          GITHUB_REPOSITORY_ID: ${{ github.repository_id }}
+        run: |
+          PY=python
+          if [ -x .venv/bin/python ]; then PY=.venv/bin/python; fi
+          "$PY" scripts/ci/upload_quality_chart.py --role gate_decisions
+
       - name: Link quality chart and artifact downloads
+        if: ${{ success() && !cancelled() && steps.report_build.outcome == 'success' }}
         env:
           QUALITY_METRICS_ARTIFACT_URL: ${{ steps.quality_metrics.outputs.artifact-url }}
           QUALITY_CHARTS_ARTIFACT_URL: ${{ steps.quality_charts.outputs.artifact-url }}
-        run: python scripts/ci/link_quality_artifacts.py --markdown reports/quality/quality-gates.md --attachment reports/quality/chart-attachment.json --no-summary
+          QUALITY_HOTSPOTS_ARTIFACT_URL: ${{ steps.quality_hotspots.outputs.artifact-url }}
+          QUALITY_COUPLING_ARTIFACT_URL: ${{ steps.quality_coupling.outputs.artifact-url }}
+          QUALITY_MUTATION_ARTIFACT_URL: ${{ steps.quality_mutation.outputs.artifact-url }}
+          QUALITY_GATE_DECISIONS_ARTIFACT_URL: ${{ steps.quality_gate_decisions.outputs.artifact-url }}
+        run: python scripts/ci/link_quality_artifacts.py --markdown reports/quality/quality-gates.md --attachment reports/quality/chart-attachment.json --hotspots-attachment reports/quality/hotspots-attachment.json --coupling-attachment reports/quality/coupling-attachment.json --mutation-attachment reports/quality/mutation-attachment.json --gate-decisions-attachment reports/quality/gate-decisions-attachment.json --no-summary
+
+      - name: Check current PR before commenting
+        id: current_pr
+        if: ${{ success() && !cancelled() && github.event_name == 'pull_request' && steps.pr.outputs.number != '' }}
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python scripts/ci/select_ci_run.py --workflow ci --check-pr-current
 
       - name: Publish quality summary to PR
         id: quality_comment
-        if: steps.pr.outputs.number != ''
+        if: ${{ success() && !cancelled() && github.event_name == 'pull_request' && steps.current_pr.outputs.number != '' }}
         continue-on-error: true
         uses: marocchino/sticky-pull-request-comment@v3
         with:
-          number: ${{ steps.pr.outputs.number }}
+          number: ${{ steps.current_pr.outputs.number }}
           path: reports/quality/quality-gates.md
-          header: quality-gates-report
+          header: quality-gates-report-${{ github.run_id }}
 
       - name: Publish unified job summary
         env:
           COMMENT_RESULT: ${{ steps.quality_comment.outcome }}
+          REPORT_BUILD_RESULT: ${{ steps.report_build.outcome }}
+          REPORT_EVENT: ${{ github.event_name }}
           QUALITY_METRICS_ARTIFACT_URL: ${{ steps.quality_metrics.outputs.artifact-url }}
           QUALITY_CHARTS_ARTIFACT_URL: ${{ steps.quality_charts.outputs.artifact-url }}
+          QUALITY_HOTSPOTS_ARTIFACT_URL: ${{ steps.quality_hotspots.outputs.artifact-url }}
+          QUALITY_COUPLING_ARTIFACT_URL: ${{ steps.quality_coupling.outputs.artifact-url }}
+          QUALITY_MUTATION_ARTIFACT_URL: ${{ steps.quality_mutation.outputs.artifact-url }}
+          QUALITY_GATE_DECISIONS_ARTIFACT_URL: ${{ steps.quality_gate_decisions.outputs.artifact-url }}
         run: |
           # Native attachments become readable when associated with a comment.
           if [ "$COMMENT_RESULT" != "success" ]; then
             cp reports/quality/quality-gates-base.md reports/quality/quality-gates.md
-            python scripts/ci/link_quality_artifacts.py --markdown reports/quality/quality-gates.md --no-summary
+            if [ "$REPORT_BUILD_RESULT" = "success" ]; then
+              python scripts/ci/link_quality_artifacts.py --markdown reports/quality/quality-gates.md --no-summary
+            fi
           fi
+          if [ "$REPORT_EVENT" != "pull_request" ]; then
+            NOTICE="PR publication not requested for this event."
+          elif [ "$COMMENT_RESULT" = "success" ]; then
+            NOTICE="PR comment delivered."
+          elif [ "$COMMENT_RESULT" = "failure" ]; then
+            NOTICE="PR comment unavailable: permission or service failure."
+          else
+            NOTICE="PR publication skipped: stale identity or freshness lookup unavailable."
+          fi
+          printf '\n%s\n' "$NOTICE" >> reports/quality/quality-gates.md
           cat reports/quality/quality-gates.md >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload readable quality report
@@ -545,10 +733,16 @@ jobs:
           retention-days: 14
 
       - name: Remove superseded mutation comment
-        if: steps.pr.outputs.number != ''
+        if: ${{ success() && !cancelled() && github.event_name == 'pull_request' && steps.current_pr.outputs.number != '' }}
         continue-on-error: true
         uses: marocchino/sticky-pull-request-comment@v3
         with:
-          number: ${{ steps.pr.outputs.number }}
+          number: ${{ steps.current_pr.outputs.number }}
           header: mutation-report
           delete: true
+
+      - name: Preserve report builder failure
+        if: ${{ !cancelled() && steps.report_build.outcome == 'failure' }}
+        run: |
+          echo "Quality report builder failed; fallback delivery does not certify this job."
+          exit 1

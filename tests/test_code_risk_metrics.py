@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import json
 import os
@@ -423,3 +424,146 @@ def test_coupling_reuses_package_graph_and_hashes_topology(tmp_path):
     assert packages["avo"]["instability"] is None
     assert coupling["edge_count"] == 1
     assert len(coupling["topology_sha256"]) == 64
+
+
+def test_module_coupling_has_exact_file_namespace_and_topology_evidence(tmp_path):
+    mod = metric_module()
+    package = sources(tmp_path, "")
+    files = {
+        "group/__init__.py": "TOKEN = 1\n",
+        "group/reader.py": (
+            "import avo.group.target as alias\n"
+            "from . import target\n"
+            "from .target import VALUE\n"
+            "import avo.group.reader\n"
+            "import avo\n"
+            "import avo.namespace\n"
+        ),
+        "group/target.py": "VALUE = 1\n",
+        "group/isolated.py": "",
+        "namespace/helper.py": "",
+    }
+    for name, text in files.items():
+        path = package / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8")
+    document = report(mod, tmp_path, tmp_path / "missing.json")
+    graph = document["coupling_modules"]
+    assert graph["schema"] == 1
+    assert graph["status"] == "MEASURED"
+    assert graph["scope"] == "src/avo/**/*.py"
+    rows = {row["module"]: row for row in graph["modules"]}
+    assert list(rows) == sorted(rows)
+    assert set(rows) == {
+        "avo",
+        "avo.logic",
+        "avo.group",
+        "avo.group.reader",
+        "avo.group.target",
+        "avo.group.isolated",
+        "avo.namespace",
+        "avo.namespace.helper",
+    }
+    assert graph["node_count"] == 8
+    assert graph["edge_count"] == 3
+    assert graph["edges"] == [
+        ["avo.group.reader", "avo"],
+        ["avo.group.reader", "avo.group.target"],
+        ["avo.group.reader", "avo.namespace"],
+    ]
+    assert rows["avo.namespace"] == {
+        "module": "avo.namespace",
+        "kind": "namespace",
+        "path": None,
+        "sha256": None,
+        "ca": 1,
+        "ce": 0,
+        "instability": 0.0,
+    }
+    manifest = {
+        row["path"]: row["sha256"] for row in document["provenance"]["sources"]["files"]
+    }
+    actual_files = [row for row in graph["modules"] if row["kind"] == "file"]
+    assert {row["path"] for row in actual_files} == set(manifest)
+    for row in actual_files:
+        assert row["sha256"] == manifest[row["path"]]
+        assert (
+            row["sha256"]
+            == hashlib.sha256((tmp_path / row["path"]).read_bytes()).hexdigest()
+        )
+    assert rows["avo.group"]["path"] == "src/avo/group/__init__.py"
+    assert rows["avo.group.reader"]["ca"] == 0
+    assert rows["avo.group.reader"]["ce"] == 3
+    assert rows["avo.group.reader"]["instability"] == 1.0
+    assert rows["avo.group.target"]["ca"] == 1
+    assert rows["avo.group.isolated"]["instability"] is None
+    topology = {"nodes": sorted(rows), "edges": graph["edges"]}
+    expected_hash = hashlib.sha256(
+        json.dumps(topology, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+    assert graph["topology_sha256"] == expected_hash
+    assert document["coupling"] == mod._coupling(package)
+    assert graph == report(mod, tmp_path, tmp_path / "missing.json")["coupling_modules"]
+
+
+@pytest.mark.parametrize(
+    ("extra_files", "reason"),
+    [
+        ({"bad.py": "def broken(:"}, "bad.py"),
+        ({"bad.py": "import avo.missing\n"}, "avo.missing"),
+        ({"group.py": "", "group/__init__.py": ""}, "ambiguous"),
+    ],
+)
+def test_failed_module_coupling_is_unavailable_not_an_empty_measurement(
+    tmp_path, extra_files, reason
+):
+    package = sources(tmp_path, "")
+    for name, text in extra_files.items():
+        path = package / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(text, encoding="utf-8")
+    graph = report(metric_module(), tmp_path, tmp_path / "missing.json")[
+        "coupling_modules"
+    ]
+    assert graph["status"] == "UNAVAILABLE"
+    assert graph["modules"] == [] and graph["edges"] == []
+    assert graph["node_count"] is None and graph["edge_count"] is None
+    assert graph["topology_sha256"] is None
+    assert reason in graph["reason"]
+
+
+def test_module_measurement_preserves_unreferenced_namespace_identity(tmp_path):
+    package = tmp_path / "src" / "avo"
+    path = package / "nested" / "isolated.py"
+    path.parent.mkdir(parents=True)
+    path.write_text("", encoding="utf-8")
+    graph = report(metric_module(), tmp_path, tmp_path / "missing.json")[
+        "coupling_modules"
+    ]
+    rows = {row["module"]: row for row in graph["modules"]}
+    assert graph["status"] == "MEASURED"
+    assert graph["node_count"] == 3 and graph["edge_count"] == 0
+    for module in ("avo", "avo.nested"):
+        assert rows[module]["kind"] == "namespace"
+        assert rows[module]["path"] is None and rows[module]["sha256"] is None
+    assert rows["avo.nested.isolated"]["kind"] == "file"
+    assert all(row["instability"] is None for row in rows.values())
+
+
+def test_source_change_during_module_measurement_rejects_the_report(
+    tmp_path, monkeypatch
+):
+    mod = metric_module()
+    package = sources(tmp_path, "def work():\n    return 1\n")
+    original = mod._module_coupling
+
+    def changed(source, manifest):
+        result = original(source, manifest)
+        (package / "logic.py").write_text(
+            "def work():\n    return 2\n", encoding="utf-8"
+        )
+        return result
+
+    monkeypatch.setattr(mod, "_module_coupling", changed)
+    with pytest.raises(ValueError, match="source changed during"):
+        report(mod, tmp_path, tmp_path / "missing.json")

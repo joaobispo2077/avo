@@ -1,0 +1,80 @@
+{
+  "schema": 1,
+  "purpose": "Controlled presentation examples, never measurements or certification of AVO. Primary populations and job outcomes are hypothetical; supporting file/function evidence comes from actual toy-source producer executions.",
+  "cases": [
+    {
+      "id": "complete",
+      "title": "Complete measured toy evidence",
+      "source_case": "normal",
+      "coverage": {"covered": 82, "total": 100},
+      "duplication": {"duplicated": 1, "total": 200},
+      "mutation": {"killed": 80, "survived": 20},
+      "expected": {"overall": "PASS", "bands": ["green", "green", "green"], "coupling": "MEASURED", "hotspots": "MEASURED"}
+    },
+    {
+      "id": "near-threshold",
+      "title": "Passing primary values near their limits",
+      "source_case": "normal",
+      "coverage": {"covered": 70, "total": 100},
+      "duplication": {"duplicated": 7, "total": 400},
+      "mutation": {"killed": 45, "survived": 55},
+      "expected": {"overall": "PASS", "bands": ["yellow", "yellow", "yellow"], "coupling": "MEASURED", "hotspots": "MEASURED"}
+    },
+    {
+      "id": "failed",
+      "title": "Failed primary limits and required integration job",
+      "source_case": "normal",
+      "coverage": {"covered": 60, "total": 100},
+      "duplication": {"duplicated": 6, "total": 200},
+      "mutation": {"killed": 20, "survived": 80},
+      "integration_result": "failure",
+      "expected": {"overall": "FAIL", "bands": ["red", "red", "red"], "coupling": "MEASURED", "hotspots": "PARTIAL"}
+    },
+    {
+      "id": "partial",
+      "title": "Known function population with omitted function coverage",
+      "source_case": "omitted-coverage",
+      "coverage": {"covered": 82, "total": 100},
+      "duplication": {"duplicated": 1, "total": 200},
+      "mutation": {"killed": 80, "survived": 20},
+      "expected": {"overall": "PASS", "bands": ["green", "green", "green"], "coupling": "MEASURED", "hotspots": "PARTIAL"}
+    },
+    {
+      "id": "unknown-population",
+      "title": "Source-analysis error with unknown total population",
+      "source_case": "parse-error",
+      "coverage": {"covered": 82, "total": 100},
+      "duplication": {"duplicated": 1, "total": 200},
+      "mutation": {"killed": 80, "survived": 20},
+      "expected": {"overall": "PASS", "bands": ["green", "green", "green"], "coupling": "UNAVAILABLE", "hotspots": "PARTIAL"}
+    },
+    {
+      "id": "unavailable",
+      "title": "Missing supporting receipt cannot supply observations",
+      "source_case": "missing-receipt",
+      "coverage": {"covered": 82, "total": 100},
+      "duplication": {"duplicated": 1, "total": 200},
+      "mutation": {"killed": 80, "survived": 20},
+      "expected": {"overall": "PASS", "bands": ["green", "green", "green"], "coupling": "UNAVAILABLE", "hotspots": "UNAVAILABLE"}
+    },
+    {
+      "id": "image-failure",
+      "title": "All image renderers fail independently; current text survives",
+      "source_case": "normal",
+      "coverage": {"covered": 82, "total": 100},
+      "duplication": {"duplicated": 1, "total": 200},
+      "mutation": {"killed": 80, "survived": 20},
+      "disable_images": true,
+      "expected": {"overall": "PASS", "bands": ["green", "green", "green"], "coupling": "MEASURED", "hotspots": "MEASURED"}
+    },
+    {
+      "id": "crowded",
+      "title": "120 additional measured modules, overlaps and long source identities",
+      "source_case": "crowded",
+      "coverage": {"covered": 82, "total": 100},
+      "duplication": {"duplicated": 1, "total": 200},
+      "mutation": {"killed": 80, "survived": 20},
+      "expected": {"overall": "PASS", "bands": ["green", "green", "green"], "coupling": "MEASURED", "hotspots": "MEASURED"}
+    }
+  ]
+}
