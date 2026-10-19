@@ -352,3 +352,218 @@ def test_linker_cli_embeds_verified_receipt_without_network_or_git(
     assert ATTACHMENT_URL in result and "71.42%" in result
     assert "Download Quality dashboard" in result
     assert result.strip() == summary.read_text(encoding="utf-8").strip()
+
+
+SUPPORT_REPORT = (
+    REPORT
+    + "\n![Function hotspots](kpi-chart:hotspots.png)\n"
+    + "[Complete function index](kpi-detail:hotspots.md)\n"
+    + "![File coupling](kpi-chart:coupling-files.png)\n"
+    + "[Complete file index](kpi-detail:coupling-index.md)\n"
+    + "![Mutation efficacy](kpi-chart:mutation-efficacy.png)\n"
+    + "[Complete mutation index](kpi-detail:mutation-efficacy.md)\n"
+    + "![Gate decisions](kpi-chart:gate-decisions.png)\n"
+    + "[Complete decision index](kpi-detail:gate-decisions.md)\n"
+)
+HOTSPOTS_URL = ATTACHMENT_URL.replace("12345678-", "22345678-", 1)
+COUPLING_URL = ATTACHMENT_URL.replace("12345678-", "32345678-", 1)
+MUTATION_URL = ATTACHMENT_URL.replace("12345678-", "42345678-", 1)
+DECISIONS_URL = ATTACHMENT_URL.replace("12345678-", "52345678-", 1)
+
+
+def test_five_image_roles_and_text_indexes_link_independently():
+    result = linker.link_artifacts(
+        SUPPORT_REPORT,
+        charts_url=PREFIX + "11",
+        metrics_url=PREFIX + "12",
+        image_url=ATTACHMENT_URL,
+        hotspots_url=PREFIX + "13",
+        coupling_url=PREFIX + "14",
+        hotspots_image_url=HOTSPOTS_URL,
+        coupling_image_url=COUPLING_URL,
+        mutation_url=PREFIX + "15",
+        gate_decisions_url=PREFIX + "16",
+        mutation_image_url=MUTATION_URL,
+        gate_decisions_image_url=DECISIONS_URL,
+    )
+    assert result.count("![") == 5
+    assert f"![Function hotspots]({HOTSPOTS_URL})" in result
+    assert f"![File coupling]({COUPLING_URL})" in result
+    assert f"![Mutation efficacy]({MUTATION_URL})" in result
+    assert f"![Gate decisions]({DECISIONS_URL})" in result
+    assert "hotspots.md" in result and "coupling-index.md" in result
+    assert "mutation-efficacy.md" in result and "gate-decisions.md" in result
+    assert "complete text index" in result
+    assert "kpi-chart:" not in result and "kpi-detail:" not in result
+    assert "Required action: repair lint." in result and "71.42%" in result
+
+
+@pytest.mark.parametrize(
+    "failed",
+    [
+        "hotspots_image_url",
+        "hotspots_url",
+        "coupling_image_url",
+        "coupling_url",
+        "mutation_image_url",
+        "mutation_url",
+        "gate_decisions_image_url",
+        "gate_decisions_url",
+    ],
+)
+def test_one_support_upload_failure_retains_other_images_downloads_and_text(failed):
+    kwargs = {
+        "charts_url": PREFIX + "11",
+        "metrics_url": PREFIX + "12",
+        "image_url": ATTACHMENT_URL,
+        "hotspots_url": PREFIX + "13",
+        "coupling_url": PREFIX + "14",
+        "hotspots_image_url": HOTSPOTS_URL,
+        "coupling_image_url": COUPLING_URL,
+        "mutation_url": PREFIX + "15",
+        "gate_decisions_url": PREFIX + "16",
+        "mutation_image_url": MUTATION_URL,
+        "gate_decisions_image_url": DECISIONS_URL,
+    }
+    kwargs[failed] = ""
+    result = linker.link_artifacts(SUPPORT_REPORT, **kwargs)
+    assert ATTACHMENT_URL in result and "71.42%" in result
+    assert ("![Function hotspots]" in result) is (failed != "hotspots_image_url")
+    assert ("![File coupling]" in result) is (failed != "coupling_image_url")
+    assert ("![Mutation efficacy]" in result) is (failed != "mutation_image_url")
+    assert ("![Gate decisions]" in result) is (failed != "gate_decisions_image_url")
+    assert (PREFIX + "13" in result) is (failed != "hotspots_url")
+    assert (PREFIX + "14" in result) is (failed != "coupling_url")
+    assert (PREFIX + "15" in result) is (failed != "mutation_url")
+    assert (PREFIX + "16" in result) is (failed != "gate_decisions_url")
+
+
+def test_support_links_reject_stale_archive_and_injected_native_urls():
+    result = linker.link_artifacts(
+        SUPPORT_REPORT,
+        charts_url="",
+        metrics_url=PREFIX + "12",
+        hotspots_url=PREFIX.replace("/42/", "/41/") + "13",
+        coupling_url=PREFIX + "14",
+        hotspots_image_url=HOTSPOTS_URL + "?token=private",
+        coupling_image_url=COUPLING_URL,
+        mutation_url=PREFIX.replace("/42/", "/41/") + "15",
+        gate_decisions_url=PREFIX + "16",
+        mutation_image_url=MUTATION_URL + "?token=private",
+        gate_decisions_image_url=DECISIONS_URL,
+    )
+    assert "private" not in result and "/runs/41/" not in result
+    assert "![Function hotspots]" not in result
+    assert "![File coupling]" in result
+    assert "![Mutation efficacy]" not in result
+    assert "![Gate decisions]" in result
+    assert "Complete text index unavailable" in result
+
+
+@pytest.mark.parametrize(
+    "role,filename",
+    [
+        ("hotspots", "hotspots.png"),
+        ("coupling_files", "coupling-files.png"),
+        ("mutation_scopes", "mutation-efficacy.png"),
+        ("gate_decisions", "gate-decisions.png"),
+    ],
+)
+def test_support_receipts_require_exact_role_and_fixed_filename(
+    attachment, role, filename
+):
+    old_chart, receipt, payload = attachment
+    chart = old_chart.with_name(filename)
+    chart.write_bytes(old_chart.read_bytes())
+    # An old dashboard-only receipt cannot authorize a supporting chart.
+    assert linker.read_attachment(receipt, chart, role=role) == ""
+    payload.update(role=role, filename=filename)
+    receipt.write_text(json.dumps(payload), encoding="utf-8")
+    assert linker.read_attachment(receipt, chart, role=role) == ATTACHMENT_URL
+    for key, value in (
+        ("role", "dashboard"),
+        ("filename", "arbitrary.png"),
+        ("sha", "b" * 40),
+        ("run_id", "41"),
+        ("chart_sha256", "0" * 64),
+        ("error", "upload failed"),
+        ("url", ATTACHMENT_URL + "?token=private"),
+    ):
+        damaged = {**payload, key: value}
+        receipt.write_text(json.dumps(damaged), encoding="utf-8")
+        assert linker.read_attachment(receipt, chart, role=role) == ""
+
+
+def test_explicit_dashboard_receipt_requires_its_filename(attachment):
+    chart, receipt, payload = attachment
+    payload["role"] = "dashboard"
+    receipt.write_text(json.dumps(payload), encoding="utf-8")
+    assert linker.read_attachment(receipt, chart) == ""
+    payload["filename"] = "dashboard.png"
+    receipt.write_text(json.dumps(payload), encoding="utf-8")
+    assert linker.read_attachment(receipt, chart) == ATTACHMENT_URL
+
+
+def test_support_cli_uses_role_receipts_without_network_or_credential_fallback(
+    tmp_path, monkeypatch
+):
+    for role, relative, url in (
+        ("hotspots", "hotspots/hotspots.png", HOTSPOTS_URL),
+        ("coupling_files", "coupling/coupling-files.png", COUPLING_URL),
+        ("mutation_scopes", "mutation/mutation-efficacy.png", MUTATION_URL),
+        ("gate_decisions", "decisions/gate-decisions.png", DECISIONS_URL),
+    ):
+        chart = tmp_path / "reports" / "quality" / relative
+        chart.parent.mkdir(parents=True)
+        chart.write_bytes(b"bound image " + role.encode())
+        (tmp_path / f"{role}.json").write_text(
+            json.dumps(
+                {
+                    "role": role,
+                    "filename": chart.name,
+                    "sha": SHA,
+                    "run_id": "42",
+                    "chart_sha256": hashlib.sha256(chart.read_bytes()).hexdigest(),
+                    "url": url,
+                    "error": "",
+                }
+            ),
+            encoding="utf-8",
+        )
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("QUALITY_HOTSPOTS_ARTIFACT_URL", PREFIX + "13")
+    monkeypatch.setenv("QUALITY_COUPLING_ARTIFACT_URL", PREFIX + "14")
+    monkeypatch.setenv("QUALITY_MUTATION_ARTIFACT_URL", PREFIX + "15")
+    monkeypatch.setenv("QUALITY_GATE_DECISIONS_ARTIFACT_URL", PREFIX + "16")
+    report = tmp_path / "report.md"
+    report.write_text(SUPPORT_REPORT, encoding="utf-8")
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "linker",
+            "--markdown",
+            str(report),
+            "--no-summary",
+            "--hotspots-attachment",
+            str(tmp_path / "hotspots.json"),
+            "--coupling-attachment",
+            str(tmp_path / "coupling_files.json"),
+            "--mutation-attachment",
+            str(tmp_path / "mutation_scopes.json"),
+            "--gate-decisions-attachment",
+            str(tmp_path / "gate_decisions.json"),
+        ],
+    )
+
+    def forbidden(*args, **kwargs):
+        pytest.fail("Supporting image linking must remain offline")
+
+    monkeypatch.setattr(socket, "create_connection", forbidden)
+    monkeypatch.setattr(subprocess, "Popen", forbidden)
+    assert linker.main() == 0
+    result = report.read_text(encoding="utf-8")
+    assert "![Function hotspots]" in result and "![File coupling]" in result
+    assert HOTSPOTS_URL in result and COUPLING_URL in result
+    assert MUTATION_URL in result and DECISIONS_URL in result
+    assert "kpi-detail:" not in result

@@ -3,6 +3,8 @@ name: Engine binary
 
 on:
   push:
+    branches:
+      - 'feature/**'
     paths:
       - packaging/**
       - src/avo/engine_cli.py
@@ -36,7 +38,7 @@ on:
         default: ''
 
 concurrency:
-  group: engine-binary-${{ github.event_name }}-${{ github.ref }}
+  group: engine-binary-${{ github.event_name }}-${{ (github.event_name == 'release' || github.event_name == 'workflow_dispatch') && github.run_id || github.event.pull_request.number || github.ref }}
   cancel-in-progress: ${{ github.event_name != 'release' && github.event_name != 'workflow_dispatch' }}
 
 permissions:
@@ -48,8 +50,32 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
 
 jobs:
+  select-run:
+    name: Select Engine work
+    # Published tags may predate the selector; release builds stay independent.
+    if: github.event_name != 'release' && github.event_name != 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      run_full_ci: ${{ steps.select.outputs.run_full_ci }}
+      reason: ${{ steps.select.outputs.reason }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Select validation
+        id: select
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 scripts/ci/select_ci_run.py --workflow engine-binary
+
   zip-smoke:
     name: Zip smoke (${{ matrix.platform }})
+    needs: select-run
+    if: ${{ !cancelled() && ((github.event_name == 'release' || github.event_name == 'workflow_dispatch') || (needs.select-run.result == 'success' && needs.select-run.outputs.run_full_ci == 'true')) }}
     strategy:
       fail-fast: false
       matrix:

@@ -1,0 +1,12 @@
+{
+  "cases": [
+    {"id":"mutation-floor","counts":{"killed":2,"survived":3,"total":5},"expected":{"status":"PASS","complete":true,"score":40.0,"unresolved":0}},
+    {"id":"mutation-failure","counts":{"killed":0,"survived":5,"total":5},"expected":{"status":"FAIL","complete":true,"score":0.0,"unresolved":0}},
+    {"id":"mutation-empty","counts":{"killed":0,"survived":0,"total":0},"expected":{"status":"INCOMPLETE","complete":false,"score":null,"unresolved":0}},
+    {"id":"mutation-unaccounted","counts":{"killed":2,"survived":3,"total":6},"expected":{"status":"INCOMPLETE","complete":false,"score":null,"unresolved":1}},
+    {"id":"mutation-invalid","counts":{"killed":2,"survived":3,"total":4},"expected":{"status":"INVALID","complete":false,"score":null,"unresolved":null}}
+  ],
+  "unresolved_categories": ["no_tests","skipped","suspicious","timeout","check_was_interrupted_by_user","segfault","not_checked","caught_by_type_check","untested"],
+  "unresolved_expected":{"status":"INCOMPLETE","complete":false,"score":null,"unresolved":1},
+  "profile_mismatch_expected":{"status":"UNAVAILABLE","measured":null}
+}

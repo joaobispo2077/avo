@@ -9,6 +9,8 @@ import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
+REASON_EXCERPT_CHARS = 1000
+
 
 def _validator():
     name = "avo_ci_test_execution_receipts"
@@ -33,12 +35,14 @@ def _tag(element: ET.Element) -> str:
     return element.tag.rsplit("}", 1)[-1]
 
 
-def _counts(raw: bytes) -> dict[str, int]:
+def parse_testcase_events(raw: bytes) -> tuple[dict[str, int], list[dict]]:
+    """Read events once; full reasons remain in the captured JUnit source."""
     root = ET.fromstring(raw, parser=ET.XMLParser(target=_NoDocumentTypes()))
     if _tag(root) not in {"testsuite", "testsuites"}:
         raise ValueError("XML is not a native JUnit testsuite document")
     parents = {child: parent for parent in root.iter() for child in parent}
     counts = {"total": 0, "passed": 0, "failed": 0, "errors": 0, "skipped": 0}
+    cases = []
     categories = {"failure": "failed", "error": "errors", "skipped": "skipped"}
     for case in root.iter():
         if _tag(case) != "testcase":
@@ -51,12 +55,37 @@ def _counts(raw: bytes) -> dict[str, int]:
         category = categories[next(iter(outcomes))] if outcomes else "passed"
         counts[category] += 1
         counts["total"] += 1
+        reasons = []
+        for child in case:
+            if _tag(child) not in outcomes:
+                continue
+            message = child.get("message", "").strip()
+            body = "".join(child.itertext()).strip()
+            if message:
+                reasons.append(message)
+            if body and body != message:
+                reasons.append(body)
+        reason = "\n".join(reasons)
+        cases.append(
+            {
+                "suite": parents[case].get("name") or None,
+                "classname": case.get("classname") or None,
+                "name": case.get("name") or None,
+                "outcome": category,
+                "reason": reason[:REASON_EXCERPT_CHARS] or None,
+                "reason_truncated": len(reason) > REASON_EXCERPT_CHARS,
+            }
+        )
     if (
         counts["total"]
         != sum(counts[key] for key in categories.values()) + counts["passed"]
     ):
         raise ValueError("testcase outcome counts are inconsistent")
-    return counts
+    return counts, cases
+
+
+def _counts(raw: bytes) -> dict[str, int]:
+    return parse_testcase_events(raw)[0]
 
 
 def _source(record: dict, directory: Path, artifact: str) -> tuple[dict, bytes]:
@@ -82,7 +111,14 @@ def read_test_evidence(
     junit_name: str,
 ) -> dict:
     """Return verified observed testcase counts, never job-derived estimates."""
-    result = {"state": "UNAVAILABLE", "counts": None, "sources": [], "reason": ""}
+    result = {
+        "state": "UNAVAILABLE",
+        "counts": None,
+        "cases": None,
+        "counting_unit": "testcase events",
+        "sources": [],
+        "reason": "",
+    }
     if not re.fullmatch(r"[a-z][a-z0-9-]*", gate):
         result["reason"] = "invalid execution gate key"
         return result
@@ -112,7 +148,7 @@ def read_test_evidence(
             raise ValueError("fresh native JUnit artifact unavailable")
         junit, raw = _source(matching[0], directory, artifact)
         result["sources"] = [junit, log]
-        counts = _counts(raw)
+        counts, cases = parse_testcase_events(raw)
         status = receipt["status"]
         if status != "PASS":
             state, reason = (
@@ -131,7 +167,7 @@ def read_test_evidence(
                 "MEASURED",
                 "Counts from actual native JUnit testcase events.",
             )
-        result.update(state=state, counts=counts, reason=reason)
+        result.update(state=state, counts=counts, cases=cases, reason=reason)
     except (OSError, ValueError, TypeError, KeyError, ET.ParseError) as exc:
         result["reason"] = str(exc)
     return result

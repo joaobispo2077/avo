@@ -13,8 +13,11 @@ restore_mutmut_profile() {
 trap restore_mutmut_profile EXIT
 
 echo "==> mutation light (profile=${AVO_MUTATION_PROFILE}; cache allowed; 20m job SLA)"
+rm -f reports/mutation/mutation-scopes.json
 uv run --frozen --extra dev python scripts/ci/patch_mutmut_profile.py apply "${AVO_MUTATION_PROFILE}"
 uv run --frozen --extra dev mutmut run
+# A no-data export exits successfully without replacing a cached stats file.
+rm -f mutants/mutmut-cicd-stats.json
 uv run --frozen --extra dev mutmut export-cicd-stats
 
 # Stamp only after export. set -e skips this when clean tests fail, so a
@@ -28,5 +31,9 @@ mkdir -p reports/mutation
 if [ -f mutants/mutmut-cicd-stats.json ]; then
   cp mutants/mutmut-cicd-stats.json reports/mutation/mutmut-cicd-stats-light.json
 fi
+# Optional scope evidence never changes the aggregate gate decision.
+uv run --frozen --extra dev python scripts/ci/mutation_scopes.py \
+  --profile "${AVO_MUTATION_PROFILE}" --stats mutants/mutmut-cicd-stats.json \
+  --out reports/mutation/mutation-scopes.json || true
 uv run --frozen --extra dev python scripts/ci/check_mutation.py
 echo "mutation light finished."
