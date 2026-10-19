@@ -700,14 +700,25 @@ def collect(doc: dict, directory: Path) -> dict:
                 "avo_ci_write_quality_pr_report", "write_quality_pr_report.py"
             )
             text = report.format_npm_summary(npm)
-            if text and not npm.get("ok") and findings:
-                details = "; ".join(
-                    report.format_deps_finding(item)
-                    for item in findings
-                    if isinstance(item, dict)
-                )
-                if details:
-                    text = f"{text}; {details}"
+            if text and isinstance(findings, list):
+                extras: list[str] = []
+                if npm.get("ok") is False:
+                    extras.extend(
+                        report.format_deps_finding(item)
+                        for item in findings
+                        if isinstance(item, dict) and item.get("package")
+                    )
+                else:
+                    for item in findings:
+                        if not isinstance(item, dict) or item.get("package"):
+                            continue
+                        advisory = str(item.get("advisory") or "").strip()
+                        if not advisory:
+                            continue
+                        tool = str(item.get("tool") or "").strip()
+                        extras.append(f"{tool} {advisory}".strip())
+                if extras:
+                    text = f"{text}; {'; '.join(extras)}"
             incomplete_tools = [
                 f"{tool}: {raw_states.get(tool, 'capture unavailable')}"
                 for tool in ("pip", "npm")

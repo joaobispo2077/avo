@@ -146,11 +146,11 @@ def audit_band(payload: dict | None) -> str:
     """Worst unwaived npm severity. Critical fails red. High or moderate passes yellow."""
     if not isinstance(payload, dict):
         return "red"
-    if (
-        payload.get("critical") is None
-        or payload.get("high") is None
-        or not payload.get("ok")
-    ):
+    if payload.get("critical") is None or payload.get("high") is None:
+        return "red"
+    if payload.get("ok") is False:
+        return "red"
+    if "ok" not in payload and int(payload.get("critical") or 0) > 0:
         return "red"
     moderate = int(payload.get("moderate") or 0) if "moderate" in payload else 0
     if int(payload.get("high") or 0) > 0 or moderate > 0:
@@ -159,17 +159,14 @@ def audit_band(payload: dict | None) -> str:
 
 
 def _high_label(hit: dict) -> str:
-    """One high package. Version and GHSA stay on the advisory package."""
-    affected = str(hit.get("affectedPackage") or hit.get("package") or "").strip()
+    """One advisory package. Dependents that inherit it are not separate highs."""
     root = str(hit.get("package") or "").strip()
+    affected = str(hit.get("affectedPackage") or "").strip()
+    name = root or affected
     version = str(hit.get("version") or "").strip()
     advisory = hit.get("id")
     advisory_id = advisory.strip() if isinstance(advisory, str) else ""
-    if advisory_id and root and affected and root != affected:
-        root_name = f"{root}@{version}" if version else root
-        return f"{affected} via {root_name} {advisory_id}"
-    name = affected or root
-    if version and name and (not root or root == name):
+    if version and name:
         name = f"{name}@{version}"
     if advisory_id:
         return f"{name} {advisory_id}".strip()
@@ -184,10 +181,11 @@ def high_package_names(reported: object) -> list[str]:
     for item in reported:
         if not isinstance(item, dict) or item.get("severity") != "high":
             continue
+        key = str(item.get("package") or item.get("affectedPackage") or "").strip()
         label = _high_label(item)
-        if not label or label in seen:
+        if not key or not label or key in seen:
             continue
-        seen.add(label)
+        seen.add(key)
         names.append(label)
     return names
 
@@ -200,13 +198,16 @@ def format_npm_summary(payload: dict | None) -> str | None:
         return (
             f"FAIL, counts unknown: {payload.get('error') or 'npm audit not completed'}"
         )
-    label = "PASS" if payload.get("ok") else "FAIL"
+    if "ok" in payload:
+        label = "PASS" if payload.get("ok") else "FAIL"
+    else:
+        label = "FAIL" if int(payload.get("critical") or 0) else "PASS"
     critical = int(payload.get("critical") or 0)
-    high = int(payload.get("high") or 0)
+    names = high_package_names(payload.get("reported"))
+    high = len(names) if names else int(payload.get("high") or 0)
     result = f"{label}, {critical} critical, {high} high"
     if "moderate" in payload and "low" in payload:
         result += f", {int(payload['moderate'])} moderate, {int(payload['low'])} low"
-    names = high_package_names(payload.get("reported"))
     if names:
         result += ": " + ", ".join(names)
     return result

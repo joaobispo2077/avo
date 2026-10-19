@@ -887,6 +887,59 @@ class QualityPrReportTests(unittest.TestCase):
         self.assertIn("demo", mod.format_npm_summary(bare))
         self.assertNotIn("critical", mod.format_npm_summary(bare).split(":", 1)[-1])
 
+    def test_high_dependents_collapse_to_three_advisory_packages(self) -> None:
+        mod = _load("write_quality_pr_report", "scripts/ci/write_quality_pr_report.py")
+        reported = []
+        for affected in (
+            "@semantic-release/changelog",
+            "micromatch",
+            "semantic-release",
+            "braces",
+        ):
+            reported.append(
+                {
+                    "package": "braces",
+                    "affectedPackage": affected,
+                    "version": "3.0.3",
+                    "id": "GHSA-vfj7-8cjw-p6xm",
+                    "severity": "high",
+                }
+            )
+        reported.extend(
+            [
+                {
+                    "package": "sharp",
+                    "affectedPackage": "sharp",
+                    "version": "0.35.4",
+                    "id": "GHSA-wq5f-xc86-pv6w",
+                    "severity": "high",
+                },
+                {
+                    "package": "source-map-js",
+                    "affectedPackage": "source-map-js",
+                    "version": "1.2.1",
+                    "id": "GHSA-68fv-2mgg-jv7q",
+                    "severity": "high",
+                },
+            ]
+        )
+        summary = {
+            "ok": True,
+            "critical": 0,
+            "high": 10,
+            "moderate": 7,
+            "low": 0,
+            "reported": reported,
+        }
+        self.assertEqual(mod.audit_band(summary), "yellow")
+        self.assertEqual(
+            mod.format_npm_summary(summary),
+            "PASS, 0 critical, 3 high, 7 moderate, 0 low: "
+            "braces@3.0.3 GHSA-vfj7-8cjw-p6xm, "
+            "sharp@0.35.4 GHSA-wq5f-xc86-pv6w, "
+            "source-map-js@1.2.1 GHSA-68fv-2mgg-jv7q",
+        )
+
     def test_deps_metric_reads_npm_audit_summary(self) -> None:
         mod = _load("write_quality_pr_report", "scripts/ci/write_quality_pr_report.py")
         with tempfile.TemporaryDirectory() as tmp:
