@@ -1137,6 +1137,152 @@ class KpiChartTests(unittest.TestCase):
         centroid = sum(caption) / len(caption)
         self.assertGreater(abs(centroid - fifty), 80)
 
+    def _write_audit(
+        self, root: Path, summary: dict, findings: list | None = None
+    ) -> None:
+        directory = root / "reports" / "quality"
+        directory.mkdir(parents=True, exist_ok=True)
+        (directory / "npm-audit-summary.json").write_text(
+            json.dumps(summary), encoding="utf-8"
+        )
+        if findings is not None:
+            (directory / "deps-findings.json").write_text(
+                json.dumps({"findings": findings}), encoding="utf-8"
+            )
+
+    def test_dependency_audit_chip_uses_severity_color_and_is_not_a_bar(self) -> None:
+        tmp = self._workspace()
+        _fixture_root(tmp)
+        _coverage(tmp / "coverage.json", 80.0, 800, 1000)
+        _jscpd(tmp, 0.0)
+        self._write_audit(
+            tmp,
+            {
+                "ok": True,
+                "critical": 0,
+                "high": 3,
+                "moderate": 0,
+                "low": 0,
+                "reported": [
+                    {
+                        "package": "braces",
+                        "affectedPackage": "braces",
+                        "version": "3.0.3",
+                        "id": "GHSA-vfj7-8cjw-p6xm",
+                        "severity": "high",
+                    },
+                    {
+                        "package": "sharp",
+                        "affectedPackage": "sharp",
+                        "severity": "high",
+                    },
+                    {
+                        "package": "source-map-js",
+                        "affectedPackage": "source-map-js",
+                        "severity": "high",
+                    },
+                ],
+            },
+        )
+        section, snapshot = self.charts.generate(
+            self._outcomes(),
+            coverage_json=tmp / "coverage.json",
+            floor=68.0,
+            root=tmp,
+            out_dir=tmp / "charts",
+        )
+        path = tmp / "charts" / "status.png"
+        series = _png_series(path)
+        row = next(
+            item for item in series["gates"] if item["title"] == "Dependency audit"
+        )
+        self.assertEqual(row["kind"], "chip")
+        self.assertEqual(row["paint"], "yellow")
+        self.assertEqual(row["status"], "PASS")
+        self.assertNotIn("drawn", row)
+        self.assertNotIn("measured", row)
+        self.assertIn("| Dependency audit | chip · yellow · **PASS** |", section)
+        self.assertIn(
+            "braces@3.0.3 GHSA-vfj7-8cjw-p6xm, sharp, source-map-js",
+            snapshot["deps"]["reported"],
+        )
+        yellow = _solid_boxes(path, YELLOW_RGB, tol=25)
+        blue = _solid_boxes(path, CHIP_PASS_RGB)
+        self.assertGreaterEqual(len(yellow), 1)
+        self.assertGreaterEqual(len(blue), 1)
+        pill = blue[0]
+        for band in yellow:
+            self.assertAlmostEqual(band[0], pill[0], delta=2)
+            for other in blue:
+                separated = band[3] < other[2] or other[3] < band[2]
+                self.assertTrue(separated)
+
+        self._write_audit(
+            tmp,
+            {
+                "ok": True,
+                "critical": 0,
+                "high": 0,
+                "moderate": 0,
+                "low": 2,
+                "reported": [{"package": "tiny", "severity": "low"}],
+            },
+        )
+        section, _snapshot = self.charts.generate(
+            self._outcomes(),
+            coverage_json=tmp / "coverage.json",
+            floor=68.0,
+            root=tmp,
+            out_dir=tmp / "green-audit",
+        )
+        green = next(
+            item
+            for item in _png_series(tmp / "green-audit" / "status.png")["gates"]
+            if item["title"] == "Dependency audit"
+        )
+        self.assertEqual(green["kind"], "chip")
+        self.assertEqual(green["paint"], "green")
+        self.assertEqual(green["status"], "PASS")
+        self.assertNotIn("drawn", green)
+        self.assertIn("| Dependency audit | chip · green · **PASS** |", section)
+        self.assertIn("0 high", _snapshot["deps"]["reported"])
+
+        self._write_audit(
+            tmp,
+            {
+                "ok": False,
+                "critical": 2,
+                "high": 0,
+                "moderate": 0,
+                "low": 0,
+                "reported": [],
+            },
+            [
+                {"package": "left-pad", "id": "GHSA-mwp4-54f8-5fhr"},
+                {"package": "braces", "id": "GHSA-vfj7-8cjw-p6xm", "version": "3.0.3"},
+            ],
+        )
+        section, snapshot = self.charts.generate(
+            self._outcomes(deps="failure"),
+            coverage_json=tmp / "coverage.json",
+            floor=68.0,
+            root=tmp,
+            out_dir=tmp / "red-audit",
+        )
+        failed = next(
+            item
+            for item in _png_series(tmp / "red-audit" / "status.png")["gates"]
+            if item["title"] == "Dependency audit"
+        )
+        self.assertEqual(failed["kind"], "chip")
+        self.assertEqual(failed["paint"], "red")
+        self.assertEqual(failed["status"], "FAIL")
+        self.assertNotIn("drawn", failed)
+        self.assertIn("| Dependency audit | chip · red · **FAIL** |", section)
+        self.assertIn("left-pad GHSA-mwp4-54f8-5fhr", snapshot["deps"]["reported"])
+        self.assertIn("braces", snapshot["deps"]["reported"])
+        self.assertIn("GHSA-vfj7-8cjw-p6xm", snapshot["deps"]["reported"])
+
     def test_upsert_replaces_previous_chart_block(self) -> None:
         once = self.charts.upsert_section("## Software metrics\n", "first")
         twice = self.charts.upsert_section(once, "second")

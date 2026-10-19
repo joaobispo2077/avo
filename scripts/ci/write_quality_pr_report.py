@@ -36,7 +36,7 @@ GATE_POLICY = {
     "format": "Ruff format --check + Prettier --check",
     "coverage": "pytest-cov fail-under on `src/avo`",
     "complexity": "xenon max-absolute **B** · Ruff C901 ≤ 31",
-    "deps": "pip-audit on dev + MCP; unwaived Python advisories and npm critical block (`deps-audit-allowlist.json`); npm high/moderate/low reported",
+    "deps": "pip-audit on dev + MCP; unwaived Python advisories and npm critical block (`deps-audit-allowlist.json`); high or moderate is a yellow PASS, low-only or clean is a green PASS; the metric names each high package",
     "deadcode": "vulture confidence ≥ 60 (`deadcode-allowlist.json`)",
     "duplication": "jscpd on `src/avo`",
     "architecture": "import-linter (`.importlinter`)",
@@ -131,29 +131,90 @@ def deadcode_allowlisted(root: Path = ROOT) -> int | None:
     return _json_count(root / "scripts/ci/deadcode-allowlist.json", "items")
 
 
-def npm_audit_reported(root: Path = ROOT) -> str | None:
-    """Sticky metric from the npm audit summary written by check_npm_audit.py."""
+def load_npm_summary(root: Path = ROOT) -> dict | None:
     path = root / "reports" / "quality" / "npm-audit-summary.json"
     if not path.is_file():
         return None
-    payload = json.loads(path.read_text(encoding="utf-8"))
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return None
+    return payload if isinstance(payload, dict) else None
+
+
+def audit_band(payload: dict | None) -> str:
+    """Worst unwaived npm severity. Critical fails red. High or moderate passes yellow."""
+    if not isinstance(payload, dict):
+        return "red"
+    if (
+        payload.get("critical") is None
+        or payload.get("high") is None
+        or not payload.get("ok")
+    ):
+        return "red"
+    moderate = int(payload.get("moderate") or 0) if "moderate" in payload else 0
+    if int(payload.get("high") or 0) > 0 or moderate > 0:
+        return "yellow"
+    return "green"
+
+
+def _high_label(hit: dict) -> str:
+    """One high package. Version and GHSA stay on the advisory package."""
+    affected = str(hit.get("affectedPackage") or hit.get("package") or "").strip()
+    root = str(hit.get("package") or "").strip()
+    version = str(hit.get("version") or "").strip()
+    advisory = hit.get("id")
+    advisory_id = advisory.strip() if isinstance(advisory, str) else ""
+    if advisory_id and root and affected and root != affected:
+        root_name = f"{root}@{version}" if version else root
+        return f"{affected} via {root_name} {advisory_id}"
+    name = affected or root
+    if version and name and (not root or root == name):
+        name = f"{name}@{version}"
+    if advisory_id:
+        return f"{name} {advisory_id}".strip()
+    return name
+
+
+def high_package_names(reported: object) -> list[str]:
+    if not isinstance(reported, list):
+        return []
+    names: list[str] = []
+    seen: set[str] = set()
+    for item in reported:
+        if not isinstance(item, dict) or item.get("severity") != "high":
+            continue
+        label = _high_label(item)
+        if not label or label in seen:
+            continue
+        seen.add(label)
+        names.append(label)
+    return names
+
+
+def format_npm_summary(payload: dict | None) -> str | None:
+    """Sticky metric. High packages are named. Moderate and low counts stay visible."""
     if not isinstance(payload, dict):
         return None
-    label = "PASS" if payload.get("ok") else "FAIL"
-    if (
-        payload.get("error")
-        or payload.get("critical") is None
-        or payload.get("high") is None
-    ):
+    if payload.get("critical") is None or payload.get("high") is None:
         return (
             f"FAIL, counts unknown: {payload.get('error') or 'npm audit not completed'}"
         )
+    label = "PASS" if payload.get("ok") else "FAIL"
     critical = int(payload.get("critical") or 0)
     high = int(payload.get("high") or 0)
-    result = f"{label}, {critical} critical, {high} high reported"
+    result = f"{label}, {critical} critical, {high} high"
     if "moderate" in payload and "low" in payload:
-        result += f", {payload['moderate']} moderate, {payload['low']} low reported"
+        result += f", {int(payload['moderate'])} moderate, {int(payload['low'])} low"
+    names = high_package_names(payload.get("reported"))
+    if names:
+        result += ": " + ", ".join(names)
     return result
+
+
+def npm_audit_reported(root: Path = ROOT) -> str | None:
+    """Sticky metric from the npm audit summary written by check_npm_audit.py."""
+    return format_npm_summary(load_npm_summary(root))
 
 
 def npm_exception_count(root: Path = ROOT) -> int:
@@ -226,11 +287,17 @@ def deps_cell(
             if isinstance(payload, dict) and payload.get("error"):
                 diagnostic = str(payload["error"])
         findings = load_deps_findings(path)
+        headline = format_npm_summary(load_npm_summary(root))
+        if headline and headline.startswith("FAIL, counts unknown"):
+            headline = None
         if findings:
             details = "; ".join(format_deps_finding(item) for item in findings)
-            return f"{diagnostic}; {details}" if diagnostic else details
+            parts = [part for part in (diagnostic, headline, details) if part]
+            return "; ".join(parts)
         if diagnostic:
             return diagnostic
+        if headline:
+            return headline
         return "dependency audit failed; no finding evidence available"
     reported = npm_audit_reported(root)
     if reported:

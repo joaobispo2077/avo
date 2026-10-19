@@ -114,8 +114,11 @@ def duplication_percent(root: Path) -> float | None:
     return float(raw)
 
 
-def _chip_row(gate: dict) -> dict:
-    return {"title": gate["title"], "status": gate["status"], "kind": "chip"}
+def _chip_row(gate: dict, *, paint: str | None = None) -> dict:
+    row = {"title": gate["title"], "status": gate["status"], "kind": "chip"}
+    if paint in {"red", "yellow", "green"}:
+        row["paint"] = paint
+    return row
 
 
 def _bar_row(
@@ -142,6 +145,7 @@ def status_chart_series(snapshot: dict) -> dict:
     coverage = snapshot["coverage"]
     duplication = snapshot["duplication"]
     rows = []
+    deps_paint = (snapshot.get("deps") or {}).get("paint")
     for gate in snapshot["gates"]:
         key = gate["key"]
         if key == "coverage" and coverage["measured"] is not None:
@@ -169,6 +173,9 @@ def status_chart_series(snapshot: dict) -> dict:
                     goodness=goodness,
                 )
             )
+        elif key == "deps":
+            # Severity colors the chip. It is never a 0 to 100 score bar.
+            rows.append(_chip_row(gate, paint=deps_paint))
         else:
             rows.append(_chip_row(gate))
     return {
@@ -181,6 +188,9 @@ def status_chart_series(snapshot: dict) -> dict:
 
 def status_chart_cell(row: dict) -> str:
     if row.get("kind") != "bar":
+        paint = row.get("paint")
+        if paint in {"red", "yellow", "green"}:
+            return f"chip · {paint}"
         return "chip"
     drawn = float(row["drawn"])
     line = float(row["line"])
@@ -252,16 +262,19 @@ def build_snapshot(
                 "deadcode", coverage_json=coverage_json, floor=floor, root=root
             ),
         ),
-        "deps": _count_block(
-            report.npm_exception_count(root),
-            report.gate_metric(
-                "deps",
-                coverage_json=coverage_json,
-                floor=floor,
-                root=root,
-                outcome=outcomes.get("deps", ""),
+        "deps": {
+            **_count_block(
+                report.npm_exception_count(root),
+                report.gate_metric(
+                    "deps",
+                    coverage_json=coverage_json,
+                    floor=floor,
+                    root=root,
+                    outcome=outcomes.get("deps", ""),
+                ),
             ),
-        ),
+            "paint": _dependency_paint(root, outcomes.get("deps", "")),
+        },
         "duplication": {
             "ceiling": report.duplication_ceiling(root),
             "percent": duplication_percent(root),
@@ -304,8 +317,24 @@ def _figure(title: str, title_color: str):
     return fig, ax
 
 
-def _chip_color(status: str) -> str:
-    """Status pills. Yellow and green are reserved for score bars."""
+def _dependency_paint(root: Path, outcome: str) -> str | None:
+    """Yellow on a high or moderate PASS. Green when only low or clean. Red on critical FAIL."""
+    if outcome.strip().lower() not in {"success", "failure"}:
+        return None
+    payload = _report().load_npm_summary(root)
+    if payload is None:
+        return None
+    return _report().audit_band(payload)
+
+
+def _chip_color(status: str, paint: str | None = None) -> str:
+    """Status pills. Dependency audit uses the severity band instead of a blue PASS."""
+    if paint == "yellow":
+        return YELLOW_HEX
+    if paint == "green":
+        return PASS_HEX
+    if paint == "red":
+        return FAIL_HEX
     if status == "PASS":
         return CHIP_PASS_HEX
     if status in {"FAIL", "CANCELLED"}:
@@ -396,7 +425,8 @@ def _draw_score_bar(ax, y: float, row: dict) -> None:
 def _draw_chip(ax, y: float, row: dict, transform, width: float) -> None:
     from matplotlib.patches import Rectangle
 
-    paint = _chip_color(str(row["status"]))
+    paint = _chip_color(str(row["status"]), row.get("paint"))
+    ink = "#182230" if row.get("paint") == "yellow" else "white"
     ax.add_patch(
         Rectangle(
             (CHIP_GAP_POINTS, y - SCORE_BAR_HEIGHT / 2),
@@ -419,7 +449,7 @@ def _draw_chip(ax, y: float, row: dict, transform, width: float) -> None:
         ha="center",
         fontsize=CHIP_FONT_SIZE,
         fontweight="bold",
-        color="white",
+        color=ink,
         clip_on=False,
         zorder=3,
     )
@@ -719,7 +749,9 @@ def build_chart_markdown(snapshot: dict, rendered: dict[str, dict]) -> str:
             "Coverage bar is the measured percent. Duplication is inverted: "
             "0% draws at 100 and the line is 100 minus the ceiling. "
             "Color is slack against that line. Yellow still passes. "
-            "Chips sit off that axis in one shared pill."
+            "Chips sit off that axis in one shared pill. "
+            "Dependency audit stays a chip: critical is red, high or moderate is yellow, "
+            "and low-only or clean is green."
         ),
         "",
         "### Coverage",
