@@ -8,7 +8,15 @@ import sys
 from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 
-PUBLIC_VERBS = ("transcribe", "render", "shorts", "cli", "mcp")
+PUBLIC_VERBS = (
+    "transcribe",
+    "render",
+    "shorts",
+    "cli",
+    "mcp",
+    "direction",
+    "briefstart",
+)
 
 # One table: verb → existing ``python -m`` module. Clone entrypoints stay intact.
 _MODULES: dict[str, str] = {
@@ -41,6 +49,8 @@ def main(argv: list[str] | None = None) -> int | None:
         return 0
     if verb == "runtime":
         return _runtime(rest)
+    if verb in {"direction", "briefstart"}:
+        return _invoke("cli", [verb, *rest])
     if verb not in _MODULES:
         _print_unknown()
         return 2

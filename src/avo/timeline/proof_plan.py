@@ -552,7 +552,9 @@ class ProofPlanCompiler:
                         actual=tool_readiness.get(tool),
                     )
                 )
-        learning_loader = getattr(self.workspace, "finalized_provider_learning", list)
+        from .workspace import TimelineWorkspace
+
+        learning = TimelineWorkspace.provider_learning_diagnostic(self.workspace)
         report = {
             "schemaVersion": "1.0.0",
             "proofPlanId": plan.get("proofPlanId"),
@@ -560,6 +562,9 @@ class ProofPlanCompiler:
             "status": "blocked" if blockers else "pass",
             "blockers": blockers,
             "providerLearning": {
+                "status": learning["status"],
+                "warnings": learning["warnings"],
+                "loadedFinalSnapshots": learning["loadedFinalSnapshots"],
                 "snapshots": [
                     {
                         "snapshotId": item["snapshotId"],
@@ -567,7 +572,7 @@ class ProofPlanCompiler:
                         "preventionRules": deepcopy(item.get("preventionRules") or []),
                         "taxonomy": deepcopy(item.get("taxonomy") or []),
                     }
-                    for item in learning_loader()
+                    for item in learning["snapshots"]
                 ],
                 "binding": False,
                 "inheritedApprovals": False,

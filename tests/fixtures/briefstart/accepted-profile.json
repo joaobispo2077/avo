@@ -1,0 +1,28 @@
+{
+  "schemaVersion": "1.0.0",
+  "provider": "neutral-channel",
+  "profileRef": {
+    "id": "editorial-r0001",
+    "documentHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "path": "profiles/editorial/r0001.json"
+  },
+  "acceptanceRef": {
+    "id": "creator-decision-1",
+    "documentHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "path": "decisions/creator-decision-1.json"
+  },
+  "summary": "The presenter remains central. Visual examples clarify comparisons and sound supports speech.",
+  "statements": [
+    {
+      "statementId": "natural-cadence",
+      "lineageId": "natural-cadence",
+      "dimension": "pacing",
+      "text": "Preserve natural conversational cadence and complete words.",
+      "basis": "creator-instruction",
+      "kind": "artistic-preference",
+      "applicability": ["analysis-review"],
+      "exclusions": ["Do not copy timings or restoration settings from the reference video."]
+    }
+  ],
+  "fixtureNote": "Neutral accepted-source test fixture. Acceptance is an explicit separate reference, not a profile boolean or production approval."
+}

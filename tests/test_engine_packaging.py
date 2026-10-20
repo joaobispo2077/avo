@@ -26,6 +26,20 @@ def test_spec_bundles_config_schemas_templates() -> None:
     assert 'collect_all("avo")' in SPEC or '_collect("avo")' in SPEC
 
 
+def test_spec_bundles_direction_resources_and_new_schema_contracts() -> None:
+    assert 'collect_data_files("avo.resources.directions")' in SPEC
+    assert '"avo.resources.directions"' in SPEC
+    assert '(str(REPO_ROOT / "schemas"), "schemas")' in SPEC
+    for name in ("avo.direction.schema.json", "avo.briefstart.schema.json"):
+        assert (ROOT / "schemas" / name).is_file()
+
+
+def test_python_distribution_declares_runtime_schema_data() -> None:
+    configuration = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
+    assert "[tool.setuptools.data-files]" in configuration
+    assert '"share/avo/schemas" = ["schemas/*.json"]' in configuration
+
+
 def test_spec_cpu_only_ctranslate2() -> None:
     assert '_collect("ctranslate2")' in SPEC or 'collect_all("ctranslate2")' in SPEC
     assert (

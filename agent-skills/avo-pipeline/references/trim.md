@@ -48,3 +48,7 @@ change belongs to `/avo.sound`.
 Map `from`/`to` notes to the canonical source units before using
 `scope.segmentIds`. Limit heavy analysis to that scope and report coverage; the
 structural every-join audit does not imply acoustic inspection of the whole video.
+
+## Selected artistic guidance
+
+Before style-dependent authoring, run the shared native pipeline status for this project (checkout: `python -m avo.cli pipeline status --project <project> --json`; installed: `avo cli pipeline status --project <project> --json`). Read `briefing.stageContexts.cmap` and its exact selected brief, treatment, constraints, exclusions and current canonical-head identities. Treat this context as offered guidance, never proof that a choice was applied, an approval, or permission to change protected content. Current creator instructions and integrity/accessibility/rights rules take precedence. A bypassed or unselected brief adds no creative gate. Do not discover provider history or select a latest profile independently. See [briefstart](briefstart.md).

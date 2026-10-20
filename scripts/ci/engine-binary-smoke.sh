@@ -85,12 +85,45 @@ fi
 echo "smoke: avo --help"
 "$LAUNCHER" --help >/dev/null
 echo "smoke: public verb --help"
-for verb in transcribe render shorts cli mcp; do
+for verb in transcribe render shorts cli mcp direction briefstart; do
   echo "smoke: avo $verb --help"
   "$LAUNCHER" "$verb" --help >/dev/null
 done
 echo "smoke: avo runtime --help"
 "$LAUNCHER" runtime --help >/dev/null
+
+# Exercise the actual onedir resource/schema lookup with no provider/media.
+echo "smoke: versioned artistic directions (metadata only)"
+CATALOG_JSON="$UNPACK/direction-catalog.json"
+(
+  cd "$UNPACK"
+  AVO_ROOT= "$LAUNCHER" direction catalog --json
+) >"$CATALOG_JSON"
+"$PYTHON" -c "
+import json, sys
+payload = json.load(open(sys.argv[1], encoding='utf-8'))
+assert {item['id'] for item in payload['builtins']} == {
+    'analysis-review', 'step-by-step', 'narrative-conversation', 'focused-short'
+}, payload
+print('direction catalog and bundled schemas ok')
+" "$CATALOG_JSON"
+BRIEF_PROJECT="$UNPACK/creative-new-video/avo.project.json"
+"$PYTHON" -c "
+import json, sys
+from pathlib import Path
+project = Path(sys.argv[1]).resolve()
+project.parent.mkdir(parents=True, exist_ok=True)
+project.write_text(json.dumps({'provider':'neutral', 'videoId':'engine-smoke', 'rawDir':str(project.parent)}), encoding='utf-8')
+" "$BRIEF_PROJECT"
+BRIEF_JSON="$UNPACK/briefstart-show.json"
+AVO_ROOT= "$LAUNCHER" briefstart show --project "$BRIEF_PROJECT" --json >"$BRIEF_JSON"
+"$PYTHON" -c "
+import json, sys
+from pathlib import Path
+assert json.load(open(sys.argv[1], encoding='utf-8'))['status'] == 'bypassed'
+assert not (Path(sys.argv[2]).parent / 'edit' / 'briefstart').exists()
+print('briefstart raw/no-reference read-only smoke ok')
+" "$BRIEF_JSON" "$BRIEF_PROJECT"
 
 FIXTURE="$ROOT/tests/fixtures/engine/stub.wav"
 if [[ ! -f "$FIXTURE" ]]; then

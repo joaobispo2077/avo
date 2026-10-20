@@ -1,0 +1,13 @@
+{
+  "schemaVersion": "1.0.0",
+  "idea": "Explain whether a longer game necessarily offers better value.",
+  "promise": "Compare time, price and enjoyment without reducing enjoyment to one number.",
+  "audience": "Players deciding what fits their available time.",
+  "viewerIntent": "hear analysis",
+  "primaryFormat": "analysis-review",
+  "hybridFormats": ["documentary-evidence"],
+  "sectionNeeds": ["Natural introduction", "Readable comparison", "Qualified conclusion"],
+  "constraints": ["Preserve complete words", "Keep speech above supporting sound"],
+  "sourceLimitations": ["One presenter recording and a few documentary references"],
+  "assumptions": []
+}

@@ -12,9 +12,11 @@ capabilities from MCP ``Context`` filter ``inputRequests`` (task-005).
 
 from __future__ import annotations
 
+import hashlib
 import inspect
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 from avo.mcp import mrtr
@@ -36,6 +38,8 @@ CORE_CLI_GROUPS: tuple[str, ...] = (
 
 # Remaining groups bridged in task-008.
 REMAINING_CLI_GROUPS: tuple[str, ...] = (
+    "direction",
+    "briefstart",
     "bmap",
     "cmap",
     "review",
@@ -117,6 +121,11 @@ def _core_bridge_defs() -> list[BridgeToolDef]:
             _MUTATE_WARN
             + "Initialize / run pipeline for a project (CLI: avo pipeline run).",
             destructive=True,
+            extra_params=(
+                ParamSpec("direction", str | None, default=None),
+                ParamSpec("brief_context", str | None, default=None),
+                ParamSpec("direction_reference", list[str] | None, default=None),
+            ),
         ),
         _tool(
             "avo_pipeline_status",
@@ -619,9 +628,72 @@ def _remaining_bridge_defs() -> list[BridgeToolDef]:
     ]
 
 
+def _creative_params(group, operation):
+    params = [ParamSpec("as_json", bool, default=True)]
+    params.append(
+        ParamSpec("project", str, required=True)
+        if group == "briefstart"
+        else ParamSpec("provider", str | None, default=None)
+    )
+    if operation in {"propose", "decide"}:
+        params.append(ParamSpec("request", str, required=True))
+    elif operation == "show":
+        params.append(ParamSpec("ref", str, required=group == "direction"))
+        if group == "direction":
+            params.append(ParamSpec("check_sources", bool, default=False))
+    elif operation == "prepare":
+        params.extend(_creative_prepare_params(group))
+    return tuple(params)
+
+
+def _creative_prepare_params(group):
+    if group == "direction":
+        return (
+            ParamSpec("profile_id", str, required=True),
+            ParamSpec("entry", list[str] | None, default=None),
+            ParamSpec("refresh_from", str | None, default=None),
+        )
+    return (
+        ParamSpec("direction", str | None, default=None),
+        ParamSpec("context", str | None, default=None),
+        ParamSpec("reference", list[str] | None, default=None),
+    )
+
+
+def _creative_bridge_defs():
+    definitions = []
+    for group in ("direction", "briefstart"):
+        operations = (
+            ("catalog", "prepare", "propose", "decide", "show")
+            if group == "direction"
+            else ("prepare", "propose", "decide", "show")
+        )
+        for operation in operations:
+            action = (
+                "Writes reviewable authorial documents. "
+                if operation in {"prepare", "propose"}
+                else ""
+            )
+            if operation == "decide":
+                action = "Records an exact human decision; confirmation binds request content. "
+            definitions.append(
+                _tool(
+                    f"avo_{group}_{operation}",
+                    group,
+                    operation,
+                    action
+                    + f"Delegate {group} {operation} to the shared native CLI; no media or model job.",
+                    destructive=operation == "decide",
+                    include_project=False,
+                    extra_params=_creative_params(group, operation),
+                )
+            )
+    return definitions
+
+
 def _all_bridge_defs() -> list[BridgeToolDef]:
     """Core (task-007) + remaining (task-008) bridge defs."""
-    return _core_bridge_defs() + _remaining_bridge_defs()
+    return _core_bridge_defs() + _remaining_bridge_defs() + _creative_bridge_defs()
 
 
 def core_bridge_defs() -> list[BridgeToolDef]:
@@ -631,7 +703,7 @@ def core_bridge_defs() -> list[BridgeToolDef]:
 
 def remaining_bridge_defs() -> list[BridgeToolDef]:
     """Return declarative defs for remaining CLI groups (task-008)."""
-    return list(_remaining_bridge_defs())
+    return _remaining_bridge_defs() + _creative_bridge_defs()
 
 
 def all_bridge_defs() -> list[BridgeToolDef]:
@@ -646,7 +718,7 @@ def core_cli_tool_specs() -> list[ToolSpec]:
 
 def remaining_cli_tool_specs() -> list[ToolSpec]:
     """ToolSpec catalog entries for remaining bridged CLI tools (task-008)."""
-    return [defn.spec for defn in _remaining_bridge_defs()]
+    return [defn.spec for defn in remaining_bridge_defs()]
 
 
 def all_cli_tool_specs() -> list[ToolSpec]:
@@ -680,10 +752,14 @@ def _run_destructive_gated(defn: BridgeToolDef, kwargs: dict[str, Any]) -> Any:
     request_state, input_responses = mrtr.extract_mrtr_fields(kwargs, ctx=ctx)
     bridge_args = mrtr.bridge_kwargs_from_tool_kwargs(kwargs)
     client_capabilities = mrtr.extract_client_capabilities(ctx)
+    try:
+        gate_args = _decision_gate_args(defn, bridge_args)
+    except (OSError, ValueError) as exc:
+        return mrtr.gate_error_envelope(str(exc))
 
     decision = mrtr.evaluate_destructive_gate(
         tool=defn.spec.name,
-        args=bridge_args,
+        args=gate_args,
         request_state=request_state,
         input_responses=input_responses,
         client_capabilities=client_capabilities,
@@ -697,7 +773,29 @@ def _run_destructive_gated(defn: BridgeToolDef, kwargs: dict[str, Any]) -> Any:
         return mrtr.gate_error_envelope(
             decision.error_message or "destructive tool confirmation rejected"
         )
+    try:
+        if _decision_gate_args(defn, bridge_args) != gate_args:
+            return mrtr.gate_error_envelope(
+                "Decision document changed during confirmation"
+            )
+    except (OSError, ValueError) as exc:
+        return mrtr.gate_error_envelope(str(exc))
+    if "_decisionDocumentSha256" in gate_args:
+        bridge_args = {
+            **bridge_args,
+            "request_sha256": gate_args["_decisionDocumentSha256"],
+        }
     return run_bridged(defn.cli_prefix, bridge_args).to_dict()
+
+
+def _decision_gate_args(defn, bridge_args):
+    if defn.cli_prefix not in {("direction", "decide"), ("briefstart", "decide")}:
+        return bridge_args
+    with Path(bridge_args["request"]).expanduser().open("rb") as stream:
+        raw = stream.read(2 * 1024 * 1024 + 1)
+    if len(raw) > 2 * 1024 * 1024:
+        raise ValueError("Decision request exceeds 2 MiB")
+    return {**bridge_args, "_decisionDocumentSha256": hashlib.sha256(raw).hexdigest()}
 
 
 def _make_handler(defn: BridgeToolDef) -> Callable[..., Any]:

@@ -607,4 +607,8 @@ async function main() {
   finishInstall(opts, failed);
 }
 
-main().catch((err) => die(err.message || String(err)));
+if (require.main === module) {
+  main().catch((err) => die(err.message || String(err)));
+}
+
+module.exports = { installSkillsFallback };

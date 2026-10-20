@@ -129,8 +129,13 @@ def _cleanup_fields(
     status: str,
     freed_bytes: int | None,
     space: dict[str, Any],
+    preservation_receipt: dict[str, Any] | None = None,
 ) -> tuple[list[Any], int | None]:
     if status != "final":
+        return [], None
+    if preservation_receipt is not None:
+        if freed_bytes is not None:
+            raise ValueError("preservation closure has no freed-bytes measurement")
         return [], None
     receipt = _actual_cleanup(raw_dir, master_basename)
     if freed_bytes is not None and freed_bytes != receipt["freedBytes"]:
@@ -155,43 +160,40 @@ def build_wrap_payload(
     freed_bytes: int | None = None,
 ) -> dict[str, Any]:
     """Build wrap JSON payload from inventory report and session metadata."""
+    return _build_wrap_payload(
+        inventory,
+        session_id=session_id,
+        provider=provider,
+        master_basename=master_basename,
+        summary=summary,
+        status=status,
+        title=title,
+        learning_note=learning_note,
+        ai_memory=ai_memory,
+        freed_bytes=freed_bytes,
+    )
+
+
+def _build_wrap_payload(
+    inventory: InventoryReport | dict[str, Any],
+    *,
+    session_id: str,
+    provider: str,
+    master_basename: str,
+    summary: str,
+    status: str,
+    title: str = "",
+    learning_note: str = "",
+    ai_memory: str = "skipped",
+    freed_bytes: int | None = None,
+    preservation_receipt: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     inv = _inventory_dict(inventory)
     space = dict(inv.get("space") or {})
-    files = inv.get("files") or {}
-
-    scheduled = list(files.get("scheduledForDeletion") or [])
-    preserved = list(files.get("preserved") or [])
-    added_then_removed = list(files.get("addedThenRemoved") or [])
-    modified = list(files.get("modified") or [])
-    degraded = bool(files.get("degradedMode", False))
-
-    sample_limit = 50
-    if load_stats_config is not None:
-        sample_limit = load_stats_config().deleted_path_sample_limit
-
-    scheduled_sample, scheduled_total = truncate_path_list(
-        scheduled, max_items=sample_limit
-    )
-    added_sample, _added_total = truncate_path_list(
-        added_then_removed, max_items=sample_limit
-    )
-    modified_sample, _modified_total = truncate_path_list(
-        modified, max_items=sample_limit
-    )
-
     raw_dir = Path(str(inv.get("rawDir", ".")))
     deleted_on_cleanup, freed_bytes = _cleanup_fields(
-        raw_dir, master_basename, status, freed_bytes, space
+        raw_dir, master_basename, status, freed_bytes, space, preservation_receipt
     )
-    deleted_cleanup_sample, deleted_cleanup_total = truncate_path_list(
-        deleted_on_cleanup, max_items=sample_limit
-    )
-
-    sample_source = deleted_cleanup_sample if status == "final" else scheduled_sample
-    deleted_count = scheduled_total
-    if status == "final":
-        deleted_count = deleted_cleanup_total
-
     editlog = "EDITLOG.md" if (raw_dir / "EDITLOG.md").is_file() else None
     scratch_meta, _scratch_report = _scratch_meta_for_session(session_id)
 
@@ -211,16 +213,7 @@ def build_wrap_payload(
             "preservedBytes": int(space.get("preservedBytes", 0)),
             "freedBytes": freed_bytes if status == "final" else None,
         },
-        "files": {
-            "scheduledForDeletion": scheduled_sample,
-            "preserved": preserved,
-            "addedThenRemoved": added_sample,
-            "modified": modified_sample,
-            "deletedOnCleanup": deleted_cleanup_sample if status == "final" else [],
-            "deletedCount": deleted_count,
-            "deletedSample": [_entry_path(entry) for entry in sample_source],
-            "degradedMode": degraded,
-        },
+        "files": _wrap_file_fields(inv, status, deleted_on_cleanup),
         "learning": {
             "aiMemory": ai_memory,
             "note": learning_note,
@@ -232,6 +225,25 @@ def build_wrap_payload(
     if scratch_meta:
         payload["files"]["scratchMeta"] = scratch_meta
         payload["links"]["scratchMeta"] = scratch_meta
+    if preservation_receipt is not None:
+        from avo.project_inventory import PRESERVATION_RECEIPT
+
+        payload["closure"] = {
+            "mode": "preservation",
+            "cleanupExecuted": False,
+            "receiptPath": PRESERVATION_RECEIPT,
+            "receiptSha256": preservation_receipt["receiptSha256"],
+            "masterSha256": preservation_receipt["master"]["sha256"],
+            "bundleSha256": preservation_receipt["reconstructionBundle"][
+                "bundleSha256"
+            ],
+        }
+    elif status == "final":
+        payload["closure"] = {
+            "mode": "cleanup",
+            "cleanupExecuted": True,
+            "receiptPath": "edit/cleanup/cleanup-result.json",
+        }
     try:
         from avo.models import resolve_active_models, resolve_model_sources
 
@@ -241,6 +253,79 @@ def build_wrap_payload(
     except Exception:
         pass
     return payload
+
+
+def _wrap_file_fields(
+    inventory: dict[str, Any], status: str, deleted: list[Any]
+) -> dict[str, Any]:
+    files = inventory.get("files") or {}
+    scheduled, scheduled_count = truncate_path_list(
+        list(files.get("scheduledForDeletion") or [])
+    )
+    added, _ = truncate_path_list(list(files.get("addedThenRemoved") or []))
+    modified, _ = truncate_path_list(list(files.get("modified") or []))
+    deleted_sample, deleted_count = truncate_path_list(deleted)
+    sample_source = deleted_sample if status == "final" else scheduled
+    return {
+        "scheduledForDeletion": scheduled,
+        "preserved": list(files.get("preserved") or []),
+        "addedThenRemoved": added,
+        "modified": modified,
+        "deletedOnCleanup": deleted_sample if status == "final" else [],
+        "deletedCount": deleted_count if status == "final" else scheduled_count,
+        "deletedSample": [_entry_path(entry) for entry in sample_source],
+        "degradedMode": bool(files.get("degradedMode", False)),
+    }
+
+
+def finalize_preservation_wrap(
+    raw_dir: Path,
+    *,
+    master_basename: str,
+    session_id: str,
+    provider: str,
+    summary: str,
+    title: str = "",
+    learning_note: str = "",
+    ai_memory: str = "skipped",
+    pre_json_path: Path | None = None,
+) -> tuple[Path, Path]:
+    """Verify retention once and write a final wrap without executing cleanup.
+
+    Only this call's verified in-process result reaches the payload builder.
+    Existing receipts are reverified by the native service, never trusted as a
+    cached pass. Reconstruction and retention evidence retain their own scope;
+    this operation does not confer editorial approval or change pipeline state.
+    """
+    from avo.project_inventory import record_preservation_closure
+
+    raw_dir = _preservation_wrap_root(raw_dir)
+    report, receipt = record_preservation_closure(
+        raw_dir, master_basename, pre_json_path=pre_json_path
+    )
+    payload = _build_wrap_payload(
+        report,
+        session_id=session_id,
+        provider=provider,
+        master_basename=master_basename,
+        summary=summary,
+        status="final",
+        title=title,
+        learning_note=learning_note,
+        ai_memory=ai_memory,
+        preservation_receipt=receipt,
+    )
+    return write_wrap_final(raw_dir, payload)
+
+
+def _preservation_wrap_root(raw_dir: Path) -> Path:
+    from avo.project_inventory import PRESERVATION_RECEIPT, preservation_output_path
+
+    outputs = [
+        preservation_output_path(raw_dir, name)
+        for name in (FINAL_JSON, FINAL_MD, PRESERVATION_RECEIPT)
+    ]
+    return outputs[0].parent
 
 
 def _append_scheduled_for_deletion(
@@ -260,6 +345,11 @@ def _append_scheduled_for_deletion(
     if scheduled_total > len(shown):
         lines.append(f"- … and {scheduled_total - len(shown)} more")
     lines.append("")
+
+
+def _append_preservation_status(lines: list[str], payload: dict[str, Any]) -> None:
+    if (payload.get("closure") or {}).get("mode") == "preservation":
+        lines.append("- **Closure:** verified preservation; cleanup not executed")
 
 
 def render_markdown(payload: dict[str, Any]) -> str:
@@ -285,6 +375,7 @@ def render_markdown(payload: dict[str, Any]) -> str:
     lines.append(f"- **Master:** `{master}`")
     lines.append(f"- **Session:** `{payload.get('sessionId', '')}`")
     lines.append(f"- **Generated:** {payload.get('generatedAt', '')}")
+    _append_preservation_status(lines, payload)
     if files.get("degradedMode"):
         lines.append("- **Inventory mode:** degraded (no pre.json baseline)")
     lines.append("")
@@ -354,6 +445,8 @@ def render_markdown(payload: dict[str, Any]) -> str:
 def _write_sidecar(
     raw_dir: Path, json_name: str, md_name: str, payload: dict[str, Any]
 ) -> tuple[Path, Path]:
+    if (payload.get("closure") or {}).get("mode") == "preservation":
+        _preservation_wrap_root(raw_dir)
     raw_dir = raw_dir.resolve()
     json_path = raw_dir / json_name
     md_path = raw_dir / md_name
@@ -465,6 +558,28 @@ def _cmd_final(args: argparse.Namespace) -> int:
     if args.title:
         title = args.title
 
+    if args.closure_mode == "preservation":
+        if args.freed_bytes is not None:
+            raise ValueError("preservation closure has no freed-bytes measurement")
+        json_path, md_path = finalize_preservation_wrap(
+            raw_dir,
+            master_basename=args.master_basename,
+            session_id=session_id,
+            provider=provider,
+            summary=summary,
+            title=title,
+            learning_note=args.learning_note,
+            ai_memory=args.ai_memory,
+            pre_json_path=args.pre,
+        )
+        if not args.no_export:
+            from avo.learndown_export import export_provider_learndown
+
+            export_provider_learndown(json.loads(json_path.read_text(encoding="utf-8")))
+        print(f"final preservation wrap: {md_path}")
+        print(f"final json: {json_path}")
+        return 0
+
     report = build_inventory_report(
         raw_dir,
         args.master_basename,
@@ -530,6 +645,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_final = sub.add_parser(
         "final", parents=[parent], help="Write final wrap sidecars."
+    )
+    p_final.add_argument(
+        "--closure-mode",
+        choices=("cleanup", "preservation"),
+        default="cleanup",
+        help="Preservation verifies integral edit/ retention without executing cleanup.",
     )
     p_final.add_argument(
         "--freed-bytes",

@@ -75,3 +75,7 @@ tracks, timed animation, candidates, Watch/transcript/QC evidence, and approvals
 Rebase classifies each cue as preserved, shifted, split, removed, ambiguous, or
 unsupported. Only unambiguous shifts auto-apply; ambiguity stops for human
 judgment.
+
+## Selected artistic guidance
+
+Before style-dependent authoring, run the shared native pipeline status for this project (checkout: `python -m avo.cli pipeline status --project <project> --json`; installed: `avo cli pipeline status --project <project> --json`). Read `briefing.stageContexts.motion` and its exact selected brief, treatment, constraints, exclusions and current canonical-head identities. Treat this context as offered guidance, never proof that a choice was applied, an approval, or permission to change protected content. Current creator instructions and integrity/accessibility/rights rules take precedence. A bypassed or unselected brief adds no creative gate. Do not discover provider history or select a latest profile independently. See [briefstart](briefstart.md).

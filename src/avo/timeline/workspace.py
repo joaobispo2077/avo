@@ -27,6 +27,27 @@ class WorkspaceError(RuntimeError):
     pass
 
 
+def _learning_active_reference(index, index_path):
+    if not isinstance(index, dict):
+        raise WorkspaceError(f"provider learning index must be an object: {index_path}")
+    snapshots = index.get("snapshots") or []
+    if not isinstance(snapshots, list) or any(
+        not isinstance(item, dict) for item in snapshots
+    ):
+        raise WorkspaceError(
+            f"provider learning snapshot references are malformed: {index_path}"
+        )
+    active_id = index.get("activeSnapshotId")
+    reference = next(
+        (item for item in snapshots if item.get("snapshotId") == active_id), None
+    )
+    if reference is None or not isinstance(reference.get("path"), str):
+        raise WorkspaceError(
+            f"provider learning index has no active snapshot: {index_path}"
+        )
+    return reference
+
+
 _WSL_MNT_RE = re.compile(r"^/mnt/([a-zA-Z])/(.*)$")
 
 
@@ -162,19 +183,7 @@ class TimelineWorkspace:
             if not index_path.is_file():
                 continue
             index = json.loads(index_path.read_text(encoding="utf-8"))
-            active_id = index.get("activeSnapshotId")
-            reference = next(
-                (
-                    item
-                    for item in index.get("snapshots") or []
-                    if item.get("snapshotId") == active_id
-                ),
-                None,
-            )
-            if reference is None:
-                raise WorkspaceError(
-                    f"provider learning index has no active snapshot: {index_path}"
-                )
+            reference = _learning_active_reference(index, index_path)
             snapshot = json.loads(
                 (index_path.parent / reference["path"]).read_text(encoding="utf-8")
             )
@@ -187,6 +196,29 @@ class TimelineWorkspace:
                 continue
             loaded.append(snapshot)
         return loaded
+
+    def provider_learning_diagnostic(self) -> dict[str, Any]:
+        """Optional historical guidance cannot block current-source validation."""
+        base = {"binding": False, "inheritedApprovals": False}
+        try:
+            snapshots = getattr(self, "finalized_provider_learning", list)()
+        except (OSError, ValueError, RuntimeError, KeyError, TypeError):
+            return {
+                **base,
+                "status": "unavailable",
+                "loadedFinalSnapshots": None,
+                "snapshots": [],
+                "warnings": [
+                    "Optional provider learning is unavailable; coverage is unknown."
+                ],
+            }
+        return {
+            **base,
+            "status": "available",
+            "loadedFinalSnapshots": len(snapshots),
+            "snapshots": snapshots,
+            "warnings": [],
+        }
 
     @classmethod
     def from_project(
@@ -256,9 +288,9 @@ class TimelineWorkspace:
         )
         status = self.status()
         status["providerLearning"] = {
-            "loadedFinalSnapshots": len(self.finalized_provider_learning()),
-            "binding": False,
-            "inheritedApprovals": False,
+            key: value
+            for key, value in self.provider_learning_diagnostic().items()
+            if key != "snapshots"
         }
         return status
 

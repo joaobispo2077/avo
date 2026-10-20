@@ -47,6 +47,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     configure_parser(sub.add_parser("breathing"))
 
+    from avo.direction_cli import configure as configure_direction
+
+    configure_direction(sub)
+
     _trim_parser(sub)
 
     pipeline = sub.add_parser("pipeline")
@@ -54,6 +58,7 @@ def build_parser() -> argparse.ArgumentParser:
     for name in ("run", "status", "verify-commands"):
         item = pipeline_sub.add_parser(name)
         _project_arg(item)
+        _add_pipeline_entry_args(item, name)
     pipeline_resume = pipeline_sub.add_parser("resume")
     _project_arg(pipeline_resume)
     pipeline_resume.add_argument("--actor", required=True)
@@ -65,6 +70,18 @@ def build_parser() -> argparse.ArgumentParser:
     pipeline_stage.add_argument("--payload", type=Path)
     pipeline_stage.add_argument("--actor", default="avo.pipeline")
     pipeline_stage.add_argument("--reason", default="")
+    pipeline_adopt = pipeline_sub.add_parser("adopt-delivery")
+    _project_arg(pipeline_adopt)
+    pipeline_adopt.add_argument("--approval", type=Path, required=True)
+    pipeline_adopt.add_argument("--regression", type=Path)
+    pipeline_adopt.add_argument("--actor", required=True)
+    pipeline_adopt.add_argument("--reason", required=True)
+    human_adopt = pipeline_sub.add_parser("adopt-human-final-delivery")
+    _project_arg(human_adopt)
+    human_adopt.add_argument("--human-final-disposition", type=Path, required=True)
+    human_adopt.add_argument("--actor", required=True)
+    human_adopt.add_argument("--reason", required=True)
+    human_adopt.add_argument("--archive", action="store_true")
 
     timeline = sub.add_parser("timeline")
     timeline_sub = timeline.add_subparsers(dest="timeline_command", required=True)
@@ -216,6 +233,16 @@ def build_parser() -> argparse.ArgumentParser:
     run_review.add_argument("--term", action="append", default=[])
     run_review.add_argument("--name", action="append", default=[])
     run_review.add_argument("--profile", default="draft")
+    run_review.add_argument(
+        "--reuse-transcript",
+        action="store_true",
+        help="require an existing exact transcript; never start ASR",
+    )
+    run_review.add_argument(
+        "--adoption-review",
+        action="store_true",
+        help="verify the union of motion, pre-master and delivery requirements",
+    )
     _watch_policy_args(run_review)
     batch_review = review_sub.add_parser("batch")
     _project_arg(batch_review)
@@ -236,22 +263,21 @@ def build_parser() -> argparse.ArgumentParser:
     decide_review.add_argument("--materialization", type=Path, required=True)
     decide_review.add_argument("--actor", required=True)
     decide_review.add_argument("--reason", required=True)
+    candidate_decision = review_sub.add_parser("decide-candidate")
+    _project_arg(candidate_decision)
+    candidate_decision.add_argument(
+        "--checkpoint", choices=("motion-proof", "pre-master", "deliver"), required=True
+    )
+    candidate_decision.add_argument("--review", type=Path, required=True)
+    candidate_decision.add_argument("--materialization", type=Path, required=True)
+    candidate_decision.add_argument("--actor", required=True)
+    candidate_decision.add_argument("--reason", required=True)
+    candidate_decision.add_argument("--source-approval", type=Path)
+    candidate_decision.add_argument("--regression", type=Path)
+    candidate_decision.add_argument("--defer-snapshot", action="store_true")
+    _add_human_final_decision_parser(review_sub)
 
-    deliver = sub.add_parser("deliver")
-    deliver_sub = deliver.add_subparsers(dest="deliver_command", required=True)
-    prepare_delivery = deliver_sub.add_parser("prepare")
-    _project_arg(prepare_delivery)
-    prepare_delivery.add_argument("--candidate", type=Path)
-    prepare_delivery.add_argument("--materialization", type=Path, required=True)
-    prepare_delivery.add_argument("--master", type=Path, required=True)
-    prepare_delivery.add_argument("--dependency", action="append", default=[])
-    prepare_delivery.add_argument("--model", default="small")
-    validate_delivery = deliver_sub.add_parser("validate")
-    _project_arg(validate_delivery)
-    approve_delivery = deliver_sub.add_parser("approve")
-    _project_arg(approve_delivery)
-    approve_delivery.add_argument("--actor", required=True)
-    approve_delivery.add_argument("--reason", required=True)
+    _add_delivery_subparsers(sub)
 
     migrate = sub.add_parser("migrate-timeline")
     migrate_sub = migrate.add_subparsers(dest="migration_command", required=True)
@@ -331,6 +357,13 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
+def _add_pipeline_entry_args(parser, operation):
+    if operation == "run":
+        parser.add_argument("--direction")
+        parser.add_argument("--brief-context", type=Path)
+        parser.add_argument("--direction-reference", type=Path, action="append")
+
+
 def _add_cleanup_subparsers(cleanup: argparse.ArgumentParser) -> None:
     cleanup_sub = cleanup.add_subparsers(dest="cleanup_command", required=True)
     for operation in ("verify", "bundle", "dry-run", "execute"):
@@ -382,7 +415,11 @@ def _pipeline(args: argparse.Namespace) -> int:
     )
     pipeline = TimelinePipeline(workspace)
     if args.pipeline_command == "run":
+        from avo.direction_cli import prepare_pipeline
+
+        preparation = prepare_pipeline(args)
         result = pipeline.initialize()
+        result["briefingPreparation"] = preparation
     elif args.pipeline_command == "status":
         result = pipeline.status()
     elif args.pipeline_command == "verify-commands":
@@ -392,6 +429,20 @@ def _pipeline(args: argparse.Namespace) -> int:
             actor=args.actor,
             reason=args.reason,
             recovery_event=args.recovery_event,
+        )
+    elif args.pipeline_command == "adopt-delivery":
+        result = pipeline.adopt_delivery(
+            approval_path=args.approval,
+            regression_path=args.regression,
+            actor=args.actor,
+            reason=args.reason,
+        )
+    elif args.pipeline_command == "adopt-human-final-delivery":
+        result = pipeline.adopt_human_final_delivery(
+            human_final_disposition_path=args.human_final_disposition,
+            actor=args.actor,
+            reason=args.reason,
+            archive=args.archive,
         )
     else:
         payload = _load_json(args.payload) if args.payload else {}
@@ -422,6 +473,58 @@ def _timeline(args: argparse.Namespace) -> int:
         raise WorkspaceError(f"unknown timeline operation: {args.timeline_command}")
     _emit(result, as_json=True)
     return 0
+
+
+def _add_delivery_subparsers(sub: argparse._SubParsersAction) -> None:
+    deliver = sub.add_parser("deliver")
+    deliver_sub = deliver.add_subparsers(dest="deliver_command", required=True)
+    prepare_delivery = deliver_sub.add_parser("prepare")
+    _project_arg(prepare_delivery)
+    prepare_delivery.add_argument("--candidate", type=Path)
+    prepare_delivery.add_argument("--materialization", type=Path, required=True)
+    prepare_delivery.add_argument("--master", type=Path, required=True)
+    prepare_delivery.add_argument("--dependency", action="append", default=[])
+    prepare_delivery.add_argument("--model", default="small")
+    _add_existing_adoption_parser(deliver_sub, "adopt", "--review")
+    _add_existing_adoption_parser(
+        deliver_sub, "adopt-human-final", "--human-final-disposition"
+    )
+    validate_delivery = deliver_sub.add_parser("validate")
+    _project_arg(validate_delivery)
+    approve_delivery = deliver_sub.add_parser("approve")
+    _project_arg(approve_delivery)
+    approve_delivery.add_argument("--actor", required=True)
+    approve_delivery.add_argument("--reason", required=True)
+
+
+def _add_existing_adoption_parser(
+    sub: argparse._SubParsersAction, command: str, reference_flag: str
+) -> None:
+    item = sub.add_parser(command)
+    _project_arg(item)
+    item.add_argument("--master", type=Path, required=True)
+    item.add_argument("--materialization", type=Path, required=True)
+    item.add_argument(reference_flag, type=Path, required=True)
+    item.add_argument("--dependency", action="append", default=[])
+    for suffix in ("json", "txt", "md", "srt"):
+        item.add_argument(f"--transcript-{suffix}", type=Path, required=True)
+
+
+def _add_human_final_decision_parser(sub: argparse._SubParsersAction) -> None:
+    item = sub.add_parser("decide-human-final")
+    _project_arg(item)
+    for flag in (
+        "--candidate",
+        "--materialization",
+        "--proof-plan",
+        "--decision-record",
+        "--source-approval",
+    ):
+        item.add_argument(flag, type=Path, required=True)
+    item.add_argument("--dependency", action="append", default=[])
+    item.add_argument("--evidence", action="append", required=True)
+    item.add_argument("--actor", required=True)
+    item.add_argument("--reason", required=True)
 
 
 def _parse_tuple(value: str, size: int) -> tuple[int, ...]:
@@ -939,6 +1042,78 @@ def _record_review_side_state(
     )
 
 
+def _decide_candidate_review(
+    args: argparse.Namespace, workspace: TimelineWorkspace
+) -> dict:
+    from avo.timeline.approval_service import ApprovalService
+    from avo.timeline.contracts import file_fingerprint
+
+    source_ref = None
+    if args.source_approval:
+        fingerprint = file_fingerprint(args.source_approval)
+        source_ref = {
+            "path": str(args.source_approval),
+            "sha256": fingerprint["sha256"],
+            "sizeBytes": fingerprint["sizeBytes"],
+        }
+    return ApprovalService(workspace).decide_candidate(
+        checkpoint=args.checkpoint,
+        review_path=args.review,
+        materialization_path=args.materialization,
+        actor=args.actor,
+        reason=args.reason,
+        source_approval_ref=source_ref,
+        regression_path=args.regression,
+        finalize_snapshot=not args.defer_snapshot,
+    )
+
+
+def _human_evidence_paths(values: list[str]) -> dict[str, Path]:
+    result: dict[str, Path] = {}
+    for value in values:
+        name, separator, path = value.partition("=")
+        if not separator or not name or not path or name in result:
+            raise ValueError("evidence must have a unique name=path")
+        result[name] = Path(path)
+    return result
+
+
+def _document_reference(path: Path) -> dict:
+    from avo.timeline.contracts import file_fingerprint
+
+    fingerprint = file_fingerprint(path)
+    return {"path": str(path), **fingerprint}
+
+
+def _decide_human_final(args: argparse.Namespace, workspace: TimelineWorkspace) -> dict:
+    from avo.timeline.approval_service import ApprovalService
+
+    materialization = _load_json(args.materialization)
+    return ApprovalService(workspace).decide_human_final(
+        candidate=args.candidate,
+        dependencies=_merge_materialization_dependencies(
+            _parse_dependency(args.dependency), materialization
+        ),
+        materialization_path=args.materialization,
+        proof_plan_path=args.proof_plan,
+        decision_ref=_document_reference(args.decision_record),
+        source_approval_ref=_document_reference(args.source_approval),
+        automated_evidence_paths=_human_evidence_paths(args.evidence),
+        actor=args.actor,
+        reason=args.reason,
+    )
+
+
+def _dispatch_review_decision(
+    args: argparse.Namespace, workspace: TimelineWorkspace
+) -> dict:
+    handlers = {
+        "decide-candidate": _decide_candidate_review,
+        "decide-human-final": _decide_human_final,
+    }
+    return handlers[args.review_command](args, workspace)
+
+
 def _review(args: argparse.Namespace) -> int:
     from avo.adapters.qc.registry import CheckpointQcRegistry
     from avo.adapters.transcribe.candidate import CandidateTranscriptionAdapter
@@ -959,6 +1134,9 @@ def _review(args: argparse.Namespace) -> int:
         )
         _emit(policy.payload(redact_working_directory=True))
         return 0
+    if args.review_command in {"decide-candidate", "decide-human-final"}:
+        _emit(_dispatch_review_decision(args, workspace))
+        return 0
     if args.review_command == "decide":
         result = ApprovalService(workspace).decide(
             decision=args.decision,
@@ -972,6 +1150,8 @@ def _review(args: argparse.Namespace) -> int:
         return 0
 
     candidate, dependencies, materialization = _review_inputs(args)
+    if args.adoption_review and args.checkpoint != "deliver":
+        raise ValueError("adoption review requires the deliver checkpoint")
     run_store = _start_cut_review(workspace, args, candidate)
 
     watch_policy = _workspace_watch_policy(
@@ -980,9 +1160,12 @@ def _review(args: argparse.Namespace) -> int:
     )
     result = ReviewRunner(
         review_root=workspace.review_dir,
-        transcription=CandidateTranscriptionAdapter(model=watch_policy.whisper_model),
+        transcription=CandidateTranscriptionAdapter(
+            model=watch_policy.whisper_model,
+            reuse_only=args.reuse_transcript,
+        ),
         watch=WatchSkillAdapter(),
-        deterministic_qc=CheckpointQcRegistry(),
+        deterministic_qc=CheckpointQcRegistry(adoption=args.adoption_review),
         workspace=workspace,
         clock=now_iso,
         watch_policy=watch_policy,
@@ -1434,6 +1617,23 @@ def _deliver(args: argparse.Namespace) -> int:
         result = service.validate_current()
     elif args.deliver_command == "approve":
         result = service.approve(actor=args.actor, reason=args.reason)
+    elif args.deliver_command in {"adopt", "adopt-human-final"}:
+        materialization = _load_json(args.materialization)
+        dependencies = _merge_materialization_dependencies(
+            _parse_dependency(args.dependency), materialization
+        )
+        result = service.adopt_existing(
+            master=args.master,
+            dependencies=dependencies,
+            materialization=materialization,
+            materialization_path=args.materialization,
+            transcript_artifacts={
+                suffix: getattr(args, f"transcript_{suffix}")
+                for suffix in ("json", "txt", "md", "srt")
+            },
+            review_path=getattr(args, "review", None),
+            human_final_disposition_path=getattr(args, "human_final_disposition", None),
+        )
     else:
         result = _prepare_delivery(args, workspace)
     _emit(result)
@@ -1745,6 +1945,10 @@ def _trim(args: argparse.Namespace) -> int:
 
 
 def _run_cli(args: argparse.Namespace) -> int:
+    if args.command in {"direction", "briefstart"}:
+        from avo.direction_cli import run as direction_run
+
+        return direction_run(args)
     if args.command == "breathing":
         from avo.breathing import run as breathing_run
 
@@ -1777,6 +1981,12 @@ def main(argv: list[str] | None = None) -> int:
     try:
         return _run_cli(args)
     except Exception as exc:
+        from avo.direction.rules import DirectionError
+
+        if isinstance(exc, DirectionError):
+            from avo.direction_cli import emit_error
+
+            return emit_error(exc, args.command)
         if hasattr(exc, "to_dict") and callable(exc.to_dict):
             print(json.dumps(exc.to_dict(), ensure_ascii=False), file=sys.stderr)
             return 3
