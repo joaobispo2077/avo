@@ -62,25 +62,38 @@ def _referenced_masters(raw_dir: Path, basename: str) -> list[Path]:
         (edit / "delivery").rglob("*manifest*.json")
     )
     references: dict[Path, tuple[str, int]] = {}
+    shorts = _shorts_artifacts(raw_dir, basename)
+    for master, transcript, digest in shorts:
+        identity = (digest, master.stat().st_size)
+        _validate_transcript(raw_dir, basename, identity, transcript=transcript)
+        _add_reference(references, master, identity)
     for manifest in manifests:
         reference = _master_reference(raw_dir, basename, manifest)
         if reference is None:
             continue
         path, identity = reference
-        if path in references and references[path] != identity:
-            raise MasterArtifactError(f"conflicting master references: {path}")
-        references[path] = identity
+        _add_reference(references, path, identity)
     if len(references) > 1:
         raise MasterArtifactError(f"ambiguous final master for basename {basename!r}")
-    if references:
+    if references and not shorts:
         _validate_transcript(raw_dir, basename, next(iter(references.values())))
     return sorted(references)
 
 
+def _add_reference(references: dict, path: Path, identity: tuple[str, int]) -> None:
+    if path in references and references[path] != identity:
+        raise MasterArtifactError(f"conflicting master references: {path}")
+    references[path] = identity
+
+
 def _validate_transcript(
-    raw_dir: Path, basename: str, identity: tuple[str, int]
+    raw_dir: Path,
+    basename: str,
+    identity: tuple[str, int],
+    *,
+    transcript: Path | None = None,
 ) -> None:
-    transcript = raw_dir / "edit" / "transcripts" / f"{basename}.json"
+    transcript = transcript or raw_dir / "edit" / "transcripts" / f"{basename}.json"
     source = _read_document(_project_file(raw_dir, transcript)).get("source")
     if (
         not isinstance(source, dict)
@@ -92,6 +105,54 @@ def _validate_transcript(
         )
     ):
         raise MasterArtifactError("final transcript/master reference identity mismatch")
+
+
+def _shorts_artifacts(raw_dir: Path, basename: str) -> list[tuple[Path, Path, str]]:
+    from avo.shorts_delivery import preserved_shorts_paths
+
+    result = []
+    for manifest in preserved_shorts_paths(raw_dir):
+        if manifest.name != "delivery-manifest.json":
+            continue
+        document = _read_document(_project_file(raw_dir, manifest))
+        for row in document.get("items") or []:
+            locator = Path(str(row.get("masterPath") or "").replace("\\", "/"))
+            if os.path.normcase(locator.stem) != os.path.normcase(basename):
+                continue
+            result.append(_shorts_item(raw_dir, row, locator, manifest))
+    return result
+
+
+def _shorts_item(
+    raw_dir: Path, row: dict, locator: Path, manifest: Path
+) -> tuple[Path, Path, str]:
+    master = _project_file(
+        raw_dir, locator if locator.is_absolute() else raw_dir / locator
+    )
+    digest = row.get("sha256")
+    if not isinstance(digest, str) or re.fullmatch(r"[0-9a-f]{64}", digest) is None:
+        raise MasterArtifactError(f"invalid Shorts master identity: {manifest}")
+    transcripts = [
+        ref for ref in row.get("transcripts") or [] if ref.get("kind") == "json"
+    ]
+    if len(transcripts) != 1:
+        raise MasterArtifactError(f"missing or ambiguous Shorts transcript: {manifest}")
+    path = Path(transcripts[0]["path"].replace("\\", "/"))
+    transcript = _project_file(raw_dir, path if path.is_absolute() else raw_dir / path)
+    return master, transcript, digest
+
+
+def resolve_final_transcript(raw_dir: Path, basename: str) -> Path:
+    """Locate the JSON sidecar without changing its exact-master binding."""
+    _validate_basename(basename)
+    raw_dir = raw_dir.resolve()
+    legacy = raw_dir / "edit" / "transcripts" / f"{basename}.json"
+    if legacy.is_file():
+        return _project_file(raw_dir, legacy)
+    matches = {transcript for _, transcript, _ in _shorts_artifacts(raw_dir, basename)}
+    if len(matches) != 1:
+        raise MasterArtifactError(f"missing or ambiguous final transcript: {basename}")
+    return next(iter(matches))
 
 
 def _validate_basename(master_basename: str) -> None:

@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from avo.master_artifacts import resolve_final_masters
+from avo.master_artifacts import resolve_final_masters, resolve_final_transcript
 
 from .contracts import (
     content_hash,
@@ -205,7 +205,7 @@ def _final_artifacts(raw_dir: Path, master_basename: str) -> tuple[Path, Path]:
     if not masters:
         raise ReconstructionError("final master is missing")
     master = masters[0]
-    transcript = raw_dir / "edit" / "transcripts" / f"{master_basename}.json"
+    transcript = resolve_final_transcript(raw_dir, master_basename)
     if not transcript.is_file():
         raise ReconstructionError("final master JSON transcript is missing")
     payload = json.loads(transcript.read_text(encoding="utf-8"))
