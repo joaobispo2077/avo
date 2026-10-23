@@ -172,6 +172,9 @@
           "enum": [
             "prepared-base",
             "prepared-dialogue",
+            "prepared-dialogue-untreated",
+            "prepared-dialogue-removed-signal",
+            "prepared-audio-bed",
             "prepared-lineage",
             "prepared-insertion-video",
             "prepared-insertion-audio",
@@ -182,7 +185,8 @@
             "qc",
             "transcript",
             "manifest",
-            "contact-sheet"
+            "contact-sheet",
+            "source-fidelity"
           ]
         },
         "path": {

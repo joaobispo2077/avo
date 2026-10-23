@@ -79,7 +79,28 @@
     },
     "output": {
       "type": "object",
-      "additionalProperties": true
+      "additionalProperties": true,
+      "properties": {
+        "previewLongSide": {
+          "type": "integer",
+          "minimum": 2,
+          "default": 640
+        },
+        "pixelFormat": {
+          "enum": [
+            "yuv420p",
+            "yuv420p10le"
+          ],
+          "default": "yuv420p"
+        },
+        "frameRateRational": {
+          "type": "string",
+          "pattern": "^[1-9][0-9]*/[1-9][0-9]*$"
+        },
+        "colorSpace": {
+          "const": "bt709"
+        }
+      }
     },
     "items": {
       "type": "array",
@@ -557,24 +578,419 @@
         },
         "qcProfile": {
           "type": "string"
+        },
+        "visualInserts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/visualInsert"
+          }
+        },
+        "audioTreatment": {
+          "$ref": "#/$defs/audioTreatment"
+        },
+        "audioBed": {
+          "$ref": "#/$defs/resolvedAudioBed"
+        }
+      }
+    },
+    "visualInsert": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "kind",
+        "path",
+        "sha256",
+        "rightsReference",
+        "startSec",
+        "endSec",
+        "rect",
+        "fit"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_-]*$"
+        },
+        "kind": {
+          "enum": [
+            "image",
+            "video"
+          ]
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "ancestry": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "mediaClass",
+              "locator",
+              "sha256"
+            ],
+            "properties": {
+              "mediaClass": {
+                "const": "source"
+              },
+              "locator": {
+                "type": "string",
+                "minLength": 1
+              },
+              "sha256": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              }
+            }
+          }
+        },
+        "rightsReference": {
+          "type": "string",
+          "minLength": 1
+        },
+        "startSec": {
+          "type": "number",
+          "minimum": 0
+        },
+        "endSec": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "rect": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "x",
+            "y",
+            "width",
+            "height"
+          ],
+          "properties": {
+            "x": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "y": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "width": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "height": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            }
+          }
+        },
+        "baseRegion": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "x",
+            "y",
+            "width",
+            "height"
+          ],
+          "properties": {
+            "x": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "y": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "width": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "height": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            }
+          }
+        },
+        "fit": {
+          "enum": [
+            "contain",
+            "cover"
+          ]
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sourceStartSec": {
+          "type": "number",
+          "minimum": 0
+        },
+        "sourceEndSec": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "videoStreamIndex": {
+          "const": 0
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "video"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "sourceStartSec",
+              "sourceEndSec",
+              "videoStreamIndex"
+            ]
+          },
+          "else": {
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "sourceStartSec"
+                  ]
+                },
+                {
+                  "required": [
+                    "sourceEndSec"
+                  ]
+                },
+                {
+                  "required": [
+                    "videoStreamIndex"
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "audioTreatment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "stream",
+        "channel",
+        "eqProfile",
+        "noiseReduction",
+        "approval"
+      ],
+      "properties": {
+        "stream": {
+          "type": "string",
+          "pattern": "^0:a:[0-9]+$"
+        },
+        "channel": {
+          "enum": [
+            "mono",
+            "stereo"
+          ]
+        },
+        "eqProfile": {
+          "enum": [
+            "dialogue-v1",
+            "bishop-dialogue-v1"
+          ]
+        },
+        "noiseReduction": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "protectedWindows": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "startSec",
+              "endSec",
+              "reason"
+            ],
+            "properties": {
+              "startSec": {
+                "type": "number",
+                "minimum": 0
+              },
+              "endSec": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "reason": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        },
+        "approval": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      }
+    },
+    "resolvedAudioBed": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "path",
+        "fingerprint",
+        "authorizedWindow",
+        "origin",
+        "rights",
+        "timelineStartSec",
+        "sourceStartSec",
+        "durationSec",
+        "fadeInMs",
+        "fadeOutMs",
+        "ducking"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "fingerprint": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "authorizedWindow": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "origin": {
+          "type": "string",
+          "minLength": 1
+        },
+        "rights": {
+          "type": "object",
+          "additionalProperties": true
+        },
+        "timelineStartSec": {
+          "type": "number",
+          "minimum": 0
+        },
+        "sourceStartSec": {
+          "type": "number",
+          "minimum": 0
+        },
+        "durationSec": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "fadeInMs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "fadeOutMs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "ducking": {
+          "type": "object",
+          "additionalProperties": true
         }
       }
     }
   },
   "allOf": [
     {
-      "if": { "properties": { "version": { "const": "1.0" } }, "required": ["version"] },
+      "if": {
+        "properties": {
+          "version": {
+            "const": "1.0"
+          }
+        },
+        "required": [
+          "version"
+        ]
+      },
       "then": {
         "properties": {
           "items": {
             "items": {
-              "required": ["sourceRange"],
+              "required": [
+                "sourceRange"
+              ],
               "allOf": [
-                { "not": { "required": ["sourceSegments"] } },
-                { "not": { "required": ["callouts"] } },
-                { "not": { "required": ["punchIns"] } },
-                { "not": { "required": ["graphics"] } },
-                { "not": { "required": ["sfxHits"] } }
+                {
+                  "not": {
+                    "required": [
+                      "sourceSegments"
+                    ]
+                  }
+                },
+                {
+                  "not": {
+                    "required": [
+                      "callouts"
+                    ]
+                  }
+                },
+                {
+                  "not": {
+                    "required": [
+                      "punchIns"
+                    ]
+                  }
+                },
+                {
+                  "not": {
+                    "required": [
+                      "graphics"
+                    ]
+                  }
+                },
+                {
+                  "not": {
+                    "required": [
+                      "sfxHits"
+                    ]
+                  }
+                },
+                {
+                  "not": {
+                    "required": [
+                      "audioTreatment"
+                    ]
+                  }
+                },
+                {
+                  "not": {
+                    "required": [
+                      "audioBed"
+                    ]
+                  }
+                }
               ]
             }
           }
@@ -582,19 +998,79 @@
       }
     },
     {
-      "if": { "properties": { "version": { "const": "1.1" } }, "required": ["version"] },
+      "if": {
+        "properties": {
+          "version": {
+            "const": "1.1"
+          }
+        },
+        "required": [
+          "version"
+        ]
+      },
       "then": {
-        "required": ["planVersion", "batchRoot", "batchRootSource", "source"],
+        "required": [
+          "planVersion",
+          "batchRoot",
+          "batchRootSource",
+          "source"
+        ],
         "properties": {
           "items": {
             "items": {
-              "required": ["sourceSegments"],
+              "required": [
+                "sourceSegments"
+              ],
               "allOf": [
-                { "not": { "required": ["sourceRange"] } },
-                { "not": { "required": ["callouts"] } },
-                { "not": { "required": ["punchIns"] } },
-                { "not": { "required": ["graphics"] } },
-                { "not": { "required": ["sfxHits"] } }
+                {
+                  "not": {
+                    "required": [
+                      "sourceRange"
+                    ]
+                  }
+                },
+                {
+                  "not": {
+                    "required": [
+                      "callouts"
+                    ]
+                  }
+                },
+                {
+                  "not": {
+                    "required": [
+                      "punchIns"
+                    ]
+                  }
+                },
+                {
+                  "not": {
+                    "required": [
+                      "graphics"
+                    ]
+                  }
+                },
+                {
+                  "not": {
+                    "required": [
+                      "sfxHits"
+                    ]
+                  }
+                },
+                {
+                  "not": {
+                    "required": [
+                      "audioTreatment"
+                    ]
+                  }
+                },
+                {
+                  "not": {
+                    "required": [
+                      "audioBed"
+                    ]
+                  }
+                }
               ]
             }
           }
@@ -602,10 +1078,38 @@
       }
     },
     {
-      "if": { "properties": { "version": { "const": "1.2" } }, "required": ["version"] },
+      "if": {
+        "properties": {
+          "version": {
+            "const": "1.2"
+          }
+        },
+        "required": [
+          "version"
+        ]
+      },
       "then": {
-        "required": ["planVersion", "batchRoot", "batchRootSource", "source"],
-        "properties": { "items": { "items": { "required": ["sourceSegments"], "not": { "required": ["sourceRange"] } } } }
+        "required": [
+          "planVersion",
+          "batchRoot",
+          "batchRootSource",
+          "source"
+        ],
+        "properties": {
+          "items": {
+            "items": {
+              "required": [
+                "sourceSegments",
+                "audioTreatment"
+              ],
+              "not": {
+                "required": [
+                  "sourceRange"
+                ]
+              }
+            }
+          }
+        }
       }
     }
   ]

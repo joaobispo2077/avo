@@ -267,6 +267,18 @@
       "items": {
         "type": "string"
       }
+    },
+    "renderLayers": {
+      "enum": [
+        "all",
+        "graphics-only"
+      ]
+    },
+    "visualInserts": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/visualInsert"
+      }
     }
   },
   "allOf": [
@@ -434,6 +446,203 @@
           "maximum": 1
         }
       }
+    },
+    "visualInsert": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "kind",
+        "path",
+        "sha256",
+        "rightsReference",
+        "startSec",
+        "endSec",
+        "rect",
+        "fit"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_-]*$"
+        },
+        "kind": {
+          "enum": [
+            "image",
+            "video"
+          ]
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "ancestry": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "mediaClass",
+              "locator",
+              "sha256"
+            ],
+            "properties": {
+              "mediaClass": {
+                "const": "source"
+              },
+              "locator": {
+                "type": "string",
+                "minLength": 1
+              },
+              "sha256": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              }
+            }
+          }
+        },
+        "rightsReference": {
+          "type": "string",
+          "minLength": 1
+        },
+        "startSec": {
+          "type": "number",
+          "minimum": 0
+        },
+        "endSec": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "rect": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "x",
+            "y",
+            "width",
+            "height"
+          ],
+          "properties": {
+            "x": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "y": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "width": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "height": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            }
+          }
+        },
+        "baseRegion": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "x",
+            "y",
+            "width",
+            "height"
+          ],
+          "properties": {
+            "x": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "y": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "width": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "height": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            }
+          }
+        },
+        "fit": {
+          "enum": [
+            "contain",
+            "cover"
+          ]
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sourceStartSec": {
+          "type": "number",
+          "minimum": 0
+        },
+        "sourceEndSec": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "videoStreamIndex": {
+          "const": 0
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "video"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "sourceStartSec",
+              "sourceEndSec",
+              "videoStreamIndex"
+            ]
+          },
+          "else": {
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "sourceStartSec"
+                  ]
+                },
+                {
+                  "required": [
+                    "sourceEndSec"
+                  ]
+                },
+                {
+                  "required": [
+                    "videoStreamIndex"
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ]
     }
   }
 }
