@@ -58,7 +58,7 @@ def test_protection_bypasses_all_repair_filters_without_breath_processing(treatm
         Path("raw.wav"), Path("out.wav"), treatment=treatment
     )
     chain = command[command.index("-filter_complex") + 1]
-    assert "aeval='val(ch)*gt(between(t,1.000000,2.000000),0)'" in chain
+    assert "aeval='val(ch)*gt(between(n/s,1.000000,2.000000),0)'" in chain
     assert "afftdn=nr=6.00:nf=-37.5:tn=1" in chain
     assert "silenceremove" not in chain
     assert command[command.index("-c:a") + 1] == "pcm_s24le"
@@ -176,7 +176,8 @@ def test_gain_and_normalization_preserve_requested_channels_and_codec(
 
 
 @pytest.mark.skipif(not shutil.which("ffmpeg"), reason="ffmpeg required")
-def test_real_ffmpeg_protected_event_is_lossless(treatment, tmp_path):
+@pytest.mark.parametrize("channels", [1, 2])
+def test_real_ffmpeg_protected_event_is_lossless(treatment, tmp_path, channels):
     source = tmp_path / "raw.wav"
     subprocess.run(
         [
@@ -188,6 +189,8 @@ def test_real_ffmpeg_protected_event_is_lossless(treatment, tmp_path):
             "lavfi",
             "-i",
             "sine=frequency=250:duration=2:sample_rate=48000",
+            "-ac",
+            str(channels),
             "-c:a",
             "pcm_s24le",
             str(source),
@@ -196,6 +199,7 @@ def test_real_ffmpeg_protected_event_is_lossless(treatment, tmp_path):
         capture_output=True,
     )
     treatment["stream"] = "0:a:0"
+    treatment["channel"] = "mono" if channels == 1 else "stereo"
     treatment["protectedWindows"] = [
         {"startSec": 0.5, "endSec": 1.5, "reason": "handling"}
     ]
@@ -214,8 +218,9 @@ def test_real_ffmpeg_protected_event_is_lossless(treatment, tmp_path):
 
     original, repaired = samples(source), samples(output)
     assert len(original) == len(repaired)
+    sample_bytes = channels * 3
     assert (
-        original[48000 * 3 // 2 : 48000 * 3 * 3 // 2]
-        == repaired[48000 * 3 // 2 : 48000 * 3 * 3 // 2]
+        original[24000 * sample_bytes : 72000 * sample_bytes]
+        == repaired[24000 * sample_bytes : 72000 * sample_bytes]
     )
     assert original[:48000] != repaired[:48000]
