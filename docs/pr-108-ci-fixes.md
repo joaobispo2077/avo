@@ -34,6 +34,23 @@ twenty minutes overall, retaining time for its tests and smoke checks. Integrati
 software-quality and branch-risk jobs already have larger overall budgets.
 Download retries, network timeouts and the real codec smoke checks remain active.
 
+The first remote validation at `07b35ea` passed unit tests, software quality
+and light mutation tests. Integration setup still timed out after eight minutes,
+and one fresh-runner retry reproduced the slow package transfer. The successful
+unit runner fetched the same 62.8 MB in four seconds. Increasing the timeout
+alone therefore did not resolve the mirror variability.
+
+When installation is necessary and the runner's APT mirror list exists,
+`ensure-ffmpeg.sh` now replaces only the Azure Ubuntu mirror URL with Ubuntu's
+main HTTPS archive before refreshing indexes and installing packages. Unrelated
+mirror entries remain unchanged. A missing mirror-list file keeps the existing
+APT configuration. This changes only the disposable runner's package source;
+package signature verification, retries, setup budgets and codec checks remain
+active. A Linux regression executes the real helper with temporary source files
+and mocked package commands for HTTP, HTTPS and absent-list cases.
+The Linux regression passes all three cases; the focused workflow contract suite
+passes 30 tests. Shell syntax and Python lint checks also pass.
+
 ## Dependency gate
 
 The previous local dependency audit reported 37 findings across three package
