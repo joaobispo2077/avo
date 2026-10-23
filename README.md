@@ -880,3 +880,7 @@ the bundled editing engine and upstream [video-use](https://github.com/browser-u
 ---
 
 <p align="center"><sub>AVO · Edit less. Create more. · local-first video orchestration for your agent.</sub></p>
+
+## Recorded video costs
+
+Use /avo.costs (/avo.metrics alias) during editing or with --history after completion. Learndown and cleanup automatically display saved cost/token summaries with coverage and cutoff. Model/service switches preserve original usage attribution. [Collection, fallbacks and pricing disclosures](docs/video-cost-transparency.md).
