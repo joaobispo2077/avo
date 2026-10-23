@@ -206,6 +206,7 @@ class Telemetry:
             video_id=video_id,
         )
 
+        _attach_cost_state(record, project)
         if session_id:
             self._append_session_phase(session_id, record)
 
@@ -319,6 +320,22 @@ class Telemetry:
 
 def report(phase: str, **kwargs: Any) -> dict[str, Any]:
     return Telemetry().report(phase, **kwargs)
+
+
+def _attach_cost_state(record, project):
+    if not project or not project.get("rawDir"):
+        return
+    from avo.cost_sources import collect
+    from avo.cost_store import CostStore
+
+    try:
+        store = CostStore(Path(project["rawDir"]))
+        identity = store.identity()
+        if identity:
+            record["accountingVideoId"] = identity["accountingVideoId"]
+            record["costCollection"] = collect(store)
+    except (OSError, ValueError):
+        record["costCollection"] = {"status": "unavailable"}
 
 
 def learndown(**kwargs: Any) -> dict[str, Any]:

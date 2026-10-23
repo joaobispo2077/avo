@@ -452,6 +452,15 @@ def _preservation_statistics(wrap: dict[str, Any], session: dict[str, Any]) -> N
         session["closure"] = {"mode": "preservation", "cleanupExecuted": False}
 
 
+def _attach_cost_reference(wrap, session):
+    costs = wrap.get("costs") or {}
+    if costs.get("snapshotId"):
+        session["costSnapshot"] = {
+            key: costs.get(key)
+            for key in ("snapshotId", "accountingVideoId", "coverage", "cutoff")
+        }
+
+
 def session_from_wrap(
     wrap: dict[str, Any], *, wrap_path: Path | None = None
 ) -> dict[str, Any]:
@@ -503,6 +512,7 @@ def session_from_wrap(
         "pathStatus": path_status,
     }
     _preservation_statistics(wrap, session)
+    _attach_cost_reference(wrap, session)
     provider_slug = str(wrap.get("provider") or session["provider"])
     try:
         from avo import video_registry

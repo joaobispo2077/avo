@@ -1,0 +1,370 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://avo.local/schemas/avo.cost-batch.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {
+      "const": "1.0.0"
+    },
+    "batchId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 500
+    },
+    "accountingVideoId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 500
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "observations": {
+      "type": "array",
+      "maxItems": 100000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "sourceInstanceId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "sourceSessionId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "requestId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "agent": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "agentVersion": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "model": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 500
+          },
+          "serviceProvider": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 500
+          },
+          "phase": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 500
+          },
+          "billingMode": {
+            "enum": [
+              "api",
+              "subscription",
+              "local",
+              "credits",
+              "unknown"
+            ]
+          },
+          "serviceClass": {
+            "enum": [
+              "host-agent",
+              "pipeline-service"
+            ]
+          },
+          "occurredAt": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "format": "date-time"
+          },
+          "tokens": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "input": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "output": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "cacheRead": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "cacheWrite": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "reasoning": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "tool": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "total": {
+                "type": [
+                  "integer",
+                  "null"
+                ],
+                "minimum": 0,
+                "maximum": 9007199254740991
+              }
+            }
+          },
+          "semantics": {
+            "type": "object",
+            "additionalProperties": {
+              "enum": [
+                "input",
+                "output",
+                "disjoint",
+                "unknown"
+              ]
+            }
+          },
+          "amounts": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "basis": {
+                  "enum": [
+                    "source-reported",
+                    "calculated-estimate",
+                    "api-equivalent",
+                    "manual"
+                  ]
+                },
+                "unit": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 500
+                },
+                "amount": {
+                  "type": "string",
+                  "pattern": "^[0-9]+(?:\\.[0-9]+)?$",
+                  "maxLength": 80
+                },
+                "provenance": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 500
+                }
+              },
+              "required": [
+                "basis",
+                "unit",
+                "amount",
+                "provenance"
+              ]
+            }
+          },
+          "measurementKind": {
+            "enum": [
+              "request",
+              "cumulative",
+              "manual"
+            ]
+          },
+          "counterEpoch": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "sequence": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "inclusion": {
+            "enum": [
+              "leaf",
+              "rollup"
+            ]
+          },
+          "parentRequestId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "bindingId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "runId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "parentSessionId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "parentSourceInstanceId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "parentCounterEpoch": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "maxLength": 500
+          },
+          "pricingDimensions": {
+            "type": "object",
+            "additionalProperties": false,
+            "minProperties": 1,
+            "properties": {
+              "tier": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100
+              },
+              "region": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100
+              },
+              "contextBand": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100
+              }
+            }
+          }
+        },
+        "required": [
+          "sourceInstanceId",
+          "sourceSessionId",
+          "requestId",
+          "agent",
+          "agentVersion",
+          "model",
+          "serviceProvider",
+          "billingMode",
+          "serviceClass",
+          "occurredAt",
+          "tokens",
+          "semantics",
+          "amounts"
+        ],
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "measurementKind": {
+                  "const": "cumulative"
+                }
+              },
+              "required": [
+                "measurementKind"
+              ]
+            },
+            "then": {
+              "required": [
+                "counterEpoch",
+                "sequence"
+              ]
+            }
+          }
+        ]
+      }
+    },
+    "contentHash": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 500
+    },
+    "priceScheduleIds": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[a-f0-9]{64}$"
+      }
+    },
+    "recordedOrder": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "observationKeys": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "observationId",
+          "sourceDigest"
+        ],
+        "properties": {
+          "observationId": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "sourceDigest": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          }
+        }
+      }
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "batchId",
+    "accountingVideoId",
+    "createdAt",
+    "observations",
+    "contentHash"
+  ]
+}

@@ -1068,13 +1068,6 @@
       "reason": "Adapter orchestration with many format/capability branches"
     },
     {
-      "path": "src/avo/adapters/motion/hyperframes.py",
-      "name": "build_composition_spec",
-      "complexity": 11,
-      "rank": "C",
-      "reason": "Feature 006 validation/orchestration branch matrix; recorded for explicit decomposition follow-up"
-    },
-    {
       "path": "src/avo/adapters/understand/watch_policy.py",
       "name": "_window_prompt_lines",
       "complexity": 11,

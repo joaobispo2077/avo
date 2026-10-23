@@ -1,5 +1,12 @@
 # AVO architecture
 
+Native Shorts delivery lookup is shared by inventory and reconstruction through
+`avo.master_artifacts`. It consumes batch manifest item records and resolves their
+JSON sidecars without relocating media or creating approval. Legacy individual
+master lookup remains supported. Project-boundary checks and exact transcript
+source identity precede independent byte verification by reconstruction. Regression
+coverage lives in `tests/test_master_artifacts.py`.
+
 AVO is a local-first modular monolith. `src/avo/` contains the bundled editing
 engine and application orchestration; CLI and MCP expose the same operations.
 Hexagonal architecture applies at real external-tool boundaries, not through a
@@ -299,3 +306,80 @@ The canonical Draft 2020-12 schemas ship with the Python distribution at `share/
 Compatibility exceptions are explicit: optional authorial context adds no lifecycle state or mandatory creative gate; old videos/declarations remain valid; historical proofs are references only. Reconstruction retention explicitly includes briefing authoring/state documents without retaining whole provider history or opening historical media locators. MCP bridges share native handlers; exact creator decisions use existing consent with a bounded decision-document digest, preventing approval of a different file body at the same path.
 
 Validation includes neutral contract/service tests, real coordinator handoffs, frozen offline replay, source/brand changes with unchanged metadata, crash/retry/CAS/lock cases, descriptor safety, actual isolated skill copying and installed distribution smoke. Provider pilot source coverage, human classification, exact profile acceptance and observed usability timing are reported separately; automated success is never substituted for human results. See [provider direction](docs/provider-direction.md) and [pilot protocol](docs/provider-direction-evaluation.md).
+# Shorts source-fidelity composition
+
+The native Shorts plan can drive a specialized registered source-fidelity
+renderer: original picture and finite inserts remain in FFmpeg at 10 bits,
+while HyperFrames supplies graphics alpha only. Dialogue restoration precedes
+the independent PCM effects mix. Timing and source identity remain owned by the
+resolved plan; generated HTML and prior exports carry no editorial authority.
+This boundary does not extend the sequential ProofPlan executor. Contracts,
+compatibility limits and validation are documented in
+[Timed Shorts inserts and source fidelity](docs/shorts-timed-inserts-source-fidelity.md).
+
+# Shorts v1.2 audio treatment and beds
+
+Shorts request v1.2 adds declarative dialogue treatment and rights-bound audio
+beds without changing the timeline owner. Planning validates and fingerprints
+the selected source, treatment settings, and authorized bed window before any
+media work. Media preparation produces treated dialogue plus untreated and
+removed-signal review assets; final composition orders dialogue EQ, restoration
+and loudness before independently mixed music or generated SFX. Only the
+candidate that resolves an `audioBedOverride` receives that bed.
+
+Requests from v1.0 and v1.1 remain readable with their historical behavior and
+must not silently gain v1.2 audio fields. Missing provenance, changed bed bytes,
+out-of-window use, or mismatched lineage fails closed. Review stems are audit
+artifacts and cannot become picture or delivery ancestors. Proof approval,
+music/rights approval, and master promotion remain separate human gates.
+
+## Video cost accounting (feature 011)
+
+Implemented by the [feature 011 plan](specs/011-video-cost-transparency/plan.md):
+local metadata accounting outside editorial timeline authority. Pure
+normalization/pricing/aggregation functions consume versioned source-reader
+output; CLI, skills, wrap/export and optional MCP use the same accounting
+service. Source readers and filesystem persistence depend on the accounting
+contracts, while accounting rules do not depend on agent SDKs or model calls.
+
+Immutable usage batches and snapshots live in the footage project's
+`edit/costs/`, preserved by canonical and legacy cleanup. Channel provider and
+AI service provider are separate identities. Each observation retains its
+actual model/service/billing basis through switches. Existing timeline and
+session IDs remain aliases; an accounting UUID prevents master-name changes
+from splitting video history. Legacy wraps without costs stay readable.
+
+Learndown and verified cleanup responses automatically display draft/final
+snapshots with coverage and cutoff; production completion does not imply an
+exact invoice or a fully reported closing turn. Validation must prove
+deduplication, category overlap, switching, cleanup preservation, portable
+history, privacy and same-snapshot agreement across response/wrap/export.
+`costs_cli` and optional MCP call `cost_store`, `cost_sources`, `costs` and
+`cost_history`; wrap/export call `cost_closure`. `cost_services` captures only
+available response usage from AVO-owned review/probe calls. None of these
+modules selects media or changes editorial approvals. History reads declared
+`.avo/cost-locators` and provider exports, independent of bounded session stats.
+
+Immutable publication uses an exclusive per-document directory lock, an fsynced
+same-directory temporary file and atomic replacement. Interrupted locks fail
+closed and require explicit recovery. Batches freeze tariff references and
+precompute observation keys; reports verify batch integrity and capture one
+membership set. Snapshots retain that exact set. Conflicts need an explicit
+selection/exclusion; revaluation appends evidence and preserves old snapshots.
+Portable exports preserve document IDs, including snapshot drill-down paths.
+
+Compatibility is additive: legacy videos remain readable with unknown costs,
+manual/normalized evidence works for every installer agent, and documented
+local import shapes are offered only for Codex exec, OpenCode exports and
+projected Claude/Gemini metadata. Interactive/Desktop log formats are not
+guessed. Imported evidence cannot establish account-wide completeness; current
+coverage remains partial or not-recorded, even after production is finished.
+
+Regression tests cover source isolation, source intervals across three videos,
+model/provider switches, counters and rollups, incomplete pricing dimensions,
+atomic-write failure, identity races, immutable export/history, cleanup retention,
+private-field rejection, engine/MCP routing and automatic response instructions.
+The dedicated 100,000-observation benchmark passes the five-second report target.
+See [cost transparency](docs/video-cost-transparency.md) and the
+[validation record](specs/011-video-cost-transparency/quickstart.md).
+

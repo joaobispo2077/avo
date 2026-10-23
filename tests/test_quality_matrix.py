@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 import unittest
 from pathlib import Path
 
@@ -239,6 +240,26 @@ class QualityMatrixTests(unittest.TestCase):
             msg="quality umbrella must run lint before format",
         )
 
+    def test_ffmpeg_setup_leaves_time_for_downloads_and_tests(self) -> None:
+        for name in ("ci.yml", "mutation-full.yml"):
+            workflow = (ROOT / ".github/workflows" / name).read_text("utf-8")
+            budgets = re.findall(
+                r"- name: Install ffmpeg\n\s+timeout-minutes: (\d+)\n"
+                r"\s+run: bash scripts/ci/ensure-ffmpeg.sh",
+                workflow,
+            )
+            self.assertTrue(budgets, name)
+            self.assertTrue(all(int(value) >= 8 for value in budgets), name)
+        unit_job = (
+            (ROOT / ".github/workflows/ci.yml")
+            .read_text("utf-8")
+            .split("repo-unit-tests:", 1)[1]
+            .split("repo-integration-tests:", 1)[0]
+        )
+        timeout = re.search(r"timeout-minutes: (\d+)", unit_job)
+        self.assertIsNotNone(timeout)
+        self.assertGreaterEqual(int(timeout[1]), 20)
+
     def test_ci_software_quality_enforces_coverage_fail_under(self) -> None:
         """task-009: coverage floor wired in pyproject, npm, run-coverage.sh, ci.yml."""
         ci = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
@@ -249,7 +270,7 @@ class QualityMatrixTests(unittest.TestCase):
         ]
         self.assertIn("Install ffmpeg", quality_block)
         self.assertIn("ensure-ffmpeg.sh", quality_block)
-        self.assertIn("timeout-minutes: 3", quality_block)
+        self.assertIn("timeout-minutes: 8", quality_block)
 
         pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
         self.assertIn("[tool.coverage.report]", pyproject)

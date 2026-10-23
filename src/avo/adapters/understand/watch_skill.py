@@ -856,7 +856,9 @@ _PROBE_PNG = (
 )
 
 
-def _live_probe(base_url: str, model: str, effective: dict[str, Any]) -> dict[str, Any]:
+def _live_probe(
+    base_url: str, model: str, effective: dict[str, Any], *, cost_candidate=None
+) -> dict[str, Any]:
     prompt = 'Inspect the image and return JSON only: {"vision":true}.'
     payload = {
         "model": model,
@@ -883,6 +885,10 @@ def _live_probe(base_url: str, model: str, effective: dict[str, Any]) -> dict[st
         timeout=int(effective["timeoutSeconds"]),
     )
     served = str(response.get("model") or model)
+    if cost_candidate is not None:
+        from avo.cost_services import try_record_response
+
+        try_record_response(cost_candidate, response, base_url, phase="review-probe")
     return {
         "success": bool(response.get("choices")),
         "servedModel": served,
@@ -1287,7 +1293,12 @@ def _native_pass_instruction(pass_id: str) -> str:
         "requiresHuman, observed, expected, whyItMatters, suggestedAction. "
         "category must be one of layout, pacing, movement, continuity, privacy, "
         "caption, visual-quality, editorial, factual-risk, rights, accessibility, "
-        "technical, other. severity must be one of info, warning, blocking, unknown."
+        "technical, other. severity must be one of info, warning, blocking, unknown. "
+        "If the review prompt requests a scorecard, every response regardless of "
+        "status must also return a top-level scorecard object alongside status and "
+        "findings. Include every requested integer score, an explicit boolean "
+        "criticalFailure, and notes. Never omit the scorecard on pass, fail, or "
+        "needs-human-judgment."
     )
 
 
@@ -1332,9 +1343,21 @@ def _native_finding(
 
 
 def _require_finding_item(item: Any) -> dict[str, Any]:
-    if not isinstance(item, dict) or not str(item.get("message") or "").strip():
+    if not isinstance(item, dict):
         raise VisionReviewError("vision finding must be an object with a message")
-    return item
+    result = dict(item)
+    message = next(
+        (
+            str(result.get(key) or "").strip()
+            for key in ("message", "observed", "whyItMatters", "expected")
+            if str(result.get(key) or "").strip()
+        ),
+        "",
+    )
+    if not message:
+        raise VisionReviewError("vision finding must be an object with a message")
+    result["message"] = message
+    return result
 
 
 def _fallback(value: Any, default: Any) -> Any:
@@ -1359,7 +1382,9 @@ def _native_review(review: _ReviewRequest, model_pin: dict[str, Any]) -> dict[st
     }
     snapshot = probe_vision_capabilities(
         model_pin=model_pin,
-        probe=lambda url, served: _live_probe(url, served, effective),
+        probe=lambda url, served: _live_probe(
+            url, served, effective, cost_candidate=review.candidate
+        ),
         resource_policy=resource_policy,
         conservative_context_limit=int(effective["contextLimit"]),
     )
@@ -1478,6 +1503,9 @@ def _native_review(review: _ReviewRequest, model_pin: dict[str, Any]) -> dict[st
             timeout=int(effective["timeoutSeconds"]),
         )
         raw_path = raw_dir / f"{review_pass['passId']}.json"
+        from avo.cost_services import try_record_response
+
+        try_record_response(review.candidate, response, base_url)
         raw_path.write_text(
             json.dumps(response, indent=2, ensure_ascii=False), encoding="utf-8"
         )

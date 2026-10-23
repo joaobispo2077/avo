@@ -27,7 +27,7 @@ in generic code.
 
 `--raw-dir` selects the footage project. `--batch-dir` is an optional nested
 override under `<rawDir>/edit/shorts`; its final directory name must equal the
-request `batchId`. Traversal, split roots, mismatched IDs, and v1.1 plans outside
+request `batchId`. Traversal, split roots, mismatched IDs, and v1.1+ plans outside
 `plans/` fail before media work. The atomic index rejects an existing `batchId`
 registered to another root.
 
@@ -74,6 +74,22 @@ Watch and human approvals, rights/factual references, disclosure and
 privacy/safety notes, AI-use/delivery metadata, and transcript sidecars produced
 from the exact delivered files. `SOURCE-LOG.md` and `EDITLOG.md` summarize the
 same machine-readable manifest rather than replacing it.
+
+## v1.2 dialogue treatment and audio beds
+
+Request v1.2 declares a default `audioTreatment`, a fingerprinted `audioBeds`
+inventory, and an optional candidate-level `audioBedOverride`. The resolver
+binds only the selected bed to that candidate, verifies its provenance and
+authorized source window, and rejects changed bytes or invalid timeline use.
+Older v1.0/v1.1 requests retain their existing behavior and reject these new
+fields rather than applying audio processing implicitly.
+
+Dialogue processing is deterministic and ordered: EQ, conservative noise
+reduction, loudness, then independently mixed music/SFX, followed by encode.
+The proof workspace retains an untreated reference and removed-signal stem for
+A/B listening. These review assets never enter composition ancestry. Bed fades,
+ducking and voice-relative limits are resolved in the immutable plan, while
+rights approval remains a separate human gate from picture lock.
 
 ## Preservation and compatibility
 

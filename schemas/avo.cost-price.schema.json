@@ -1,0 +1,115 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://avo.local/schemas/avo.cost-price.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {
+      "const": "1.0.0"
+    },
+    "model": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 500
+    },
+    "serviceProvider": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 500
+    },
+    "unit": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 500
+    },
+    "basis": {
+      "enum": [
+        "calculated-estimate",
+        "api-equivalent"
+      ]
+    },
+    "effectiveAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "provenance": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 500
+    },
+    "denominator": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "rates": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": false,
+      "properties": {
+        "input": {
+          "type": "string",
+          "pattern": "^[0-9]+(?:\\.[0-9]+)?$",
+          "maxLength": 80
+        },
+        "output": {
+          "type": "string",
+          "pattern": "^[0-9]+(?:\\.[0-9]+)?$",
+          "maxLength": 80
+        },
+        "cacheRead": {
+          "type": "string",
+          "pattern": "^[0-9]+(?:\\.[0-9]+)?$",
+          "maxLength": 80
+        },
+        "cacheWrite": {
+          "type": "string",
+          "pattern": "^[0-9]+(?:\\.[0-9]+)?$",
+          "maxLength": 80
+        },
+        "reasoning": {
+          "type": "string",
+          "pattern": "^[0-9]+(?:\\.[0-9]+)?$",
+          "maxLength": 80
+        },
+        "tool": {
+          "type": "string",
+          "pattern": "^[0-9]+(?:\\.[0-9]+)?$",
+          "maxLength": 80
+        }
+      }
+    },
+    "dimensions": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "tier": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "region": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "contextBand": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 100
+        }
+      }
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "model",
+    "serviceProvider",
+    "unit",
+    "basis",
+    "effectiveAt",
+    "provenance",
+    "denominator",
+    "rates"
+  ]
+}

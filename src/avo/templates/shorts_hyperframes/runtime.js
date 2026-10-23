@@ -6,6 +6,7 @@
   const callouts = __CALLOUT_JSON__;
   const punchIns = __PUNCHIN_JSON__;
   const graphics = __GRAPHIC_JSON__;
+  const visualInserts = __VISUAL_JSON__;
   const duration = Number(root.dataset.duration);
   const uiScale =
     Number.parseFloat(getComputedStyle(root).getPropertyValue("--ui-scale")) || 1;
@@ -39,6 +40,11 @@
   const wrap = document.getElementById("base-wrap");
   if (wrap) {
     gsap.set(wrap, { scale: 1, transformOrigin: "50% 50%" });
+    for (const insert of [...visualInserts].sort((a, b) => a.startSec - b.startSec)) {
+      if (!insert.baseRegion) continue;
+      timeline.set(wrap, { opacity: 0 }, insert.startSec);
+      timeline.set(wrap, { opacity: 1 }, insert.endSec);
+    }
   }
 
   for (const phrase of phrases) {

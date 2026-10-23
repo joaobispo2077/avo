@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import subprocess
 from collections.abc import Iterable, Mapping
+from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
@@ -27,12 +28,56 @@ def evaluate_probe(
             video.get("height", 0)
         ) != int(expected["height"]):
             findings.append({"severity": "error", "code": "wrong-geometry"})
+        findings.extend(_video_fidelity_findings(video, expected))
     if not audio:
         findings.append({"severity": "error", "code": "missing-audio"})
+    else:
+        findings.extend(_audio_contract_findings(audio, expected))
     duration = float((probe.get("format") or {}).get("duration", 0))
     if abs(duration - float(expected["durationSec"])) > tolerance_sec:
         findings.append({"severity": "error", "code": "wrong-duration"})
     return findings
+
+
+def _video_fidelity_findings(video, expected):
+    checks = [
+        (
+            "wrong-pixel-format",
+            expected.get("pixelFormat")
+            and video.get("pix_fmt") != expected["pixelFormat"],
+        ),
+        (
+            "wrong-frame-rate",
+            expected.get("frameRateRational")
+            and Fraction(video.get("r_frame_rate", "0/1"))
+            != Fraction(expected["frameRateRational"]),
+        ),
+        (
+            "wrong-color-space",
+            expected.get("colorSpace")
+            and any(
+                video.get(key) != expected["colorSpace"]
+                for key in ("color_space", "color_primaries", "color_transfer")
+            ),
+        ),
+    ]
+    return [{"severity": "error", "code": code} for code, failed in checks if failed]
+
+
+def _audio_contract_findings(audio, expected):
+    checks = [
+        (
+            "wrong-audio-rate",
+            expected.get("audioSampleRateHz")
+            and int(audio.get("sample_rate", 0)) != int(expected["audioSampleRateHz"]),
+        ),
+        (
+            "wrong-audio-channels",
+            expected.get("audioChannels")
+            and int(audio.get("channels", 0)) != int(expected["audioChannels"]),
+        ),
+    ]
+    return [{"severity": "error", "code": code} for code, failed in checks if failed]
 
 
 def evaluate_captions(
@@ -59,7 +104,7 @@ def evaluate_captions(
 def insertion_review_findings(
     item: Mapping[str, Any], watch_reference: str | None
 ) -> list[dict[str, str]]:
-    if not item.get("insertion"):
+    if not item.get("insertion") and not item.get("visualInserts"):
         return []
     if not watch_reference:
         return [
@@ -107,6 +152,7 @@ def evaluate_item(
         *evaluate_probe(
             probe,
             {
+                **expected,
                 "width": expected.get("width", 1080),
                 "height": expected.get("height", 1920),
                 "durationSec": item["editedDurationSec"],

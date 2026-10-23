@@ -128,6 +128,9 @@ def start_session(raw_dir: Path, provider: str, title: str = "") -> SessionConte
     raw_dir = Path(raw_dir).expanduser().resolve()
     started_at = avo_state.now_iso()
     session_id = provisional_session_id(raw_dir, started_at)
+    pre_files = scan_inventory(raw_dir, relative_to=raw_dir)
+
+    cost_identity = _accounting_identity(raw_dir, provider)
     sdir = session_dir(session_id)
     sdir.mkdir(parents=True, exist_ok=True)
 
@@ -137,13 +140,14 @@ def start_session(raw_dir: Path, provider: str, title: str = "") -> SessionConte
         "provider": provider,
         "startedAt": started_at,
         "masterBasename": None,
+        "accountingVideoId": cost_identity["accountingVideoId"],
     }
     if title:
         meta["title"] = title
 
     pre_payload = {
         "scannedAt": started_at,
-        "files": scan_inventory(raw_dir, relative_to=raw_dir),
+        "files": pre_files,
     }
 
     _write_json(sdir / "meta.json", meta)
@@ -154,6 +158,18 @@ def start_session(raw_dir: Path, provider: str, title: str = "") -> SessionConte
         raw_dir=raw_dir,
         provider=provider,
         started_at=started_at,
+    )
+
+
+def _accounting_identity(raw_dir, provider):
+    from avo.cost_store import CostStore
+
+    project_path = raw_dir / "avo.project.json"
+    project = (
+        json.loads(project_path.read_text("utf-8")) if project_path.is_file() else {}
+    )
+    return CostStore(raw_dir).initialize(
+        provider, str(project.get("videoId") or raw_dir.name)
     )
 
 

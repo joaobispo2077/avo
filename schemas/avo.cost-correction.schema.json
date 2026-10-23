@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://avo.local/schemas/avo.cost-correction.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {
+      "const": "1.0.0"
+    },
+    "correctionId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 500
+    },
+    "observationId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 500
+    },
+    "action": {
+      "enum": [
+        "select",
+        "exclude"
+      ]
+    },
+    "actor": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 500
+    },
+    "reason": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 500
+    },
+    "selected": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 500
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "supersedes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "correctionId",
+    "observationId",
+    "action",
+    "actor",
+    "reason",
+    "selected",
+    "createdAt"
+  ]
+}
