@@ -87,6 +87,55 @@ class ShortsMediaTests(unittest.TestCase):
         self.assertEqual(command[command.index("-t") + 1], "10.000000")
         self.assertEqual(command[command.index("-ar") + 1], "48000")
 
+    def test_dialogue_treatment_is_eq_then_nr_before_loudness_stage(self) -> None:
+        treatment = {
+            "stream": "0:a:0",
+            "channel": "mono",
+            "eqProfile": "bishop-dialogue-v1",
+            "noiseReduction": {
+                "mode": "afftdn",
+                "strengthPercent": 30,
+                "nrDb": 6.0,
+                "noiseFloorDb": -37.5,
+            },
+            "approval": {
+                "abRequired": True,
+                "removedSignalReviewRequired": True,
+                "reference": "user://approved",
+            },
+        }
+        command = shorts_media.dialogue_treatment_command(
+            Path("raw.m4a"), Path("treated.m4a"), treatment=treatment
+        )
+        chain = command[command.index("-af") + 1]
+        self.assertLess(chain.index("highpass=f=90"), chain.index("afftdn="))
+        self.assertLess(chain.index("lowpass=f=16000"), chain.index("afftdn="))
+        self.assertNotIn("loudnorm", chain)
+        self.assertEqual(command[command.index("-ac") + 1], "1")
+
+    def test_timed_music_bed_command_enforces_fades_offset_and_relative_limit(
+        self,
+    ) -> None:
+        command = shorts_media.timed_audio_bed_mix_command(
+            Path("voice.m4a"),
+            Path("music.m4a"),
+            Path("mix.m4a"),
+            timeline_start_sec=23.62,
+            source_start_sec=0.41,
+            duration_sec=6.0,
+            fade_in_ms=120,
+            fade_out_ms=250,
+            gain_db=-18.0,
+            channels=1,
+        )
+        filters = command[command.index("-filter_complex") + 1]
+        self.assertIn("atrim=start=0.410000:duration=6.000000", filters)
+        self.assertIn("afade=t=in:st=0:d=0.120", filters)
+        self.assertIn("afade=t=out:st=5.750000:d=0.250", filters)
+        self.assertIn("adelay=23620", filters)
+        self.assertIn("sidechaincompress=", filters)
+        self.assertEqual(command[command.index("-ac") + 1], "1")
+
     def test_extreme_tempo_is_decomposed_into_supported_filters(self) -> None:
         self.assertEqual(shorts_media.atempo_chain(4), "atempo=2,atempo=2")
         self.assertEqual(shorts_media.atempo_chain(0.25), "atempo=0.5,atempo=0.5")
@@ -302,6 +351,14 @@ class ShortsMediaTests(unittest.TestCase):
         self.assertEqual(command[command.index("-ar") + 1], "48000")
         self.assertEqual(command[command.index("-ac") + 1], "2")
         self.assertEqual(command[command.index("-c:a") + 1], "aac")
+
+    def test_channel_remap_copies_picture_and_encodes_requested_mono(self) -> None:
+        command = shorts_media.audio_channel_remap_command(
+            Path("proof.mp4"), Path("proof-mono.mp4"), channels=1
+        )
+        self.assertEqual(command[command.index("-c:v") + 1], "copy")
+        self.assertEqual(command[command.index("-ac") + 1], "1")
+        self.assertEqual(command[command.index("-ar") + 1], "48000")
 
     def test_prepare_sfx_assets_copies_used_kinds_only(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
