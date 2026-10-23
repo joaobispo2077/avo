@@ -4,12 +4,14 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import subprocess
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from avo import audio_restoration
 from avo.shorts_rules import (
     SFX_ASSET_KEY,
     SFX_FILE_NAME,
@@ -134,6 +136,7 @@ def dialogue_audio_command(
     speed: float,
     sample_rate: int = 48000,
     channels: int = 2,
+    audio_stream: str = "0:a:0",
 ) -> list[str]:
     duration = (end_sec - start_sec) / speed
     return [
@@ -148,7 +151,7 @@ def dialogue_audio_command(
         "-i",
         str(source),
         "-map",
-        "0:a:0",
+        audio_stream,
         "-vn",
         "-af",
         f"asetpts=PTS-STARTPTS,{atempo_chain(speed)}",
@@ -159,11 +162,234 @@ def dialogue_audio_command(
         "-ac",
         str(channels),
         "-c:a",
-        "aac",
+        "pcm_s24le" if output.suffix.lower() == ".wav" else "aac",
         "-b:a",
         "192k",
         str(output),
     ]
+
+
+def dialogue_treatment_command(
+    source: Path,
+    output: Path,
+    *,
+    treatment: Mapping[str, Any],
+    sample_rate: int = 48000,
+) -> list[str]:
+    """Treat dialogue only, bypassing documented output-time tactile events."""
+    strength = _validate_audio_treatment(treatment)
+    chain = audio_restoration.build_repair_filter(strength).split(",")
+    # Keep the existing public chain's EQ order; calibration comes from the
+    # shared restoration builder rather than caller-supplied decibel settings.
+    chain = [part for part in chain if not part.startswith("lowpass=")]
+    chain.insert(3, audio_restoration.EQ_CHAIN[-1])
+    windows = treatment.get("protectedWindows") or []
+    filters = ["-af", ",".join(chain)]
+    if windows:
+        expression = "+".join(
+            f"between(t,{window['startSec']:.6f},{window['endSec']:.6f})"
+            for window in windows
+        )
+        # FFT filters may delay even disabled samples. Mix the untouched branch
+        # sample-by-sample so protected handling is actually preserved.
+        graph = (
+            "[0:a:0]asplit=2[dry][input];[input]" + ",".join(chain) + "[wet];"
+            f"[dry]aeval='val(ch)*gt({expression},0)':c=same[protected];"
+            f"[wet]aeval='val(ch)*not({expression})':c=same[repaired];"
+            "[protected][repaired]amix=inputs=2:normalize=0:duration=first[out]"
+        )
+        filters = ["-filter_complex", graph]
+    channels = 1 if treatment["channel"] == "mono" else 2
+    return [
+        "ffmpeg",
+        "-hide_banner",
+        "-nostdin",
+        "-y",
+        "-i",
+        str(source),
+        *filters,
+        "-map",
+        "[out]" if windows else "0:a:0",
+        "-vn",
+        "-ar",
+        str(sample_rate),
+        "-ac",
+        str(channels),
+        "-c:a",
+        "pcm_s24le" if output.suffix.lower() == ".wav" else "aac",
+        str(output),
+    ]
+
+
+def _finite_audio_number(value: Any) -> bool:
+    return type(value) in {int, float} and math.isfinite(value)
+
+
+def _validate_noise_strength(strength: Any) -> int:
+    if (
+        not _finite_audio_number(strength)
+        or not 0 <= strength <= 100
+        or int(strength) != strength
+    ):
+        raise MediaPreparationError(
+            "dialogue NR strength must be an integer percentage"
+        )
+    return int(strength)
+
+
+def _validate_noise_calibration(noise: Mapping[str, Any], strength: int) -> None:
+    expected = audio_restoration.afftdn_params(strength)
+    actual = (noise.get("nrDb"), noise.get("noiseFloorDb"))
+    if noise.get("mode") != "afftdn" or (expected is None and actual[0] != 0):
+        raise MediaPreparationError("unsupported dialogue NR calibration")
+    if expected is not None and any(
+        not _finite_audio_number(value) or not math.isclose(value, target, abs_tol=1e-6)
+        for value, target in zip(actual, expected)
+    ):
+        raise MediaPreparationError(
+            "dialogue NR parameters do not match strength calibration"
+        )
+
+
+def _validate_treatment_approval(approval: Mapping[str, Any]) -> None:
+    if (
+        approval.get("abRequired") is not True
+        or approval.get("removedSignalReviewRequired") is not True
+        or not str(approval.get("reference") or "").strip()
+    ):
+        raise MediaPreparationError(
+            "dialogue treatment requires A/B and removed-signal review"
+        )
+
+
+def _validate_protected_audio_window(window: Mapping[str, Any]) -> None:
+    start, end = window.get("startSec"), window.get("endSec")
+    if (
+        not _finite_audio_number(start)
+        or not _finite_audio_number(end)
+        or start < 0
+        or end <= start
+        or not str(window.get("reason") or "").strip()
+    ):
+        raise MediaPreparationError(
+            "protected audio window requires finite range and reason"
+        )
+
+
+def _validate_audio_treatment(treatment: Mapping[str, Any]) -> int:
+    profile = str(treatment.get("eqProfile") or "")
+    if profile != "dialogue-v1" and not profile.endswith("-dialogue-v1"):
+        raise MediaPreparationError("unsupported dialogue EQ profile")
+    noise = treatment.get("noiseReduction") or {}
+    strength = _validate_noise_strength(noise.get("strengthPercent"))
+    _validate_noise_calibration(noise, strength)
+    _validate_treatment_approval(treatment.get("approval") or {})
+    if treatment.get("channel") not in {"mono", "stereo"}:
+        raise MediaPreparationError("dialogue treatment channel must be mono or stereo")
+    for window in treatment.get("protectedWindows") or []:
+        _validate_protected_audio_window(window)
+    return strength
+
+
+def _validate_dialogue_source(source, treatment, runner):
+    _validate_audio_treatment(treatment)
+    selector = str(treatment.get("stream") or "")
+    probe = probe_media(source, runner)
+    validate_stream_selector(probe, selector, "a")
+    streams = [s for s in probe.get("streams") or [] if s.get("codec_type") == "audio"]
+    selected = streams[int(selector.rsplit(":", 1)[1])]
+    channels = 1 if treatment["channel"] == "mono" else 2
+    if selected.get("channels") != channels:
+        raise MediaPreparationError(
+            "dialogue treatment must preserve selected source channel layout"
+        )
+    return selector, channels
+
+
+def removed_signal_command(
+    untreated: Path,
+    treated: Path,
+    output: Path,
+    *,
+    sample_rate: int = 48000,
+    channels: int = 1,
+) -> list[str]:
+    filters = (
+        "[1:a]volume=-1[inv];"
+        "[0:a][inv]amix=inputs=2:duration=shortest:normalize=0[removed]"
+    )
+    return [
+        "ffmpeg",
+        "-hide_banner",
+        "-nostdin",
+        "-y",
+        "-i",
+        str(untreated),
+        "-i",
+        str(treated),
+        "-filter_complex",
+        filters,
+        "-map",
+        "[removed]",
+        "-vn",
+        "-ar",
+        str(sample_rate),
+        "-ac",
+        str(channels),
+        "-c:a",
+        "pcm_s24le",
+        str(output),
+    ]
+
+
+def apply_dialogue_treatment(
+    untreated: PreparedAsset,
+    output_dir: Path,
+    *,
+    treatment: Mapping[str, Any],
+    sample_rate: int,
+    runner: CommandRunner,
+) -> dict[str, PreparedAsset]:
+    _validate_audio_treatment(treatment)
+    if any(
+        w["endSec"] > untreated.duration_sec
+        for w in treatment.get("protectedWindows") or []
+    ):
+        raise MediaPreparationError("protected audio window exceeds dialogue duration")
+    output_dir.mkdir(parents=True, exist_ok=True)
+    treated_path = output_dir / "dialogue-audio.wav"
+    channels = 1 if treatment.get("channel") == "mono" else 2
+    _run(
+        dialogue_treatment_command(
+            untreated.path,
+            treated_path,
+            treatment=treatment,
+            sample_rate=sample_rate,
+        ),
+        runner,
+    )
+    removed_path = output_dir / "dialogue-removed-signal.wav"
+    _run(
+        removed_signal_command(
+            untreated.path,
+            treated_path,
+            removed_path,
+            sample_rate=sample_rate,
+            channels=channels,
+        ),
+        runner,
+    )
+    if not treated_path.is_file() or not removed_path.is_file():
+        raise MediaPreparationError("dialogue treatment review assets were not created")
+    return {
+        "dialogueAudio": PreparedAsset(
+            treated_path, sha256_file(treated_path), untreated.duration_sec, False
+        ),
+        "dialogueUntreated": untreated,
+        "dialogueRemovedSignal": PreparedAsset(
+            removed_path, sha256_file(removed_path), untreated.duration_sec, False
+        ),
+    }
 
 
 def _run(command: Sequence[str], runner: CommandRunner) -> None:
@@ -187,15 +413,25 @@ def prepare_base_assets(
     sample_rate: int = 48000,
     channels: int = 2,
     crop_mode: str = "cover",
+    audio_treatment: Mapping[str, Any] | None = None,
+    audio_stream: str = "0:a:0",
+    lossless_audio: bool = False,
     runner: CommandRunner = _default_runner,
 ) -> dict[str, PreparedAsset]:
     """Prepare exact-duration muted video and separate pitch-preserved dialogue."""
     source = source.resolve()
     if not source.is_file():
         raise MediaPreparationError(f"source does not exist: {source}")
+    if audio_treatment:
+        audio_stream, channels = _validate_dialogue_source(
+            source, audio_treatment, runner
+        )
+    suffix = ".wav" if audio_treatment or lossless_audio else ".m4a"
     output_dir.mkdir(parents=True, exist_ok=True)
     video = output_dir / "base-video.mp4"
-    audio = output_dir / "dialogue-audio.m4a"
+    audio = output_dir / (
+        f"dialogue-untreated{suffix}" if audio_treatment else f"dialogue-audio{suffix}"
+    )
     _run(
         base_video_command(
             source,
@@ -219,16 +455,28 @@ def prepare_base_assets(
             speed=speed,
             sample_rate=sample_rate,
             channels=channels,
+            audio_stream=audio_stream,
         ),
         runner,
     )
     if not video.is_file() or not audio.is_file():
         raise MediaPreparationError("media runner did not create both expected assets")
     duration = (end_sec - start_sec) / speed
-    return {
+    assets = {
         "baseVideo": PreparedAsset(video, sha256_file(video), duration, True),
         "dialogueAudio": PreparedAsset(audio, sha256_file(audio), duration, False),
     }
+    if audio_treatment:
+        assets.update(
+            apply_dialogue_treatment(
+                assets["dialogueAudio"],
+                output_dir,
+                treatment=audio_treatment,
+                sample_rate=sample_rate,
+                runner=runner,
+            )
+        )
+    return assets
 
 
 def prepare_ordered_base_assets(
@@ -243,6 +491,7 @@ def prepare_ordered_base_assets(
     sample_rate: int = 48000,
     channels: int = 2,
     crop_mode: str = "cover",
+    audio_treatment: Mapping[str, Any] | None = None,
     seam_safety_sec: float = 0.03,
     runner: CommandRunner = _default_runner,
 ) -> dict[str, Any]:
@@ -250,6 +499,11 @@ def prepare_ordered_base_assets(
     if not source_segments:
         raise MediaPreparationError("ordered source segments cannot be empty")
     source = source.resolve()
+    audio_stream = "0:a:0"
+    if audio_treatment:
+        audio_stream, channels = _validate_dialogue_source(
+            source, audio_treatment, runner
+        )
     output_dir.mkdir(parents=True, exist_ok=True)
     prepared = _prepare_ordered_segments(
         source,
@@ -261,11 +515,15 @@ def prepare_ordered_base_assets(
         height=height,
         sample_rate=sample_rate,
         channels=channels,
+        audio_stream=audio_stream,
+        lossless_audio=bool(audio_treatment),
         crop_mode=crop_mode,
         runner=runner,
     )
     video = output_dir / "base-video.mp4"
-    audio = output_dir / "dialogue-audio.m4a"
+    audio = output_dir / (
+        "dialogue-untreated.wav" if audio_treatment else "dialogue-audio.m4a"
+    )
     video_inputs = [part["baseVideo"].path for part in prepared]
     audio_inputs = [part["dialogueAudio"].path for part in prepared]
     _run(_concat_video_command(video_inputs, video), runner)
@@ -286,11 +544,22 @@ def prepare_ordered_base_assets(
         )
     total = sum(part["baseVideo"].duration_sec for part in prepared)
     windows = _join_windows(source_segments, prepared, total, seam_safety_sec)
-    return {
+    assets: dict[str, Any] = {
         "baseVideo": PreparedAsset(video, sha256_file(video), total, True),
         "dialogueAudio": PreparedAsset(audio, sha256_file(audio), total, False),
         "joinWindows": windows,
     }
+    if audio_treatment:
+        assets.update(
+            apply_dialogue_treatment(
+                assets["dialogueAudio"],
+                output_dir,
+                treatment=audio_treatment,
+                sample_rate=sample_rate,
+                runner=runner,
+            )
+        )
+    return assets
 
 
 def _prepare_ordered_segments(
@@ -372,7 +641,7 @@ def _concat_audio_command(
             "-ac",
             str(channels),
             "-c:a",
-            "aac",
+            "pcm_s24le" if output.suffix.lower() == ".wav" else "aac",
             str(output),
         ]
     )
@@ -549,6 +818,98 @@ def ducked_mix_command(
     ]
 
 
+def timed_audio_bed_mix_command(
+    dialogue: Path,
+    bed: Path,
+    output: Path,
+    *,
+    timeline_start_sec: float,
+    source_start_sec: float,
+    duration_sec: float,
+    fade_in_ms: int,
+    fade_out_ms: int,
+    gain_db: float,
+    channels: int = 1,
+) -> list[str]:
+    layout = "mono" if channels == 1 else "stereo"
+    fade_out_start = max(0.0, duration_sec - fade_out_ms / 1000)
+    delay_ms = round(timeline_start_sec * 1000)
+    filters = [
+        f"[0:a]aformat=sample_fmts=fltp:sample_rates=48000:channel_layouts={layout},asplit=2[dlg][sc]",
+        (
+            f"[1:a]atrim=start={source_start_sec:.6f}:duration={duration_sec:.6f},"
+            "asetpts=PTS-STARTPTS,"
+            f"afade=t=in:st=0:d={fade_in_ms / 1000:.3f},"
+            f"afade=t=out:st={fade_out_start:.6f}:d={fade_out_ms / 1000:.3f},"
+            f"volume={gain_db:.3f}dB,adelay={delay_ms}:all=1[bedin]"
+        ),
+        (
+            f"[bedin][sc]sidechaincompress=threshold=0.05:ratio={DUCK_RATIO:g}:"
+            f"attack={DUCK_ATTACK_MS:g}:release={DUCK_RELEASE_MS:g}[bedduck]"
+        ),
+        "[dlg][bedduck]amix=inputs=2:duration=first:dropout_transition=0:normalize=0[outa]",
+    ]
+    return [
+        "ffmpeg",
+        "-hide_banner",
+        "-nostdin",
+        "-y",
+        "-i",
+        str(dialogue),
+        "-i",
+        str(bed),
+        "-filter_complex",
+        ";".join(filters),
+        "-map",
+        "[outa]",
+        "-ar",
+        "48000",
+        "-ac",
+        str(channels),
+        "-c:a",
+        "aac",
+        str(output),
+    ]
+
+
+def mix_timed_audio_bed(
+    dialogue: PreparedAsset,
+    bed: Path,
+    output: Path,
+    *,
+    policy: Mapping[str, Any],
+    channels: int,
+    runner: CommandRunner = _default_runner,
+) -> PreparedAsset:
+    bed_measure = measure_audio_loudness(bed, runner=runner)
+    dialogue_measure = measure_audio_loudness(dialogue.path, runner=runner)
+    bed_lufs = bed_measure.get("integratedLufs")
+    dialogue_lufs = dialogue_measure.get("integratedLufs")
+    minimum_below = float(policy["ducking"]["minimumBelowDialogueDb"])
+    gain_db = -minimum_below
+    if bed_lufs is not None and dialogue_lufs is not None:
+        gain_db = min(0.0, float(dialogue_lufs) - minimum_below - float(bed_lufs))
+    output.parent.mkdir(parents=True, exist_ok=True)
+    _run(
+        timed_audio_bed_mix_command(
+            dialogue.path,
+            bed,
+            output,
+            timeline_start_sec=float(policy["timelineStartSec"]),
+            source_start_sec=float(policy["sourceStartSec"]),
+            duration_sec=float(policy["durationSec"]),
+            fade_in_ms=int(policy["fadeInMs"]),
+            fade_out_ms=int(policy["fadeOutMs"]),
+            gain_db=gain_db,
+            channels=channels,
+        ),
+        runner,
+    )
+    if not output.is_file():
+        raise MediaPreparationError("timed audio bed mix was not created")
+    return PreparedAsset(output, sha256_file(output), dialogue.duration_sec, False)
+
+
 def mix_ducked_bed_into_dialogue(
     dialogue: Path,
     bed: Path,
@@ -577,9 +938,13 @@ def apply_dialogue_gain_if_needed(
     output: Path,
     *,
     tp_ceiling: float = VOICE_TP_CEILING_DBTP,
+    channels: int = 2,
     runner: CommandRunner = _default_runner,
 ) -> PreparedAsset:
     """Raise or lower a quiet/hot dialogue stem; skip when already in band."""
+    if channels not in {1, 2}:
+        raise MediaPreparationError("dialogue gain channels must be mono or stereo")
+    codec = "pcm_s24le" if output.suffix.lower() == ".wav" else "aac"
     measured = measure_audio_loudness(dialogue.path, runner=runner)
     gain_filter = dialogue_gain_filter(
         measured.get("integratedLufs"),
@@ -602,9 +967,9 @@ def apply_dialogue_gain_if_needed(
             "-ar",
             "48000",
             "-ac",
-            "2",
+            str(channels),
             "-c:a",
-            "aac",
+            codec,
             str(output),
         ],
         runner,
@@ -616,7 +981,7 @@ def apply_dialogue_gain_if_needed(
     integrated = after.get("integratedLufs")
     if integrated is None or VOICE_QUIET_LUFS <= integrated <= VOICE_HOT_LUFS:
         return gained
-    normalized = output.with_name("dialogue-loudnorm.m4a")
+    normalized = output.with_name(f"dialogue-loudnorm{output.suffix}")
     _run(
         [
             "ffmpeg",
@@ -630,9 +995,9 @@ def apply_dialogue_gain_if_needed(
             "-ar",
             "48000",
             "-ac",
-            "2",
+            str(channels),
             "-c:a",
-            "aac",
+            codec,
             str(normalized),
         ],
         runner,
@@ -687,6 +1052,65 @@ def sfx_audio_command(
     ]
 
 
+def audio_channel_remap_command(
+    source: Path, output: Path, *, channels: int, sample_rate: int = 48000
+) -> list[str]:
+    return [
+        "ffmpeg",
+        "-hide_banner",
+        "-nostdin",
+        "-y",
+        "-i",
+        str(source),
+        "-map",
+        "0:v:0",
+        "-map",
+        "0:a:0",
+        "-c:v",
+        "copy",
+        "-c:a",
+        "aac",
+        "-ar",
+        str(sample_rate),
+        "-ac",
+        str(channels),
+        "-movflags",
+        "+faststart",
+        str(output),
+    ]
+
+
+def ensure_audio_channels(
+    source: Path,
+    *,
+    channels: int,
+    sample_rate: int = 48000,
+    runner: CommandRunner = _default_runner,
+) -> None:
+    probe = probe_media(source, runner)
+    audio = next(
+        (row for row in probe.get("streams") or [] if row.get("codec_type") == "audio"),
+        None,
+    )
+    if audio is None:
+        raise MediaPreparationError("rendered proof has no audio stream")
+    if (
+        int(audio.get("channels") or 0) == channels
+        and int(audio.get("sample_rate") or 0) == sample_rate
+    ):
+        return
+    remapped = source.with_name(f"{source.stem}.channels{source.suffix}")
+    _run(
+        audio_channel_remap_command(
+            source, remapped, channels=channels, sample_rate=sample_rate
+        ),
+        runner,
+    )
+    if not remapped.is_file():
+        raise MediaPreparationError("audio channel remap did not create output")
+    remapped.replace(source)
+
+
 def prepare_sfx_assets(
     hits: Sequence[Mapping[str, Any]],
     library: Mapping[str, str],
@@ -723,7 +1147,11 @@ def composition_assets(prepared: Mapping[str, Any]) -> dict[str, Any]:
     return {
         key: value.as_contract()
         for key, value in prepared.items()
-        if isinstance(value, PreparedAsset) and key != "insertionAudio"
+        if isinstance(value, PreparedAsset)
+        and (
+            key in {"baseVideo", "dialogueAudio", "insertionVideo"}
+            or key.startswith("sfx")
+        )
     }
 
 
@@ -781,12 +1209,7 @@ def validate_stream_selector(
     probe: Mapping[str, Any], selector: str, kind: str
 ) -> None:
     match = selector.split(":")
-    if (
-        len(match) != 3
-        or match[0] != "0"
-        or match[1] not in {"v", "a"}
-        or not match[2].isdigit()
-    ):
+    if len(match) != 3 or match[0] != "0" or match[1] != kind or not match[2].isdigit():
         raise MediaPreparationError(
             f"stream selector must be concrete like 0:{kind}:0: {selector}"
         )
