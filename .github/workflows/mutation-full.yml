@@ -100,7 +100,7 @@ jobs:
         run: npm ci
 
       - name: Install ffmpeg
-        timeout-minutes: 3
+        timeout-minutes: 8
         run: bash scripts/ci/ensure-ffmpeg.sh
 
       - name: Measure core unit branches

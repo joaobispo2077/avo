@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The workflow bounds this entire step to three minutes.
+# The workflow allows eight minutes for package downloads and codec checks.
 set -euo pipefail
 if ! command -v ffmpeg >/dev/null || ! command -v ffprobe >/dev/null \
   || ! ffmpeg -version >/dev/null 2>&1 || ! ffprobe -version >/dev/null 2>&1; then
