@@ -30,6 +30,8 @@ _MATRIX = {
     "changelog-video": ("Profile", ()),
     "chapters": ("Consumes", ()),
     "cleanup": ("Admin", ()),
+    "costs": ("Admin", ()),
+    "metrics": ("Admin", ()),
     "color": ("Owns", ("tracks",)),
     "creators": ("Admin", ()),
     "deliver": ("Consumes", ()),
