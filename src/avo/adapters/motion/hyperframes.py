@@ -125,16 +125,7 @@ def _motion_fields(
     return None
 
 
-def build_composition_spec(
-    *,
-    batch_id: str,
-    item: Mapping[str, Any],
-    output: Mapping[str, Any],
-    assets: Mapping[str, Mapping[str, Any]],
-    proof_revision: int,
-    expected_output_path: Path,
-    provider_tokens: Mapping[str, Any] | None = None,
-) -> dict[str, Any]:
+def _validate_composition_text(item: Mapping[str, Any]) -> None:
     from avo.timeline.animation import (
         AnimationError,
         validate_visible_text_policy,
@@ -151,6 +142,19 @@ def build_composition_spec(
         )
     except AnimationError as exc:
         raise HyperframesError(str(exc)) from exc
+
+
+def build_composition_spec(
+    *,
+    batch_id: str,
+    item: Mapping[str, Any],
+    output: Mapping[str, Any],
+    assets: Mapping[str, Mapping[str, Any]],
+    proof_revision: int,
+    expected_output_path: Path,
+    provider_tokens: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    _validate_composition_text(item)
     layout = _normalized_layout(item)
     if layout["mode"] == "split" and not assets.get("insertionVideo"):
         raise HyperframesError("split layout requires prepared insertion video")
@@ -538,6 +542,19 @@ def _insertion_markup(spec: Mapping[str, Any], duration: str) -> tuple[str, str]
     return video, audio
 
 
+def _write_runtime(
+    spec: Mapping[str, Any], template_root: Any, project_dir: Path
+) -> None:
+    runtime = template_root.joinpath("runtime.js").read_text(encoding="utf-8")
+    (project_dir / "runtime.js").write_text(
+        runtime.replace("__CAPTION_JSON__", _script_json(spec["captions"]))
+        .replace("__CALLOUT_JSON__", _script_json(spec.get("callouts") or []))
+        .replace("__PUNCHIN_JSON__", _script_json(spec.get("punchIns") or []))
+        .replace("__GRAPHIC_JSON__", _script_json(spec.get("graphics") or [])),
+        encoding="utf-8",
+    )
+
+
 def compile_project(spec: Mapping[str, Any], project_dir: Path) -> Path:
     """Compile one immutable static project; generated HTML is disposable."""
     shorts_contract.validate_document(spec, "composition")
@@ -551,14 +568,7 @@ def compile_project(spec: Mapping[str, Any], project_dir: Path) -> Path:
         encoding="utf-8",
     )
     _write_hyperframes_manifest(spec, template_root, project_dir)
-    runtime = template_root.joinpath("runtime.js").read_text(encoding="utf-8")
-    (project_dir / "runtime.js").write_text(
-        runtime.replace("__CAPTION_JSON__", _script_json(spec["captions"]))
-        .replace("__CALLOUT_JSON__", _script_json(spec.get("callouts") or []))
-        .replace("__PUNCHIN_JSON__", _script_json(spec.get("punchIns") or []))
-        .replace("__GRAPHIC_JSON__", _script_json(spec.get("graphics") or [])),
-        encoding="utf-8",
-    )
+    _write_runtime(spec, template_root, project_dir)
     _copy_spec_assets(spec, assets_dir)
     duration = f"{float(spec['durationSec']):.6f}"
     insertion_video, insertion_audio = _insertion_markup(spec, duration)
@@ -602,6 +612,15 @@ def compile_project(spec: Mapping[str, Any], project_dir: Path) -> Path:
     return project_dir
 
 
+def _collect_render_artifacts(project: Path) -> list[Path]:
+    artifacts: list[Path] = []
+    for directory in (project / "snapshots", project / "renders"):
+        if directory.is_dir():
+            artifacts.extend(path for path in directory.rglob("*") if path.is_file())
+    return artifacts
+
+
+
 class HyperframesAdapter:
     routing_id = "hyperframes"
     operations: ClassVar[set[str]] = {"check", "snapshot", "preview", "render"}
@@ -633,15 +652,9 @@ class HyperframesAdapter:
         completed = self.runner(
             command, cwd=root, text=True, capture_output=True, check=False
         )
-        artifacts: list[Path] = []
-        for directory in (project / "snapshots", project / "renders"):
-            if directory.is_dir():
-                artifacts.extend(
-                    path for path in directory.rglob("*") if path.is_file()
-                )
         return JobResult(
             exit_code=completed.returncode,
-            artifact_paths=artifacts,
+            artifact_paths=_collect_render_artifacts(project),
             stdout=completed.stdout,
             stderr=completed.stderr,
         )
