@@ -11,6 +11,7 @@ from unittest.mock import patch
 from avo.adapters.motion.hyperframes import (
     HyperframesAdapter,
     HyperframesError,
+    _token_css,
     build_composition_spec,
     compile_project,
 )
@@ -346,6 +347,41 @@ class HyperframesAdapterTests(unittest.TestCase):
                     proof_revision=1,
                     expected_output_path=root / "x.mp4",
                 )
+            insert = root / "insert.mp4"
+            insert.write_bytes(b"insert")
+            item["visualInserts"] = [
+                {
+                    "id": "gameplay",
+                    "kind": "video",
+                    "path": str(insert),
+                    "sha256": hashlib.sha256(insert.read_bytes()).hexdigest(),
+                    "rightsReference": "official://gameplay",
+                    "startSec": 0,
+                    "endSec": 2,
+                    "sourceStartSec": 0,
+                    "sourceEndSec": 2,
+                    "videoStreamIndex": 0,
+                    "rect": {"x": 0, "y": 0, "width": 1, "height": 0.62},
+                    "baseRegion": {
+                        "x": 0,
+                        "y": 0.62,
+                        "width": 1,
+                        "height": 0.38,
+                    },
+                    "fit": "cover",
+                }
+            ]
+            spec = build_composition_spec(
+                batch_id="b",
+                item=item,
+                output={"width": 1080, "height": 1920, "fps": 30},
+                assets=assets,
+                proof_revision=1,
+                expected_output_path=root / "x.mp4",
+            )
+            self.assertEqual(spec["layout"]["baseRegion"]["y"], 0.62)
+            self.assertEqual(spec["layout"]["insertionRegion"]["height"], 0.62)
+            self.assertIn("--split-percent:62.000%;", _token_css(spec))
 
     def test_subprocess_adapter_adds_strict_and_propagates_failure(self) -> None:
         calls = []
@@ -360,6 +396,12 @@ class HyperframesAdapterTests(unittest.TestCase):
         self.assertEqual(result.exit_code, 7)
         self.assertIn("--strict", calls[0][0])
         self.assertEqual(result.stderr, "bad composition")
+
+        HyperframesAdapter(runner=runner).execute(
+            "check", Path("/tmp/project"), "--allow-warnings", root=Path.cwd()
+        )
+        self.assertNotIn("--strict", calls[1][0])
+        self.assertNotIn("--allow-warnings", calls[1][0])
 
     def test_caption_words_are_inline_block_without_negative_tracking(self) -> None:
         css = (

@@ -761,6 +761,26 @@ class ShortsPlanTests(unittest.TestCase):
                 request_path=FIXTURE_DIR / "shorts.request.json",
             )
 
+    def test_preview_render_profile_preserves_vertical_aspect_ratio(self) -> None:
+        plan = {"output": {"width": 1728, "height": 3072}}
+
+        profile = shorts_plan.target_render_profile(plan, preview=True)
+
+        self.assertEqual(
+            profile,
+            {"preview": True, "width": 360, "height": 640},
+        )
+
+    def test_preview_render_profile_preserves_horizontal_aspect_ratio(self) -> None:
+        plan = {"output": {"width": 1920, "height": 1080}}
+
+        profile = shorts_plan.target_render_profile(plan, preview=True)
+
+        self.assertEqual(
+            profile,
+            {"preview": True, "width": 640, "height": 360},
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
