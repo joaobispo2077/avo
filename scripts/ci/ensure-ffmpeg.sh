@@ -3,6 +3,11 @@
 set -euo pipefail
 if ! command -v ffmpeg >/dev/null || ! command -v ffprobe >/dev/null \
   || ! ffmpeg -version >/dev/null 2>&1 || ! ffprobe -version >/dev/null 2>&1; then
+  # The Azure HTTP mirror can stream packages too slowly for bounded CI setup.
+  if [[ -f /etc/apt/apt-mirrors.txt ]]; then
+    sudo sed -i 's#https\?://azure\.archive\.ubuntu\.com/ubuntu#https://archive.ubuntu.com/ubuntu#g' \
+      /etc/apt/apt-mirrors.txt
+  fi
   sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=15 \
     -o Acquire::https::Timeout=15 update
   sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=15 \
