@@ -187,11 +187,11 @@ def dialogue_treatment_command(
     filters = ["-af", ",".join(chain)]
     if windows:
         expression = "+".join(
-            f"between(t,{window['startSec']:.6f},{window['endSec']:.6f})"
+            f"between(n/s,{window['startSec']:.6f},{window['endSec']:.6f})"
             for window in windows
         )
         # FFT filters may delay even disabled samples. Mix the untouched branch
-        # sample-by-sample so protected handling is actually preserved.
+        # sample-by-sample; n/s avoids timestamp rounding at protected boundaries.
         graph = (
             "[0:a:0]asplit=2[dry][input];[input]" + ",".join(chain) + "[wet];"
             f"[dry]aeval='val(ch)*gt({expression},0)':c=same[protected];"
