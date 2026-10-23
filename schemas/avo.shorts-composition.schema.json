@@ -42,6 +42,7 @@
       "type": "array",
       "items": { "type": "object" }
     },
+    "renderLayers": { "enum": ["all", "graphics-only"] },
     "batchId": {
       "type": "string"
     },
@@ -167,6 +168,7 @@
         "additionalProperties": true
       }
     },
+    "visualInserts": { "type": "array", "items": { "$ref": "#/$defs/visualInsert" } },
     "callouts": {
       "type": "array",
       "items": {
@@ -267,18 +269,6 @@
       "items": {
         "type": "string"
       }
-    },
-    "renderLayers": {
-      "enum": [
-        "all",
-        "graphics-only"
-      ]
-    },
-    "visualInserts": {
-      "type": "array",
-      "items": {
-        "$ref": "#/$defs/visualInsert"
-      }
     }
   },
   "allOf": [
@@ -346,107 +336,6 @@
     }
   ],
   "$defs": {
-    "graphicSfx": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["kind"],
-      "properties": {
-        "kind": { "enum": ["chip", "stamp", "punch", "seam", "price"] },
-        "every": {
-          "enum": [
-            "start",
-            "fill",
-            "item",
-            "resolve",
-            "reject",
-            "confirm",
-            "badge",
-            "role",
-            "downbeat",
-            "wipe"
-          ]
-        },
-        "offsetSec": { "type": "number" },
-        "atSec": { "type": "number", "minimum": 0 }
-      }
-    },
-    "asset": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "path",
-        "hash",
-        "durationSec"
-      ],
-      "properties": {
-        "path": {
-          "type": "string"
-        },
-        "hash": {
-          "type": "string",
-          "pattern": "^[a-f0-9]{64}$"
-        },
-        "durationSec": {
-          "type": "number",
-          "exclusiveMinimum": 0
-        },
-        "muted": {
-          "type": "boolean"
-        }
-      }
-    },
-    "rect": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "x",
-        "y",
-        "width",
-        "height"
-      ],
-      "properties": {
-        "x": {
-          "type": "number",
-          "minimum": 0,
-          "maximum": 1
-        },
-        "y": {
-          "type": "number",
-          "minimum": 0,
-          "maximum": 1
-        },
-        "width": {
-          "type": "number",
-          "exclusiveMinimum": 0,
-          "maximum": 1
-        },
-        "height": {
-          "type": "number",
-          "exclusiveMinimum": 0,
-          "maximum": 1
-        }
-      }
-    },
-    "point": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": [
-        "x",
-        "y"
-      ],
-      "properties": {
-        "x": {
-          "type": "number",
-          "minimum": 0,
-          "maximum": 1
-        },
-        "y": {
-          "type": "number",
-          "minimum": 0,
-          "maximum": 1
-        }
-      }
-    },
     "visualInsert": {
       "type": "object",
       "additionalProperties": false,
@@ -480,32 +369,7 @@
           "type": "string",
           "pattern": "^[a-f0-9]{64}$"
         },
-        "ancestry": {
-          "type": "array",
-          "minItems": 1,
-          "items": {
-            "type": "object",
-            "additionalProperties": false,
-            "required": [
-              "mediaClass",
-              "locator",
-              "sha256"
-            ],
-            "properties": {
-              "mediaClass": {
-                "const": "source"
-              },
-              "locator": {
-                "type": "string",
-                "minLength": 1
-              },
-              "sha256": {
-                "type": "string",
-                "pattern": "^[a-f0-9]{64}$"
-              }
-            }
-          }
-        },
+        "ancestry": {"type": "array", "minItems": 1, "items": {"type": "object", "additionalProperties": false, "required": ["mediaClass", "locator", "sha256"], "properties": {"mediaClass": {"const": "source"}, "locator": {"type": "string", "minLength": 1}, "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}}}},
         "rightsReference": {
           "type": "string",
           "minLength": 1
@@ -643,6 +507,107 @@
           }
         }
       ]
+    },
+    "graphicSfx": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind"],
+      "properties": {
+        "kind": { "enum": ["chip", "stamp", "punch", "seam", "price"] },
+        "every": {
+          "enum": [
+            "start",
+            "fill",
+            "item",
+            "resolve",
+            "reject",
+            "confirm",
+            "badge",
+            "role",
+            "downbeat",
+            "wipe"
+          ]
+        },
+        "offsetSec": { "type": "number" },
+        "atSec": { "type": "number", "minimum": 0 }
+      }
+    },
+    "asset": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "hash",
+        "durationSec"
+      ],
+      "properties": {
+        "path": {
+          "type": "string"
+        },
+        "hash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "durationSec": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "muted": {
+          "type": "boolean"
+        }
+      }
+    },
+    "rect": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "x",
+        "y",
+        "width",
+        "height"
+      ],
+      "properties": {
+        "x": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "y": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "width": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 1
+        },
+        "height": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 1
+        }
+      }
+    },
+    "point": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "x",
+        "y"
+      ],
+      "properties": {
+        "x": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "y": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      }
     }
   }
 }

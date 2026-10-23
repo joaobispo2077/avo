@@ -15,12 +15,36 @@
   ],
   "properties": {
     "version": {
-      "enum": ["1.0", "1.1", "1.2"]
+      "enum": [
+        "1.0",
+        "1.1",
+        "1.2"
+      ]
     },
-    "planVersion": { "enum": ["1.0", "1.1", "1.2"] },
-    "batchRoot": { "type": "string", "minLength": 1 },
-    "batchRootSource": { "enum": ["canonical-default", "invocation", "legacy-output"] },
-    "legacyExternalDelivery": { "type": ["string", "null"] },
+    "planVersion": {
+      "enum": [
+        "1.0",
+        "1.1",
+        "1.2"
+      ]
+    },
+    "batchRoot": {
+      "type": "string",
+      "minLength": 1
+    },
+    "batchRootSource": {
+      "enum": [
+        "canonical-default",
+        "invocation",
+        "legacy-output"
+      ]
+    },
+    "legacyExternalDelivery": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
     "batchId": {
       "type": "string"
     },
@@ -367,7 +391,16 @@
   },
   "allOf": [
     {
-      "if": { "properties": { "version": { "const": "1.0" } }, "required": ["version"] },
+      "if": {
+        "properties": {
+          "version": {
+            "const": "1.0"
+          }
+        },
+        "required": [
+          "version"
+        ]
+      },
       "then": {
         "properties": {
           "items": {
@@ -376,8 +409,14 @@
                 "artifacts": {
                   "not": {
                     "contains": {
-                      "properties": { "kind": { "const": "prepared-sfx" } },
-                      "required": ["kind"]
+                      "properties": {
+                        "kind": {
+                          "const": "prepared-sfx"
+                        }
+                      },
+                      "required": [
+                        "kind"
+                      ]
                     }
                   }
                 }
@@ -388,9 +427,22 @@
       }
     },
     {
-      "if": { "properties": { "version": { "const": "1.1" } }, "required": ["version"] },
+      "if": {
+        "properties": {
+          "version": {
+            "const": "1.1"
+          }
+        },
+        "required": [
+          "version"
+        ]
+      },
       "then": {
-        "required": ["planVersion", "batchRoot", "batchRootSource"],
+        "required": [
+          "planVersion",
+          "batchRoot",
+          "batchRootSource"
+        ],
         "properties": {
           "items": {
             "items": {
@@ -398,8 +450,14 @@
                 "artifacts": {
                   "not": {
                     "contains": {
-                      "properties": { "kind": { "const": "prepared-sfx" } },
-                      "required": ["kind"]
+                      "properties": {
+                        "kind": {
+                          "const": "prepared-sfx"
+                        }
+                      },
+                      "required": [
+                        "kind"
+                      ]
                     }
                   }
                 }
@@ -410,8 +468,23 @@
       }
     },
     {
-      "if": { "properties": { "version": { "const": "1.2" } }, "required": ["version"] },
-      "then": { "required": ["planVersion", "batchRoot", "batchRootSource"] }
+      "if": {
+        "properties": {
+          "version": {
+            "const": "1.2"
+          }
+        },
+        "required": [
+          "version"
+        ]
+      },
+      "then": {
+        "required": [
+          "planVersion",
+          "batchRoot",
+          "batchRootSource"
+        ]
+      }
     }
   ]
 }
