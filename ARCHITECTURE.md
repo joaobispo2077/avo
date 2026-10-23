@@ -1,5 +1,12 @@
 # AVO architecture
 
+Native Shorts delivery lookup is shared by inventory and reconstruction through
+`avo.master_artifacts`. It consumes batch manifest item records and resolves their
+JSON sidecars without relocating media or creating approval. Legacy individual
+master lookup remains supported. Project-boundary checks and exact transcript
+source identity precede independent byte verification by reconstruction. Regression
+coverage lives in `tests/test_master_artifacts.py`.
+
 AVO is a local-first modular monolith. `src/avo/` contains the bundled editing
 engine and application orchestration; CLI and MCP expose the same operations.
 Hexagonal architecture applies at real external-tool boundaries, not through a
