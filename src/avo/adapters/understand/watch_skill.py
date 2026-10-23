@@ -856,7 +856,9 @@ _PROBE_PNG = (
 )
 
 
-def _live_probe(base_url: str, model: str, effective: dict[str, Any]) -> dict[str, Any]:
+def _live_probe(
+    base_url: str, model: str, effective: dict[str, Any], *, cost_candidate=None
+) -> dict[str, Any]:
     prompt = 'Inspect the image and return JSON only: {"vision":true}.'
     payload = {
         "model": model,
@@ -883,6 +885,10 @@ def _live_probe(base_url: str, model: str, effective: dict[str, Any]) -> dict[st
         timeout=int(effective["timeoutSeconds"]),
     )
     served = str(response.get("model") or model)
+    if cost_candidate is not None:
+        from avo.cost_services import try_record_response
+
+        try_record_response(cost_candidate, response, base_url, phase="review-probe")
     return {
         "success": bool(response.get("choices")),
         "servedModel": served,
@@ -1359,7 +1365,9 @@ def _native_review(review: _ReviewRequest, model_pin: dict[str, Any]) -> dict[st
     }
     snapshot = probe_vision_capabilities(
         model_pin=model_pin,
-        probe=lambda url, served: _live_probe(url, served, effective),
+        probe=lambda url, served: _live_probe(
+            url, served, effective, cost_candidate=review.candidate
+        ),
         resource_policy=resource_policy,
         conservative_context_limit=int(effective["contextLimit"]),
     )
@@ -1478,6 +1486,9 @@ def _native_review(review: _ReviewRequest, model_pin: dict[str, Any]) -> dict[st
             timeout=int(effective["timeoutSeconds"]),
         )
         raw_path = raw_dir / f"{review_pass['passId']}.json"
+        from avo.cost_services import try_record_response
+
+        try_record_response(review.candidate, response, base_url)
         raw_path.write_text(
             json.dumps(response, indent=2, ensure_ascii=False), encoding="utf-8"
         )
