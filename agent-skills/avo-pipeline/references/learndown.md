@@ -89,3 +89,9 @@ Learndown does **not** delete files. Run `/avo.cleanup` after learndown complete
 ## If ai-memory absent
 
 Print one-line skip notice in wrap learning section (`aiMemory: "skipped"`). **Steps 1–3 above still run.** Proceed to `/avo.cleanup` when user ready. See [`docs/ai-memory-and-ai-jail.md`](../../../docs/ai-memory-and-ai-jail.md) for manual install.
+
+## Cost recording and completion response
+
+Use the existing runtime to inspect recorded costs (python -m avo.cli costs --project <project> in a checkout; avo costs installed). Read [cost guidance](costs.md) for explicit usage-source binding and model/provider switches. Refresh bound local sources with costs collect before learndown and after verified cleanup, before final wrap. This adds no inference calls. Missing telemetry stays unknown.
+
+Learndown MUST automatically display the persisted draft cost/token summary, valuation basis, coverage, cutoff and pending turn before the existing step-status footer. Cleanup MUST automatically display the final persisted summary after verified cleanup and final wrap/export. Only successful production closure can say the video is finished. Accounting/export failure after deletion requires accounting-only retry, never repeating cleanup deletion. Do not generate recursive responses to meter the still-open closing turn.
