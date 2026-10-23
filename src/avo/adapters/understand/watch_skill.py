@@ -1293,7 +1293,12 @@ def _native_pass_instruction(pass_id: str) -> str:
         "requiresHuman, observed, expected, whyItMatters, suggestedAction. "
         "category must be one of layout, pacing, movement, continuity, privacy, "
         "caption, visual-quality, editorial, factual-risk, rights, accessibility, "
-        "technical, other. severity must be one of info, warning, blocking, unknown."
+        "technical, other. severity must be one of info, warning, blocking, unknown. "
+        "If the review prompt requests a scorecard, every response regardless of "
+        "status must also return a top-level scorecard object alongside status and "
+        "findings. Include every requested integer score, an explicit boolean "
+        "criticalFailure, and notes. Never omit the scorecard on pass, fail, or "
+        "needs-human-judgment."
     )
 
 
@@ -1338,9 +1343,21 @@ def _native_finding(
 
 
 def _require_finding_item(item: Any) -> dict[str, Any]:
-    if not isinstance(item, dict) or not str(item.get("message") or "").strip():
+    if not isinstance(item, dict):
         raise VisionReviewError("vision finding must be an object with a message")
-    return item
+    result = dict(item)
+    message = next(
+        (
+            str(result.get(key) or "").strip()
+            for key in ("message", "observed", "whyItMatters", "expected")
+            if str(result.get(key) or "").strip()
+        ),
+        "",
+    )
+    if not message:
+        raise VisionReviewError("vision finding must be an object with a message")
+    result["message"] = message
+    return result
 
 
 def _fallback(value: Any, default: Any) -> Any:
