@@ -60,3 +60,9 @@
 Spoken alias: **`/avo --help`** → `/avo.help`
 
 Shared args: [`arguments.md`](arguments.md)
+
+## Artistic direction commands
+
+- `/avo.direction`: [direction.md](direction.md), native `direction catalog|prepare|propose|decide|show`; provider-scope decisions only.
+- `/avo.briefstart`: [briefstart.md](briefstart.md), native `briefstart prepare|propose|decide|show`; project-scope decisions only.
+- `pipeline status`: derived `briefing.stageContexts` for structure, cmap, bmap, motion and sound; consume before style-dependent proposals, with no duplicate selection state.

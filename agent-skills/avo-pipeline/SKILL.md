@@ -1,6 +1,6 @@
 ---
 name: avo-pipeline
-description: Gateway for AVO slash commands (/avo.help, /avo.guidelines, /avo.pipeline, /avo.trim, /avo.transcribe, /avo.sound, /avo.sync, /avo.audit, /avo.watch, /avo.motion, /avo.captions, /avo.talking-head, /avo.rights, /avo.audio-qc, /avo.color, /avo.grade, /avo.format, /avo.framework, /avo.chapters, /avo.thumbnail, /avo.end-screen, /avo.deliver, /avo.shorts, /avo.reframe, /avo.podcast-clip, /avo.trailer, /avo.pr-video, /avo.changelog-video, /avo.explainer, /avo.slideshow, /avo.launch, /avo.music-video, /avo.beat-edit, /avo.figma, /avo.media, /avo.motion-graphics, /avo.general, /avo.remotion-port, /avo.screencast, /avo.retention, /avo.animation-qc, /avo.telemetry, /avo.learndown, /avo.cleanup, /avo.update, /avo.stats, /avo.models, /avo.docs). Load when the user invokes any /avo.* command or declares Footage/rawDir asset paths.
+description: Gateway for AVO slash commands (/avo.help, /avo.direction, /avo.briefstart, /avo.guidelines, /avo.pipeline, /avo.trim, /avo.transcribe, /avo.sound, /avo.sync, /avo.audit, /avo.watch, /avo.motion, /avo.captions, /avo.talking-head, /avo.rights, /avo.audio-qc, /avo.color, /avo.grade, /avo.format, /avo.framework, /avo.chapters, /avo.thumbnail, /avo.end-screen, /avo.deliver, /avo.shorts, /avo.reframe, /avo.podcast-clip, /avo.trailer, /avo.pr-video, /avo.changelog-video, /avo.explainer, /avo.slideshow, /avo.launch, /avo.music-video, /avo.beat-edit, /avo.figma, /avo.media, /avo.motion-graphics, /avo.general, /avo.remotion-port, /avo.screencast, /avo.retention, /avo.animation-qc, /avo.telemetry, /avo.learndown, /avo.cleanup, /avo.update, /avo.stats, /avo.costs, /avo.metrics, /avo.models, /avo.docs). Load when the user invokes any /avo.* command or declares Footage/rawDir asset paths.
 ---
 
 # AVO pipeline commands (gateway)
@@ -23,6 +23,7 @@ Engine zip is **AVO Python only** — not ffmpeg, HyperFrames, watch-skill, CUDA
 
 | User invokes | Read |
 | ------------ | ---- |
+| /avo.costs or /avo.metrics | [references/costs.md](references/costs.md) |
 | `/avo.help` (alias `/avo --help`) | [`references/help.md`](references/help.md) |
 | `/avo.guidelines --youtube` | [`references/guidelines-youtube.md`](references/guidelines-youtube.md) |
 | `/avo.guidelines --eq` | [`references/guidelines-eq.md`](references/guidelines-eq.md) |
@@ -31,6 +32,8 @@ Engine zip is **AVO Python only** — not ffmpeg, HyperFrames, watch-skill, CUDA
 | `/avo.guidelines --shorts` | [`references/guidelines-shorts.md`](references/guidelines-shorts.md) |
 | `/avo.guidelines` (no flag) | [`references/guidelines.md`](references/guidelines.md) |
 | `/avo.docs` | [`references/docs.md`](references/docs.md) |
+| `/avo.direction` | [`references/direction.md`](references/direction.md) |
+| `/avo.briefstart` | [`references/briefstart.md`](references/briefstart.md) |
 | `/avo.pipeline` | [`references/pipeline.md`](references/pipeline.md) |
 | `/avo.trim` | [`references/trim.md`](references/trim.md) |
 | `/avo.transcribe` | [`references/transcribe.md`](references/transcribe.md) |
@@ -112,3 +115,7 @@ Or install per [`docs/avo-commands.md`](../../docs/avo-commands.md).
 ## Canonical timeline gateway
 
 Every command resolves the same video/provider context and declares its integration mode. CMap is raw-only. BMap is based only on the latest exact approved cut. Tracks resolve BMap; animation strategy references provider patterns; sync is raw-based. Candidate evidence and approvals bind content/dependency hashes. No command keeps private timeline or approval truth, and no human gate opens before current Watch plus candidate transcript analysis.
+
+## Artistic briefing at authoring boundaries
+
+Before proposing structure, CMap cuts, BMap inserts, motion or sound direction, read the project's native `pipeline status` and matching `briefing.stageContexts` payload. Use the selected version's concrete treatment, scoped statements and exclusions. This is offered context, never edit/render approval. No selection means proceed with normal format diagnosis and current instructions; no artistic questionnaire or provider-history scan is mandatory. The brief index is the sole selection authority. Read [briefstart](references/briefstart.md) for raw, built-in, provider and personal-reference entry.

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
@@ -98,6 +99,17 @@ def load_schema(name: str, root: Path | None = None) -> dict[str, Any]:
     return result
 
 
+@lru_cache(maxsize=32)
+def _checked_validator(schema_bytes: bytes):
+    """Cache schema checking by complete content, never by file metadata or input."""
+    import jsonschema
+
+    schema = json.loads(schema_bytes)
+    validator_cls = jsonschema.validators.validator_for(schema)
+    validator_cls.check_schema(schema)
+    return validator_cls
+
+
 def validate_document(
     document: Any,
     schema_name: str,
@@ -109,10 +121,7 @@ def validate_document(
         Path(root) if root else schema_path(schema_name.partition("#")[0]).parent
     )
     try:
-        import jsonschema
-
-        validator_cls = jsonschema.validators.validator_for(schema)
-        validator_cls.check_schema(schema)
+        validator_cls = _checked_validator(canonical_json_bytes(schema))
         errors = sorted(
             validator_cls(schema, registry=_schema_registry(schema_root)).iter_errors(
                 document

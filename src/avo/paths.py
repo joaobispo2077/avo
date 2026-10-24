@@ -47,7 +47,19 @@ def schemas_dir() -> Path:
     nested = repo_root() / "schemas"
     if nested.is_dir():
         return nested
+    installed = _installed_schemas()
+    if installed is not None:
+        return installed
     return repo_root()
+
+
+def _installed_schemas() -> Path | None:
+    """Setuptools data-files, including pip's target-directory installation."""
+    candidates = (
+        Path(sys.prefix) / "share" / "avo" / "schemas",
+        Path(__file__).resolve().parents[1] / "share" / "avo" / "schemas",
+    )
+    return next((path for path in candidates if path.is_dir()), None)
 
 
 def schema_path(name: str) -> Path:
@@ -55,7 +67,13 @@ def schema_path(name: str) -> Path:
     nested = repo_root() / "schemas" / name
     if nested.is_file():
         return nested
-    return repo_root() / name
+    legacy = repo_root() / name
+    if legacy.is_file():
+        return legacy
+    installed = _installed_schemas()
+    if installed is not None and (installed / name).is_file():
+        return installed / name
+    return legacy
 
 
 def providers_dir() -> Path:

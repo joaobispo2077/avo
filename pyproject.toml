@@ -37,6 +37,10 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 "avo.templates.shorts_hyperframes" = ["*.html", "*.css", "*.js", "*.json"]
+"avo.resources.directions" = ["*.json"]
+
+[tool.setuptools.data-files]
+"share/avo/schemas" = ["schemas/*.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

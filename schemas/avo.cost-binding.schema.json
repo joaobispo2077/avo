@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://avo.local/schemas/avo.cost-binding.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {
+      "const": "1.0.0"
+    },
+    "bindingId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "source": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 500
+    },
+    "agent": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 500
+    },
+    "sourceSessionId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 500
+    },
+    "boundary": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 500
+    },
+    "format": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 500
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "supersedesBindingId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "endBoundary": {
+      "type": "string",
+      "minLength": 1
+    },
+    "runId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 500
+    },
+    "phase": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 500
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "bindingId",
+    "source",
+    "agent",
+    "sourceSessionId",
+    "boundary",
+    "format",
+    "createdAt"
+  ]
+}

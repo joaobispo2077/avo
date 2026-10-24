@@ -1,12 +1,5 @@
-# BL-014 — `/avo.costs`
+# BL-014: Video cost transparency
 
-**Status:** Wave B (planned)  
-**Slash surface:** `/avo.costs` (alias `/avo.metrics`)
+Implementation and validation in progress. /avo.costs and /avo.metrics expose local recorded tokens and costs, history and explicit source collection. Learndown/cleanup summaries show valuation basis, coverage and cutoff. Model/service switches retain per-event provenance. No fixed savings claim.
 
-## Summary
-
-Local-only token/USD transparency in wrap JSON and `.avo/state.json`. Learning-curve narrative ($30–40 → <$10 typical). Estimate-not-bill disclaimer.
-
-## Spec
-
-[`specs/active/avo-capabilities-roadmap/spec.md`](../active/avo-capabilities-roadmap/spec.md) — FR-B5
+See [user guide](../../docs/video-cost-transparency.md).

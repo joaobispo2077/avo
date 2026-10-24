@@ -22,7 +22,7 @@ from avo import (
 )
 
 
-def _sample_session(session_id: str = "sess-1", *, freed: int = 1000) -> dict:
+def _sample_session(session_id: str = "sess-1", *, freed: int | None = 1000) -> dict:
     return {
         "id": session_id,
         "provider": "bishop",
@@ -178,6 +178,50 @@ class StatsTests(unittest.TestCase):
             session_payload = stats.session_from_wrap(wrap_payload)
         self.assertIsNone(session_payload["sourceDurationSeconds"])
         self.assertIsNone(session_payload["estimatedMinutesSaved"])
+
+    def test_preservation_wrap_keeps_unknown_freed_and_explicit_closure(self) -> None:
+        wrap = {
+            "sessionId": "preservation",
+            "rawDir": str(FIXTURE.resolve()),
+            "provider": "bishop",
+            "masterBasename": MASTER,
+            "space": {"freedBytes": None, "preservedBytes": 2000},
+            "closure": {"mode": "preservation", "cleanupExecuted": False},
+            "files": {"preserved": [], "deletedOnCleanup": []},
+        }
+        with mock.patch.object(stats, "media_duration", lambda _path: None):
+            session = stats.session_from_wrap(wrap)
+        self.assertIsNone(session["bytes"]["freed"])
+        self.assertEqual(
+            session["closure"], {"mode": "preservation", "cleanupExecuted": False}
+        )
+
+    def test_unknown_preservation_freed_does_not_change_measured_totals(self) -> None:
+        stats.record_session(_sample_session("measured", freed=1000))
+        preserved = _sample_session("preserved", freed=None)
+        preserved["closure"] = {"mode": "preservation", "cleanupExecuted": False}
+        stats.record_session(preserved)
+        stats.record_session(preserved)
+        state = avo_state.load_state()["stats"]
+        self.assertEqual(state["totals"]["videosCompleted"], 2)
+        self.assertEqual(state["totals"]["bytesFreed"], 1000)
+        record = next(item for item in state["sessions"] if item["id"] == "preserved")
+        self.assertIsNone(record["bytes"]["freed"])
+        self.assertFalse(record["closure"]["cleanupExecuted"])
+
+    def test_legacy_wrap_cleanup_metadata_remains_unchanged(self) -> None:
+        wrap = {
+            "sessionId": "legacy",
+            "rawDir": str(FIXTURE.resolve()),
+            "provider": "bishop",
+            "masterBasename": MASTER,
+            "space": {"freedBytes": 500, "preservedBytes": 2000},
+            "files": {"preserved": [], "deletedOnCleanup": []},
+        }
+        with mock.patch.object(stats, "media_duration", lambda _path: None):
+            session = stats.session_from_wrap(wrap)
+        self.assertEqual(session["bytes"]["freed"], 500)
+        self.assertNotIn("closure", session)
 
     def test_verbose_display_includes_tier_b_c(self) -> None:
         session = _sample_session()
