@@ -287,3 +287,7 @@ rights evidence, review, and approval.
 `/avo.thumbnail` extracts a deterministic frame from a source, program time, or
 candidate. Cut-boundary side, anomalous VFR frame index, display geometry, and
 HDR color policy must be explicit whenever inference would be ambiguous.
+
+## Recorded video costs
+
+Use /avo.costs (/avo.metrics alias) during editing or with --history after completion. Learndown and cleanup automatically display saved cost/token summaries with coverage and cutoff. Model/service switches preserve original usage attribution. [Collection, fallbacks and pricing disclosures](video-cost-transparency.md).

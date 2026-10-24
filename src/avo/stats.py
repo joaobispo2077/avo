@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from avo import avo_state
+from avo.master_artifacts import resolve_final_masters
 from avo.paths import config_path
 from avo.project_inventory import resolve_preserved_set
 from avo.session import normalize_path
@@ -111,7 +112,7 @@ def _session_contribution(session: dict[str, Any]) -> dict[str, int]:
     est = session.get("estimatedMinutesSaved")
     return {
         "videosCompleted": 1,
-        "bytesFreed": int(bytes_block.get("freed", 0)),
+        "bytesFreed": int(bytes_block.get("freed") or 0),
         "preservedBytes": int(bytes_block.get("preserved", 0)),
         "estimatedMinutesSaved": int(est) if est is not None else 0,
     }
@@ -440,13 +441,24 @@ def _probe_source_duration(raw_dir: Path, master_basename: str) -> float | None:
 def _probe_master_duration(raw_dir: Path, master_basename: str) -> float | None:
     if media_duration is None:
         return None
-    masters_dir = raw_dir / "edit" / "masters"
-    if not masters_dir.is_dir():
-        return None
-    for path in sorted(masters_dir.glob(f"{master_basename}.*")):
-        if path.is_file():
-            return media_duration(path)
+    for path in resolve_final_masters(raw_dir, master_basename):
+        return media_duration(path)
     return None
+
+
+def _preservation_statistics(wrap: dict[str, Any], session: dict[str, Any]) -> None:
+    if (wrap.get("closure") or {}).get("mode") == "preservation":
+        session["bytes"]["freed"] = None
+        session["closure"] = {"mode": "preservation", "cleanupExecuted": False}
+
+
+def _attach_cost_reference(wrap, session):
+    costs = wrap.get("costs") or {}
+    if costs.get("snapshotId"):
+        session["costSnapshot"] = {
+            key: costs.get(key)
+            for key in ("snapshotId", "accountingVideoId", "coverage", "cutoff")
+        }
 
 
 def session_from_wrap(
@@ -499,6 +511,8 @@ def session_from_wrap(
         "wrapPath": str(wrap_file.resolve()),
         "pathStatus": path_status,
     }
+    _preservation_statistics(wrap, session)
+    _attach_cost_reference(wrap, session)
     provider_slug = str(wrap.get("provider") or session["provider"])
     try:
         from avo import video_registry

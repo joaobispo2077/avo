@@ -9,7 +9,11 @@ from unittest import mock
 from avo.adapters.base import JobRequest, JobResult
 from avo.adapters.transcribe.candidate import CandidateTranscriptionAdapter
 from avo.adapters.understand.watch_policy import build_watch_prompt
-from avo.adapters.understand.watch_skill import WatchSkillAdapter, _extract_json_object
+from avo.adapters.understand.watch_skill import (
+    WatchSkillAdapter,
+    _extract_json_object,
+    _require_finding_item,
+)
 from avo.timeline.ports import ToolError
 
 _RESOLVE = "avo.models.resolve_option_id"
@@ -28,6 +32,10 @@ class WatchAdapterTests(unittest.TestCase):
             '{"status":"pass","confidence":1,"findings":[]}'
         )
         self.assertEqual(result["status"], "pass")
+
+    def test_finding_without_message_uses_observed_text(self):
+        result = _require_finding_item({"observed": "Visible caption overlap"})
+        self.assertEqual(result["message"], "Visible caption overlap")
 
     def test_invokes_cli(self):
         with tempfile.TemporaryDirectory() as tmp:

@@ -1,6 +1,18 @@
 [importlinter]
 root_package = avo
 
+[importlinter:contract:direction-not-execution]
+name = Artistic direction must not import CLI MCP or media execution
+type = forbidden
+source_modules =
+    avo.direction
+forbidden_modules =
+    avo.cli
+    avo.direction_cli
+    avo.mcp
+    avo.adapters
+    avo.proof_composition
+
 # helpers/ shims live outside this root_package (src/avo). They are temporary
 # edges until v0.2.0; do not add new helpers→engine imports here.
 

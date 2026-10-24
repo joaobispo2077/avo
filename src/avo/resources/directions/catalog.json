@@ -1,0 +1,230 @@
+{
+  "schemaVersion": "1.0.0",
+  "directions": [
+    {
+      "builtinId": "analysis-review",
+      "title": "Speech-led analysis and review",
+      "formats": [
+        "analysis-review",
+        "opinion",
+        "review"
+      ],
+      "viewerIntents": [
+        "hear analysis",
+        "decide",
+        "understand a qualified argument"
+      ],
+      "promiseGuidance": "Make the central question clear early, support each material claim and return to the promised conclusion with its qualifications.",
+      "sectionGuidance": [
+        "Let the introduction establish the question in the creator's natural voice.",
+        "In documentary-evidence sections, hold the original context long enough to read and distinguish observation from interpretation.",
+        "Let the conclusion resolve the promise without introducing unrelated visual distractions."
+      ],
+      "rhythm": "Follow the development of the argument. Remove confirmed repetition or filler while preserving complete words, natural cadence and meaningful pauses.",
+      "visual": "Keep the creator present when their reasoning or reaction matters. Use relevant demonstrations, comparisons and source documents when they improve comprehension.",
+      "motion": "Use selective support for concepts or calculations; reveal one informational step at a time and hold during reading.",
+      "sound": "Keep intelligible speech foremost. Music supports the current idea; purposeful sound can mark information arrivals without becoming an unsupported argument.",
+      "variants": [
+        "A reflective section can stay still and quiet.",
+        "A dense comparison may use progressive graphics while reducing competing movement.",
+        "A short news opening may be brisk while the following analysis retains its own conversational cadence."
+      ],
+      "schemaVersion": "1.0.0",
+      "documentType": "BuiltinDirection",
+      "id": "builtin-analysis-review-v1",
+      "createdAt": "2026-10-16T00:00:00Z",
+      "createdBy": {
+        "type": "native",
+        "id": "avo.direction"
+      },
+      "version": "1.0.0",
+      "constraints": [
+        "Preserve factual meaning, chronology, qualifications and the current creator intention.",
+        "Allow readable holds for text and evidence; keep captions legible and clear of important information.",
+        "Use high contrast, safe areas and accessible motion; avoid rapid flashes and prolonged shaking.",
+        "Diagnose source quality and delivery context before choosing technical processing.",
+        "Keep attribution and source context visible; this direction transfers no media rights or previous approval."
+      ],
+      "exclusions": [
+        "Not a universal style or a fixed quota of cuts, graphics, music or sound effects.",
+        "Never manufacture evidence, reactions, chronology or certainty to create momentum.",
+        "Do not apply historical restoration settings or numeric mix targets without fresh source diagnosis."
+      ],
+      "doctrineRefs": [
+        "AGENTS.md@sha256:8c9ad740d0e93a51283fa2c7d34e926c379c4d6296fa0ba3a9626208866e6d8b",
+        "docs/templates/review/format-diagnosis.md@sha256:f45a51cd00b8eb66973881070e7fa513225ec5a82cda066c563d5baeaa40c79f",
+        "docs/audio-post-production-system.md@sha256:e7d54a36054fc45c66ee849d03cab3e8f05eb56467d5c5d56aad58214f4befa3"
+      ],
+      "documentHash": "e7a7c651d1e204d5583c3c628dcbcbfe2da0bba7df467d267b26449d59c72b79"
+    },
+    {
+      "builtinId": "step-by-step",
+      "title": "Step-by-step demonstration and tutorial",
+      "formats": [
+        "step-by-step",
+        "tutorial",
+        "demonstration"
+      ],
+      "viewerIntents": [
+        "learn a process",
+        "repeat an action",
+        "solve a concrete problem"
+      ],
+      "promiseGuidance": "Show the starting condition, necessary steps and observable result. Keep prerequisites, limitations and the current task clear.",
+      "sectionGuidance": [
+        "Orient the viewer before an unfamiliar action.",
+        "Hold intermediate states and labels long enough to read or reproduce them.",
+        "Separate an explanation from the actual demonstrated result; preserve failed or conditional outcomes that affect the instructions."
+      ],
+      "rhythm": "Time the sequence to understanding and reproducibility. Give complex actions space instead of copying entertainment-oriented cutting.",
+      "visual": "Prefer the relevant interface, object or action at the moment it is explained. Use the creator's face when it clarifies intent, judgment or a transition.",
+      "motion": "Use a clear visual hierarchy and progressive annotation. Show beginning and ending states rather than animating over the essential action.",
+      "sound": "Keep instructions intelligible while preserving meaningful device, game or product sounds. Use cues for consequential actions, not every pointer movement.",
+      "variants": [
+        "An experienced audience can use concise orientation while unfamiliar steps still receive clear holds.",
+        "A conceptual introduction can use analysis-style support before the practical sequence.",
+        "A troubleshooting branch can slow down to compare the observed and expected states."
+      ],
+      "schemaVersion": "1.0.0",
+      "documentType": "BuiltinDirection",
+      "id": "builtin-step-by-step-v1",
+      "createdAt": "2026-10-16T00:00:00Z",
+      "createdBy": {
+        "type": "native",
+        "id": "avo.direction"
+      },
+      "version": "1.0.0",
+      "constraints": [
+        "Preserve factual meaning, chronology, qualifications and the current creator intention.",
+        "Allow readable holds for text and evidence; keep captions legible and clear of important information.",
+        "Use high contrast, safe areas and accessible motion; avoid rapid flashes and prolonged shaking.",
+        "Diagnose source quality and delivery context before choosing technical processing.",
+        "Keep attribution and source context visible; this direction transfers no media rights or previous approval."
+      ],
+      "exclusions": [
+        "Not a universal style or a fixed quota of cuts, graphics, music or sound effects.",
+        "Never manufacture evidence, reactions, chronology or certainty to create momentum.",
+        "Do not apply historical restoration settings or numeric mix targets without fresh source diagnosis."
+      ],
+      "doctrineRefs": [
+        "AGENTS.md@sha256:8c9ad740d0e93a51283fa2c7d34e926c379c4d6296fa0ba3a9626208866e6d8b",
+        "docs/templates/review/format-diagnosis.md@sha256:f45a51cd00b8eb66973881070e7fa513225ec5a82cda066c563d5baeaa40c79f",
+        "docs/audio-post-production-system.md@sha256:e7d54a36054fc45c66ee849d03cab3e8f05eb56467d5c5d56aad58214f4befa3"
+      ],
+      "documentHash": "3dc15add4d08f765a7fbcf7a2ea48df13ad7246adf0a66c811653d6271745bbf"
+    },
+    {
+      "builtinId": "narrative-conversation",
+      "title": "Narrative, documentary and conversation",
+      "formats": [
+        "narrative-conversation",
+        "documentary",
+        "interview",
+        "conversation"
+      ],
+      "viewerIntents": [
+        "follow a story",
+        "understand context",
+        "connect with the speaker"
+      ],
+      "promiseGuidance": "Establish the question or human experience and build toward an earned answer. Preserve chronology, uncertainty and the speaker's intended emotional tone.",
+      "sectionGuidance": [
+        "Use orientation where a change in time, place or speaker would otherwise confuse the story.",
+        "Hold documentary material long enough to read and understand its provenance.",
+        "Give a consequential reflection room to settle; do not interrupt every emotional pause."
+      ],
+      "rhythm": "Follow causality, turns of thought and emotional space. A pause can carry meaning; remove it only when the source and editorial intent justify that choice.",
+      "visual": "Use relevant reactions, places and source material to establish context. Distinguish archival or illustrative imagery from direct evidence.",
+      "motion": "Use restrained orientation and emphasis around the story. Simplify competing movement when viewers must listen closely or read a document.",
+      "sound": "Keep conversation intelligible and preserve meaningful ambience. Musical or effect choices must not imply danger, guilt, scale or emotion unsupported by the record.",
+      "variants": [
+        "A conversation-led section can favor sustained presence over graphic support.",
+        "An evidence-led section can use explanatory comparison while preserving source context.",
+        "A reflective ending may reduce sound and motion density instead of adding a forced climax."
+      ],
+      "schemaVersion": "1.0.0",
+      "documentType": "BuiltinDirection",
+      "id": "builtin-narrative-conversation-v1",
+      "createdAt": "2026-10-16T00:00:00Z",
+      "createdBy": {
+        "type": "native",
+        "id": "avo.direction"
+      },
+      "version": "1.0.0",
+      "constraints": [
+        "Preserve factual meaning, chronology, qualifications and the current creator intention.",
+        "Allow readable holds for text and evidence; keep captions legible and clear of important information.",
+        "Use high contrast, safe areas and accessible motion; avoid rapid flashes and prolonged shaking.",
+        "Diagnose source quality and delivery context before choosing technical processing.",
+        "Keep attribution and source context visible; this direction transfers no media rights or previous approval."
+      ],
+      "exclusions": [
+        "Not a universal style or a fixed quota of cuts, graphics, music or sound effects.",
+        "Never manufacture evidence, reactions, chronology or certainty to create momentum.",
+        "Do not apply historical restoration settings or numeric mix targets without fresh source diagnosis."
+      ],
+      "doctrineRefs": [
+        "AGENTS.md@sha256:8c9ad740d0e93a51283fa2c7d34e926c379c4d6296fa0ba3a9626208866e6d8b",
+        "docs/templates/review/format-diagnosis.md@sha256:f45a51cd00b8eb66973881070e7fa513225ec5a82cda066c563d5baeaa40c79f",
+        "docs/audio-post-production-system.md@sha256:e7d54a36054fc45c66ee849d03cab3e8f05eb56467d5c5d56aad58214f4befa3"
+      ],
+      "documentHash": "8b3774fe3dfb5db980e88a232e36748d8ae9c829f6ec502cc71544699270e24c"
+    },
+    {
+      "builtinId": "focused-short",
+      "title": "Focused short-form and highlights",
+      "formats": [
+        "focused-short",
+        "highlight",
+        "short-form"
+      ],
+      "viewerIntents": [
+        "understand one point quickly",
+        "enjoy a contained moment",
+        "discover a useful highlight"
+      ],
+      "promiseGuidance": "Deliver one complete point or moment with enough context to preserve meaning. The opening and ending must pay off the same promise.",
+      "sectionGuidance": [
+        "Orient the viewer quickly without inventing a misleading hook.",
+        "Keep necessary labels and captions readable on the target display.",
+        "Preserve the setup and payoff of a joke, argument or demonstration rather than extracting a misleading isolated sentence."
+      ],
+      "rhythm": "Use concise progression suited to the source performance. Keep meaningful cadence and complete words; speed is not a requirement for every short.",
+      "visual": "Maintain one dominant focus. Reframe for the target aspect ratio while preserving faces, products, evidence and other relevant details.",
+      "motion": "Use selective emphasis with readable holds. Avoid continuous shaking, flashing or competing caption and graphic animations.",
+      "sound": "Prioritize the point or performance. Keep supporting music and effects from masking speech; preserve source-audio intent rather than forcing a constant sound bed.",
+      "variants": [
+        "A practical highlight can use a compact demonstration sequence.",
+        "A reflective quote can remain quiet with minimal movement.",
+        "A longer parent-video section retains its own pacing; do not impose this short-form treatment on the whole film."
+      ],
+      "schemaVersion": "1.0.0",
+      "documentType": "BuiltinDirection",
+      "id": "builtin-focused-short-v1",
+      "createdAt": "2026-10-16T00:00:00Z",
+      "createdBy": {
+        "type": "native",
+        "id": "avo.direction"
+      },
+      "version": "1.0.0",
+      "constraints": [
+        "Preserve factual meaning, chronology, qualifications and the current creator intention.",
+        "Allow readable holds for text and evidence; keep captions legible and clear of important information.",
+        "Use high contrast, safe areas and accessible motion; avoid rapid flashes and prolonged shaking.",
+        "Diagnose source quality and delivery context before choosing technical processing.",
+        "Keep attribution and source context visible; this direction transfers no media rights or previous approval."
+      ],
+      "exclusions": [
+        "Not a universal style or a fixed quota of cuts, graphics, music or sound effects.",
+        "Never manufacture evidence, reactions, chronology or certainty to create momentum.",
+        "Do not apply historical restoration settings or numeric mix targets without fresh source diagnosis."
+      ],
+      "doctrineRefs": [
+        "AGENTS.md@sha256:8c9ad740d0e93a51283fa2c7d34e926c379c4d6296fa0ba3a9626208866e6d8b",
+        "docs/templates/review/format-diagnosis.md@sha256:f45a51cd00b8eb66973881070e7fa513225ec5a82cda066c563d5baeaa40c79f",
+        "docs/audio-post-production-system.md@sha256:e7d54a36054fc45c66ee849d03cab3e8f05eb56467d5c5d56aad58214f4befa3"
+      ],
+      "documentHash": "5efe1ef500ab492e7617ef3216ed6c4cdecfa4622375c6f104f2cdbf77e03bc4"
+    }
+  ]
+}

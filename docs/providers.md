@@ -232,3 +232,7 @@ Slash command: **`/avo.provider`** (configure or create).
 - [`providers/README.md`](../providers/README.md) — directory layout
 - [`docs/avo-workflow.md`](avo-workflow.md) §8 — provider-scoped learning
 - [`docs/model-transparency.md`](model-transparency.md) — model tiers per job
+
+## Artistic direction from learning
+
+A provider can build a concise versioned artistic profile from existing learndowns, then use an exact accepted version as an optional starting reference for a new video. The profile preserves evidence, scope, exclusions, contradictions and unknowns. It is distinct from brand assets and technical presets; previous media permissions and approvals do not transfer. Start with [provider direction and Briefstart](provider-direction.md). Four built-in directions and a raw start remain available without provider history.

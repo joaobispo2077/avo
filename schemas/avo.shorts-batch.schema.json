@@ -19,11 +19,22 @@
   ],
   "properties": {
     "version": {
-      "enum": ["1.0", "1.1", "1.2"]
+      "enum": [
+        "1.0",
+        "1.1",
+        "1.2"
+      ]
     },
-    "batchRoot": { "type": "string", "minLength": 1 },
+    "batchRoot": {
+      "type": "string",
+      "minLength": 1
+    },
     "batchRootSource": {
-      "enum": ["canonical-default", "invocation", "legacy-output"]
+      "enum": [
+        "canonical-default",
+        "invocation",
+        "legacy-output"
+      ]
     },
     "batchId": {
       "type": "string",
@@ -40,7 +51,10 @@
         "masterPath"
       ],
       "properties": {
-        "sourceId": { "type": "string", "minLength": 1 },
+        "sourceId": {
+          "type": "string",
+          "minLength": 1
+        },
         "masterPath": {
           "type": "string",
           "minLength": 1
@@ -51,7 +65,10 @@
             "null"
           ]
         },
-        "durationSec": { "type": "number", "exclusiveMinimum": 0 },
+        "durationSec": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
         "expectedFingerprint": {
           "type": [
             "string",
@@ -105,6 +122,25 @@
           "type": "number",
           "exclusiveMinimum": 0,
           "default": 60
+        },
+        "previewLongSide": {
+          "type": "integer",
+          "minimum": 2,
+          "default": 640
+        },
+        "pixelFormat": {
+          "enum": [
+            "yuv420p",
+            "yuv420p10le"
+          ],
+          "default": "yuv420p"
+        },
+        "frameRateRational": {
+          "type": "string",
+          "pattern": "^[1-9][0-9]*/[1-9][0-9]*$"
+        },
+        "colorSpace": {
+          "const": "bt709"
         },
         "videoCodec": {
           "type": "string",
@@ -197,6 +233,9 @@
         },
         "sfx": {
           "$ref": "#/$defs/sfxLibrary"
+        },
+        "audioTreatment": {
+          "$ref": "#/$defs/audioTreatment"
         }
       }
     },
@@ -206,6 +245,14 @@
       "items": {
         "$ref": "#/$defs/candidate"
       }
+    },
+    "audioBeds": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/audioBed"
+      },
+      "default": []
     },
     "insertions": {
       "type": "array",
@@ -236,7 +283,204 @@
       }
     }
   },
-    "$defs": {
+  "$defs": {
+    "visualInsert": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "kind",
+        "path",
+        "sha256",
+        "rightsReference",
+        "startSec",
+        "endSec",
+        "rect",
+        "fit"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[A-Za-z][A-Za-z0-9_-]*$"
+        },
+        "kind": {
+          "enum": [
+            "image",
+            "video"
+          ]
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "ancestry": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "mediaClass",
+              "locator",
+              "sha256"
+            ],
+            "properties": {
+              "mediaClass": {
+                "const": "source"
+              },
+              "locator": {
+                "type": "string",
+                "minLength": 1
+              },
+              "sha256": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              }
+            }
+          }
+        },
+        "rightsReference": {
+          "type": "string",
+          "minLength": 1
+        },
+        "startSec": {
+          "type": "number",
+          "minimum": 0
+        },
+        "endSec": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "rect": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "x",
+            "y",
+            "width",
+            "height"
+          ],
+          "properties": {
+            "x": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "y": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "width": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "height": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            }
+          }
+        },
+        "baseRegion": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "x",
+            "y",
+            "width",
+            "height"
+          ],
+          "properties": {
+            "x": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "y": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "width": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "height": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            }
+          }
+        },
+        "fit": {
+          "enum": [
+            "contain",
+            "cover"
+          ]
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sourceStartSec": {
+          "type": "number",
+          "minimum": 0
+        },
+        "sourceEndSec": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "videoStreamIndex": {
+          "const": 0
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "video"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "sourceStartSec",
+              "sourceEndSec",
+              "videoStreamIndex"
+            ]
+          },
+          "else": {
+            "not": {
+              "anyOf": [
+                {
+                  "required": [
+                    "sourceStartSec"
+                  ]
+                },
+                {
+                  "required": [
+                    "sourceEndSec"
+                  ]
+                },
+                {
+                  "required": [
+                    "videoStreamIndex"
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
     "timeRange": {
       "type": "object",
       "additionalProperties": false,
@@ -258,30 +502,68 @@
     "callout": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "kind", "text", "startSec", "endSec", "corner"],
+      "required": [
+        "id",
+        "kind",
+        "text",
+        "startSec",
+        "endSec",
+        "corner"
+      ],
       "properties": {
         "id": {
           "type": "string",
           "pattern": "^[A-Za-z][A-Za-z0-9_-]*$"
         },
-        "kind": { "enum": ["chip", "stamp"] },
-        "text": { "type": "string", "minLength": 1, "maxLength": 40 },
-        "startSec": { "type": "number", "minimum": 0 },
-        "endSec": { "type": "number", "exclusiveMinimum": 0 },
-        "corner": { "enum": ["bl", "br", "bc"] }
+        "kind": {
+          "enum": [
+            "chip",
+            "stamp"
+          ]
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 40
+        },
+        "startSec": {
+          "type": "number",
+          "minimum": 0
+        },
+        "endSec": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "corner": {
+          "enum": [
+            "bl",
+            "br",
+            "bc"
+          ]
+        }
       }
     },
     "punchIn": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "startSec", "endSec"],
+      "required": [
+        "id",
+        "startSec",
+        "endSec"
+      ],
       "properties": {
         "id": {
           "type": "string",
           "pattern": "^[A-Za-z][A-Za-z0-9_-]*$"
         },
-        "startSec": { "type": "number", "minimum": 0 },
-        "endSec": { "type": "number", "exclusiveMinimum": 0 },
+        "startSec": {
+          "type": "number",
+          "minimum": 0
+        },
+        "endSec": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
         "scale": {
           "type": "number",
           "minimum": 1,
@@ -292,9 +574,19 @@
     "graphicSfx": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["kind"],
+      "required": [
+        "kind"
+      ],
       "properties": {
-        "kind": { "enum": ["chip", "stamp", "punch", "seam", "price"] },
+        "kind": {
+          "enum": [
+            "chip",
+            "stamp",
+            "punch",
+            "seam",
+            "price"
+          ]
+        },
         "every": {
           "enum": [
             "start",
@@ -309,14 +601,25 @@
             "wipe"
           ]
         },
-        "offsetSec": { "type": "number" },
-        "atSec": { "type": "number", "minimum": 0 }
+        "offsetSec": {
+          "type": "number"
+        },
+        "atSec": {
+          "type": "number",
+          "minimum": 0
+        }
       }
     },
     "graphic": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "widget", "startSec", "endSec", "corner"],
+      "required": [
+        "id",
+        "widget",
+        "startSec",
+        "endSec",
+        "corner"
+      ],
       "properties": {
         "id": {
           "type": "string",
@@ -336,202 +639,79 @@
             "price-duel"
           ]
         },
-        "startSec": { "type": "number", "minimum": 0 },
-        "endSec": { "type": "number", "exclusiveMinimum": 0 },
-        "corner": { "enum": ["bl", "br", "bc"] },
+        "startSec": {
+          "type": "number",
+          "minimum": 0
+        },
+        "endSec": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "corner": {
+          "enum": [
+            "bl",
+            "br",
+            "bc"
+          ]
+        },
         "params": {
           "type": "object",
           "minProperties": 1
         },
         "sfx": {
           "anyOf": [
-            { "$ref": "#/$defs/graphicSfx" },
+            {
+              "$ref": "#/$defs/graphicSfx"
+            },
             {
               "type": "array",
               "minItems": 1,
-              "items": { "$ref": "#/$defs/graphicSfx" }
+              "items": {
+                "$ref": "#/$defs/graphicSfx"
+              }
             }
           ]
         }
       },
       "allOf": [
         {
-          "if": { "properties": { "widget": { "const": "stars" } }, "required": ["widget"] },
-          "then": {
-            "required": ["params"],
+          "if": {
             "properties": {
-              "params": {
-                "additionalProperties": false,
-                "required": ["total", "filled"],
-                "properties": {
-                  "total": { "type": "integer", "minimum": 1 },
-                  "filled": { "type": "number", "minimum": 0 },
-                  "label": { "type": "string", "minLength": 1 },
-                  "fillStaggerSec": { "type": "number", "exclusiveMinimum": 0 }
-                }
+              "widget": {
+                "const": "stars"
               }
-            }
-          }
-        },
-        {
-          "if": { "properties": { "widget": { "const": "stack-resolve" } }, "required": ["widget"] },
+            },
+            "required": [
+              "widget"
+            ]
+          },
           "then": {
-            "required": ["params"],
+            "required": [
+              "params"
+            ],
             "properties": {
               "params": {
                 "additionalProperties": false,
-                "required": ["items", "resolve", "resolveAtSec"],
+                "required": [
+                  "total",
+                  "filled"
+                ],
                 "properties": {
-                  "items": {
-                    "type": "array",
-                    "minItems": 1,
-                    "items": {
-                      "oneOf": [
-                        { "type": "string", "minLength": 1 },
-                        {
-                          "type": "object",
-                          "additionalProperties": false,
-                          "required": ["text"],
-                          "properties": {
-                            "text": { "type": "string", "minLength": 1 },
-                            "startSec": { "type": "number", "minimum": 0 }
-                          }
-                        }
-                      ]
-                    }
+                  "total": {
+                    "type": "integer",
+                    "minimum": 1
                   },
-                  "resolve": { "type": "string", "minLength": 1 },
-                  "resolveAtSec": { "type": "number", "minimum": 0 },
-                  "itemStaggerSec": { "type": "number", "exclusiveMinimum": 0 }
-                }
-              }
-            }
-          }
-        },
-        {
-          "if": { "properties": { "widget": { "const": "vs-reject" } }, "required": ["widget"] },
-          "then": {
-            "required": ["params"],
-            "properties": {
-              "params": {
-                "additionalProperties": false,
-                "required": ["reject", "confirm"],
-                "properties": {
-                  "reject": { "$ref": "#/$defs/timedText" },
-                  "confirm": { "$ref": "#/$defs/timedText" },
-                  "badge": { "$ref": "#/$defs/timedText" }
-                }
-              }
-            }
-          }
-        },
-        {
-          "if": { "properties": { "widget": { "const": "flip-180" } }, "required": ["widget"] },
-          "then": {
-            "required": ["params"],
-            "properties": {
-              "params": {
-                "additionalProperties": false,
-                "required": ["front", "back"],
-                "properties": {
-                  "front": { "type": "string", "minLength": 1 },
-                  "back": { "type": "string", "minLength": 1 }
-                }
-              }
-            }
-          }
-        },
-        {
-          "if": { "properties": { "widget": { "const": "cover-wipe" } }, "required": ["widget"] },
-          "then": {
-            "required": ["params"],
-            "properties": {
-              "params": {
-                "additionalProperties": false,
-                "required": ["cover", "hidden", "wipeAtSec"],
-                "properties": {
-                  "cover": { "type": "string", "minLength": 1 },
-                  "hidden": { "type": "string", "minLength": 1 },
-                  "wipeAtSec": { "type": "number", "minimum": 0 }
-                }
-              }
-            }
-          }
-        },
-        {
-          "if": { "properties": { "widget": { "const": "ratio-lock" } }, "required": ["widget"] },
-          "then": {
-            "required": ["params"],
-            "properties": {
-              "params": {
-                "additionalProperties": false,
-                "required": ["ratio"],
-                "properties": { "ratio": { "type": "string", "minLength": 1 } }
-              }
-            }
-          }
-        },
-        {
-          "if": { "properties": { "widget": { "const": "duration-meter" } }, "required": ["widget"] },
-          "then": {
-            "required": ["params"],
-            "properties": {
-              "params": {
-                "additionalProperties": false,
-                "required": ["label", "ticks"],
-                "properties": {
-                  "label": { "type": "string", "minLength": 1 },
-                  "hours": { "type": ["string", "number"] },
-                  "ticks": { "type": "integer", "minimum": 1 },
-                  "fillStaggerSec": { "type": "number", "exclusiveMinimum": 0 },
-                  "metacritic": { "type": "string", "minLength": 1 },
-                  "metacriticAtSec": { "type": "number", "minimum": 0 },
-                  "meterHoldSec": { "type": "number", "exclusiveMinimum": 0 }
-                }
-              }
-            }
-          }
-        },
-        {
-          "if": { "properties": { "widget": { "const": "two-roles" } }, "required": ["widget"] },
-          "then": {
-            "required": ["params"],
-            "properties": {
-              "params": {
-                "additionalProperties": false,
-                "required": ["roles", "downbeat", "downbeatAtSec"],
-                "properties": {
-                  "roles": {
-                    "type": "array",
-                    "minItems": 2,
-                    "items": {
-                      "oneOf": [
-                        { "type": "string", "minLength": 1 },
-                        { "$ref": "#/$defs/timedText" }
-                      ]
-                    }
+                  "filled": {
+                    "type": "number",
+                    "minimum": 0
                   },
-                  "roleStaggerSec": { "type": "number", "exclusiveMinimum": 0 },
-                  "downbeat": { "type": "string", "minLength": 1 },
-                  "downbeatAtSec": { "type": "number", "minimum": 0 }
-                }
-              }
-            }
-          }
-        },
-        {
-          "if": { "properties": { "widget": { "const": "badge-pair" } }, "required": ["widget"] },
-          "then": {
-            "required": ["params"],
-            "properties": {
-              "params": {
-                "additionalProperties": false,
-                "required": ["badges"],
-                "properties": {
-                  "badges": {
-                    "type": "array",
-                    "minItems": 2,
-                    "items": { "$ref": "#/$defs/timedText" }
+                  "label": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "fillStaggerSec": {
+                    "type": "number",
+                    "exclusiveMinimum": 0
                   }
                 }
               }
@@ -539,16 +719,399 @@
           }
         },
         {
-          "if": { "properties": { "widget": { "const": "price-duel" } }, "required": ["widget"] },
+          "if": {
+            "properties": {
+              "widget": {
+                "const": "stack-resolve"
+              }
+            },
+            "required": [
+              "widget"
+            ]
+          },
           "then": {
-            "required": ["params"],
+            "required": [
+              "params"
+            ],
             "properties": {
               "params": {
                 "additionalProperties": false,
-                "required": ["physical", "digital"],
+                "required": [
+                  "items",
+                  "resolve",
+                  "resolveAtSec"
+                ],
                 "properties": {
-                  "physical": { "type": "string", "minLength": 1 },
-                  "digital": { "type": "string", "minLength": 1 }
+                  "items": {
+                    "type": "array",
+                    "minItems": 1,
+                    "items": {
+                      "oneOf": [
+                        {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        {
+                          "type": "object",
+                          "additionalProperties": false,
+                          "required": [
+                            "text"
+                          ],
+                          "properties": {
+                            "text": {
+                              "type": "string",
+                              "minLength": 1
+                            },
+                            "startSec": {
+                              "type": "number",
+                              "minimum": 0
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  "resolve": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "resolveAtSec": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "itemStaggerSec": {
+                    "type": "number",
+                    "exclusiveMinimum": 0
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "widget": {
+                "const": "vs-reject"
+              }
+            },
+            "required": [
+              "widget"
+            ]
+          },
+          "then": {
+            "required": [
+              "params"
+            ],
+            "properties": {
+              "params": {
+                "additionalProperties": false,
+                "required": [
+                  "reject",
+                  "confirm"
+                ],
+                "properties": {
+                  "reject": {
+                    "$ref": "#/$defs/timedText"
+                  },
+                  "confirm": {
+                    "$ref": "#/$defs/timedText"
+                  },
+                  "badge": {
+                    "$ref": "#/$defs/timedText"
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "widget": {
+                "const": "flip-180"
+              }
+            },
+            "required": [
+              "widget"
+            ]
+          },
+          "then": {
+            "required": [
+              "params"
+            ],
+            "properties": {
+              "params": {
+                "additionalProperties": false,
+                "required": [
+                  "front",
+                  "back"
+                ],
+                "properties": {
+                  "front": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "back": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "widget": {
+                "const": "cover-wipe"
+              }
+            },
+            "required": [
+              "widget"
+            ]
+          },
+          "then": {
+            "required": [
+              "params"
+            ],
+            "properties": {
+              "params": {
+                "additionalProperties": false,
+                "required": [
+                  "cover",
+                  "hidden",
+                  "wipeAtSec"
+                ],
+                "properties": {
+                  "cover": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "hidden": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "wipeAtSec": {
+                    "type": "number",
+                    "minimum": 0
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "widget": {
+                "const": "ratio-lock"
+              }
+            },
+            "required": [
+              "widget"
+            ]
+          },
+          "then": {
+            "required": [
+              "params"
+            ],
+            "properties": {
+              "params": {
+                "additionalProperties": false,
+                "required": [
+                  "ratio"
+                ],
+                "properties": {
+                  "ratio": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "widget": {
+                "const": "duration-meter"
+              }
+            },
+            "required": [
+              "widget"
+            ]
+          },
+          "then": {
+            "required": [
+              "params"
+            ],
+            "properties": {
+              "params": {
+                "additionalProperties": false,
+                "required": [
+                  "label",
+                  "ticks"
+                ],
+                "properties": {
+                  "label": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "hours": {
+                    "type": [
+                      "string",
+                      "number"
+                    ]
+                  },
+                  "ticks": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "fillStaggerSec": {
+                    "type": "number",
+                    "exclusiveMinimum": 0
+                  },
+                  "metacritic": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "metacriticAtSec": {
+                    "type": "number",
+                    "minimum": 0
+                  },
+                  "meterHoldSec": {
+                    "type": "number",
+                    "exclusiveMinimum": 0
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "widget": {
+                "const": "two-roles"
+              }
+            },
+            "required": [
+              "widget"
+            ]
+          },
+          "then": {
+            "required": [
+              "params"
+            ],
+            "properties": {
+              "params": {
+                "additionalProperties": false,
+                "required": [
+                  "roles",
+                  "downbeat",
+                  "downbeatAtSec"
+                ],
+                "properties": {
+                  "roles": {
+                    "type": "array",
+                    "minItems": 2,
+                    "items": {
+                      "oneOf": [
+                        {
+                          "type": "string",
+                          "minLength": 1
+                        },
+                        {
+                          "$ref": "#/$defs/timedText"
+                        }
+                      ]
+                    }
+                  },
+                  "roleStaggerSec": {
+                    "type": "number",
+                    "exclusiveMinimum": 0
+                  },
+                  "downbeat": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "downbeatAtSec": {
+                    "type": "number",
+                    "minimum": 0
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "widget": {
+                "const": "badge-pair"
+              }
+            },
+            "required": [
+              "widget"
+            ]
+          },
+          "then": {
+            "required": [
+              "params"
+            ],
+            "properties": {
+              "params": {
+                "additionalProperties": false,
+                "required": [
+                  "badges"
+                ],
+                "properties": {
+                  "badges": {
+                    "type": "array",
+                    "minItems": 2,
+                    "items": {
+                      "$ref": "#/$defs/timedText"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "widget": {
+                "const": "price-duel"
+              }
+            },
+            "required": [
+              "widget"
+            ]
+          },
+          "then": {
+            "required": [
+              "params"
+            ],
+            "properties": {
+              "params": {
+                "additionalProperties": false,
+                "required": [
+                  "physical",
+                  "digital"
+                ],
+                "properties": {
+                  "physical": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "digital": {
+                    "type": "string",
+                    "minLength": 1
+                  }
                 }
               }
             }
@@ -559,26 +1122,275 @@
     "timedText": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["text", "atSec"],
+      "required": [
+        "text",
+        "atSec"
+      ],
       "properties": {
-        "text": { "type": "string", "minLength": 1 },
-        "atSec": { "type": "number", "minimum": 0 }
+        "text": {
+          "type": "string",
+          "minLength": 1
+        },
+        "atSec": {
+          "type": "number",
+          "minimum": 0
+        }
       }
     },
     "sfxLibrary": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["library"],
+      "required": [
+        "library"
+      ],
       "properties": {
         "library": {
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "chip": { "type": "string", "minLength": 1 },
-            "stamp": { "type": "string", "minLength": 1 },
-            "punch": { "type": "string", "minLength": 1 },
-            "seam": { "type": "string", "minLength": 1 },
-            "price": { "type": "string", "minLength": 1 }
+            "chip": {
+              "type": "string",
+              "minLength": 1
+            },
+            "stamp": {
+              "type": "string",
+              "minLength": 1
+            },
+            "punch": {
+              "type": "string",
+              "minLength": 1
+            },
+            "seam": {
+              "type": "string",
+              "minLength": 1
+            },
+            "price": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      }
+    },
+    "audioTreatment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "stream",
+        "channel",
+        "eqProfile",
+        "noiseReduction",
+        "approval"
+      ],
+      "properties": {
+        "stream": {
+          "type": "string",
+          "pattern": "^0:a:[0-9]+$"
+        },
+        "channel": {
+          "enum": [
+            "mono",
+            "stereo"
+          ]
+        },
+        "eqProfile": {
+          "enum": ["dialogue-v1", "bishop-dialogue-v1"]
+        },
+        "noiseReduction": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "mode",
+            "strengthPercent",
+            "nrDb",
+            "noiseFloorDb"
+          ],
+          "properties": {
+            "mode": {
+              "const": "afftdn"
+            },
+            "strengthPercent": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100
+            },
+            "nrDb": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 22
+            },
+            "noiseFloorDb": {
+              "type": "number",
+              "maximum": 0
+            }
+          }
+        },
+        "protectedWindows": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "startSec",
+              "endSec",
+              "reason"
+            ],
+            "properties": {
+              "startSec": {
+                "type": "number",
+                "minimum": 0
+              },
+              "endSec": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              },
+              "reason": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        },
+        "approval": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "abRequired",
+            "removedSignalReviewRequired",
+            "reference"
+          ],
+          "properties": {
+            "abRequired": {
+              "const": true
+            },
+            "removedSignalReviewRequired": {
+              "const": true
+            },
+            "reference": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      }
+    },
+    "audioBed": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "path",
+        "fingerprint",
+        "authorizedWindow",
+        "origin",
+        "rights"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_-]*$"
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "fingerprint": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "authorizedWindow": {
+          "$ref": "#/$defs/timeRange"
+        },
+        "origin": {
+          "type": "string",
+          "minLength": 1
+        },
+        "rights": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "basis",
+            "status",
+            "publicationState",
+            "reference"
+          ],
+          "properties": {
+            "basis": {
+              "type": "string",
+              "minLength": 1
+            },
+            "status": {
+              "enum": [
+                "cleared",
+                "proof-conditioned"
+              ]
+            },
+            "publicationState": {
+              "enum": [
+                "proof-only",
+                "publishable"
+              ]
+            },
+            "reference": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      }
+    },
+    "audioBedOverride": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "bedId",
+        "timelineStartSec",
+        "sourceStartSec",
+        "durationSec",
+        "fadeInMs",
+        "fadeOutMs",
+        "ducking"
+      ],
+      "properties": {
+        "bedId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "timelineStartSec": {
+          "type": "number",
+          "minimum": 0
+        },
+        "sourceStartSec": {
+          "type": "number",
+          "minimum": 0
+        },
+        "durationSec": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "fadeInMs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "fadeOutMs": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "ducking": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "mode",
+            "minimumBelowDialogueDb"
+          ],
+          "properties": {
+            "mode": {
+              "const": "sidechain"
+            },
+            "minimumBelowDialogueDb": {
+              "type": "number",
+              "minimum": 12
+            }
           }
         }
       }
@@ -843,7 +1655,9 @@
         "sourceSegments": {
           "type": "array",
           "minItems": 1,
-          "items": { "$ref": "#/$defs/sourceSegment" }
+          "items": {
+            "$ref": "#/$defs/sourceSegment"
+          }
         },
         "requestedSpeed": {
           "type": "number",
@@ -855,21 +1669,34 @@
         "captionOverride": {
           "$ref": "#/$defs/captionPolicy"
         },
+        "visualInserts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/visualInsert"
+          }
+        },
         "motionOverride": {
           "type": "object",
           "additionalProperties": false,
           "properties": {
+            "sfxHits": {"type": "array", "items": {"type": "object", "additionalProperties": false, "required": ["id", "kind", "startSec"], "properties": {"id": {"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_-]*$"}, "kind": {"enum": ["chip", "stamp", "punch", "seam", "price"]}, "startSec": {"type": "number", "minimum": 0}}}},
             "callouts": {
               "type": "array",
-              "items": { "$ref": "#/$defs/callout" }
+              "items": {
+                "$ref": "#/$defs/callout"
+              }
             },
             "punchIns": {
               "type": "array",
-              "items": { "$ref": "#/$defs/punchIn" }
+              "items": {
+                "$ref": "#/$defs/punchIn"
+              }
             },
             "graphics": {
               "type": "array",
-              "items": { "$ref": "#/$defs/graphic" }
+              "items": {
+                "$ref": "#/$defs/graphic"
+              }
             }
           }
         },
@@ -878,6 +1705,9 @@
             "string",
             "null"
           ]
+        },
+        "audioBedOverride": {
+          "$ref": "#/$defs/audioBedOverride"
         },
         "rightsNotes": {
           "type": "array",
@@ -899,6 +1729,9 @@
           "type": "number",
           "minimum": 0,
           "maximum": 100
+        },
+        "audioTreatmentOverride": {
+          "$ref": "#/$defs/audioTreatment"
         }
       }
     },
@@ -1085,15 +1918,46 @@
     "sourceSegment": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["order", "sourceId", "startSec", "endSec", "rationale", "evidenceReference"],
+      "required": [
+        "order",
+        "sourceId",
+        "startSec",
+        "endSec",
+        "rationale",
+        "evidenceReference"
+      ],
       "properties": {
-        "order": { "type": "integer", "minimum": 1 },
-        "sourceId": { "type": "string", "minLength": 1 },
-        "startSec": { "type": "number", "minimum": 0 },
-        "endSec": { "type": "number", "exclusiveMinimum": 0 },
-        "rationale": { "type": "string", "minLength": 1 },
-        "evidenceReference": { "type": "string", "minLength": 1 },
-        "overlapApprovalReference": { "type": ["string", "null"], "minLength": 1 }
+        "order": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "sourceId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "startSec": {
+          "type": "number",
+          "minimum": 0
+        },
+        "endSec": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "rationale": {
+          "type": "string",
+          "minLength": 1
+        },
+        "evidenceReference": {
+          "type": "string",
+          "minLength": 1
+        },
+        "overlapApprovalReference": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1
+        }
       }
     },
     "point": {
@@ -1179,16 +2043,66 @@
   },
   "allOf": [
     {
-      "if": { "properties": { "version": { "const": "1.0" } }, "required": ["version"] },
+      "if": {
+        "properties": {
+          "version": {
+            "const": "1.0"
+          }
+        },
+        "required": [
+          "version"
+        ]
+      },
       "then": {
         "properties": {
-          "defaults": { "not": { "required": ["sfx"] } },
+          "defaults": {
+            "allOf": [
+              {
+                "not": {
+                  "required": [
+                    "sfx"
+                  ]
+                }
+              },
+              {
+                "not": {
+                  "required": [
+                    "audioTreatment"
+                  ]
+                }
+              }
+            ]
+          },
+          "audioBeds": {
+            "maxItems": 0
+          },
           "candidates": {
             "items": {
-              "required": ["sourceRange"],
+              "required": [
+                "sourceRange"
+              ],
               "allOf": [
-                { "not": { "required": ["sourceSegments"] } },
-                { "not": { "required": ["motionOverride"] } }
+                {
+                  "not": {
+                    "required": [
+                      "sourceSegments"
+                    ]
+                  }
+                },
+                {
+                  "not": {
+                    "required": [
+                      "motionOverride"
+                    ]
+                  }
+                },
+                {
+                  "not": {
+                    "required": [
+                      "audioBedOverride"
+                    ]
+                  }
+                }
               ]
             }
           }
@@ -1196,18 +2110,75 @@
       }
     },
     {
-      "if": { "properties": { "version": { "const": "1.1" } }, "required": ["version"] },
-      "then": {
-        "required": ["batchRoot", "batchRootSource"],
+      "if": {
         "properties": {
-          "source": { "required": ["sourceId"] },
-          "defaults": { "not": { "required": ["sfx"] } },
+          "version": {
+            "const": "1.1"
+          }
+        },
+        "required": [
+          "version"
+        ]
+      },
+      "then": {
+        "required": [
+          "batchRoot",
+          "batchRootSource"
+        ],
+        "properties": {
+          "source": {
+            "required": [
+              "sourceId"
+            ]
+          },
+          "defaults": {
+            "allOf": [
+              {
+                "not": {
+                  "required": [
+                    "sfx"
+                  ]
+                }
+              },
+              {
+                "not": {
+                  "required": [
+                    "audioTreatment"
+                  ]
+                }
+              }
+            ]
+          },
+          "audioBeds": {
+            "maxItems": 0
+          },
           "candidates": {
             "items": {
-              "required": ["sourceSegments"],
+              "required": [
+                "sourceSegments"
+              ],
               "allOf": [
-                { "not": { "required": ["sourceRange"] } },
-                { "not": { "required": ["motionOverride"] } }
+                {
+                  "not": {
+                    "required": [
+                      "sourceRange"
+                    ]
+                  }
+                },
+                {
+                  "not": {
+                    "required": [
+                      "motionOverride"
+                    ]
+                  }
+                },
+                {
+                  "not": {
+                    "required": [
+                      "audioBedOverride"
+                    ]
+                  }
+                }
               ]
             }
           }
@@ -1215,12 +2186,44 @@
       }
     },
     {
-      "if": { "properties": { "version": { "const": "1.2" } }, "required": ["version"] },
-      "then": {
-        "required": ["batchRoot", "batchRootSource"],
+      "if": {
         "properties": {
-          "source": { "required": ["sourceId"] },
-          "candidates": { "items": { "required": ["sourceSegments"], "not": { "required": ["sourceRange"] } } }
+          "version": {
+            "const": "1.2"
+          }
+        },
+        "required": [
+          "version"
+        ]
+      },
+      "then": {
+        "required": [
+          "batchRoot",
+          "batchRootSource"
+        ],
+        "properties": {
+          "source": {
+            "required": [
+              "sourceId"
+            ]
+          },
+          "defaults": {
+            "required": [
+              "audioTreatment"
+            ]
+          },
+          "candidates": {
+            "items": {
+              "required": [
+                "sourceSegments"
+              ],
+              "not": {
+                "required": [
+                  "sourceRange"
+                ]
+              }
+            }
+          }
         }
       }
     }

@@ -179,6 +179,22 @@ def valid_plan_v12() -> dict:
     plan = valid_plan_v11()
     plan["version"] = "1.2"
     plan["planVersion"] = "1.2"
+    plan["items"][0]["audioTreatment"] = {
+        "stream": "0:a:0",
+        "channel": "mono",
+        "eqProfile": "bishop-dialogue-v1",
+        "noiseReduction": {
+            "mode": "afftdn",
+            "strengthPercent": 30,
+            "nrDb": 6.0,
+            "noiseFloorDb": -37.5,
+        },
+        "approval": {
+            "abRequired": True,
+            "removedSignalReviewRequired": True,
+            "reference": "user://approved",
+        },
+    }
     plan["planHash"] = shorts_contract.plan_hash(plan)
     return plan
 
@@ -216,6 +232,66 @@ def valid_request_v11() -> dict:
 def valid_request_v12() -> dict:
     request = valid_request_v11()
     request["version"] = "1.2"
+    request["defaults"]["audioTreatment"] = {
+        "stream": "0:a:0",
+        "channel": "mono",
+        "eqProfile": "bishop-dialogue-v1",
+        "noiseReduction": {
+            "mode": "afftdn",
+            "strengthPercent": 30,
+            "nrDb": 6.0,
+            "noiseFloorDb": -37.5,
+        },
+        "approval": {
+            "abRequired": True,
+            "removedSignalReviewRequired": True,
+            "reference": "user://approved",
+        },
+    }
+    return request
+
+
+def add_v12_audio(request: dict) -> dict:
+    request["defaults"]["audioTreatment"] = {
+        "stream": "0:a:0",
+        "channel": "mono",
+        "eqProfile": "bishop-dialogue-v1",
+        "noiseReduction": {
+            "mode": "afftdn",
+            "strengthPercent": 30,
+            "nrDb": 6.0,
+            "noiseFloorDb": -37.5,
+        },
+        "approval": {
+            "abRequired": True,
+            "removedSignalReviewRequired": True,
+            "reference": "user://approved-2026-10-18",
+        },
+    }
+    request["audioBeds"] = [
+        {
+            "id": "prayer-children-preview",
+            "path": "assets/prayer-children.m4a",
+            "fingerprint": HASH,
+            "authorizedWindow": {"startSec": 0.0, "endSec": 30.0},
+            "origin": "Apple Music official preview",
+            "rights": {
+                "basis": "official-preview",
+                "status": "proof-conditioned",
+                "publicationState": "proof-only",
+                "reference": "https://music.apple.com/",
+            },
+        }
+    ]
+    request["candidates"][0]["audioBedOverride"] = {
+        "bedId": "prayer-children-preview",
+        "timelineStartSec": 2.0,
+        "sourceStartSec": 0.0,
+        "durationSec": 6.0,
+        "fadeInMs": 120,
+        "fadeOutMs": 250,
+        "ducking": {"mode": "sidechain", "minimumBelowDialogueDb": 12.0},
+    }
     return request
 
 
@@ -255,6 +331,22 @@ class ShortsSchemaTests(unittest.TestCase):
         request = valid_request_v11()
         self.assertEqual(shorts_contract.validate_document(request, "request"), request)
         request["candidates"][0]["sourceRange"] = {"startSec": 1, "endSec": 11}
+        with self.assertRaises(shorts_contract.ContractValidationError):
+            shorts_contract.validate_document(request, "request")
+
+    def test_v12_accepts_audio_treatment_and_provenanced_bed(self) -> None:
+        request = add_v12_audio(valid_request_v12())
+        self.assertEqual(shorts_contract.validate_document(request, "request"), request)
+
+    def test_v11_rejects_v12_audio_fields(self) -> None:
+        request = add_v12_audio(valid_request_v11())
+        with self.assertRaises(shorts_contract.ContractValidationError):
+            shorts_contract.validate_document(request, "request")
+
+    def test_v12_rejects_music_without_fingerprint_or_rights_provenance(self) -> None:
+        request = add_v12_audio(valid_request_v12())
+        request["audioBeds"][0].pop("fingerprint")
+        request["audioBeds"][0].pop("rights")
         with self.assertRaises(shorts_contract.ContractValidationError):
             shorts_contract.validate_document(request, "request")
 

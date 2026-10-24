@@ -20,6 +20,8 @@ class CommandSpec:
 
 _MODES = {"Owns", "Evidence", "Consumes", "Profile", "Admin"}
 _MATRIX = {
+    "direction": ("Admin", ()),
+    "briefstart": ("Admin", ()),
     "animation-qc": ("Evidence", ()),
     "audio-qc": ("Evidence", ()),
     "audit": ("Evidence", ()),
@@ -28,6 +30,8 @@ _MATRIX = {
     "changelog-video": ("Profile", ()),
     "chapters": ("Consumes", ()),
     "cleanup": ("Admin", ()),
+    "costs": ("Admin", ()),
+    "metrics": ("Admin", ()),
     "color": ("Owns", ("tracks",)),
     "creators": ("Admin", ()),
     "deliver": ("Consumes", ()),

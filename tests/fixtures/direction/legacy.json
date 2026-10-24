@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "entryId": "20260101-neutral-tutorial",
+  "provider": "neutral",
+  "masterBasename": "20260101-neutral-tutorial-master-v001.mp4",
+  "rawDir": "Z:/neutral-fixtures/tutorial-original",
+  "title": "A clear demonstration",
+  "status": "final",
+  "generatedAt": "2026-01-02T12:00:00Z",
+  "sessionId": "neutral-session-tutorial",
+  "summary": "Keep the presenter audible while the demonstration illustrates each step. This report records one completed project, not a provider-wide instruction.",
+  "learning": {
+    "aiMemory": "exported",
+    "note": "Natural pauses were retained for difficult instructions. The reason attributed to the creator was not recorded."
+  },
+  "editlogLock": null
+}

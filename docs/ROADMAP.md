@@ -113,3 +113,7 @@ with compatibility shims in `helpers/` until v0.2.0.
 1. Run **`/avo.issues`** with your agent, or open the [issue template chooser](https://github.com/joaobispo2077/avo/issues/new/choose).
 2. For large features, use Spec Kit in your footage folder or SDD specs locally.
 3. Link sponsor interest in the issue if you want something moved up the queue (`/avo.supporters`).
+
+## Recorded video costs
+
+Use /avo.costs (/avo.metrics alias) during editing or with --history after completion. Learndown and cleanup automatically display saved cost/token summaries with coverage and cutoff. Model/service switches preserve original usage attribution. [Collection, fallbacks and pricing disclosures](video-cost-transparency.md).
