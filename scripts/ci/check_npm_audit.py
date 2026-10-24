@@ -142,6 +142,15 @@ def write_deps_findings(
     )
 
 
+def _severity_band(counts: dict | None, *, ok: bool) -> str:
+    """Critical is red. High or moderate is yellow. Low-only or clean is green."""
+    if not ok or not counts or counts.get("critical") is None:
+        return "red"
+    if counts.get("high") or counts.get("moderate"):
+        return "yellow"
+    return "green"
+
+
 def _write_summary(
     counts: dict | None,
     *,
@@ -156,6 +165,7 @@ def _write_summary(
             **(counts or dict.fromkeys(_COUNT_KEYS)),
             "reported": reported or [],
             "error": error,
+            "band": _severity_band(counts, ok=ok),
         },
     )
 

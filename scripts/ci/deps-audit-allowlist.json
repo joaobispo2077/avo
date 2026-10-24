@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "description": "Documented critical dependency audit exemptions (task-011 / FR-6). Unexpected critical npm findings still fail immediately. High, moderate, and low npm findings are reported and do not fail. Prefer fixing or overriding over adding entries. Keep empty when @semantic-release/npm stub/overrides remove nested npm CLI bundles from the audit tree.",
+  "description": "Documented critical dependency audit exemptions (task-011 / FR-6). Unexpected critical npm findings still fail immediately. High or moderate findings pass yellow and low-only or clean findings pass green. A finding with no GHSA id keeps npm's severity. Prefer fixing or overriding over adding entries. Keep empty when @semantic-release/npm stub/overrides remove nested npm CLI bundles from the audit tree.",
   "npm": {
     "advisory_ids": []
   },
