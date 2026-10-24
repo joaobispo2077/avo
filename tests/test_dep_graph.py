@@ -174,7 +174,7 @@ def test_main_records_commit_utc_and_scope(
     assert summary["sha"] == "b" * 40
     assert summary["scope"] == "src/avo/**/*.py"
     assert summary["nodes"] == 2 and summary["edges"] == 0
-    assert datetime.fromisoformat(summary["recorded_at"].replace("Z", "+00:00")).tzinfo
+    assert datetime.fromisoformat(summary["recorded_at"]).tzinfo
     html = (GRAPH.OUT_DIR / "avo-imports.html").read_text(encoding="utf-8")
     assert summary["sha"] in html and summary["recorded_at"] in html
 

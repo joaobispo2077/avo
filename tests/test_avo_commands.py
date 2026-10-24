@@ -324,7 +324,7 @@ class AvoCommandParityTests(unittest.TestCase):
     def test_every_command_declares_timeline_integration_mode(self) -> None:
         allowed = {"Owns", "Evidence", "Consumes", "Profile", "Admin"}
         found = sorted(COMMANDS.glob("*.md"))
-        self.assertEqual(len(found), 53)
+        self.assertEqual(len(found), 57)
         failures = []
         for command in found:
             declarations = [
@@ -345,7 +345,7 @@ class AvoCommandParityTests(unittest.TestCase):
         )
         failures = []
         found = sorted(COMMANDS.glob("*.md"))
-        self.assertEqual(len(found), 53)
+        self.assertEqual(len(found), 57)
         for command in found:
             text = command.read_text(encoding="utf-8")
             missing_or_repeated = {

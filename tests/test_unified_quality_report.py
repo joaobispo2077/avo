@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import importlib.util
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -323,8 +324,32 @@ def test_publisher_cli_reads_junit_and_leaves_missing_counts_unavailable(
     assert doc["test_evidence"]["repo-integration-tests"]["counts"] is None
     assert doc["test_evidence"]["repo-integration-tests"]["state"] == "UNAVAILABLE"
     text = output.read_text()
-    assert "1 passed / 0 failed / 0 errors / 1 skipped; 2 JUnit testcases" in text
-    assert "0 JUnit testcases" not in text and "999" not in text
+    count_lines = "\n".join(
+        line
+        for line in text.splitlines()
+        if line.startswith(
+            (
+                "| repo-unit-tests |",
+                "| repo-integration-tests |",
+                "- repo-unit-tests:",
+                "- repo-integration-tests:",
+            )
+        )
+    )
+    assert (
+        "1 passed / 0 failed / 0 errors / 1 skipped; 2 JUnit testcases." in count_lines
+    )
+    assert (
+        "1 passed / 0 failed / 0 errors / 1 skipped; 2 testcase events." in count_lines
+    )
+    assert "Job result; testcase counts not captured." in count_lines
+    assert "Testcase counts unavailable." in count_lines
+    assert "0 JUnit testcases" not in text
+    # 999 is the fixture sentinel. Match it only as its own count so a SHA,
+    # SHA-256, or GitHub run/commit URL that happens to contain those digits
+    # cannot fail or satisfy the check.
+    report = re.sub(r"https://github\.com/\S+", "", text)
+    assert re.search(r"(?<![0-9A-Fa-f])999(?![0-9A-Fa-f])", report) is None
     assert "UNAVAILABLE" in text and "counts not captured" in text
     assert "Dashboard image unavailable; current measurements remain in text." in text
 
@@ -470,7 +495,10 @@ def test_fatal_builder_fallback_is_dependency_isolated_and_markdown_only(
     assert "report builder failed" in text.lower()
     assert f"| repo-integration-tests | {result.upper()} |" in text
     assert SHA in text and "b" * 40 in text and "c" * 40 in text
-    assert "42" in text and "Attempt: 2" in text
+    assert (
+        "Run: [42](https://github.com/owner/avo/actions/runs/42/attempts/2) · Attempt: 2"
+        in text
+    )
     assert "Unavailable" in text and "Overall: PASS" not in text
     assert "kpi-chart:" not in text and "![" not in text
     assert metrics.read_text(encoding="utf-8") == '{"previous":"partial"}'

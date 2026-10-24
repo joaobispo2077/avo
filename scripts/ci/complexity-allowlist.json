@@ -606,13 +606,6 @@
       "reason": "Feature 006 validation/orchestration branch matrix; recorded for explicit decomposition follow-up"
     },
     {
-      "path": "src/avo/wrap.py",
-      "name": "build_wrap_payload",
-      "complexity": 17,
-      "rank": "C",
-      "reason": "Reporting/inventory/validation aggregation with many optional fields"
-    },
-    {
       "path": "src/avo/final_transcript_artifacts.py",
       "name": "_word_cues",
       "complexity": 16,
@@ -718,13 +711,6 @@
       "reason": "Reporting/inventory/validation aggregation with many optional fields"
     },
     {
-      "path": "src/avo/project_inventory.py",
-      "name": "verify_preserved_complete",
-      "complexity": 15,
-      "rank": "C",
-      "reason": "Reporting/inventory/validation aggregation with many optional fields"
-    },
-    {
       "path": "src/avo/render.py",
       "name": "build_master_srt",
       "complexity": 15,
@@ -807,13 +793,6 @@
       "complexity": 14,
       "rank": "C",
       "reason": "Timeline state machine / review gate branching; planned decomposition"
-    },
-    {
-      "path": "src/avo/timeline/approval_service.py",
-      "name": "ApprovalService",
-      "complexity": 14,
-      "rank": "C",
-      "reason": "Feature 006 validation/orchestration branch matrix; recorded for explicit decomposition follow-up"
     },
     {
       "path": "src/avo/timeline/mapping.py",
@@ -1040,13 +1019,6 @@
       "reason": "Feature 006 validation/orchestration branch matrix; recorded for explicit decomposition follow-up"
     },
     {
-      "path": "src/avo/timeline/reconstruction.py",
-      "name": "verify_reconstruction_bundle",
-      "complexity": 12,
-      "rank": "C",
-      "reason": "Timeline state machine / review gate branching; planned decomposition"
-    },
-    {
       "path": "src/avo/timeline/tracks.py",
       "name": "apply_event_role_defaults",
       "complexity": 12,
@@ -1094,13 +1066,6 @@
       "complexity": 11,
       "rank": "C",
       "reason": "Adapter orchestration with many format/capability branches"
-    },
-    {
-      "path": "src/avo/adapters/motion/hyperframes.py",
-      "name": "build_composition_spec",
-      "complexity": 11,
-      "rank": "C",
-      "reason": "Feature 006 validation/orchestration branch matrix; recorded for explicit decomposition follow-up"
     },
     {
       "path": "src/avo/adapters/understand/watch_policy.py",

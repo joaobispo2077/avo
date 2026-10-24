@@ -36,9 +36,16 @@ def _fold(value: str) -> str:
 
 
 class CandidateTranscriptionAdapter:
-    def __init__(self, runtime: Any | None = None, *, model: str = "small"):
+    def __init__(
+        self,
+        runtime: Any | None = None,
+        *,
+        model: str = "small",
+        reuse_only: bool = False,
+    ):
         self.runtime = runtime
         self.model = model
+        self.reuse_only = reuse_only
 
     @staticmethod
     def analyze(
@@ -91,7 +98,7 @@ class CandidateTranscriptionAdapter:
     def _load_transcript_payload(
         self, candidate: Path, fingerprint: dict[str, Any], options: dict[str, Any]
     ) -> tuple[dict[str, Any], Any]:
-        if self.runtime is not None:
+        if self.runtime is not None and not self.reuse_only:
             payload = (
                 self.runtime.transcribe(candidate, **options)
                 if hasattr(self.runtime, "transcribe")
@@ -105,6 +112,13 @@ class CandidateTranscriptionAdapter:
         path = out_path(candidate, edit_dir)
         payload = _matching_transcript(path, fingerprint["sha256"], model=self.model)
         if payload is None:
+            if self.reuse_only:
+                raise ToolError(
+                    "TRANSCRIPT_REUSE_UNAVAILABLE",
+                    "no existing transcript matches the exact candidate and model",
+                    False,
+                    "provide the matching transcript; reuse-only mode never starts ASR",
+                )
             path = transcribe_one(
                 candidate,
                 edit_dir,
@@ -115,13 +129,13 @@ class CandidateTranscriptionAdapter:
             payload = json.loads(path.read_text(encoding="utf-8"))
         return payload, path
 
-    def transcribe(self, candidate: Path, **options: Any) -> dict[str, Any]:
-        candidate = Path(candidate)
-        fingerprint = file_fingerprint(candidate)
+    def _load_or_error(
+        self, candidate: Path, fingerprint: dict[str, Any], options: dict[str, Any]
+    ) -> tuple[dict[str, Any], Any]:
         try:
-            payload, transcript_path = self._load_transcript_payload(
-                candidate, fingerprint, options
-            )
+            return self._load_transcript_payload(candidate, fingerprint, options)
+        except ToolError:
+            raise
         except Exception as exc:
             raise ToolError(
                 "TRANSCRIPTION_UNAVAILABLE",
@@ -129,6 +143,11 @@ class CandidateTranscriptionAdapter:
                 True,
                 "prepare the local multilingual model and retry",
             ) from exc
+
+    def transcribe(self, candidate: Path, **options: Any) -> dict[str, Any]:
+        candidate = Path(candidate)
+        fingerprint = file_fingerprint(candidate)
+        payload, transcript_path = self._load_or_error(candidate, fingerprint, options)
         source = (payload.get("source") or {}).get("sha256") or payload.get(
             "sourceSha256"
         )

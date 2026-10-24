@@ -15,6 +15,12 @@ GENERIC_SURFACES = (
     "src/avo/adapters/understand/watch_policy.py",
     "src/avo/adapters/understand/watch_skill.py",
     "src/avo/adapters/qc/source_fidelity.py",
+    "src/avo/direction/rules.py",
+    "src/avo/direction/store.py",
+    "src/avo/direction/sources.py",
+    "src/avo/direction/service.py",
+    "src/avo/direction/brief.py",
+    "src/avo/direction_cli.py",
 )
 
 

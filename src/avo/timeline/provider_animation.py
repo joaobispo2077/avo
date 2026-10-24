@@ -7,7 +7,7 @@ import re
 import shutil
 from collections.abc import Callable, Iterable
 from copy import deepcopy
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
@@ -151,7 +151,7 @@ class ProviderAnimationService:
     ) -> dict[str, Any]:
         if not entries:
             raise AnimationError("rights manifest is required")
-        now = now or datetime.now(timezone.utc)
+        now = now or datetime.now(UTC)
         for entry in entries:
             missing = _RIGHTS_REQUIRED - set(entry)
             if missing:
@@ -168,7 +168,7 @@ class ProviderAnimationService:
             end = entry.get("termEndsAt")
             if end:
                 try:
-                    expiry = datetime.fromisoformat(str(end).replace("Z", "+00:00"))
+                    expiry = datetime.fromisoformat(str(end))
                 except ValueError as exc:
                     raise AnimationError("rights expiry is invalid") from exc
                 if expiry <= now:

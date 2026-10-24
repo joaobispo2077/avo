@@ -16,34 +16,16 @@
       data-height="__HEIGHT__"
       data-duration="__DURATION__"
       data-layout="__LAYOUT_MODE__"
+      data-render-layers="__RENDER_LAYERS__"
       data-pane-order="__PANE_ORDER__"
       data-caption-anchor="__CAPTION_ANCHOR__"
       style="--canvas-width: __WIDTH__px; --canvas-height: __HEIGHT__px; __TOKEN_CSS__"
     >
-      <div id="base-wrap" class="media-wrap base-pane">
-        <video
-          id="base-video"
-          class="clip media-pane"
-          src="assets/base-video.mp4"
-          data-start="0"
-          data-duration="__DURATION__"
-          data-track-index="0"
-          muted
-          playsinline
-        ></video>
-      </div>
+__BASE_MEDIA__
 __INSERTION_MEDIA__
+__VISUAL_MEDIA__
+__VISUAL_LABELS__
       <div id="ui-design">
-      <section
-        id="caption-rail"
-        class="clip caption-rail anchor-__CAPTION_ANCHOR__"
-        data-start="0"
-        data-duration="__DURATION__"
-        data-track-index="2"
-        aria-label="Captions"
-      >
-__CAPTION_MARKUP__
-      </section>
       <div
         id="callout-layer"
         class="clip callout-layer"
@@ -64,15 +46,18 @@ __CALLOUT_MARKUP__
       >
 __GRAPHIC_MARKUP__
       </div>
-      </div>
-      <audio
-        id="dialogue-audio"
-        src="assets/dialogue-audio.m4a"
+      <section
+        id="caption-rail"
+        class="clip caption-rail anchor-__CAPTION_ANCHOR__"
         data-start="0"
         data-duration="__DURATION__"
-        data-track-index="10"
-        data-volume="1"
-      ></audio>
+        data-track-index="90"
+        aria-label="Captions"
+      >
+__CAPTION_MARKUP__
+      </section>
+      </div>
+__DIALOGUE_AUDIO__
 __INSERTION_AUDIO__
 __SFX_AUDIO__
     </main>

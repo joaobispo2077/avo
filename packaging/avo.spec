@@ -4,7 +4,7 @@
 Entry: avo.__main__ → avo.engine_cli:main.
 CPU-only CTranslate2: collect the wheel, then drop CUDA stubs.
 Drop matplotlib (declared in pyproject, unused under src/avo).
-Bundle config/, schemas/, and shorts HTML templates (package data).
+Bundle config/, schemas/, shorts HTML templates and direction package data.
 
 This spec is onedir (EXE exclude_binaries + COLLECT). Do not ship --onefile.
 Forbidden: PyOxidizer. Forbidden: onefile as the shipped artifact.
@@ -101,6 +101,7 @@ hiddenimports: list = [
     "avo.engine_cli",
     "avo.consume_mode",
     "avo.paths",
+    "avo.resources.directions",
     "avo.mcp.__main__",
     "avo.mcp.server",
     "mcp",
@@ -122,6 +123,7 @@ _collect("faster_whisper")
 # avo mcp only imports mcp.server.MCPServer.
 datas += collect_data_files("mcp")
 datas += collect_data_files("avo.templates.shorts_hyperframes")
+datas += collect_data_files("avo.resources.directions")
 datas += copy_metadata("avo")
 datas += copy_metadata("faster-whisper")
 datas += copy_metadata("mcp")

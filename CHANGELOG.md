@@ -1,3 +1,56 @@
+# [1.17.0](https://github.com/joaobispo2077/avo/compare/v1.16.0...v1.17.0) (2026-10-24)
+
+
+### Bug Fixes
+
+* **deps:** bump filelock and setuptools for pip-audit ([d276865](https://github.com/joaobispo2077/avo/commit/d27686552668ac6ff9fbfee2d6f942a956a6249a))
+* **deps:** bump pillow to 13.0.0 and certifi to 2026.10.19 ([755af61](https://github.com/joaobispo2077/avo/commit/755af6124477ffe2eb4550418080b3444148f275))
+* **schema:** find installed validation contracts ([8d46b1a](https://github.com/joaobispo2077/avo/commit/8d46b1a8b114e71fed19a1755119f89dd80039c9))
+* **delivery:** locate documented final masters ([2805a6c](https://github.com/joaobispo2077/avo/commit/2805a6c9979910196bbda921d53441f8359ecd34))
+* **shorts:** preserve protected audio samples ([39d6e3a](https://github.com/joaobispo2077/avo/commit/39d6e3a14c41193d7bec375fc78046ee1f5b937e))
+* **cleanup:** resolve Shorts delivery sidecars ([9150a8a](https://github.com/joaobispo2077/avo/commit/9150a8a1d1dff28d7e30f620e56e879372a6b29f))
+* **reconstruction:** separate history from media ([5543e25](https://github.com/joaobispo2077/avo/commit/5543e25f922869e1273314b649b84db117d3f069))
+* **pipeline:** tolerate unavailable learning ([a7c7dd9](https://github.com/joaobispo2077/avo/commit/a7c7dd957ce136f7077daa6845e4025c121ad802))
+* **cleanup:** verify dependencies once per run ([0aa1763](https://github.com/joaobispo2077/avo/commit/0aa17633d670968ba719deefb2b37b87f1a3a1ca))
+* **qc:** verify persisted assembly lineage ([356f433](https://github.com/joaobispo2077/avo/commit/356f433ac0691145d9f42c141c338c7e4bdc3da1))
+
+
+### Features
+
+* **mcp:** add exact creative review tools ([02e9739](https://github.com/joaobispo2077/avo/commit/02e9739b4032016b3d5f315c7e09ad29a2db57d6))
+* **delivery:** adopt reviewed existing masters ([fa51dd0](https://github.com/joaobispo2077/avo/commit/fa51dd02ee805b249b168bb3d59f9dd6e0ad0e07))
+* **review:** bind serial Shorts scorecards ([73fb589](https://github.com/joaobispo2077/avo/commit/73fb58932d42fe393387c404bd3c3d4593565428))
+* **preservation:** close without deleting files ([5632663](https://github.com/joaobispo2077/avo/commit/563266308b76c2a83f3693049362dda544ba0f9a))
+* **costs:** collect agent and review usage ([67b9c83](https://github.com/joaobispo2077/avo/commit/67b9c83e3fdc9fd56fbe07455dd8c5be54c853a9))
+* **direction:** collect bounded learning evidence ([02c62ce](https://github.com/joaobispo2077/avo/commit/02c62ce278b5a6528f8b9b63d7498a38e1202f07))
+* **shorts:** compile timed graphics layers ([a4711d6](https://github.com/joaobispo2077/avo/commit/a4711d610b7d64a235ce7ecc4e28688e41254319))
+* **costs:** define identity and snapshot contracts ([f981a52](https://github.com/joaobispo2077/avo/commit/f981a5238bcc70eaaed5b742852e3f358ebe68b1))
+* **briefstart:** define project choice contract ([91ada5a](https://github.com/joaobispo2077/avo/commit/91ada5a05b2e56a0ed622e2778411eec17c4dca6))
+* **direction:** define provider review contract ([ef9cce1](https://github.com/joaobispo2077/avo/commit/ef9cce1355dbe8ca5a9896871eb8d5d1d8023d7c))
+* **costs:** define usage and tariff contracts ([bab45c2](https://github.com/joaobispo2077/avo/commit/bab45c2dd20fbfa2a8455161d50bb7ad45244ebe))
+* **costs:** enable agent cost workflows ([a8d62d8](https://github.com/joaobispo2077/avo/commit/a8d62d813fb9ea0371427db0c114973e503a0b5d))
+* **costs:** expose CLI and MCP operations ([e1ca93c](https://github.com/joaobispo2077/avo/commit/e1ca93c6c9d5bc40938fe86b67adba15aa94f023))
+* **cli:** expose direction and briefstart ([a4957dd](https://github.com/joaobispo2077/avo/commit/a4957dde74ec3d2e0136aa24b3d485ea2fda51e4))
+* **shorts:** extend versioned proof contracts ([3c6a644](https://github.com/joaobispo2077/avo/commit/3c6a644246d0b7dc0087df48433a9322a59effe2))
+* **direction:** manage reviewed provider profiles ([9a600f4](https://github.com/joaobispo2077/avo/commit/9a600f4f1204344ed874da2542d561ea19dfdbe3))
+* **briefstart:** offer scoped creative choices ([5ebed3d](https://github.com/joaobispo2077/avo/commit/5ebed3d1174844b9f8ae3c77a18e185181cd5d5b))
+* **pipeline:** offer selected creative guidance ([fb6d26c](https://github.com/joaobispo2077/avo/commit/fb6d26c881d751fc06082dd5200e0df491168c26))
+* **direction:** persist exact creative decisions ([a31d3ab](https://github.com/joaobispo2077/avo/commit/a31d3abbb61bde8c341c986335957c79f8da947e))
+* **costs:** persist immutable usage evidence ([c0b6e72](https://github.com/joaobispo2077/avo/commit/c0b6e726828ab7b78e93e23c6583a8b67cf06e1a))
+* **shorts:** prepare dialogue and audio beds ([4d3fb6e](https://github.com/joaobispo2077/avo/commit/4d3fb6eb3ae29671e18d893cfba3bc510be9ca0f))
+* **shorts:** render original-source proofs ([e95b046](https://github.com/joaobispo2077/avo/commit/e95b04645a551b74a6d23e004c3879085452bedd))
+* **costs:** report usage and retained history ([6ce2113](https://github.com/joaobispo2077/avo/commit/6ce21137a7d960e112b1721f37b1cea290e758c9))
+* **shorts:** resolve timed visuals and audio ([2297c23](https://github.com/joaobispo2077/avo/commit/2297c2357c44cd1bfbdacda958e50fe37a365c35))
+* **costs:** retain costs through video closure ([4323f0a](https://github.com/joaobispo2077/avo/commit/4323f0a88135c5364e5393535f61004ee82914d8))
+* **review:** reuse exact candidate transcripts ([1f898da](https://github.com/joaobispo2077/avo/commit/1f898dacc580950ebf2222415a50d2d688d52056))
+* **shorts:** wire proof and review orchestration ([60abc2a](https://github.com/joaobispo2077/avo/commit/60abc2a684606e2f7ad354ceedc550cf1a2bb585))
+
+
+### Performance Improvements
+
+* **schema:** cache validators by content ([7be3def](https://github.com/joaobispo2077/avo/commit/7be3defc80e4946cba78b8d8add5aa91c8ffee7a))
+* **watch:** decode review frames in one pass ([ceabcbb](https://github.com/joaobispo2077/avo/commit/ceabcbb9ba99c260c640712c41243340e547b83b))
+
 # [1.16.0](https://github.com/joaobispo2077/avo/compare/v1.15.0...v1.16.0) (2026-10-18)
 
 
