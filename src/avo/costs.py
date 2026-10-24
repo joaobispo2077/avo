@@ -349,7 +349,7 @@ def _cutoff(rows):
 
 
 def _time(value):
-    return datetime.fromisoformat(value.replace("Z", "+00:00"))
+    return datetime.fromisoformat(value)
 
 
 def render_summary(report):

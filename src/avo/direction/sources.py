@@ -7,7 +7,7 @@ import json
 import re
 import unicodedata
 from collections import Counter
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from avo.direction.rules import DirectionError, seal, validate
@@ -732,9 +732,7 @@ def collect_sources(
     """Collect the bounded union of catalog entries and recognized entry folders."""
     root = _root(provider_root, provider)
     timestamp = (
-        clock()
-        if clock
-        else datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+        clock() if clock else datetime.now(UTC).isoformat().replace("+00:00", "Z")
     )
     state = {"bytes": 0, "cache": {}}
     problems = []
