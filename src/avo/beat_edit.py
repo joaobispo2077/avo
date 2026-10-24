@@ -6,7 +6,7 @@ import argparse
 import json
 import subprocess
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -639,7 +639,7 @@ def append_source_log(edit_dir: Path, rows: list[dict[str, str]]) -> Path:
             encoding="utf-8",
         )
     existing = path.read_text(encoding="utf-8")
-    today = datetime.now(timezone.utc).date().isoformat()
+    today = datetime.now(UTC).date().isoformat()
     lines = [
         f"| {today} | {row['asset']} | {row['role']} | {row['path']} | {row['note']} |"
         for row in rows

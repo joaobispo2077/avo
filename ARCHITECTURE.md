@@ -43,7 +43,7 @@ The current skills' references to `helpers/` describe the former layout;
   entry points. A prior proof is never reusable source media.
 - Fingerprint formats and atomic JSON writers have different contracts. Shared
   mechanics must not erase validation, durability or representation differences.
-- Python 3.10 remains supported. No new package dependency is required here.
+- Python 3.11 is the minimum supported version. No new package dependency is required here.
 
 ## Import enforcement
 

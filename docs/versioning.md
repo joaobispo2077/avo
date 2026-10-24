@@ -58,6 +58,24 @@ Releases are **automated** via [semantic-release](https://github.com/semantic-re
    `CHANGELOG.md`, creates the git tag, and publishes the GitHub Release
 4. `scripts/ci/verify-release-version.sh` confirms manifest alignment post-release
 
+The GitHub Release initially stays **draft**. The release workflow dispatches
+`engine-binary.yml` with `attach_tag` set to the existing version tag. After all
+three platform builds pass, that workflow uploads their zip files and checksums,
+then publishes the draft. Until publication finishes, GitHub's latest-release
+badge continues to show the previous published version.
+
+The engine workflow intentionally skips its work-selection job for releases.
+Its publishing condition must explicitly handle that skipped ancestor with
+`!cancelled()` while requiring `needs.zip-smoke.result == 'success'`. Failed,
+cancelled or skipped builds must never publish a release. Manual smoke runs
+without `attach_tag`, push runs and pull-request runs must not publish either.
+
+To recover an existing draft after fixing the workflow, dispatch **Engine binary**
+from a branch containing the fix and set `attach_tag` to that draft's existing tag
+(for example, `v1.17.0`). The builds check out that tag, not the workflow branch's
+application code. This recovery attaches assets and publishes the existing
+release without creating another version or changing its tag.
+
 **Maintainer setup:** add repository secret **`GH_TOKEN`** (PAT or fine-grained token with
 `contents: write`). Maxframe uses the same pattern; `github.token` alone may be insufficient
 for `@semantic-release/git` pushes.

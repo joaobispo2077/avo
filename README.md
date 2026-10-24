@@ -98,7 +98,7 @@ heavier tiers raise quality and VRAM.
 | **GPU** | ~**4 GB** VRAM (Qwen 1.5B path) · ~**8 GB** VRAM (Bonsai 1-bit path) · or CPU-only Whisper + very patient LLM |
 | **System RAM** | ~**8 GB** (Qwen 1.5B) · ~**16 GB** recommended if using Bonsai |
 | **Disk** | Models (~4–8 GB for the light stack) **plus** free space for footage / `edit/` proofs |
-| **Software** | Node ≥ 18 · Python ≥ 3.10 · ffmpeg · optional MCP SDK installed from an AVO checkout with `pip install -e ".[mcp]"` (no account) |
+| **Software** | Node ≥ 18 · Python ≥ 3.11 · ffmpeg · optional MCP SDK installed from an AVO checkout with `pip install -e ".[mcp]"` (no account) |
 
 Weak hardware that cannot hold even this floor may later use optional
 **[avo.cloud](specs/backlog/avo-cloud.md)** ([ROADMAP](#roadmap) **BL-018**) —

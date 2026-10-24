@@ -43,7 +43,7 @@ def validate(kind, value):
         stamp = value.get(field)
         if stamp is not None:
             try:
-                parsed = datetime.fromisoformat(stamp.replace("Z", "+00:00"))
+                parsed = datetime.fromisoformat(stamp)
                 if parsed.tzinfo is None:
                     raise ValueError("missing UTC offset")
             except (ValueError, TypeError, AttributeError) as exc:
