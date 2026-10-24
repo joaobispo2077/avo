@@ -1,3 +1,10 @@
+## [1.17.1](https://github.com/joaobispo2077/avo/compare/v1.17.0...v1.17.1) (2026-10-24)
+
+
+### Bug Fixes
+
+* **ci:** publish releases after successful builds ([c0e1740](https://github.com/joaobispo2077/avo/commit/c0e17401fd630e94046739bc292e39b7dc457b4c))
+
 # [1.17.0](https://github.com/joaobispo2077/avo/compare/v1.16.0...v1.17.0) (2026-10-24)
 
 
