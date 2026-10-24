@@ -10,7 +10,7 @@ import html
 import re
 import unicodedata
 from copy import deepcopy
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import PurePosixPath
 
 from avo.timeline.contracts import (
@@ -145,9 +145,7 @@ def seal(document_type: str, fields: dict, *, clock=None) -> dict:
             "Native envelope fields cannot be supplied as authoring content.",
         )
     timestamp = (
-        clock()
-        if clock
-        else datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+        clock() if clock else datetime.now(UTC).isoformat().replace("+00:00", "Z")
     )
     document = {
         "schemaVersion": "1.0.0",

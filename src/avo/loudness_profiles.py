@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import subprocess
 from dataclasses import asdict, dataclass
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
 
@@ -143,7 +143,7 @@ def get_preset(preset_id: str) -> LoudnessPreset:
 def preset_stale_advisory(
     preset: LoudnessPreset, *, today: date | None = None
 ) -> str | None:
-    today = today or datetime.now(tz=timezone.utc).date()
+    today = today or datetime.now(tz=UTC).date()
     verified = date.fromisoformat(preset.last_verified)
     age_days = (today - verified).days
     if age_days >= 180:

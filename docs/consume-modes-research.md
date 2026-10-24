@@ -26,7 +26,7 @@ AVO already has one coherent product: an **agent with three registry skills**, a
 | Rejected editor MCP | `docs/why-not-editor-mcp.md` | Orchestrator, not NLE timeline MCP. |
 | Cloud MCP backlog | `specs/backlog/avo-mcp-cloud.md` | Must never gate local skills/CLI/MCP. |
 
-`scripts/scan-patterns.sh` is referenced by the SDD research skill but **does not exist** in this repo. Stack is already documented: Python 3.10+ (`src/avo/`), Node ≥18 (install + HyperFrames), pytest, uv/npm wrappers.
+`scripts/scan-patterns.sh` is referenced by the SDD research skill but **does not exist** in this repo. Stack is already documented: Python 3.11+ (`src/avo/`), Node ≥18 (install + HyperFrames), pytest, uv/npm wrappers.
 
 ### Reusable Components
 

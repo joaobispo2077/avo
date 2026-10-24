@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
 
@@ -87,7 +87,7 @@ def _opencode(value, session):
         if info.get("sessionID") != session:
             continue
         occurred = datetime.fromtimestamp(
-            info["time"]["completed"] / 1000, timezone.utc
+            info["time"]["completed"] / 1000, UTC
         ).isoformat()
         row = _base("opencode", session, info["id"], occurred)
         tokens = info.get("tokens") or {}

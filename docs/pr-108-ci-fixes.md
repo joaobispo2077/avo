@@ -59,11 +59,12 @@ and Pillow 13.0.0 on Python 3.11+. Auditing an export of the frozen development
 and MCP requirements found no known vulnerabilities on Python 3.11. No advisory
 exceptions, gate thresholds or direct dependency requirements were weakened.
 
-Pillow 13 requires Python 3.11+. CI runs Python 3.12. The project still supports
-Python 3.10, whose lock resolution retains Pillow 12.3.0 and its outstanding
-advisories. This fix does not silently drop that Python version or claim its
-dependency set is vulnerability-free; it needs a patched compatible release
-or a separately approved minimum-Python change.
+Pillow 13 requires Python 3.11+. CI runs Python 3.12. At the time of this fix
+the project still supported Python 3.10, whose lock resolution retained Pillow
+12.3.0 and its outstanding advisories. This fix did not silently drop that
+Python version or claim its dependency set was vulnerability-free; dropping it
+needed a patched compatible release or a separately approved minimum-Python
+change.
 
 ## Validation
 
