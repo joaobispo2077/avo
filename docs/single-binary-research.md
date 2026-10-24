@@ -30,7 +30,7 @@ This extends [`docs/consume-modes-research.md`](consume-modes-research.md). That
 | Native stack | `pyproject.toml` | `faster-whisper` → CTranslate2; `numpy`; `librosa`; unused `matplotlib` still declared. |
 | PyPI name | consume-modes research | Distribution name `avo` on PyPI is **Soteria**. Binary on disk can still be `avo` if scoped to `~/.avo/bin`. |
 
-`scripts/scan-patterns.sh` still does not exist. Stack: Python 3.10+ (`src/avo/`), Node ≥18, pytest, uv/npm, GitHub Actions, semantic-release on branch `release`.
+`scripts/scan-patterns.sh` still does not exist. Stack: Python 3.11+ (`src/avo/`), Node ≥18, pytest, uv/npm, GitHub Actions, semantic-release on branch `release`.
 
 ### Reusable Components
 

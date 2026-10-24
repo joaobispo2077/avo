@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pytest
 
@@ -10,7 +10,7 @@ from tests.test_provider_animation_promotion import _rights
 
 
 def test_rights_fail_closed_for_missing_expired_revoked_or_nonportable():
-    now = datetime(2026, 8, 13, tzinfo=timezone.utc)
+    now = datetime(2026, 8, 13, tzinfo=UTC)
     valid = _rights()
     report = ProviderAnimationService.validate_rights(valid, now=now)
     assert report["eligible"] is True
