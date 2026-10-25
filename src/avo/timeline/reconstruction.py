@@ -6,6 +6,8 @@ import json
 from pathlib import Path
 from typing import Any
 
+from avo.master_artifacts import resolve_final_masters, resolve_final_transcript
+
 from .contracts import (
     content_hash,
     document_hash_excluding,
@@ -46,6 +48,9 @@ def _fingerprinted_refs(value: Any):
 def _head_media_refs(raw_dir: Path, artifact: dict[str, Any]):
     store = ArtifactStore(raw_dir / artifact["path"])
     index = store.load_index()
+    if index["artifactType"] not in ("cmap", "bmap", "tracks", "animation", "sync-map"):
+        # Ledger snapshots retain historical identities, not current media requirements.
+        return
     head = next(
         (
             ref
@@ -85,11 +90,13 @@ def _authoring_files(raw_dir: Path):
     }
     for name in (
         "delivery",
+        "review",
         "tools",
         "animations",
         "learndown",
         "motion",
         "intermediates",
+        "briefstart",
     ):
         for path in (raw_dir / "edit" / name).rglob("*"):
             if (
@@ -103,11 +110,35 @@ def _authoring_files(raw_dir: Path):
             yield path.resolve()
 
 
+def _human_final_inputs(raw_dir: Path) -> dict[Path, str]:
+    """Keep the delivered authority and its JSON evidence without adopting its claims."""
+    manifest = raw_dir / "edit" / "delivery-manifest.json"
+    if not manifest.is_file():
+        return {}
+    payload = json.loads(manifest.read_text(encoding="utf-8"))
+    reference = (payload.get("adoption") or {}).get("humanFinalDisposition")
+    if not reference:
+        return {}
+    disposition = _bundled_path(raw_dir, str(reference["path"]))
+    payload = json.loads(disposition.read_text(encoding="utf-8"))
+    required = {}
+    for ref in [reference, *_fingerprinted_refs(payload)]:
+        path = _bundled_path(raw_dir, str(ref.get("locator") or ref["path"]))
+        if path.suffix.lower() != ".json":
+            raise ReconstructionError("human-final authority requires JSON evidence")
+        expected = str(ref["sha256"])
+        if path in required and required[path] != expected:
+            raise ReconstructionError(f"conflicting human-final fingerprints: {path}")
+        required[path] = expected
+    return required
+
+
 def _required_files(
     raw_dir: Path, canonical: list[dict[str, Any]]
 ) -> dict[Path, str | None]:
     """Current local media plus authoring/delivery evidence, not disposable caches."""
     required: dict[Path, str | None] = dict.fromkeys(_authoring_files(raw_dir))
+    required.update(_human_final_inputs(raw_dir))
     for artifact in canonical:
         for ref in _head_media_refs(raw_dir, artifact):
             path = _local_media_path(raw_dir, ref)
@@ -165,16 +196,16 @@ def _raw_sources(raw_dir: Path) -> list[Path]:
         if path.is_file()
         and path.name not in excluded
         and not path.name.startswith(".")
+        and not path.name.startswith("avo.wrap.")
     )
 
 
 def _final_artifacts(raw_dir: Path, master_basename: str) -> tuple[Path, Path]:
-    candidates = sorted((raw_dir / "edit" / "masters").glob(f"{master_basename}.*"))
-    masters = [path for path in candidates if path.is_file()]
+    masters = resolve_final_masters(raw_dir, master_basename)
     if not masters:
         raise ReconstructionError("final master is missing")
     master = masters[0]
-    transcript = raw_dir / "edit" / "transcripts" / f"{master_basename}.json"
+    transcript = resolve_final_transcript(raw_dir, master_basename)
     if not transcript.is_file():
         raise ReconstructionError("final master JSON transcript is missing")
     payload = json.loads(transcript.read_text(encoding="utf-8"))
@@ -436,7 +467,12 @@ def build_reconstruction_bundle(
     _validate_active_candidate_snapshot(workspace, state_groups["candidateSnapshots"])
     for entries in state_groups.values():
         graph_files.extend(entries)
-    graph_files.extend(_required_entries(raw_dir, canonical))
+    graph_paths = {entry["path"] for entry in graph_files}
+    graph_files.extend(
+        entry
+        for entry in _required_entries(raw_dir, canonical)
+        if entry["path"] not in graph_paths
+    )
 
     raw_entries = [
         _entry(raw_dir, path, "raw-source") for path in _raw_sources(raw_dir)
@@ -468,6 +504,28 @@ def build_reconstruction_bundle(
     return body
 
 
+def _verify_bundle_files(raw_dir: Path, bundle: dict[str, Any]) -> dict[str, Any]:
+    """Return only the master fingerprint freshly verified in this file pass."""
+    verified_master = None
+    for entry in bundle["files"]:
+        path = _bundled_path(raw_dir, entry["path"])
+        if not path.is_file():
+            raise ReconstructionError(f"reconstruction file missing: {entry['path']}")
+        current = file_fingerprint(path)
+        if (
+            current["sha256"] != entry["sha256"]
+            or current["sizeBytes"] != entry["sizeBytes"]
+        ):
+            raise ReconstructionError(f"reconstruction file changed: {entry['path']}")
+        if entry["path"] == bundle["master"]["path"]:
+            verified_master = current
+    if verified_master is None or any(
+        verified_master[key] != bundle["master"][key] for key in ("sha256", "sizeBytes")
+    ):
+        raise ReconstructionError("reconstruction master entry is missing or stale")
+    return verified_master
+
+
 def verify_reconstruction_bundle(
     raw_dir: Path, bundle_path: Path | None = None
 ) -> dict[str, Any]:
@@ -488,24 +546,12 @@ def verify_reconstruction_bundle(
     )
     if expected != actual:
         raise ReconstructionError("reconstruction bundle hash mismatch")
-    for entry in bundle["files"]:
-        path = _bundled_path(raw_dir, entry["path"])
-        if not path.is_file():
-            raise ReconstructionError(f"reconstruction file missing: {entry['path']}")
-        current = file_fingerprint(path)
-        if (
-            current["sha256"] != entry["sha256"]
-            or current["sizeBytes"] != entry["sizeBytes"]
-        ):
-            raise ReconstructionError(f"reconstruction file changed: {entry['path']}")
+    verified_master = _verify_bundle_files(raw_dir, bundle)
     _verify_coverage(raw_dir, bundle)
-    master = raw_dir / bundle["master"]["path"]
     transcript = json.loads(
         (raw_dir / bundle["finalTranscript"]["path"]).read_text(encoding="utf-8")
     )
-    if (transcript.get("source") or {}).get("sha256") != file_fingerprint(master)[
-        "sha256"
-    ]:
+    if (transcript.get("source") or {}).get("sha256") != verified_master["sha256"]:
         raise ReconstructionError(
             "reconstruction final transcript/master binding is stale"
         )

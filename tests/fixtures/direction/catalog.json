@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "entryId": "20260103-neutral-analysis-continuation",
+  "provider": "neutral",
+  "title": "An analysis learning continuation",
+  "status": "final",
+  "baseEntryId": "20260102-neutral-analysis-original",
+  "baseCatalogRelative": "../20260102-neutral-analysis-original/catalogo.json",
+  "masterFingerprint": {
+    "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "sizeBytes": 1200
+  },
+  "snapshotScope": "sanitized-learning-only",
+  "tags": ["analysis", "speech-led"],
+  "techniques": [
+    {
+      "id": "neutral-purposeful-overlay",
+      "summary": "A diagram appears when the spoken comparison needs support.",
+      "status": "documented-reference",
+      "impact": {"scope": "project", "format": "analysis-review"}
+    }
+  ],
+  "preventionRules": [
+    {
+      "id": "neutral-complete-words",
+      "summary": "Recover whole words when repairing an edit seam.",
+      "status": "active",
+      "evidenceClasses": ["documented-repair"],
+      "impact": {"scope": "technical-prevention"}
+    }
+  ],
+  "newProjectApprovalsInherited": false,
+  "publishingAuthorizationInherited": false,
+  "packageLocator": "Z:/neutral-fixtures/analysis-original/edit/reference",
+  "evidenceLookup": {"description": "A locator citation; collection must not open it."}
+}

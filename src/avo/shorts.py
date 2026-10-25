@@ -7,7 +7,8 @@ import json
 import sys
 from collections.abc import Callable, Mapping, Sequence
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
@@ -18,7 +19,9 @@ from avo import (
     shorts_paths,
     shorts_plan,
     shorts_qc,
+    shorts_review,
 )
+from avo.adapters.motion import hyperframes as hyperframes_motion
 from avo.adapters.motion.hyperframes import (
     HyperframesAdapter,
     build_composition_spec,
@@ -36,9 +39,13 @@ def _apply_loudness_preset(
     input_path: Path, output_path: Path, *, preset_id: str, preview: bool
 ) -> bool:
     """Apply the shared AVO loudness engine without slowing normal Shorts imports."""
+    from dataclasses import replace
+
     from avo import loudness_profiles, render
 
     profile = loudness_profiles.resolve_loudness_profile(preset_override=preset_id)
+    if preview:
+        profile = replace(profile, true_peak_dbtp=min(profile.true_peak_dbtp, -2.0))
     return render.apply_loudnorm_two_pass(
         input_path,
         output_path,
@@ -68,7 +75,7 @@ def build_parser() -> argparse.ArgumentParser:
     build.add_argument(
         "--preview",
         action="store_true",
-        help="render proofs at 640x360 for cheap review",
+        help="render proofs at output.previewLongSide (default 640), preserving aspect ratio",
     )
     build.add_argument("--approval-manifest", type=Path)
     build.add_argument("--delivery-dir", type=Path)
@@ -78,6 +85,12 @@ def build_parser() -> argparse.ArgumentParser:
     qc.add_argument("--stage", choices=("proof", "master"), required=True)
     qc.add_argument("--short", action="append", dest="short_ids")
     _add_batch_root_arguments(qc)
+    review = subparsers.add_parser(
+        "review", help="run serial exact-proof ASR, vision and QC"
+    )
+    review.add_argument("plan", type=Path)
+    review.add_argument("--short", action="append", dest="short_ids")
+    review.add_argument("--device", choices=("cpu",), default="cpu")
     status = subparsers.add_parser("status", help="show read-only batch status")
     status.add_argument("plan", type=Path)
     _add_batch_root_arguments(status)
@@ -314,7 +327,7 @@ def _resolve(args: argparse.Namespace) -> int:
 
 
 def _now() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _status_path(
@@ -510,6 +523,44 @@ def _add_prepared_sfx(
     )
 
 
+def _add_prepared_audio_bed(
+    prepared: dict[str, Any],
+    request_path: Path,
+    item: Mapping[str, Any],
+    work: Path,
+    *,
+    channels: int,
+) -> None:
+    policy = item.get("audioBed")
+    if not policy:
+        return
+    value = Path(str(policy["path"]))
+    source = (
+        value.resolve()
+        if value.is_absolute()
+        else (request_path.parent / value).resolve()
+    )
+    if not source.is_file():
+        raise RuntimeError(f"audio bed source does not exist: {source}")
+    actual = shorts_media.sha256_file(source)
+    if actual != policy["fingerprint"]:
+        raise RuntimeError(f"audio bed fingerprint mismatch: {policy['id']}")
+    dialogue = prepared["dialogueAudio"]
+    prepared["audioBedSource"] = shorts_media.PreparedAsset(
+        source,
+        actual,
+        shorts_media.probe_duration_sec(shorts_media.probe_media(source)),
+        False,
+    )
+    prepared["dialogueAudio"] = shorts_media.mix_timed_audio_bed(
+        dialogue,
+        source,
+        work / "prepared" / "dialogue-with-audio-bed.m4a",
+        policy=policy,
+        channels=channels,
+    )
+
+
 def _write_prepared_lineage(
     plan: Mapping[str, Any],
     item: Mapping[str, Any],
@@ -526,6 +577,14 @@ def _write_prepared_lineage(
         "sourceSegments": list(item["sourceSegments"]),
         "preparedVideo": assets["baseVideo"],
         "preparedDialogue": assets["dialogueAudio"],
+        "audioTreatment": item.get("audioTreatment"),
+        "visualInserts": list(item.get("visualInserts") or []),
+        "audioBed": item.get("audioBed"),
+        "audioBedSource": (
+            prepared["audioBedSource"].as_contract()
+            if isinstance(prepared.get("audioBedSource"), shorts_media.PreparedAsset)
+            else None
+        ),
         "joinWindows": windows,
     }
     lineage["lineageHash"] = shorts_contract.content_hash(lineage)
@@ -545,6 +604,7 @@ def _prepared_artifacts(
         _artifact("prepared-base", prepared["baseVideo"].path, revision),
         _artifact("prepared-dialogue", prepared["dialogueAudio"].path, revision),
     ]
+    artifacts.extend(_prepared_audio_review_artifacts(prepared, revision))
     if lineage:
         artifacts.append(_artifact("prepared-lineage", Path(lineage["path"]), revision))
     for key, kind in (
@@ -564,6 +624,19 @@ def _prepared_artifacts(
     )
     if contact_sheet and contact_sheet.is_file():
         artifacts.append(_artifact("contact-sheet", contact_sheet, revision))
+    return artifacts
+
+
+def _prepared_audio_review_artifacts(prepared, revision):
+    artifacts = []
+    for key, kind in (
+        ("dialogueUntreated", "prepared-dialogue-untreated"),
+        ("dialogueRemovedSignal", "prepared-dialogue-removed-signal"),
+        ("audioBedSource", "prepared-audio-bed"),
+    ):
+        value = prepared.get(key)
+        if isinstance(value, shorts_media.PreparedAsset):
+            artifacts.append(_artifact(kind, value.path, revision))
     return artifacts
 
 
@@ -588,6 +661,210 @@ def _hyperframes_command_error(result: Any, action: str) -> str:
         if part and str(part).strip()
     ]
     return "\n".join(chunks) or f"HyperFrames {action} failed"
+
+
+def _only_slow_media_warning(result: Any) -> bool:
+    issue_lines = [
+        line.strip()
+        for line in str(result.stdout or "").splitlines()
+        if line.strip().startswith(("⚠", "✗"))
+    ]
+    return bool(issue_lines) and all("clip_media_fit" in line for line in issue_lines)
+
+
+def _fidelity_segments(item):
+    if item.get("insertion"):
+        raise RuntimeError(
+            "10-bit Shorts require timed visualInserts, not legacy split media"
+        )
+    if item["layout"]["mode"] == "split" and not item.get("visualInserts"):
+        raise RuntimeError("10-bit split Shorts require timed visualInserts")
+    if not item.get("sourceSegments"):
+        raise RuntimeError("10-bit Shorts require locked original sourceSegments")
+    return item["sourceSegments"]
+
+
+def _fidelity_lock(plan, item, spec, overlay, mixed):
+    lock = {
+        "plan": str(plan["planHash"]),
+        "item": str(item["inputFingerprint"]),
+        "composition": shorts_contract.content_hash(spec),
+        "source": str(item["sourceSegments"][0]["sourceFingerprint"]),
+        "graphics-alpha": shorts_media.sha256_file(overlay),
+        "mixed-audio": mixed["sha256"],
+        **{
+            f"visual:{row['id']}": str(row["sha256"])
+            for row in item.get("visualInserts", [])
+        },
+        **{
+            f"asset:{key}": asset["hash"]
+            for key, asset in spec["assets"].items()
+            if isinstance(asset, Mapping)
+        },
+    }
+    lock.update(_fidelity_implementation_hashes())
+    return lock
+
+
+def _fidelity_implementation_hashes():
+    from avo import shorts_fidelity, shorts_fidelity_audio
+
+    template_root = (
+        Path(hyperframes_motion.__file__).parents[2]
+        / "templates"
+        / "shorts_hyperframes"
+    )
+    paths = (
+        Path(__file__),
+        Path(shorts_fidelity.__file__),
+        Path(shorts_fidelity_audio.__file__),
+        Path(hyperframes_motion.__file__),
+        template_root / "index.html",
+        template_root / "runtime.js",
+        template_root / "styles.css",
+        template_root / "hyperframes.json",
+    )
+    return {
+        f"implementation:{path.name}": shorts_media.sha256_file(path) for path in paths
+    }
+
+
+def _render_graphics_alpha(spec, work, overlay, fps, adapter):
+    overlay_spec = {
+        **spec,
+        "renderLayers": "graphics-only",
+        "expectedOutputPath": str(overlay),
+    }
+    graphics = compile_project(overlay_spec, work / "hyperframes-alpha")
+    rendered = adapter.execute(
+        "render",
+        graphics,
+        "--format",
+        "webm",
+        "--fps",
+        fps,
+        "--quality",
+        "high",
+        "--workers",
+        "2",
+        "--output",
+        str(overlay),
+        root=Path.cwd(),
+    )
+    if rendered.exit_code or not overlay.is_file():
+        raise RuntimeError(
+            _hyperframes_command_error(rendered, "graphics-alpha render")
+        )
+
+
+def _render_source_fidelity(
+    plan: Mapping[str, Any],
+    item: Mapping[str, Any],
+    source: Path,
+    output: Mapping[str, Any],
+    spec: Mapping[str, Any],
+    work: Path,
+    expected: Path,
+    adapter: HyperframesAdapter,
+) -> None:
+    """Render HTML graphics alpha over original 10-bit picture, never over a proof."""
+    from fractions import Fraction
+
+    from avo import shorts_fidelity, shorts_fidelity_audio
+
+    segments = _fidelity_segments(item)
+    fps = str(
+        output.get("frameRateRational")
+        or Fraction(str(output["fps"])).limit_denominator(100000)
+    )
+    overlay = work / "renders" / "graphics-alpha.webm"
+    mixed = shorts_fidelity_audio.mix_short_audio(
+        spec["assets"],
+        item,
+        work / "prepared" / "mixed-audio.wav",
+        channels=int(output.get("audioChannels", 2)),
+        true_peak=-1.5,
+    )
+    source_hash = str(segments[0]["sourceFingerprint"])
+    microproof_gate = shorts_fidelity.build_microproofs(
+        source,
+        work / "microproofs",
+        plan_hash=str(plan["planHash"]),
+        item=item,
+        source_sha256=source_hash,
+        width=int(output["width"]),
+        height=int(output["height"]),
+        fps=fps,
+        mixed_audio_path=Path(mixed["path"]),
+        mixed_audio_sha256=mixed["sha256"],
+    )
+    _render_graphics_alpha(spec, work, overlay, fps, adapter)
+    lock = _fidelity_lock(plan, item, spec, overlay, mixed)
+    lock["microproof-gate"] = microproof_gate["sha256"]
+    implementation = shorts_fidelity.registered_implementation()
+    lock["implementation:registered-source-fidelity"] = implementation["sha256"]
+    result = shorts_fidelity.render_fidelity(
+        source,
+        expected,
+        source_segments=segments,
+        source_sha256=source_hash,
+        canonical_lock=lock,
+        width=int(output["width"]),
+        height=int(output["height"]),
+        fps=fps,
+        speed=float(item["speed"]),
+        visual_inserts=item.get("visualInserts", []),
+        punch_ins=item.get("punchIns", []),
+        overlay_path=overlay,
+        overlay_sha256=lock["graphics-alpha"],
+        mixed_audio_path=Path(mixed["path"]),
+        mixed_audio_sha256=mixed["sha256"],
+        preset="fast" if output.get("preview") else "slow",
+    )
+    result["audioMix"] = mixed
+    result["implementationRef"] = implementation
+    result["microproofGate"] = microproof_gate
+    shorts_contract.atomic_write_json(work / "source-fidelity.json", result)
+
+
+def _render_hyperframes_picture(adapter, project, expected, fps):
+    rendered = adapter.execute(
+        "render",
+        project,
+        "--fps",
+        fps,
+        "--output",
+        str(expected),
+        root=Path.cwd(),
+    )
+    if rendered.exit_code:
+        raise RuntimeError(_hyperframes_command_error(rendered, "render"))
+    if expected.is_file():
+        return expected
+    candidates = [
+        path for path in rendered.artifact_paths if path.suffix.lower() == ".mp4"
+    ]
+    if not candidates:
+        raise RuntimeError("HyperFrames completed without an MP4 proof")
+    return candidates[-1]
+
+
+def _check_hyperframes_project(adapter, project, fidelity):
+    checked = adapter.execute(
+        "check", project, "--snapshots", "--timeout", "120000", root=Path.cwd()
+    )
+    if checked.exit_code and fidelity and _only_slow_media_warning(checked):
+        checked = adapter.execute(
+            "check",
+            project,
+            "--snapshots",
+            "--timeout",
+            "120000",
+            "--allow-warnings",
+            root=Path.cwd(),
+        )
+    if checked.exit_code:
+        raise RuntimeError(_hyperframes_command_error(checked, "strict check"))
 
 
 def _build_one_proof(
@@ -615,10 +892,11 @@ def _build_one_proof(
     request = shorts_contract.load_document(request_path, "request")
     output = dict(plan["output"])
     if preview:
+        preview_profile = shorts_plan.target_render_profile(plan, preview=True)
         output = {
             **output,
-            "width": 640,
-            "height": 360,
+            "width": preview_profile["width"],
+            "height": preview_profile["height"],
             "preview": True,
         }
     master_value = Path(request["source"]["masterPath"])
@@ -640,6 +918,7 @@ def _build_one_proof(
         "sample_rate": output.get("audioSampleRateHz", 48000),
         "channels": output.get("audioChannels", 2),
         "crop_mode": crop_mode,
+        "audio_treatment": item.get("audioTreatment"),
     }
     prepared = _prepare_proof_media(prepare, master, work, item, prepare_kwargs)
     tp_ceiling = (
@@ -649,8 +928,22 @@ def _build_one_proof(
     )
     prepared["dialogueAudio"] = shorts_media.apply_dialogue_gain_if_needed(
         prepared["dialogueAudio"],
-        work / "prepared" / "dialogue-gained.m4a",
+        work
+        / "prepared"
+        / (
+            "dialogue-gained.wav"
+            if item.get("audioTreatment")
+            else "dialogue-gained.m4a"
+        ),
         tp_ceiling=tp_ceiling,
+        channels=int(output.get("audioChannels", 2)),
+    )
+    _add_prepared_audio_bed(
+        prepared,
+        request_path,
+        item,
+        work,
+        channels=int(output.get("audioChannels", 2)),
     )
     _add_prepared_insertion(
         prepared, request, request_path, item, work, plan["output"]["fps"]
@@ -685,29 +978,30 @@ def _build_one_proof(
         shorts_contract.validate_document(spec, "composition")
     project = compile_project(spec, work / "hyperframes")
     adapter = adapter_factory()
-    checked = adapter.execute("check", project, "--snapshots", root=Path.cwd())
-    if checked.exit_code:
-        raise RuntimeError(_hyperframes_command_error(checked, "strict check"))
+    fidelity = output.get("pixelFormat") == "yuv420p10le"
+    _check_hyperframes_project(adapter, project, fidelity)
     contact_sheet = work / "qc" / "contact-sheet.jpg"
     try:
         shorts_qc.generate_contact_sheet(project, contact_sheet)
     except ValueError:
         contact_sheet = None
-    rendered = adapter.execute(
-        "render", project, "--output", str(expected), root=Path.cwd()
+    if fidelity:
+        _render_source_fidelity(
+            plan, item, master, output, spec, work, expected, adapter
+        )
+    else:
+        fps = str(
+            output.get("frameRateRational")
+            or Fraction(str(output["fps"])).limit_denominator(100000)
+        )
+        expected = _render_hyperframes_picture(adapter, project, expected, fps)
+    shorts_media.ensure_audio_channels(
+        expected,
+        channels=int(output.get("audioChannels", 2)),
+        sample_rate=int(output.get("audioSampleRateHz", 48000)),
     )
-    if rendered.exit_code:
-        raise RuntimeError(_hyperframes_command_error(rendered, "render"))
-    if not expected.is_file():
-        candidates = [
-            path for path in rendered.artifact_paths if path.suffix.lower() == ".mp4"
-        ]
-        if candidates:
-            expected = candidates[-1]
-        else:
-            raise RuntimeError("HyperFrames completed without an MP4 proof")
     loudness_preset = output.get("loudnessPreset")
-    if loudness_preset:
+    if loudness_preset and not fidelity:
         normalized = expected.with_name(f"{expected.stem}.loudnorm{expected.suffix}")
         if not _apply_loudness_preset(
             expected,
@@ -725,6 +1019,10 @@ def _build_one_proof(
         prepared_lineage_ref,
         contact_sheet,
     )
+    if fidelity:
+        artifacts.append(
+            _artifact("source-fidelity", work / "source-fidelity.json", revision)
+        )
     render_profile = shorts_plan.target_render_profile(plan, preview=preview)
     return {
         **dict(prior),
@@ -761,6 +1059,61 @@ def _load_or_reset_status(
     return status
 
 
+def _fidelity_report_current(row, implementations):
+    revision = int(row.get("proofArtifactRevision") or row.get("proofRevision") or 0)
+    artifacts = {
+        artifact["kind"]: artifact
+        for artifact in row.get("artifacts", [])
+        if int(artifact.get("revision", 0)) == revision
+    }
+    try:
+        report_artifact, proof = artifacts["source-fidelity"], artifacts["proof"]
+        report_path = Path(report_artifact["path"])
+        if shorts_media.sha256_file(report_path) != report_artifact["hash"]:
+            return False
+        report = _read_json_object(report_path)
+        return _fidelity_report_matches(report, proof, implementations)
+    except (OSError, ValueError, KeyError, TypeError):
+        return False
+
+
+def _fidelity_report_matches(report, proof, implementations):
+    lock = report["canonicalInputLock"]
+    if not isinstance(lock, Mapping):
+        return False
+    if any(lock.get(key) != value for key, value in implementations.items()):
+        return False
+    if (
+        report["implementationRef"]["sha256"]
+        != implementations["implementation:registered-source-fidelity"]
+    ):
+        return False
+    return (
+        Path(report["path"]).resolve() == Path(proof["path"]).resolve()
+        and report["sha256"] == proof["hash"]
+        and shorts_media.sha256_file(Path(proof["path"])) == proof["hash"]
+    )
+
+
+def _mark_stale_fidelity_proofs(plan, status):
+    if plan.get("output", {}).get("pixelFormat") != "yuv420p10le":
+        return
+    from avo import shorts_fidelity
+
+    implementations = _fidelity_implementation_hashes()
+    implementations["implementation:registered-source-fidelity"] = (
+        shorts_fidelity.registered_implementation()["sha256"]
+    )
+    for row in status["items"]:
+        if not (row.get("proofArtifactRevision") or row.get("proofRevision")):
+            continue
+        if not _fidelity_report_current(row, implementations):
+            row["dirty"] = True
+            reasons = row.setdefault("dirtyReasons", [])
+            if "render-implementation-changed" not in reasons:
+                reasons.append("render-implementation-changed")
+
+
 def build_proofs(
     plan_path: Path,
     *,
@@ -783,6 +1136,7 @@ def build_proofs(
         raise shorts_contract.ContractValidationError(
             f"unknown Short IDs: {', '.join(sorted(unknown))}"
         )
+    _mark_stale_fidelity_proofs(plan, status)
     dirty = shorts_plan.dirty_items(plan, status, preview=preview)
     item_status = {item["shortId"]: item for item in status["items"]}
     pending = [
@@ -882,6 +1236,19 @@ def _batch_state_after_qc(
     return "delivered" if was_delivered and not failed else "master-qc"
 
 
+def _qc_output_profile(
+    plan: Mapping[str, Any], item_status: Mapping[str, Any], stage: str
+) -> Mapping[str, Any]:
+    render_profile = item_status.get("renderProfile") or {}
+    if stage != "proof" or not render_profile.get("preview"):
+        return plan["output"]
+    return {
+        **plan["output"],
+        "width": int(render_profile["width"]),
+        "height": int(render_profile["height"]),
+    }
+
+
 def _qc(args: argparse.Namespace) -> int:
     plan_path = args.plan.resolve()
     plan, paths = _plan_paths(plan_path, args)
@@ -902,7 +1269,7 @@ def _qc(args: argparse.Namespace) -> int:
             (a for a in reversed(item_status["artifacts"]) if a["kind"] == kind), None
         )
         plan_item = plan_items[item_status["shortId"]]
-        output = plan["output"]
+        output = _qc_output_profile(plan, item_status, args.stage)
         if artifact is None:
             item_status["qc"] = {
                 "status": "failed",
@@ -944,6 +1311,14 @@ def _status(args: argparse.Namespace) -> int:
     status = shorts_contract.load_document(path, "status")
     print(json.dumps(status, ensure_ascii=False, indent=2))
     return EXIT_OK
+
+
+def _review(args: argparse.Namespace) -> int:
+    result = shorts_review.review_batch(
+        args.plan.resolve(), short_ids=args.short_ids, device=args.device
+    )
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+    return EXIT_INVALID if result["failed"] else EXIT_OK
 
 
 def _promote(args: argparse.Namespace) -> int:
@@ -1062,6 +1437,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             return _build(args)
         if args.action == "qc":
             return _qc(args)
+        if args.action == "review":
+            return _review(args)
         if args.action == "status":
             return _status(args)
         if args.action == "promote":

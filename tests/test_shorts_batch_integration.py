@@ -16,6 +16,13 @@ FIXTURE_DIR = Path(__file__).parent / "fixtures" / "shorts" / "planning"
 
 
 class ShortsPlanningIntegrationTests(unittest.TestCase):
+    def setUp(self) -> None:
+        # These adapters write placeholder bytes. Real channel mapping belongs
+        # to the FFmpeg media tests, not this orchestration seam.
+        finalizer = unittest.mock.patch.object(shorts_media, "ensure_audio_channels")
+        finalizer.start()
+        self.addCleanup(finalizer.stop)
+
     def stage_request(self, root: Path, *, with_transcript: bool = True) -> Path:
         master = root / "master.mp4"
         master.write_bytes((FIXTURE_DIR / "master.mp4").read_bytes())
@@ -228,6 +235,26 @@ class ShortsPlanningIntegrationTests(unittest.TestCase):
                 ),
             )
 
+    def test_native_hyperframes_render_preserves_rational_frame_rate(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            expected = Path(tmp) / "proof.mp4"
+            calls = []
+
+            class FakeAdapter:
+                def execute(self, operation, project, *extra, **kwargs):
+                    calls.append((operation, extra, kwargs))
+                    output = Path(extra[extra.index("--output") + 1])
+                    output.write_bytes(b"proof")
+                    return JobResult(exit_code=0)
+
+            result = shorts._render_hyperframes_picture(
+                FakeAdapter(), Path(tmp), expected, "30000/1001"
+            )
+
+            self.assertEqual(result, expected)
+            self.assertEqual(calls[0][0], "render")
+            self.assertEqual(calls[0][1][calls[0][1].index("--fps") + 1], "30000/1001")
+
     def test_explicit_loudness_preset_normalizes_before_artifact_hashing(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -375,6 +402,7 @@ class ShortsPlanningIntegrationTests(unittest.TestCase):
             shorts.build_proofs(
                 plan_path,
                 workers=1,
+                preview=True,
                 prepare=self.fake_prepare,
                 adapter_factory=FakeAdapter,
             )
@@ -382,11 +410,19 @@ class ShortsPlanningIntegrationTests(unittest.TestCase):
                 shorts.shorts_qc,
                 "qc_proof_artifact",
                 return_value={"status": "passed", "findings": []},
-            ):
+            ) as qc_proof:
                 self.assertEqual(
                     shorts.main(["qc", str(plan_path), "--stage", "proof"]),
                     shorts.EXIT_OK,
                 )
+            self.assertEqual(qc_proof.call_count, 10)
+            self.assertTrue(
+                all(
+                    call.kwargs["output"]["width"] == 360
+                    and call.kwargs["output"]["height"] == 640
+                    for call in qc_proof.call_args_list
+                )
+            )
             status = json.loads(
                 plan_path.with_name("shorts.status.json").read_text(encoding="utf-8")
             )

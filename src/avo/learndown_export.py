@@ -378,6 +378,7 @@ def build_learndown_payload(wrap_payload: dict[str, Any]) -> dict[str, Any]:
         },
         "wrapPaths": wrap_paths,
         "editlogLock": None,
+        "costs": wrap_payload.get("costs"),
     }
 
 
@@ -393,6 +394,10 @@ def render_learndown_markdown(payload: dict[str, Any]) -> str:
         "",
     ]
     summary = str(payload.get("summary") or "").strip()
+    if payload.get("costs"):
+        from avo.costs import render_summary
+
+        lines.extend(["## Recorded cost", "", render_summary(payload["costs"]), ""])
     if summary:
         lines.extend(["## Summary", "", summary, ""])
     learning = payload.get("learning") or {}
@@ -440,6 +445,8 @@ def _upsert_index_entry(index: dict[str, Any], payload: dict[str, Any]) -> None:
         "title": payload.get("title") or "",
         "status": payload["status"],
         "generatedAt": payload["generatedAt"],
+        "costSnapshotId": (payload.get("costs") or {}).get("snapshotId"),
+        "accountingVideoId": (payload.get("costs") or {}).get("accountingVideoId"),
     }
     entries = [e for e in entries if e.get("entryId") != entry["entryId"]]
     entries.append(entry)
@@ -486,6 +493,9 @@ def export_provider_learndown(
     entry_dir.mkdir(parents=True, exist_ok=True)
 
     raw_dir = Path(payload["rawDir"])
+    from avo.cost_store import CostStore
+
+    CostStore(raw_dir).export(entry_dir / "costs")
     status = payload["status"]
     payload["editlogLock"] = (
         EDITLOG_LOCK if _copy_editlog_lock_once(raw_dir, entry_dir) else None

@@ -471,3 +471,11 @@ pass from its real context and resource limits. It combines sparse orientation,
 dense required-window review, section-aware pacing, sequential decode,
 movement, transcript, waveform, flash, and human disposition. Coverage is
 reported from actual evidence rather than nominal duration.
+
+## Optional quick artistic briefing
+
+Before style-dependent planning, choose no reference, an exact built-in direction, an accepted provider profile version or personal reference descriptors. Native `direction` prepares/validates provider profiles; `briefstart` prepares two or three concrete project options with tradeoffs and a short complete view. Selection is project-scoped and independent of media/cut approval. No reference adds no creative gate. The pipeline and direct authoring stages consume the same selected `briefing.stageContexts` from native status. See [provider direction](provider-direction.md) for commands, exact versions, overrides, refresh and frozen reconstruction.
+
+## Recorded video costs
+
+Use /avo.costs (/avo.metrics alias) during editing or with --history after completion. Learndown and cleanup automatically display saved cost/token summaries with coverage and cutoff. Model/service switches preserve original usage attribution. [Collection, fallbacks and pricing disclosures](video-cost-transparency.md).

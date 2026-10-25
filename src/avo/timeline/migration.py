@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -42,7 +42,7 @@ def inventory_historical_output_fingerprints(raw_dir: Path) -> list[dict[str, An
 
 
 def _file_time(path: Path) -> str:
-    value = datetime.fromtimestamp(path.stat().st_mtime, timezone.utc)
+    value = datetime.fromtimestamp(path.stat().st_mtime, UTC)
     return value.replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 

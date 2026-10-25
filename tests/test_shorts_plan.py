@@ -27,6 +27,22 @@ def load_motion_request() -> dict:
     request["batchRoot"] = str(FIXTURE_DIR / "batch")
     request["batchRootSource"] = "canonical-default"
     request["source"]["sourceId"] = "master"
+    request["defaults"]["audioTreatment"] = {
+        "stream": "0:a:0",
+        "channel": "mono",
+        "eqProfile": "bishop-dialogue-v1",
+        "noiseReduction": {
+            "mode": "afftdn",
+            "strengthPercent": 30,
+            "nrDb": 6.0,
+            "noiseFloorDb": -37.5,
+        },
+        "approval": {
+            "abRequired": True,
+            "removedSignalReviewRequired": True,
+            "reference": "user://approved",
+        },
+    }
     for candidate in request["candidates"]:
         source_range = candidate.pop("sourceRange")
         candidate["sourceSegments"] = [
@@ -47,6 +63,43 @@ def load_v11_fixture(name: str) -> dict:
 
 
 class ShortsPlanTests(unittest.TestCase):
+    def test_v12_audio_bed_is_resolved_only_for_selected_candidate(self) -> None:
+        request = load_motion_request()
+        request["audioBeds"] = [
+            {
+                "id": "music",
+                "path": "music.m4a",
+                "fingerprint": "b" * 64,
+                "authorizedWindow": {"startSec": 0, "endSec": 30},
+                "origin": "official preview",
+                "rights": {
+                    "basis": "official-preview",
+                    "status": "proof-conditioned",
+                    "publicationState": "proof-only",
+                    "reference": "https://example.test/official",
+                },
+            }
+        ]
+        request["candidates"][0]["audioBedOverride"] = {
+            "bedId": "music",
+            "timelineStartSec": 1,
+            "sourceStartSec": 0,
+            "durationSec": 2,
+            "fadeInMs": 120,
+            "fadeOutMs": 250,
+            "ducking": {"mode": "sidechain", "minimumBelowDialogueDb": 12},
+        }
+        plan = shorts_plan.resolve_batch(
+            request,
+            load_transcript(),
+            request_path=FIXTURE_DIR / "shorts.request-v12.json",
+            source_fingerprint="a" * 64,
+            provider_tokens={},
+        )
+        self.assertEqual(plan["items"][0]["audioBed"]["id"], "music")
+        self.assertNotIn("audioBed", plan["items"][1])
+        self.assertTrue(all("audioTreatment" in item for item in plan["items"]))
+
     def test_v11_fixture_preserves_exact_order_without_enclosing_range(self) -> None:
         request = load_v11_fixture("shorts.request.json")
         transcript = load_v11_fixture("transcript.json")
@@ -707,6 +760,26 @@ class ShortsPlanTests(unittest.TestCase):
                 load_transcript(),
                 request_path=FIXTURE_DIR / "shorts.request.json",
             )
+
+    def test_preview_render_profile_preserves_vertical_aspect_ratio(self) -> None:
+        plan = {"output": {"width": 1728, "height": 3072}}
+
+        profile = shorts_plan.target_render_profile(plan, preview=True)
+
+        self.assertEqual(
+            profile,
+            {"preview": True, "width": 360, "height": 640},
+        )
+
+    def test_preview_render_profile_preserves_horizontal_aspect_ratio(self) -> None:
+        plan = {"output": {"width": 1920, "height": 1080}}
+
+        profile = shorts_plan.target_render_profile(plan, preview=True)
+
+        self.assertEqual(
+            profile,
+            {"preview": True, "width": 640, "height": 360},
+        )
 
 
 if __name__ == "__main__":

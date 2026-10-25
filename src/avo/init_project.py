@@ -31,6 +31,15 @@ def _cutting_declaration(settings):
     return {"cutting": deepcopy(settings)}
 
 
+def _direction_declaration(settings):
+    if settings is None:
+        return {}
+    from avo.timeline.contracts import validate_document
+
+    validate_document(settings, "avo.project.schema.json#/properties/direction")
+    return {"direction": deepcopy(settings)}
+
+
 from avo.paths import providers_dir as _providers_dir
 
 ASSET_KEYS = ("sfx", "music", "inserts", "graphics", "logos")
@@ -137,6 +146,7 @@ def build_project(
     config: dict[str, Any] | None = None,
     registry_defaults: dict[str, Any] | None = None,
     cutting_settings: dict[str, Any] | None = None,
+    direction_settings: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     provider_manifest = provider_manifest or {}
     config = config or {}
@@ -167,6 +177,7 @@ def build_project(
         "rawDir": raw_dir,
     }
     project.update(_cutting_declaration(cutting_settings))
+    project.update(_direction_declaration(direction_settings))
     if title.strip():
         project["title"] = title.strip()
     project["assets"] = assets

@@ -192,7 +192,7 @@ AVO orchestrates independent local tools. This section is the **toolchain setup 
 ### Required end state
 
 1. The repository is cloned at a stable path (`git clone https://github.com/joaobispo2077/avo.git`).
-2. Python 3.10+ dependencies are installed (video-use engine).
+2. Python 3.11+ dependencies are installed (video-use engine).
 3. `ffmpeg` and `ffprobe` are on `PATH` (Node `ffmpeg-static`/`ffprobe-static`
    are a fallback).
 4. A **multilingual** faster-whisper model is prepared locally; the transcription

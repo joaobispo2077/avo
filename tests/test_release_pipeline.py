@@ -115,6 +115,51 @@ class ReleasePipelineTests(unittest.TestCase):
         self.assertIn("actions: write", release)
         self.assertIn("github.token", release)
 
+    def test_engine_publication_handles_skipped_selector_and_requires_green_builds(
+        self,
+    ) -> None:
+        workflow = (ROOT / ".github/workflows/engine-binary.yml").read_text("utf-8")
+        publish = workflow.split("  publish-release:", 1)[1]
+        condition = publish.split("if: >", 1)[1].split("needs:", 1)[0].strip()
+        # Explicit status handling prevents the skipped selector from implicitly
+        # disabling publication even when every zip build succeeded.
+        self.assertIn("!cancelled()", condition)
+        self.assertIn("needs: zip-smoke", publish)
+        cases = [
+            ["workflow_dispatch", "v1.17.0", "success", False, True],
+            ["release", "", "success", False, True],
+            ["workflow_dispatch", "", "success", False, False],
+            ["push", "v1.17.0", "success", False, False],
+            ["pull_request", "v1.17.0", "success", False, False],
+            ["workflow_dispatch", "v1.17.0", "failure", False, False],
+            ["workflow_dispatch", "v1.17.0", "cancelled", False, False],
+            ["workflow_dispatch", "v1.17.0", "skipped", False, False],
+            ["release", "", "failure", False, False],
+            ["workflow_dispatch", "v1.17.0", "success", True, False],
+        ]
+        # This condition uses the common GitHub/JavaScript boolean subset.
+        expression = condition.replace("needs.zip-smoke", "needs['zip-smoke']")
+        proc = subprocess.run(
+            [
+                "node",
+                "-e",
+                (
+                    "const check = new Function('github', 'inputs', 'needs', 'cancelled',"
+                    " 'return (' + process.argv[1] + ')');"
+                    "const result = JSON.parse(process.argv[2]).map(([event, tag, result, stop])"
+                    " => check({event_name: event}, {attach_tag: tag},"
+                    " {'select-run': {result: 'skipped'}, 'zip-smoke': {result}}, () => stop));"
+                    "console.log(JSON.stringify(result));"
+                ),
+                expression,
+                json.dumps(cases),
+            ],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(proc.returncode, 0, proc.stderr)
+        self.assertEqual(json.loads(proc.stdout), [case[-1] for case in cases])
+
     def test_sync_pyproject_version_script(self) -> None:
         script = ROOT / "scripts/ci/sync-pyproject-version.mjs"
         self.assertTrue(script.is_file())

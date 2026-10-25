@@ -74,7 +74,7 @@ jobs:
     name: Unit tests (AVO repo)
     runs-on: ubuntu-24.04
     needs: prerequisites-gate
-    timeout-minutes: 12
+    timeout-minutes: 20
     outputs:
       evidence_url: ${{ steps.unit-evidence.outputs.artifact-url }}
     steps:
@@ -107,7 +107,7 @@ jobs:
         run: npm ci
 
       - name: Install ffmpeg
-        timeout-minutes: 3
+        timeout-minutes: 8
         run: bash scripts/ci/ensure-ffmpeg.sh
 
       - name: Run unit tests
@@ -163,7 +163,7 @@ jobs:
         run: echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
 
       - name: Install ffmpeg
-        timeout-minutes: 3
+        timeout-minutes: 8
         run: bash scripts/ci/ensure-ffmpeg.sh
 
       - name: Run integration tests
@@ -224,7 +224,7 @@ jobs:
         run: npm ci
 
       - name: Install ffmpeg
-        timeout-minutes: 3
+        timeout-minutes: 8
         run: bash scripts/ci/ensure-ffmpeg.sh
 
       # Spec v1.4 / task-013: Phase-1 fast gates — all fail-immediately (no soft stubs).

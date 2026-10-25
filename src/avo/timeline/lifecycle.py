@@ -122,6 +122,36 @@ def transition(
     return target
 
 
+def _require_adoption_candidate(current, adoption, active_refs):
+    if adoption.get("authority") == "human-final":
+        expected = adoption.get("priorCandidateSnapshot")
+        if active_refs.get("activeCandidateSnapshot") is not None:
+            raise LifecycleError(
+                "human-final adoption cannot retain a stale active snapshot"
+            )
+    else:
+        expected = adoption["candidateSnapshot"]
+    if current["activeRefs"].get("activeCandidateSnapshot") != expected:
+        raise LifecycleError("delivery adoption candidate snapshot is stale")
+
+
+def _require_human_archive_adoption(current, disposition):
+    adoption = (
+        (current.get("extensions") or {})
+        .get("deliveryAdoption", {})
+        .get("identity", {})
+    )
+    if (
+        current["mainState"] != PipelineState.DELIVERED.value
+        or current["sideState"] is not None
+        or adoption.get("authority") != "human-final"
+        or adoption.get("humanFinalDisposition") != disposition
+    ):
+        raise LifecycleError(
+            "human-final archive requires its exact delivered disposition"
+        )
+
+
 class PipelineRunStore:
     """Persist the lifecycle state and explicit recovery history."""
 
@@ -267,6 +297,100 @@ class PipelineRunStore:
         updated["blockers"] = list(blockers or [])
         updated["transitionHistory"].append(history)
         updated["updatedAt"] = history["occurredAt"]
+        return self._write(updated, expected_updated_at=expected_updated_at)
+
+    def adopt_delivery(
+        self,
+        adoption,
+        *,
+        actor,
+        reason,
+        active_refs,
+        expected_updated_at=None,
+    ):
+        """Record one verified administrative migration, never backfill stage passes."""
+        from copy import deepcopy
+
+        from .contracts import content_hash
+
+        current = self.load()
+        if current["sideState"] is not None:
+            raise LifecycleError(
+                "delivery adoption requires explicit side-state recovery"
+            )
+        if not actor.strip() or not reason.strip():
+            raise LifecycleError("delivery adoption requires an actor and reason")
+        digest = content_hash(adoption)
+        existing = (current.get("extensions") or {}).get("deliveryAdoption")
+        if existing is not None:
+            if existing["adoptionHash"] == digest and current["mainState"] in {
+                PipelineState.DELIVERED.value,
+                PipelineState.ARCHIVED.value,
+            }:
+                return current
+            raise LifecycleError("existing delivery adoption identity cannot change")
+        if current["mainState"] in {
+            PipelineState.DELIVERED.value,
+            PipelineState.ARCHIVED.value,
+        }:
+            raise LifecycleError("delivered lifecycle has no matching adoption")
+        _require_adoption_candidate(current, adoption, active_refs)
+        updated = deepcopy(current)
+        history = self._history(
+            current,
+            actor=actor,
+            reason=f"administrative existing-master adoption: {reason}",
+            to_main=PipelineState.DELIVERED.value,
+            to_side=None,
+        )
+        updated["mainState"] = PipelineState.DELIVERED.value
+        updated["activeRefs"] = deepcopy(active_refs)
+        updated["transitionHistory"].append(history)
+        updated["updatedAt"] = history["occurredAt"]
+        updated.setdefault("extensions", {})["deliveryAdoption"] = {
+            "adoptionHash": digest,
+            "registeredAt": history["occurredAt"],
+            "identity": deepcopy(adoption),
+        }
+        return self._write(updated, expected_updated_at=expected_updated_at)
+
+    def archive_human_final_delivery(
+        self, disposition, retention_policy, *, actor, reason, expected_updated_at=None
+    ):
+        """Record the explicit human archive decision, not byte verification or cleanup."""
+        from copy import deepcopy
+
+        current = self.load()
+        identity = {
+            "authority": "human-final",
+            "humanFinalDisposition": disposition,
+            "retentionPolicy": retention_policy,
+            "cleanupExecuted": False,
+            "preservationVerification": "recorded-separately-in-final-preservation-receipt",
+            "preservationReceiptPath": "edit/cleanup/preservation-result.json",
+            "byteVerificationAsserted": False,
+        }
+        existing = (current.get("extensions") or {}).get("humanFinalArchive")
+        if (
+            current["mainState"] == PipelineState.ARCHIVED.value
+            and existing == identity
+        ):
+            return current
+        _require_human_archive_adoption(current, disposition)
+        if not actor.strip() or not reason.strip():
+            raise LifecycleError("human-final archive requires an actor and reason")
+        updated = deepcopy(current)
+        history = self._history(
+            current,
+            actor=actor,
+            reason=f"human-final preserve-all archive decision: {reason}",
+            to_main=PipelineState.ARCHIVED.value,
+            to_side=None,
+        )
+        updated["mainState"] = PipelineState.ARCHIVED.value
+        updated["transitionHistory"].append(history)
+        updated["updatedAt"] = history["occurredAt"]
+        updated.setdefault("extensions", {})["humanFinalArchive"] = identity
         return self._write(updated, expected_updated_at=expected_updated_at)
 
     def resume(self, *, actor, reason, recovery_event, expected_updated_at=None):

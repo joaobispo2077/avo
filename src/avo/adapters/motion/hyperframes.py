@@ -17,9 +17,10 @@ from avo import shorts_contract
 from avo.adapters.base import JobRequest, JobResult
 from avo.paths import repo_root
 from avo.shorts_rules import SFX_ASSET_KEY, SFX_FILE_NAME, SFX_VOLUME
+from avo.shorts_visuals import prepare_visual_inserts, validate_visual_inserts
 
 Runner = Callable[..., subprocess.CompletedProcess[str]]
-TEMPLATE_VERSION = "shorts-anchor-rail-v4"
+TEMPLATE_VERSION = "shorts-anchor-rail-v5"
 FORBIDDEN_COPY = ("COMPARATIVO SEM HYPE", "GAMEPLAY ILUSTRATIVA")
 STAR_PATH = (
     "M12 2.4l2.86 5.8 6.4.93-4.63 4.51 1.09 6.36L12 16.97 6.28 20l1.09-6.36"
@@ -106,6 +107,12 @@ def _normalized_layout(item: Mapping[str, Any]) -> dict[str, Any]:
                 "width": 1,
                 "height": 1 - ratio,
             }
+    visual_inserts = list(item.get("visualInserts") or [])
+    if layout["mode"] == "split" and visual_inserts:
+        first = visual_inserts[0]
+        if first.get("baseRegion"):
+            layout["baseRegion"] = dict(first["baseRegion"])
+            layout["insertionRegion"] = dict(first["rect"])
     layout = {key: value for key, value in layout.items() if key in _LAYOUT_KEYS}
     validate_geometry(layout)
     return layout
@@ -118,6 +125,7 @@ def _motion_fields(
         "callouts": list(item.get("callouts") or []),
         "punchIns": list(item.get("punchIns") or []),
         "graphics": list(item.get("graphics") or []),
+        "visualInserts": list(item.get("visualInserts") or []),
         "sfxHits": list(item.get("sfxHits") or []),
     }
     if any(motion.values()) or any(key.startswith("sfx") for key in assets):
@@ -125,16 +133,7 @@ def _motion_fields(
     return None
 
 
-def build_composition_spec(
-    *,
-    batch_id: str,
-    item: Mapping[str, Any],
-    output: Mapping[str, Any],
-    assets: Mapping[str, Mapping[str, Any]],
-    proof_revision: int,
-    expected_output_path: Path,
-    provider_tokens: Mapping[str, Any] | None = None,
-) -> dict[str, Any]:
+def _validate_composition_text(item: Mapping[str, Any]) -> None:
     from avo.timeline.animation import (
         AnimationError,
         validate_visible_text_policy,
@@ -146,13 +145,35 @@ def build_composition_spec(
                 "captions": item.get("captions") or [],
                 "callouts": item.get("callouts") or [],
                 "graphics": item.get("graphics") or [],
+                "visualInserts": item.get("visualInserts") or [],
             },
             em_dash_authorization_ref=item.get("emDashAuthorizationRef"),
         )
     except AnimationError as exc:
         raise HyperframesError(str(exc)) from exc
+
+
+def build_composition_spec(
+    *,
+    batch_id: str,
+    item: Mapping[str, Any],
+    output: Mapping[str, Any],
+    assets: Mapping[str, Mapping[str, Any]],
+    proof_revision: int,
+    expected_output_path: Path,
+    provider_tokens: Mapping[str, Any] | None = None,
+    render_layers: str = "all",
+) -> dict[str, Any]:
+    _validate_composition_text(item)
     layout = _normalized_layout(item)
-    if layout["mode"] == "split" and not assets.get("insertionVideo"):
+    validate_visual_inserts(
+        item.get("visualInserts") or [], float(item["editedDurationSec"])
+    )
+    if (
+        layout["mode"] == "split"
+        and not assets.get("insertionVideo")
+        and not item.get("visualInserts")
+    ):
         raise HyperframesError("split layout requires prepared insertion video")
     motion = _motion_fields(item, assets)
     spec = {
@@ -172,6 +193,7 @@ def build_composition_spec(
         "expectedTimelineCount": 1,
         "expectedOutputPath": str(expected_output_path),
         "provenanceReferences": list(item.get("factualReviewReferences") or []),
+        "renderLayers": render_layers,
     }
     if motion:
         spec.update(motion)
@@ -205,7 +227,9 @@ def _token_css(spec: Mapping[str, Any]) -> str:
     scale = _ui_scale(spec)
     margins = layout.get("safeMargins") or {}
     focus = layout.get("focusPoint") or {"x": 0.5, "y": 0.5}
-    split = float(layout.get("baseRegion", {}).get("height", 0.5)) * 100
+    base_region = layout.get("baseRegion", {})
+    base_y = float(base_region.get("y", 0))
+    split = (base_y if base_y > 0 else float(base_region.get("height", 0.5))) * 100
     return " ".join(
         (
             f"--ui-scale:{scale:.6g};",
@@ -366,9 +390,13 @@ def _cover_wipe_markup(graphic: Mapping[str, Any]) -> str:
 
 def _ratio_lock_markup(graphic: Mapping[str, Any]) -> str:
     params = graphic.get("params") or {}
+    ratio = str(params.get("ratio") or "")
+    style = ""
+    if re.fullmatch(r"[1-9][0-9]*(?:\.[0-9]+)?:[1-9][0-9]*(?:\.[0-9]+)?", ratio):
+        style = f' style="width:calc(300px * var(--ui-scale));height:auto;aspect-ratio:{ratio.replace(":", "/")}"'
     inner = (
-        f'<div class="ratio-frame"><span class="ratio-label">'
-        f"{_text(params.get('ratio') or '')}</span></div>"
+        f'<div class="ratio-frame"{style}><span class="ratio-label">'
+        f"{_text(ratio)}</span></div>"
     )
     return _graphic_shell(graphic, inner)
 
@@ -499,19 +527,23 @@ def _write_hyperframes_manifest(
     )
 
 
-def _copy_spec_assets(spec: Mapping[str, Any], assets_dir: Path) -> None:
+def _copy_spec_assets(
+    spec: Mapping[str, Any], assets_dir: Path, *, graphics_only: bool = False
+) -> None:
     gsap = repo_root() / "node_modules" / "gsap" / "dist" / "gsap.min.js"
     if not gsap.is_file():
         raise HyperframesError("pinned local GSAP asset is missing; run npm install")
     shutil.copy2(gsap, assets_dir / "gsap.min.js")
     asset_names = {
         "baseVideo": "base-video.mp4",
-        "dialogueAudio": "dialogue-audio.m4a",
+        "dialogueAudio": _dialogue_filename(spec),
         "insertionVideo": "insertion-video.mp4",
         "insertionAudio": "insertion-audio.m4a",
         **SFX_FILE_NAME,
     }
     for key, name in asset_names.items():
+        if graphics_only:
+            continue
         source = _asset_source(spec, key)
         if source is None:
             continue
@@ -538,10 +570,119 @@ def _insertion_markup(spec: Mapping[str, Any], duration: str) -> tuple[str, str]
     return video, audio
 
 
+def _rect_style(rect: Mapping[str, Any]) -> str:
+    return ";".join(
+        f"{css}:{float(rect[key]) * 100:.8f}%"
+        for css, key in (
+            ("left", "x"),
+            ("top", "y"),
+            ("width", "width"),
+            ("height", "height"),
+        )
+    )
+
+
+def _visual_markup(inserts: Sequence[Mapping[str, Any]]) -> str:
+    rows: list[str] = []
+    for index, row in enumerate(inserts):
+        cid = _esc(f"visual-{row['id']}")
+        start = float(row["startSec"])
+        duration = float(row["endSec"]) - start
+        timing = f'data-start="{start:.6f}" data-duration="{duration:.6f}"'
+        src = _esc(f"assets/{Path(row['path']).name}")
+        style = _rect_style(row["rect"]) + f";object-fit:{row['fit']}"
+        common = f'id="{cid}" class="clip timed-visual" src="{src}" {timing} data-track-index="{30 + index * 3}" style="{style}"'
+        if row["kind"] == "video":
+            rows.append(
+                f'<video {common} data-media-start="{float(row["sourceStartSec"]):.6f}" muted playsinline></video>'
+            )
+        else:
+            rows.append(f'<img {common} alt="{_esc(row.get("label") or "")}" />')
+        if row.get("baseRegion"):
+            rows.append(
+                f'<video id="{cid}-base" class="clip timed-base" src="assets/base-video.mp4" '
+                f'{timing} data-media-start="{start:.6f}" data-track-index="{31 + index * 3}" '
+                f'style="{_rect_style(row["baseRegion"])}" muted playsinline></video>'
+            )
+    return "\n".join(rows)
+
+
+def _visual_label_markup(inserts: Sequence[Mapping[str, Any]]) -> str:
+    rows = []
+    for index, row in enumerate(inserts):
+        if not row.get("label"):
+            continue
+        start = float(row["startSec"])
+        duration = float(row["endSec"]) - start
+        rows.append(
+            f'<div id="visual-{_esc(row["id"])}-label" class="clip visual-label" '
+            f'data-start="{start:.6f}" data-duration="{duration:.6f}" '
+            f'data-track-index="{32 + index * 3}" style="{_rect_style(row["rect"])}">'
+            f"<span>{_text(row['label'])}</span></div>"
+        )
+    return "\n".join(rows)
+
+
+def _base_markup(duration: str) -> str:
+    return (
+        '<div id="base-wrap" class="media-wrap base-pane">'
+        '<video id="base-video" class="clip media-pane" src="assets/base-video.mp4" '
+        f'data-start="0" data-duration="{duration}" data-track-index="0" '
+        "muted playsinline></video></div>"
+    )
+
+
+def _dialogue_filename(spec: Mapping[str, Any]) -> str:
+    source = _asset_source(spec, "dialogueAudio")
+    suffix = source.suffix.lower() if source else ".m4a"
+    if suffix not in {".m4a", ".wav", ".mp3", ".aac", ".flac", ".ogg"}:
+        raise HyperframesError(f"unsupported dialogue audio container: {suffix}")
+    return f"dialogue-audio{suffix}"
+
+
+def _write_runtime(
+    spec: Mapping[str, Any], template_root: Any, project_dir: Path
+) -> None:
+    runtime = template_root.joinpath("runtime.js").read_text(encoding="utf-8")
+    (project_dir / "runtime.js").write_text(
+        runtime.replace("__CAPTION_JSON__", _script_json(spec["captions"]))
+        .replace("__CALLOUT_JSON__", _script_json(spec.get("callouts") or []))
+        .replace("__PUNCHIN_JSON__", _script_json(spec.get("punchIns") or []))
+        .replace("__VISUAL_JSON__", _script_json(spec.get("visualInserts") or []))
+        .replace("__GRAPHIC_JSON__", _script_json(spec.get("graphics") or [])),
+        encoding="utf-8",
+    )
+
+
+def _media_replacements(
+    spec: Mapping[str, Any],
+    visual_inserts: Sequence[Mapping[str, Any]],
+    duration: str,
+    graphics_only: bool,
+) -> dict[str, str]:
+    insertion_video, insertion_audio = _insertion_markup(spec, duration)
+    return {
+        "__BASE_MEDIA__": "" if graphics_only else _base_markup(duration),
+        "__INSERTION_MEDIA__": "" if graphics_only else insertion_video,
+        "__VISUAL_MEDIA__": "" if graphics_only else _visual_markup(visual_inserts),
+        "__VISUAL_LABELS__": _visual_label_markup(visual_inserts),
+        "__INSERTION_AUDIO__": "" if graphics_only else insertion_audio,
+        "__SFX_AUDIO__": "" if graphics_only else _sfx_markup(spec),
+        "__DIALOGUE_AUDIO__": ""
+        if graphics_only
+        else (
+            f'<audio\n        id="dialogue-audio" src="assets/{_dialogue_filename(spec)}" '
+            f'data-start="0" data-duration="{duration}" data-track-index="10" '
+            'data-volume="1"></audio>'
+        ),
+    }
+
+
 def compile_project(spec: Mapping[str, Any], project_dir: Path) -> Path:
     """Compile one immutable static project; generated HTML is disposable."""
     shorts_contract.validate_document(spec, "composition")
     validate_geometry(spec["layout"])
+    validate_visual_inserts(spec.get("visualInserts") or [], float(spec["durationSec"]))
     template_root = resources.files("avo.templates.shorts_hyperframes")
     project_dir.mkdir(parents=True, exist_ok=False)
     assets_dir = project_dir / "assets"
@@ -551,18 +692,15 @@ def compile_project(spec: Mapping[str, Any], project_dir: Path) -> Path:
         encoding="utf-8",
     )
     _write_hyperframes_manifest(spec, template_root, project_dir)
-    runtime = template_root.joinpath("runtime.js").read_text(encoding="utf-8")
-    (project_dir / "runtime.js").write_text(
-        runtime.replace("__CAPTION_JSON__", _script_json(spec["captions"]))
-        .replace("__CALLOUT_JSON__", _script_json(spec.get("callouts") or []))
-        .replace("__PUNCHIN_JSON__", _script_json(spec.get("punchIns") or []))
-        .replace("__GRAPHIC_JSON__", _script_json(spec.get("graphics") or [])),
-        encoding="utf-8",
-    )
-    _copy_spec_assets(spec, assets_dir)
+    _write_runtime(spec, template_root, project_dir)
+    graphics_only = spec.get("renderLayers") == "graphics-only"
+    _copy_spec_assets(spec, assets_dir, graphics_only=graphics_only)
+    visual_inserts = list(spec.get("visualInserts") or [])
+    if not graphics_only:
+        visual_inserts = prepare_visual_inserts(
+            visual_inserts, assets_dir, duration=float(spec["durationSec"])
+        )
     duration = f"{float(spec['durationSec']):.6f}"
-    insertion_video, insertion_audio = _insertion_markup(spec, duration)
-
     page = template_root.joinpath("index.html").read_text(encoding="utf-8")
     replacements = {
         "__WIDTH__": str(spec["width"]),
@@ -570,16 +708,17 @@ def compile_project(spec: Mapping[str, Any], project_dir: Path) -> Path:
         "__SHORT_ID__": html.escape(str(spec["shortId"]), quote=True),
         "__DURATION__": duration,
         "__LAYOUT_MODE__": spec["layout"]["mode"],
+        "__RENDER_LAYERS__": spec.get("renderLayers", "all"),
         "__PANE_ORDER__": spec["layout"].get("paneOrder", "base-first"),
         "__CAPTION_ANCHOR__": spec["layout"]["captionAnchor"],
         "__TOKEN_CSS__": _token_css(spec),
-        "__INSERTION_MEDIA__": insertion_video,
-        "__INSERTION_AUDIO__": insertion_audio,
-        "__SFX_AUDIO__": _sfx_markup(spec),
         "__CAPTION_MARKUP__": _caption_markup(spec["captions"]),
         "__CALLOUT_MARKUP__": _callout_markup(spec.get("callouts") or []),
         "__GRAPHIC_MARKUP__": _graphic_markup(spec.get("graphics") or []),
     }
+    replacements.update(
+        _media_replacements(spec, visual_inserts, duration, graphics_only)
+    )
     for marker, value in replacements.items():
         page = page.replace(marker, str(value))
     if re.search(r"__[A-Z][A-Z_]+__", page):
@@ -600,6 +739,14 @@ def compile_project(spec: Mapping[str, Any], project_dir: Path) -> Path:
     }
     shorts_contract.atomic_write_json(project_dir / "index.motion.json", motion)
     return project_dir
+
+
+def _collect_render_artifacts(project: Path) -> list[Path]:
+    artifacts: list[Path] = []
+    for directory in (project / "snapshots", project / "renders"):
+        if directory.is_dir():
+            artifacts.extend(path for path in directory.rglob("*") if path.is_file())
+    return artifacts
 
 
 class HyperframesAdapter:
@@ -627,21 +774,17 @@ class HyperframesAdapter:
                 exit_code=2, stderr=f"unsupported HyperFrames operation: {operation}"
             )
         root = (root or repo_root()).resolve()
-        command = [*self._binary(root), operation, str(project.resolve()), *extra]
-        if operation == "check" and "--strict" not in command:
+        allow_warnings = "--allow-warnings" in extra
+        forwarded = [value for value in extra if value != "--allow-warnings"]
+        command = [*self._binary(root), operation, str(project.resolve()), *forwarded]
+        if operation == "check" and not allow_warnings and "--strict" not in command:
             command.append("--strict")
         completed = self.runner(
             command, cwd=root, text=True, capture_output=True, check=False
         )
-        artifacts: list[Path] = []
-        for directory in (project / "snapshots", project / "renders"):
-            if directory.is_dir():
-                artifacts.extend(
-                    path for path in directory.rglob("*") if path.is_file()
-                )
         return JobResult(
             exit_code=completed.returncode,
-            artifact_paths=artifacts,
+            artifact_paths=_collect_render_artifacts(project),
             stdout=completed.stdout,
             stderr=completed.stderr,
         )

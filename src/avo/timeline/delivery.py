@@ -140,6 +140,94 @@ def _validate_materialization_reference(
         raise DeliveryError("master bytes changed from materialized output")
 
 
+def _load_document(path: Path, label: str) -> dict[str, Any]:
+    try:
+        document = json.loads(Path(path).read_text(encoding="utf-8"))
+    except (OSError, ValueError) as error:
+        raise DeliveryError(f"cannot load {label}: {path}") from error
+    if not isinstance(document, dict):
+        raise DeliveryError(f"{label} must be an object: {path}")
+    return document
+
+
+def _existing_transcript_artifacts(
+    paths: dict[str, Path], raw_dir: Path
+) -> dict[str, Path]:
+    if set(paths) != {"json", "txt", "md", "srt"}:
+        raise DeliveryError(
+            "existing transcript artifacts require JSON, TXT, MD and SRT"
+        )
+    resolved = {kind: Path(path).resolve() for kind, path in paths.items()}
+    if len(set(resolved.values())) != 4:
+        raise DeliveryError("existing transcript artifacts must be separate files")
+    for kind, path in resolved.items():
+        if (
+            not path.is_relative_to(raw_dir.resolve())
+            or not path.is_file()
+            or path.stat().st_size == 0
+        ):
+            raise DeliveryError(
+                f"existing transcript artifact is missing or unsafe: {kind}"
+            )
+    return resolved
+
+
+def _require_current_adoption_dependencies(
+    workspace: Any, materialization: dict[str, Any], dependencies: dict[str, str]
+) -> None:
+    from .approval_service import require_current_candidate_dependencies
+
+    try:
+        require_current_candidate_dependencies(workspace, materialization, dependencies)
+    except (ValueError, RuntimeError) as error:
+        raise DeliveryError(str(error)) from error
+
+
+def _validate_existing_review(
+    path: Path, master: Path, fingerprint: dict[str, Any], dependencies: dict[str, str]
+) -> dict[str, Any]:
+    from .approval_service import require_candidate_review
+
+    review = _load_document(path, "delivery review")
+    try:
+        require_candidate_review(
+            review,
+            checkpoint="deliver",
+            candidate=master,
+            fingerprint=fingerprint,
+            dependencies=dependencies,
+        )
+    except (OSError, ValueError, RuntimeError) as error:
+        raise DeliveryError(f"existing delivery review is invalid: {error}") from error
+    return review
+
+
+def _human_final_review(
+    workspace, path, master, fingerprint, materialization, dependencies
+):
+    from .approval_service import require_human_final_disposition
+
+    try:
+        disposition = require_human_final_disposition(
+            workspace,
+            path,
+            candidate=master,
+            fingerprint=fingerprint,
+            materialization=materialization,
+            dependencies=dependencies,
+        )
+    except (OSError, ValueError, RuntimeError) as error:
+        raise DeliveryError(f"human-final disposition is invalid: {error}") from error
+    return {
+        "kind": "human-final-disposition",
+        "path": str(path),
+        "state": "human-approved",
+        "candidateIdentityHash": disposition["candidateIdentityHash"],
+        "candidateSha256": disposition["candidateSha256"],
+        "dependencyLockSha256": disposition["dependencyLockSha256"],
+    }
+
+
 class DeliveryService:
     def __init__(self, workspace: Any, *, clock: Callable[[], str] = now_iso):
         self.workspace = workspace
@@ -254,6 +342,233 @@ class DeliveryService:
         manifest["editlogRefresh"] = self.workspace.notify_editlog()
         return manifest
 
+    def _require_adoption_snapshot(
+        self,
+        fingerprint: dict[str, Any],
+        materialization: dict[str, Any],
+        dependencies: dict[str, str],
+        transcript: dict[str, Any],
+    ) -> dict[str, Any]:
+        from .pipeline import TimelinePipeline
+
+        reference = self._require_candidate_snapshot(fingerprint)
+        if reference is None:
+            raise DeliveryError(
+                "existing-master adoption requires an approved candidate snapshot"
+            )
+        snapshot = TimelinePipeline(self.workspace).active_candidate_snapshot()
+        if snapshot is None:
+            raise DeliveryError("approved candidate snapshot is no longer active")
+        exact = (
+            snapshot["snapshotHash"] == reference["sha256"],
+            snapshot["materialization"]["sha256"]
+            == materialization["materializationHash"],
+            snapshot["proofPlan"]["sha256"] == dependencies.get("proof-plan"),
+            all(
+                snapshot.get(key) for key in ("review", "regressionResult", "approval")
+            ),
+            all(
+                (snapshot.get("transcript") or {}).get(key) == transcript[key]
+                for key in ("sha256", "sizeBytes")
+            ),
+        )
+        if not all(exact):
+            raise DeliveryError(
+                "existing-master candidate lifecycle binding is stale or incomplete"
+            )
+        return reference
+
+    def adopt_existing(
+        self,
+        *,
+        master: Path,
+        dependencies: dict[str, str],
+        materialization: dict[str, Any],
+        materialization_path: Path,
+        transcript_artifacts: dict[str, Path],
+        review_path: Path | None = None,
+        human_final_disposition_path: Path | None = None,
+    ) -> dict[str, Any]:
+        """Register an existing master and exact completed evidence without producing media."""
+        if (review_path is None) == (human_final_disposition_path is None):
+            raise DeliveryError(
+                "review and human-final disposition are exclusive; provide exactly one"
+            )
+        master = Path(master).resolve()
+        materialization_path = Path(materialization_path).resolve()
+        if (
+            not master.is_relative_to(self.workspace.raw_dir.resolve())
+            or not master.is_file()
+        ):
+            raise DeliveryError(
+                f"existing master is missing or outside the project: {master}"
+            )
+        if (
+            _load_document(materialization_path, "assembly materialization")
+            != materialization
+        ):
+            raise DeliveryError(
+                "persisted assembly materialization differs from supplied record"
+            )
+        fingerprint, output_hash = _validate_materialization(
+            master, materialization, materialization_path
+        )
+        canonical_dependencies = _canonical_dependencies(
+            dependencies, materialization, output_hash
+        )
+        _require_current_adoption_dependencies(
+            self.workspace, materialization, canonical_dependencies
+        )
+        sidecars = _existing_transcript_artifacts(
+            transcript_artifacts, self.workspace.raw_dir
+        )
+        try:
+            transcript = final_transcript_artifacts.validate_master_transcript(
+                master, sidecars["json"]
+            )
+        except (OSError, ValueError) as error:
+            raise DeliveryError(
+                f"existing master transcript is invalid: {error}"
+            ) from error
+        artifacts = _artifact_fingerprints(sidecars)
+        review, snapshot, adoption = self._adoption_review_context(
+            master,
+            fingerprint,
+            materialization,
+            canonical_dependencies,
+            artifacts["json"],
+            review_path,
+            human_final_disposition_path,
+        )
+        if self.manifest_path.exists():
+            existing = self.validate_current()
+            same_adoption = (
+                existing.get("adoption", {}).get("mode") == "existing-master",
+                existing["master"]["path"] == str(master),
+                existing["dependencies"] == canonical_dependencies,
+                existing["transcriptArtifacts"] == artifacts,
+                existing.get("adoption") == adoption,
+                existing["review"] == review,
+            )
+            if not all(same_adoption):
+                raise DeliveryError(
+                    "immutable delivery manifest differs from existing adoption"
+                )
+            return existing
+        manifest = {
+            "schemaVersion": "1.0.0",
+            "state": "review-ready",
+            "master": {**fingerprint, "path": str(master)},
+            "dependencies": canonical_dependencies,
+            "dependencyLockSha256": review["dependencyLockSha256"],
+            "materialization": _materialization_reference(
+                materialization, Path(materialization_path), output_hash
+            ),
+            "transcript": transcript,
+            "transcriptArtifacts": artifacts,
+            "review": review,
+            "adoption": adoption,
+            "approval": None,
+            "createdAt": self.clock(),
+        }
+        if snapshot is not None:
+            manifest["candidateSnapshot"] = snapshot
+        atomic_write_json(self.manifest_path, manifest)
+        self.workspace.notify_editlog()
+        return manifest
+
+    def _adoption_review_context(
+        self,
+        master,
+        fingerprint,
+        materialization,
+        dependencies,
+        transcript,
+        review_path,
+        human_final_disposition_path,
+    ):
+        if human_final_disposition_path is not None:
+            path = Path(human_final_disposition_path).resolve()
+            review = _human_final_review(
+                self.workspace, path, master, fingerprint, materialization, dependencies
+            )
+            reference = {"path": str(path), **file_fingerprint(path)}
+            return (
+                review,
+                None,
+                {"mode": "existing-master", "humanFinalDisposition": reference},
+            )
+        path = Path(review_path).resolve()
+        snapshot = self._require_adoption_snapshot(
+            fingerprint, materialization, dependencies, transcript
+        )
+        review = _validate_existing_review(path, master, fingerprint, dependencies)
+        reference = {
+            "path": str(path),
+            "candidateIdentityHash": review["candidate"]["identityHash"],
+            "candidateSha256": review["candidate"]["sha256"],
+            "dependencyLockSha256": review["dependencyLockSha256"],
+            "state": review["state"],
+        }
+        return (
+            reference,
+            snapshot,
+            {"mode": "existing-master", "reviewFingerprint": file_fingerprint(path)},
+        )
+
+    def _validate_adoption(
+        self, manifest: dict[str, Any], current: dict[str, Any]
+    ) -> None:
+        materialization = _load_document(
+            Path(manifest["materialization"]["path"]), "assembly materialization"
+        )
+        _require_current_adoption_dependencies(
+            self.workspace, materialization, manifest["dependencies"]
+        )
+        for kind, artifact in manifest["transcriptArtifacts"].items():
+            if file_fingerprint(Path(artifact["path"])) != {
+                key: value for key, value in artifact.items() if key != "path"
+            }:
+                raise DeliveryError(f"existing transcript artifact changed: {kind}")
+        human_reference = manifest["adoption"].get("humanFinalDisposition")
+        if human_reference is not None:
+            self._validate_human_adoption(
+                manifest, current, materialization, human_reference
+            )
+            return
+        review_path = Path(manifest["review"]["path"])
+        if file_fingerprint(review_path) != manifest["adoption"]["reviewFingerprint"]:
+            raise DeliveryError("existing delivery review changed")
+        self._require_adoption_snapshot(
+            current,
+            materialization,
+            manifest["dependencies"],
+            manifest["transcriptArtifacts"]["json"],
+        )
+        _validate_existing_review(
+            review_path,
+            Path(manifest["master"]["path"]),
+            current,
+            manifest["dependencies"],
+        )
+
+    def _validate_human_adoption(self, manifest, current, materialization, reference):
+        path = Path(reference["path"])
+        if file_fingerprint(path) != {
+            key: value for key, value in reference.items() if key != "path"
+        }:
+            raise DeliveryError("human-final disposition changed")
+        expected = _human_final_review(
+            self.workspace,
+            path,
+            Path(manifest["master"]["path"]),
+            current,
+            materialization,
+            manifest["dependencies"],
+        )
+        if manifest["review"] != expected:
+            raise DeliveryError("human-final delivery identity changed")
+
     def validate_current(self) -> dict[str, Any]:
         if not self.manifest_path.is_file():
             raise DeliveryError("delivery manifest is missing")
@@ -274,6 +589,8 @@ class DeliveryService:
             active_snapshot = self._require_candidate_snapshot(current)
             if active_snapshot != expected_snapshot:
                 raise DeliveryError("delivery candidate snapshot is stale")
+        if manifest.get("adoption", {}).get("mode") == "existing-master":
+            self._validate_adoption(manifest, current)
         return manifest
 
     def approve(self, *, actor: str, reason: str) -> dict[str, Any]:

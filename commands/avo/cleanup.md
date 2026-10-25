@@ -93,3 +93,9 @@ python -m avo.cli cleanup dry-run --project /videos/review/avo.project.json --ma
 ## Shared timeline gateway
 
 Resolves provider/video context but performs no editorial timeline mutation. Reports and configuration reference canonical artifact/revision identities.
+
+## Cost recording and completion response
+
+Use the existing runtime to inspect recorded costs (python -m avo.cli costs --project <project> in a checkout; avo costs installed). Read [cost guidance](../../agent-skills/avo-pipeline/references/costs.md) for explicit usage-source binding and model/provider switches. Refresh bound local sources with costs collect before learndown and after verified cleanup, before final wrap. This adds no inference calls. Missing telemetry stays unknown.
+
+Learndown MUST automatically display the persisted draft cost/token summary, valuation basis, coverage, cutoff and pending turn before the existing step-status footer. Cleanup MUST automatically display the final persisted summary after verified cleanup and final wrap/export. Only successful production closure can say the video is finished. Accounting/export failure after deletion requires accounting-only retry, never repeating cleanup deletion. Do not generate recursive responses to meter the still-open closing turn.

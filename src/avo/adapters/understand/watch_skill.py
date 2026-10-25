@@ -9,9 +9,13 @@ import math
 import os
 import re
 import shutil
+import struct
 import subprocess
+import tempfile
+import threading
 import time
 import urllib.request
+import zlib
 from collections.abc import Callable
 from copy import deepcopy
 from dataclasses import dataclass
@@ -852,7 +856,9 @@ _PROBE_PNG = (
 )
 
 
-def _live_probe(base_url: str, model: str, effective: dict[str, Any]) -> dict[str, Any]:
+def _live_probe(
+    base_url: str, model: str, effective: dict[str, Any], *, cost_candidate=None
+) -> dict[str, Any]:
     prompt = 'Inspect the image and return JSON only: {"vision":true}.'
     payload = {
         "model": model,
@@ -879,6 +885,10 @@ def _live_probe(base_url: str, model: str, effective: dict[str, Any]) -> dict[st
         timeout=int(effective["timeoutSeconds"]),
     )
     served = str(response.get("model") or model)
+    if cost_candidate is not None:
+        from avo.cost_services import try_record_response
+
+        try_record_response(cost_candidate, response, base_url, phase="review-probe")
     return {
         "success": bool(response.get("choices")),
         "servedModel": served,
@@ -981,41 +991,263 @@ def _frame_windows(
     return result
 
 
-def _extract_exact_frame(
-    candidate: Path, frame: int, directory: Path, long_side: int
-) -> Path:
-    directory.mkdir(parents=True, exist_ok=True)
-    path = directory / f"frame-{frame:09d}.png"
-    if path.is_file() and path.stat().st_size:
-        return path
-    completed = subprocess.run(
-        [
-            "ffmpeg",
-            "-v",
-            "error",
-            "-i",
-            str(candidate),
-            "-vf",
-            f"select=eq(n\\,{frame}),scale={long_side}:{long_side}:force_original_aspect_ratio=decrease",
-            "-vsync",
-            "0",
-            "-frames:v",
-            "1",
-            "-y",
-            str(path),
-        ],
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        check=False,
-    )
-    if completed.returncode != 0 or not path.is_file() or not path.stat().st_size:
-        path.unlink(missing_ok=True)
-        raise VisionReviewError(
-            completed.stderr.strip() or f"frame {frame} did not decode"
+def _read_png_bytes(stream, size: int, *, allow_eof: bool = False):
+    value = bytearray()
+    while len(value) < size:
+        chunk = stream.read(min(size - len(value), 65536))
+        if not chunk:
+            if allow_eof and not value:
+                return None
+            raise VisionReviewError("truncated PNG frame stream")
+        value.extend(chunk)
+    return bytes(value)
+
+
+def _read_png_chunk(stream, *, remaining: int):
+    header = _read_png_bytes(stream, 8)
+    length, kind = struct.unpack(">I4s", header)
+    if length + 12 > remaining:
+        raise VisionReviewError("PNG frame exceeds bounded size")
+    payload = _read_png_bytes(stream, length)
+    checksum = _read_png_bytes(stream, 4)
+    if struct.unpack(">I", checksum)[0] != zlib.crc32(kind + payload):
+        raise VisionReviewError("PNG frame chunk checksum is invalid")
+    return kind, payload, header + payload + checksum
+
+
+def _require_png_header(kind: bytes, payload: bytes, max_dimension: int):
+    if kind != b"IHDR" or len(payload) != 13:
+        raise VisionReviewError("PNG frame requires one initial IHDR")
+    width, height = struct.unpack(">II", payload[:8])
+    if not (0 < width <= max_dimension and 0 < height <= max_dimension):
+        raise VisionReviewError("PNG frame dimensions exceed the decode contract")
+
+
+def _read_frame_png(stream, *, max_bytes: int, max_dimension: int):
+    signature = _read_png_bytes(stream, 8, allow_eof=True)
+    if signature is None:
+        return None
+    if signature != b"\x89PNG\r\n\x1a\n":
+        raise VisionReviewError("invalid PNG frame signature")
+    result = bytearray(signature)
+    kind, payload, chunk = _read_png_chunk(stream, remaining=max_bytes - len(result))
+    _require_png_header(kind, payload, max_dimension)
+    result.extend(chunk)
+    seen_data = False
+    while True:
+        kind, payload, chunk = _read_png_chunk(
+            stream, remaining=max_bytes - len(result)
         )
-    return path
+        if kind == b"IHDR":
+            raise VisionReviewError("PNG frame has a duplicate IHDR")
+        result.extend(chunk)
+        seen_data = seen_data or kind == b"IDAT"
+        if kind == b"IEND":
+            if payload or not seen_data:
+                raise VisionReviewError("PNG frame has no valid image ending")
+            return bytes(result)
+
+
+def _store_prefetched_frame(directory: Path, frame: int, png: bytes) -> str:
+    path = directory / f"frame-{frame:09d}.png"
+    if path.is_symlink():
+        raise VisionReviewError(f"unsafe cached frame: {path}")
+    if path.exists():
+        if (
+            not path.is_file()
+            or path.stat().st_size != len(png)
+            or path.read_bytes() != png
+        ):
+            raise VisionReviewError(f"cached frame differs from fresh decode: {path}")
+    else:
+        with path.open("xb") as output:
+            output.write(png)
+    return hashlib.sha256(png).hexdigest()
+
+
+def _consume_frame_batch(stream, frames, directory: Path, long_side: int):
+    hashes = {}
+    limits = {
+        "max_bytes": long_side * long_side * 8 + 1024**2,
+        "max_dimension": long_side,
+    }
+    for frame in frames:
+        png = _read_frame_png(stream, **limits)
+        if png is None:
+            raise VisionReviewError(f"required frame {frame} did not decode")
+        hashes[frame] = _store_prefetched_frame(directory, frame, png)
+    if _read_frame_png(stream, **limits) is not None:
+        raise VisionReviewError("decoder produced unexpected extra PNG frames")
+    return hashes
+
+
+def _prefetch_exact_frames(
+    candidate: Path,
+    frames,
+    directory: Path,
+    long_side: int,
+    *,
+    timeout_seconds: float = 600,
+    cancel_event: threading.Event | None = None,
+):
+    """Decode a sorted frame union once; compare every existing cached PNG afresh."""
+    if any(type(frame) is not int or frame < 0 for frame in frames):
+        raise VisionReviewError("exact frame numbers must be nonnegative integers")
+    if type(long_side) is not int or not 64 <= long_side <= 4096:
+        raise VisionReviewError("frame image size is outside the decode contract")
+    selected = sorted(set(frames))
+    if not selected:
+        return {}
+    directory.mkdir(parents=True, exist_ok=True)
+    if directory.is_symlink():
+        raise VisionReviewError("unsafe frame cache directory")
+    expression = "+".join(f"eq(n\\,{frame})" for frame in selected)
+    command = [
+        "ffmpeg",
+        "-nostdin",
+        "-v",
+        "error",
+        "-i",
+        str(candidate),
+        "-map",
+        "0:v:0",
+        "-vf",
+        f"select={expression},scale={long_side}:{long_side}:force_original_aspect_ratio=decrease",
+        "-vsync",
+        "0",
+        "-frames:v",
+        str(len(selected)),
+        "-an",
+        "-sn",
+        "-dn",
+        "-c:v",
+        "png",
+        "-f",
+        "image2pipe",
+        "pipe:1",
+    ]
+    return _decode_frame_batch(
+        command,
+        selected,
+        directory,
+        long_side,
+        timeout_seconds=timeout_seconds,
+        cancel_event=cancel_event,
+    )
+
+
+def _kill_decoder(process):
+    if process.poll() is None:
+        try:
+            process.kill()
+        except OSError:
+            if process.poll() is None:
+                raise
+
+
+def _watch_decoder(process, stopped, interrupted, deadline, cancel_event):
+    while not stopped.wait(min(0.1, max(0, deadline - time.monotonic()))):
+        reason = None
+        if cancel_event is not None and cancel_event.is_set():
+            reason = "cancelled"
+        elif time.monotonic() >= deadline:
+            reason = "timed out"
+        if reason:
+            interrupted.append(reason)
+            _kill_decoder(process)
+            return
+
+
+def _reap_decoder(process, watcher, stopped):
+    stopped.set()
+    try:
+        _kill_decoder(process)
+        process.wait(timeout=5)
+    finally:
+        if watcher.ident is not None:
+            watcher.join(timeout=1)
+        process.stdout.close()
+
+
+def _decode_frame_batch(
+    command,
+    selected,
+    directory,
+    long_side,
+    *,
+    timeout_seconds=600,
+    cancel_event=None,
+):
+    if not math.isfinite(timeout_seconds) or timeout_seconds <= 0:
+        raise VisionReviewError("frame decode requires a finite positive deadline")
+    if cancel_event is not None and cancel_event.is_set():
+        raise VisionReviewError("frame decode cancelled")
+    with tempfile.TemporaryFile() as errors:
+        process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=errors)
+        stopped = threading.Event()
+        interrupted = []
+        watcher = threading.Thread(
+            target=_watch_decoder,
+            args=(
+                process,
+                stopped,
+                interrupted,
+                time.monotonic() + timeout_seconds,
+                cancel_event,
+            ),
+            daemon=True,
+        )
+        try:
+            watcher.start()
+            hashes = _consume_frame_batch(
+                process.stdout, selected, directory, long_side
+            )
+            returncode = process.wait(timeout=timeout_seconds)
+        except BaseException as error:
+            if interrupted:
+                raise VisionReviewError(f"frame decode {interrupted[0]}") from error
+            raise
+        finally:
+            _reap_decoder(process, watcher, stopped)
+        if interrupted:
+            raise VisionReviewError(f"frame decode {interrupted[0]}")
+        if returncode != 0:
+            errors.seek(0, 2)
+            errors.seek(max(0, errors.tell() - 8192))
+            message = errors.read().decode("utf-8", errors="replace").strip()
+            raise VisionReviewError(message or "exact frame batch decode failed")
+        return hashes
+
+
+def _review_sample_frames(coverage_plan):
+    return sorted(
+        {frame for item in coverage_plan["passes"] for frame in item["sampleFrames"]}
+    )
+
+
+def _cached_frame_is_current(path, expected, max_bytes):
+    try:
+        if path.is_symlink() or not path.is_file():
+            return False
+        if not 0 < path.stat().st_size <= max_bytes:
+            return False
+        return file_fingerprint(path)["sha256"] == expected
+    except OSError:
+        return False
+
+
+def _cached_review_frames(
+    requested, directory, prefetched, *, max_bytes=4096 * 4096 * 8 + 1024**2
+):
+    decoded, failed, paths = [], [], []
+    for frame in requested:
+        path = directory / f"frame-{frame:09d}.png"
+        if not _cached_frame_is_current(path, prefetched.get(frame), max_bytes):
+            failed.append(frame)
+        else:
+            decoded.append(frame)
+            paths.append(path)
+    return decoded, failed, paths
 
 
 def _choice_text(response: dict[str, Any]) -> str:
@@ -1061,7 +1293,12 @@ def _native_pass_instruction(pass_id: str) -> str:
         "requiresHuman, observed, expected, whyItMatters, suggestedAction. "
         "category must be one of layout, pacing, movement, continuity, privacy, "
         "caption, visual-quality, editorial, factual-risk, rights, accessibility, "
-        "technical, other. severity must be one of info, warning, blocking, unknown."
+        "technical, other. severity must be one of info, warning, blocking, unknown. "
+        "If the review prompt requests a scorecard, every response regardless of "
+        "status must also return a top-level scorecard object alongside status and "
+        "findings. Include every requested integer score, an explicit boolean "
+        "criticalFailure, and notes. Never omit the scorecard on pass, fail, or "
+        "needs-human-judgment."
     )
 
 
@@ -1106,9 +1343,21 @@ def _native_finding(
 
 
 def _require_finding_item(item: Any) -> dict[str, Any]:
-    if not isinstance(item, dict) or not str(item.get("message") or "").strip():
+    if not isinstance(item, dict):
         raise VisionReviewError("vision finding must be an object with a message")
-    return item
+    result = dict(item)
+    message = next(
+        (
+            str(result.get(key) or "").strip()
+            for key in ("message", "observed", "whyItMatters", "expected")
+            if str(result.get(key) or "").strip()
+        ),
+        "",
+    )
+    if not message:
+        raise VisionReviewError("vision finding must be an object with a message")
+    result["message"] = message
+    return result
 
 
 def _fallback(value: Any, default: Any) -> Any:
@@ -1133,7 +1382,9 @@ def _native_review(review: _ReviewRequest, model_pin: dict[str, Any]) -> dict[st
     }
     snapshot = probe_vision_capabilities(
         model_pin=model_pin,
-        probe=lambda url, served: _live_probe(url, served, effective),
+        probe=lambda url, served: _live_probe(
+            url, served, effective, cost_candidate=review.candidate
+        ),
         resource_policy=resource_policy,
         conservative_context_limit=int(effective["contextLimit"]),
     )
@@ -1154,7 +1405,7 @@ def _native_review(review: _ReviewRequest, model_pin: dict[str, Any]) -> dict[st
     if coverage_plan["coverageHoles"]:
         raise VisionReviewError("mandatory vision coverage could not be planned")
     contract_seed = {
-        "candidate": hashlib.sha256(review.candidate.read_bytes()).hexdigest(),
+        "candidate": file_fingerprint(review.candidate)["sha256"],
         "candidateIdentity": review.contract_context.get("candidateIdentityHash"),
         "dependencies": review.contract_context.get("dependencies") or {},
         "policy": review.policy_payload.get("policyHash"),
@@ -1180,25 +1431,22 @@ def _native_review(review: _ReviewRequest, model_pin: dict[str, Any]) -> dict[st
     frames_dir = contract_dir / "frames"
     raw_dir = contract_dir / "raw"
     raw_dir.mkdir(parents=True, exist_ok=True)
+    prefetched_frames = _prefetch_exact_frames(
+        review.candidate,
+        _review_sample_frames(coverage_plan),
+        frames_dir,
+        int(effective["imageLongSide"]),
+        timeout_seconds=max(600, math.ceil(duration_seconds * 2)),
+    )
 
     def invoke(_candidate_index: str, review_pass: dict[str, Any]) -> dict[str, Any]:
         requested = [int(frame) for frame in review_pass.get("sampleFrames") or []]
-        decoded: list[int] = []
-        failed: list[int] = []
-        paths: list[Path] = []
-        for frame in requested:
-            try:
-                paths.append(
-                    _extract_exact_frame(
-                        review.candidate,
-                        frame,
-                        frames_dir,
-                        int(effective["imageLongSide"]),
-                    )
-                )
-                decoded.append(frame)
-            except VisionReviewError:
-                failed.append(frame)
+        decoded, failed, paths = _cached_review_frames(
+            requested,
+            frames_dir,
+            prefetched_frames,
+            max_bytes=int(effective["imageLongSide"]) ** 2 * 8 + 1024**2,
+        )
         if failed:
             return {
                 "status": "blocked",
@@ -1220,6 +1468,10 @@ def _native_review(review: _ReviewRequest, model_pin: dict[str, Any]) -> dict[st
         for frame, path in zip(decoded, paths, strict=True):
             data = path.read_bytes()
             digest = hashlib.sha256(data).hexdigest()
+            if digest != prefetched_frames.get(frame):
+                raise VisionReviewError(
+                    f"prefetched frame {frame} changed before review"
+                )
             refs.append(
                 {
                     "kind": "decoded-frame",
@@ -1251,6 +1503,9 @@ def _native_review(review: _ReviewRequest, model_pin: dict[str, Any]) -> dict[st
             timeout=int(effective["timeoutSeconds"]),
         )
         raw_path = raw_dir / f"{review_pass['passId']}.json"
+        from avo.cost_services import try_record_response
+
+        try_record_response(review.candidate, response, base_url)
         raw_path.write_text(
             json.dumps(response, indent=2, ensure_ascii=False), encoding="utf-8"
         )
@@ -1275,7 +1530,7 @@ def _native_review(review: _ReviewRequest, model_pin: dict[str, Any]) -> dict[st
         }
 
     execution = execute_bounded_passes(
-        candidate_index=hashlib.sha256(review.candidate.read_bytes()).hexdigest(),
+        candidate_index=contract_seed["candidate"],
         passes=[
             {
                 **item,

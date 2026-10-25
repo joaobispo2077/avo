@@ -128,9 +128,12 @@ jobs:
 
   publish-release:
     name: Upload engine zips to GitHub Release
+    # The selector is skipped on release runs; still require every zip to pass.
     if: >
-      github.event_name == 'release' ||
-      (github.event_name == 'workflow_dispatch' && inputs.attach_tag != '')
+      !cancelled() &&
+      needs.zip-smoke.result == 'success' &&
+      (github.event_name == 'release' ||
+       (github.event_name == 'workflow_dispatch' && inputs.attach_tag != ''))
     needs: zip-smoke
     runs-on: ubuntu-24.04
     timeout-minutes: 15
