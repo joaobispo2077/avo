@@ -203,6 +203,49 @@ def test_verified_receipt_failure_overrides_reported_pass_without_hiding_it():
     assert row["proof"] == "VERIFIED"
 
 
+def test_dependency_yellow_band_paints_the_chip_and_metric(tmp_path):
+    from PIL import Image
+
+    mod = helper()
+    doc = document()
+    named = (
+        "PASS, 0 critical, 3 high, 0 moderate, 0 low: "
+        "braces@3.0.3 GHSA-vfj7-8cjw-p6xm, sharp, source-map-js"
+    )
+    doc["measurement_evidence"]["metrics"].append(
+        {
+            "key": "dependencies",
+            "state": "MEASURED",
+            "value": named,
+            "band": "yellow",
+            "basis": "High findings pass.",
+            "sources": [],
+        }
+    )
+    series = mod.build_gate_series(doc)
+    row = next(item for item in series["rows"] if item["key"] == "deps")
+    assert row["decision"] == "PASS"
+    assert row["band"] == "yellow"
+    assert row["observed"] == named
+    assert mod.validate_frozen_series(series, doc) is True
+    mod.render_gates(series, tmp_path / "gate-decisions.png")
+    with Image.open(tmp_path / "gate-decisions.png") as image:
+        rgb = image.convert("RGB")
+        assert json.loads(image.info["Description"])["rows"]
+    yellow = False
+    amber_text = False
+    width, height = rgb.size
+    pix = rgb.load()
+    for y in range(height):
+        for x in range(width):
+            red, green, blue = pix[x, y]
+            if abs(red - 240) <= 12 and abs(green - 180) <= 20 and blue <= 30:
+                yellow = True
+            if abs(red - 133) <= 12 and abs(green - 93) <= 12 and blue <= 20:
+                amber_text = True
+    assert yellow and amber_text
+
+
 def test_dependency_gate_uses_observed_findings_not_a_missing_alias():
     doc = document()
     doc["measurement_evidence"]["metrics"].append(
