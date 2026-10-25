@@ -1,0 +1,34 @@
+[
+  {
+    "sourceInstanceId": "synthetic",
+    "sourceSessionId": "session",
+    "requestId": "r1",
+    "agent": "windsurf",
+    "agentVersion": "synthetic-manual-v1",
+    "model": "model-a",
+    "serviceProvider": "service-a",
+    "billingMode": "api",
+    "serviceClass": "host-agent",
+    "occurredAt": "2026-10-22T16:00:00Z",
+    "phase": "motion",
+    "tokens": {
+      "input": 100,
+      "output": 20,
+      "cacheRead": 60,
+      "reasoning": 5
+    },
+    "semantics": {
+      "cacheRead": "input",
+      "reasoning": "output"
+    },
+    "amounts": [
+      {
+        "basis": "source-reported",
+        "unit": "USD",
+        "amount": "0.10",
+        "provenance": "synthetic fixture"
+      }
+    ],
+    "measurementKind": "manual"
+  }
+]

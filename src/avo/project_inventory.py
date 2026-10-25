@@ -348,7 +348,12 @@ def _resolve_initial_transcript(
 
 
 def _resolve_final_transcripts(raw_dir: Path, master_basename: str) -> list[Path]:
-    transcripts_dir = raw_dir / "edit" / "transcripts"
+    from avo.master_artifacts import MasterArtifactError, resolve_final_transcript
+
+    try:
+        transcripts_dir = resolve_final_transcript(raw_dir, master_basename).parent
+    except MasterArtifactError:
+        transcripts_dir = raw_dir / "edit" / "transcripts"
     if not transcripts_dir.is_dir():
         return []
 
@@ -483,10 +488,29 @@ def _retained_paths(raw_dir: Path) -> list[Path]:
     ]
     cleanup = raw_dir / "edit" / "cleanup"
     paths.extend(path for path in cleanup.rglob("*") if path.is_file())
+    costs = raw_dir / "edit" / "costs"
+    if costs.exists():
+        from avo.cost_store import CostStore
+
+        store = CostStore(raw_dir)
+        paths.extend(
+            store.path(str(path.relative_to(costs)))
+            for path in costs.rglob("*")
+            if path.is_file()
+        )
+    ancestors = raw_dir / "edit" / "cost-ancestors"
+    paths.extend(_retained_cost_ancestors(raw_dir, ancestors))
     if any(not path.is_relative_to(raw_dir) for path in paths):
         raise PreservedSetViolation(
             "cleanup preserve path contains a link outside project"
         )
+    return paths
+
+
+def _retained_cost_ancestors(raw_dir, directory):
+    paths = [p for p in directory.rglob("*") if p.is_file()]
+    if any(p.is_symlink() or not p.resolve().is_relative_to(raw_dir) for p in paths):
+        raise PreservedSetViolation("cost archive contains a link outside project")
     return paths
 
 
@@ -841,6 +865,15 @@ def scan_delete_candidates(
 
     for path in sorted(edit_dir.rglob("*")):
         try:
+            if _is_cost_archive(path, edit_dir):
+                if not path.resolve().is_relative_to(raw_dir):
+                    raise PreservedSetViolation("cost archive leaves the project")
+                continue
+            if path.is_relative_to(edit_dir / "costs"):
+                from avo.cost_store import CostStore
+
+                CostStore(raw_dir).path(str(path.relative_to(edit_dir / "costs")))
+                continue
             resolved = str(path.resolve())
             if resolved in preserved_set:
                 continue
@@ -851,6 +884,10 @@ def scan_delete_candidates(
             continue
 
     return candidates, leftover
+
+
+def _is_cost_archive(path, edit_dir):
+    return path.is_relative_to(edit_dir / "cost-ancestors")
 
 
 def list_delete_candidates(raw_dir: Path, preserved: PreservedSetResult) -> list[Path]:

@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any
 
 from avo import shorts_captions, shorts_contract, shorts_provider, shorts_rules
+from avo.shorts_visuals import validate_visual_inserts
 
 TranscribeRunner = Callable[[Path, Path], Path]
 
@@ -535,8 +536,12 @@ def _sfx_from_motion(
     layout: Mapping[str, Any],
     sfx: Mapping[str, Any] | None,
     graphics: Sequence[Mapping[str, Any]] | None = None,
+    explicit_hits: Sequence[Mapping[str, Any]] | None = None,
+    edited_duration: float = math.inf,
 ) -> list[dict[str, Any]]:
     """Derive UI hits from chips/stamps/graphics; punch at the same clock is skipped."""
+    if explicit_hits is not None:
+        return _validated_explicit_sfx(short_id, explicit_hits, edited_duration, sfx)
     if not sfx:
         return []
     hits: list[dict[str, Any]] = []
@@ -550,6 +555,26 @@ def _sfx_from_motion(
     hits.extend(_punch_sfx_hits(punch_ins, occupied))
     _require_sfx_library(short_id, hits, sfx.get("library") or {})
     return hits
+
+
+def _validated_explicit_sfx(
+    short_id: str,
+    hits: Sequence[Mapping[str, Any]],
+    duration: float,
+    sfx: Mapping[str, Any] | None,
+) -> list[dict[str, Any]]:
+    result = deepcopy(list(hits))
+    ids = [str(hit["id"]) for hit in result]
+    if len(ids) != len(set(ids)):
+        raise PlanningError(f"candidate {short_id} explicit SFX IDs must be unique")
+    for hit in result:
+        clock = float(hit["startSec"])
+        if not math.isfinite(clock) or not 0 <= clock < duration:
+            raise PlanningError(
+                f"candidate {short_id} explicit SFX must be within edited duration"
+            )
+    _require_sfx_library(short_id, result, (sfx or {}).get("library") or {})
+    return result
 
 
 def _item_fingerprint(
@@ -573,6 +598,42 @@ def _item_fingerprint(
             "corrections": corrections or [],
         }
     )
+
+
+def _resolve_audio_bed(
+    request: Mapping[str, Any],
+    candidate: Mapping[str, Any],
+    *,
+    edited_duration: float,
+) -> dict[str, Any] | None:
+    override = candidate.get("audioBedOverride")
+    if not override:
+        return None
+    beds = {str(row["id"]): row for row in request.get("audioBeds") or []}
+    bed_id = str(override["bedId"])
+    if bed_id not in beds:
+        raise PlanningError(
+            f"candidate {candidate['id']} references unknown audio bed {bed_id}"
+        )
+    bed = deepcopy(dict(beds[bed_id]))
+    start = float(override["sourceStartSec"])
+    duration = float(override["durationSec"])
+    authorized = bed["authorizedWindow"]
+    if (
+        start < float(authorized["startSec"])
+        or start + duration > float(authorized["endSec"]) + 1e-9
+    ):
+        raise PlanningError(
+            f"candidate {candidate['id']} audio bed exceeds its authorized window"
+        )
+    timeline_start = float(override["timelineStartSec"])
+    if timeline_start + duration > edited_duration + 1e-9:
+        raise PlanningError(
+            f"candidate {candidate['id']} audio bed exceeds edited duration"
+        )
+    resolved_override = deepcopy(dict(override))
+    resolved_override.pop("bedId", None)
+    return {**bed, **resolved_override, "id": bed_id}
 
 
 def _allocation_candidates(
@@ -688,6 +749,38 @@ def _apply_canonical_plan_identity(
     )
 
 
+def _candidate_audio_fields(
+    request: Mapping[str, Any], candidate: Mapping[str, Any], edited_duration: float
+) -> tuple[dict | None, dict | None]:
+    audio_treatment = deepcopy((request.get("defaults") or {}).get("audioTreatment"))
+    if candidate.get("audioTreatmentOverride"):
+        audio_treatment = _deep_merge(
+            audio_treatment or {}, candidate["audioTreatmentOverride"]
+        )
+    audio_bed = _resolve_audio_bed(request, candidate, edited_duration=edited_duration)
+    return audio_treatment, audio_bed
+
+
+def _audio_input_fingerprint(
+    fingerprint: str, audio_treatment: Any, audio_bed: Any
+) -> str:
+    if audio_treatment or audio_bed:
+        fingerprint = shorts_contract.content_hash(
+            {
+                "baseFingerprint": fingerprint,
+                "audioTreatment": audio_treatment,
+                "audioBed": audio_bed,
+            }
+        )
+    return fingerprint
+
+
+def _apply_item_effects(item: dict[str, Any], effects: Mapping[str, Any]) -> None:
+    for key, value in effects.items():
+        if value:
+            item[key] = value
+
+
 def resolve_batch(
     request: Mapping[str, Any],
     transcript: Mapping[str, Any],
@@ -759,8 +852,14 @@ def resolve_batch(
                 f"{edited_duration:.3f}s exceeds maxDurationSec {max_duration:g}"
             )
         layout = _resolve_layout(request["defaults"]["layout"], candidate)
+        visual_inserts = validate_visual_inserts(
+            candidate.get("visualInserts") or [], edited_duration
+        )
         captions, correction_audit, caption_policy, scoped_corrections = _caption_plan(
             request, candidate, words, segments, layout, speed
+        )
+        audio_treatment, audio_bed = _candidate_audio_fields(
+            request, candidate, edited_duration
         )
         fingerprint = _item_fingerprint(
             candidate,
@@ -771,6 +870,7 @@ def resolve_batch(
             caption_policy=caption_policy,
             corrections=scoped_corrections,
         )
+        fingerprint = _audio_input_fingerprint(fingerprint, audio_treatment, audio_bed)
         callouts, punch_ins, graphics = _motion_from_candidate(
             candidate, edited_duration
         )
@@ -795,12 +895,6 @@ def resolve_batch(
             ],
             "qcProfile": "shorts-proof",
         }
-        if callouts:
-            item["callouts"] = callouts
-        if punch_ins:
-            item["punchIns"] = punch_ins
-        if graphics:
-            item["graphics"] = graphics
         sfx_hits = _sfx_from_motion(
             short_id=candidate["id"],
             callouts=callouts,
@@ -808,9 +902,21 @@ def resolve_batch(
             layout=layout,
             sfx=(request.get("defaults") or {}).get("sfx"),
             graphics=graphics,
+            explicit_hits=(candidate.get("motionOverride") or {}).get("sfxHits"),
+            edited_duration=edited_duration,
         )
-        if sfx_hits:
-            item["sfxHits"] = sfx_hits
+        _apply_item_effects(
+            item,
+            {
+                "callouts": callouts,
+                "visualInserts": visual_inserts,
+                "punchIns": punch_ins,
+                "graphics": graphics,
+                "audioTreatment": audio_treatment,
+                "audioBed": audio_bed,
+                "sfxHits": sfx_hits,
+            },
+        )
         _bind_source_fields(item, request, candidate, segments)
         items.append(item)
         if review_speed:
@@ -920,6 +1026,27 @@ def _sha256_file(path: Path, chunk_size: int = 1024 * 1024) -> str:
     return digest.hexdigest()
 
 
+def _validate_audio_bed_files(request: Mapping[str, Any], request_path: Path) -> None:
+    seen: set[str] = set()
+    for bed in request.get("audioBeds") or []:
+        bed_id = str(bed["id"])
+        if bed_id in seen:
+            raise PlanningError(f"duplicate audio bed id: {bed_id}")
+        seen.add(bed_id)
+        source = _resolve_relative(request_path.parent, str(bed["path"]))
+        if not source.is_file():
+            raise PlanningError(f"audio bed source does not exist: {source}")
+        if _sha256_file(source) != bed["fingerprint"]:
+            raise PlanningError(f"audio bed fingerprint mismatch: {bed_id}")
+        rights = bed.get("rights") or {}
+        if (
+            not bed.get("origin")
+            or not rights.get("basis")
+            or not rights.get("reference")
+        ):
+            raise PlanningError(f"audio bed provenance is incomplete: {bed_id}")
+
+
 def _revision_from_path(path: Path) -> int:
     match = re.search(r"-v(\d{3})(?=\.json$)", path.name)
     return int(match.group(1)) if match else 1
@@ -950,6 +1077,7 @@ def validate_request_file(path: Path | str) -> dict[str, Any]:
             raise TranscriptRequiredError(
                 f"declared source transcript does not exist: {transcript_path}"
             )
+    _validate_audio_bed_files(request, request_path)
     return request
 
 
@@ -969,6 +1097,7 @@ def resolve_request_file(
     expected = request["source"].get("expectedFingerprint")
     if expected and source_fingerprint != expected:
         raise PlanningError("source master fingerprint does not match request")
+    _validate_audio_bed_files(request, request_path)
 
     transcript_value = request["source"].get("transcriptPath")
     if transcript_value:
@@ -1024,7 +1153,16 @@ def target_render_profile(
 ) -> dict[str, Any]:
     output = plan["output"]
     if preview:
-        return {"preview": True, "width": 640, "height": 360}
+        width = int(output["width"])
+        height = int(output["height"])
+        scale = float(output.get("previewLongSide", 640)) / max(width, height)
+        preview_width = max(2, round(width * scale / 2) * 2)
+        preview_height = max(2, round(height * scale / 2) * 2)
+        return {
+            "preview": True,
+            "width": preview_width,
+            "height": preview_height,
+        }
     return {
         "preview": False,
         "width": int(output["width"]),

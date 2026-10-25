@@ -13,7 +13,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -52,12 +52,7 @@ def package_version() -> str:
 
 
 def now_iso() -> str:
-    return (
-        datetime.now(timezone.utc)
-        .replace(microsecond=0)
-        .isoformat()
-        .replace("+00:00", "Z")
-    )
+    return datetime.now(UTC).replace(microsecond=0).isoformat().replace("+00:00", "Z")
 
 
 def default_state() -> dict[str, Any]:
@@ -169,7 +164,7 @@ def _parse_iso(value: Any) -> datetime | None:
     if not value or not isinstance(value, str):
         return None
     try:
-        return datetime.fromisoformat(value.replace("Z", "+00:00"))
+        return datetime.fromisoformat(value)
     except ValueError:
         return None
 
@@ -181,8 +176,8 @@ def update_age_days(state: dict[str, Any] | None = None) -> float | None:
     if last is None:
         return None
     if last.tzinfo is None:
-        last = last.replace(tzinfo=timezone.utc)
-    return (datetime.now(timezone.utc) - last).total_seconds() / 86400.0
+        last = last.replace(tzinfo=UTC)
+    return (datetime.now(UTC) - last).total_seconds() / 86400.0
 
 
 def is_update_due(days: float = 7.0, state: dict[str, Any] | None = None) -> bool:

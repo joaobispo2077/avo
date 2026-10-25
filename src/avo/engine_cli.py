@@ -16,6 +16,8 @@ PUBLIC_VERBS = (
     "mcp",
     "direction",
     "briefstart",
+    "costs",
+    "metrics",
 )
 
 # One table: verb → existing ``python -m`` module. Clone entrypoints stay intact.
@@ -49,7 +51,7 @@ def main(argv: list[str] | None = None) -> int | None:
         return 0
     if verb == "runtime":
         return _runtime(rest)
-    if verb in {"direction", "briefstart"}:
+    if verb in {"direction", "briefstart", "costs", "metrics"}:
         return _invoke("cli", [verb, *rest])
     if verb not in _MODULES:
         _print_unknown()

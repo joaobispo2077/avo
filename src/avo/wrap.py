@@ -252,6 +252,18 @@ def _build_wrap_payload(
         payload["resolvedModelSources"] = resolve_model_sources(project=project)
     except Exception:
         pass
+    from avo.cost_closure import close_costs
+
+    try:
+        payload["costs"] = close_costs(
+            raw_dir, status, preservation=preservation_receipt is not None
+        )
+    except (OSError, ValueError):
+        payload["costs"] = {
+            "coverage": "unavailable",
+            "persistence": "failed",
+            "message": "Cost snapshot unavailable; retry accounting/export without repeating cleanup",
+        }
     return payload
 
 
@@ -352,6 +364,13 @@ def _append_preservation_status(lines: list[str], payload: dict[str, Any]) -> No
         lines.append("- **Closure:** verified preservation; cleanup not executed")
 
 
+def _append_cost_section(lines, payload):
+    if payload.get("costs"):
+        from avo.costs import render_summary
+
+        lines.extend(["", "## Recorded cost", "", render_summary(payload["costs"])])
+
+
 def render_markdown(payload: dict[str, Any]) -> str:
     """Render deterministic markdown from wrap JSON payload."""
     status = payload.get("status", "draft")
@@ -439,6 +458,7 @@ def render_markdown(payload: dict[str, Any]) -> str:
         lines.append(f"See also: [{editlog}]({editlog})")
         lines.append("")
 
+    _append_cost_section(lines, payload)
     return "\n".join(lines).rstrip() + "\n"
 
 
@@ -542,6 +562,9 @@ def _cmd_draft(args: argparse.Namespace) -> int:
         export_provider_learndown(payload)
     print(f"draft wrap: {md_path}")
     print(f"draft json: {json_path}")
+    from avo.costs import render_summary
+
+    print(render_summary(payload.get("costs")))
     return 0
 
 
@@ -604,6 +627,9 @@ def _cmd_final(args: argparse.Namespace) -> int:
         export_provider_learndown(payload)
     print(f"final wrap: {md_path}")
     print(f"final json: {json_path}")
+    from avo.costs import render_summary
+
+    print(render_summary(payload.get("costs")))
     return 0
 
 

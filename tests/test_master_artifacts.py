@@ -92,6 +92,74 @@ def test_unreferenced_proof_is_not_a_final_master(tmp_path: Path):
     assert resolve_final_masters(raw, STEM) == []
 
 
+@pytest.mark.parametrize("invalid", [None, "source", "outside", "ambiguous"])
+def test_native_shorts_delivery_resolves_master_and_nested_transcript(
+    tmp_path: Path, invalid: str | None
+):
+    import hashlib
+
+    from avo.master_artifacts import resolve_final_transcript
+    from avo.project_inventory import _resolve_final_transcripts
+    from avo.timeline.reconstruction import _final_artifacts
+
+    raw = tmp_path / "raw"
+    delivery = raw / "edit" / "shorts" / "batch" / "delivery"
+    master = delivery / "masters" / f"{STEM}.mp4"
+    master.parent.mkdir(parents=True)
+    master.write_bytes(b"media")
+    digest = hashlib.sha256(b"media").hexdigest()
+    transcript = write_json(
+        delivery / "transcripts" / f"{STEM}.json",
+        {"source": {"sha256": digest, "size_bytes": 5}},
+    )
+    write_json(
+        delivery / "delivery-manifest.json",
+        {
+            "items": [
+                {
+                    "masterPath": str(master),
+                    "sha256": digest,
+                    "transcripts": [{"kind": "json", "path": str(transcript)}],
+                }
+            ]
+        },
+    )
+    assert resolve_final_masters(raw, STEM) == [master]
+    assert resolve_final_transcript(raw, STEM) == transcript
+    assert _resolve_final_transcripts(raw, STEM) == [transcript]
+    assert _final_artifacts(raw, STEM) == (master, transcript)
+    if invalid is None:
+        return
+    if invalid == "source":
+        write_json(transcript, {"source": {"sha256": "b" * 64}})
+    elif invalid == "outside":
+        manifest = delivery / "delivery-manifest.json"
+        value = json.loads(manifest.read_text(encoding="utf-8"))
+        outside = tmp_path / master.name
+        outside.write_bytes(b"media")
+        value["items"][0]["masterPath"] = str(outside)
+        write_json(manifest, value)
+    else:
+        other = raw / "edit" / "shorts" / "other" / "delivery"
+        copy = other / "masters" / master.name
+        copy.parent.mkdir(parents=True)
+        copy.write_bytes(b"media")
+        write_json(
+            other / "delivery-manifest.json",
+            {
+                "items": [
+                    {
+                        "masterPath": str(copy),
+                        "sha256": digest,
+                        "transcripts": [{"kind": "json", "path": str(transcript)}],
+                    }
+                ]
+            },
+        )
+    with pytest.raises(MasterArtifactError):
+        resolve_final_masters(raw, STEM)
+
+
 def test_identical_manifest_references_are_deduplicated(tmp_path: Path):
     raw, master = project(tmp_path)
     value = descriptor(raw, master)

@@ -1,4 +1,4 @@
-"""CLI-bridged MCP tools for ``avo.cli`` groups (tasks 007–008).
+"""CLI-bridged MCP tools for ``avo.cli`` groups (tasks 007â€“008).
 
 Registers 1:1 tools ``avo_<group>_<subcommand>`` that delegate in-process to
 ``avo.cli.main`` via :mod:`avo.mcp.bridge`. Covers core groups (task-007) and
@@ -25,7 +25,7 @@ from avo.mcp.registry import ToolSpec
 
 _MUTATE_WARN = "WARNING: Mutates project/timeline state. "
 _RENDER_WARN = "WARNING: May write render/output files under the project. "
-_DESTRUCTIVE_WARN = "DESTRUCTIVE: Irreversible or high-impact operation — confirm intent before calling. "
+_DESTRUCTIVE_WARN = "DESTRUCTIVE: Irreversible or high-impact operation â€” confirm intent before calling. "
 
 # Groups bridged in task-007.
 CORE_CLI_GROUPS: tuple[str, ...] = (
@@ -38,6 +38,7 @@ CORE_CLI_GROUPS: tuple[str, ...] = (
 
 # Remaining groups bridged in task-008.
 REMAINING_CLI_GROUPS: tuple[str, ...] = (
+    "costs",
     "direction",
     "briefstart",
     "bmap",
@@ -568,7 +569,7 @@ def _remaining_bridge_defs() -> list[BridgeToolDef]:
             "cleanup",
             "verify",
             "Verify cleanup prerequisites. Returns compact JSON (status, "
-            "verifyErrors, counts/sample) — not every path. Use built-in CLI/MCP; "
+            "verifyErrors, counts/sample) â€” not every path. Use built-in CLI/MCP; "
             "do not write .avo/tmp/**/execute_*.py walk/delete scripts. "
             "(CLI: avo cleanup verify).",
             extra_params=(ParamSpec("master_basename", str, required=True),),
@@ -589,7 +590,7 @@ def _remaining_bridge_defs() -> list[BridgeToolDef]:
             "cleanup",
             "dry-run",
             "Dry-run cleanup without deleting files. Returns compact JSON "
-            "(candidateCount, leftoverCandidates, candidateSample ≤50). Full path "
+            "(candidateCount, leftoverCandidates, candidateSample â‰¤50). Full path "
             "lists live in optional CLI scratch (--session-id --scratch-out). "
             "Do not write .avo/tmp/**/execute_*.py walk/delete scripts. "
             "(CLI: avo cleanup dry-run).",
@@ -693,7 +694,63 @@ def _creative_bridge_defs():
 
 def _all_bridge_defs() -> list[BridgeToolDef]:
     """Core (task-007) + remaining (task-008) bridge defs."""
-    return _core_bridge_defs() + _remaining_bridge_defs() + _creative_bridge_defs()
+    return (
+        _core_bridge_defs()
+        + _remaining_bridge_defs()
+        + _creative_bridge_defs()
+        + _cost_bridge_defs()
+    )
+
+
+def _cost_bridge_defs():
+    optional_source = (
+        ParamSpec("session_id", str | None),
+        ParamSpec("format", str, default="normalized"),
+    )
+    files = (ParamSpec("file", str, required=True),)
+    operations = {
+        "report": (
+            ParamSpec("history", bool, default=False),
+            ParamSpec("phase", str | None),
+            ParamSpec("provider", str | None),
+            ParamSpec("snapshot_id", str | None),
+            ParamSpec("trends", bool, default=False),
+        ),
+        "capabilities": (ParamSpec("agent", str | None),),
+        "bind": tuple(
+            ParamSpec(name, str, required=True)
+            for name in ("source", "agent", "session_id", "boundary")
+        )
+        + (
+            ParamSpec("format", str, default="normalized"),
+            ParamSpec("run_id", str | None),
+            ParamSpec("phase", str | None),
+        ),
+        "collect": (ParamSpec("binding_id", str | None),),
+        "import": files + optional_source,
+        "report-manual": files,
+        "snapshot": (ParamSpec("stage", str, default="draft"),),
+        "price": files,
+        "correct": files,
+        "revalue": files,
+        "close-binding": (
+            ParamSpec("binding_id", str, required=True),
+            ParamSpec("end_boundary", str, required=True),
+        ),
+        "fork": (ParamSpec("new_video_id", str, required=True),),
+    }
+    return [
+        _tool(
+            "avo_costs_" + operation.replace("-", "_"),
+            "costs",
+            operation,
+            "Recorded local usage and cost; incomplete sources remain visible.",
+            destructive=operation not in {"report", "capabilities"},
+            extra_params=params,
+            include_project=operation != "capabilities",
+        )
+        for operation, params in operations.items()
+    ]
 
 
 def core_bridge_defs() -> list[BridgeToolDef]:
@@ -703,7 +760,7 @@ def core_bridge_defs() -> list[BridgeToolDef]:
 
 def remaining_bridge_defs() -> list[BridgeToolDef]:
     """Return declarative defs for remaining CLI groups (task-008)."""
-    return _remaining_bridge_defs() + _creative_bridge_defs()
+    return _remaining_bridge_defs() + _creative_bridge_defs() + _cost_bridge_defs()
 
 
 def all_bridge_defs() -> list[BridgeToolDef]:

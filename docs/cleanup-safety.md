@@ -1,5 +1,11 @@
 # Cleanup preservation and truthful learndown
 
+Native Shorts batches also resolve final exports from canonical batch delivery
+manifests and nested transcript sidecars. Lookup validates project-contained paths
+and transcript/master identity; it does not confer approval. Reconstruction
+independently verifies media bytes. Extra footage retention continues to use
+`cleanup.preservePaths`.
+
 Cleanup verifies both hashes and coverage. A correctly hashed bundle that omits a
 current canonical local media dependency is not safe to execute. Current source
 fingerprints, project configuration, the renderer EDL, authoring inputs and

@@ -15,12 +15,36 @@
   ],
   "properties": {
     "version": {
-      "enum": ["1.0", "1.1", "1.2"]
+      "enum": [
+        "1.0",
+        "1.1",
+        "1.2"
+      ]
     },
-    "planVersion": { "enum": ["1.0", "1.1", "1.2"] },
-    "batchRoot": { "type": "string", "minLength": 1 },
-    "batchRootSource": { "enum": ["canonical-default", "invocation", "legacy-output"] },
-    "legacyExternalDelivery": { "type": ["string", "null"] },
+    "planVersion": {
+      "enum": [
+        "1.0",
+        "1.1",
+        "1.2"
+      ]
+    },
+    "batchRoot": {
+      "type": "string",
+      "minLength": 1
+    },
+    "batchRootSource": {
+      "enum": [
+        "canonical-default",
+        "invocation",
+        "legacy-output"
+      ]
+    },
+    "legacyExternalDelivery": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
     "batchId": {
       "type": "string"
     },
@@ -172,6 +196,9 @@
           "enum": [
             "prepared-base",
             "prepared-dialogue",
+            "prepared-dialogue-untreated",
+            "prepared-dialogue-removed-signal",
+            "prepared-audio-bed",
             "prepared-lineage",
             "prepared-insertion-video",
             "prepared-insertion-audio",
@@ -182,7 +209,8 @@
             "qc",
             "transcript",
             "manifest",
-            "contact-sheet"
+            "contact-sheet",
+            "source-fidelity"
           ]
         },
         "path": {
@@ -363,7 +391,16 @@
   },
   "allOf": [
     {
-      "if": { "properties": { "version": { "const": "1.0" } }, "required": ["version"] },
+      "if": {
+        "properties": {
+          "version": {
+            "const": "1.0"
+          }
+        },
+        "required": [
+          "version"
+        ]
+      },
       "then": {
         "properties": {
           "items": {
@@ -372,8 +409,14 @@
                 "artifacts": {
                   "not": {
                     "contains": {
-                      "properties": { "kind": { "const": "prepared-sfx" } },
-                      "required": ["kind"]
+                      "properties": {
+                        "kind": {
+                          "const": "prepared-sfx"
+                        }
+                      },
+                      "required": [
+                        "kind"
+                      ]
                     }
                   }
                 }
@@ -384,9 +427,22 @@
       }
     },
     {
-      "if": { "properties": { "version": { "const": "1.1" } }, "required": ["version"] },
+      "if": {
+        "properties": {
+          "version": {
+            "const": "1.1"
+          }
+        },
+        "required": [
+          "version"
+        ]
+      },
       "then": {
-        "required": ["planVersion", "batchRoot", "batchRootSource"],
+        "required": [
+          "planVersion",
+          "batchRoot",
+          "batchRootSource"
+        ],
         "properties": {
           "items": {
             "items": {
@@ -394,8 +450,14 @@
                 "artifacts": {
                   "not": {
                     "contains": {
-                      "properties": { "kind": { "const": "prepared-sfx" } },
-                      "required": ["kind"]
+                      "properties": {
+                        "kind": {
+                          "const": "prepared-sfx"
+                        }
+                      },
+                      "required": [
+                        "kind"
+                      ]
                     }
                   }
                 }
@@ -406,8 +468,23 @@
       }
     },
     {
-      "if": { "properties": { "version": { "const": "1.2" } }, "required": ["version"] },
-      "then": { "required": ["planVersion", "batchRoot", "batchRootSource"] }
+      "if": {
+        "properties": {
+          "version": {
+            "const": "1.2"
+          }
+        },
+        "required": [
+          "version"
+        ]
+      },
+      "then": {
+        "required": [
+          "planVersion",
+          "batchRoot",
+          "batchRootSource"
+        ]
+      }
     }
   ]
 }

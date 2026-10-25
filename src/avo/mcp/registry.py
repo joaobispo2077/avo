@@ -29,6 +29,7 @@ def protocol_posture() -> dict[str, bool | str]:
 
 # Full phase-1 CLI groups (all bridged).
 PLANNED_CLI_GROUPS: tuple[str, ...] = (
+    "costs",
     "direction",
     "briefstart",
     "pipeline",

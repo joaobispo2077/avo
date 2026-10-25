@@ -305,6 +305,22 @@ def _source_segments(
     ]
 
 
+def _require_delivery_profile(plan, item_status):
+    short_id = item_status["shortId"]
+    profile = item_status.get("renderProfile") or {}
+    if profile.get("preview"):
+        raise DeliveryError(
+            f"Short {short_id} is a preview; reconstruct the approved plan from original sources at delivery resolution before promotion"
+        )
+    if profile and any(
+        int(profile.get(key, 0)) != int(plan["output"][key])
+        for key in ("width", "height")
+    ):
+        raise DeliveryError(
+            f"Short {short_id} render profile differs from delivery resolution"
+        )
+
+
 def _promote_item(
     plan: Mapping[str, Any],
     plan_item: Mapping[str, Any],
@@ -315,6 +331,7 @@ def _promote_item(
     generator: Callable[..., Mapping[str, Path]],
 ) -> dict[str, Any]:
     short_id = item_status["shortId"]
+    _require_delivery_profile(plan, item_status)
     revision = int(item_status.get("masterRevision", 0)) + 1
     master = masters / (
         f"{plan_item['expectedOutputBasename']}-master-v{revision:03d}.mp4"

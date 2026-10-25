@@ -43,6 +43,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="avo")
     sub = parser.add_subparsers(dest="command", required=True)
 
+    from avo.costs_cli import configure as configure_costs
+
+    configure_costs(sub)
+
     from avo.breathing import configure_parser
 
     configure_parser(sub.add_parser("breathing"))
@@ -419,6 +423,12 @@ def _pipeline(args: argparse.Namespace) -> int:
 
         preparation = prepare_pipeline(args)
         result = pipeline.initialize()
+        from avo.cost_store import CostStore
+
+        identity = CostStore(workspace.raw_dir).initialize(
+            workspace.project["provider"], workspace.video_id
+        )
+        result["accountingVideoId"] = identity["accountingVideoId"]
         result["briefingPreparation"] = preparation
     elif args.pipeline_command == "status":
         result = pipeline.status()
@@ -1945,6 +1955,10 @@ def _trim(args: argparse.Namespace) -> int:
 
 
 def _run_cli(args: argparse.Namespace) -> int:
+    if args.command in {"costs", "metrics"}:
+        from avo.costs_cli import run as costs_run
+
+        return costs_run(args)
     if args.command in {"direction", "briefstart"}:
         from avo.direction_cli import run as direction_run
 
