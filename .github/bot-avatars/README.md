@@ -18,6 +18,8 @@ Official bot to character mapping (João’s branding):
 | product-manager.png | Product Manager | Bulma |
 | data-analytics.png | Data Analytics | Cortana |
 | business-analyst.png | Business Analyst | Kurisu Makise |
+| copywriter-expert.png | Copywriter Expert | Mei Hatsume |
+| ui-ux-expert.png | UI/UX Expert | TBD |
 
 Required GitHub header format:
 
