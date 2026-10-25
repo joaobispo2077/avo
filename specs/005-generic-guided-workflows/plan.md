@@ -12,7 +12,7 @@ New behavior is opt-in where it is not universally safe: invocation-only choices
 
 ## Technical Context
 
-**Language/Version**: Python 3.10+; Markdown command/skill prompts; JSON Schema draft 2020-12
+**Language/Version**: Python 3.11+; Markdown command/skill prompts; JSON Schema draft 2020-12
 
 **Primary Dependencies**: Python standard library, `jsonschema`, FFmpeg/FFprobe adapters, Watch Skill executable, existing AVO canonical timeline services
 
