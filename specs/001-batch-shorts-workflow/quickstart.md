@@ -7,7 +7,7 @@ Operator flow from one approved master to immutable delivery.
 - Approved master MP4 + word-timed transcript JSON
 - `shorts.request.json` with candidates, policies, optional insertions
 - Provider palette at `providers/<provider>/brand/palette.json`
-- FFmpeg, Python 3.10+, HyperFrames CLI
+- FFmpeg, Python 3.11+, HyperFrames CLI
 
 ## Steps
 
