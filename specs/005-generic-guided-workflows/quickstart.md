@@ -4,7 +4,7 @@ This guide is for validating the implementation after `/speckit.tasks` and `/spe
 
 ## Prerequisites
 
-- Python 3.10+ environment installed through the repository's normal `uv` workflow.
+- Python 3.11+ environment installed through the repository's normal `uv` workflow.
 - FFmpeg/FFprobe available for media integration cases.
 - Watch Skill installed only for live adapter smoke tests; pure policy/adapter tests use fakes.
 - A disposable footage-project directory for CLI scenarios.
