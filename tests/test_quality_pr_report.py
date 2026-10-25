@@ -762,6 +762,184 @@ class QualityPrReportTests(unittest.TestCase):
         self.assertNotIn("Tarball Contents", text)
         self.assertNotIn("<details>", text)
 
+    def test_dependency_cell_colors_follow_unwaived_severity(self) -> None:
+        mod = _load("write_quality_pr_report", "scripts/ci/write_quality_pr_report.py")
+        root = self._empty_allowlist_root()
+        summary_path = root / "reports" / "quality" / "npm-audit-summary.json"
+        summary_path.parent.mkdir(parents=True)
+        highs = {
+            "ok": True,
+            "critical": 0,
+            "high": 3,
+            "moderate": 0,
+            "low": 0,
+            "reported": [
+                {
+                    "package": "braces",
+                    "affectedPackage": "braces",
+                    "version": "3.0.3",
+                    "id": "GHSA-vfj7-8cjw-p6xm",
+                    "severity": "high",
+                },
+                {
+                    "package": "sharp",
+                    "affectedPackage": "sharp",
+                    "severity": "high",
+                },
+                {
+                    "package": "source-map-js",
+                    "affectedPackage": "source-map-js",
+                    "severity": "high",
+                },
+            ],
+        }
+        summary_path.write_text(json.dumps(highs), encoding="utf-8")
+        self.assertEqual(mod.audit_band(highs), "yellow")
+        yellow = mod.deps_cell("success", root=root)
+        self.assertEqual(
+            yellow,
+            "PASS, 0 critical, 3 high, 0 moderate, 0 low: "
+            "braces@3.0.3 GHSA-vfj7-8cjw-p6xm, sharp, source-map-js",
+        )
+        text = mod.build_markdown(
+            {"deps": "success"},
+            coverage_json=Path("missing.json"),
+            floor=68.0,
+            root=root,
+        )
+        self.assertIn(f"| Dependency audit | **PASS** | {yellow} |", text)
+
+        low = {
+            "ok": True,
+            "critical": 0,
+            "high": 0,
+            "moderate": 0,
+            "low": 1,
+            "reported": [{"package": "tiny", "severity": "low", "id": None}],
+        }
+        summary_path.write_text(json.dumps(low), encoding="utf-8")
+        self.assertEqual(mod.audit_band(low), "green")
+        self.assertEqual(
+            mod.deps_cell("success", root=root),
+            "PASS, 0 critical, 0 high, 0 moderate, 1 low",
+        )
+
+        summary_path.write_text(
+            json.dumps(
+                {
+                    "ok": False,
+                    "critical": 2,
+                    "high": 1,
+                    "moderate": 0,
+                    "low": 0,
+                    "reported": [
+                        {
+                            "package": "braces",
+                            "affectedPackage": "braces",
+                            "version": "3.0.3",
+                            "id": "GHSA-vfj7-8cjw-p6xm",
+                            "severity": "high",
+                        }
+                    ],
+                }
+            ),
+            encoding="utf-8",
+        )
+        self._deps_findings(
+            root,
+            [
+                {
+                    "package": "left-pad",
+                    "id": "GHSA-mwp4-54f8-5fhr",
+                    "version": "1.0.0",
+                },
+                {"package": "minimatch", "id": None, "via": "brace-expansion"},
+            ],
+        )
+        failed = mod.deps_cell("failure", root=root)
+        self.assertTrue(failed.startswith("FAIL, 2 critical, 1 high"))
+        self.assertIn("braces@3.0.3 GHSA-vfj7-8cjw-p6xm", failed)
+        self.assertIn("left-pad GHSA-mwp4-54f8-5fhr", failed)
+        self.assertIn("minimatch via brace-expansion has no GHSA id", failed)
+        self.assertLess(failed.index("left-pad"), failed.index("minimatch"))
+        self.assertEqual(
+            mod.audit_band(json.loads(summary_path.read_text(encoding="utf-8"))),
+            "red",
+        )
+
+        bare = {
+            "ok": True,
+            "critical": 0,
+            "high": 1,
+            "moderate": 0,
+            "low": 0,
+            "reported": [
+                {
+                    "package": "demo",
+                    "affectedPackage": "demo",
+                    "id": None,
+                    "severity": "high",
+                    "via": "missing-tool",
+                }
+            ],
+        }
+        self.assertEqual(mod.audit_band(bare), "yellow")
+        self.assertIn("demo", mod.format_npm_summary(bare))
+        self.assertNotIn("critical", mod.format_npm_summary(bare).split(":", 1)[-1])
+
+    def test_high_dependents_collapse_to_three_advisory_packages(self) -> None:
+        mod = _load("write_quality_pr_report", "scripts/ci/write_quality_pr_report.py")
+        reported = []
+        for affected in (
+            "@semantic-release/changelog",
+            "micromatch",
+            "semantic-release",
+            "braces",
+        ):
+            reported.append(
+                {
+                    "package": "braces",
+                    "affectedPackage": affected,
+                    "version": "3.0.3",
+                    "id": "GHSA-vfj7-8cjw-p6xm",
+                    "severity": "high",
+                }
+            )
+        reported.extend(
+            [
+                {
+                    "package": "sharp",
+                    "affectedPackage": "sharp",
+                    "version": "0.35.4",
+                    "id": "GHSA-wq5f-xc86-pv6w",
+                    "severity": "high",
+                },
+                {
+                    "package": "source-map-js",
+                    "affectedPackage": "source-map-js",
+                    "version": "1.2.1",
+                    "id": "GHSA-68fv-2mgg-jv7q",
+                    "severity": "high",
+                },
+            ]
+        )
+        summary = {
+            "ok": True,
+            "critical": 0,
+            "high": 10,
+            "moderate": 7,
+            "low": 0,
+            "reported": reported,
+        }
+        self.assertEqual(mod.audit_band(summary), "yellow")
+        self.assertEqual(
+            mod.format_npm_summary(summary),
+            "PASS, 0 critical, 3 high, 7 moderate, 0 low: "
+            "braces@3.0.3 GHSA-vfj7-8cjw-p6xm, "
+            "sharp@0.35.4 GHSA-wq5f-xc86-pv6w, "
+            "source-map-js@1.2.1 GHSA-68fv-2mgg-jv7q",
+        )
+
     def test_deps_metric_reads_npm_audit_summary(self) -> None:
         mod = _load("write_quality_pr_report", "scripts/ci/write_quality_pr_report.py")
         with tempfile.TemporaryDirectory() as tmp:
@@ -778,7 +956,11 @@ class QualityPrReportTests(unittest.TestCase):
                 floor=68.0,
                 root=root,
             )
-            self.assertEqual(metric, "PASS, 0 critical, 8 high reported")
+            self.assertEqual(metric, "PASS, 0 critical, 8 high")
+            self.assertEqual(
+                mod.audit_band(json.loads(summary.read_text(encoding="utf-8"))),
+                "yellow",
+            )
 
             empty = root / "empty"
             empty.mkdir()

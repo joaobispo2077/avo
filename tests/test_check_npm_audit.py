@@ -166,6 +166,159 @@ class TestCheckNpmAudit(unittest.TestCase):
         self.assertEqual(summary["critical"], 0)
         self.assertEqual(summary["high"], 4)
 
+    def test_critical_fail_is_red_and_lists_every_unwaived_hit(self) -> None:
+        audit = {
+            "vulnerabilities": {
+                "left-pad": {
+                    "severity": "critical",
+                    "via": [
+                        {
+                            "name": "left-pad",
+                            "url": "https://github.com/advisories/GHSA-mwp4-54f8-5fhr",
+                        }
+                    ],
+                    "nodes": ["node_modules/left-pad"],
+                },
+                "braces": {
+                    "severity": "critical",
+                    "via": [{"name": "braces", "url": BRACES_URL}],
+                    "nodes": ["node_modules/braces"],
+                },
+                "noted": {
+                    "severity": "low",
+                    "via": ["missing"],
+                    "nodes": ["node_modules/noted"],
+                },
+            }
+        }
+        lock = {
+            "node_modules/left-pad": {"version": "1.0.0"},
+            "node_modules/braces": {"version": "3.0.3"},
+        }
+        code, _out, err = self._run(audit, lock=lock)
+        summary = json.loads(self.mod.SUMMARY_PATH.read_text(encoding="utf-8"))
+        findings = json.loads(self.mod.FINDINGS_PATH.read_text(encoding="utf-8"))
+        self.assertEqual(code, 1)
+        self.assertEqual(summary["band"], "red")
+        self.assertFalse(summary["ok"])
+        self.assertIn("left-pad@1.0.0 GHSA-mwp4-54f8-5fhr", err)
+        self.assertIn(f"braces@3.0.3 {BRACES_GHSA}", err)
+        self.assertEqual(
+            [row["package"] for row in findings["findings"]],
+            ["left-pad", "braces"],
+        )
+
+    def test_high_only_pass_is_yellow_and_names_packages(self) -> None:
+        sharp = "GHSA-shap-0000-0001"
+        audit = {
+            "vulnerabilities": {
+                "braces": _braces_chain()["vulnerabilities"]["braces"],
+                "sharp": {
+                    "severity": "high",
+                    "via": [
+                        {
+                            "name": "sharp",
+                            "url": f"https://github.com/advisories/{sharp}",
+                        }
+                    ],
+                    "nodes": ["node_modules/sharp"],
+                },
+                "source-map-js": {
+                    "severity": "high",
+                    "via": ["missing"],
+                    "nodes": ["node_modules/source-map-js"],
+                },
+            }
+        }
+        lock = {
+            "node_modules/braces": {"version": "3.0.3"},
+            "node_modules/sharp": {"version": "0.32.6"},
+        }
+        code, out, err = self._run(audit, lock=lock)
+        summary = json.loads(self.mod.SUMMARY_PATH.read_text(encoding="utf-8"))
+        self.assertEqual((code, err), (0, ""))
+        self.assertEqual(summary["band"], "yellow")
+        self.assertEqual(summary["critical"], 0)
+        self.assertEqual(summary["high"], 3)
+        self.assertIn(f"braces@3.0.3 {BRACES_GHSA}", out)
+        self.assertIn(f"sharp@0.32.6 {sharp}", out)
+        self.assertIn("source-map-js", out)
+        named = [
+            (row["package"], row["id"], row["severity"])
+            for row in summary["reported"]
+            if row["severity"] == "high"
+        ]
+        self.assertIn(("braces", BRACES_GHSA, "high"), named)
+        self.assertIn(("sharp", sharp, "high"), named)
+        self.assertIn(("source-map-js", None, "high"), named)
+
+    def test_low_only_pass_is_green(self) -> None:
+        audit = {
+            "vulnerabilities": {
+                "tiny": {
+                    "severity": "low",
+                    "via": [
+                        {
+                            "url": "https://github.com/advisories/GHSA-loww-0000-0001",
+                        }
+                    ],
+                    "nodes": ["node_modules/tiny"],
+                }
+            }
+        }
+        code, out, err = self._run(audit)
+        summary = json.loads(self.mod.SUMMARY_PATH.read_text(encoding="utf-8"))
+        self.assertEqual((code, err), (0, ""))
+        self.assertEqual(summary["band"], "green")
+        self.assertEqual(summary["critical"], 0)
+        self.assertEqual(summary["high"], 0)
+        self.assertEqual(summary["low"], 1)
+        self.assertIn("PASS, 0 critical, 0 high reported", out)
+        self.assertEqual(summary["reported"][0]["severity"], "low")
+
+    def test_no_ghsa_keeps_npm_severity(self) -> None:
+        expected = {
+            "critical": (1, "red"),
+            "high": (0, "yellow"),
+            "moderate": (0, "yellow"),
+            "low": (0, "green"),
+        }
+        for severity, (code, band) in expected.items():
+            with self.subTest(severity=severity):
+                audit = {
+                    "vulnerabilities": {
+                        "demo": {
+                            "severity": severity,
+                            "via": ["missing-tool"],
+                            "nodes": ["node_modules/demo"],
+                        }
+                    }
+                }
+                status, _out, err = self._run(audit)
+                summary = json.loads(self.mod.SUMMARY_PATH.read_text(encoding="utf-8"))
+                self.assertEqual(status, code)
+                self.assertEqual(summary["band"], band)
+                self.assertEqual(summary[severity], 1)
+                self.assertEqual(
+                    sum(
+                        summary[key] for key in ("critical", "high", "moderate", "low")
+                    ),
+                    1,
+                )
+                if severity == "critical":
+                    self.assertIn("without GHSA id", err)
+                    finding = json.loads(self.mod.FINDINGS_PATH.read_text())[
+                        "findings"
+                    ][0]
+                    self.assertEqual(finding["severity"], "critical")
+                    self.assertIsNone(finding["id"])
+                else:
+                    self.assertEqual(err, "")
+                    hit = summary["reported"][0]
+                    self.assertEqual(hit["severity"], severity)
+                    self.assertIsNone(hit["id"])
+                    self.assertNotIn("critical", err)
+
     def test_cycle_via_names_root_advisory(self) -> None:
         braces = _braces_chain()["vulnerabilities"]["braces"]
         audit = {

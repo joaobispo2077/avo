@@ -841,6 +841,17 @@ def gate_view_markdown(doc: dict, decisions: dict) -> list[str]:
     return lines
 
 
+def gate_decision_label(gate: dict, frozen_gate: dict) -> str:
+    """Decision text. Dependency audit appends its red, yellow, or green band."""
+    decision = frozen_gate.get("decision", gate["status"])
+    if decision != gate["status"]:
+        decision += f" (reported {gate['status']})"
+    band = frozen_gate.get("band")
+    if gate["key"] == "deps" and band in {"red", "yellow", "green"}:
+        decision = f"{decision} · {band}"
+    return decision
+
+
 def markdown(doc: dict, series: dict, *, image: str = "") -> str:
     lines = [
         "## AVO quality",
@@ -942,9 +953,7 @@ def markdown(doc: dict, series: dict, *, image: str = "") -> str:
         if not proof.get("verified"):
             links = f"Unverified capture: {safe_text(proof.get('reason', 'Historical execution summary only.'))}"
         frozen_gate = decision_rows.get(gate["key"], {})
-        decision = frozen_gate.get("decision", gate["status"])
-        if decision != gate["status"]:
-            decision += f" (reported {gate['status']})"
+        decision = gate_decision_label(gate, frozen_gate)
         if frozen_gate.get("observed"):
             links = safe_text(frozen_gate["observed"]) + ". " + links
         lines.append(

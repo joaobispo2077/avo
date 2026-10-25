@@ -3,5 +3,5 @@
   "execution_expected":{"total":5,"passed":2,"failed":1,"errors":1,"skipped":1},
   "outputs":{"npm-audit-summary.json":{"critical":0,"high":2,"moderate":7,"low":0},"deps-findings.json":{"findings":[{"tool":"pip","advisory":"fixture-advisory"}],"error":null},"pip-audit-raw.json":{"status":"COMPLETE"},"npm-audit-raw.json":{"status":"COMPLETE"},"deadcode.json":{"complete":true,"counts":{"findings":3,"unwaived":1},"findings":[],"allowlisted":[]},"dependency-tree.json":{"added":1,"removed":2,"changed":3}},
   "architecture_log":"Contracts: 2 kept, 1 broken\n",
-  "expected":{"deadcode":{"value":"3 reported; 1 unwaived","state":"MEASURED"},"dependencies":{"value":"1 blocking; npm 0 critical / 2 high / 7 moderate / 0 low","state":"MEASURED"},"architecture":{"value":"2 kept; 1 broken","state":"MEASURED"},"tree":{"value":"6 proposed package changes","state":"MEASURED"},"branches":{"value":"Unavailable","state":"UNAVAILABLE"}}
+  "expected":{"deadcode":{"value":"3 reported; 1 unwaived","state":"MEASURED"},"dependencies":{"value":"PASS, 0 critical, 2 high, 7 moderate, 0 low; pip fixture-advisory","state":"MEASURED"},"architecture":{"value":"2 kept; 1 broken","state":"MEASURED"},"tree":{"value":"6 proposed package changes","state":"MEASURED"},"branches":{"value":"Unavailable","state":"UNAVAILABLE"}}
 }
