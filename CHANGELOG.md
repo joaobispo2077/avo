@@ -1,3 +1,15 @@
+# [1.18.0](https://github.com/joaobispo2077/avo/compare/v1.17.1...v1.18.0) (2026-10-25)
+
+
+### Bug Fixes
+
+* **quality:** name three high advisories in the yellow audit cell ([930b8eb](https://github.com/joaobispo2077/avo/commit/930b8eb8a102316c6c0554c0a059ea1c671caae0))
+
+
+### Features
+
+* **quality:** color dependency audit by unwaived severity ([520d9f5](https://github.com/joaobispo2077/avo/commit/520d9f58dab5b5010ca35da58f8e58970302ba28))
+
 ## [1.17.1](https://github.com/joaobispo2077/avo/compare/v1.17.0...v1.17.1) (2026-10-24)
 
 

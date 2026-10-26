@@ -277,6 +277,52 @@ def _risk(directory: Path) -> dict:
     }
 
 
+def test_dependency_measurement_names_high_packages_and_lists_criticals(
+    execution,
+) -> None:
+    collector, doc, directory, produce = execution
+    outputs = _dependencies()
+    outputs["npm-audit-summary.json"]["reported"] = [
+        {
+            "package": "braces",
+            "affectedPackage": "braces",
+            "version": "3.0.3",
+            "id": "GHSA-vfj7-8cjw-p6xm",
+            "severity": "high",
+        },
+        {"package": "sharp", "affectedPackage": "sharp", "severity": "high"},
+        {
+            "package": "source-map-js",
+            "affectedPackage": "source-map-js",
+            "severity": "high",
+        },
+    ]
+    outputs["npm-audit-summary.json"]["high"] = 3
+    produce("deps", outputs)
+    row = _metrics(collector.collect(doc, directory))["dependencies"]
+    assert row["band"] == "yellow"
+    assert row["value"] == (
+        "PASS, 0 critical, 3 high, 3 moderate, 1 low: "
+        "braces@3.0.3 GHSA-vfj7-8cjw-p6xm, sharp, source-map-js"
+    )
+
+    outputs["npm-audit-summary.json"]["ok"] = False
+    outputs["npm-audit-summary.json"]["critical"] = 2
+    outputs["deps-findings.json"] = {
+        "findings": [
+            {"package": "left-pad", "id": "GHSA-mwp4-54f8-5fhr"},
+            {"package": "minimatch", "id": None, "via": "brace-expansion"},
+        ],
+        "error": None,
+    }
+    produce("deps", outputs)
+    failed = _metrics(collector.collect(doc, directory))["dependencies"]
+    assert failed["band"] == "red"
+    assert "left-pad GHSA-mwp4-54f8-5fhr" in failed["value"]
+    assert "minimatch via brace-expansion has no GHSA id" in failed["value"]
+    assert failed["value"].startswith("FAIL, 2 critical, 3 high")
+
+
 def test_verified_counts_and_raw_artifact_references(execution) -> None:
     collector, doc, directory, produce = execution
     produce("coverage", {"coverage.json": _coverage()})
@@ -315,9 +361,9 @@ def test_verified_counts_and_raw_artifact_references(execution) -> None:
     assert rows["duplication"]["number"] == 0.8
     assert "2/250" in rows["duplication"]["basis"]
     assert (
-        rows["dependencies"]["value"]
-        == "0 blocking; npm 0 critical / 2 high / 3 moderate / 1 low"
+        rows["dependencies"]["value"] == "PASS, 0 critical, 2 high, 3 moderate, 1 low"
     )
+    assert rows["dependencies"]["band"] == "yellow"
     assert rows["dependencies"]["state"] == "MEASURED"
     assert {source["path"] for source in rows["dependencies"]["sources"]} == {
         "npm-audit-summary.json",
@@ -522,7 +568,8 @@ def test_dependency_summaries_flag_incomplete_or_unbound_raw_audits(
     produce("deps", outputs)
     row = _metrics(collector.collect(doc, directory))["dependencies"]
     assert row["state"] == "PARTIAL"
-    assert row["value"] == "0 blocking; npm 0 critical / 2 high / 3 moderate / 1 low"
+    assert row["value"] == "PASS, 0 critical, 2 high, 3 moderate, 1 low"
+    assert row["band"] == "yellow"
     assert "Raw audit incomplete" in row["basis"]
     tool = "pip" if "pip" in damage else "npm"
     expected = (

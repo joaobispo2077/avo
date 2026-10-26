@@ -696,7 +696,29 @@ def collect(doc: dict, directory: Path) -> dict:
         ]
         findings = dependencies.get("findings")
         if isinstance(findings, list) and all(value is not None for value in values):
-            blocking = len(findings)
+            report = module(
+                "avo_ci_write_quality_pr_report", "write_quality_pr_report.py"
+            )
+            text = report.format_npm_summary(npm)
+            if text and isinstance(findings, list):
+                extras: list[str] = []
+                if npm.get("ok") is False:
+                    extras.extend(
+                        report.format_deps_finding(item)
+                        for item in findings
+                        if isinstance(item, dict) and item.get("package")
+                    )
+                else:
+                    for item in findings:
+                        if not isinstance(item, dict) or item.get("package"):
+                            continue
+                        advisory = str(item.get("advisory") or "").strip()
+                        if not advisory:
+                            continue
+                        tool = str(item.get("tool") or "").strip()
+                        extras.append(f"{tool} {advisory}".strip())
+                if extras:
+                    text = f"{text}; {'; '.join(extras)}"
             incomplete_tools = [
                 f"{tool}: {raw_states.get(tool, 'capture unavailable')}"
                 for tool in ("pip", "npm")
@@ -704,16 +726,18 @@ def collect(doc: dict, directory: Path) -> dict:
             ]
             measured(
                 metrics["dependencies"],
-                f"{blocking} blocking; npm {values[0]} critical / {values[1]} high / {values[2]} moderate / {values[3]} low",
+                text
+                or f"{len(findings)} blocking; npm {values[0]} critical / {values[1]} high / {values[2]} moderate / {values[3]} low",
                 "Captured finding summaries; unwaived Python advisories and npm criticals block."
                 + (
                     f" Raw audit incomplete ({'; '.join(incomplete_tools)})."
                     if incomplete_tools
-                    else " Both raw audits completed; other npm severities are reported."
+                    else " Both raw audits completed; high or moderate stays a yellow pass and low stays green."
                 ),
                 npm_sources + dep_sources + raw_sources,
                 partial=bool(incomplete_tools),
             )
+            metrics["dependencies"]["band"] = report.audit_band(npm)
             diagnostics["dependencies"] = dependencies
     for key in ("architecture",):
         proof = proofs.get(key, {})
