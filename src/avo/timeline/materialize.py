@@ -435,6 +435,46 @@ def _assembly_invariant(
     }
 
 
+def _require_materialized_layer(layer: dict) -> str:
+    from .media_admission import is_code_drawn_asset
+
+    source = layer.get("source") or {}
+    generator = layer.get("generator") or source.get("generator")
+    asset_id = str(
+        source.get("generatedAssetId") or layer.get("generatedAssetId") or ""
+    )
+    code_drawn = is_code_drawn_asset({"generator": generator})
+    if (layer.get("generatedSourceRef") or code_drawn) and not asset_id:
+        raise ProofMaterializationError(
+            "PROOF_GENERATED_ASSET_REQUIRED",
+            f"Logical generated layer {layer.get('layerId', '')} is not materialized",
+            "generate/admit the declared instance and compile its registered generated asset",
+        )
+    return asset_id
+
+
+def _assembly_track_input(layer: dict, carrying: dict) -> dict | None:
+    from .picture_lineage import _track_identity
+
+    asset_id = _require_materialized_layer(layer)
+    layer_id, source, generator, locator, generated = _track_identity(layer)
+    if not locator and not source.get("sha256") and not generator:
+        return None
+    provenance = layer.get("provenance") or {}
+    return {
+        **source,
+        "nodeId": f"track-{layer_id}",
+        "kind": "generated" if generated else "source",
+        "role": str(layer.get("role") or "media"),
+        "mediaClass": "generated"
+        if generated
+        else str(provenance.get("mediaClass") or "source"),
+        "locator": locator,
+        "assetId": asset_id,
+        **carrying,
+    }
+
+
 def _assembly_media_inputs(
     revisions: dict[str, dict[str, Any]],
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
@@ -467,31 +507,9 @@ def _assembly_media_inputs(
         ("audioTracks", {"pictureCarrying": False, "audioCarrying": True}),
     ):
         for layer in (tracks.get(group) or {}).get("layers") or []:
-            source = layer.get("source") or {}
-            generator = layer.get("generator") or source.get("generator")
-            locator = str(source.get("locator") or "")
-            if not locator and not source.get("sha256") and not generator:
-                continue
-            provenance = layer.get("provenance") or {}
-            contributors.append(
-                {
-                    "nodeId": f"track-{layer.get('layerId', '')}",
-                    "kind": "generated" if generator and not locator else "source",
-                    "role": str(layer.get("role") or "media"),
-                    "mediaClass": str(
-                        provenance.get("mediaClass")
-                        or ("generated" if generator and not locator else "source")
-                    ),
-                    "locator": locator,
-                    "assetId": str(
-                        source.get("generatedAssetId")
-                        or layer.get("generatedAssetId")
-                        or ""
-                    ),
-                    **source,
-                    **carrying,
-                }
-            )
+            contributor = _assembly_track_input(layer, carrying)
+            if contributor is not None:
+                contributors.append(contributor)
     return contributors, originals
 
 
@@ -526,6 +544,7 @@ def _preflight_assembly_media(
             ],
             generated_assets=configured.get("generatedAssets") or {},
             known_outputs=known_outputs,
+            code_drawn_verifier=configured.get("codeDrawnVerifier"),
         )
 
 
@@ -717,6 +736,71 @@ def _required_proof_sources(proof_plan: dict[str, Any]) -> set[str]:
     }
 
 
+def _require_generated_proof_binding(
+    workspace: Any, extension: dict, proof_lock: dict, asset_id: str
+) -> None:
+    from avo.motion import canonical_code_drawn_binding
+
+    binding = canonical_code_drawn_binding(workspace, extension["instanceId"])
+    manifest = (
+        Path(workspace.raw_dir) / binding["reference"]["manifestRef"]["path"]
+    ).resolve()
+    if (
+        binding["canonicalInputLock"] != extension["canonicalInputLock"]
+        or manifest != Path(extension["manifestRef"]["path"]).resolve()
+        or binding["reference"]["manifestRef"]["sha256"]
+        != extension["manifestRef"]["sha256"]
+    ):
+        raise ValueError(f"generated logical source is stale: {asset_id}")
+    if (
+        proof_lock.get("input-lock:" + extension["instanceId"])
+        != extension["inputLockHash"]
+    ):
+        raise ValueError(f"generated input lock differs from proof lock: {asset_id}")
+
+
+def _generated_proof_inputs(workspace: Any, proof_lock: dict) -> dict[str, dict]:
+    if not any(key.startswith("generated:") for key in proof_lock):
+        return {}
+    from .generated_assets import GeneratedAssetService
+
+    service = GeneratedAssetService(workspace)
+    inputs = {}
+    for key, expected in proof_lock.items():
+        if not key.startswith("generated:"):
+            continue
+        asset_id = key.removeprefix("generated:")
+        record = service.load(asset_id)
+        if record["recordHash"] != expected:
+            raise ValueError(f"generated receipt differs from proof lock: {asset_id}")
+        if not record["output"].get("locator"):
+            raise ValueError(f"generated output locator is missing: {asset_id}")
+        value = {
+            "path": Path(record["output"]["locator"]),
+            "kind": "generated",
+            "mediaClass": "generated",
+            "generatedAssetRef": {
+                "assetId": asset_id,
+                "recordHash": record["recordHash"],
+                "locator": str(service.path(asset_id)),
+            },
+            "ancestry": deepcopy(record["inputs"]),
+        }
+        extension = (record.get("parameters") or {}).get("codeDrawn")
+        if extension:
+            _require_generated_proof_binding(workspace, extension, proof_lock, asset_id)
+            value["inputLockRef"] = deepcopy(extension["inputLockRef"])
+        inputs[key] = value
+    return inputs
+
+
+def _require_original_only_plan(plan: dict) -> None:
+    if any(
+        key.startswith("generated:") for key in plan.get("canonicalInputLock") or {}
+    ):
+        raise ValueError("generated proof inputs require current canonical Tracks")
+
+
 def canonical_proof_media_inputs(
     workspace: Any, proof_plan: dict[str, Any]
 ) -> dict[str, dict[str, Any]]:
@@ -741,6 +825,7 @@ def canonical_proof_media_inputs(
                 "ancestry": deepcopy(source.get("ancestry") or []),
             }
     if _validated_absent_tracks(workspace, proof_plan):
+        _require_original_only_plan(proof_plan)
         return inputs
     tracks_index = workspace.require_active("tracks")
     tracks = workspace.store("tracks").revision(tracks_index["headRevisionId"])
@@ -763,6 +848,9 @@ def canonical_proof_media_inputs(
                     ),
                     "ancestry": deepcopy(source.get("ancestry") or []),
                 }
+    inputs.update(
+        _generated_proof_inputs(workspace, proof_plan.get("canonicalInputLock") or {})
+    )
     return inputs
 
 
@@ -808,9 +896,22 @@ def _proof_readiness(render_port: Any, plan: dict[str, Any]) -> dict[str, bool]:
     return normalized
 
 
-def default_proof_readiness(plan: dict[str, Any]) -> dict[str, bool]:
-    """Probe the default renderer through the materialization adapter boundary."""
-    return _proof_readiness(create_timeline_render_port(), plan)
+def _configured_proof_port(render_port: Any, workspace: Any, plan: dict) -> Any:
+    port = render_port or create_timeline_render_port()
+    configure = getattr(port, "for_proof_plan", None)
+    return configure(workspace, plan) if configure is not None else port
+
+
+def default_proof_readiness(
+    plan: dict[str, Any], *, workspace: Any = None
+) -> dict[str, bool]:
+    """Probe the selected default renderer through the outer composition boundary."""
+    port = (
+        _configured_proof_port(None, workspace, plan)
+        if workspace is not None
+        else create_timeline_render_port()
+    )
+    return _proof_readiness(port, plan)
 
 
 def _proof_render(
@@ -895,7 +996,7 @@ def render_proof_microproofs(
     from .store import write_immutable_json
 
     compiler, plan = _proof_plan_value(workspace, proof_plan)
-    port = render_port or create_timeline_render_port().for_proof_plan(workspace, plan)
+    port = _configured_proof_port(render_port, workspace, plan)
     readiness = _proof_readiness(port, plan)
     preflight = compiler.require_preflight(
         plan,
@@ -1125,7 +1226,7 @@ def materialize_proof_plan(
             "a proposed cutting preview cannot be promoted to a full proof",
             "apply the reviewed CMap and compile a new canonical full proof plan",
         )
-    port = render_port or create_timeline_render_port()
+    port = _configured_proof_port(render_port, workspace, plan)
     readiness = _proof_readiness(port, plan)
     preflight = compiler.require_preflight(
         plan,
@@ -1182,7 +1283,7 @@ def proof_build_status(
 ) -> dict[str, Any]:
     """Return one non-mutating preflight/microproof build-gate summary."""
     compiler, plan = _proof_plan_value(workspace, proof_plan)
-    port = render_port or create_timeline_render_port()
+    port = _configured_proof_port(render_port, workspace, plan)
     readiness = _proof_readiness(port, plan)
     preflight = compiler.preflight(
         plan,
