@@ -300,14 +300,6 @@
       "reason": "Public API / CLI surface not referenced inside src/avo scan"
     },
     {
-      "path": "src/avo/paths.py",
-      "name": "schemas_dir",
-      "kind": "function",
-      "lineno": 45,
-      "confidence": 60,
-      "reason": "Public API / CLI surface not referenced inside src/avo scan"
-    },
-    {
       "path": "src/avo/project_inventory.py",
       "name": "execute_cleanup",
       "kind": "function",
@@ -432,14 +424,6 @@
       "name": "resolve_timed_event",
       "kind": "function",
       "lineno": 110,
-      "confidence": 60,
-      "reason": "Feature 006 public/dynamic contract covered by focused tests and runtime registration"
-    },
-    {
-      "path": "src/avo/timeline/generated_assets.py",
-      "name": "admit",
-      "kind": "method",
-      "lineno": 90,
       "confidence": 60,
       "reason": "Feature 006 public/dynamic contract covered by focused tests and runtime registration"
     },
@@ -680,14 +664,6 @@
       "name": "validate_stable_id",
       "kind": "function",
       "lineno": 235,
-      "confidence": 60,
-      "reason": "Timeline domain/API surface (dynamic CLI and future stages)"
-    },
-    {
-      "path": "src/avo/timeline/pipeline.py",
-      "name": "color",
-      "kind": "method",
-      "lineno": 737,
       "confidence": 60,
       "reason": "Timeline domain/API surface (dynamic CLI and future stages)"
     },

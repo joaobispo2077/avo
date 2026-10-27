@@ -662,13 +662,6 @@
       "reason": "Feature 006 validation/orchestration branch matrix; recorded for explicit decomposition follow-up"
     },
     {
-      "path": "src/avo/validate_dependencies.py",
-      "name": "run_checks",
-      "complexity": 16,
-      "rank": "C",
-      "reason": "Reporting/inventory/validation aggregation with many optional fields"
-    },
-    {
       "path": "src/avo/adapters/media/still_extract.py",
       "name": "media_metadata",
       "complexity": 15,
