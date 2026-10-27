@@ -1056,6 +1056,30 @@ def _load_or_reset_status(
         previous = status
         status = _new_status(plan, plan_path, paths=paths)
         _carry_revision_watermarks(previous, status)
+        try:
+            previous_plan = shorts_contract.load_document(previous["planPath"], "plan")
+        except (OSError, KeyError, shorts_contract.ContractValidationError):
+            previous_plan = {}
+        shared_inputs = (
+            "batchId",
+            "sourceFingerprint",
+            "source",
+            "providerTokensFingerprint",
+            "output",
+            "batchRoot",
+        )
+        if previous_plan.get("planHash") == previous.get("planHash") and all(
+            previous_plan.get(key) == plan.get(key) for key in shared_inputs
+        ):
+            prior_rows = {row["shortId"]: row for row in previous["items"]}
+            # Item approvals remain bound to their original exact candidates.
+            status["items"] = [
+                dict(prior_rows[row["shortId"]])
+                if prior_rows.get(row["shortId"], {}).get("inputFingerprint")
+                == row["inputFingerprint"]
+                else row
+                for row in status["items"]
+            ]
     return status
 
 
