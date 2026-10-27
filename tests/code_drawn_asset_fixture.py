@@ -1,0 +1,231 @@
+"""Synthetic domain fixtures; no browser, font, brush, or media execution is claimed."""
+
+from __future__ import annotations
+
+import json
+from copy import deepcopy
+from pathlib import Path
+from types import SimpleNamespace
+
+from avo import motion
+from avo.timeline.animation import AnimationService
+from avo.timeline.bmap_service import BMapService
+from avo.timeline.contracts import (
+    document_hash_excluding,
+    file_fingerprint,
+)
+from avo.timeline.tracks import TracksService
+from tests.test_code_drawn_canonical_schema import (
+    canonical_drawing_reference,
+    code_drawn_strategy,
+)
+from tests.test_timeline_bmap_service import approved_workspace, cue
+from tests.test_timeline_tracks_service import canonical_tracks
+
+
+def synthetic_environment() -> dict:
+    return {
+        "platform": "unit-test-os-x64",
+        "dependencies": {"playwright": "1.64.1", "ffmpeg": "unit-test-encoder"},
+        "browserVersion": "unit-test-browser",
+        "browserRevision": "unit-test-revision",
+        "graphics": "synthetic-domain-observation-not-a-render",
+        "driverSha256": "a" * 64,
+        "encoderSha256": "b" * 64,
+        "locale": "en-US",
+        "timezone": "UTC",
+        "colorSpace": "srgb",
+    }
+
+
+def write_manifest(path: Path, value: dict) -> None:
+    path.write_text(
+        json.dumps(motion.seal_composition(value), indent=2), encoding="utf-8"
+    )
+
+
+def canonical_asset(
+    tmp_path: Path, *, forbidden_dependency: bool = False
+) -> SimpleNamespace:
+    """Real canonical stores plus synthetic local bytes and supplied observations."""
+    workspace, _, _ = approved_workspace(tmp_path)
+    reference = canonical_drawing_reference(workspace)
+    composition = workspace.raw_dir / reference["manifestRef"]["path"]
+    manifest = motion.load_composition(composition)
+    font = composition.parent / "assets/unit-font.woff2"
+    brush = composition.parent / "assets/unit-brush.js"
+    license_file = composition.parent / "assets/unit-brush-LICENSE.md"
+    font.write_bytes(
+        (workspace.raw_dir / "edit/proof.mp4").read_bytes()
+        if forbidden_dependency
+        else b"synthetic font bytes, never browser-loaded"
+    )
+    brush.write_bytes(b"synthetic drawing dependency, never executed")
+    license_file.write_bytes(b"synthetic test dependency license")
+    for path, kind in ((font, "font"), (license_file, "data")):
+        fingerprint = file_fingerprint(path)
+        asset = {
+            "id": path.stem,
+            "kind": kind,
+            "path": path.relative_to(composition.parent).as_posix(),
+            "sha256": fingerprint["sha256"],
+            "sizeBytes": fingerprint["sizeBytes"],
+            "rightsRef": "ANIMATION-SOURCE-LOG.md",
+        }
+        if kind == "font":
+            asset.update(family="Unit Test Font", style="normal", weight=400)
+        manifest["assets"].append(asset)
+    fingerprint = file_fingerprint(brush)
+    manifest["dependencies"].append(
+        {
+            "path": brush.relative_to(composition.parent).as_posix(),
+            "sha256": fingerprint["sha256"],
+            "sizeBytes": fingerprint["sizeBytes"],
+            "name": "unit-brush",
+            "version": "unit-1",
+            "build": "standalone",
+            "licenseRef": license_file.relative_to(composition.parent).as_posix(),
+        }
+    )
+    write_manifest(composition, manifest)
+    manifest = motion.load_composition(composition)
+    reference["manifestRef"]["sha256"] = file_fingerprint(composition)["sha256"]
+    beat = cue()
+    beat["kind"] = "animation"
+    BMapService(workspace).author(
+        {"cues": [beat]}, actor="unit-test", reason="declared cue"
+    )
+    tracks = canonical_tracks(workspace, workspace.raw_dir / "raw.bin")
+    region = deepcopy(tracks["videoTracks"]["layers"][0]["regions"][0])
+    tracks["videoTracks"]["layers"].append(
+        {
+            "layerId": "drawing-overlay",
+            "order": 1,
+            "role": "overlay",
+            "generatedSourceRef": deepcopy(reference),
+            "regions": [region],
+            "zOrder": 10,
+            "fit": "contain",
+            "safeZones": ["face", "captions"],
+            "faceAvoidance": True,
+        }
+    )
+    TracksService(workspace).author(
+        tracks, actor="unit-test", reason="logical drawing binding"
+    )
+    strategy = code_drawn_strategy(reference)
+    AnimationService(workspace).author(
+        strategy, actor="unit-test", reason="source strategy"
+    )
+    environment = synthetic_environment()
+    lock = motion.freeze_code_drawn_lock(
+        composition,
+        workspace=workspace,
+        instance_id=reference["instanceId"],
+        environment=environment,
+    )
+    lock_path = composition.parent / "input-lock.json"
+    lock_path.write_text(json.dumps(lock), encoding="utf-8")
+    output = composition.parent / "synthetic-generated.mkv"
+    output.write_bytes(b"synthetic generated bytes; no physical encode is claimed")
+    contract = manifest["renderContract"]
+    verification = {
+        "width": contract["width"],
+        "height": contract["height"],
+        "frameRate": deepcopy(contract["frameRate"]),
+        "frameCount": contract["frameCount"],
+        "silent": True,
+        "codec": "ffv1",
+        "pixelFormat": "bgra",
+        "alphaMode": "straight",
+        "rgbaRoundTrip": "exact",
+        "colorRange": "full",
+        "captureColorSpace": "srgb",
+        "compositeColorSpace": "sdr-bt709",
+        "controlledCompositeChecks": [],
+    }
+    extension = {
+        "instanceId": lock["instanceId"],
+        "drawingRoute": manifest["drawingRoute"],
+        "manifestRef": deepcopy(lock["manifestRef"]),
+        "sourceRevision": manifest["sourceRevision"],
+        "inputLockRef": {
+            "path": str(lock_path),
+            "sha256": file_fingerprint(lock_path)["sha256"],
+        },
+        "inputLockHash": lock["inputLockHash"],
+        "renderContractHash": lock["renderContractHash"],
+        "inputsHash": lock["inputsHash"],
+        "canonicalInputLock": deepcopy(lock["canonicalInputLock"]),
+        "captureEvidence": {
+            "frames": [round(i * (contract["frameCount"] - 1) / 9) for i in range(10)],
+            "rgbaSha256": ["c" * 64] * 10,
+            "passes": ["repeat", "reverse", "fresh-session"],
+            "environment": deepcopy(environment),
+        },
+        "outputVerification": verification,
+    }
+    record = {
+        "schemaVersion": "1.0.0",
+        "assetId": "unit-code-drawn-asset",
+        "role": "overlay",
+        "generator": deepcopy(lock["generator"]),
+        "parameters": {"codeDrawn": extension},
+        "inputs": [
+            *deepcopy(lock["inputs"]),
+            {
+                "artifactId": "input-lock:" + lock["instanceId"],
+                "fingerprint": file_fingerprint(lock_path),
+                "ancestryRole": "dependency",
+            },
+        ],
+        "sourceFree": True,
+        "environment": {
+            key: deepcopy(environment[key]) for key in ("platform", "dependencies")
+        },
+        "output": {
+            **file_fingerprint(output),
+            "mediaSignature": deepcopy(verification),
+        },
+        "reproducibility": "verified",
+        "approvalReference": None,
+    }
+    record["recordHash"] = document_hash_excluding(record, "recordHash")
+    return SimpleNamespace(
+        workspace=workspace,
+        reference=reference,
+        composition=composition,
+        manifest=manifest,
+        source=composition.parent / manifest["entry"],
+        font=font,
+        brush=brush,
+        lock=lock,
+        lock_path=lock_path,
+        output=output,
+        record=record,
+        environment=environment,
+        strategy=strategy,
+    )
+
+
+def reseal_record(record: dict) -> dict:
+    value = deepcopy(record)
+    value["recordHash"] = document_hash_excluding(value, "recordHash")
+    return value
+
+
+def forge_current_looking_binding(asset: SimpleNamespace) -> dict:
+    """Reseal every affected nested identity; current workspace remains authority."""
+    lock = deepcopy(asset.lock)
+    lock["canonicalInputLock"]["tracks"] = "0" * 64
+    lock = motion.seal_input_lock(lock)
+    asset.lock_path.write_text(json.dumps(lock), encoding="utf-8")
+    record = deepcopy(asset.record)
+    extension = record["parameters"]["codeDrawn"]
+    extension["canonicalInputLock"] = deepcopy(lock["canonicalInputLock"])
+    extension["inputLockHash"] = lock["inputLockHash"]
+    extension["inputLockRef"]["sha256"] = file_fingerprint(asset.lock_path)["sha256"]
+    for item in record["inputs"]:
+        if item["artifactId"] == "input-lock:" + lock["instanceId"]:
+            item["fingerprint"] = file_fingerprint(asset.lock_path)
+    return reseal_record(record)

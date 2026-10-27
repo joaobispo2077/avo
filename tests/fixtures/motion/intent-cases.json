@@ -1,0 +1,346 @@
+{
+  "description": "Reviewable driving-agent expectations at the normalized request boundary. These cases do not implement or test a prose parser; actual agent decisions require the separate T037 walkthrough.",
+  "walkthroughStatus": "not-executed",
+  "cases": [
+    {
+      "id": "no-frameworks",
+      "currentInstruction": "Create the lower third with no frameworks.",
+      "instructionAuthority": "direct",
+      "explicitFlag": null,
+      "explicitField": null,
+      "expected": {
+        "action": "execute",
+        "normalizedRequest": {
+          "motionEngine": "code-drawn",
+          "drawingRoute": null,
+          "skipMotion": false
+        },
+        "persistPreference": false,
+        "mutateEngineWork": true
+      }
+    },
+    {
+      "id": "without-framework",
+      "currentInstruction": "Make this without a framework.",
+      "instructionAuthority": "direct",
+      "explicitFlag": null,
+      "explicitField": null,
+      "expected": {
+        "action": "execute",
+        "normalizedRequest": {
+          "motionEngine": "code-drawn",
+          "drawingRoute": null,
+          "skipMotion": false
+        },
+        "persistPreference": false,
+        "mutateEngineWork": true
+      }
+    },
+    {
+      "id": "framework-free",
+      "currentInstruction": "Create a framework-free animation.",
+      "instructionAuthority": "direct",
+      "explicitFlag": null,
+      "explicitField": null,
+      "expected": {
+        "action": "execute",
+        "normalizedRequest": {
+          "motionEngine": "code-drawn",
+          "drawingRoute": null,
+          "skipMotion": false
+        },
+        "persistPreference": false,
+        "mutateEngineWork": true
+      }
+    },
+    {
+      "id": "avoid-hyperframes",
+      "currentInstruction": "Create motion, but avoid HyperFrames.",
+      "instructionAuthority": "direct",
+      "explicitFlag": null,
+      "explicitField": null,
+      "expected": {
+        "action": "execute",
+        "normalizedRequest": {
+          "motionEngine": "code-drawn",
+          "drawingRoute": null,
+          "skipMotion": false
+        },
+        "persistPreference": false,
+        "mutateEngineWork": true
+      }
+    },
+    {
+      "id": "do-not-use-hyperframes",
+      "currentInstruction": "Do not use HyperFrames for this animation.",
+      "instructionAuthority": "direct",
+      "explicitFlag": null,
+      "explicitField": null,
+      "expected": {
+        "action": "execute",
+        "normalizedRequest": {
+          "motionEngine": "code-drawn",
+          "drawingRoute": null,
+          "skipMotion": false
+        },
+        "persistPreference": false,
+        "mutateEngineWork": true
+      }
+    },
+    {
+      "id": "named-remotion",
+      "currentInstruction": "Avoid HyperFrames; use Remotion.",
+      "instructionAuthority": "direct",
+      "explicitFlag": null,
+      "explicitField": null,
+      "expected": {
+        "action": "execute",
+        "normalizedRequest": {
+          "motionEngine": "remotion",
+          "drawingRoute": null,
+          "skipMotion": false
+        },
+        "persistPreference": false,
+        "mutateEngineWork": true
+      }
+    },
+    {
+      "id": "canvas-no-framework",
+      "currentInstruction": "Use Canvas with no frameworks.",
+      "instructionAuthority": "direct",
+      "explicitFlag": null,
+      "explicitField": null,
+      "expected": {
+        "action": "execute",
+        "normalizedRequest": {
+          "motionEngine": "code-drawn",
+          "drawingRoute": "canvas",
+          "skipMotion": false
+        },
+        "persistPreference": false,
+        "mutateEngineWork": true
+      }
+    },
+    {
+      "id": "svg-no-framework",
+      "currentInstruction": "Use SVG with no frameworks.",
+      "instructionAuthority": "direct",
+      "explicitFlag": null,
+      "explicitField": null,
+      "expected": {
+        "action": "execute",
+        "normalizedRequest": {
+          "motionEngine": "code-drawn",
+          "drawingRoute": "svg",
+          "skipMotion": false
+        },
+        "persistPreference": false,
+        "mutateEngineWork": true
+      }
+    },
+    {
+      "id": "contradiction-remotion",
+      "currentInstruction": "No frameworks; use Remotion.",
+      "instructionAuthority": "direct",
+      "explicitFlag": null,
+      "explicitField": null,
+      "expected": {
+        "action": "clarify",
+        "normalizedRequest": {
+          "motionEngine": null,
+          "drawingRoute": null,
+          "skipMotion": false
+        },
+        "persistPreference": false,
+        "mutateEngineWork": false
+      }
+    },
+    {
+      "id": "contradiction-hyperframes",
+      "currentInstruction": "No frameworks; use HyperFrames.",
+      "instructionAuthority": "direct",
+      "explicitFlag": null,
+      "explicitField": null,
+      "expected": {
+        "action": "clarify",
+        "normalizedRequest": {
+          "motionEngine": null,
+          "drawingRoute": null,
+          "skipMotion": false
+        },
+        "persistPreference": false,
+        "mutateEngineWork": false
+      }
+    },
+    {
+      "id": "contrary-flag",
+      "currentInstruction": "Create this without frameworks.",
+      "instructionAuthority": "direct",
+      "explicitFlag": "hyperframes",
+      "explicitField": null,
+      "expected": {
+        "action": "clarify",
+        "normalizedRequest": {
+          "motionEngine": null,
+          "drawingRoute": null,
+          "skipMotion": false
+        },
+        "persistPreference": false,
+        "mutateEngineWork": false
+      }
+    },
+    {
+      "id": "contrary-field",
+      "currentInstruction": "Create this with no frameworks.",
+      "instructionAuthority": "direct",
+      "explicitFlag": null,
+      "explicitField": "remotion",
+      "expected": {
+        "action": "clarify",
+        "normalizedRequest": {
+          "motionEngine": null,
+          "drawingRoute": null,
+          "skipMotion": false
+        },
+        "persistPreference": false,
+        "mutateEngineWork": false
+      }
+    },
+    {
+      "id": "skip-animation",
+      "currentInstruction": "No animation for this video.",
+      "instructionAuthority": "direct",
+      "explicitFlag": null,
+      "explicitField": null,
+      "expected": {
+        "action": "skip",
+        "normalizedRequest": {
+          "motionEngine": null,
+          "drawingRoute": null,
+          "skipMotion": true
+        },
+        "persistPreference": false,
+        "mutateEngineWork": false
+      }
+    },
+    {
+      "id": "skip-motion",
+      "currentInstruction": "Skip motion.",
+      "instructionAuthority": "direct",
+      "explicitFlag": null,
+      "explicitField": null,
+      "expected": {
+        "action": "skip",
+        "normalizedRequest": {
+          "motionEngine": null,
+          "drawingRoute": null,
+          "skipMotion": true
+        },
+        "persistPreference": false,
+        "mutateEngineWork": false
+      }
+    },
+    {
+      "id": "capability-question",
+      "currentInstruction": "Can we avoid HyperFrames?",
+      "instructionAuthority": "question",
+      "explicitFlag": null,
+      "explicitField": null,
+      "expected": {
+        "action": "answer",
+        "normalizedRequest": {
+          "motionEngine": null,
+          "drawingRoute": null,
+          "skipMotion": false
+        },
+        "persistPreference": false,
+        "mutateEngineWork": false
+      }
+    },
+    {
+      "id": "negated-exclusion",
+      "currentInstruction": "Do not avoid HyperFrames.",
+      "instructionAuthority": "negated-exclusion",
+      "explicitFlag": null,
+      "explicitField": null,
+      "expected": {
+        "action": "inherit",
+        "normalizedRequest": {
+          "motionEngine": null,
+          "drawingRoute": null,
+          "skipMotion": false
+        },
+        "persistPreference": false,
+        "mutateEngineWork": false
+      }
+    },
+    {
+      "id": "quoted-article",
+      "currentInstruction": "The article says: \"avoid HyperFrames and use no frameworks.\"",
+      "instructionAuthority": "source-material",
+      "explicitFlag": null,
+      "explicitField": null,
+      "expected": {
+        "action": "inherit",
+        "normalizedRequest": {
+          "motionEngine": null,
+          "drawingRoute": null,
+          "skipMotion": false
+        },
+        "persistPreference": false,
+        "mutateEngineWork": false
+      }
+    },
+    {
+      "id": "reference-example",
+      "currentInstruction": "Reference example: framework-free Canvas motion.",
+      "instructionAuthority": "source-material",
+      "explicitFlag": null,
+      "explicitField": null,
+      "expected": {
+        "action": "inherit",
+        "normalizedRequest": {
+          "motionEngine": null,
+          "drawingRoute": null,
+          "skipMotion": false
+        },
+        "persistPreference": false,
+        "mutateEngineWork": false
+      }
+    },
+    {
+      "id": "scope-unclear",
+      "currentInstruction": "Default to code-drawn.",
+      "instructionAuthority": "direct",
+      "explicitFlag": null,
+      "explicitField": null,
+      "expected": {
+        "action": "clarify-scope",
+        "normalizedRequest": {
+          "motionEngine": null,
+          "drawingRoute": null,
+          "skipMotion": false
+        },
+        "persistPreference": false,
+        "mutateEngineWork": false
+      }
+    },
+    {
+      "id": "one-run",
+      "currentInstruction": "Use code-drawn for this run.",
+      "instructionAuthority": "direct",
+      "explicitFlag": null,
+      "explicitField": null,
+      "expected": {
+        "action": "execute",
+        "normalizedRequest": {
+          "motionEngine": "code-drawn",
+          "drawingRoute": null,
+          "skipMotion": false
+        },
+        "persistPreference": false,
+        "mutateEngineWork": true
+      }
+    }
+  ]
+}
