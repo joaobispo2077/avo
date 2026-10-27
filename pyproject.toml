@@ -14,6 +14,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+code-drawn = [
+    "playwright==1.64.1",
+]
 dev = [
     "pytest>=8.0",
     "pytest-cov>=5.0",
@@ -37,6 +40,13 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 "avo.templates.shorts_hyperframes" = ["*.html", "*.css", "*.js", "*.json"]
+"avo.templates.code_drawn" = [
+    "**/*.html",
+    "**/*.js",
+    "**/*.css",
+    "**/*.json",
+    "**/*.md",
+]
 "avo.resources.directions" = ["*.json"]
 
 [tool.setuptools.data-files]
