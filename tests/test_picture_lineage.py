@@ -183,3 +183,41 @@ def test_lineage_records_declared_and_compiled_transform_edges(tmp_path):
         "reframe": "approval://reframe-001",
         "crop": "approval://overlay-crop-001",
     }
+
+
+def test_materialized_code_drawn_layer_retains_generated_kind_and_exact_receipt_lock(
+    tmp_path,
+):
+    a, b, drawing, lock = (
+        tmp_path / name for name in ("a.mov", "b.mov", "drawing.mkv", "input-lock.json")
+    )
+    for path, data in (
+        (a, b"a"),
+        (b, b"b"),
+        (drawing, b"synthetic drawing"),
+        (lock, b"synthetic lock"),
+    ):
+        path.write_bytes(data)
+    tracks = _tracks(drawing, tmp_path / "ignored-proof.mp4")
+    layer = tracks["snapshot"]["videoTracks"]["layers"][1]
+    binding = {
+        "adapterId": "code-drawn",
+        "assetId": "drawing-one",
+        "recordHash": "a" * 64,
+        "inputLockRef": {"path": str(lock), "sha256": file_fingerprint(lock)["sha256"]},
+    }
+    layer["source"]["generatedAssetId"] = "drawing-one"
+    layer["generator"] = binding
+    graph = build_picture_lineage(
+        cmap_revision=_revision(a, b),
+        tracks_revision=tracks,
+        canonical_input_lock={"cmapRevisionHash": "c" * 64},
+        projection_hash="p" * 64,
+        output={"locator": str(tmp_path / "out.mp4"), "sha256": "o" * 64},
+        render_contract={"transformations": []},
+    )
+    node = next(node for node in graph["nodes"] if node["nodeId"] == "track-logo")
+    assert node["kind"] == "generated"
+    assert node["mediaClass"] == "generated"
+    assert node["locator"] == str(drawing)
+    assert node["generator"] == binding
