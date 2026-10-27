@@ -140,6 +140,10 @@ jobs:
     runs-on: ubuntu-24.04
     needs: prerequisites-gate
     timeout-minutes: 20
+    # Real capture checks must fail, rather than skip, when this runtime is absent.
+    env:
+      AVO_REQUIRE_CODE_DRAWN_RUNTIME: '1'
+      PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/avo-code-drawn-browsers
     outputs:
       evidence_url: ${{ steps.integration-evidence.outputs.artifact-url }}
     steps:
@@ -157,7 +161,7 @@ jobs:
           enable-cache: true
 
       - name: Sync Python deps (frozen)
-        run: uv sync --frozen --extra dev --extra mcp
+        run: uv sync --frozen --extra dev --extra mcp --extra code-drawn
 
       - name: Expose venv on PATH
         run: echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
@@ -165,6 +169,28 @@ jobs:
       - name: Install ffmpeg
         timeout-minutes: 8
         run: bash scripts/ci/ensure-ffmpeg.sh
+
+      - name: Install managed Chromium for code-drawn integration
+        timeout-minutes: 8
+        run: python -m playwright install --with-deps --no-shell chromium
+
+      - name: Provision pinned standalone brush dependency
+        timeout-minutes: 8
+        run: python -m avo.cli animation runtime-install --engine code-drawn --brush --json
+
+      - name: Setup Node for installed guide verification
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Install pinned skills test tool
+        run: |
+          npm install --prefix "$RUNNER_TEMP/avo-skills-cli" skills@1.7.4 --ignore-scripts --no-audit --no-fund
+          echo "AVO_SKILLS_CLI=$RUNNER_TEMP/avo-skills-cli/node_modules/skills/bin/cli.mjs" >> "$GITHUB_ENV"
+          echo "AVO_REQUIRE_SKILLS_CLI=1" >> "$GITHUB_ENV"
+
+      - name: Verify installed guides for all seven agent profiles
+        run: python -m pytest -q tests/test_code_drawn_distribution.py tests/test_install_scripts.py
 
       - name: Run integration tests
         env:
