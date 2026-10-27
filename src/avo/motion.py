@@ -640,3 +640,760 @@ def reset_motion_preference(
     )
 
 
+def _drawing_frame_rate(value: str) -> dict[str, int]:
+    if not isinstance(value, str) or not re.fullmatch(
+        r"[1-9][0-9]*/[1-9][0-9]*", value
+    ):
+        raise MotionError("CODE_DRAWN_INPUT_INVALID", "Frame rate must be num/den.")
+    numerator, denominator = map(int, value.split("/"))
+    divisor = math.gcd(numerator, denominator)
+    return {"num": numerator // divisor, "den": denominator // divisor}
+
+
+def _drawing_contract(
+    width: int,
+    height: int,
+    fps: str,
+    frames: int,
+    background: str,
+    background_color: str | None,
+) -> dict[str, Any]:
+    if background not in {"opaque", "transparent"}:
+        raise MotionError("CODE_DRAWN_INPUT_INVALID", "Choose opaque or transparent.")
+    if background == "opaque":
+        if not isinstance(background_color, str) or not re.fullmatch(
+            r"#[0-9a-fA-F]{6}", background_color
+        ):
+            raise MotionError(
+                "CODE_DRAWN_INPUT_INVALID",
+                "Opaque drawing needs an explicit #rrggbb color.",
+            )
+        fill = {"mode": "opaque", "color": background_color}
+    else:
+        if background_color is not None:
+            raise MotionError(
+                "CODE_DRAWN_INPUT_INVALID",
+                "Transparent drawing cannot include an opaque color.",
+            )
+        fill = {"mode": "transparent"}
+    contract = {
+        "width": width,
+        "height": height,
+        "frameRate": _drawing_frame_rate(fps),
+        "frameCount": frames,
+        "background": fill,
+        "alphaMode": "straight" if background == "transparent" else "opaque",
+        "captureColorSpace": "srgb",
+        "compositeColorSpace": "sdr-bt709",
+        "quality": {"spatialSamples": 1, "temporalSamples": 1},
+    }
+    _contract(
+        contract,
+        "avo.code-drawn.schema.json#/properties/renderContract",
+        "CODE_DRAWN_INPUT_INVALID",
+    )
+    _validate_render_contract(contract)
+    return contract
+
+
+def _drawing_template_tree(resource: Any, prefix: str = "") -> dict[str, bytes]:
+    if not resource.is_dir():
+        raise MotionError(
+            "CODE_DRAWN_INPUT_INVALID", f"Drawing template is missing: {resource}"
+        )
+    result = {}
+    for child in sorted(resource.iterdir(), key=lambda item: item.name):
+        name = prefix + child.name
+        if child.is_dir():
+            result.update(_drawing_template_tree(child, name + "/"))
+        else:
+            result[name] = child.read_bytes()
+    return result
+
+
+def _drawing_substitutions(contract: dict[str, Any]) -> dict[str, str]:
+    return {
+        "__WIDTH__": str(contract["width"]),
+        "__HEIGHT__": str(contract["height"]),
+        "__BACKGROUND__": json.dumps(contract["background"].get("color")),
+        "__SEED__": "7",
+        "__FRAMES__": str(contract["frameCount"]),
+        "__FPS_NUM__": str(contract["frameRate"]["num"]),
+        "__FPS_DEN__": str(contract["frameRate"]["den"]),
+    }
+
+
+def _drawing_template_bytes(data: bytes, replacements: dict[str, str]) -> bytes:
+    text = data.decode("utf-8")
+    for token, value in replacements.items():
+        text = text.replace(token, value)
+    return text.encode("utf-8")
+
+
+def _brush_scaffold_inputs(
+    brush_resources: tuple[Path, Path] | None,
+) -> dict[str, bytes]:
+    from avo.templates.code_drawn import (
+        BRUSH_LICENSE_SHA256,
+        BRUSH_SHA256,
+        brush_cache_paths,
+    )
+
+    paths = brush_resources if brush_resources is not None else brush_cache_paths()
+    result = {}
+    for path, name, digest in zip(
+        paths,
+        ("assets/brush.js", "assets/brush-LICENSE.md"),
+        (BRUSH_SHA256, BRUSH_LICENSE_SHA256),
+        strict=True,
+    ):
+        try:
+            data = Path(path).read_bytes()
+        except OSError as error:
+            raise MotionError(
+                "CODE_DRAWN_ASSET_NOT_READY",
+                f"Missing brush input: {path}",
+                remediation="Run animation runtime-install --engine code-drawn --brush.",
+            ) from error
+        if hashlib.sha256(data).hexdigest() != digest:
+            raise MotionError(
+                "CODE_DRAWN_ASSET_NOT_READY", f"Brush input changed: {path}"
+            )
+        result[name] = data
+    return result
+
+
+def _drawing_file(path: str, data: bytes, **fields: Any) -> dict[str, Any]:
+    return {
+        "path": path,
+        "sha256": hashlib.sha256(data).hexdigest(),
+        "sizeBytes": len(data),
+        **fields,
+    }
+
+
+def _drawing_manifest(
+    route: str,
+    contract: dict[str, Any],
+    sources: dict[str, bytes],
+    brush: dict[str, bytes],
+) -> dict[str, Any]:
+    from avo.templates.code_drawn import BRUSH_VERSION
+
+    dependencies = []
+    assets = []
+    if brush:
+        license_path = "assets/brush-LICENSE.md"
+        dependencies.append(
+            _drawing_file(
+                "assets/brush.js",
+                brush["assets/brush.js"],
+                name="p5.brush",
+                version=BRUSH_VERSION,
+                build="standalone",
+                licenseRef=license_path,
+            )
+        )
+        assets.append(
+            _drawing_file(
+                license_path,
+                brush[license_path],
+                id="brush-license",
+                kind="data",
+                rightsRef=license_path,
+            )
+        )
+    return seal_composition(
+        {
+            "schemaVersion": "1.0.0",
+            "compositionId": f"code-drawn-{route}",
+            "engine": "code-drawn",
+            "drawingRoute": route,
+            "entry": "index.html",
+            "sourceRevision": "source-r0001",
+            "files": [
+                _drawing_file(path, data, role="source")
+                for path, data in sorted(sources.items())
+            ],
+            "assets": assets,
+            "dependencies": dependencies,
+            "seed": 7,
+            "renderContract": contract,
+        }
+    )
+
+
+def _write_drawing_scaffold(
+    destination: Path,
+    files: dict[str, bytes],
+    manifest: dict[str, Any],
+) -> None:
+    try:
+        destination.mkdir(parents=True, exist_ok=False)
+        (destination / "assets").mkdir()
+        for relative, data in files.items():
+            target = local_composition_path(destination, relative)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            with target.open("xb") as stream:
+                stream.write(data)
+        with (destination / "composition.json").open(
+            "x", encoding="utf-8", newline="\n"
+        ) as stream:
+            json.dump(manifest, stream, indent=2, ensure_ascii=False, sort_keys=True)
+            stream.write("\n")
+    except OSError as error:
+        raise MotionError(
+            "CODE_DRAWN_INPUT_INVALID",
+            f"Could not create scaffold {destination}: {error}. Existing or partial files were preserved.",
+        ) from error
+
+
+def scaffold_code_drawn(
+    destination: Path,
+    *,
+    route: str,
+    width: int,
+    height: int,
+    fps: str,
+    frames: int,
+    background: str = "opaque",
+    background_color: str | None = None,
+    brush_resources: tuple[Path, Path] | None = None,
+) -> dict[str, Any]:
+    """Copy generic package resources into a new editable drawing workspace."""
+    destination = Path(destination).expanduser().resolve()
+    if destination.exists():
+        raise MotionError(
+            "CODE_DRAWN_INPUT_INVALID",
+            f"Scaffold destination already exists: {destination}",
+        )
+    if route not in {"canvas", "svg", "brush"}:
+        raise MotionError("CODE_DRAWN_INPUT_INVALID", "Choose canvas, svg, or brush.")
+    contract = _drawing_contract(
+        width, height, fps, frames, background, background_color
+    )
+    replacements = _drawing_substitutions(contract)
+    package = resources.files("avo.templates.code_drawn")
+    sources = {
+        path: _drawing_template_bytes(data, replacements)
+        for path, data in _drawing_template_tree(package.joinpath(route)).items()
+    }
+    documents = {
+        path: _drawing_template_bytes(data, replacements)
+        for path, data in _drawing_template_tree(
+            package.joinpath("project-documents")
+        ).items()
+    }
+    brush = _brush_scaffold_inputs(brush_resources) if route == "brush" else {}
+    manifest = _drawing_manifest(route, contract, sources, brush)
+    validate_composition(manifest, root=destination, verify_files=False)
+    _write_drawing_scaffold(destination, {**sources, **documents, **brush}, manifest)
+    return {
+        "operation": "code-drawn-scaffold",
+        "status": "ok",
+        "selection": resolve_motion_selection(invocation={"engine": "code-drawn"}),
+        "savedPreferences": {},
+        "runSelection": None,
+        "recordedAnimation": None,
+        "readiness": {
+            "ready": True,
+            "state": "available",
+            "checks": [{"name": "local-starter", "ready": True}],
+            "blockers": [],
+            "nextActions": [],
+        },
+        "artifacts": [
+            {
+                "path": str(destination / "composition.json"),
+                "sha256": file_fingerprint(destination / "composition.json")["sha256"],
+            }
+        ],
+        "checks": [],
+        "errors": [],
+    }
+
+
+def _observed_drawing_environment(environment: dict[str, Any] | None) -> dict[str, Any]:
+    required = {
+        "platform",
+        "dependencies",
+        "browserVersion",
+        "browserRevision",
+        "graphics",
+        "driverSha256",
+        "encoderSha256",
+        "locale",
+        "timezone",
+        "colorSpace",
+    }
+    if not isinstance(environment, dict) or required - environment.keys():
+        raise MotionError(
+            "CODE_DRAWN_RUNTIME_MISSING",
+            "A complete observed drawing runtime environment is required.",
+            remediation="Run a selected-engine check to observe the managed browser and encoder.",
+        )
+    _contract(
+        environment,
+        "avo.code-drawn.schema.json#/$defs/inputLock/properties/environment",
+        "CODE_DRAWN_INPUT_INVALID",
+    )
+    return deepcopy(environment)
+
+
+def _drawing_generator_identity() -> dict[str, str]:
+    executable = file_fingerprint(Path(sys.executable).resolve())["sha256"]
+    if getattr(sys, "frozen", False):
+        # Frozen program modules are embedded in the actual engine executable.
+        source_hash = executable
+    else:
+        package = Path(__file__).resolve().parent
+        files = (
+            "motion.py",
+            "motion_runtime.py",
+            "adapters/motion/code_drawn.py",
+            "timeline/contracts.py",
+            "templates/code_drawn/__init__.py",
+        )
+        source_hash = content_hash(
+            {name: file_fingerprint(package / name)["sha256"] for name in files}
+        )
+    return {
+        "adapterId": "code-drawn",
+        "version": "1.0.0",
+        "executableSha256": executable,
+        "sourceSha256": source_hash,
+    }
+
+
+def _drawing_input(
+    target: Path, artifact_id: str, role: str, declared: dict[str, Any] | None = None
+) -> dict[str, Any]:
+    try:
+        fingerprint = file_fingerprint(target)
+    except OSError as error:
+        raise MotionError(
+            "CODE_DRAWN_ASSET_NOT_READY", f"Cannot read drawing input {target}: {error}"
+        ) from error
+    if declared and any(
+        fingerprint[key] != declared[key] for key in ("sha256", "sizeBytes")
+    ):
+        raise MotionError(
+            "CODE_DRAWN_LOCK_STALE", f"Drawing input changed while freezing: {target}"
+        )
+    return {
+        "artifactId": artifact_id,
+        "fingerprint": fingerprint,
+        "ancestryRole": role,
+    }
+
+
+def _drawing_asset_ancestry(item: dict[str, Any]) -> tuple[str, str]:
+    reference = item.get("sourceRef")
+    if reference is None:
+        return "drawing-assets:" + item["path"], "dependency"
+    _contract(
+        reference,
+        "avo.code-drawn.schema.json#/properties/assets/items/properties/sourceRef",
+        "CODE_DRAWN_INPUT_INVALID",
+    )
+    if "sourceId" in reference:
+        return reference["sourceId"], "source"
+    return reference["assetId"], "generated"
+
+
+def _frozen_drawing_inputs(
+    composition: Path, manifest: dict[str, Any]
+) -> list[dict[str, Any]]:
+    inputs = [_drawing_input(composition, "drawing-manifest", "dependency")]
+    for section in ("files", "assets", "dependencies"):
+        for item in sorted(manifest[section], key=lambda entry: entry["path"]):
+            artifact_id, role = (
+                _drawing_asset_ancestry(item)
+                if section == "assets"
+                else (f"drawing-{section}:{item['path']}", "dependency")
+            )
+            target = local_composition_path(composition.parent, item["path"])
+            inputs.append(_drawing_input(target, artifact_id, role, item))
+    return inputs
+
+
+def _drawing_reference_identity(
+    reference: dict, include_engine: bool
+) -> tuple[str, dict]:
+    expected = {"instanceId", "manifestRef"} | ({"engine"} if include_engine else set())
+    if not isinstance(reference, dict) or set(reference) != expected:
+        raise MotionError(
+            "CODE_DRAWN_INPUT_INVALID", "Incomplete code-drawn manifest reference."
+        )
+    instance = reference["instanceId"]
+    if not isinstance(instance, str) or not re.fullmatch(
+        r"[a-z][a-z0-9-]{2,63}", instance
+    ):
+        raise MotionError("CODE_DRAWN_INPUT_INVALID", "Invalid code-drawn instanceId.")
+    if include_engine and reference["engine"] != "code-drawn":
+        raise MotionError("CODE_DRAWN_INPUT_INVALID", "Incompatible generated engine.")
+    ref = reference["manifestRef"]
+    if not isinstance(ref, dict) or set(ref) != {"path", "sha256"}:
+        raise MotionError(
+            "CODE_DRAWN_INPUT_INVALID", "Invalid manifest fingerprint reference."
+        )
+    return instance, ref
+
+
+def validate_code_drawn_reference(
+    reference: dict[str, Any], *, root: Path, include_engine: bool = False
+) -> dict[str, Any]:
+    """Validate a logical local source without granting render or approval authority."""
+    instance, ref = _drawing_reference_identity(reference, include_engine)
+    target = local_composition_path(root, str(ref["path"]))
+    required = Path(root).resolve() / "edit" / "derived" / "components" / instance
+    if (
+        not target.is_relative_to(required.resolve())
+        or target.name != "composition.json"
+    ):
+        raise MotionError(
+            "CODE_DRAWN_INPUT_INVALID",
+            f"Manifest path does not belong to instance {instance}: {target}",
+        )
+    if not target.is_file() or file_fingerprint(target)["sha256"] != ref["sha256"]:
+        raise MotionError(
+            "CODE_DRAWN_LOCK_STALE",
+            f"Manifest fingerprint changed or missing: {target}",
+        )
+    return load_composition(target)
+
+
+def _require_drawing_basis(snapshots: dict, lock: dict) -> None:
+    if (snapshots["bmap"].get("basis") or {}).get("sha256") != lock["cmap"]:
+        raise MotionError(
+            "CODE_DRAWN_LOCK_STALE", "BMap requires the current approved CMap."
+        )
+    if (snapshots["tracks"].get("basis") or {}).get("sha256") != lock["bmap"]:
+        raise MotionError("CODE_DRAWN_LOCK_STALE", "Tracks requires the current BMap.")
+    dependencies = snapshots["animation"].get("dependencies") or {}
+    if any(dependencies.get(name) != lock[name] for name in ("cmap", "bmap", "tracks")):
+        raise MotionError(
+            "CODE_DRAWN_LOCK_STALE",
+            "Animation requires current canonical strategy/Tracks dependencies.",
+        )
+
+
+def _require_current_drawing_cut(workspace: Any, snapshots: dict) -> None:
+    approval = workspace.store("cmap").effective_approval()
+    cut_output = (snapshots["bmap"].get("basis") or {}).get("outputSha256")
+    if not approval or approval["candidateSha256"] != cut_output:
+        raise MotionError(
+            "CODE_DRAWN_LOCK_STALE",
+            "Drawing BMap basis differs from the current approved cut output.",
+        )
+
+
+def _canonical_drawing_heads(workspace: Any) -> tuple[dict, dict]:
+    snapshots, lock = {}, {}
+    for name in ("cmap", "bmap", "tracks", "animation", "sync-map"):
+        index = workspace.require_active(name)
+        revision = workspace.store(name).revision(index["headRevisionId"])
+        lock[name] = revision["contentHash"]
+        snapshots[name] = revision["snapshot"]
+    for name in ("cmap", "sync-map"):
+        approval = workspace.store(name).effective_approval()
+        if not approval or approval["subject"]["contentSha256"] != lock[name]:
+            raise MotionError(
+                "CODE_DRAWN_LOCK_STALE",
+                f"Current approved {name} is required for canonical drawing generation.",
+            )
+    _require_drawing_basis(snapshots, lock)
+    _require_current_drawing_cut(workspace, snapshots)
+    return snapshots, lock
+
+
+def _drawing_logical_binding(snapshots: dict, instance_id: str) -> tuple[dict, dict]:
+    strategy = snapshots["animation"]
+    if strategy.get("framework") != "code-drawn":
+        raise MotionError(
+            "MOTION_ENGINE_UNSUPPORTED", "Recorded animation engine is not code-drawn."
+        )
+    references = [
+        component.get("extensions", {}).get("codeDrawn")
+        for component in strategy.get("components", [])
+    ]
+    matches = [
+        ref for ref in references if ref and ref.get("instanceId") == instance_id
+    ]
+    layers = [
+        layer
+        for layer in snapshots["tracks"].get("videoTracks", {}).get("layers", [])
+        if layer.get("generatedSourceRef", {}).get("instanceId") == instance_id
+    ]
+    if len(matches) != 1 or len(layers) != 1:
+        raise MotionError(
+            "CODE_DRAWN_INPUT_INVALID",
+            f"Exactly one strategy and Tracks binding required for {instance_id}.",
+        )
+    return matches[0], layers[0]
+
+
+def _drawing_region(layer: dict, contract: dict) -> dict:
+    from fractions import Fraction
+
+    regions = layer.get("regions") or []
+    if len(regions) != 1:
+        raise MotionError(
+            "CODE_DRAWN_INPUT_INVALID",
+            "One contiguous canonical region is required per drawing instance.",
+        )
+    rate = Fraction(contract["frameRate"]["num"], contract["frameRate"]["den"])
+    region = regions[0]
+    base = region.get("timebase") or {"num": 1, "den": 1000}
+    frames = [
+        Fraction(region[key] * base["num"], base["den"]) * rate
+        for key in ("startTicks", "endTicks")
+    ]
+    if (
+        any(frame.denominator != 1 for frame in frames)
+        or frames[1] - frames[0] != contract["frameCount"]
+    ):
+        raise MotionError(
+            "CODE_DRAWN_INPUT_INVALID",
+            "Drawing rate/count does not exactly cover its canonical region.",
+        )
+    return {"startFrame": int(frames[0]), "endFrameExclusive": int(frames[1])}
+
+
+def _drawing_placement(layer: dict, contract: dict) -> dict:
+    role = layer.get("role")
+    if role not in {"base", "overlay", "caption", "graphic"}:
+        raise MotionError(
+            "CODE_DRAWN_INPUT_INVALID", f"Unsupported drawing layer role: {role}"
+        )
+    if role == "base" and contract["alphaMode"] != "opaque":
+        raise MotionError(
+            "CODE_DRAWN_INPUT_INVALID", "A generated base must be opaque."
+        )
+    return {
+        "x": 0,
+        "y": 0,
+        "width": contract["width"],
+        "height": contract["height"],
+        **(layer.get("placement") or {}),
+        "zOrder": layer.get("zOrder", layer.get("order", 0)),
+        "layerRole": role,
+    }
+
+
+def _require_drawing_asset_parent(
+    item: dict, originals: dict, generated_service: Any
+) -> None:
+    artifact_id, role = _drawing_asset_ancestry(item)
+    if role == "dependency":
+        return
+    if role == "source":
+        source = originals.get(artifact_id)
+        if source is None:
+            raise MotionError(
+                "CODE_DRAWN_INPUT_INVALID",
+                f"Unknown original source {artifact_id} for drawing asset {item['path']}.",
+            )
+        expected = source["fingerprint"]
+    else:
+        parent = generated_service.load(artifact_id)
+        if parent["recordHash"] != item["sourceRef"]["recordHash"]:
+            raise MotionError(
+                "CODE_DRAWN_LOCK_STALE",
+                f"Generated parent record changed for drawing asset {item['path']}: {artifact_id}.",
+            )
+        expected = parent["output"]
+    if any(item[field] != expected.get(field) for field in ("sha256", "sizeBytes")):
+        raise MotionError(
+            "CODE_DRAWN_LOCK_STALE",
+            f"Drawing asset {item['path']} fingerprint differs from its {role} parent {artifact_id}.",
+        )
+
+
+def _require_drawing_asset_parents(workspace: Any, manifest: dict, cmap: dict) -> None:
+    from avo.timeline.generated_assets import GeneratedAssetService
+
+    originals = {source["sourceId"]: source for source in cmap["sources"]}
+    service = GeneratedAssetService(workspace)
+    for item in manifest["assets"]:
+        _require_drawing_asset_parent(item, originals, service)
+
+
+def canonical_code_drawn_binding(workspace: Any, instance_id: str) -> dict[str, Any]:
+    """Derive one source, output range and placement from current canonical stores."""
+    snapshots, lock = _canonical_drawing_heads(workspace)
+    reference, layer = _drawing_logical_binding(snapshots, instance_id)
+    manifest = validate_code_drawn_reference(reference, root=workspace.raw_dir)
+    _require_drawing_asset_parents(workspace, manifest, snapshots["cmap"])
+    if layer["generatedSourceRef"] != {"engine": "code-drawn", **reference}:
+        raise MotionError(
+            "CODE_DRAWN_LOCK_STALE",
+            f"Strategy/Tracks manifest identity differs for {instance_id}.",
+        )
+    contract = manifest["renderContract"]
+    return {
+        "reference": deepcopy(reference),
+        "manifest": manifest,
+        "canonicalInputLock": lock,
+        "range": _drawing_region(layer, contract),
+        "placement": _drawing_placement(layer, contract),
+    }
+
+
+def _drawing_manifest_stable(composition: Path, manifest: dict) -> None:
+    try:
+        current = json.loads(composition.read_bytes())
+    except (OSError, ValueError) as error:
+        raise MotionError(
+            "CODE_DRAWN_LOCK_STALE",
+            f"Cannot revalidate manifest while freezing {composition}: {error}",
+        ) from error
+    if current != manifest:
+        raise MotionError(
+            "CODE_DRAWN_LOCK_STALE", f"Manifest changed while freezing: {composition}"
+        )
+
+
+def _drawing_canonical_lock_fields(workspace, instance_id, composition):
+    if workspace is None:
+        return {}
+    binding = canonical_code_drawn_binding(workspace, str(instance_id))
+    if (
+        Path(workspace.raw_dir) / binding["reference"]["manifestRef"]["path"]
+    ).resolve() != composition:
+        raise MotionError(
+            "CODE_DRAWN_INPUT_INVALID",
+            "Composition differs from the canonical manifest reference.",
+        )
+    return {key: binding[key] for key in ("canonicalInputLock", "range", "placement")}
+
+
+def freeze_code_drawn_lock(
+    composition: Path,
+    *,
+    environment: dict[str, Any] | None = None,
+    canonical_binding: dict[str, Any] | None = None,
+    workspace: Any = None,
+    instance_id: str | None = None,
+) -> dict[str, Any]:
+    """Freeze standalone inputs using supplied observations, never invented approval."""
+    observed = _observed_drawing_environment(environment)
+    if canonical_binding is not None:
+        raise MotionError(
+            "CODE_DRAWN_INPUT_INVALID",
+            "Canonical binding requires verification by the shared timeline coordinator.",
+        )
+    composition = Path(composition).expanduser().resolve()
+    manifest = load_composition(composition)
+    inputs = _frozen_drawing_inputs(composition, manifest)
+    _drawing_manifest_stable(composition, manifest)
+    binding = _drawing_canonical_lock_fields(workspace, instance_id, composition)
+    lock = seal_input_lock(
+        {
+            "schemaVersion": "1.0.0",
+            "bindingMode": "canonical" if binding else "standalone",
+            "instanceId": instance_id if binding else manifest["compositionId"],
+            **binding,
+            "manifestRef": {
+                "path": str(composition),
+                "sha256": inputs[0]["fingerprint"]["sha256"],
+            },
+            "renderContractHash": content_hash(manifest["renderContract"]),
+            "inputsHash": content_hash(inputs),
+            "inputs": inputs,
+            "generator": _drawing_generator_identity(),
+            "environment": observed,
+        }
+    )
+    return validate_input_lock(lock)
+
+
+def verify_code_drawn_lock(
+    composition: Path,
+    lock: dict[str, Any],
+    *,
+    environment: dict[str, Any] | None = None,
+    workspace: Any = None,
+    instance_id: str | None = None,
+) -> dict[str, Any]:
+    """Compare original source identities; runtime freshness needs new observations."""
+    original = validate_input_lock(lock)
+    if original["bindingMode"] == "canonical" and workspace is None:
+        raise MotionError(
+            "CODE_DRAWN_INPUT_INVALID",
+            "Canonical lock verification requires the shared timeline coordinator.",
+        )
+    current = freeze_code_drawn_lock(
+        composition,
+        environment=environment if environment is not None else original["environment"],
+        workspace=workspace if original["bindingMode"] == "canonical" else None,
+        instance_id=instance_id or original["instanceId"],
+    )
+    if current != original:
+        raise MotionError(
+            "CODE_DRAWN_LOCK_STALE",
+            f"Drawing inputs, generator or environment changed: {Path(composition)}",
+            remediation="Freeze a new input lock and regenerate affected evidence.",
+        )
+    return original
+
+
+def materialize_code_drawn(
+    workspace: Any, instance_id: str, *, output: Path, adapter: Any
+) -> dict[str, Any]:
+    """Generate and admit an authority-bound asset through an injected renderer."""
+    from avo.timeline.generated_assets import GeneratedAssetService
+    from avo.timeline.store import write_immutable_json
+
+    binding = canonical_code_drawn_binding(workspace, instance_id)
+    composition = local_composition_path(
+        workspace.raw_dir, binding["reference"]["manifestRef"]["path"]
+    )
+    service = GeneratedAssetService(workspace)
+    service.validate_code_drawn_inputs(
+        _frozen_drawing_inputs(composition, binding["manifest"])
+    )
+    output = Path(output).expanduser().resolve()
+    if not output.is_relative_to(
+        Path(workspace.raw_dir).resolve() / "edit" / "derived"
+    ):
+        raise MotionError(
+            "CODE_DRAWN_INPUT_INVALID",
+            "Canonical generated output must remain under edit/derived.",
+        )
+    lock_path = output.with_suffix(".input-lock.json")
+    if (
+        output.exists()
+        or lock_path.exists()
+        or output.with_suffix(".generated-asset.json").exists()
+    ):
+        raise MotionError(
+            "CODE_DRAWN_INPUT_INVALID", f"Choose a new immutable output: {output}"
+        )
+    check = adapter.check(composition)
+    environment = check["checks"][0]["evidence"]["environment"]
+    lock = freeze_code_drawn_lock(
+        composition,
+        workspace=workspace,
+        instance_id=instance_id,
+        environment=environment,
+    )
+    write_immutable_json(lock_path, lock)
+    result = adapter.render(
+        composition, input_lock=lock_path, output=output, workspace=workspace
+    )
+    verify_code_drawn_lock(
+        composition,
+        lock,
+        workspace=workspace,
+        instance_id=instance_id,
+        environment=environment,
+    )
+    record = json.loads(
+        output.with_suffix(".generated-asset.json").read_text(encoding="utf-8")
+    )
+    service.register(record, code_drawn_environment=environment)
+    service.admit(record["assetId"], code_drawn_environment=environment)
+    return result
+
+
