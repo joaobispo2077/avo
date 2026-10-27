@@ -287,13 +287,106 @@ def _generator_payload(generator: Any) -> dict[str, Any]:
     )
 
 
+def _materialized_generated(
+    source: dict, layer: dict, generator: Any, locator: str
+) -> bool:
+    if source.get("generatedAssetId") or layer.get("generatedAssetId"):
+        return True
+    if not generator:
+        return False
+    return not locator or (
+        isinstance(generator, dict) and generator.get("adapterId") == "code-drawn"
+    )
+
+
+def _asset_generator_metadata(record: dict, asset_id: str) -> dict:
+    value = {**deepcopy(record.get("generator") or {}), "assetId": asset_id}
+    if record.get("recordHash"):
+        value["recordHash"] = record["recordHash"]
+    extension = (record.get("parameters") or {}).get("codeDrawn")
+    if extension:
+        value["inputLockRef"] = deepcopy(extension["inputLockRef"])
+    return value
+
+
+def _asset_ancestor_node(
+    reference: dict,
+    node_id: str,
+    parent_asset: str,
+    assets: dict,
+    *,
+    picture_carrying: bool,
+    audio_carrying: bool,
+) -> dict:
+    fingerprint = reference["fingerprint"]
+    kind = "dependency" if reference.get("ancestryRole") == "dependency" else "source"
+    if parent_asset in assets:
+        kind = "generated"
+    node = {
+        "nodeId": node_id,
+        "kind": kind,
+        "role": {
+            "generated": "generated-input",
+            "dependency": "dependency",
+            "source": "source-input",
+        }[kind],
+        "mediaClass": kind,
+        "locator": str(
+            fingerprint.get("locator")
+            or f"canonical:artifact:{parent_asset or node_id}"
+        ),
+        "sha256": str(fingerprint.get("sha256") or ""),
+        "pictureCarrying": picture_carrying and kind != "dependency",
+        "audioCarrying": audio_carrying and kind != "dependency",
+        "media": deepcopy(fingerprint.get("mediaSignature") or {}),
+    }
+    if kind == "generated":
+        node["generator"] = _asset_generator_metadata(
+            assets[parent_asset], parent_asset
+        )
+    return node
+
+
 def _track_identity(layer: dict[str, Any]) -> tuple[str, dict, Any, str, bool]:
     layer_id = str(layer.get("layerId") or "")
     source = layer.get("source") or {}
     generator = layer.get("generator") or source.get("generator")
     locator = str(source.get("locator") or "")
-    generated = bool(generator) and not locator
+    generated = _materialized_generated(source, layer, generator, locator)
+    if layer.get("generatedSourceRef") and not locator:
+        raise PictureLineageError(
+            "generated source must be materialized and admitted before lineage"
+        )
     return layer_id, source, generator, locator, generated
+
+
+def _track_generator_binding(layer: dict, source: dict, generator: Any) -> dict:
+    value = _generator_payload(generator) if generator else {}
+    asset_id = source.get("generatedAssetId") or layer.get("generatedAssetId")
+    if asset_id:
+        value.setdefault("assetId", asset_id)
+    return value
+
+
+def _audio_track_node(layer: dict) -> dict:
+    layer_id, source, generator, locator, generated = _track_identity(layer)
+    node = {
+        "nodeId": f"audio-{layer_id}",
+        "kind": "generated" if generated else "source",
+        "role": str(layer.get("role") or "audio"),
+        "mediaClass": _media_class(
+            layer, default="generated" if generated else "audio-asset"
+        ),
+        "locator": locator or f"generator:{layer_id}",
+        "sha256": _node_sha(source, locator, {"generator": generator, "layer": layer}),
+        "pictureCarrying": False,
+        "audioCarrying": True,
+        "media": deepcopy(source.get("mediaSignature") or {}),
+        "layerId": layer_id,
+    }
+    if generated:
+        node["generator"] = _track_generator_binding(layer, source, generator)
+    return node
 
 
 def _track_source_node(layer: dict[str, Any], role: str) -> dict[str, Any]:
@@ -313,7 +406,10 @@ def _track_source_node(layer: dict[str, Any], role: str) -> dict[str, Any]:
         "layerId": layer_id,
     }
     if generated:
-        node["generator"] = _generator_payload(generator)
+        node["generator"] = _generator_payload(generator) if generator else {}
+        asset_id = source.get("generatedAssetId") or layer.get("generatedAssetId")
+        if asset_id:
+            node["generator"].setdefault("assetId", asset_id)
     return node
 
 
@@ -511,7 +607,6 @@ def build_audiovisual_lineage(
             return
         existing_ids = {str(node["nodeId"]) for node in nodes}
         for ordinal, reference in enumerate(record.get("inputs") or []):
-            fingerprint = reference.get("fingerprint") or {}
             parent_asset = str(reference.get("artifactId") or "")
             nested = parent_asset in assets
             node_id = (
@@ -521,21 +616,14 @@ def build_audiovisual_lineage(
             )
             if node_id not in existing_ids:
                 nodes.append(
-                    {
-                        "nodeId": node_id,
-                        "kind": "generated" if nested else "source",
-                        "role": "generated-input" if nested else "source-input",
-                        "mediaClass": "generated" if nested else "source",
-                        "locator": str(
-                            fingerprint.get("locator")
-                            or f"canonical:artifact:{parent_asset or node_id}"
-                        ),
-                        "sha256": str(fingerprint.get("sha256") or ""),
-                        "pictureCarrying": picture_carrying,
-                        "audioCarrying": audio_carrying,
-                        "media": deepcopy(fingerprint.get("mediaSignature") or {}),
-                        **({"generator": {"assetId": parent_asset}} if nested else {}),
-                    }
+                    _asset_ancestor_node(
+                        reference,
+                        node_id,
+                        parent_asset,
+                        assets,
+                        picture_carrying=picture_carrying,
+                        audio_carrying=audio_carrying,
+                    )
                 )
                 existing_ids.add(node_id)
                 if nested:
@@ -587,33 +675,9 @@ def build_audiovisual_lineage(
             }
         )
         for layer in audio_layers:
-            layer_id = str(layer.get("layerId") or "")
-            source = layer.get("source") or {}
-            locator = str(source.get("locator") or "")
-            generator = layer.get("generator") or source.get("generator")
-            generated = bool(generator) and not locator
-            node = {
-                "nodeId": f"audio-{layer_id}",
-                "kind": "generated" if generated else "source",
-                "role": str(layer.get("role") or "audio"),
-                "mediaClass": _media_class(
-                    layer, default="generated" if generated else "audio-asset"
-                ),
-                "locator": locator or f"generator:{layer_id}",
-                "sha256": _node_sha(
-                    source, locator, {"generator": generator, "layer": layer}
-                ),
-                "pictureCarrying": False,
-                "audioCarrying": True,
-                "media": deepcopy(source.get("mediaSignature") or {}),
-                "layerId": layer_id,
-            }
-            if generated:
-                node["generator"] = _generator_payload(generator)
+            node = _audio_track_node(layer)
             nodes.append(node)
-            asset_id = str(
-                source.get("generatedAssetId") or layer.get("generatedAssetId") or ""
-            )
+            asset_id = str((node.get("generator") or {}).get("assetId") or "")
             if asset_id:
                 append_asset_inputs(
                     asset_id,
