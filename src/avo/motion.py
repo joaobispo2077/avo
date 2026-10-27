@@ -1397,3 +1397,321 @@ def materialize_code_drawn(
     return result
 
 
+def _review_json(path: Path) -> dict[str, Any]:
+    try:
+        value = json.loads(Path(path).read_text(encoding="utf-8"))
+    except (OSError, ValueError) as error:
+        raise MotionError(
+            "CODE_DRAWN_INPUT_INVALID", f"Cannot read review input {path}: {error}"
+        ) from error
+    if not isinstance(value, dict):
+        raise MotionError(
+            "CODE_DRAWN_INPUT_INVALID", f"Review input must be an object: {path}"
+        )
+    return value
+
+
+def _review_file_ref(path: Path) -> dict[str, str]:
+    target = Path(path).resolve()
+    return {"path": str(target), "sha256": file_fingerprint(target)["sha256"]}
+
+
+def _review_source_identity(
+    receipt: dict, lock: dict, manifest: dict, composition: Path, lock_path: Path
+) -> None:
+    extension = receipt["parameters"]["codeDrawn"]
+    expected = {
+        "instanceId": lock["instanceId"],
+        "manifestRef": _review_file_ref(composition),
+        "sourceRevision": manifest["sourceRevision"],
+        "drawingRoute": manifest["drawingRoute"],
+        "inputLockRef": _review_file_ref(lock_path),
+        "inputLockHash": lock["inputLockHash"],
+        "renderContractHash": content_hash(manifest["renderContract"]),
+        "inputsHash": lock["inputsHash"],
+    }
+    if any(extension.get(key) != value for key, value in expected.items()):
+        raise MotionError(
+            "CODE_DRAWN_LOCK_STALE", "Review source/receipt/lock identity changed."
+        )
+    pairs = [
+        (lock["manifestRef"], expected["manifestRef"]),
+        (lock["renderContractHash"], expected["renderContractHash"]),
+        (receipt["generator"], lock["generator"]),
+        (extension["captureEvidence"].get("environment"), lock["environment"]),
+        (receipt["environment"]["platform"], lock["environment"]["platform"]),
+        (receipt["environment"]["dependencies"], lock["environment"]["dependencies"]),
+        (lock["inputs"], _frozen_drawing_inputs(composition, manifest)),
+    ]
+    if any(left != right for left, right in pairs):
+        raise MotionError(
+            "CODE_DRAWN_LOCK_STALE",
+            "Review source closure or recorded runtime changed.",
+        )
+    canonical = lock["bindingMode"] == "canonical"
+    if ("canonicalInputLock" in extension) != canonical or extension.get(
+        "canonicalInputLock"
+    ) != lock.get("canonicalInputLock"):
+        raise MotionError(
+            "CODE_DRAWN_LOCK_STALE", "Review changes the original binding mode."
+        )
+
+
+def _code_drawn_review_sources(
+    source_receipts: list[Path], dependencies: dict[str, str]
+) -> list[dict[str, Any]]:
+    if not source_receipts:
+        raise MotionError(
+            "CODE_DRAWN_INPUT_INVALID", "Review requires actual source receipts."
+        )
+    result, seen = [], set()
+    for value in source_receipts:
+        path = Path(value).resolve()
+        receipt = _review_json(path)
+        _contract(
+            receipt, "avo.generated-asset.schema.json", "CODE_DRAWN_INPUT_INVALID"
+        )
+        _check_seal(receipt, "recordHash")
+        if (
+            receipt["generator"]["adapterId"] != "code-drawn"
+            or receipt["assetId"] in seen
+        ):
+            raise MotionError(
+                "CODE_DRAWN_INPUT_INVALID",
+                "Review requires unique code-drawn source assets.",
+            )
+        seen.add(receipt["assetId"])
+        extension = receipt["parameters"]["codeDrawn"]
+        composition = Path(extension["manifestRef"]["path"]).resolve()
+        lock_path = Path(extension["inputLockRef"]["path"]).resolve()
+        manifest = load_composition(composition)
+        lock = validate_input_lock(_review_json(lock_path))
+        _review_source_identity(receipt, lock, manifest, composition, lock_path)
+        required = {
+            "generated:" + receipt["assetId"]: receipt["recordHash"],
+            "input-lock:" + lock["instanceId"]: lock["inputLockHash"],
+        }
+        if any(dependencies.get(key) != expected for key, expected in required.items()):
+            raise MotionError(
+                "CODE_DRAWN_LOCK_STALE",
+                "Review dependency lock omits a source asset/input lock.",
+            )
+        result.append(
+            {
+                "engine": "code-drawn",
+                "assetId": receipt["assetId"],
+                "recordHash": receipt["recordHash"],
+                "receiptRef": _review_file_ref(path),
+                **{
+                    key: deepcopy(extension[key])
+                    for key in (
+                        "instanceId",
+                        "drawingRoute",
+                        "sourceRevision",
+                        "manifestRef",
+                        "inputLockRef",
+                        "inputLockHash",
+                        "renderContractHash",
+                        "inputsHash",
+                        "outputVerification",
+                    )
+                },
+                "generator": deepcopy(lock["generator"]),
+                "environment": deepcopy(lock["environment"]),
+                "dependencies": deepcopy(manifest["dependencies"]),
+                "output": deepcopy(receipt["output"]),
+            }
+        )
+    return result
+
+
+def _positive_review_numbers(numbers: list[int]) -> None:
+    if any(type(number) is not int or number <= 0 for number in numbers):
+        raise MotionError(
+            "CODE_DRAWN_INPUT_INVALID",
+            "Review target numbers must be positive integers.",
+        )
+
+
+def _review_candidate_contract(value: dict) -> dict:
+    fields = {"width", "height", "frameRate", "frameCount"}
+    if not isinstance(value, dict) or set(value) != fields:
+        raise MotionError(
+            "CODE_DRAWN_INPUT_INVALID", "Review requires the exact candidate contract."
+        )
+    _positive_review_numbers([value[key] for key in ("width", "height", "frameCount")])
+    rate = value["frameRate"]
+    if not isinstance(rate, dict) or set(rate) != {"num", "den"}:
+        raise MotionError(
+            "CODE_DRAWN_INPUT_INVALID", "Review frame rate must be a reduced rational."
+        )
+    _positive_review_numbers(list(rate.values()))
+    if (
+        math.gcd(rate["num"], rate["den"]) != 1
+        or value["width"] * value["height"] > MAX_CAPTURE_PIXELS
+    ):
+        raise MotionError(
+            "CODE_DRAWN_INPUT_INVALID", "Unsupported review rate/pixel target."
+        )
+    return deepcopy(value)
+
+
+def _review_transition_range(bounds: dict, count: int) -> None:
+    if not isinstance(bounds, dict) or set(bounds) != {
+        "startFrame",
+        "endFrameExclusive",
+    }:
+        raise MotionError(
+            "CODE_DRAWN_INPUT_INVALID", "Review transition needs exact frame bounds."
+        )
+    if any(type(frame) is not int for frame in bounds.values()) or not (
+        0 <= bounds["startFrame"] < bounds["endFrameExclusive"] <= count
+    ):
+        raise MotionError(
+            "CODE_DRAWN_INPUT_INVALID", "Review transition range is invalid."
+        )
+
+
+def _review_sample_plan(
+    count: int, samples: list[int] | None, ranges: list[dict] | None
+) -> tuple[list[int], list[dict]]:
+    frames = (
+        list(samples)
+        if samples is not None
+        else [round(index * (count - 1) / 9) for index in range(10)]
+    )
+    if any(type(frame) is not int or not 0 <= frame < count for frame in frames):
+        raise MotionError(
+            "CODE_DRAWN_INPUT_INVALID",
+            "Review sample is outside the integer frame range.",
+        )
+    transitions = deepcopy(ranges or [])
+    for bounds in transitions:
+        _review_transition_range(bounds, count)
+    return sorted({0, count - 1, *frames}), transitions
+
+
+def _produce_review_previews(producer: Any, request: dict) -> dict:
+    try:
+        result = producer(**request)
+        if not isinstance(result, dict):
+            raise ValueError("Preview producer must return an object.")
+        return result
+    except Exception as error:
+        raise MotionError(
+            "CODE_DRAWN_RENDER_FAILED", f"Candidate preview generation failed: {error}"
+        ) from error
+
+
+def _review_artifacts(values: list[dict], output_dir: Path) -> list[dict]:
+    result = []
+    for item in values:
+        path = Path(item["path"]).resolve()
+        if not path.is_relative_to(output_dir) or not path.is_file():
+            raise MotionError(
+                "CODE_DRAWN_INPUT_INVALID",
+                f"Review artifact is missing/outside its new directory: {path}",
+            )
+        fingerprint = file_fingerprint(path)
+        result.append(
+            {
+                **deepcopy(item),
+                "path": str(path),
+                "sha256": fingerprint["sha256"],
+                "sizeBytes": fingerprint["sizeBytes"],
+            }
+        )
+    return result
+
+
+def prepare_code_drawn_review(
+    candidate: Path,
+    *,
+    dependencies: dict[str, str],
+    render_profile: str,
+    candidate_contract: dict,
+    source_receipts: list[Path],
+    output_dir: Path,
+    producer: Any,
+    sample_frames: list[int] | None = None,
+    transition_ranges: list[dict] | None = None,
+    loop_requested: bool = False,
+) -> dict[str, Any]:
+    """Prepare exact decoded-candidate review artifacts, never creator approval."""
+    from avo.timeline.contracts import dependency_lock_hash
+    from avo.timeline.review import (
+        GateError,
+        _validate_code_drawn_package,
+        candidate_identity,
+    )
+    from avo.timeline.store import now_iso, write_immutable_json
+
+    candidate, output_dir = Path(candidate).resolve(), Path(output_dir).resolve()
+    if (
+        output_dir.exists()
+        or not candidate.is_file()
+        or type(loop_requested) is not bool
+    ):
+        raise MotionError(
+            "CODE_DRAWN_INPUT_INVALID",
+            "Review needs a candidate, fresh output directory and boolean loop request.",
+        )
+    contract = _review_candidate_contract(candidate_contract)
+    frames, transitions = _review_sample_plan(
+        contract["frameCount"], sample_frames, transition_ranges
+    )
+    frozen_dependencies = deepcopy(dependencies)
+    sources = _code_drawn_review_sources(source_receipts, frozen_dependencies)
+    identity = candidate_identity(candidate, frozen_dependencies, render_profile)
+    produced = _produce_review_previews(
+        producer,
+        {
+            "candidate": candidate,
+            "output_dir": output_dir,
+            "candidate_contract": deepcopy(contract),
+            "sample_frames": list(frames),
+            "transition_ranges": deepcopy(transitions),
+            "loop_requested": loop_requested,
+        },
+    )
+    if (
+        candidate_identity(candidate, dependencies, render_profile) != identity
+        or dependencies != frozen_dependencies
+    ):
+        raise MotionError(
+            "CODE_DRAWN_LOCK_STALE",
+            "Candidate/dependencies changed during review preparation.",
+        )
+    if _code_drawn_review_sources(source_receipts, frozen_dependencies) != sources:
+        raise MotionError(
+            "CODE_DRAWN_LOCK_STALE", "Source inputs changed during review preparation."
+        )
+    package = {
+        "schemaVersion": "1.0.0",
+        "kind": "code-drawn-review",
+        "packagePath": str(output_dir / "code-drawn-review.json"),
+        "candidate": identity,
+        "dependencyLockSha256": dependency_lock_hash(frozen_dependencies),
+        "candidateContract": contract,
+        "sources": sources,
+        "sampleFrames": frames,
+        "transitionRanges": transitions,
+        "loopRequested": loop_requested,
+        "artifacts": _review_artifacts(produced.get("artifacts") or [], output_dir),
+        "findings": deepcopy(produced.get("findings") or []),
+        "state": "needs-human-judgment",
+        "approval": None,
+        "createdAt": now_iso(),
+    }
+    package["reviewHash"] = document_hash_excluding(package, "reviewHash")
+    try:
+        _validate_code_drawn_package(
+            package,
+            candidate=candidate,
+            dependencies=frozen_dependencies,
+            render_profile=render_profile,
+        )
+    except GateError as error:
+        raise MotionError("CODE_DRAWN_INPUT_INVALID", str(error)) from error
+    write_immutable_json(Path(package["packagePath"]), package)
+    return package

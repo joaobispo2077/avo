@@ -114,13 +114,6 @@ def _require_native_plan_binding(materialization, plan):
 
 def require_native_cut_materialization(workspace, materialization, candidate):
     """Verify native source-only lineage without requiring a legacy projection."""
-    from .contracts import file_fingerprint
-    from .materialize import (
-        _load_microproof_gate,
-        _require_current_microproof_gate,
-        canonical_proof_media_inputs,
-        default_proof_readiness,
-    )
     from .proof_plan import ProofPlanCompiler
 
     dependencies = native_cut_dependencies(materialization)
@@ -138,27 +131,108 @@ def require_native_cut_materialization(workspace, materialization, candidate):
         raise ValueError("native cut candidate path differs from proof plan")
     if Path(declared["locator"]).resolve() != Path(candidate).resolve():
         raise ValueError("native cut output locator differs from candidate")
-    preflight = compiler.require_preflight(
+    _require_native_proof_gate(workspace, materialization, plan)
+    _require_native_sync(workspace, dependencies["sync-map"])
+    return dependencies
+
+
+def _native_proof_lock(materialization):
+    if materialization.get("kind") != "proof-plan" or materialization.get(
+        "checkpoint"
+    ) not in {"motion-proof", "pre-master", "deliver"}:
+        raise ValueError("native proof materialization checkpoint is invalid")
+    body = {k: v for k, v in materialization.items() if k != "materializationHash"}
+    if materialization.get("materializationHash") != content_hash(body):
+        raise ValueError("native proof materialization record hash mismatch")
+    lock = materialization.get("canonicalInputLock")
+    if not isinstance(lock, dict):
+        raise ValueError("native proof canonical input lock is missing")
+    return lock
+
+
+def native_proof_dependencies(materialization: dict[str, Any]) -> dict[str, str]:
+    """Derive exact review/delivery inputs from a persisted native proof record."""
+    if materialization.get("checkpoint") == "cut-proof":
+        return native_cut_dependencies(materialization)
+    lock = _native_proof_lock(materialization)
+    canonical = {
+        name: _locked_canonical_hash(lock, name)
+        for name in ("cmap", "sync-map", "bmap", "tracks", "animation")
+    }
+    dependencies = {
+        key: value
+        for key, value in lock.items()
+        if key not in set(_CANONICAL_HASH_ALIASES.values())
+    }
+    dependencies.update(canonical)
+    dependencies.update(
+        {
+            "materialization": materialization.get("materializationHash"),
+            "proof-plan": materialization.get("proofPlanHash"),
+            "preflight": materialization.get("preflightHash"),
+            "microproof-gate": materialization.get("microproofGateHash"),
+            "assembly-output": (materialization.get("output") or {}).get("sha256"),
+        }
+    )
+    _require_native_hashes(dependencies)
+    dependencies["raw"] = _native_raw_dependency(
+        lock, materialization.get("proofPlanId")
+    )
+    return dict(sorted(dependencies.items()))
+
+
+def _require_native_proof_gate(workspace, materialization, plan):
+    from .materialize import (
+        _load_microproof_gate,
+        _require_current_microproof_gate,
+        canonical_proof_media_inputs,
+        default_proof_readiness,
+    )
+    from .proof_plan import ProofPlanCompiler
+
+    preflight = ProofPlanCompiler(workspace).require_preflight(
         plan,
         media_inputs=canonical_proof_media_inputs(workspace, plan),
-        tool_readiness=default_proof_readiness(plan),
+        tool_readiness=default_proof_readiness(plan, workspace=workspace),
     )
     if preflight["reportHash"] != materialization.get("preflightHash"):
-        raise ValueError("native cut materialization preflight is stale")
-    gate_path = (
+        raise ValueError("native proof materialization preflight is stale")
+    path = (
         Path(workspace.timeline_dir)
         / "microproofs"
         / plan["proofPlanId"]
         / f"gate-{materialization['microproofGateHash'][:12]}.json"
     )
-    gate = _load_microproof_gate(gate_path)
+    gate = _load_microproof_gate(path)
     if (
         gate.get("gateHash") != materialization["microproofGateHash"]
         or gate.get("proofPlanId") != plan["proofPlanId"]
     ):
-        raise ValueError("native cut microproof gate identity differs")
+        raise ValueError("native proof microproof gate identity differs")
     _require_current_microproof_gate(plan, gate, preflight_hash=preflight["reportHash"])
-    _require_native_sync(workspace, dependencies["sync-map"])
+
+
+def require_native_proof_materialization(workspace, materialization, candidate):
+    """Verify frozen native lineage, current original inputs and microproofs."""
+    if materialization.get("checkpoint") == "cut-proof":
+        return require_native_cut_materialization(workspace, materialization, candidate)
+    from .proof_plan import ProofPlanCompiler
+
+    dependencies = native_proof_dependencies(materialization)
+    compiler = ProofPlanCompiler(workspace)
+    plan = compiler.load(compiler.path(materialization["proofPlanId"]))
+    _require_native_plan_binding(materialization, plan)
+    candidate = Path(candidate).resolve()
+    if not candidate.is_relative_to(Path(workspace.raw_dir).resolve()):
+        raise ValueError("native proof candidate is outside the project")
+    actual = file_fingerprint(candidate)
+    declared = materialization["output"]
+    if any(actual[key] != declared.get(key) for key in ("sha256", "sizeBytes")):
+        raise ValueError("native proof candidate bytes differ from materialization")
+    if Path(declared["locator"]).resolve() != Path(plan["output"]["path"]).resolve():
+        raise ValueError("native proof output locator differs from frozen plan")
+    require_current_candidate_dependencies(workspace, materialization, dependencies)
+    _require_native_proof_gate(workspace, materialization, plan)
     return dependencies
 
 
@@ -288,11 +362,25 @@ def require_candidate_review(
                 raise ValueError("candidate review artifact changed")
 
 
+def _native_candidate_materialization(workspace, review, materialization):
+    if materialization.get("checkpoint") == "cut-proof":
+        raise ValueError("candidate approval requires a later native checkpoint")
+    candidate = Path(review["candidate"]["path"]).resolve()
+    expected = require_native_proof_materialization(
+        workspace, materialization, candidate
+    )
+    if review["candidate"]["dependencies"] != expected:
+        raise ValueError("native candidate review dependencies are not exact")
+    return candidate, file_fingerprint(candidate)
+
+
 def _candidate_materialization(
     workspace: TimelineWorkspace,
     review: dict[str, Any],
     materialization: dict[str, Any],
 ) -> tuple[Path, dict[str, Any]]:
+    if materialization.get("kind") == "proof-plan":
+        return _native_candidate_materialization(workspace, review, materialization)
     body = dict(materialization)
     body.pop("materializationHash", None)
     if materialization.get("kind") != "assembly" or materialization.get(
