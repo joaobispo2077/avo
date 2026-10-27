@@ -1,5 +1,14 @@
 # Short-form HyperFrames knowledge
 
+**Motion engine gate:** Apply [shared arguments](arguments.md) and inspect native
+`animation engine-show` with available context before motion-specific skill/setup.
+HyperFrames remains the built-in default. For selected code-drawn, follow the
+[advanced workflow](code-drawn.md) and common canonical source/review gates.
+HyperFrames-only loaders and recipes below apply only to selected HyperFrames.
+Unavailable Remotion or incompatible treatments block; never silently substitute.
+
+This bundle's executable scaffold and installed skills are HyperFrames-specific. Code-drawn uses its portable workflow and needs explicit native Shorts capability before canonical automation.
+
 Router for 9:16 talking-head + motion overlay + captions compositions. Load when authoring vertical shorts motion **or** when `/avo.shorts` phase 3 motion is active.
 
 ## When to load

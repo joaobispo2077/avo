@@ -13,9 +13,37 @@ Follow the shared [step-status response contract](../../agent-skills/avo-pipelin
 
 Run the full AVO pipeline from declared assets through deliver.
 
+## Resolve motion before engine-specific loading
+
+Parse [shared arguments](../../agent-skills/avo-pipeline/references/arguments.md),
+then inspect native `animation engine-show` for the declared project/provider and
+optional `--motion-engine hyperframes|remotion|code-drawn` or `Motion engine: <id>`.
+Resolve before engine-specific skills, installs or motion authoring, including
+motion performed later after a pipeline pause.
+
+Direct "no frameworks" or unqualified "avoid HyperFrames" selects invocation
+`code-drawn`; it does not mean `--skip-motion` or save a default. A compatible named
+Remotion choice stays explicit and reports its actual unsupported readiness.
+Question/quoted-reference/negated-avoidance text is not an execution instruction;
+ask once when explicit choices conflict.
+
+For code-drawn motion load the [portable advanced entry](../../agent-skills/avo-pipeline/references/code-drawn.md)
+and [selection policy](../../agent-skills/avo-pipeline/references/code-drawn/selection.md).
+Do not load HyperFrames-only skills, kits or installation instructions for that
+branch. The canonical pipeline and review gates still apply. An unsupported
+treatment blocks with its capability explanation; there is no engine substitution.
+
+Pass an explicit choice through native `pipeline run --motion-engine <id>` and
+`animation author --motion-engine <id>` when appropriate. Its typed execution choice
+survives pauses/resume without writing preferences. A genuine new authoring request
+uses `pipeline run --new-request`; existing animation remains pinned until
+deliberately revised through the shared services. Inspect future selection,
+active `runSelection` and `recordedAnimation` separately. Use `avo cli` installed or
+`python -m avo.cli` in a checkout for these core command suffixes.
+
 **Skill:** [`agent-skills/avo-pipeline/references/pipeline.md`](../../agent-skills/avo-pipeline/references/pipeline.md)
 
-**See also:** [`docs/avo-workflow.md`](../../docs/avo-workflow.md) · [`SKILL.md`](../../SKILL.md)
+**See also:** [`docs/avo-workflow.md`](../../docs/avo-workflow.md) · [pipeline gateway](../../agent-skills/avo-pipeline/SKILL.md)
 
 ---
 
@@ -31,7 +59,7 @@ B-roll: /path/to/broll/
 Music: /path/to/music/
 ```
 
-Optional: `--skip-motion`, `--preview`, `--lang pt`
+Optional: `--skip-motion`, `--motion-engine hyperframes|remotion|code-drawn`, `--preview`, `--lang pt`
 
 ---
 
@@ -43,15 +71,15 @@ Orchestrate stages 0–7: plan (optional Spec Kit) → transcribe → edit → w
 
 ## Instructions
 
-1. **Parse inputs** per [`arguments.md`](../../agent-skills/avo-pipeline/references/arguments.md).
-2. **Resolve provider** manifest: `providers/<provider>/avo.provider.json`.
-3. **Write or update** `<rawDir>/avo.project.json` with asset paths.
-4. **Start session (REQUIRED):** run `python -m avo.session start --raw-dir <rawDir> --provider <provider> [--title TEXT]` — writes `.avo/sessions/<id>/pre.json` baseline inventory for wrap diff and stats.
-5. **Inventory** sources (`ffprobe`), transcribe, pack transcripts.
-6. **Converse** → propose strategy → **wait for confirmation**.
-7. **Execute** edit proof (~360p) → watch-skill LOOP → write `edit/review/edit-proof/approval-gate.md` → **wait for approval**.
-8. Unless `--skip-motion`: motion proof (~720p) → LOOP → approval gate → promote to source resolution.
-9. **Deliver** master + final transcript; run `/avo.learndown` then `/avo.cleanup` per preserved-set rules (§7).
+1. **Parse inputs and motion intent** per [shared arguments](../../agent-skills/avo-pipeline/references/arguments.md). Inspect the effective engine before loading engine-only workflows.
+2. **Resolve provider** manifest and exact project context, then inspect that engine context without saving a default.
+3. **Write or update** `<rawDir>/avo.project.json` with declared asset paths only.
+4. **Start session (REQUIRED):** use the resolved runtime's `session start --raw-dir <rawDir> --provider <provider> [--title TEXT]`, installed as `avo session start` or checkout `python -m avo.session start`. This writes `.avo/sessions/<id>/pre.json` baseline inventory for wrap diff and stats.
+5. **Inventory** sources (`ffprobe`), transcribe and pack transcripts.
+6. **Converse** → propose strategy → **wait for required confirmation**.
+7. **Execute** edit proof using its declared profile → current QC/Watch/transcript analysis → write `edit/review/edit-proof/approval-gate.md` → **wait for approval**.
+8. Unless `--skip-motion`, author with the selected engine, then generate the canonical motion proof → current review loop → approval gate → promote to the declared source-resolution contract. A standalone code-drawn asset/receipt is not this proof or its approval.
+9. **Deliver** master + final transcript; run `/avo.learndown` then `/avo.cleanup` per preserved-set rules (section 7).
 
 Report telemetry at each phase boundary (disk, progress, ETA estimate). Pass `session_id` when telemetry helper supports it.
 

@@ -1,8 +1,17 @@
 # /avo.motion reference
 
+**Motion engine gate:** Apply [shared arguments](arguments.md) and inspect native
+`animation engine-show` with available context before motion-specific skill/setup.
+HyperFrames remains the built-in default. For selected code-drawn, follow the
+[advanced workflow](code-drawn.md) and common canonical source/review gates.
+HyperFrames-only loaders and recipes below apply only to selected HyperFrames.
+Unavailable Remotion or incompatible treatments block; never silently substitute.
+
+HyperFrames component kits are engine-specific. Require compatible source and declared capabilities; do not automatically port a kit or substitute an engine.
+
 ## Step/state mapping
 
-**Durable state:** pipeline-run.json plus the current canonical timeline revision
+**Durable state:** pipeline-run.json when present, canonical animation/source/input-lock revisions and actual motion outputs
 
 **Workflow steps:** Validate motion prerequisites → Run motion → Verify and report the motion result
 
@@ -12,11 +21,11 @@
 
 **Valid next commands:** /avo.animation-qc or /avo.watch
 
-HyperFrames-first. Load [`hyperframes`](../../../.claude/skills/hyperframes/SKILL.md) entry + [`motion-doctrine`](../../../.claude/skills/motion-doctrine/SKILL.md) when building slots.
+For selected HyperFrames, load [`hyperframes`](../../../.claude/skills/hyperframes/SKILL.md) entry + [`motion-doctrine`](../../../.claude/skills/motion-doctrine/SKILL.md) when building slots.
 
-**Product promo / SaaS launch:** load [`product-promo-knowledge.md`](product-promo-knowledge.md) first — curated technique index, render contract, and starter exemplar under `docs/exemplars/hyperframes-product-promo/`.
+**Selected HyperFrames product promo / SaaS launch:** load [`product-promo-knowledge.md`](product-promo-knowledge.md) first — curated technique index, render contract, and starter exemplar under `docs/exemplars/hyperframes-product-promo/`.
 
-**Short-form vertical (9:16):** load [`short-form-knowledge.md`](short-form-knowledge.md) — 4-layer scaffold, face-mode choreography, audio-sync protocol under `docs/exemplars/hyperframes-short-form/`.
+**Selected HyperFrames short-form vertical (9:16):** load [`short-form-knowledge.md`](short-form-knowledge.md) — 4-layer scaffold, face-mode choreography, audio-sync protocol under `docs/exemplars/hyperframes-short-form/`.
 
 ## Density
 
@@ -33,7 +42,7 @@ Default Level 2–3 for explainers; Level 1 for read-heavy segments.
 | Short motion graphic | [`motion-graphics.md`](motion-graphics.md) |
 | Remotion → HyperFrames port | [`remotion-port.md`](remotion-port.md) |
 | Screencast oversized cursor | [`screencast.md`](screencast.md) |
-| Framework pick (HF vs Remotion) | [`framework.md`](framework.md) — run before first slot |
+| Engine selection/intake | [`framework.md`](framework.md) — run before first slot |
 | Product promo / SaaS demo | [`product-promo-knowledge.md`](product-promo-knowledge.md) → product-launch-video |
 | Short-form 9:16 + overlays | [`short-form-knowledge.md`](short-form-knowledge.md) → `/avo.shorts` motion phase |
 | Wiggly / boil insert (text, image, video) | [`boil-insert-knowledge.md`](boil-insert-knowledge.md) → `motion-graphics` kinetic-type / `/avo.motion` slot |

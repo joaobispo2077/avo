@@ -47,17 +47,21 @@ Spoken alias: **`/avo --help`**. Cursor file: `commands/avo/help.md` → `/avo.h
 | `/avo.transcribe` | Transcribe only |
 | `/avo.sync` | Audio sync diagnosis (before long/external cuts) |
 | `/avo.sound` | Mix, NR, SFX |
-| `/avo.motion` | HyperFrames overlays |
+| `/avo.motion` | Selected-engine overlays (HyperFrames default) |
 | `/avo.captions` | Embedded captions (after overlays) |
 | `/avo.watch` | watch-skill LOOP |
 
 ### Motion & composition
 
+Resolve the engine through [shared arguments](arguments.md) first. Advanced
+framework-free motion uses the [portable code-drawn guide](code-drawn.md);
+HyperFrames is the default, and the current Remotion adapter is unsupported.
+
 | Command | When to use |
 | ------- | ----------- |
-| `/avo.framework` | HyperFrames vs Remotion intake before motion |
+| `/avo.framework` | Engine selection, preferences and readiness |
 | `/avo.motion-graphics` | Short design-led motion graphic |
-| `/avo.general` | Custom HyperFrames composition |
+| `/avo.general` | Custom composition with selected engine |
 | `/avo.remotion-port` | Remotion → HyperFrames port |
 | `/avo.screencast` | Tutorial screencast + oversized cursor |
 
@@ -99,11 +103,11 @@ Spoken alias: **`/avo --help`**. Cursor file: `commands/avo/help.md` → `/avo.h
 | `/avo.pr-video` | GitHub PR → explainer video |
 | `/avo.changelog-video` | Changelog markdown → branded video |
 | `/avo.explainer` | Article / notes → faceless explainer |
-| `/avo.slideshow` | Slide outline → HyperFrames slideshow |
+| `/avo.slideshow` | Supported slide video/deck workflow |
 | `/avo.launch` | Product / marketing URL → launch video |
 | `/avo.music-video` | Music track → visual video |
 | `/avo.beat-edit` | Beat-synced insert edit (map + generate) |
-| `/avo.figma` | Figma → HyperFrames import |
+| `/avo.figma` | Selected compatible Figma/local-asset workflow |
 | `/avo.media` | Catalog BGM/SFX/logos via media-use |
 
 ### Install & maintenance

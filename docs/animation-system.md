@@ -19,7 +19,7 @@ video compositions. `AGENTS.md` is canonical.
 
 1. Intake and diagnose format, viewer, message, sources, brand, audio, density,
    framework context, rights, and risks.
-2. Select framework: HyperFrames by default, Remotion only with documented fit.
+2. Resolve engine/source/readiness first: HyperFrames default, explicit advanced code-drawn, or an honest unsupported Remotion selection.
 3. Capture and inventory assets in `ANIMATION-SOURCE-LOG.md`.
 4. Create or update `DESIGN.md`.
 5. Create `STORYBOARD.md` or a beat map.
@@ -27,22 +27,43 @@ video compositions. `AGENTS.md` is canonical.
 7. Add primary motion.
 8. Add secondary and ambient motion only after hierarchy works.
 9. Add transitions and audio synchronization.
-10. Validate technically with framework lint/check/snapshot workflows.
+10. Validate through the selected engine's actual native check/snapshot/render workflow.
 11. Review by format, density, accessibility, and source integrity.
 12. Render and compare preview, snapshots, and candidate output.
 13. Complete final QC and delivery manifest.
 
-## Framework Selection
+## Engine selection
 
-HyperFrames is preferred because current docs describe HTML compositions,
-declared timing, HTML/CSS/JavaScript authoring, seekable runtimes, framework-owned
-media playback, deterministic frame-by-frame rendering, agent skills, and
-preview/lint/check/snapshot/render workflows.
+Resolve current intent and scoped preferences before loading engine-specific
+skills or checking their prerequisites. HyperFrames remains the built-in
+default. Explicit advanced `code-drawn` uses Canvas, SVG or optional standalone
+p5.brush with managed headless Chromium; it does not require HyperFrames,
+Remotion or a particular model. Use the
+[portable guide](../agent-skills/avo-pipeline/references/code-drawn.md).
 
-Remotion is permitted when an existing React/TypeScript/Remotion stack,
-data-driven template system, React app integration, required Remotion capability,
-or explicit user request makes it lower risk or more maintainable. Review the
-current Remotion license before organizational or commercial use.
+Use native `animation engine-show` to inspect engine, winning scope, readiness,
+current run choice and recorded source separately. Resolution is invocation >
+project > provider/channel > global > default. Global preference operations
+need no footage. A default change cannot rewrite an immutable animation or
+reinterpret a paused request; deliberate new source authoring uses the existing
+revision/invalidation services. See [exact commands](avo-commands.md#native-motion-commands).
+
+For selected HyperFrames, keep its HTML/timing/media contract and installed
+entry/core/animation/creative/CLI skills. HyperFrames-only exemplars, registry
+kits and specialized workflows below apply only to that branch.
+
+Remotion may fit an existing maintained React/TypeScript/Remotion project,
+data-driven template system or explicit request. Its current AVO execution
+adapter is unsupported: disclose that readiness and do not silently substitute
+another engine. Review its current license for intended use; see the
+[decision guide](remotion-decision-guide.md).
+
+For any engine, use one canonical timing/master owner and a documented boundary
+for generated assets. No automatic kit conversion, segmentation treatment,
+interactive presenter or source port is implied. A working standalone capture
+does not establish a canonical proof: admission, source locks, ProofPlan,
+reconstruction, Watch/transcript and human approval remain required on supported
+native integration paths. Missing capabilities block before execution.
 
 ## Motion Density
 
@@ -60,7 +81,7 @@ Use higher density only with stronger hierarchy and clearer review gates.
 
 - `DESIGN.md`: visual and motion design system.
 - `STORYBOARD.md`: scene plan and density/hierarchy map.
-- `ANIMATION-EDITLOG.md`: framework decisions, versions, renders, reviews.
+- `ANIMATION-EDITLOG.md`: engine/route decisions, versions, renders, reviews.
 - `ANIMATION-SOURCE-LOG.md`: source, rights, AI provenance, attribution.
 - `SCRIPT.md`: when narration or spoken timing drives the animation.
 
@@ -77,13 +98,16 @@ Use higher density only with stronger hierarchy and clearer review gates.
 9. Render-candidate QC.
 10. Master approval.
 
+These describe existing project review stages; do not create a duplicate approval
+ritual. Current candidate-bound review/explicit human decisions remain authoritative.
+
 Do not invest in high-cost 3D, shaders, particles, or detailed secondary motion
 before message, storyboard, layout, and typography are approved.
 
 ## Product-promo knowledge base
 
-For SaaS demos, feature reveals, and product launch films, load the curated bundle
-before composing:
+For selected HyperFrames SaaS demos, feature reveals, and product launch films,
+load the curated bundle before composing:
 
 - [`docs/exemplars/hyperframes-product-promo/README.md`](exemplars/hyperframes-product-promo/README.md)
 - Templates: [`design-product-promo.md`](templates/animation/design-product-promo.md),

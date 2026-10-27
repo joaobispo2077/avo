@@ -13,11 +13,19 @@ Resolve once. Do not ask. Consumers: **skills + binary**. MCP and clone only whe
 
 Never `pip install avo` — PyPI `avo` is Soteria.
 
-Engine zip is **AVO Python only** — not ffmpeg, HyperFrames, watch-skill, CUDA, or model weights. Unused when this AVO repo is the opened folder.
+Engine zip contains **AVO Python and the bundled Playwright driver (including Node)** — not ffmpeg, HyperFrames, watch-skill, CUDA, or model weights. Unused when this AVO repo is the opened folder.
 
 1. **Override** — user said MCP / self-build / clone-python. Honor it. Do not silently use the zip.
 2. **Opened folder is an AVO checkout** — `pyproject.toml` name `avo` **and** `src/avo/` **and** `AGENTS.md` contains `<!-- avo:orchestrator:start -->` → `python -m avo.*`. Do **not** use `~/.avo/bin/avo`.
 3. **Else** → `~/.avo/bin/avo`. Missing? Run the installer. Do not clone unless asked.
+
+## Motion engine selection before workflow loading
+
+Parse the current direct user instruction using the shared arguments before any engine-specific workflow. Run `avo cli animation engine-show --json`, adding the exact `--project`/`--provider` context and canonical `--motion-engine` override when supplied. Checkout equivalent: `python -m avo.cli animation engine-show`. Global inspection/preferences and runtime setup need no footage project.
+
+HyperFrames remains the built-in default. Direct "no frameworks", "without a framework", "framework-free", or unqualified "avoid HyperFrames" means invocation `code-drawn`; a compatible named Remotion alternative remains explicit Remotion and must disclose its unavailable AVO adapter. Preserve skip-motion. Quoted material, questions, and negated exclusions have no execution authority. Resolve contradictory explicit choices once before source mutations.
+
+For code-drawn, load the portable [advanced code-drawn guide](references/code-drawn.md) and relevant topic sections before the router below. Do not load or initialize HyperFrames as a prerequisite. The advanced label explains author-owned seeking, assets, dependencies and QC; selection itself adds no human approval gate. Keep current run selection and recorded animation separate from future defaults.
 
 ## Command router
 
@@ -94,7 +102,7 @@ completion response with exactly one four-line footer.
 
 ## Non-negotiable
 
-1. Declare `provider` + `rawDir` before any stage.
+1. Declare `provider` + `rawDir` before footage stages. Standalone code-drawn uses an explicit external ProjectDir; global preference/runtime operations require no footage context.
 2. **Agent pre-human gate:** exact-candidate Watch + transcript analysis +
    canonical lineage/projection/QC before each human approval gate (see [`references/cuts.md`](references/cuts.md),
    [`references/watch.md`](references/watch.md), workflow §4b).

@@ -1,5 +1,11 @@
 # /avo.general Command
 
+**Motion engine gate:** Resolve intent through [shared arguments](../../agent-skills/avo-pipeline/references/arguments.md)
+before motion-specific loaders. Selected code-drawn follows the
+[advanced workflow](../../agent-skills/avo-pipeline/references/code-drawn.md) and common
+canonical review. HyperFrames-specific instructions below require selected
+HyperFrames; unavailable engines/treatments block without silent substitution.
+
 **Timeline integration:** Profile
 
 ## Workflow guidance
@@ -11,7 +17,7 @@
 
 Follow the shared [step-status response contract](../../agent-skills/avo-pipeline/references/step-status.md) for every progress, input, blocker, and completion response.
 
-Router to custom HyperFrames composition skill.
+Router to a custom composition using the selected engine's compatible workflow.
 
 **Skill:** [`agent-skills/avo-pipeline/references/general.md`](../../agent-skills/avo-pipeline/references/general.md)
 
