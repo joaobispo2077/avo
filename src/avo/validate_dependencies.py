@@ -295,9 +295,74 @@ def check_external_binary_or_clone(
     return check_git_clone(root, tool_id, spec, ci=ci)
 
 
-def run_checks(root: Path, *, ci: bool, optional: bool) -> list[CheckResult]:
+def _motion_prerequisite(tool_id: str, readiness: dict[str, Any]) -> CheckResult:
+    if readiness["ready"]:
+        return CheckResult(tool_id, "OK", "selected motion runtime available")
+    return CheckResult(tool_id, "FAIL", "; ".join(readiness["blockers"]))
+
+
+def _selected_motion_readiness(
+    root: Path, manifest: dict[str, Any], motion_engine: str | None
+) -> dict[str, Any] | None:
+    if motion_engine is None:
+        return None
+    from avo.motion import MotionError, inspect_motion, validate_engine
+
+    validate_engine(motion_engine)
+    if (manifest["tools"].get(motion_engine) or {}).get("job") != "motion":
+        raise MotionError(
+            "MOTION_ENGINE_UNSUPPORTED",
+            f"Selected engine is absent from the dependency manifest: {motion_engine}",
+        )
+    return inspect_motion(root=root, invocation=motion_engine)["readiness"]
+
+
+def _check_managed_runtime(tool_id: str) -> CheckResult:
+    from avo.motion_runtime import runtime_readiness
+
+    return _motion_prerequisite(tool_id, runtime_readiness())
+
+
+def _check_dependency(
+    root: Path, tool_id: str, spec: dict[str, Any], *, ci: bool
+) -> CheckResult:
+    kind = spec.get("kind", "")
+    if kind == "git-clone":
+        check = check_ai_memory_optional if tool_id == "ai-memory" else check_git_clone
+        return check(root, tool_id, spec, ci=ci)
+    if kind == "external-binary-or-clone":
+        check = (
+            check_ai_jail_optional
+            if tool_id == "ai-jail"
+            else check_external_binary_or_clone
+        )
+        return check(root, tool_id, spec, ci=ci)
+    handlers = {
+        "in-repo-paths": lambda: check_in_repo_paths(root, tool_id, spec),
+        "python-project": lambda: check_python_project(root, tool_id, spec),
+        "system-binary": lambda: check_system_binary(tool_id, spec, ci=ci),
+        "npm-package": lambda: check_npm_package(root, tool_id, spec),
+        "managed-runtime": lambda: _check_managed_runtime(tool_id),
+        "documentation-only": lambda: check_documentation_only(root, tool_id, spec),
+    }
+    handler = handlers.get(kind)
+    return (
+        handler()
+        if handler is not None
+        else CheckResult(tool_id, "FAIL", f"unknown kind: {kind}")
+    )
+
+
+def run_checks(
+    root: Path,
+    *,
+    ci: bool,
+    optional: bool,
+    motion_engine: str | None = None,
+) -> list[CheckResult]:
     manifest = load_manifest(root)
     routing = load_routing(root)
+    selected_readiness = _selected_motion_readiness(root, manifest, motion_engine)
     alignment = routing_covers_manifest(routing, manifest)
     results: list[CheckResult] = []
     if alignment:
@@ -316,34 +381,19 @@ def run_checks(root: Path, *, ci: bool, optional: bool) -> list[CheckResult]:
 
     for tool_id, spec in canonical_tools:
         spec = {**spec, "_id": tool_id}
+        if selected_readiness is not None and spec.get("job") == "motion":
+            results.append(
+                _motion_prerequisite(tool_id, selected_readiness)
+                if tool_id == motion_engine
+                else CheckResult(tool_id, "SKIP", "not the selected motion engine")
+            )
+            continue
         required = bool(spec.get("required"))
         if not required and not optional:
             results.append(CheckResult(tool_id, "SKIP", "optional (not requested)"))
             continue
 
-        kind = spec.get("kind", "")
-        if kind == "in-repo-paths":
-            r = check_in_repo_paths(root, tool_id, spec)
-        elif kind == "python-project":
-            r = check_python_project(root, tool_id, spec)
-        elif kind == "system-binary":
-            r = check_system_binary(tool_id, spec, ci=ci)
-        elif kind == "git-clone":
-            if tool_id == "ai-memory":
-                r = check_ai_memory_optional(root, tool_id, spec, ci=ci)
-            else:
-                r = check_git_clone(root, tool_id, spec, ci=ci)
-        elif kind == "npm-package":
-            r = check_npm_package(root, tool_id, spec)
-        elif kind == "documentation-only":
-            r = check_documentation_only(root, tool_id, spec)
-        elif kind == "external-binary-or-clone":
-            if tool_id == "ai-jail":
-                r = check_ai_jail_optional(root, tool_id, spec, ci=ci)
-            else:
-                r = check_external_binary_or_clone(root, tool_id, spec, ci=ci)
-        else:
-            r = CheckResult(tool_id, "FAIL", f"unknown kind: {kind}")
+        r = _check_dependency(root, tool_id, spec, ci=ci)
         r.tool = tool_id
         if not required and r.status == "FAIL":
             r = CheckResult(tool_id, "WARN", r.note)
@@ -379,9 +429,19 @@ def main(argv: list[str] | None = None) -> int:
         help="Also validate optional orchestrator tools",
     )
     parser.add_argument("--root", type=Path, default=None, help="Repo root override")
+    parser.add_argument(
+        "--motion-engine",
+        choices=["hyperframes", "remotion", "code-drawn"],
+        help="Validate prerequisites only for this motion engine",
+    )
     args = parser.parse_args(argv)
     root = args.root or repo_root()
-    results = run_checks(root, ci=args.ci, optional=args.include_optional)
+    results = run_checks(
+        root,
+        ci=args.ci,
+        optional=args.include_optional,
+        motion_engine=args.motion_engine,
+    )
     return print_report(results)
 
 
