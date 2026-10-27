@@ -16,6 +16,7 @@ from avo import (
     shorts_contract,
     shorts_delivery,
     shorts_media,
+    shorts_motion,
     shorts_paths,
     shorts_plan,
     shorts_qc,
@@ -135,6 +136,8 @@ def _raw_dir_from_batch_root(batch_root: Path | str) -> Path | None:
 def _request_paths(
     request_path: Path,
     args: argparse.Namespace,
+    *,
+    pin_motion: bool = False,
 ) -> tuple[dict[str, Any], shorts_paths.ShortsBatchPaths | None]:
     request = _read_json_object(request_path)
     version = str(request.get("version") or "1.0")
@@ -145,6 +148,8 @@ def _request_paths(
             "so the canonical batch root can be resolved before work"
         )
     if raw_dir is None:
+        if pin_motion:
+            _pin_validated_request_motion(request, None)
         return request, None
     raw_dir = Path(raw_dir).expanduser().resolve()
     batch_dir = _request_batch_dir(request, args, raw_dir)
@@ -157,7 +162,10 @@ def _request_paths(
     if shorts_contract.uses_canonical_root(version):
         request["batchRoot"] = str(paths.batch_root)
         request["batchRootSource"] = paths.root_source
-    shorts_contract.validate_document(request, "request")
+    if pin_motion:
+        _pin_validated_request_motion(request, paths)
+    else:
+        shorts_contract.validate_document(request, "request")
     shorts_paths.register_batch(paths)
     return request, paths
 
@@ -298,8 +306,30 @@ def _validate(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def _pin_request_motion(
+    request: dict, paths: shorts_paths.ShortsBatchPaths | None
+) -> None:
+    from avo.motion import inspect_motion
+    from avo.video_context import resolve_context, resolve_context_motion_selection
+
+    selected = request["defaults"].get("motionEngine")
+    invocation = {"engine": selected} if selected is not None else None
+    if paths is not None and (paths.raw_dir / "avo.project.json").is_file():
+        context = resolve_context(raw_dir=paths.raw_dir)
+        selection = resolve_context_motion_selection(context, invocation=invocation)
+    else:
+        selection = inspect_motion(invocation=invocation)["selection"]
+    request["defaults"]["motionEngine"] = selection["engine"]
+
+
+def _pin_validated_request_motion(request, paths):
+    shorts_contract.validate_document(request, "request")
+    _pin_request_motion(request, paths)
+    shorts_contract.validate_document(request, "request")
+
+
 def _resolve(args: argparse.Namespace) -> int:
-    request, paths = _request_paths(args.request, args)
+    request, paths = _request_paths(args.request, args, pin_motion=True)
     request_path = args.request.resolve()
     if paths is not None:
         request_path = _snapshot_request(args.request, request, paths)
@@ -313,7 +343,9 @@ def _resolve(args: argparse.Namespace) -> int:
                 "legacy v1.0 resolution without --raw-dir requires --output"
             )
         output_path = args.output
-    output = shorts_plan.resolve_request_file(request_path, output_path)
+    output = shorts_plan.resolve_request_file(
+        request_path, output_path, motion_engine=request["defaults"]["motionEngine"]
+    )
     plan = shorts_contract.load_document(output, "plan")
     if paths is not None:
         shorts_paths.register_batch(paths, plan_hash=plan["planHash"])
@@ -372,6 +404,7 @@ def _new_status(
         "items": [
             {
                 "shortId": item["id"],
+                **shorts_motion.pinned_fields(item),
                 "inputFingerprint": item["inputFingerprint"],
                 "state": "pending",
                 "dirty": True,
@@ -684,7 +717,7 @@ def _fidelity_segments(item):
     return item["sourceSegments"]
 
 
-def _fidelity_lock(plan, item, spec, overlay, mixed):
+def _fidelity_lock(plan, item, spec, overlay, mixed, receipt=None):
     lock = {
         "plan": str(plan["planHash"]),
         "item": str(item["inputFingerprint"]),
@@ -702,11 +735,15 @@ def _fidelity_lock(plan, item, spec, overlay, mixed):
             if isinstance(asset, Mapping)
         },
     }
-    lock.update(_fidelity_implementation_hashes())
+    if receipt is None:
+        lock.update(_fidelity_implementation_hashes())
+    else:
+        lock.update(_fidelity_implementation_hashes("code-drawn"))
+        lock.update(shorts_motion.receipt_lock(receipt))
     return lock
 
 
-def _fidelity_implementation_hashes():
+def _fidelity_implementation_hashes(engine="hyperframes"):
     from avo import shorts_fidelity, shorts_fidelity_audio
 
     template_root = (
@@ -714,22 +751,44 @@ def _fidelity_implementation_hashes():
         / "templates"
         / "shorts_hyperframes"
     )
-    paths = (
+    common = (
         Path(__file__),
         Path(shorts_fidelity.__file__),
         Path(shorts_fidelity_audio.__file__),
-        Path(hyperframes_motion.__file__),
-        template_root / "index.html",
-        template_root / "runtime.js",
-        template_root / "styles.css",
-        template_root / "hyperframes.json",
     )
-    return {
+    paths = (
+        (*common, Path(shorts_motion.__file__))
+        if engine == "code-drawn"
+        else (
+            *common,
+            Path(hyperframes_motion.__file__),
+            template_root / "index.html",
+            template_root / "runtime.js",
+            template_root / "styles.css",
+            template_root / "hyperframes.json",
+        )
+    )
+    hashes = {
         f"implementation:{path.name}": shorts_media.sha256_file(path) for path in paths
     }
+    if engine == "code-drawn":
+        from avo.motion import _drawing_generator_identity
+
+        generator = _drawing_generator_identity()
+        hashes.update(
+            {
+                "generator:code-drawn-executable": generator["executableSha256"],
+                "generator:code-drawn-source": generator["sourceSha256"],
+            }
+        )
+    return hashes
 
 
 def _render_graphics_alpha(spec, work, overlay, fps, adapter):
+    if shorts_motion.engine(spec) != "hyperframes":
+        raise RuntimeError(
+            "code-drawn graphics require an admitted canonical alpha; HyperFrames styles are unsupported"
+        )
     overlay_spec = {
         **spec,
         "renderLayers": "graphics-only",
@@ -765,9 +824,11 @@ def _render_source_fidelity(
     spec: Mapping[str, Any],
     work: Path,
     expected: Path,
-    adapter: HyperframesAdapter,
-) -> None:
-    """Render HTML graphics alpha over original 10-bit picture, never over a proof."""
+    adapter: HyperframesAdapter | None,
+    *,
+    workspace=None,
+) -> dict[str, Any] | None:
+    """Composite selected graphics alpha over original picture and independent audio."""
     from fractions import Fraction
 
     from avo import shorts_fidelity, shorts_fidelity_audio
@@ -778,6 +839,9 @@ def _render_source_fidelity(
         or Fraction(str(output["fps"])).limit_denominator(100000)
     )
     overlay = work / "renders" / "graphics-alpha.webm"
+    receipt = None
+    if shorts_motion.engine(spec) == "code-drawn":
+        overlay, receipt = shorts_motion.admitted_alpha(spec, workspace, item, output)
     mixed = shorts_fidelity_audio.mix_short_audio(
         spec["assets"],
         item,
@@ -797,9 +861,17 @@ def _render_source_fidelity(
         fps=fps,
         mixed_audio_path=Path(mixed["path"]),
         mixed_audio_sha256=mixed["sha256"],
+        **(
+            {
+                "graphics_review": "admitted code-drawn alpha; separate human visual and caption review pending"
+            }
+            if receipt is not None
+            else {}
+        ),
     )
-    _render_graphics_alpha(spec, work, overlay, fps, adapter)
-    lock = _fidelity_lock(plan, item, spec, overlay, mixed)
+    if receipt is None:
+        _render_graphics_alpha(spec, work, overlay, fps, adapter)
+    lock = _fidelity_lock(plan, item, spec, overlay, mixed, receipt)
     lock["microproof-gate"] = microproof_gate["sha256"]
     implementation = shorts_fidelity.registered_implementation()
     lock["implementation:registered-source-fidelity"] = implementation["sha256"]
@@ -821,10 +893,13 @@ def _render_source_fidelity(
         mixed_audio_sha256=mixed["sha256"],
         preset="fast" if output.get("preview") else "slow",
     )
+    if receipt is not None:
+        shorts_motion.revalidate_alpha(spec, workspace, item, output, receipt)
     result["audioMix"] = mixed
     result["implementationRef"] = implementation
     result["microproofGate"] = microproof_gate
     shorts_contract.atomic_write_json(work / "source-fidelity.json", result)
+    return receipt
 
 
 def _render_hyperframes_picture(adapter, project, expected, fps):
@@ -867,6 +942,51 @@ def _check_hyperframes_project(adapter, project, fidelity):
         raise RuntimeError(_hyperframes_command_error(checked, "strict check"))
 
 
+def _render_selected_proof(
+    plan, item, master, output, spec, work, expected, adapter_factory, workspace
+):
+    fidelity = output.get("pixelFormat") == "yuv420p10le"
+    if shorts_motion.engine(spec) == "code-drawn":
+        project = work / "composition"
+        shorts_contract.atomic_write_json(project / "composition.json", spec)
+        receipt = _render_source_fidelity(
+            plan, item, master, output, spec, work, expected, None, workspace=workspace
+        )
+        extension = receipt["parameters"]["codeDrawn"]
+        validation = {
+            "codeDrawnValidation": {
+                "status": "passed",
+                "receiptRecordHash": receipt["recordHash"],
+                "inputLockSha256": extension["inputLockRef"]["sha256"],
+            }
+        }
+        return project, None, expected, validation
+    project = compile_project(spec, work / "hyperframes")
+    adapter = adapter_factory()
+    _check_hyperframes_project(adapter, project, fidelity)
+    contact_sheet = work / "qc" / "contact-sheet.jpg"
+    try:
+        shorts_qc.generate_contact_sheet(project, contact_sheet)
+    except ValueError:
+        contact_sheet = None
+    if fidelity:
+        _render_source_fidelity(
+            plan, item, master, output, spec, work, expected, adapter
+        )
+    else:
+        fps = str(
+            output.get("frameRateRational")
+            or Fraction(str(output["fps"])).limit_denominator(100000)
+        )
+        expected = _render_hyperframes_picture(adapter, project, expected, fps)
+    return (
+        project,
+        contact_sheet,
+        expected,
+        {"hyperframesValidation": {"status": "passed", "strict": True}},
+    )
+
+
 def _build_one_proof(
     plan: Mapping[str, Any],
     item: Mapping[str, Any],
@@ -899,6 +1019,7 @@ def _build_one_proof(
             "height": preview_profile["height"],
             "preview": True,
         }
+    workspace = shorts_motion.require_proof(item, output, paths)
     master_value = Path(request["source"]["masterPath"])
     master = (
         master_value.resolve()
@@ -956,7 +1077,12 @@ def _build_one_proof(
     expected = (
         work / "renders" / f"{item['expectedOutputBasename']}-proof-v{revision:03d}.mp4"
     )
-    spec = build_composition_spec(
+    composition_builder = (
+        shorts_motion.composition_spec
+        if workspace is not None
+        else build_composition_spec
+    )
+    spec = composition_builder(
         batch_id=plan["batchId"],
         item=item,
         output=output,
@@ -976,25 +1102,10 @@ def _build_one_proof(
             }
         )
         shorts_contract.validate_document(spec, "composition")
-    project = compile_project(spec, work / "hyperframes")
-    adapter = adapter_factory()
+    project, contact_sheet, expected, validation = _render_selected_proof(
+        plan, item, master, output, spec, work, expected, adapter_factory, workspace
+    )
     fidelity = output.get("pixelFormat") == "yuv420p10le"
-    _check_hyperframes_project(adapter, project, fidelity)
-    contact_sheet = work / "qc" / "contact-sheet.jpg"
-    try:
-        shorts_qc.generate_contact_sheet(project, contact_sheet)
-    except ValueError:
-        contact_sheet = None
-    if fidelity:
-        _render_source_fidelity(
-            plan, item, master, output, spec, work, expected, adapter
-        )
-    else:
-        fps = str(
-            output.get("frameRateRational")
-            or Fraction(str(output["fps"])).limit_denominator(100000)
-        )
-        expected = _render_hyperframes_picture(adapter, project, expected, fps)
     shorts_media.ensure_audio_channels(
         expected,
         channels=int(output.get("audioChannels", 2)),
@@ -1036,7 +1147,8 @@ def _build_one_proof(
         "renderProfile": render_profile,
         "artifacts": [*(prior.get("artifacts") or []), *artifacts],
         "errors": [],
-        "hyperframesValidation": {"status": "passed", "strict": True},
+        **shorts_motion.pinned_fields(item),
+        **validation,
     }
 
 
@@ -1119,19 +1231,39 @@ def _fidelity_report_matches(report, proof, implementations):
     )
 
 
-def _mark_stale_fidelity_proofs(plan, status):
-    if plan.get("output", {}).get("pixelFormat") != "yuv420p10le":
-        return
+def _current_fidelity_implementations(plan, item, paths):
     from avo import shorts_fidelity
 
-    implementations = _fidelity_implementation_hashes()
+    if shorts_motion.engine(item) == "code-drawn":
+        implementations = _fidelity_implementation_hashes("code-drawn")
+        workspace = shorts_motion.workspace_from_paths(paths)
+        _, receipt = shorts_motion.admitted_alpha(item, workspace, item, plan["output"])
+        implementations.update(shorts_motion.receipt_lock(receipt))
+    else:
+        implementations = _fidelity_implementation_hashes()
     implementations["implementation:registered-source-fidelity"] = (
         shorts_fidelity.registered_implementation()["sha256"]
     )
+    return implementations
+
+
+def _current_fidelity_report(plan, row, item, paths):
+    try:
+        implementations = _current_fidelity_implementations(plan, item, paths)
+        return _fidelity_report_current(row, implementations)
+    except (OSError, ValueError, KeyError, RuntimeError, TypeError):
+        return False
+
+
+def _mark_stale_fidelity_proofs(plan, status, *, paths=None):
+    if plan.get("output", {}).get("pixelFormat") != "yuv420p10le":
+        return
+    items = {item["id"]: item for item in plan.get("items", [])}
     for row in status["items"]:
         if not (row.get("proofArtifactRevision") or row.get("proofRevision")):
             continue
-        if not _fidelity_report_current(row, implementations):
+        item = items.get(row.get("shortId"), row)
+        if not _current_fidelity_report(plan, row, item, paths):
             row["dirty"] = True
             reasons = row.setdefault("dirtyReasons", [])
             if "render-implementation-changed" not in reasons:
@@ -1160,7 +1292,7 @@ def build_proofs(
         raise shorts_contract.ContractValidationError(
             f"unknown Short IDs: {', '.join(sorted(unknown))}"
         )
-    _mark_stale_fidelity_proofs(plan, status)
+    _mark_stale_fidelity_proofs(plan, status, paths=paths)
     dirty = shorts_plan.dirty_items(plan, status, preview=preview)
     item_status = {item["shortId"]: item for item in status["items"]}
     pending = [

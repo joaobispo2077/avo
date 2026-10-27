@@ -558,11 +558,12 @@ def build_microproofs(
     mixed_audio_path: Path | None = None,
     mixed_audio_sha256: str | None = None,
     runner: CommandRunner = _default_runner,
+    graphics_review: str = "separate native HyperFrames check and snapshots required",
 ) -> dict[str, Any]:
     """Gate the same original picture/audio graph before expensive HTML alpha.
 
     This does not examine captions/graphics. The caller must separately gate the
-    native HyperFrames full composition with its check and snapshots.
+    selected graphics renderer and complete its separate visual review.
     """
     from avo.shorts_contract import atomic_write_json, content_hash
 
@@ -614,7 +615,7 @@ def build_microproofs(
         "itemId": item["id"],
         "status": "passed",
         "scope": "original-picture-and-mixed-audio-only",
-        "graphicsReview": "separate native HyperFrames check and snapshots required",
+        "graphicsReview": graphics_review,
         "implementationRef": implementation,
         "canonicalInputLock": lock,
         "results": results,

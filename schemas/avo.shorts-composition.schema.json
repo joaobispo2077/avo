@@ -21,6 +21,16 @@
     "expectedOutputPath"
   ],
   "properties": {
+    "motionEngine": {
+      "enum": [
+        "hyperframes",
+        "remotion",
+        "code-drawn"
+      ]
+    },
+    "codeDrawn": {
+      "$ref": "#/$defs/codeDrawnBinding"
+    },
     "version": {
       "enum": ["1.0", "1.1", "1.2"]
     },
@@ -333,9 +343,108 @@
         ]
       },
       "then": { "required": ["planVersion", "sourceSegments", "preparedLineage"] }
-    }
-  ],
+    },
+    {
+      "if": {
+        "required": [
+          "motionEngine"
+        ],
+        "properties": {
+          "motionEngine": {
+            "const": "code-drawn"
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "codeDrawn"
+        ]
+      }
+    },
+    {
+      "if": {
+        "required": [
+          "codeDrawn"
+        ]
+      },
+      "then": {
+        "required": [
+          "motionEngine"
+        ],
+        "properties": {
+          "motionEngine": {
+            "const": "code-drawn"
+          }
+        }
+      }
+    }],
   "$defs": {
+    "motionFileRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "sha256"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      }
+    },
+    "codeDrawnBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "instanceId",
+        "manifestRef",
+        "inputLockRef",
+        "generatedAssetRef"
+      ],
+      "properties": {
+        "engine": {
+          "const": "code-drawn"
+        },
+        "instanceId": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{2,63}$"
+        },
+        "manifestRef": {
+          "$ref": "#/$defs/motionFileRef"
+        },
+        "inputLockRef": {
+          "$ref": "#/$defs/motionFileRef"
+        },
+        "generatedAssetRef": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "assetId",
+            "recordHash",
+            "locator"
+          ],
+          "properties": {
+            "assetId": {
+              "type": "string",
+              "pattern": "^[a-z][a-z0-9-]{2,63}$"
+            },
+            "recordHash": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "locator": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      }
+    },
     "visualInsert": {
       "type": "object",
       "additionalProperties": false,

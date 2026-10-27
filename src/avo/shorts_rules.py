@@ -1,6 +1,7 @@
 """Pure Shorts mapping rules and shared sound-effect metadata."""
 
 from collections.abc import Iterable, Mapping
+from copy import deepcopy
 
 
 class MediaPreparationError(RuntimeError):
@@ -85,3 +86,27 @@ def validate_source_map(
         raise MediaPreparationError(
             "insertion provenance does not cover target duration"
         )
+
+
+def motion_engine(value) -> str:
+    if value not in ("hyperframes", "remotion", "code-drawn"):
+        raise ValueError("motion engine must be hyperframes, remotion or code-drawn")
+    return value
+
+
+def resolved_motion_fields(defaults: dict, candidate: dict) -> dict:
+    selected = motion_engine(
+        candidate.get("motionEngine", defaults.get("motionEngine", "hyperframes"))
+    )
+    binding = deepcopy(candidate.get("codeDrawn", defaults.get("codeDrawn")))
+    if selected == "code-drawn":
+        if not isinstance(binding, dict):
+            raise ValueError(
+                "code-drawn Shorts require a bound canonical generated alpha asset"
+            )
+        return {"motionEngine": selected, "codeDrawn": binding}
+    if candidate.get("codeDrawn") or (
+        "motionEngine" not in candidate and binding is not None
+    ):
+        raise ValueError("code-drawn binding conflicts with the selected motion engine")
+    return {"motionEngine": selected}
