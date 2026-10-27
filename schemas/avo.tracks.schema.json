@@ -771,8 +771,40 @@
                   },
                   "captionAvoidance": {
                     "type": "boolean"
+                  },
+                  "generatedSourceRef": {
+                    "$ref": "#/$defs/generatedSourceRef"
                   }
-                }
+                },
+                "allOf": [
+                  {
+                    "if": {
+                      "required": [
+                        "generatedSourceRef"
+                      ]
+                    },
+                    "then": {
+                      "not": {
+                        "required": [
+                          "source"
+                        ]
+                      },
+                      "properties": {
+                        "generator": {
+                          "type": "object",
+                          "required": [
+                            "adapterId"
+                          ],
+                          "properties": {
+                            "adapterId": {
+                              "const": "code-drawn"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                ]
               }
             }
           }
@@ -782,6 +814,27 @@
         },
         "animationBasis": {
           "$ref": "#/$defs/dependencyRef"
+        }
+      }
+    },
+    "generatedSourceRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "engine",
+        "instanceId",
+        "manifestRef"
+      ],
+      "properties": {
+        "engine": {
+          "const": "code-drawn"
+        },
+        "instanceId": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{2,63}$"
+        },
+        "manifestRef": {
+          "$ref": "https://avo.local/avo.animation.schema.json#/$defs/canonicalManifestRef"
         }
       }
     }
