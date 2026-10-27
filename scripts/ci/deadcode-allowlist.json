@@ -1189,6 +1189,14 @@
       "lineno": 286,
       "confidence": 60,
       "reason": "Public operator maintenance API for explicit, exact-hash local lock recovery; intentionally not an automatic CLI override. Covered by test_direction_store.py and test_direction_recovery.py."
+    },
+    {
+      "path": "src/avo/adapters/motion/code_drawn.py",
+      "name": "capture_frames",
+      "kind": "method",
+      "lineno": 590,
+      "confidence": 60,
+      "reason": "Public read-only ordered-frame diagnostic API used by physical repeat/reverse/fresh-session conformance checks; intentionally callable without encoding or canonical mutations."
     }
   ]
 }
