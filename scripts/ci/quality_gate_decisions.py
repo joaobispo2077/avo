@@ -176,26 +176,38 @@ def build_gate_series(document: dict, *, primary_series: dict | None = None) -> 
             and decision in {"PASS", "INCOMPLETE", "UNKNOWN", "MISSING", "UNAVAILABLE"}
         ):
             decision = policy_status
-        rows.append(
-            {
-                "key": key,
-                "title": gate.get("title") or title,
-                "reported_decision": reported,
-                "decision": decision,
-                "policy": _policy(document, gate),
-                "observed": _observed(document, key, proof),
-                "proof": "VERIFIED"
-                if proof.get("verified") is True
-                else "UNVERIFIED"
-                if proof
-                else "MISSING",
-                "proof_reason": proof.get("reason")
-                or "Current execution proof unavailable.",
-                "receipt_status": proof.get("receipt", {}).get("status"),
-                "exit_code": proof.get("receipt", {}).get("exit_code"),
-                "sources": copy.deepcopy(proof.get("sources", [])),
-            }
-        )
+        row = {
+            "key": key,
+            "title": gate.get("title") or title,
+            "reported_decision": reported,
+            "decision": decision,
+            "policy": _policy(document, gate),
+            "observed": _observed(document, key, proof),
+            "proof": "VERIFIED"
+            if proof.get("verified") is True
+            else "UNVERIFIED"
+            if proof
+            else "MISSING",
+            "proof_reason": proof.get("reason")
+            or "Current execution proof unavailable.",
+            "receipt_status": proof.get("receipt", {}).get("status"),
+            "exit_code": proof.get("receipt", {}).get("exit_code"),
+            "sources": copy.deepcopy(proof.get("sources", [])),
+        }
+        if key == "deps":
+            metrics = document.get("measurement_evidence", {}).get("metrics", [])
+            dependency = next(
+                (
+                    item
+                    for item in metrics
+                    if isinstance(item, dict) and item.get("key") == "dependencies"
+                ),
+                {},
+            )
+            band = dependency.get("band")
+            if band in {"red", "yellow", "green"}:
+                row["band"] = band
+        rows.append(row)
     metric, evaluation, mutation_refs = view.aggregate(document, primary_series=primary)
     verified = bool(evaluation.get("counts") and mutation_refs)
     floor = metric["threshold"]
@@ -464,6 +476,35 @@ def _color(status: str) -> str:
     )
 
 
+def _badge_color(row: dict) -> str:
+    """Dependency audit uses the severity band. Other gates stay categorical."""
+    view = _view()
+    band = row.get("band")
+    if band == "yellow":
+        return "#f0b400"
+    if band == "red":
+        return view.RED
+    if band == "green":
+        return view.GREEN
+    return _color(row["decision"])
+
+
+def _badge_ink(row: dict) -> str:
+    return "#182230" if row.get("band") == "yellow" else "white"
+
+
+def _metric_ink(row: dict) -> str:
+    view = _view()
+    band = row.get("band")
+    if band == "yellow":
+        return "#855d00"
+    if band == "red":
+        return view.RED
+    if band == "green" and row.get("key") == "deps":
+        return view.GREEN
+    return view.MUTED
+
+
 def _wrapped(value: str, width: int = 94, lines: int = 2) -> str:
     plain = re.sub(r"[*`]", "", value).replace("\n", " ")
     wrapped = textwrap.wrap(plain, width=width, break_long_words=True) or [
@@ -534,14 +575,14 @@ def render_gates(series: dict, path: Path) -> None:
             weight="bold",
             color=view.INK,
         )
-        view.box(ax, 0.216, y + 0.02, 0.096, 0.28, _color(row["decision"]))
+        view.box(ax, 0.216, y + 0.02, 0.096, 0.28, _badge_color(row))
         ax.text(
             0.264,
             y + 0.16,
             row["decision"],
             fontsize=8.5,
             weight="bold",
-            color="white",
+            color=_badge_ink(row),
             ha="center",
             va="center",
         )
@@ -560,7 +601,7 @@ def render_gates(series: dict, path: Path) -> None:
             y - 0.035,
             _wrapped(row["observed"], 100, 1),
             fontsize=9.1,
-            color=view.MUTED,
+            color=_metric_ink(row),
             va="top",
         )
         ax.text(

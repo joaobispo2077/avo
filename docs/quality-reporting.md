@@ -296,7 +296,7 @@ evidence; they do not prove correctness for every possible input.
 | CRAP | Informational per-function calculation from verified same-run inputs; explicit unmeasured functions |
 | CA/CE coupling | Current static package graph, counts, and instability; `code-risk.json`; no speculative quadrant policy |
 | Lint and formatting | Qualitative gate decisions and capture logs, not invented percentage metrics |
-| Security | Actual Python/npm audits, advisory descriptions and fix versions, findings, policy, and command receipts |
+| Security | Actual Python/npm audits, advisory descriptions and fix versions, findings, policy, and command receipts. The dependency audit chip and metric use the worst unwaived npm severity: critical red FAIL, high or moderate yellow PASS with each high package named, low-only or clean green PASS. It stays a chip, not a 0 to 100 bar. |
 | Dead code | Actual Vulture findings, unwaived count, matched exceptions, reasons and source lines; `deadcode.json` |
 | Import boundaries | Executed kept/broken contract counts and capture log; configured contract count remains configuration |
 | Dependency tree | Actual proposed add/remove/change counts from npm's dry run; `dependency-tree.json`; proposals are not applied or automatically blocking |
