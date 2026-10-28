@@ -464,6 +464,12 @@ resolution, frame rate, duration, delivery format, publishing speed, whether
 animation is primary or supporting, rights/privacy/factual/AI risks, and existing
 framework architecture.
 
+Resolve the motion engine before loading engine-specific skills or checking their prerequisites. Inspect with `avo cli animation engine-show --project <absolute avo.project.json> --json` (checkout: `python -m avo.cli animation engine-show`). New authoring resolves invocation > video/project > provider/channel > user-global > built-in HyperFrames. Saved preferences govern future authoring; active requests and existing animation retain their recorded engine until explicitly revised.
+
+A direct current instruction such as "no frameworks", "without a framework", "framework-free", or unqualified "avoid HyperFrames" selects the advanced `code-drawn` engine for that invocation through `--motion-engine code-drawn`. It uses editable Canvas/SVG or optional locally pinned standalone p5.brush with managed headless Chromium. Load the installed `avo-pipeline/references/code-drawn.md` guide, then only its relevant topic guides. Do not load HyperFrames skills, install/init HyperFrames, or substitute another engine on this path. "Avoid HyperFrames; use Remotion" selects explicit Remotion subject to actual readiness. Contradictory explicit choices require one focused clarification before engine-dependent writes. Quoted reference text, capability questions, "Do not avoid HyperFrames", and "no animation" are not an automatic code-drawn execution request; preserve skip-motion separately.
+
+Code-drawn is model-neutral and advanced: the author owns complete time-addressable redraws, local dependency/asset readiness, deterministic seeking, rendering and output QC. Explain those responsibilities once without a repeated engine-approval ritual. Native setup/scaffold/check/snapshot/render do not grant canonical media admission or creator approval. The existing editorial, accessibility, source-preservation, audio and human gates apply to every engine.
+
 Use HyperFrames by default for agent-authored video animation. HyperFrames fits
 this repository because current official docs describe HTML compositions,
 declared timing, HTML/CSS/JavaScript authoring, seekable runtimes, framework-owned

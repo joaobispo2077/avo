@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import shutil
 from collections.abc import Callable
+from copy import deepcopy
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
@@ -31,8 +32,10 @@ def _validate_materialization(
     materialization: dict[str, Any],
     materialization_path: Path | None,
 ) -> tuple[dict[str, Any], str]:
-    if materialization.get("kind") != "assembly":
-        raise DeliveryError("delivery requires a canonical assembly materialization")
+    if materialization.get("kind") not in {"assembly", "proof-plan"}:
+        raise DeliveryError(
+            "delivery requires a canonical assembly or native proof materialization"
+        )
     if materialization_path is None or not Path(materialization_path).is_file():
         raise DeliveryError("persisted canonical assembly materialization is missing")
     expected_hash = _document_hash(materialization, "materializationHash")
@@ -71,6 +74,20 @@ def _canonical_dependencies(
     dependencies: dict[str, str], materialization: dict[str, Any], output_hash: str
 ) -> dict[str, str]:
     result = dict(dependencies)
+    if materialization.get("kind") == "proof-plan":
+        from .approval_service import native_proof_dependencies
+
+        try:
+            required = native_proof_dependencies(materialization)
+        except (ValueError, RuntimeError) as error:
+            raise DeliveryError(
+                f"native proof materialization is invalid: {error}"
+            ) from error
+        if any(
+            key in result and result[key] != digest for key, digest in required.items()
+        ):
+            raise DeliveryError("native proof delivery dependencies are stale")
+        return dict(sorted({**result, **required}.items()))
     references = {
         "materialization": materialization.get("materializationHash"),
         "delivery-fidelity-policy": materialization.get("deliveryFidelityPolicyHash"),
@@ -93,7 +110,7 @@ def _materialization_reference(
 ) -> dict[str, Any]:
     policy = materialization.get("deliveryFidelityPolicy") or {}
     lineage = materialization.get("pictureLineage") or {}
-    return {
+    reference = {
         "path": str(materialization_path),
         "materializationId": materialization.get("materializationId"),
         "materializationHash": materialization.get("materializationHash"),
@@ -112,11 +129,22 @@ def _materialization_reference(
             "rootIds": list(lineage.get("rootIds") or []),
         },
     }
+    if materialization.get("kind") == "proof-plan":
+        reference.update(
+            {
+                "kind": "proof-plan",
+                "proofPlanId": materialization["proofPlanId"],
+                "proofPlanHash": materialization["proofPlanHash"],
+                "preflightHash": materialization["preflightHash"],
+                "microproofGateHash": materialization["microproofGateHash"],
+            }
+        )
+    return reference
 
 
 def _validate_materialization_reference(
     reference: dict[str, Any], master_fingerprint: dict[str, Any]
-) -> None:
+) -> dict[str, Any]:
     materialization_path = reference.get("path")
     if not materialization_path:
         raise DeliveryError("canonical assembly materialization reference is missing")
@@ -138,6 +166,25 @@ def _validate_materialization_reference(
         raise DeliveryError("canonical assembly materialization references changed")
     if master_fingerprint["sha256"] != expected["outputSha256"]:
         raise DeliveryError("master bytes changed from materialized output")
+    _require_native_reference(reference, materialization)
+    return materialization
+
+
+def _require_native_reference(reference, materialization):
+    if materialization.get("kind") != "proof-plan":
+        return
+    expected = {
+        key: materialization.get(key)
+        for key in (
+            "proofPlanId",
+            "proofPlanHash",
+            "preflightHash",
+            "microproofGateHash",
+        )
+    }
+    expected["kind"] = "proof-plan"
+    if any(reference.get(key) != value for key, value in expected.items()):
+        raise DeliveryError("native proof delivery references changed")
 
 
 def _load_document(path: Path, label: str) -> dict[str, Any]:
@@ -228,6 +275,85 @@ def _human_final_review(
     }
 
 
+def _require_native_delivery_materialization(
+    workspace, candidate, materialization, path, dependencies
+):
+    from .approval_service import require_native_proof_materialization
+
+    if _load_document(path, "native proof materialization") != materialization:
+        raise DeliveryError(
+            "persisted native proof materialization differs from supplied record"
+        )
+    try:
+        expected = require_native_proof_materialization(
+            workspace, materialization, candidate
+        )
+        if any(dependencies.get(key) != value for key, value in expected.items()):
+            raise DeliveryError(
+                "native delivery materialization dependencies are stale"
+            )
+    except (OSError, ValueError, RuntimeError) as error:
+        raise DeliveryError(
+            f"native delivery materialization is invalid: {error}"
+        ) from error
+
+
+def _motion_delivery_metadata(
+    package: dict[str, Any] | Path, candidate: Path, dependencies: dict[str, str]
+) -> dict[str, Any]:
+    from .review import validate_code_drawn_review
+
+    if isinstance(package, (str, Path)):
+        package = _load_document(Path(package), "code-drawn motion review")
+    if not isinstance(package, dict):
+        raise DeliveryError("delivery motion review must be an exact candidate package")
+    try:
+        evidence = validate_code_drawn_review(
+            package,
+            candidate=candidate,
+            dependencies=dependencies,
+            render_profile="master",
+        )
+    except (OSError, ValueError, RuntimeError) as error:
+        raise DeliveryError(
+            f"delivery motion review is invalid or stale: {error}"
+        ) from error
+    if evidence["status"] == "fail":
+        raise DeliveryError("delivery motion review has unresolved blocking findings")
+    return {
+        "engine": "code-drawn",
+        "sources": deepcopy(package["sources"]),
+        "output": deepcopy(package["candidateContract"]),
+        "review": deepcopy(evidence["reviewContext"]["codeDrawnReview"]),
+    }
+
+
+def _require_native_motion_sources(materialization, metadata):
+    lock = materialization.get("canonicalInputLock") or {}
+    for source in metadata["sources"]:
+        expected = {
+            "generated:" + source["assetId"]: source["recordHash"],
+            "input-lock:" + source["instanceId"]: source["inputLockHash"],
+        }
+        if any(lock.get(key) != digest for key, digest in expected.items()):
+            raise DeliveryError(
+                "motion review source is absent from native proof input lock"
+            )
+
+
+def _validate_motion_delivery(manifest: dict[str, Any], master: Path) -> None:
+    if "motion" not in manifest:
+        return
+    expected = manifest["motion"]
+    if not isinstance(expected, dict) or not (expected.get("review") or {}).get("path"):
+        raise DeliveryError("delivery motion review reference is missing")
+    current = _motion_delivery_metadata(
+        Path(expected["review"]["path"]), master, manifest["dependencies"]
+    )
+    if current != expected:
+        raise DeliveryError("delivery motion source/review identity changed")
+
+
 class DeliveryService:
     def __init__(self, workspace: Any, *, clock: Callable[[], str] = now_iso):
         self.workspace = workspace
@@ -263,6 +389,71 @@ class DeliveryService:
             "sha256": snapshot["snapshotHash"],
         }
 
+    def _require_native_candidate_snapshot(
+        self, fingerprint, materialization, dependencies
+    ):
+        from .pipeline import TimelinePipeline
+
+        reference = self._require_candidate_snapshot(fingerprint)
+        snapshot = TimelinePipeline(self.workspace).active_candidate_snapshot()
+        if reference is None or snapshot is None:
+            raise DeliveryError(
+                "native delivery requires an approved candidate snapshot"
+            )
+        exact = (
+            (snapshot.get("materialization") or {}).get("sha256")
+            == materialization["materializationHash"],
+            (snapshot.get("proofPlan") or {}).get("sha256")
+            == dependencies["proof-plan"],
+            all(
+                snapshot.get(key) for key in ("review", "regressionResult", "approval")
+            ),
+        )
+        if not all(exact):
+            raise DeliveryError("native delivery candidate snapshot bindings are stale")
+        return reference
+
+    def _preparation_context(
+        self,
+        candidate,
+        materialization,
+        materialization_path,
+        dependencies,
+        motion_review,
+    ):
+        candidate_fingerprint, materialized_output_hash = _validate_materialization(
+            candidate, materialization, materialization_path
+        )
+        canonical_dependencies = _canonical_dependencies(
+            dependencies, materialization, materialized_output_hash
+        )
+        if materialization.get("kind") == "proof-plan":
+            _require_native_delivery_materialization(
+                self.workspace,
+                candidate,
+                materialization,
+                Path(materialization_path),
+                canonical_dependencies,
+            )
+            candidate_snapshot = self._require_native_candidate_snapshot(
+                candidate_fingerprint, materialization, canonical_dependencies
+            )
+        else:
+            candidate_snapshot = self._require_candidate_snapshot(candidate_fingerprint)
+        motion_metadata = (
+            _motion_delivery_metadata(motion_review, candidate, canonical_dependencies)
+            if motion_review is not None
+            else None
+        )
+        if motion_metadata is not None and materialization.get("kind") == "proof-plan":
+            _require_native_motion_sources(materialization, motion_metadata)
+        return (
+            materialized_output_hash,
+            candidate_snapshot,
+            canonical_dependencies,
+            motion_metadata,
+        )
+
     def prepare(
         self,
         *,
@@ -276,19 +467,25 @@ class DeliveryService:
             ..., dict[str, Path]
         ] = final_transcript_artifacts.generate_from_master,
         transcript_options: dict[str, Any] | None = None,
+        motion_review: dict[str, Any] | Path | None = None,
     ) -> dict[str, Any]:
         candidate = Path(candidate).resolve()
         master = Path(master).resolve()
         if not candidate.is_file():
             raise DeliveryError(f"candidate does not exist: {candidate}")
-        candidate_fingerprint, materialized_output_hash = _validate_materialization(
-            candidate, materialization, materialization_path
+        (
+            materialized_output_hash,
+            candidate_snapshot,
+            canonical_dependencies,
+            motion_metadata,
+        ) = self._preparation_context(
+            candidate,
+            materialization,
+            materialization_path,
+            dependencies,
+            motion_review,
         )
-        candidate_snapshot = self._require_candidate_snapshot(candidate_fingerprint)
         master_fp = _copy_verified_master(candidate, master, materialized_output_hash)
-        canonical_dependencies = _canonical_dependencies(
-            dependencies, materialization, materialized_output_hash
-        )
 
         edit_dir = self.workspace.raw_dir / "edit"
         sidecars = transcript_generator(
@@ -314,6 +511,10 @@ class DeliveryService:
                 "final master review did not pass; delivery remains blocked: "
                 + str(review.get("blocker") or review.get("state"))
             )
+        if materialization.get("kind") == "proof-plan":
+            _validate_existing_review(
+                Path(review["reviewPath"]), master, master_fp, canonical_dependencies
+            )
         artifacts = _artifact_fingerprints(sidecars)
         manifest = {
             "schemaVersion": "1.0.0",
@@ -336,6 +537,8 @@ class DeliveryService:
             "approval": None,
             "createdAt": self.clock(),
         }
+        if motion_metadata is not None:
+            manifest["motion"] = motion_metadata
         if candidate_snapshot is not None:
             manifest["candidateSnapshot"] = candidate_snapshot
         atomic_write_json(self.manifest_path, manifest)
@@ -393,6 +596,10 @@ class DeliveryService:
         if (review_path is None) == (human_final_disposition_path is None):
             raise DeliveryError(
                 "review and human-final disposition are exclusive; provide exactly one"
+            )
+        if materialization.get("kind") != "assembly":
+            raise DeliveryError(
+                "existing-master adoption requires an assembly materialization"
             )
         master = Path(master).resolve()
         materialization_path = Path(materialization_path).resolve()
@@ -581,7 +788,7 @@ class DeliveryService:
             )
         transcript_path = Path(manifest["transcriptArtifacts"]["json"]["path"])
         final_transcript_artifacts.validate_master_transcript(master, transcript_path)
-        _validate_materialization_reference(
+        materialization = _validate_materialization_reference(
             manifest.get("materialization") or {}, current
         )
         expected_snapshot = manifest.get("candidateSnapshot")
@@ -591,6 +798,31 @@ class DeliveryService:
                 raise DeliveryError("delivery candidate snapshot is stale")
         if manifest.get("adoption", {}).get("mode") == "existing-master":
             self._validate_adoption(manifest, current)
+
+        if materialization.get("kind") == "proof-plan":
+            materialization = _load_document(
+                Path(manifest["materialization"]["path"]),
+                "native proof materialization",
+            )
+            _require_native_delivery_materialization(
+                self.workspace,
+                master,
+                materialization,
+                Path(manifest["materialization"]["path"]),
+                manifest["dependencies"],
+            )
+            self._require_native_candidate_snapshot(
+                current, materialization, manifest["dependencies"]
+            )
+            if "motion" in manifest:
+                _require_native_motion_sources(materialization, manifest["motion"])
+            _validate_existing_review(
+                Path(manifest["review"]["path"]),
+                master,
+                current,
+                manifest["dependencies"],
+            )
+        _validate_motion_delivery(manifest, master)
         return manifest
 
     def approve(self, *, actor: str, reason: str) -> dict[str, Any]:

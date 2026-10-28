@@ -236,7 +236,9 @@ function copyRecursive(src, dest, dryRun) {
 
 function installSkillsViaNpx(profile, opts) {
   const spec = `github:${REPO}#${PINNED_REF}`;
-  const args = ['-y', 'skills', 'add', spec, '-a', profile];
+  const agent =
+    { claude: 'claude-code', gemini: 'gemini-cli' }[profile] || profile;
+  const args = ['-y', 'skills', 'add', spec, '-a', agent];
   if (opts.yes) args.push('--yes');
   log(`npx ${args.join(' ')}`, { dry: opts.dryRun });
   if (opts.dryRun) return true;

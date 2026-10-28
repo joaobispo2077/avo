@@ -6,7 +6,11 @@ Resolve once. Do not ask. Consumers: **skills + binary**. MCP and clone only whe
 
 Never `pip install avo` — PyPI `avo` is Soteria.
 
-Engine zip is **AVO Python only** — not ffmpeg, HyperFrames, watch-skill, CUDA, or model weights. Unused when this AVO repo is the opened folder. Windows launcher: `%USERPROFILE%\.avo\bin\avo`.
+The engine zip includes AVO's Python runtime, code-drawn adapter/templates and
+its pinned Playwright driver with an internal Node executable. It excludes the
+separately managed browser, FFmpeg/FFprobe, HyperFrames, watch-skill, CUDA and model
+weights. No separate user-managed Node capture worker is required. Unused when
+this AVO repo is the opened folder. Windows launcher: `%USERPROFILE%\.avo\bin\avo`.
 
 1. **Override** — user said MCP / self-build / clone-python. Honor it. Do not silently use the zip.
 2. **Opened folder is an AVO checkout** — `pyproject.toml` name `avo` **and** `src/avo/` **and** `AGENTS.md` contains `<!-- avo:orchestrator:start -->` → `python -m avo.*`. Do **not** use `~/.avo/bin/avo`.
@@ -15,6 +19,31 @@ Engine zip is **AVO Python only** — not ffmpeg, HyperFrames, watch-skill, CUDA
 **Tier 1** (~30s) is skills + slash commands; the same installer also fetches the engine zip on v1 OS/arch. `npx skills add` copies markdown only — if `~/.avo/bin/avo` is missing, run the installer. **Tier 2** (`--full` from a clone) is ffmpeg, whisper weights, watch-skill, HyperFrames — not inside the zip. Summary: [README § Install](../../README.md#install).
 
 ---
+
+## Advanced code-drawn runtime
+
+The existing `avo-pipeline` skill includes its nested code-drawn guidance; there
+is no fourth top-level skill. Read the
+[setup guide](../../agent-skills/avo-pipeline/references/code-drawn/setup.md) for
+the installed/source distinction and selected prerequisites.
+
+With an installed engine, explicitly provision its managed browser:
+
+```bash
+avo cli animation runtime-install --engine code-drawn --json
+```
+
+Add `--brush` only when the optional pinned standalone brush build is wanted.
+Canvas/SVG need neither brush nor a motion framework. No external Python or
+separately configured Node capture worker is needed by the frozen engine.
+Browser download occurs at this explicit setup step; inspection/render do not
+download or silently substitute system Chrome. FFmpeg/FFprobe remain external.
+Watch/models/transcription are required only by the workflow stages using them,
+not by a silent standalone drawing check. The engine also ships the public provider
+settings schema beside the launcher at `providers/avo.provider.schema.json`;
+provider manifests and user preferences remain outside the bundle. An explicit
+`AVO_ROOT` must identify a complete installation with its public schemas. See the
+[command index](../avo-commands.md#native-motion-commands).
 
 ## Tier 1 — Fast agent install
 
@@ -32,7 +61,11 @@ curl -fsSL https://raw.githubusercontent.com/joaobispo2077/avo/main/scripts/inst
 irm https://raw.githubusercontent.com/joaobispo2077/avo/main/scripts/install/install.ps1 | iex
 ```
 
-~30 seconds. Needs **Node ≥18**. Detects agents on your machine. Skips agents you do not have. Safe to re-run.
+The published skills CLI currently needs **Node 22.20+**. AVO's local installer
+and clone-based fallback still support **Node 18+**; this does not raise AVO's
+implementation minimum. The installer detects available agents and can be re-run.
+If the normal skills CLI cannot run, a local checkout provides the existing
+recursive fallback copy.
 
 #### What tier 1 installs
 
@@ -54,11 +87,11 @@ pwsh scripts/install/install.ps1 -Full -Lang en
 
 ```bash
 npx skills add joaobispo2077/avo -a cursor
-npx skills add joaobispo2077/avo -a claude
+npx skills add joaobispo2077/avo -a claude-code
 npx skills add joaobispo2077/avo -a codex
 npx skills add joaobispo2077/avo -a windsurf
 npx skills add joaobispo2077/avo -a cline
-npx skills add joaobispo2077/avo -a gemini
+npx skills add joaobispo2077/avo -a gemini-cli
 npx skills add joaobispo2077/avo -a opencode
 ```
 
@@ -137,7 +170,9 @@ rm -rf ~/.cursor/commands/avo
 
 ### Troubleshooting
 
-**Node too old:** Upgrade to Node ≥18 from [nodejs.org](https://nodejs.org).
+**Node too old for normal skills installation:** Use Node 22.20+ for the current
+published skills CLI. AVO's local installer/fallback remains Node 18+; it can copy
+the full nested skill tree from a checkout without changing the engine minimum.
 
 **No agents detected:** Install Cursor (or your agent) first, or use `--only cursor`.
 
@@ -197,7 +232,9 @@ AVO orchestrates independent local tools. This section is the **toolchain setup 
    are a fallback).
 4. A **multilingual** faster-whisper model is prepared locally; the transcription
    **language is chosen at setup** (`--lang`), not fixed to any locale.
-5. Node.js ≥ 18 with the motion toolchain (HyperFrames) installed.
+5. Node.js ≥18 for AVO's local setup, with prerequisites for the selected motion
+   engine. Full setup may install HyperFrames; standalone code-drawn does not
+   require it and uses its explicit managed-browser setup above.
 6. [GitHub Spec Kit](https://github.com/github/spec-kit) present (`.specify` marker).
 7. Optional: watch-skill, ai-memory, ai-jail, logo-generator-skill.
 
@@ -248,13 +285,19 @@ npm run setup -- --lang pt --with-memory
    `ffmpeg`/`ffprobe`, records the chosen language in `.avo/state.json`, and
    prepares the Whisper model via `avo.prepare_transcription`.
 4. **watch-skill** — clones/updates `oxbshw/watch-skill` into `tools/`.
-5. **HyperFrames** — `npm install` + `hyperframes doctor`.
-6. **Remotion** — installed per-project when justified (see
-   `docs/remotion-decision-guide.md`).
+5. **HyperFrames** — full setup may run `npm install` + `hyperframes doctor`;
+   this is not a prerequisite of selected code-drawn capture.
+6. **Remotion** — no working AVO execution adapter is provisioned. Maintained
+   external projects still require their own dependency/license review; see
+   [decision guide](../remotion-decision-guide.md).
 7. **ai-memory** *(with `--with-memory`)* — clones `akitaonrails/ai-memory`.
 8. **ai-jail** *(with `--with-jail`)* — installs via `brew`/`cargo`/`mise`/`nix`
    (Linux/macOS) or verifies inside **WSL2** on Windows.
 9. **logo-generator-skill** *(with `--with-logo`)*.
+
+Code-drawn managed Chromium/optional brush provisioning is the explicit native
+runtime-install operation above, not an extra tool silently downloaded by full
+setup. Select only the prerequisites used by the intended workflow.
 
 Each step prints a pass/fail row. Required steps (`python`, `engine`) fail the
 run; optional tools only `WARN`. The script is **idempotent** — re-running skips
@@ -271,7 +314,7 @@ satisfied steps.
 ### Verify
 
 ```bash
-# Gate 1 — orchestrator prerequisites (video-use, watch-skill, HyperFrames, …)
+# Gate 1 — full configured toolchain (not a standalone drawing prerequisite)
 npm run validate:prerequisites -- --ci
 
 # Gate 2 — project usability (run after Gate 1 passes)

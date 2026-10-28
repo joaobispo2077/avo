@@ -112,6 +112,41 @@ def _validate_breath_layer(layer: dict) -> None:
     select_events(control, 48000)
 
 
+def _validate_generated_track_layer(
+    layer: dict[str, Any], group: str, instances: set[str]
+) -> None:
+    from .contracts import ContractError
+
+    if "generatedSourceRef" not in layer:
+        return
+    if group != "videoTracks":
+        raise TrackError("Code-drawn generatedSourceRef is a video source contract.")
+    try:
+        validate_document(
+            layer,
+            "avo.tracks.schema.json#/$defs/tracksSnapshot/properties/videoTracks/properties/layers/items",
+        )
+    except ContractError as error:
+        raise TrackError(f"Invalid generated track source: {error}") from error
+    instance = layer["generatedSourceRef"]["instanceId"]
+    if instance in instances:
+        raise TrackError("Code-drawn track instance IDs must be unique.")
+    instances.add(instance)
+
+
+def _validate_generated_track_sources(snapshot: dict[str, Any], root: Path) -> None:
+    from avo.motion import MotionError, validate_code_drawn_reference
+
+    for layer in snapshot.get("videoTracks", {}).get("layers") or []:
+        if "generatedSourceRef" in layer:
+            try:
+                validate_code_drawn_reference(
+                    layer["generatedSourceRef"], root=root, include_engine=True
+                )
+            except MotionError as error:
+                raise TrackError(f"Invalid generated track source: {error}") from error
+
+
 def resolve_tracks(
     snapshot: dict[str, Any],
     cue_ids: set[str],
@@ -132,9 +167,11 @@ def resolve_tracks(
                 for layer in layers
             ]
         seen: set[str] = set()
+        generated_instances: set[str] = set()
         for layer in layers:
             layer_id = str(layer.get("layerId") or "")
             _validate_breath_layer(layer)
+            _validate_generated_track_layer(layer, group, generated_instances)
             if not layer_id or layer_id in seen:
                 raise TrackError("track layer IDs must be unique and stable")
             seen.add(layer_id)
@@ -297,6 +334,7 @@ class TracksService:
             cue["cueId"]: cue for cue in bmap_revision["snapshot"].get("cues") or []
         }
         value = resolve_tracks(value, set(cue_map), cues=cue_map)
+        _validate_generated_track_sources(value, Path(self.workspace.raw_dir))
         index = self.store.load_index()
         expected = None
         if index["headRevisionId"]:

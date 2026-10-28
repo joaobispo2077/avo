@@ -287,13 +287,31 @@ def _require_adoption_gates(workspace, manifest, snapshot, review, materializati
 
 
 class TimelinePipeline:
-    def __init__(self, workspace: TimelineWorkspace):
+    def __init__(self, workspace: TimelineWorkspace, *, motion_materializer=None):
         self.workspace = workspace
+        self.motion_materializer = motion_materializer
         self.run_store = PipelineRunStore(workspace.pipeline_run_path)
 
-    def initialize(self) -> dict[str, Any]:
-        if self.workspace.authority != "canonical":
+    def materialize_motion(self, instance_id: str, *, output: Path) -> dict[str, Any]:
+        if self.motion_materializer is None:
+            raise ValueError("Canonical motion materializer is not configured")
+        return self.motion_materializer(
+            self.workspace, instance_id, output=Path(output)
+        )
+
+    def initialize(
+        self,
+        *,
+        motion_selection: dict[str, Any] | None = None,
+        request_id: str | None = None,
+        new_request: bool = False,
+    ) -> dict[str, Any]:
+        if self.workspace.authority != "canonical" or not self.run_store.path.is_file():
             self.workspace.initialize()
+        if motion_selection is not None:
+            self.run_store.bind_motion_selection(
+                motion_selection, request_id=request_id, new_request=new_request
+            )
         return self.status()
 
     def status(self) -> dict[str, Any]:

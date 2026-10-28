@@ -2,7 +2,7 @@
 
 AVO routes **jobs** from [`avo.config.json`](../config/avo.config.json) through a thin
 **port/adapter** layer in `src/avo/adapters/`. Adapters talk to engines and external tools
-via **subprocess or CLI only** — never deep-import from `tools/*` into orchestrator logic.
+through their supported subprocess, CLI, or pinned browser-driver API. Never deep-import from `tools/*` into orchestrator logic.
 
 ## Run a job
 
@@ -20,8 +20,9 @@ Exit codes: `0` success, `1` adapter failure, `2` config/user error.
 | transcribe | local | `video-use+faster-whisper` | `FasterWhisperAdapter` | Wired |
 | transcribe | paid | `elevenlabs` | `ElevenLabsAdapter` | Stub |
 | understand | local | `watch-skill` | `WatchSkillStubAdapter` | Stub |
-| motion | local | `hyperframes` | `HyperframesStubAdapter` | Stub |
-| motion | local | `remotion` | `RemotionStubAdapter` | Stub |
+| motion | local | `hyperframes` | `HyperframesAdapter` | Default CLI integration |
+| motion | local | `code-drawn` | `CodeDrawnAdapter` | Advanced managed-browser capture |
+| motion | local | `remotion` | `RemotionStubAdapter` | Unsupported execution |
 | memory | local | `ai-memory` | `AiMemoryStubAdapter` | Stub |
 | plan | local | `speckit` | `SpeckitStubAdapter` | Stub |
 

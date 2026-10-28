@@ -47,6 +47,12 @@
       "package": "hyperframes",
       "packageJson": "package.json"
     },
+    "code-drawn": {
+      "required": false,
+      "job": "motion",
+      "description": "Advanced local Canvas/SVG/optional brush capture with a managed Chromium runtime",
+      "kind": "managed-runtime"
+    },
     "remotion": {
       "required": false,
       "job": "motion",

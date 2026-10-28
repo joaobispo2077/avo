@@ -1,5 +1,14 @@
 # /avo.changelog-video reference
 
+**Motion engine gate:** Apply [shared arguments](arguments.md) and inspect native
+`animation engine-show` with available context before motion-specific skill/setup.
+HyperFrames remains the built-in default. For selected code-drawn, follow the
+[advanced workflow](code-drawn.md) and common canonical source/review gates.
+HyperFrames-only loaders and recipes below apply only to selected HyperFrames.
+Unavailable Remotion or incompatible treatments block; never silently substitute.
+
+Use actual approved changelog/brand assets. Existing HyperFrames branded components remain engine-specific and require a compatible drawing implementation.
+
 ## Step/state mapping
 
 **Durable state:** the child pipeline-run.json and its parent timeline lineage

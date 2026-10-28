@@ -52,6 +52,7 @@ def build_manifest(
             "design": f"providers/{name}/DESIGN.md",
             "palette": f"providers/{name}/brand/palette.json",
         },
+        # No engine pin means inherit the user global choice, then HyperFrames.
         "routingOverrides": {},
         "animationLibrary": "animations/animation.json",
     }

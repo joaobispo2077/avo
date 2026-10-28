@@ -40,7 +40,7 @@ print(match.group(1))
 
 echo "building avo ${VERSION} (${PLATFORM}) with PyInstaller onedir"
 
-"$PYTHON" -m pip install -e ".[mcp]" "pyinstaller>=6,<7"
+"$PYTHON" -m pip install -e ".[mcp,code-drawn]" "pyinstaller>=6,<7"
 
 "$PYTHON" -m PyInstaller \
   --noconfirm \
@@ -55,6 +55,11 @@ if [[ ! -x "$LAUNCHER" ]]; then
   echo "error: missing onedir launcher at $LAUNCHER" >&2
   exit 1
 fi
+
+# Provider preference validation has a compatibility fallback beside the launcher.
+# Ship the public schema only; provider identities and media paths stay external.
+mkdir -p "$ONEDIR/providers"
+cp "$ROOT/providers/avo.provider.schema.json" "$ONEDIR/providers/avo.provider.schema.json"
 
 echo "smoke: avo version"
 GOT="$("$LAUNCHER" version)"
@@ -90,5 +95,5 @@ shutil.make_archive(str(base), 'zip', root_dir=dist, base_dir='avo')
 
 SIZE="$("$PYTHON" -c "from pathlib import Path; print(Path('$ZIP_PATH').stat().st_size)")"
 echo "zip: $ZIP_PATH ($SIZE bytes)"
-echo "done. Engine zip is AVO Python only (no ffmpeg / HyperFrames / watch-skill / CUDA / weights)."
+echo "done. Engine zip includes AVO and its bundled Playwright driver (no managed browser / ffmpeg / HyperFrames / watch-skill / CUDA / weights)."
 echo "If a later freeze cannot import faster_whisper, rebuild this same onedir zip with Nuitka --mode=standalone - do not switch to onefile or PyOxidizer."

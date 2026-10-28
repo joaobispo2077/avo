@@ -8,7 +8,11 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from avo.proof_composition import create_timeline_render_port, probe_audio_sample_rate
+from avo.proof_composition import (
+    create_motion_materializer,
+    create_timeline_render_port,
+    probe_audio_sample_rate,
+)
 from avo.timeline.lifecycle import (
     LifecycleError,
     PipelineRunStore,
@@ -140,9 +144,18 @@ def build_parser() -> argparse.ArgumentParser:
 
     animation = sub.add_parser("animation")
     animation_sub = animation.add_subparsers(dest="animation_command", required=True)
+    _add_motion_preferences(animation_sub)
+    _add_code_drawn_commands(animation_sub)
+    materialize_animation = animation_sub.add_parser("materialize")
+    _project_arg(materialize_animation)
+    materialize_animation.add_argument("--instance-id", required=True)
+    materialize_animation.add_argument("--output", type=Path, required=True)
     author_animation = animation_sub.add_parser("author")
     _project_arg(author_animation)
     author_animation.add_argument("--strategy", type=Path, required=True)
+    from avo.motion import ENGINE_IDS
+
+    author_animation.add_argument("--motion-engine", choices=ENGINE_IDS)
     author_animation.add_argument("--actor", required=True)
     author_animation.add_argument("--reason", required=True)
     propose_animation = animation_sub.add_parser("propose")
@@ -363,6 +376,10 @@ def build_parser() -> argparse.ArgumentParser:
 
 def _add_pipeline_entry_args(parser, operation):
     if operation == "run":
+        from avo.motion import ENGINE_IDS
+
+        parser.add_argument("--motion-engine", choices=ENGINE_IDS)
+        parser.add_argument("--new-request", action="store_true")
         parser.add_argument("--direction")
         parser.add_argument("--brief-context", type=Path)
         parser.add_argument("--direction-reference", type=Path, action="append")
@@ -410,6 +427,40 @@ def _emit(value: dict, *, as_json: bool = True) -> None:
         print(value)
 
 
+def _initialize_pipeline_run(pipeline, args: argparse.Namespace) -> dict:
+    workspace = pipeline.workspace
+    from avo.direction_cli import prepare_pipeline
+    from avo.motion import inspect_motion
+
+    shown = inspect_motion(
+        project=workspace.project_path, invocation=args.motion_engine
+    )
+    previous = (
+        (pipeline.run_store.load().get("executionChoices") or {}).get("motion")
+        if pipeline.run_store.path.is_file()
+        else None
+    )
+    changed_explicit_engine = bool(
+        args.motion_engine and previous and previous["engine"] != args.motion_engine
+    )
+    preparation = prepare_pipeline(args)
+    result = pipeline.initialize(
+        motion_selection=shown["selection"],
+        new_request=args.new_request or changed_explicit_engine,
+    )
+    from avo.cost_store import CostStore
+
+    identity = CostStore(workspace.raw_dir).initialize(
+        workspace.project["provider"], workspace.video_id
+    )
+    result["accountingVideoId"] = identity["accountingVideoId"]
+    result["briefingPreparation"] = preparation
+    result["motion"] = inspect_motion(
+        project=workspace.project_path, invocation=args.motion_engine
+    )
+    return result
+
+
 def _pipeline(args: argparse.Namespace) -> int:
     from avo.timeline.command_registry import registry_document
     from avo.timeline.pipeline import TimelinePipeline
@@ -417,21 +468,16 @@ def _pipeline(args: argparse.Namespace) -> int:
     workspace = TimelineWorkspace.from_project(
         args.project, video_id=args.video_id or None
     )
-    pipeline = TimelinePipeline(workspace)
+    pipeline = TimelinePipeline(
+        workspace, motion_materializer=create_motion_materializer()
+    )
     if args.pipeline_command == "run":
-        from avo.direction_cli import prepare_pipeline
-
-        preparation = prepare_pipeline(args)
-        result = pipeline.initialize()
-        from avo.cost_store import CostStore
-
-        identity = CostStore(workspace.raw_dir).initialize(
-            workspace.project["provider"], workspace.video_id
-        )
-        result["accountingVideoId"] = identity["accountingVideoId"]
-        result["briefingPreparation"] = preparation
+        result = _initialize_pipeline_run(pipeline, args)
     elif args.pipeline_command == "status":
+        from avo.motion import inspect_motion
+
         result = pipeline.status()
+        result["motion"] = inspect_motion(project=workspace.project_path)
     elif args.pipeline_command == "verify-commands":
         result = registry_document()
     elif args.pipeline_command == "resume":
@@ -455,12 +501,21 @@ def _pipeline(args: argparse.Namespace) -> int:
             archive=args.archive,
         )
     else:
-        payload = _load_json(args.payload) if args.payload else {}
-        payload.setdefault("actor", args.actor)
-        payload.setdefault("reason", args.reason or f"pipeline stage {args.stage}")
-        result = pipeline.advance(args.stage, **payload)
+        result = _advance_pipeline_stage(pipeline, args)
     _emit(result)
     return 0
+
+
+def _advance_pipeline_stage(pipeline, args):
+    payload = _load_json(args.payload) if args.payload else {}
+    payload.setdefault("actor", args.actor)
+    payload.setdefault("reason", args.reason or f"pipeline stage {args.stage}")
+    if args.stage == "motion-materialize":
+        return pipeline.materialize_motion(
+            payload["instanceId"], output=Path(payload["output"])
+        )
+    else:
+        return pipeline.advance(args.stage, **payload)
 
 
 def _timeline(args: argparse.Namespace) -> int:
@@ -495,6 +550,7 @@ def _add_delivery_subparsers(sub: argparse._SubParsersAction) -> None:
     prepare_delivery.add_argument("--master", type=Path, required=True)
     prepare_delivery.add_argument("--dependency", action="append", default=[])
     prepare_delivery.add_argument("--model", default="small")
+    prepare_delivery.add_argument("--motion-review", type=Path)
     _add_existing_adoption_parser(deliver_sub, "adopt", "--review")
     _add_existing_adoption_parser(
         deliver_sub, "adopt-human-final", "--human-final-disposition"
@@ -691,9 +747,9 @@ def _materialization_dependencies(materialization: dict) -> dict[str, str]:
     from avo.timeline.contracts import content_hash
 
     if materialization.get("kind") == "proof-plan":
-        from avo.timeline.approval_service import native_cut_dependencies
+        from avo.timeline.approval_service import native_proof_dependencies
 
-        return native_cut_dependencies(materialization)
+        return native_proof_dependencies(materialization)
     lock = materialization.get("canonicalInputLock") or {}
     kind = str(materialization.get("kind") or "")
     output_sha = (materialization.get("output") or {}).get("sha256")
@@ -722,19 +778,439 @@ def _materialization_dependencies(materialization: dict) -> dict[str, str]:
     return _complete_hashes(required, "assembly materialization")
 
 
+def _add_motion_preferences(subparsers) -> None:
+    from avo.motion import ENGINE_IDS
+
+    for operation in ("engine-show", "engine-set", "engine-reset"):
+        item = subparsers.add_parser(operation)
+        item.add_argument("--project", type=Path)
+        item.add_argument("--provider")
+        item.add_argument("--json", action="store_true", dest="as_json")
+        if operation == "engine-show":
+            item.add_argument("--motion-engine", choices=ENGINE_IDS)
+        else:
+            item.add_argument(
+                "--scope", choices=("global", "provider", "project"), required=True
+            )
+            if operation == "engine-set":
+                item.add_argument("--engine", choices=ENGINE_IDS, required=True)
+
+
+def _add_code_drawn_commands(subparsers) -> None:
+    runtime = subparsers.add_parser("runtime-install")
+    runtime.add_argument("--engine", choices=("code-drawn",), required=True)
+    runtime.add_argument("--brush", action="store_true")
+    runtime.add_argument("--json", action="store_true", dest="as_json")
+
+    scaffold = subparsers.add_parser("code-drawn-scaffold")
+    scaffold.add_argument("--destination", type=Path, required=True)
+    scaffold.add_argument("--route", choices=("canvas", "svg", "brush"), required=True)
+    scaffold.add_argument("--width", type=int, required=True)
+    scaffold.add_argument("--height", type=int, required=True)
+    scaffold.add_argument("--fps", required=True)
+    scaffold.add_argument("--frames", type=int, required=True)
+    scaffold.add_argument(
+        "--background", choices=("opaque", "transparent"), default="opaque"
+    )
+    scaffold.add_argument("--background-color")
+    scaffold.add_argument("--json", action="store_true", dest="as_json")
+
+    review = subparsers.add_parser("code-drawn-review")
+    review.add_argument("--candidate", type=Path, required=True)
+    review.add_argument("--source-receipt", type=Path, action="append", required=True)
+    review.add_argument("--output", type=Path, required=True)
+    review.add_argument("--project", type=Path)
+    review.add_argument("--video-id", default="")
+    review.add_argument("--render-profile", default="code-drawn")
+    review.add_argument("--materialization", type=Path)
+    review.add_argument("--dependency", action="append", default=[])
+    review.add_argument("--sample-frame", type=int, action="append")
+    review.add_argument("--transition", action="append", default=[])
+    review.add_argument("--loop", action="store_true")
+    review.add_argument("--json", action="store_true", dest="as_json")
+
+    for operation in ("check", "snapshot", "render"):
+        item = subparsers.add_parser(f"code-drawn-{operation}")
+        item.add_argument("--composition", type=Path, required=True)
+        item.add_argument("--input-lock", type=Path, required=operation == "render")
+        item.add_argument("--json", action="store_true", dest="as_json")
+        if operation == "check":
+            item.add_argument("--output-lock", type=Path)
+        else:
+            item.add_argument("--output", type=Path, required=True)
+            if operation == "snapshot":
+                item.add_argument("--frame", type=int, required=True)
+
+
+def _code_drawn_error(error) -> int:
+    print(json.dumps(error.to_dict(), ensure_ascii=False), file=sys.stderr)
+    return {
+        "CODE_DRAWN_CANCELLED": 130,
+        "CODE_DRAWN_RENDER_FAILED": 1,
+        "CODE_DRAWN_OUTPUT_INVALID": 1,
+    }.get(error.code, 2)
+
+
+def _code_drawn(args: argparse.Namespace) -> int:
+    from avo.adapters.motion.code_drawn import CodeDrawnAdapter, install_runtime
+    from avo.motion import MotionError, scaffold_code_drawn
+
+    try:
+        for field in (
+            "destination",
+            "composition",
+            "input_lock",
+            "output_lock",
+            "output",
+        ):
+            value = getattr(args, field, None)
+            if value is not None and not value.is_absolute():
+                raise MotionError(
+                    "CODE_DRAWN_INPUT_INVALID",
+                    f"{field} must be an absolute path: {value}",
+                    field=field,
+                )
+        operation = args.animation_command
+        if operation == "runtime-install":
+            result = install_runtime(brush=args.brush)
+        elif operation == "code-drawn-scaffold":
+            result = scaffold_code_drawn(
+                destination=args.destination,
+                route=args.route,
+                width=args.width,
+                height=args.height,
+                fps=args.fps,
+                frames=args.frames,
+                background=args.background,
+                background_color=args.background_color,
+            )
+        else:
+            adapter = CodeDrawnAdapter()
+            if operation == "code-drawn-check":
+                result = adapter.check(
+                    args.composition,
+                    input_lock=args.input_lock,
+                    output_lock=args.output_lock,
+                )
+            elif operation == "code-drawn-snapshot":
+                result = adapter.snapshot(
+                    args.composition,
+                    frame=args.frame,
+                    output=args.output,
+                    input_lock=args.input_lock,
+                )
+            else:
+                result = adapter.render(
+                    args.composition, input_lock=args.input_lock, output=args.output
+                )
+    except MotionError as error:
+        return _code_drawn_error(error)
+    except KeyboardInterrupt:
+        return _code_drawn_error(
+            MotionError(
+                "CODE_DRAWN_CANCELLED",
+                "Drawing attempt cancelled; no successful output was published.",
+            )
+        )
+    _emit(result)
+    return 0
+
+
+def _review_drawing_sources(args, workspace):
+    from avo.motion import MotionError, verify_code_drawn_lock
+    from avo.proof_composition import observe_code_drawn_environment
+    from avo.timeline.contracts import (
+        document_hash_excluding,
+        file_fingerprint,
+        validate_document,
+    )
+
+    dependencies = {}
+    for receipt_path in args.source_receipt:
+        record = _load_json(receipt_path)
+        validate_document(record, "avo.generated-asset.schema.json")
+        if record["generator"]["adapterId"] != "code-drawn":
+            raise MotionError(
+                "CODE_DRAWN_INPUT_INVALID",
+                "Review requires code-drawn source receipts.",
+            )
+        if record["recordHash"] != document_hash_excluding(record, "recordHash"):
+            raise MotionError(
+                "CODE_DRAWN_LOCK_STALE", "Review source receipt seal changed."
+            )
+        extension = record["parameters"]["codeDrawn"]
+        lock_path = Path(extension["inputLockRef"]["path"])
+        if file_fingerprint(lock_path)["sha256"] != extension["inputLockRef"]["sha256"]:
+            raise MotionError(
+                "CODE_DRAWN_LOCK_STALE", f"Review input lock changed: {lock_path}"
+            )
+        lock = _load_json(lock_path)
+        composition = Path(extension["manifestRef"]["path"])
+        if workspace is not None:
+            from avo.timeline.generated_assets import GeneratedAssetService
+
+            GeneratedAssetService(workspace).validate_code_drawn_inputs(lock["inputs"])
+        environment = observe_code_drawn_environment(
+            composition, expected_evidence=extension["captureEvidence"]
+        )
+        verify_code_drawn_lock(
+            composition, lock, workspace=workspace, environment=environment
+        )
+        if workspace is not None:
+            from avo.timeline.generated_assets import GeneratedAssetService
+
+            admitted = GeneratedAssetService(workspace).admit(
+                record["assetId"], code_drawn_environment=environment
+            )
+            if admitted != record:
+                raise MotionError(
+                    "CODE_DRAWN_LOCK_STALE",
+                    "Supplied receipt differs from the currently registered/admitted asset.",
+                )
+        instance = extension["instanceId"]
+        dependencies.update(
+            {
+                "generated:" + record["assetId"]: record["recordHash"],
+                "input-lock:" + instance: lock["inputLockHash"],
+            }
+        )
+        dependencies.update(extension.get("canonicalInputLock") or {})
+    return dependencies
+
+
+def _code_drawn_review(args):
+    from avo.motion import MotionError
+
+    try:
+        targets = [args.candidate, args.output, *args.source_receipt]
+        if args.materialization is not None:
+            targets.append(args.materialization)
+        if not all(target.is_absolute() for target in targets):
+            raise MotionError(
+                "CODE_DRAWN_INPUT_INVALID", "Review paths must be absolute."
+            )
+        workspace = (
+            TimelineWorkspace.from_project(args.project, video_id=args.video_id or None)
+            if args.project
+            else None
+        )
+        dependencies = _review_drawing_sources(args, workspace)
+        dependencies = _review_candidate_dependencies(args, workspace, dependencies)
+        result = _prepare_native_drawing_review(args, dependencies)
+    except (OSError, ValueError) as error:
+        failure = (
+            error
+            if isinstance(error, MotionError)
+            else MotionError("CODE_DRAWN_INPUT_INVALID", str(error))
+        )
+        return _code_drawn_error(failure)
+    _emit(result)
+    return 0
+
+
+def _require_direct_review_asset(args):
+    from avo.motion import MotionError
+    from avo.timeline.contracts import file_fingerprint
+
+    if len(args.source_receipt) != 1:
+        raise MotionError(
+            "CODE_DRAWN_INPUT_INVALID",
+            "A composite candidate requires canonical materialization context.",
+        )
+    source = _load_json(args.source_receipt[0])["output"]
+    candidate = file_fingerprint(args.candidate)
+    if any(candidate[key] != source[key] for key in ("sha256", "sizeBytes")):
+        raise MotionError(
+            "CODE_DRAWN_INPUT_INVALID",
+            "Composite candidate review requires its canonical materialization.",
+        )
+
+
+def _require_review_source_coverage(workspace, dependencies, observed):
+    from avo.motion import MotionError
+    from avo.timeline.generated_assets import GeneratedAssetService
+
+    service = GeneratedAssetService(workspace)
+    expected = {
+        key
+        for key in dependencies
+        if key.startswith("generated:")
+        and service.load(key.removeprefix("generated:"))["generator"]["adapterId"]
+        == "code-drawn"
+    }
+    actual = {key for key in observed if key.startswith("generated:")}
+    if actual != expected:
+        raise MotionError(
+            "CODE_DRAWN_INPUT_INVALID",
+            "Review requires every code-drawn receipt used by this canonical candidate.",
+        )
+
+
+def _review_candidate_dependencies(args, workspace, observed):
+    from avo.motion import MotionError
+
+    materialization_path = args.materialization
+    if materialization_path is not None:
+        if workspace is None:
+            raise MotionError(
+                "CODE_DRAWN_INPUT_INVALID",
+                "Canonical candidate review requires project context.",
+            )
+        from avo.timeline.approval_service import require_native_proof_materialization
+
+        materialization = _load_json(materialization_path)
+        dependencies = require_native_proof_materialization(
+            workspace, materialization, args.candidate
+        )
+        if any(dependencies.get(key) != value for key, value in observed.items()):
+            raise MotionError(
+                "CODE_DRAWN_LOCK_STALE",
+                "Review receipt is absent from the canonical candidate input lock.",
+            )
+        _require_review_source_coverage(workspace, dependencies, observed)
+    else:
+        _require_direct_review_asset(args)
+        dependencies = dict(observed)
+    supplied = _parse_dependency(args.dependency)
+    if any(
+        key in dependencies and dependencies[key] != value
+        for key, value in supplied.items()
+    ):
+        raise MotionError(
+            "CODE_DRAWN_LOCK_STALE",
+            "Supplied review dependency conflicts with observed identity.",
+        )
+    return {**dependencies, **supplied}
+
+
+def _prepare_native_drawing_review(args, dependencies):
+    from avo.adapters.motion.code_drawn import motion_result
+    from avo.adapters.qc.code_drawn_review import CodeDrawnReviewProducer
+    from avo.motion import prepare_code_drawn_review
+    from avo.timeline.contracts import file_fingerprint
+    from avo.timeline.review import validate_code_drawn_review
+
+    transitions = []
+    for value in args.transition:
+        first, last = _parse_tuple(value, 2)
+        transitions.append({"startFrame": first, "endFrameExclusive": last})
+    producer = CodeDrawnReviewProducer()
+    package = prepare_code_drawn_review(
+        args.candidate,
+        dependencies=dependencies,
+        render_profile=args.render_profile,
+        candidate_contract=producer.probe_contract(args.candidate),
+        source_receipts=args.source_receipt,
+        output_dir=args.output,
+        producer=producer,
+        sample_frames=args.sample_frame,
+        transition_ranges=transitions,
+        loop_requested=args.loop,
+    )
+    evidence = validate_code_drawn_review(
+        package,
+        candidate=args.candidate,
+        dependencies=dependencies,
+        render_profile=args.render_profile,
+    )
+    package_path = Path(package["packagePath"])
+    return motion_result(
+        "code-drawn-review",
+        artifacts=[{"path": str(package_path), **file_fingerprint(package_path)}],
+        checks=[
+            {"name": "exact-candidate-review", "ready": True, "evidence": evidence}
+        ],
+    )
+
+
+def _motion_preferences(args: argparse.Namespace) -> int:
+    from avo.motion import (
+        MotionError,
+        inspect_motion,
+        reset_motion_preference,
+        set_motion_preference,
+    )
+
+    context = {"project": args.project, "provider": args.provider}
+    try:
+        if args.animation_command == "engine-show":
+            result = inspect_motion(invocation=args.motion_engine, **context)
+        elif args.animation_command == "engine-set":
+            result = set_motion_preference(
+                scope=args.scope, engine=args.engine, **context
+            )
+        else:
+            result = reset_motion_preference(scope=args.scope, **context)
+    except MotionError as error:
+        print(json.dumps(error.to_dict(), ensure_ascii=False), file=sys.stderr)
+        return 2
+    _emit(result)
+    return 0
+
+
+def _author_animation(args: argparse.Namespace) -> dict:
+    from avo.motion import MotionError, validate_engine
+    from avo.timeline.animation import AnimationService
+
+    strategy = _load_json(args.strategy)
+    source_engine = validate_engine(strategy.get("framework"))
+    if args.motion_engine is not None and args.motion_engine != source_engine:
+        raise MotionError(
+            "MOTION_ENGINE_CONFLICT",
+            f"Explicit engine {args.motion_engine} conflicts with strategy framework "
+            f"{source_engine}; provide source authored for the selected engine.",
+            field="framework",
+            remediation="Choose one engine and provide compatible strategy source; "
+            "engine selection does not convert existing components.",
+        )
+    workspace = TimelineWorkspace.from_project(
+        args.project, video_id=args.video_id or None
+    )
+    from avo.motion import inspect_motion
+
+    selected = inspect_motion(project=workspace.project_path, invocation=source_engine)[
+        "selection"
+    ]
+    if workspace.pipeline_run_path.is_file():
+        run = PipelineRunStore(workspace.pipeline_run_path)
+        previous = (run.load().get("executionChoices") or {}).get("motion")
+        run.bind_motion_selection(
+            selected,
+            new_request=bool(previous and previous["engine"] != source_engine),
+        )
+    result = AnimationService(workspace).author(
+        strategy,
+        actor=args.actor,
+        reason=args.reason,
+    )
+    return result
+
+
+def _is_code_drawn_command(operation):
+    return operation == "runtime-install" or operation.startswith("code-drawn-")
+
+
 def _animation(args: argparse.Namespace) -> int:
+    if args.animation_command == "code-drawn-review":
+        return _code_drawn_review(args)
+    if args.animation_command.startswith("engine-"):
+        return _motion_preferences(args)
+    if _is_code_drawn_command(args.animation_command):
+        return _code_drawn(args)
     from avo.timeline.animation import AnimationService
     from avo.timeline.provider_animation import ProviderAnimationService
 
-    if args.animation_command == "author":
+    if args.animation_command == "materialize":
+        from avo.timeline.pipeline import TimelinePipeline
+
         workspace = TimelineWorkspace.from_project(
             args.project, video_id=args.video_id or None
         )
-        result = AnimationService(workspace).author(
-            _load_json(args.strategy),
-            actor=args.actor,
-            reason=args.reason,
-        )
+        result = TimelinePipeline(
+            workspace, motion_materializer=create_motion_materializer()
+        ).materialize_motion(args.instance_id, output=args.output)
+    elif args.animation_command == "author":
+        result = _author_animation(args)
     else:
         service = ProviderAnimationService(args.catalog, provider=args.provider)
         if args.animation_command == "propose":
@@ -959,12 +1435,15 @@ def _review_inputs(
     materialization = None
     if args.materialization:
         materialization = _load_json(args.materialization)
-        if materialization.get("kind") != "assembly" and args.checkpoint in {
+        if materialization.get("kind") not in {
+            "assembly",
+            "proof-plan",
+        } and args.checkpoint in {
             "pre-master",
             "deliver",
         }:
             raise ValueError(
-                "pre-master/deliver requires a canonical assembly materialization"
+                "pre-master/deliver requires canonical assembly or native proof-plan materialization"
             )
         output = materialization["output"]
         candidate = candidate or Path(
@@ -1583,9 +2062,9 @@ def _prepare_delivery(args: argparse.Namespace, workspace: TimelineWorkspace) ->
     from avo.timeline.store import now_iso
 
     materialization = _load_json(args.materialization)
-    if materialization.get("kind") != "assembly":
+    if materialization.get("kind") not in {"assembly", "proof-plan"}:
         raise ValueError(
-            "deliver prepare requires a canonical assembly materialization"
+            "deliver prepare requires a canonical assembly or native proof-plan materialization"
         )
     output = materialization.get("output") or {}
     candidate = args.candidate or Path(
@@ -1613,6 +2092,7 @@ def _prepare_delivery(args: argparse.Namespace, workspace: TimelineWorkspace) ->
         materialization_path=args.materialization,
         review_runner=runner,
         transcript_options={"model": args.model},
+        motion_review=getattr(args, "motion_review", None),
     )
 
 

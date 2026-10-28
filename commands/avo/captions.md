@@ -1,5 +1,11 @@
 # /avo.captions Command
 
+**Motion engine gate:** Resolve intent through [shared arguments](../../agent-skills/avo-pipeline/references/arguments.md)
+before motion-specific loaders. Selected code-drawn follows the
+[advanced workflow](../../agent-skills/avo-pipeline/references/code-drawn.md) and common
+canonical review. HyperFrames-specific instructions below require selected
+HyperFrames; unavailable engines/treatments block without silent substitution.
+
 **Timeline integration:** Owns
 
 ## Workflow guidance
@@ -32,7 +38,11 @@ Optional: `Footage:` path · `from:` / `to:` window · `--preview`
 
 ## Role
 
-Apply embedded captions **after** motion overlays (Hard Rule #1: subtitles last). Load `embedded-captions` doctrine, proof at preview resolution, human approval gate before promotion.
+Apply compatible captions **after** motion overlays (Hard Rule #1: subtitles last).
+For selected HyperFrames, load its `embedded-captions` workflow. A requested
+segmentation/catalog treatment needs explicit support on the selected engine;
+report a missing capability before authoring. Preserve normal preview and human
+approval before promotion.
 
 ---
 
@@ -42,7 +52,7 @@ Apply embedded captions **after** motion overlays (Hard Rule #1: subtitles last)
 2. Block if edit or motion composite is not human-approved.
 3. Follow [`captions.md`](../../agent-skills/avo-pipeline/references/captions.md) filter-order contract.
 4. Default to **360p/720p preview** until user approves promotion.
-5. Do **not** start HyperFrames slot work unless user explicitly requests motion.
+5. Do **not** start engine-specific slot work unless the user requests motion and that engine is selected.
 
 ---
 

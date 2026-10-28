@@ -8,6 +8,8 @@
   "required": ["provider", "rawDir"],
   "properties": {
     "$schema": { "type": "string", "description": "Optional path/URL to this schema for editor validation." },
+    "schemaVersion": { "const": "1.0.0", "description": "Optional version used by canonical project writers." },
+    "videoId": { "type": "string", "minLength": 1, "description": "Optional existing canonical video identifier." },
     "provider": {
       "type": "string",
       "description": "Provider slug. Resolves against providers/<provider>/avo.provider.json in the AVO repo for brand + routing + defaults.",
@@ -21,6 +23,7 @@
       "type": "string",
       "description": "Optional working title for this video project."
     },
+    "motion": {"$ref": "https://avo.local/avo.motion.schema.json#/$defs/config"},
     "cutting": {"$ref": "avo.cutting.schema.json#/$defs/config"},
     "direction": {
       "type": "object",

@@ -268,6 +268,10 @@ def test_real_proof_routes_embedded_mic_and_external_stereo_with_fades(tmp_path)
     output = tmp_path / "full.mp4"
     result = execute_ffmpeg_proof(execution, output)
     assert result["audioEncodeCount"] == 1
+    assert {s["codec_type"]: s["codec_name"] for s in result["media"]["streams"]} == {
+        "video": "h264",
+        "audio": "aac",
+    }
     video = next(s for s in result["media"]["streams"] if s["codec_type"] == "video")
     assert (
         video["width"],

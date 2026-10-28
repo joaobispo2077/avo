@@ -152,6 +152,40 @@ def _require_human_archive_adoption(current, disposition):
         )
 
 
+def _validate_motion_request(selection, request_id, new_request):
+    from .contracts import ContractError, validate_document
+
+    try:
+        validate_document(selection, "avo.motion.schema.json#/$defs/selection")
+    except ContractError as exc:
+        raise LifecycleError(f"invalid motion selection: {exc}") from exc
+    if request_id is not None and (
+        not isinstance(request_id, str) or not request_id.strip()
+    ):
+        raise LifecycleError("motion request identity must be a nonempty string")
+    if type(new_request) is not bool:
+        raise LifecycleError("new_request must be a boolean")
+
+
+def _motion_requests(document):
+    choices = list((document.get("extensions") or {}).get("motionRequestHistory", []))
+    choice = (document.get("executionChoices") or {}).get("motion")
+    if choice is not None:
+        choices.append(choice)
+    return choices
+
+
+def _known_motion_request(document, request_id):
+    return next(
+        (
+            choice
+            for choice in _motion_requests(document)
+            if choice["requestId"] == request_id
+        ),
+        None,
+    )
+
+
 class PipelineRunStore:
     """Persist the lifecycle state and explicit recovery history."""
 
@@ -170,6 +204,15 @@ class PipelineRunStore:
             validate_document(document, "avo.pipeline-run.schema.json")
         except ContractError as exc:
             raise LifecycleError(f"invalid pipeline run: {exc}") from exc
+        for choice in _motion_requests(document):
+            if choice["runId"] != document["runId"]:
+                raise LifecycleError(
+                    "motion execution choice belongs to a different run"
+                )
+            if not choice["requestId"].strip():
+                raise LifecycleError(
+                    "motion execution choice requires a request identity"
+                )
 
     def initialize(
         self,
@@ -220,6 +263,41 @@ class PipelineRunStore:
             ) from exc
         self._validate(document)
         return document
+
+    def bind_motion_selection(self, selection, *, request_id=None, new_request=False):
+        """Pin authoring intent for one request without changing editorial state."""
+        from copy import deepcopy
+        from uuid import uuid4
+
+        _validate_motion_request(selection, request_id, new_request)
+        current = self.load()
+        previous = (current.get("executionChoices") or {}).get("motion")
+        requested = {
+            "runId": current["runId"],
+            "requestId": request_id or f"motion-{uuid4().hex}",
+            **{key: selection[key] for key in ("engine", "source", "resolutionHash")},
+        }
+        known = _known_motion_request(current, request_id)
+        if known is not None:
+            if requested != known:
+                raise LifecycleError(
+                    "motion request identity conflicts with its recorded selection"
+                )
+            return current
+        if previous is not None and not new_request:
+            if request_id is not None:
+                raise LifecycleError(
+                    "a different motion request identity requires new_request=True"
+                )
+            return current
+        updated = deepcopy(current)
+        if previous is not None:
+            updated.setdefault("extensions", {}).setdefault(
+                "motionRequestHistory", []
+            ).append(deepcopy(previous))
+        updated.setdefault("executionChoices", {})["motion"] = requested
+        updated["updatedAt"] = self.clock()
+        return self._write(updated, expected_updated_at=current["updatedAt"])
 
     def _write(self, document, *, expected_updated_at=None):
         from .store import atomic_write_json

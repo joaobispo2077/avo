@@ -40,7 +40,7 @@ if (-not $Version) {
 
 Write-Host "building avo $Version ($Platform) with PyInstaller onedir"
 
-& $Python -m pip install -e ".[mcp]" "pyinstaller>=6,<7"
+& $Python -m pip install -e ".[mcp,code-drawn]" "pyinstaller>=6,<7"
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 & $Python -m PyInstaller `
@@ -56,6 +56,13 @@ $Launcher = Join-Path $Onedir "avo.exe"
 if (-not (Test-Path $Launcher)) {
   Write-Error "error: missing onedir launcher at $Launcher"
 }
+
+# Provider preference validation has a compatibility fallback beside the launcher.
+# Ship the public schema only; provider identities and media paths stay external.
+$ProviderSchemaDir = Join-Path $Onedir "providers"
+New-Item -ItemType Directory -Path $ProviderSchemaDir -Force | Out-Null
+Copy-Item -LiteralPath (Join-Path $Root "providers\avo.provider.schema.json") `
+  -Destination (Join-Path $ProviderSchemaDir "avo.provider.schema.json")
 
 Write-Host "smoke: avo version"
 $Got = & $Launcher version
@@ -95,5 +102,5 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 $ZipPath = Join-Path $Root "dist\engine\$ZipStem.zip"
 $Size = (Get-Item $ZipPath).Length
 Write-Host "zip: $ZipPath ($Size bytes)"
-Write-Host "done. Engine zip is AVO Python only (no ffmpeg / HyperFrames / watch-skill / CUDA / weights)."
+Write-Host "done. Engine zip includes AVO and its bundled Playwright driver (no managed browser / ffmpeg / HyperFrames / watch-skill / CUDA / weights)."
 Write-Host "If a later freeze cannot import faster_whisper, rebuild this same onedir zip with Nuitka --mode=standalone - do not switch to onefile or PyOxidizer."

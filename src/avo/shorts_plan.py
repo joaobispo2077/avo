@@ -11,7 +11,12 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
-from avo import shorts_captions, shorts_contract, shorts_provider, shorts_rules
+from avo import (
+    shorts_captions,
+    shorts_contract,
+    shorts_provider,
+    shorts_rules,
+)
 from avo.shorts_visuals import validate_visual_inserts
 
 TranscribeRunner = Callable[[Path, Path], Path]
@@ -918,6 +923,7 @@ def resolve_batch(
             },
         )
         _bind_source_fields(item, request, candidate, segments)
+        _bind_motion_fields(item, request, candidate)
         items.append(item)
         if review_speed:
             required_reviews.append(
@@ -1013,6 +1019,22 @@ def resolve_batch(
     return plan
 
 
+def _bind_motion_fields(
+    item: dict, request: Mapping[str, Any], candidate: Mapping[str, Any]
+) -> None:
+    try:
+        fields = shorts_rules.resolved_motion_fields(request["defaults"], candidate)
+    except ValueError as error:
+        raise PlanningError(str(error)) from error
+    item.update(fields)
+    item["inputFingerprint"] = shorts_contract.content_hash(
+        {
+            "baseFingerprint": item["inputFingerprint"],
+            "motion": fields,
+        }
+    )
+
+
 def _resolve_relative(base: Path, value: str) -> Path:
     path = Path(value).expanduser()
     return path.resolve() if path.is_absolute() else (base / path).resolve()
@@ -1081,15 +1103,23 @@ def validate_request_file(path: Path | str) -> dict[str, Any]:
     return request
 
 
+def _request_with_selected_motion(path: Path, motion_engine: str | None) -> dict:
+    request = shorts_contract.load_document(path, "request")
+    if motion_engine is not None:
+        request["defaults"]["motionEngine"] = shorts_rules.motion_engine(motion_engine)
+    return request
+
+
 def resolve_request_file(
     request_path: Path | str,
     output_path: Path | str,
     *,
     transcribe_runner: TranscribeRunner | None = None,
+    motion_engine: str | None = None,
 ) -> Path:
     """Resolve and atomically write/reuse an immutable plan revision."""
     request_path = Path(request_path).resolve()
-    request = shorts_contract.load_document(request_path, "request")
+    request = _request_with_selected_motion(request_path, motion_engine)
     master = _resolve_relative(request_path.parent, request["source"]["masterPath"])
     if not master.is_file():
         raise PlanningError(f"source master does not exist: {master}")

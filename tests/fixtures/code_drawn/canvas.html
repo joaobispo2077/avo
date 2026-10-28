@@ -1,0 +1,26 @@
+<!doctype html>
+<meta charset="utf-8">
+<style>html,body{margin:0;overflow:hidden}#avo-stage{display:block;width:128px;height:96px}</style>
+<canvas id="avo-stage" width="128" height="96"></canvas>
+<script>
+const stage = document.getElementById("avo-stage");
+const context = stage.getContext("2d");
+const background = __AVO_TEST_BACKGROUND__;
+window.avoReady = Promise.resolve();
+window.seek = async (t) => {
+  await Promise.resolve();
+  const frame = Math.floor(t * 30000 / 1001 + 0.5);
+  context.resetTransform();
+  context.clearRect(0, 0, 128, 96);
+  if (background) {
+    context.fillStyle = background;
+    context.fillRect(0, 0, 128, 96);
+  }
+  context.fillStyle = frame < 6 ? "#e04444" : "#22bbcc";
+  context.fillRect(8 + frame % 12 * 3, 22, 18, 22);
+  context.fillStyle = "rgba(48,96,224,0.5)";
+  context.beginPath();
+  context.arc(93, 60, 15, 0, Math.PI * 2);
+  context.fill();
+};
+</script>

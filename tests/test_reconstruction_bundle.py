@@ -655,3 +655,221 @@ def test_missing_or_changed_canonical_media_blocks_bundle(
         build_reconstruction_bundle(
             workspace, master_basename=basename, actor="creator"
         )
+
+
+# Synthetic metadata/media fixture for retention only; this is not render evidence.
+def code_drawn_retention_fixture(tmp_path: Path):
+    from avo.adapters.motion.code_drawn import CodeDrawnAdapter
+    from avo.motion import (
+        freeze_code_drawn_lock,
+        load_composition,
+        scaffold_code_drawn,
+        seal_composition,
+    )
+    from avo.timeline.store import write_immutable_json
+    from tests.test_timeline_animation_service import strategy
+
+    workspace, basename = canonical_project(tmp_path)
+    instance = "retained-title"
+    root = workspace.raw_dir / "edit" / "derived" / "components" / instance
+    scaffold_code_drawn(
+        root,
+        route="canvas",
+        width=128,
+        height=96,
+        fps="30/1",
+        frames=12,
+        background="transparent",
+    )
+    manifest_path = root / "composition.json"
+    manifest = load_composition(manifest_path)
+    manifest["compositionId"] = instance
+    assets = {
+        "assets/type.woff2": (b"synthetic font dependency", "font", "font-fixture"),
+        "assets/logo.svg": (
+            b'<svg xmlns="http://www.w3.org/2000/svg" width="2" height="2"/>',
+            "svg",
+            "svg-fixture",
+        ),
+        "assets/image.png": (b"synthetic image dependency", "image", "image-fixture"),
+        "assets/LICENSE.md": (
+            b"Self-authored synthetic test dependency",
+            "data",
+            "license-fixture",
+        ),
+    }
+    for relative, (data, kind, asset_id) in assets.items():
+        target = root / relative
+        target.write_bytes(data)
+        fields = (
+            {"family": "FixtureFace", "style": "normal", "weight": 400}
+            if kind == "font"
+            else {}
+        )
+        manifest["assets"].append(
+            {
+                "id": asset_id,
+                "kind": kind,
+                "path": relative,
+                "sha256": file_fingerprint(target)["sha256"],
+                "sizeBytes": len(data),
+                "rightsRef": "ANIMATION-SOURCE-LOG.md",
+                **fields,
+            }
+        )
+    brush = root / "assets" / "brush.js"
+    brush.write_bytes(
+        b"// Synthetic brush dependency; never executed in this unit fixture.\n"
+    )
+    manifest["dependencies"].append(
+        {
+            "name": "fixture-brush",
+            "version": "1.0.0",
+            "build": "unit-fixture",
+            "path": "assets/brush.js",
+            "sha256": file_fingerprint(brush)["sha256"],
+            "sizeBytes": brush.stat().st_size,
+            "licenseRef": "assets/LICENSE.md",
+        }
+    )
+    manifest_path.write_text(json.dumps(seal_composition(manifest)), encoding="utf-8")
+    manifest = load_composition(manifest_path)
+    environment = {
+        "platform": "unit-fixture",
+        "dependencies": {"fixture": "1"},
+        "browserVersion": "unit",
+        "browserRevision": "unit",
+        "graphics": "unit",
+        "driverSha256": "a" * 64,
+        "encoderSha256": "b" * 64,
+        "locale": "en-US",
+        "timezone": "UTC",
+        "colorSpace": "srgb",
+    }
+    lock = freeze_code_drawn_lock(manifest_path, environment=environment)
+    generated = workspace.raw_dir / "edit" / "derived" / "generated-media" / instance
+    generated.mkdir(parents=True)
+    lock_path = generated / "input-lock.json"
+    write_immutable_json(lock_path, lock)
+    output = generated / "asset.mkv"
+    output.write_bytes(b"synthetic generated-media fixture, not a physical render")
+    evidence = {
+        "frames": list(range(10)),
+        "rgbaSha256": ["c" * 64] * 10,
+        "passes": ["repeat", "reverse", "fresh-session"],
+        "environment": environment,
+    }
+    verification = {
+        "width": 128,
+        "height": 96,
+        "frameRate": {"num": 30, "den": 1},
+        "frameCount": 12,
+        "silent": True,
+        "codec": "ffv1",
+        "pixelFormat": "bgra",
+        "alphaMode": "straight",
+        "rgbaRoundTrip": "exact",
+        "colorRange": "full",
+        "captureColorSpace": "srgb",
+        "compositeColorSpace": "sdr-bt709",
+        "controlledCompositeChecks": [],
+    }
+    record = CodeDrawnAdapter()._receipt(
+        manifest_path, manifest, lock_path, lock, output, evidence, verification
+    )
+    record_path = (
+        workspace.timeline_dir / "generated-assets" / (record["assetId"] + ".json")
+    )
+    write_immutable_json(record_path, record)
+    value = strategy()
+    value["framework"] = "code-drawn"
+    component = value["components"][0]
+    component.pop("providerPatternRef", None)
+    component["componentId"] = instance
+    component["extensions"] = {
+        "codeDrawn": {
+            "instanceId": instance,
+            "manifestRef": {
+                "path": manifest_path.relative_to(workspace.raw_dir).as_posix(),
+                "sha256": file_fingerprint(manifest_path)["sha256"],
+            },
+        }
+    }
+    value["dependencies"] = {
+        kind: workspace.store(kind).revision(
+            workspace.store(kind).load_index()["headRevisionId"]
+        )["contentHash"]
+        for kind in ("cmap", "bmap", "tracks")
+    }
+    workspace.store("animation").append_revision(
+        snapshot=value, actor="test-fixture", reason="Retain editable source"
+    )
+    return workspace, basename, manifest_path, lock_path, record_path, output
+
+
+def test_code_drawn_bundle_preserves_referenced_lock_and_nontext_source_closure(
+    tmp_path,
+):
+    workspace, basename, manifest, lock, record, output = code_drawn_retention_fixture(
+        tmp_path
+    )
+    bundle = build_reconstruction_bundle(
+        workspace, master_basename=basename, actor="test-reviewer"
+    )
+    included = {entry["path"] for entry in bundle["files"]}
+    expected = {
+        path.relative_to(workspace.raw_dir).as_posix()
+        for path in (
+            manifest,
+            lock,
+            record,
+            manifest.parent / "index.html",
+            manifest.parent / "assets/type.woff2",
+            manifest.parent / "assets/logo.svg",
+            manifest.parent / "assets/image.png",
+            manifest.parent / "assets/brush.js",
+            manifest.parent / "assets/LICENSE.md",
+        )
+    }
+    assert expected <= included
+    assert output.relative_to(workspace.raw_dir).as_posix() not in included
+
+
+@pytest.mark.parametrize("change", ["missing", "changed"])
+def test_code_drawn_incomplete_or_changed_dependency_blocks_reconstruction(
+    tmp_path, change
+):
+    workspace, basename, manifest, _lock, _record, _output = (
+        code_drawn_retention_fixture(tmp_path)
+    )
+    font = manifest.parent / "assets/type.woff2"
+    if change == "missing":
+        font.unlink()
+    else:
+        font.write_bytes(b"different source, despite an unchanged manifest/receipt")
+    with pytest.raises(
+        ReconstructionError, match="type.woff2|drawing|dependency|fingerprint"
+    ):
+        build_reconstruction_bundle(
+            workspace, master_basename=basename, actor="test-reviewer"
+        )
+    assert (workspace.raw_dir / "raw.bin").read_bytes() == b"raw-original"
+
+
+def test_code_drawn_bundle_verification_rechecks_referenced_lock_coverage(tmp_path):
+    from avo.timeline.contracts import document_hash_excluding
+
+    workspace, basename, _manifest, lock, _record, _output = (
+        code_drawn_retention_fixture(tmp_path)
+    )
+    bundle = build_reconstruction_bundle(
+        workspace, master_basename=basename, actor="test-reviewer"
+    )
+    relative = lock.relative_to(workspace.raw_dir).as_posix()
+    bundle["files"] = [entry for entry in bundle["files"] if entry["path"] != relative]
+    bundle["bundleSha256"] = document_hash_excluding(bundle, "bundleSha256")
+    (workspace.timeline_dir / "reconstruction-bundle.json").write_text(
+        json.dumps(bundle), encoding="utf-8"
+    )
+    with pytest.raises(ReconstructionError, match="coverage|lock|dependency"):
+        verify_reconstruction_bundle(workspace.raw_dir)

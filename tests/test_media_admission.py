@@ -264,3 +264,211 @@ def test_materialization_blocks_known_output_before_renderer_execution(
     assert raised.value.finding["nodeId"] == "track-copied-proof"
     assert raised.value.finding["locator"] == str(copied)
     assert renderer.calls == 0
+
+
+@pytest.mark.parametrize("nested", [False, True])
+def test_code_drawn_recursive_admission_requires_verifier_even_for_legacy_calls(
+    tmp_path, nested
+):
+    drawing = tmp_path / "drawing.mkv"
+    outer = tmp_path / "outer.mkv"
+    drawing.write_bytes(b"synthetic drawing")
+    outer.write_bytes(b"synthetic wrapper")
+    assets = {
+        "drawing": _asset(
+            "drawing",
+            drawing,
+            [],
+            generator={"adapterId": "code-drawn"},
+            parameters={"codeDrawn": {}},
+        )
+    }
+    selected = "drawing"
+    output = drawing
+    if nested:
+        assets["outer"] = _asset(
+            "outer", outer, [_ref("drawing", drawing, "generated")]
+        )
+        selected, output = "outer", outer
+    with pytest.raises(MediaAdmissionError, match="(?i)code.drawn|fresh|verifier"):
+        require_media_admission(
+            [_node(output, kind="generated", mediaClass="generated", assetId=selected)],
+            generated_assets=assets,
+        )
+
+
+def test_code_drawn_nonmedia_dependencies_are_verified_without_becoming_originals(
+    tmp_path,
+):
+    drawing = tmp_path / "drawing.mkv"
+    font = tmp_path / "font.woff2"
+    drawing.write_bytes(b"synthetic drawing")
+    font.write_bytes(b"synthetic nonmedia font")
+    record = _asset(
+        "drawing",
+        drawing,
+        [_ref("font", font, "dependency")],
+        generator={"adapterId": "code-drawn"},
+        parameters={"codeDrawn": {}},
+    )
+    calls = []
+
+    def verify(value):
+        calls.append(value["assetId"])
+        return value
+
+    report = require_media_admission(
+        [_node(drawing, kind="generated", mediaClass="generated", assetId="drawing")],
+        generated_assets={"drawing": record},
+        code_drawn_verifier=verify,
+    )
+    assert report["status"] == "pass"
+    assert calls == ["drawing"]
+    assert {item["admission"] for item in report["admitted"]} == {
+        "canonical-generated-asset"
+    }
+    font.write_bytes(b"changed nonmedia dependency")
+    with pytest.raises(MediaAdmissionError, match="(?i)fingerprint|changed|mismatch"):
+        require_media_admission(
+            [
+                _node(
+                    drawing, kind="generated", mediaClass="generated", assetId="drawing"
+                )
+            ],
+            generated_assets={"drawing": record},
+            code_drawn_verifier=verify,
+        )
+
+
+@pytest.mark.parametrize("role", ["proof", "preview", "proxy", "master", "delivery"])
+def test_code_drawn_dependency_label_cannot_hide_renamed_known_output(tmp_path, role):
+    old = tmp_path / f"old-{role}.mp4"
+    disguised = tmp_path / "font-like-input.woff2"
+    drawing = tmp_path / "drawing.mkv"
+    old.write_bytes(b"known-output-" + role.encode())
+    disguised.write_bytes(old.read_bytes())
+    drawing.write_bytes(b"synthetic drawing")
+    record = _asset(
+        "drawing",
+        drawing,
+        [_ref("claimed-font", disguised, "dependency")],
+        generator={"adapterId": "code-drawn"},
+        parameters={"codeDrawn": {}},
+        sourceFree=True,
+    )
+    with pytest.raises(MediaAdmissionError) as caught:
+        require_media_admission(
+            [
+                _node(
+                    drawing, kind="generated", mediaClass="generated", assetId="drawing"
+                )
+            ],
+            generated_assets={"drawing": record},
+            known_outputs=[{**file_fingerprint(old), "role": role}],
+            code_drawn_verifier=lambda value: value,
+        )
+    assert caught.value.code == "PROOF_FORBIDDEN_ANCESTOR"
+    assert caught.value.finding["locator"] == str(disguised)
+    assert caught.value.finding["artifactId"] == "claimed-font"
+
+
+def test_recursive_code_drawn_verifier_rechecks_current_canonical_asset(tmp_path):
+    from tests.code_drawn_asset_fixture import canonical_asset
+
+    asset = canonical_asset(tmp_path)
+    from avo.timeline.generated_assets import GeneratedAssetService
+
+    service = GeneratedAssetService(asset.workspace)
+    registered = service.register(
+        asset.record, code_drawn_environment=asset.environment
+    )
+    outer = tmp_path / "outer-generated.mkv"
+    outer.write_bytes(b"outer generic generated output")
+    assets = {
+        registered["assetId"]: registered,
+        "outer": _asset(
+            "outer", outer, [_ref(registered["assetId"], asset.output, "generated")]
+        ),
+    }
+    calls = []
+
+    def verify(record):
+        calls.append(record["assetId"])
+        return service.admit(
+            record["assetId"], code_drawn_environment=asset.environment
+        )
+
+    node = _node(outer, kind="generated", mediaClass="generated", assetId="outer")
+    assert (
+        require_media_admission(
+            [node], generated_assets=assets, code_drawn_verifier=verify
+        )["status"]
+        == "pass"
+    )
+    assert calls == [registered["assetId"]]
+    asset.font.write_bytes(b"changed after verified registration")
+    with pytest.raises(
+        MediaAdmissionError, match="(?i)changed|stale|fingerprint|input"
+    ):
+        require_media_admission(
+            [node], generated_assets=assets, code_drawn_verifier=verify
+        )
+
+
+def test_assembly_inventory_rejects_unmaterialized_logical_drawing():
+    from avo.timeline.materialize import (
+        ProofMaterializationError,
+        _assembly_media_inputs,
+    )
+
+    revisions = {
+        "cmap": {"snapshot": {"sources": []}},
+        "tracks": {
+            "snapshot": {
+                "videoTracks": {
+                    "layers": [
+                        {
+                            "layerId": "drawing",
+                            "role": "overlay",
+                            "generatedSourceRef": {
+                                "engine": "code-drawn",
+                                "instanceId": "drawing-one",
+                            },
+                        }
+                    ]
+                }
+            }
+        },
+    }
+    with pytest.raises(ProofMaterializationError, match="Logical generated layer"):
+        _assembly_media_inputs(revisions)
+
+
+def test_assembly_inventory_keeps_materialized_generated_kind(tmp_path):
+    from avo.timeline.materialize import _assembly_media_inputs
+
+    output = tmp_path / "drawing.mkv"
+    output.write_bytes(b"synthetic drawing")
+    revisions = {
+        "cmap": {"snapshot": {"sources": []}},
+        "tracks": {
+            "snapshot": {
+                "videoTracks": {
+                    "layers": [
+                        {
+                            "layerId": "drawing",
+                            "role": "overlay",
+                            "source": {
+                                **file_fingerprint(output),
+                                "generatedAssetId": "drawing-one",
+                            },
+                        }
+                    ]
+                }
+            }
+        },
+    }
+    contributors, originals = _assembly_media_inputs(revisions)
+    assert originals == []
+    assert contributors[0]["kind"] == contributors[0]["mediaClass"] == "generated"
+    assert contributors[0]["assetId"] == "drawing-one"

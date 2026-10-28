@@ -169,3 +169,116 @@ def test_clean_reconstruction_keeps_lineage_not_rejected_proof_bytes(
     assert sum(len(item["feedback"]) for item in restored_ledger["iterations"]) == 1
     assert len(restored_ledger["decisions"]) == 1
     assert sum(len(item["riskWindows"]) for item in restored_ledger["decisions"]) == 1
+
+
+def test_retained_code_drawn_source_rematerializes_real_pixels_after_derived_video_removal(
+    tmp_path,
+):
+    """Physical drawing regeneration; archive metadata is a separate synthetic fixture."""
+    import os
+    import shutil
+    import subprocess
+
+    import pytest
+    from tests.test_reconstruction_bundle import canonical_project
+    from tests.test_timeline_animation_service import strategy
+
+    from avo.adapters.motion.code_drawn import CodeDrawnAdapter, runtime_readiness
+    from avo.motion import load_composition, scaffold_code_drawn
+    from avo.timeline.store import write_immutable_json
+
+    readiness = runtime_readiness()
+    if not readiness["ready"] or not shutil.which("ffmpeg"):
+        message = "Real matched browser and FFmpeg required for drawing regeneration"
+        if os.environ.get("AVO_REQUIRE_CODE_DRAWN_RUNTIME") == "1":
+            pytest.fail(message)
+        pytest.skip(message)
+    workspace, basename = canonical_project(tmp_path)
+    instance = "code-drawn-canvas"
+    source = workspace.raw_dir / "edit" / "derived" / "components" / instance
+    scaffold_code_drawn(
+        source,
+        route="canvas",
+        width=128,
+        height=96,
+        fps="30/1",
+        frames=12,
+        background="transparent",
+    )
+    composition = source / "composition.json"
+    generated = workspace.raw_dir / "edit" / "derived" / "generated-media" / instance
+    lock_path = generated / "input-lock.json"
+    adapter = CodeDrawnAdapter()
+    adapter.check(composition, output_lock=lock_path)
+    first = generated / "asset-first.mkv"
+    adapter.render(composition, input_lock=lock_path, output=first)
+    record = json.loads(
+        first.with_suffix(".generated-asset.json").read_text(encoding="utf-8")
+    )
+    write_immutable_json(
+        workspace.timeline_dir / "generated-assets" / (record["assetId"] + ".json"),
+        record,
+    )
+    value = strategy()
+    value["framework"] = "code-drawn"
+    component = value["components"][0]
+    component.pop("providerPatternRef", None)
+    component["componentId"] = instance
+    component["extensions"] = {
+        "codeDrawn": {
+            "instanceId": instance,
+            "manifestRef": {
+                "path": composition.relative_to(workspace.raw_dir).as_posix(),
+                "sha256": file_fingerprint(composition)["sha256"],
+            },
+        }
+    }
+    value["dependencies"] = {
+        kind: workspace.store(kind).revision(
+            workspace.store(kind).load_index()["headRevisionId"]
+        )["contentHash"]
+        for kind in ("cmap", "bmap", "tracks")
+    }
+    workspace.store("animation").append_revision(
+        snapshot=value, actor="test-fixture", reason="Preserve drawing inputs"
+    )
+
+    def rgba(path):
+        return subprocess.run(
+            [
+                "ffmpeg",
+                "-v",
+                "error",
+                "-i",
+                str(path),
+                "-map",
+                "0:v:0",
+                "-vsync",
+                "0",
+                "-pix_fmt",
+                "rgba",
+                "-f",
+                "rawvideo",
+                "pipe:1",
+            ],
+            capture_output=True,
+            check=True,
+        ).stdout
+
+    expected = rgba(first)
+    manifest_before = load_composition(composition)
+    lock_before = lock_path.read_bytes()
+    bundle = build_reconstruction_bundle(
+        workspace, master_basename=basename, actor="test-reviewer"
+    )
+    paths = {entry["path"] for entry in bundle["files"]}
+    assert lock_path.relative_to(workspace.raw_dir).as_posix() in paths
+    assert first.relative_to(workspace.raw_dir).as_posix() not in paths
+    first.unlink()  # Only this fixture's regenerable generated video is removed.
+    verify_reconstruction_bundle(workspace.raw_dir)
+    second = generated / "asset-rematerialized.mkv"
+    adapter.render(composition, input_lock=lock_path, output=second)
+    assert rgba(second) == expected
+    assert lock_path.read_bytes() == lock_before
+    assert load_composition(composition) == manifest_before
+    assert (workspace.raw_dir / "raw.bin").read_bytes() == b"raw-original"

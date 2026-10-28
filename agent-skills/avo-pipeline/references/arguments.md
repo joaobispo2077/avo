@@ -2,6 +2,29 @@
 
 Parse these from the user's slash command or ask once before executing.
 
+## Motion engine: resolve before required workflow context
+
+Accept `--motion-engine hyperframes|remotion|code-drawn` or `Motion engine: <id>`. Engine IDs are strict; Canvas, SVG and brush are drawing routes inside code-drawn. Inspect the effective choice with `avo cli animation engine-show --json` and exact available project/provider context before loading engine-specific skills. Read the portable [selection guide](code-drawn/selection.md) and [advanced entry](code-drawn.md).
+
+| Current user instruction | Normalize at the agent boundary |
+| --- | --- |
+| No override | Invocation > project > provider > global > built-in HyperFrames |
+| "no frameworks", "without a framework", "framework-free" | Invocation code-drawn |
+| "avoid HyperFrames" without a named alternative | Invocation code-drawn |
+| "Avoid HyperFrames; use Remotion" | Explicit remotion, report actual readiness |
+| "Use Canvas/SVG with no frameworks" | code-drawn plus that drawing route |
+| "No frameworks; use Remotion/HyperFrames", or contrary explicit flag/field/instruction | Conflict; one focused clarification before dependent writes |
+| "no animation", "skip motion", `--skip-motion` | Skip motion; do not select code-drawn |
+| "Can we avoid HyperFrames?" | Answer the capability question; no execution/default write |
+| "Do not avoid HyperFrames" | Negated exclusion; no automatic override |
+| Quoted article/reference/example | Source material; no selection authority |
+| "Default to code-drawn" with no identifiable scope | Clarify global/provider/project before saving |
+| "Use code-drawn for this run" | Invocation only; do not save a default |
+
+This interpretation belongs to the driving agent; native CLI/MCP receive canonical IDs, not arbitrary prose. For code-drawn, follow its portable guide without loading HyperFrames-only skills, init/install or checks. Explain advanced responsibilities once: complete redraws, deterministic seeking, local asset/dependency readiness and actual output QC. A selected unavailable engine blocks with a repair action; no silent substitution.
+
+Global `engine-show`, `engine-set --scope global`, `engine-reset --scope global`, and `runtime-install` require no provider or footage. Standalone code-drawn authoring needs an explicit external ProjectDir; outputs stay in that project. Footage editing retains the context requirements below. A one-run choice survives that request's pauses; `pipeline run --new-request` explicitly resolves current defaults for new authoring without resetting editorial lifecycle. Existing immutable animation stays pinned until deliberately revised through the canonical services.
+
 ## Required context
 
 ```text
@@ -123,6 +146,8 @@ Also accept `9:30-9:35` or `--from 9:30 --to 9:35`.
 
 | Flag | Commands | Meaning |
 | ---- | -------- | ------- |
+| `--motion-engine ID` | motion, pipeline, content motion | One-run canonical engine ID; resolve before engine-only skills |
+| `--new-request` | pipeline run | Explicitly refresh motion request context while retaining editorial lifecycle |
 | `--skip-motion` | pipeline, trim, shorts, podcast-clip | Stop after edit master / skip motion phase |
 | `--identity NAME` | captions, shorts, podcast-clip | Caption identity (e.g. `anchor`) |
 | `--from-master` | shorts | Extract from approved long-form master via reframe |
@@ -156,11 +181,9 @@ Full reference: [`docs/video-work-modes.md`](../../../docs/video-work-modes.md).
 
 ## Canonical rules
 
-Always load before executing:
+In an AVO checkout, follow [`AGENTS.md`](../../../AGENTS.md) as the canonical policy and the existing project instructions. A root [`SKILL.md`](../../../SKILL.md), when present, and [`docs/avo-workflow.md`](../../../docs/avo-workflow.md) are checkout references.
 
-- [`AGENTS.md`](../../../AGENTS.md)
-- [`SKILL.md`](../../../SKILL.md)
-- [`docs/avo-workflow.md`](../../../docs/avo-workflow.md)
+In a skills-plus-binary installation, required guidance is the installed `avo`/`avo-pipeline` gateway and its local references, plus the external project’s own instructions. For code-drawn, the complete [portable guide](code-drawn.md) supplies its workflow and review boundaries. Do not require a missing AVO checkout, root SKILL file or HyperFrames skill to follow this route; remote/checkout links are supplementary. Native canonical services still enforce source, timing, evidence and approval authority.
 
 **Note:** `/avo.deliver` covers the full master. Use `/avo.audit` with `from`/`to` for window QC only.
 

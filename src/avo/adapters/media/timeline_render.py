@@ -77,27 +77,41 @@ def _reject_contract_mismatch(
 class TimelineRenderAdapter:
     """TimelineRenderPort: projection JSON in, hash-bound media out."""
 
-    def __init__(self, *, proof_executor: Any | None = None) -> None:
+    def __init__(
+        self, *, proof_executor: Any | None = None, generated_asset_validator=None
+    ) -> None:
         if proof_executor is None:
             from .proof_executor import execute_ffmpeg_proof
 
             proof_executor = execute_ffmpeg_proof
         self.proof_executor = proof_executor
+        self.generated_asset_validator = generated_asset_validator
 
     def for_proof_plan(self, workspace, proof_plan):
-        """Compose fresh physical cutting checks at the existing adapter seam."""
+        """Compose fresh source/runtime checks at the existing adapter seam."""
+        port = self
+        if any(
+            (operation.get("parameters") or {}).get("generatedAssetRef")
+            for operation in proof_plan.get("videoGraph", {}).get("operations", [])
+        ):
+            from avo.proof_composition import create_generated_asset_validator
+
+            port = TimelineRenderAdapter(
+                proof_executor=self.proof_executor,
+                generated_asset_validator=create_generated_asset_validator(workspace),
+            )
         if not proof_plan.get("validationPlan", {}).get("cutting", {}).get("required"):
-            return self
+            return port
         from .cutting_preview import CuttingPreviewAdapter
 
-        return CuttingPreviewAdapter(workspace, render_port=self)
+        return CuttingPreviewAdapter(workspace, render_port=port)
 
     def proof_tool_readiness(self, proof_plan: dict[str, Any]) -> dict[str, bool]:
         adapters = {
             str(item.get("adapterId") or "").casefold()
             for item in proof_plan.get("implementationRefs") or []
         }
-        return {
+        readiness = {
             "ffmpeg": shutil.which("ffmpeg") is not None,
             "hyperframes": (
                 shutil.which("hyperframes") is not None
@@ -106,6 +120,28 @@ class TimelineRenderAdapter:
             ),
             "proof-plan-executor": self.proof_executor is not None,
         }
+        readiness.update(self._generated_readiness(proof_plan))
+        return readiness
+
+    def _generated_readiness(self, proof_plan):
+        readiness = {}
+        for operation in proof_plan.get("videoGraph", {}).get("operations", []):
+            parameters = operation.get("parameters") or {}
+            reference = parameters.get("generatedAssetRef")
+            if reference:
+                key = "generated:" + reference["assetId"]
+                try:
+                    if self.generated_asset_validator is None:
+                        raise ValueError("Generated asset validator is not configured")
+                    self.generated_asset_validator(
+                        reference,
+                        parameters["inputLockRef"],
+                        proof_plan["canonicalInputLock"],
+                    )
+                    readiness[key] = True
+                except (OSError, ValueError, RuntimeError):
+                    readiness[key] = False
+        return readiness
 
     def render_proof_plan(
         self,
@@ -148,7 +184,14 @@ class TimelineRenderAdapter:
                 )
             }
         )
-        result = self.proof_executor(execution, Path(output))
+        if self.generated_asset_validator is None:
+            result = self.proof_executor(execution, Path(output))
+        else:
+            result = self.proof_executor(
+                execution,
+                Path(output),
+                generated_asset_validator=self.generated_asset_validator,
+            )
         if not isinstance(result, dict):
             raise RuntimeError("ProofPlan executor returned an invalid result")
         return {
