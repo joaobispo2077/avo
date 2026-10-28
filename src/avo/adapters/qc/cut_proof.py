@@ -80,8 +80,66 @@ def _require_assembly_dependencies(workspace, materialization, dependencies):
         raise ProjectionError("current approved Sync/N/A is missing or stale")
 
 
+def _require_generated_node_binding(node, record):
+    generator = node["generator"]
+    if node.get("kind") != "generated" or node.get("mediaClass") != "generated":
+        raise ProjectionError("code-drawn generated lineage was relabelled")
+    expected = (
+        generator.get("recordHash") == record["recordHash"],
+        generator.get("inputLockRef")
+        == record["parameters"]["codeDrawn"]["inputLockRef"],
+        node.get("sha256") == record["output"]["sha256"],
+    )
+    if not all(expected):
+        raise ProjectionError(
+            "code-drawn generated lineage identity/input lock mismatch"
+        )
+
+
+def _require_generated_node(workspace, node, environment):
+    from avo.timeline.generated_assets import GeneratedAssetError, GeneratedAssetService
+    from avo.timeline.media_admission import is_code_drawn_asset
+
+    generator = node.get("generator") or {}
+    selected = generator.get("adapterId") == "code-drawn"
+    if selected and environment is None:
+        raise ProjectionError(
+            "code-drawn generated receipt requires fresh environment observations"
+        )
+    if not hasattr(workspace, "timeline_dir"):
+        raise ProjectionError("generated receipt canonical workspace is missing")
+    service = GeneratedAssetService(workspace)
+    try:
+        record = service.load(str(generator.get("assetId") or ""))
+        if not is_code_drawn_asset(record) and not selected:
+            return
+        admitted = service.admit(record["assetId"], code_drawn_environment=environment)
+    except GeneratedAssetError as error:
+        raise ProjectionError(
+            f"generated receipt is unavailable or stale: {error}"
+        ) from error
+    _require_generated_node_binding(node, admitted)
+
+
+def _require_generated_receipts(workspace, materialization, environment):
+    graphs = [materialization["pictureLineage"]]
+    if materialization.get("audiovisualLineage"):
+        graphs.append(materialization["audiovisualLineage"])
+    for graph in graphs:
+        for node in graph.get("nodes") or []:
+            generator = node.get("generator") or {}
+            if generator.get("adapterId") == "code-drawn" or generator.get("assetId"):
+                _require_generated_node(workspace, node, environment)
+
+
 def _require_assembly_lineage(
-    workspace, materialization, candidate, dependencies, materialization_path, probe
+    workspace,
+    materialization,
+    candidate,
+    dependencies,
+    materialization_path,
+    probe,
+    code_drawn_environment=None,
 ):
     if materialization_path is None:
         raise ProjectionError("persisted assembly materialization is required")
@@ -99,6 +157,7 @@ def _require_assembly_lineage(
         raise ProjectionError("assembly candidate differs from materialization")
     _require_assembly_dependencies(workspace, materialization, dependencies)
     _require_assembly_graph(materialization, candidate, actual)
+    _require_generated_receipts(workspace, materialization, code_drawn_environment)
     result = source_fidelity_evidence(
         checkpoint="pre-master",
         candidate=media_from_probe(
@@ -145,6 +204,7 @@ def _require_cut_lineage(
     *,
     materialization_path=None,
     probe=None,
+    code_drawn_environment=None,
 ):
     if workspace is None:
         raise ProjectionError("canonical workspace is required")
@@ -156,16 +216,17 @@ def _require_cut_lineage(
             dependencies,
             materialization_path,
             probe,
+            code_drawn_environment,
         )
         return
     if materialization and materialization.get("kind") == "proof-plan":
-        from avo.timeline.approval_service import require_native_cut_materialization
+        from avo.timeline.approval_service import require_native_proof_materialization
 
-        expected = require_native_cut_materialization(
+        expected = require_native_proof_materialization(
             workspace, materialization, candidate
         )
         if any(dependencies.get(key) != value for key, value in expected.items()):
-            raise ProjectionError("candidate native cut dependencies are not exact")
+            raise ProjectionError("candidate native proof dependencies are not exact")
     else:
         verify_projection(workspace)
     _require_current_cut_heads(workspace, candidate, dependencies)
@@ -254,6 +315,7 @@ class CutProofQcAdapter:
                 dependencies,
                 materialization_path=request.get("materialization_path"),
                 probe=probe,
+                code_drawn_environment=request.get("code_drawn_environment"),
             )
         except (
             OSError,

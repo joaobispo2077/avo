@@ -1,5 +1,11 @@
 # /avo.figma Command
 
+**Motion engine gate:** Resolve intent through [shared arguments](../../agent-skills/avo-pipeline/references/arguments.md)
+before motion-specific loaders. Selected code-drawn follows the
+[advanced workflow](../../agent-skills/avo-pipeline/references/code-drawn.md) and common
+canonical review. HyperFrames-specific instructions below require selected
+HyperFrames; unavailable engines/treatments block without silent substitution.
+
 **Timeline integration:** Owns
 
 ## Workflow guidance
@@ -11,7 +17,9 @@
 
 Follow the shared [step-status response contract](../../agent-skills/avo-pipeline/references/step-status.md) for every progress, input, blocker, and completion response.
 
-Router to Figma → HyperFrames import workflow.
+Router to the selected compatible Figma/local-asset workflow. The existing
+Figma-to-HyperFrames importer applies only to selected HyperFrames; code-drawn
+uses permitted frozen local assets and reports unsupported import features.
 
 **Skill:** [`agent-skills/avo-pipeline/references/figma.md`](../../agent-skills/avo-pipeline/references/figma.md)
 

@@ -1,5 +1,72 @@
 # /avo.shorts reference
 
+**Motion engine gate:** Apply [shared arguments](arguments.md) and inspect native
+`animation engine-show` with available context before motion-specific skill/setup.
+HyperFrames remains the built-in default. For selected code-drawn, follow the
+[advanced workflow](code-drawn.md) and common canonical source/review gates.
+HyperFrames-only loaders and recipes below apply only to selected HyperFrames.
+Unavailable Remotion or incompatible treatments block; never silently substitute.
+
+A standalone code-drawn render does not establish automated Shorts support. Require the native motion path to report selected-engine support and current canonical admission; if absent, stop at that capability boundary before invoking HyperFrames.
+
+## Advanced code-drawn bound alpha
+
+For selected `code-drawn`, the native Shorts producer composites an already
+registered canonical drawing alpha over original picture and independent audio.
+It does not compile a HyperFrames project, run a HyperFrames check/contact sheet,
+or generate a HyperFrames caption/widget layer. Follow the
+[advanced entry workflow](code-drawn.md) and
+[render contract](code-drawn/render-contract.md) for authoring and materialization.
+
+In a normal Shorts request, place `motionEngine: "code-drawn"` and its
+`codeDrawn` binding in `defaults` or one candidate. These are typed request
+fields, not slash-command flags. Use actual producer references:
+
+| Field | Required identity |
+| --- | --- |
+| `codeDrawn.instanceId` | Exact current canonical drawing instance. |
+| `codeDrawn.manifestRef` | `{path, sha256}` for its current source manifest; path is relative to the footage root. |
+| `codeDrawn.inputLockRef` | `{path, sha256}` for the original frozen input lock used to render the alpha. |
+| `codeDrawn.generatedAssetRef` | `{assetId, recordHash, locator}` for the actual sealed registered receipt. |
+
+A candidate engine override wins over shared request defaults. Declaring both a
+contrary engine and a code-drawn binding in the same scope is invalid, even if a
+stronger candidate would mask it. New native resolution consults global,
+provider/channel and project preferences and pins each resolved item. Explicit
+request choices win. Existing approved plans without a motion field keep their
+historical HyperFrames route; saved preference changes do not reinterpret them.
+
+The initial code-drawn Shorts path requires the original-picture source-fidelity
+10-bit output profile, one contiguous original-source segment at speed 1, and the
+same selected canonical content. Alpha must be silent with straight transparency,
+fill the entire canvas, and match the exact dimensions, rational frame rate and
+frame count/duration. A resized preview requires a new compatible bound alpha.
+Non-fidelity output, split layout, automatic HyperFrames callouts/widgets,
+punch-ins and visual inserts fail before preparation. Author supported graphics
+inside the drawing instead of requesting an automatic style port. An unavailable
+Remotion route or incompatible treatment never authorizes a HyperFrames fallback.
+
+Nonempty planned captions must actually be authored into the inspectable drawing
+source. Declare `extensions.shortsCaptionPlanHash` in its manifest: SHA-256 of
+the exact resolved `captions` array as UTF-8 canonical JSON, with sorted object
+keys, preserved Unicode, no separator whitespace and no non-finite numbers.
+Preserve text, word IDs and times. An absent or mismatched declaration blocks
+before browser/media work. Empty captions need no declaration. After authoring
+or changing captions, refresh source file fingerprints and the manifest seal,
+freeze a new original input lock, regenerate/register the alpha, update the
+request binding and resolve a new plan revision. The hash declares authored
+intent; it is not proof of visible accuracy or human approval.
+
+The native path checks the current canonical heads, source range, full-canvas
+placement, source closure and forbidden-output inventory. It observes the actual
+runtime and compares fresh RGBA frame hashes with the original receipt before
+admission, again after encoding before report publication, and before reusing a
+saved proof. Its report binds the receipt, original input lock, generator,
+original picture and independent audio. Unused HyperFrames template files do not
+determine a code-drawn proof's freshness. Complete the separate human watch,
+caption/accessibility, rights and delivery gates in
+[QC and delivery](code-drawn/qc-delivery.md).
+
 ## Step/state mapping
 
 **Durable state:** shorts.status.json for the batch/item

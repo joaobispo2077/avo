@@ -4,6 +4,8 @@ import subprocess
 import unittest
 from pathlib import Path
 
+import pytest
+
 ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -77,3 +79,96 @@ class InstallScriptTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+# Canonical CLI IDs differ from AVO's stable --only/fallback profile IDs.
+# Capturing argv is a contract check, not proof that the real CLI copied a tree.
+def test_normal_installer_preserves_user_profile_ids():
+    import json
+
+    result = subprocess.run(
+        [
+            "node",
+            "-e",
+            _skills_invocation_probe(),
+            str(ROOT / "bin/install.cjs"),
+            "cursor",
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout)["ids"] == [
+        "cursor",
+        "claude",
+        "codex",
+        "windsurf",
+        "cline",
+        "gemini",
+        "opencode",
+    ]
+
+
+def _skills_invocation_probe():
+    return """
+const fs = require('fs');
+const vm = require('vm');
+const filename = process.argv[1];
+const requested = process.argv[2];
+const calls = [];
+const sandbox = {
+  __filename: filename,
+  module: {exports:{}},
+  console: {log(){}, error(){}},
+  process: {platform:process.platform, env:{AVO_INSTALL_REPO:'example/avo',AVO_INSTALL_REF:'test-ref'}},
+  require(name) {
+    if (name === 'child_process') return {spawnSync(command, args) {calls.push({command,args}); return {status:0};}};
+    return require(name);
+  },
+};
+vm.runInNewContext(fs.readFileSync(filename,'utf8') + '\\nglobalThis.probe={PROVIDERS,installProvider};', sandbox, {filename});
+const provider = sandbox.probe.PROVIDERS.find(item => item.id === requested);
+if (!provider) throw new Error('Unknown profile ' + requested);
+if (!sandbox.probe.installProvider(provider, null, {yes:true,dryRun:false})) throw new Error('Installer failed');
+console.log(JSON.stringify({ids:sandbox.probe.PROVIDERS.map(item=>item.id),calls}));
+"""
+
+
+@pytest.mark.parametrize(
+    "profile,canonical",
+    [
+        ("cursor", "cursor"),
+        ("claude", "claude-code"),
+        ("codex", "codex"),
+        ("windsurf", "windsurf"),
+        ("cline", "cline"),
+        ("gemini", "gemini-cli"),
+        ("opencode", "opencode"),
+    ],
+)
+def test_normal_installer_uses_supported_canonical_skills_agent_ids(profile, canonical):
+    import json
+
+    result = subprocess.run(
+        [
+            "node",
+            "-e",
+            _skills_invocation_probe(),
+            str(ROOT / "bin/install.cjs"),
+            profile,
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    calls = json.loads(result.stdout)["calls"]
+    assert len(calls) == 1
+    assert calls[0]["command"] == "npx"
+    arguments = calls[0]["args"]
+    assert arguments[:4] == ["-y", "skills", "add", "github:example/avo#test-ref"]
+    assert arguments[arguments.index("-a") + 1] == canonical
+    assert "--yes" in arguments

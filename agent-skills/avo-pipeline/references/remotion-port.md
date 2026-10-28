@@ -1,5 +1,14 @@
 # /avo.remotion-port reference
 
+**Motion engine gate:** Apply [shared arguments](arguments.md) and inspect native
+`animation engine-show` with available context before motion-specific skill/setup.
+HyperFrames remains the built-in default. For selected code-drawn, follow the
+[advanced workflow](code-drawn.md) and common canonical source/review gates.
+HyperFrames-only loaders and recipes below apply only to selected HyperFrames.
+Unavailable Remotion or incompatible treatments block; never silently substitute.
+
+This router is an explicit Remotion-to-HyperFrames source migration. Code-drawn is not an automatic port target, and the unsupported Remotion execution adapter is not enabled by porting; resolve a contrary target before authoring.
+
 ## Step/state mapping
 
 **Durable state:** pipeline-run.json plus the current canonical timeline revision

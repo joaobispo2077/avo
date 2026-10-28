@@ -236,3 +236,416 @@ def test_eight_bit_route_does_not_require_fidelity_reports():
     }
     shorts._mark_stale_fidelity_proofs({"output": {"pixelFormat": "yuv420p"}}, status)
     assert status["items"][0]["dirty"] is False
+
+
+def _code_drawn_fidelity_context(tmp_path, *, caption_plan_hash=None):
+    from copy import deepcopy
+
+    from avo.timeline.contracts import content_hash, file_fingerprint
+    from avo.timeline.generated_assets import GeneratedAssetService
+    from tests.code_drawn_asset_fixture import canonical_asset
+
+    if caption_plan_hash is None:
+        asset = canonical_asset(tmp_path)
+    else:
+        from tests import code_drawn_asset_fixture
+
+        write = code_drawn_asset_fixture.write_manifest
+
+        def declared_manifest(path, value):
+            value = deepcopy(value)
+            value["extensions"] = {"shortsCaptionPlanHash": caption_plan_hash}
+            write(path, value)
+
+        with patch.object(
+            code_drawn_asset_fixture, "write_manifest", side_effect=declared_manifest
+        ):
+            asset = canonical_asset(tmp_path)
+    workspace = asset.workspace
+    service = GeneratedAssetService(workspace)
+    receipt = service.register(asset.record, code_drawn_environment=asset.environment)
+    voice = workspace.raw_dir / "prepared-voice.wav"
+    voice.write_bytes(b"unit-transport-existing-canonical-audio")
+    source = workspace.raw_dir / "raw.bin"
+    item = {
+        "layout": {"mode": "full-frame"},
+        "sourceSegments": [
+            {
+                "startSec": 0.1,
+                "endSec": 0.4,
+                "sourceFingerprint": file_fingerprint(source)["sha256"],
+            }
+        ],
+        "inputFingerprint": content_hash("bound-short"),
+        "speed": 1,
+        "editedDurationSec": 0.3,
+    }
+    spec = {
+        "motionEngine": "code-drawn",
+        "codeDrawn": {
+            **deepcopy(asset.reference),
+            "inputLockRef": deepcopy(
+                receipt["parameters"]["codeDrawn"]["inputLockRef"]
+            ),
+            "generatedAssetRef": {
+                "assetId": receipt["assetId"],
+                "recordHash": receipt["recordHash"],
+                "locator": str(service.path(receipt["assetId"])),
+            },
+        },
+        "assets": {
+            "dialogueAudio": {
+                "path": str(voice),
+                "hash": file_fingerprint(voice)["sha256"],
+                "durationSec": 0.3,
+            }
+        },
+    }
+    return workspace, source, voice, item, spec, receipt
+
+
+def test_code_drawn_shorts_transport_uses_admitted_alpha_without_hyperframes(
+    tmp_path, monkeypatch
+):
+    from avo.timeline.contracts import content_hash, file_fingerprint
+    from avo.timeline.generated_assets import GeneratedAssetService
+
+    workspace, source, voice, item, spec, receipt = _code_drawn_fidelity_context(
+        tmp_path
+    )
+    seen = {}
+
+    def admit(service, asset_id, **kwargs):
+        assert service.workspace is workspace
+        assert asset_id == receipt["assetId"]
+        assert kwargs, (
+            "Code-drawn admission must receive current freshness observations."
+        )
+        seen["admission"] = kwargs
+        return receipt
+
+    def forbidden(*args, **kwargs):
+        pytest.fail("Bound code-drawn Shorts invoked a HyperFrames compile or render.")
+
+    class NoFrameworkAdapter:
+        execute = forbidden
+        render = forbidden
+
+    def render(original, destination, **kwargs):
+        seen["source"] = original
+        seen["render"] = kwargs
+        return {
+            "path": str(destination),
+            "canonicalInputLock": kwargs["canonical_lock"],
+        }
+
+    from tests.code_drawn_asset_fixture import synthetic_environment
+
+    def observe(composition, **kwargs):
+        seen["observedComposition"] = composition
+        return synthetic_environment()
+
+    monkeypatch.setattr("avo.proof_composition.observe_code_drawn_environment", observe)
+    monkeypatch.setattr(GeneratedAssetService, "admit", admit)
+    monkeypatch.setattr(shorts, "compile_project", forbidden, raising=False)
+    monkeypatch.setattr(
+        "avo.shorts_fidelity_audio.mix_short_audio",
+        lambda *a, **k: {
+            "path": str(voice),
+            "sha256": file_fingerprint(voice)["sha256"],
+        },
+    )
+    monkeypatch.setattr(
+        shorts_fidelity,
+        "build_microproofs",
+        lambda *a, **k: {"sha256": content_hash("microproof")},
+    )
+    monkeypatch.setattr(shorts_fidelity, "render_fidelity", render)
+    work = workspace.raw_dir / "short-work"
+    work.mkdir()
+    shorts._render_source_fidelity(
+        {"planHash": content_hash("plan")},
+        item,
+        source,
+        {
+            "width": 128,
+            "height": 96,
+            "fps": 30,
+            "frameRateRational": "30/1",
+            "audioChannels": 2,
+            "preview": True,
+        },
+        spec,
+        work,
+        work / "candidate.mp4",
+        NoFrameworkAdapter(),
+        workspace=workspace,
+    )
+    assert seen["admission"] == {"code_drawn_environment": synthetic_environment()}
+    assert seen["observedComposition"].name == "composition.json"
+    assert seen["source"] == source
+    assert seen["render"]["overlay_path"] == Path(receipt["output"]["locator"])
+    assert seen["render"]["overlay_sha256"] == receipt["output"]["sha256"]
+    assert seen["render"]["mixed_audio_path"] == voice
+    assert seen["render"]["fps"] == "30/1"
+
+
+def test_code_drawn_shorts_requires_real_canonical_context_before_media_work(
+    tmp_path, monkeypatch
+):
+    def forbidden(*args, **kwargs):
+        pytest.fail("An unbound request reached media work.")
+
+    monkeypatch.setattr(shorts, "compile_project", forbidden, raising=False)
+    monkeypatch.setattr("avo.shorts_fidelity_audio.mix_short_audio", forbidden)
+    with pytest.raises(RuntimeError, match="canonical|workspace|context"):
+        shorts._render_source_fidelity(
+            {"planHash": "a" * 64},
+            {
+                "layout": {"mode": "full-frame"},
+                "sourceSegments": [
+                    {"startSec": 0, "endSec": 1, "sourceFingerprint": "b" * 64}
+                ],
+                "speed": 1,
+            },
+            tmp_path / "source.mkv",
+            {"width": 128, "height": 96, "fps": 30},
+            {"motionEngine": "code-drawn", "codeDrawn": {}, "assets": {}},
+            tmp_path,
+            tmp_path / "candidate.mp4",
+            object(),
+        )
+    assert not (tmp_path / "candidate.mp4").exists()
+
+
+def test_unported_shorts_style_cannot_trigger_implicit_hyperframes_generation(
+    tmp_path, monkeypatch
+):
+    def forbidden(*args, **kwargs):
+        pytest.fail("Unsupported style reached a HyperFrames loader.")
+
+    monkeypatch.setattr(shorts, "compile_project", forbidden, raising=False)
+    with pytest.raises(
+        RuntimeError, match="code-drawn|bound|unsupported|capability|context"
+    ):
+        shorts._render_graphics_alpha(
+            {
+                "motionEngine": "code-drawn",
+                "assets": {},
+                "captions": [],
+                "identity": "embedded",
+            },
+            tmp_path,
+            tmp_path / "alpha.webm",
+            "30/1",
+            object(),
+        )
+    assert not (tmp_path / "alpha.webm").exists()
+
+
+@pytest.mark.parametrize("declared", [None, "0" * 64])
+def test_code_drawn_captions_require_exact_authored_plan_before_observation(
+    tmp_path, monkeypatch, declared
+):
+    from avo import shorts_motion
+
+    workspace, _, _, item, spec, _ = _code_drawn_fidelity_context(
+        tmp_path, caption_plan_hash=declared
+    )
+    spec["captions"] = [
+        {"id": "caption-one", "text": "Source meaning", "startSec": 0, "endSec": 0.3}
+    ]
+
+    def forbidden(*args, **kwargs):
+        pytest.fail("Undeclared captions reached a browser or audio operation")
+
+    monkeypatch.setattr(
+        "avo.proof_composition.observe_code_drawn_environment", forbidden
+    )
+    with pytest.raises(RuntimeError, match="caption.*plan|caption.*source"):
+        shorts_motion.admitted_alpha(
+            spec, workspace, item, {"width": 128, "height": 96, "fps": 30}
+        )
+
+
+def test_code_drawn_declared_caption_plan_is_bound_but_requires_visual_review(tmp_path):
+    from avo import shorts_motion
+
+    captions = [
+        {"id": "caption-one", "text": "Source meaning", "startSec": 0, "endSec": 0.3}
+    ]
+    workspace, _, _, item, spec, receipt = _code_drawn_fidelity_context(
+        tmp_path, caption_plan_hash=shorts_contract.content_hash(captions)
+    )
+    spec["captions"] = captions
+    _, actual, _ = shorts_motion.preflight_alpha(
+        spec, workspace, item, {"width": 128, "height": 96, "fps": 30}
+    )
+    assert actual["recordHash"] == receipt["recordHash"]
+    assert "semanticReview" not in actual
+
+
+@pytest.mark.parametrize(
+    "changed", ["range", "speed", "size", "rate", "duration", "noncontiguous"]
+)
+def test_code_drawn_short_contract_mismatch_blocks_before_current_observation(
+    tmp_path, monkeypatch, changed
+):
+    from copy import deepcopy
+
+    from avo import shorts_motion
+
+    workspace, _, _, item, spec, _ = _code_drawn_fidelity_context(tmp_path)
+    output = {"width": 128, "height": 96, "fps": 30, "frameRateRational": "30/1"}
+    if changed == "range":
+        item["sourceSegments"][0]["startSec"] = 0.2
+    elif changed == "speed":
+        item["speed"] = 1.25
+    elif changed == "size":
+        output["width"] = 256
+    elif changed == "rate":
+        output["fps"], output["frameRateRational"] = 60, "60/1"
+    elif changed == "duration":
+        item["editedDurationSec"] = 0.6
+    else:
+        item["sourceSegments"].append(deepcopy(item["sourceSegments"][0]))
+
+    def forbidden(*args, **kwargs):
+        pytest.fail("Incompatible selected content reached current browser observation")
+
+    monkeypatch.setattr(
+        "avo.proof_composition.observe_code_drawn_environment", forbidden
+    )
+    with pytest.raises(RuntimeError, match="code-drawn"):
+        shorts_motion.admitted_alpha(spec, workspace, item, output)
+
+
+def test_code_drawn_source_changed_during_fidelity_cannot_publish_report(
+    tmp_path, monkeypatch
+):
+    from avo import motion
+    from tests.code_drawn_asset_fixture import synthetic_environment
+
+    workspace, source, voice, item, spec, _ = _code_drawn_fidelity_context(tmp_path)
+    manifest_path = workspace.raw_dir / spec["codeDrawn"]["manifestRef"]["path"]
+    manifest = motion.load_composition(manifest_path)
+    entry = manifest_path.parent / manifest["entry"]
+    work = workspace.raw_dir / "fidelity-attempt"
+    work.mkdir()
+    monkeypatch.setattr(
+        "avo.proof_composition.observe_code_drawn_environment",
+        lambda _, **kwargs: synthetic_environment(),
+    )
+    monkeypatch.setattr(
+        "avo.shorts_fidelity_audio.mix_short_audio",
+        lambda *a, **k: {
+            "path": str(voice),
+            "sha256": shorts.shorts_media.sha256_file(voice),
+        },
+    )
+    monkeypatch.setattr(
+        shorts_fidelity, "build_microproofs", lambda *a, **k: {"sha256": "e" * 64}
+    )
+
+    def render(original, destination, **kwargs):
+        entry.write_bytes(entry.read_bytes() + b"\n<!-- changed while encoding -->")
+        return {
+            "path": str(destination),
+            "canonicalInputLock": kwargs["canonical_lock"],
+        }
+
+    monkeypatch.setattr(shorts_fidelity, "render_fidelity", render)
+    with pytest.raises(motion.MotionError, match="fingerprint|changed"):
+        shorts._render_source_fidelity(
+            {"planHash": "d" * 64},
+            item,
+            source,
+            {"width": 128, "height": 96, "fps": 30},
+            spec,
+            work,
+            work / "proof.mp4",
+            None,
+            workspace=workspace,
+        )
+    assert not (work / "source-fidelity.json").exists()
+
+
+def test_code_drawn_fidelity_reuse_requires_current_observed_browser_environment(
+    tmp_path, monkeypatch
+):
+    from types import SimpleNamespace
+
+    from avo import shorts_motion
+    from tests.code_drawn_asset_fixture import synthetic_environment
+
+    workspace, _, _, item, spec, receipt = _code_drawn_fidelity_context(tmp_path)
+    item.update(id="01", **shorts_motion.pinned_fields(spec))
+    output = {"width": 128, "height": 96, "fps": 30, "pixelFormat": "yuv420p10le"}
+    plan = {"items": [item], "output": output}
+    paths = SimpleNamespace(raw_dir=workspace.raw_dir)
+    observed = synthetic_environment()
+    monkeypatch.setattr(
+        "avo.proof_composition.observe_code_drawn_environment",
+        lambda _, **kwargs: dict(observed),
+    )
+    implementations = shorts._current_fidelity_implementations(plan, item, paths)
+    proof = workspace.raw_dir / "short-proof.mp4"
+    proof.write_bytes(b"synthetic unit proof")
+    report = {
+        "path": str(proof),
+        "sha256": shorts.shorts_media.sha256_file(proof),
+        "canonicalInputLock": implementations,
+        "implementationRef": {
+            "sha256": implementations["implementation:registered-source-fidelity"]
+        },
+    }
+    report_path = workspace.raw_dir / "source-fidelity.json"
+    shorts_contract.atomic_write_json(report_path, report)
+    row = {
+        "shortId": "01",
+        "proofRevision": 1,
+        "dirty": False,
+        "dirtyReasons": [],
+        "artifacts": [
+            shorts._artifact("proof", proof, 1),
+            shorts._artifact("source-fidelity", report_path, 1),
+        ],
+    }
+    status = {"items": [row]}
+    shorts._mark_stale_fidelity_proofs(plan, status, paths=paths)
+    assert row["dirty"] is False
+    observed["browserVersion"] = "different-current-browser"
+    shorts._mark_stale_fidelity_proofs(plan, status, paths=paths)
+    assert row["dirty"] is True
+    assert row["dirtyReasons"] == ["render-implementation-changed"]
+    assert implementations["generated:" + receipt["assetId"]] == receipt["recordHash"]
+
+
+def test_code_drawn_short_rejects_changed_fresh_pixels_before_admission(
+    tmp_path, monkeypatch
+):
+    from copy import deepcopy
+
+    from avo import motion, shorts_motion
+    from avo.adapters.motion.code_drawn import CodeDrawnAdapter
+    from avo.timeline.generated_assets import GeneratedAssetService
+    from tests.code_drawn_asset_fixture import synthetic_environment
+
+    workspace, _, _, item, spec, receipt = _code_drawn_fidelity_context(tmp_path)
+    fresh = deepcopy(receipt["parameters"]["codeDrawn"]["captureEvidence"])
+    fresh["rgbaSha256"][0] = "f" * 64
+    fresh["environment"] = synthetic_environment()
+    monkeypatch.setattr(
+        CodeDrawnAdapter,
+        "check",
+        lambda self, composition: {"checks": [{"evidence": fresh}]},
+    )
+
+    def forbidden(*args, **kwargs):
+        pytest.fail("Changed fresh pixels reached generated alpha admission")
+
+    monkeypatch.setattr(GeneratedAssetService, "admit", forbidden)
+    with pytest.raises(motion.MotionError, match="RGBA|pixels"):
+        shorts_motion.admitted_alpha(
+            spec, workspace, item, {"width": 128, "height": 96, "fps": 30}
+        )

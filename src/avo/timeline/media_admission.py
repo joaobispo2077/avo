@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping
 from pathlib import Path
 from typing import Any
 
@@ -11,6 +11,14 @@ from .contracts import file_fingerprint
 FORBIDDEN_OUTPUT_CLASSES = frozenset(
     {"proof", "preview", "proxy", "master", "delivery"}
 )
+
+
+def is_code_drawn_asset(record: dict[str, Any]) -> bool:
+    generator = record.get("generator")
+    parameters = record.get("parameters")
+    return (
+        isinstance(generator, Mapping) and generator.get("adapterId") == "code-drawn"
+    ) or (isinstance(parameters, Mapping) and "codeDrawn" in parameters)
 
 
 class MediaAdmissionError(ValueError):
@@ -73,17 +81,27 @@ def _media_class(value: dict[str, Any]) -> str:
     ).lower()
 
 
-def _verify_locator(value: dict[str, Any]) -> None:
+def _fingerprint_matches(actual: dict, expected: dict) -> bool:
+    return actual["sha256"] == expected["sha256"] and (
+        "sizeBytes" not in expected or actual["sizeBytes"] == expected["sizeBytes"]
+    )
+
+
+def _verify_locator(value: dict[str, Any], *, required: bool = False) -> None:
     fingerprint = _fingerprint(value)
     locator = str(value.get("locator") or fingerprint.get("locator") or "")
     expected = str(fingerprint.get("sha256") or "")
     if not locator or not Path(locator).is_file() or not expected:
+        if required:
+            raise MediaAdmissionError(
+                "PROOF_MEDIA_FINGERPRINT_MISMATCH", _finding(value, "missing-input")
+            )
         return
-    actual = file_fingerprint(Path(locator))["sha256"]
-    if actual != expected:
+    actual = file_fingerprint(Path(locator))
+    if not _fingerprint_matches(actual, fingerprint):
         raise MediaAdmissionError(
             "PROOF_MEDIA_FINGERPRINT_MISMATCH",
-            _finding(value, "fingerprint-mismatch", actualSha256=actual),
+            _finding(value, "fingerprint-mismatch", actualSha256=actual["sha256"]),
         )
 
 
@@ -108,12 +126,24 @@ def require_no_forbidden_outputs(
             )
 
 
+def _plain_admission(contributor: dict, sha256: str, originals: dict) -> str:
+    if contributor.get("ancestryRole") == "dependency":
+        _verify_locator(contributor, required=True)
+        return "fingerprinted-dependency"
+    if sha256 in originals:
+        return "registered-original"
+    raise MediaAdmissionError(
+        "PROOF_MEDIA_QUARANTINED", _finding(contributor, "unregistered-or-ambiguous")
+    )
+
+
 def require_media_admission(
     contributors: Iterable[dict[str, Any]],
     *,
     registered_originals: Iterable[dict[str, Any]] = (),
     generated_assets: Mapping[str, dict[str, Any]] | Iterable[dict[str, Any]] = (),
     known_outputs: Iterable[dict[str, Any]] = (),
+    code_drawn_verifier: Callable[[dict[str, Any]], dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Admit only exact originals or recursively complete generated assets."""
     originals = list(registered_originals)
@@ -152,6 +182,9 @@ def require_media_admission(
                 )
             admit_asset(record, stack)
             return
+        _verify_locator(reference, required=True)
+        if reference.get("ancestryRole") == "dependency":
+            return
         original = originals_by_id.get(artifact_id) or originals_by_sha.get(sha256)
         if original is not None and (not sha256 or sha256 == _sha256(original)):
             return
@@ -183,6 +216,25 @@ def require_media_admission(
                 "PROOF_MEDIA_QUARANTINED",
                 _finding(record, "generated-asset-not-admissible"),
             )
+        _verify_locator(record, required=True)
+        if is_code_drawn_asset(record):
+            if code_drawn_verifier is None:
+                raise MediaAdmissionError(
+                    "PROOF_MEDIA_QUARANTINED",
+                    _finding(record, "code-drawn-freshness-verifier-required"),
+                )
+            try:
+                verified = code_drawn_verifier(record)
+            except (ValueError, RuntimeError, OSError) as error:
+                raise MediaAdmissionError(
+                    "PROOF_MEDIA_QUARANTINED",
+                    _finding(record, "code-drawn-input-stale", detail=str(error)),
+                ) from error
+            if verified != record:
+                raise MediaAdmissionError(
+                    "PROOF_MEDIA_QUARANTINED",
+                    _finding(record, "code-drawn-verifier-record-mismatch"),
+                )
         inputs = list(record.get("inputs") or [])
         if not inputs and not record.get("sourceFree", False):
             raise MediaAdmissionError(
@@ -209,13 +261,8 @@ def require_media_admission(
                 )
             admit_asset(record, ())
             admission = "canonical-generated-asset"
-        elif sha256 in originals_by_sha:
-            admission = "registered-original"
         else:
-            raise MediaAdmissionError(
-                "PROOF_MEDIA_QUARANTINED",
-                _finding(contributor, "unregistered-or-ambiguous"),
-            )
+            admission = _plain_admission(contributor, sha256, originals_by_sha)
         admitted.append(
             {"nodeId": str(contributor.get("nodeId") or ""), "admission": admission}
         )

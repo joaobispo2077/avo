@@ -1,5 +1,14 @@
 # /avo.pipeline reference
 
+**Motion engine gate:** Apply [shared arguments](arguments.md) and inspect native
+`animation engine-show` with available context before motion-specific skill/setup.
+HyperFrames remains the built-in default. For selected code-drawn, follow the
+[advanced workflow](code-drawn.md) and common canonical source/review gates.
+HyperFrames-only loaders and recipes below apply only to selected HyperFrames.
+Unavailable Remotion or incompatible treatments block; never silently substitute.
+
+A pipeline initialization is not a completed motion proof. Use code-drawn in canonical execution only when the native path admits its current source/lock and supports the requested operation; otherwise report the missing capability before rendering.
+
 ## Step/state mapping
 
 **Durable state:** pipeline-run.json main/side state
@@ -23,7 +32,7 @@ Load [`arguments.md`](arguments.md) first.
 | 1 | Transcribe | faster-whisper | raw file(s) | **initial transcript** |
 | 2 | Edit | render helpers | transcript, EDL | cut proofs |
 | 3 | Verify | watch-skill | proof render | agent QC + human gate |
-| 4 | Motion | HyperFrames | approved cut | motion proof + human gate |
+| 4 | Motion | Selected supported engine (HyperFrames default) | approved cut | motion proof + human gate |
 | 5 | Render | `avo.render --youtube-4k` | approved pre-master | **final master** + **final transcript** (auto) |
 | 6 | Deliver | QC + manifest | master + final transcript | delivery manifest |
 | 7 | Learndown + cleanup | rimraf | project tree | preserved set only |

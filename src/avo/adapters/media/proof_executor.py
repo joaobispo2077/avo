@@ -285,15 +285,16 @@ def _output_settings(execution: dict) -> tuple:
         or rate != execution["audioGraph"]["sampleRate"]
     ):
         raise RuntimeError("ProofPlan requires consistent stereo output/sample rate")
-    if (
-        spec["videoCodec"] not in {"libx264", "h264_nvenc"}
-        or spec["audioCodec"] != "aac"
-    ):
+    conformance = spec.get("conformance", False)
+    if type(conformance) is not bool:
+        raise RuntimeError("Conformance selection must be a boolean")
+    codecs = (spec["videoCodec"], spec["audioCodec"])
+    if conformance:
+        valid = codecs == ("ffv1", "pcm_s32le")
+    else:
+        valid = codecs[0] in {"libx264", "h264_nvenc"} and codecs[1] == "aac"
+    if not valid:
         raise RuntimeError("Unsupported ProofPlan output codec")
-    if execution["events"]:
-        raise RuntimeError(
-            "ProofPlan timed events require an implemented event renderer"
-        )
     if not execution["audioGraph"]["singleFinalEncode"]:
         raise RuntimeError("ProofPlan requires one final audio encode")
     return spec, fps, rate
@@ -422,65 +423,176 @@ def _validate_consumed(cursor, used_audio, nodes, audio_trims):
         raise RuntimeError("Unconsumed or empty ProofPlan graph")
 
 
-def _segments(execution, node_by_range, audio_trims, fps, rate, nodes):
-    operations = execution["videoGraph"]["operations"]
+def _audio_frame_ranges(node_by_range, fps, rate):
+    result, cursor = [], 0
+    for (start, end), node in sorted(node_by_range.items()):
+        first, last = (
+            round(Fraction(start, rate) * fps),
+            round(Fraction(end, rate) * fps),
+        )
+        if start != cursor or any(
+            round(Fraction(frame, 1) / fps * rate) != sample
+            for frame, sample in ((first, start), (last, end))
+        ):
+            raise RuntimeError("Audio graph requires contiguous frame-aligned coverage")
+        result.append((first, last, node))
+        cursor = end
+    if not result:
+        raise RuntimeError("ProofPlan requires complete audio coverage")
+    return result
+
+
+def _picture_source(operation, generated, execution, cache, fps):
+    parameters = operation["parameters"]
+    region = operation["outputRange"]
+    start, end = _bounds(region, "startFrame", "endFrameExclusive")
+    if operation["kind"] == "generated-clip":
+        asset = generated[operation["operationId"]]
+        source = parameters["sourceRange"]
+        return (
+            (asset["path"], asset["video"]["index"]),
+            Fraction(source["startFrame"], 1) / fps,
+            Fraction(end - start, 1) / fps,
+            None,
+        )
+    picture = _source(parameters, execution["canonicalInputLock"], cache)
+    source_range = parameters["sourceRange"]
+    raw_start, raw_end = _bounds(source_range, "startTicks", "endTicks")
+    source_start = _seconds(raw_start, source_range["timebase"])
+    source_duration = _seconds(raw_end - raw_start, source_range["timebase"])
+    if abs(source_duration - Fraction(end - start, 1) / fps) > 1 / fps:
+        raise RuntimeError("Source/video duration differs by more than one frame")
+    tail = _video_tail(
+        parameters,
+        picture,
+        cache,
+        source_start,
+        source_duration,
+        Fraction(end - start, 1) / fps,
+    )
+    return picture, source_start, source_duration, tail
+
+
+def _base_parameters(operation, refs, registry):
+    if operation["kind"] == "trim":
+        _video_parameters(operation, refs, registry)
+    elif operation["kind"] != "generated-clip":
+        raise RuntimeError(
+            f"Unsupported ProofPlan video operation: {operation['kind']}"
+        )
+
+
+def _segments(execution, node_by_range, audio_trims, fps, rate, nodes, generated):
+    operations = [
+        item
+        for item in execution["videoGraph"]["operations"]
+        if item["kind"] != "overlay-video"
+    ]
     registry = default_proof_capability_registry()
     refs = {item["implementationId"]: item for item in execution["implementationRefs"]}
+    audio_ranges = _audio_frame_ranges(node_by_range, fps, rate)
     cursor, segments, cache, used_audio = 0, [], {}, set()
     for operation in operations:
-        parameters = _video_parameters(operation, refs, registry)
+        _base_parameters(operation, refs, registry)
         start, end = _bounds(
             operation["outputRange"], "startFrame", "endFrameExclusive"
         )
         if start != cursor:
-            raise RuntimeError("Video trims must completely cover a sequential output")
-        cursor = end
-        sample_bounds = (
-            round(Fraction(start, 1) / fps * rate),
-            round(Fraction(end, 1) / fps * rate),
-        )
-        node = node_by_range.get(sample_bounds)
-        if node is None:
             raise RuntimeError(
-                "Every video trim requires matching absolute audio coverage"
+                "Base picture intervals must completely cover a sequential output"
             )
-        used_audio.add(node["nodeId"])
-        picture = _source(parameters, execution["canonicalInputLock"], cache)
-        source_range = parameters["sourceRange"]
-        raw_start, raw_end = _bounds(source_range, "startTicks", "endTicks")
-        timebase = source_range["timebase"]
-        source_start = _seconds(raw_start, timebase)
-        source_duration = _seconds(raw_end - raw_start, timebase)
-        if abs(source_duration - Fraction(end - start, 1) / fps) > 1 / fps:
-            raise RuntimeError("Source/video duration differs by more than one frame")
-        audio, fades = _segment_audio(
-            node, audio_trims, execution, cache, sample_bounds, rate, fps
+        cursor = end
+        picture, source_start, source_duration, tail = _picture_source(
+            operation, generated, execution, cache, fps
         )
-        noise_policy = _dialogue_noise_policy(node, audio_trims)
-        tail = _video_tail(
-            parameters,
-            picture,
-            cache,
-            source_start,
-            source_duration,
-            Fraction(end - start, 1) / fps,
-        )
-        segments.append(
-            (
-                start,
-                end,
-                picture,
-                source_start,
-                source_duration,
-                node,
-                audio,
-                fades,
-                tail,
-                noise_policy,
+        for astart, aend, node in audio_ranges:
+            if max(astart, start) >= min(aend, end):
+                continue
+            used_audio.add(node["nodeId"])
+            bounds = _bounds(node["outputRange"], "startSample", "endSampleExclusive")
+            audio, fades = _segment_audio(
+                node, audio_trims, execution, cache, bounds, rate, fps
             )
-        )
+            segments.append(
+                (
+                    start,
+                    end,
+                    picture,
+                    source_start,
+                    source_duration,
+                    node,
+                    audio,
+                    fades,
+                    tail,
+                    _dialogue_noise_policy(node, audio_trims),
+                )
+            )
     _validate_consumed(cursor, used_audio, nodes, audio_trims)
+    if audio_ranges[-1][1] != cursor:
+        raise RuntimeError("Audio graph coverage differs from complete picture")
     return cursor, segments
+
+
+def _generated_inputs(execution, spec, fps, validator):
+    from . import proof_generated
+
+    registry = default_proof_capability_registry()
+    refs = {item["implementationId"]: item for item in execution["implementationRefs"]}
+    generated = {}
+    for operation in execution["videoGraph"]["operations"]:
+        if operation["kind"] not in {"generated-clip", "overlay-video"}:
+            continue
+        if operation["operationId"] in generated:
+            raise RuntimeError("Duplicate generated operation identity")
+        proof_generated.parameters(operation, refs, registry)
+        asset = proof_generated.verify(
+            operation, execution["canonicalInputLock"], validator, _validate_ancestry
+        )
+        generated[operation["operationId"]] = proof_generated.inspect(asset, spec, fps)
+    proof_generated.validate_layers(list(generated.values()))
+    return generated
+
+
+def _validate_events(execution):
+    visual = {"main-scene", "overlay-video", "authored-graphic", "caption"}
+    ranges = [item["outputRange"] for item in execution["videoGraph"]["operations"]]
+    for event in execution["events"]:
+        region = event.get("visibleRange")
+        if (
+            event.get("role") not in visual
+            or region not in ranges
+            or event.get("audio")
+        ):
+            raise RuntimeError(
+                "ProofPlan timed event requires an implemented event renderer"
+            )
+        start, end = _bounds(region, "startFrame", "endFrameExclusive")
+        if not start <= event.get("programFrame", -1) < end:
+            raise RuntimeError(
+                "ProofPlan timed event lies outside its frozen visual range"
+            )
+
+
+def _revalidate_inputs(execution, generated, validator):
+    from . import proof_generated
+
+    for operation in (
+        execution["videoGraph"]["operations"] + execution["audioGraph"]["operations"]
+    ):
+        parameters = operation.get("parameters", {})
+        if "source" in parameters:
+            source = parameters["source"]
+            if file_fingerprint(Path(source["locator"]))["sha256"] != source["sha256"]:
+                raise RuntimeError(
+                    f"ProofPlan source changed during render: {source['locator']}"
+                )
+    for asset in generated.values():
+        proof_generated.verify(
+            asset["operation"],
+            execution["canonicalInputLock"],
+            validator,
+            _validate_ancestry,
+        )
 
 
 def _dialogue_noise_filter(policy, node):
@@ -545,7 +657,7 @@ def _render_piece(segment, left, right, spec, fps, rate, piece):
         str(path),
     ]
     pad_seconds = tail["padSeconds"] if tail else float(1 / fps)
-    vfilter = f"[0:{stream}]trim=duration={float(source_duration)},setpts=PTS-STARTPTS,fps={fps.numerator}/{fps.denominator},tpad=stop_mode=clone:stop_duration={pad_seconds},trim=start_frame={left - start}:end_frame={right - start},setpts=PTS-STARTPTS,scale={spec['width']}:{spec['height']}:force_original_aspect_ratio=decrease,pad={spec['width']}:{spec['height']}:(ow-iw)/2:(oh-ih)/2,setsar=1,format=yuv420p[v]"
+    vfilter = f"[0:{stream}]trim=duration={float(source_duration)},setpts=PTS-STARTPTS,fps={fps.numerator}/{fps.denominator},tpad=stop_mode=clone:stop_duration={pad_seconds},trim=start_frame={left - start}:end_frame={right - start},setpts=PTS-STARTPTS,scale={spec['width']}:{spec['height']}:force_original_aspect_ratio=decrease,pad={spec['width']}:{spec['height']}:(ow-iw)/2:(oh-ih)/2,setsar=1,format={'bgra' if spec.get('conformance') is True else 'yuv420p'}[v]"
     target_start = round(Fraction(left, 1) / fps * rate)
     target_end = round(Fraction(right, 1) / fps * rate)
     length = target_end - target_start
@@ -593,124 +705,117 @@ def _render_piece(segment, left, right, spec, fps, rate, piece):
     )
 
 
-def _render_media(output, segments, spec, fps, rate, wstart, wend):
+def _encode_arguments(spec, fps, count):
+    arguments = [
+        "-c:v",
+        spec["videoCodec"],
+        "-c:a",
+        spec["audioCodec"],
+        "-ar",
+        str(spec["audioSampleRate"]),
+        "-r",
+        f"{fps.numerator}/{fps.denominator}",
+        "-frames:v",
+        str(count),
+    ]
+    if spec.get("conformance") is True:
+        return arguments + ["-pix_fmt", "bgra", "-f", "matroska"]
+    return arguments + ["-b:a", "192k", "-movflags", "+faststart"]
+
+
+def _render_final(listing, candidate, overlays, spec, fps, wstart, wend):
+    from . import proof_generated
+
+    extra, filters, metadata = proof_generated.overlay_filters(
+        overlays, fps, wstart, wend, conformance=spec.get("conformance") is True
+    )
+    timebase = f"{fps.denominator}/{fps.numerator}"
+    video = f"[0:v:0]settb=expr={timebase},setpts=N,format=rgba[picture]"
+    audio = "[0:a:0]asetpts=N/SR/TB[a]"
+    _run(
+        [
+            "ffmpeg",
+            "-v",
+            "error",
+            "-nostdin",
+            "-f",
+            "concat",
+            "-safe",
+            "1",
+            "-i",
+            str(listing),
+            *extra,
+            "-filter_complex",
+            ";".join([video, *filters, audio]),
+            "-map",
+            "[v]",
+            "-map",
+            "[a]",
+            *_encode_arguments(spec, fps, wend - wstart),
+            str(candidate),
+        ]
+    )
+    media = json.loads(
+        subprocess.run(
+            [
+                "ffprobe",
+                "-v",
+                "error",
+                "-count_frames",
+                "-show_streams",
+                "-of",
+                "json",
+                str(candidate),
+            ],
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout
+    )
+    stream = next(item for item in media["streams"] if item["codec_type"] == "video")
+    count = int(stream.get("nb_read_frames") or stream.get("nb_frames") or 0)
+    if count != wend - wstart or Fraction(stream["r_frame_rate"]) != fps:
+        raise RuntimeError("Encoded proof violates its exact frame contract")
+    return media, metadata
+
+
+def _render_media(
+    output, segments, spec, fps, rate, wstart, wend, overlays, verify_inputs
+):
     if output.exists():
         raise RuntimeError(f"Refusing to replace existing proof: {output}")
     output.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="proof-plan-", dir=output.parent) as folder:
         directory = Path(folder)
         pieces = []
-        for (
-            start,
-            end,
-            picture,
-            source_start,
-            source_duration,
-            node,
-            audio,
-            fades,
-            tail,
-            noise_policy,
-        ) in segments:
-            left, right = max(start, wstart), min(end, wend)
+        for segment in segments:
+            start, end, _, _, _, node, *_ = segment
+            astart = round(Fraction(node["outputRange"]["startSample"], rate) * fps)
+            aend = round(
+                Fraction(node["outputRange"]["endSampleExclusive"], rate) * fps
+            )
+            left, right = max(start, wstart, astart), min(end, wend, aend)
             if left >= right:
                 continue
             piece = directory / f"{len(pieces):06d}.mkv"
-            _render_piece(
-                (
-                    start,
-                    end,
-                    picture,
-                    source_start,
-                    source_duration,
-                    node,
-                    audio,
-                    fades,
-                    tail,
-                    noise_policy,
-                ),
-                left,
-                right,
-                spec,
-                fps,
-                rate,
-                piece,
-            )
+            _render_piece(segment, left, right, spec, fps, rate, piece)
             pieces.append(piece)
         listing = directory / "concat.txt"
         listing.write_text(
-            "".join(f"file '{p.name}'\n" for p in pieces), encoding="utf-8"
+            "".join(f"file '{piece.name}'\n" for piece in pieces), encoding="utf-8"
         )
-        candidate = directory / "candidate.mp4"
-        _run(
-            [
-                "ffmpeg",
-                "-v",
-                "error",
-                "-nostdin",
-                "-f",
-                "concat",
-                "-safe",
-                "1",
-                "-i",
-                str(listing),
-                "-vf",
-                f"setpts=N/({fps.numerator}/{fps.denominator}*TB)",
-                "-af",
-                "asetpts=N/SR/TB",
-                "-c:v",
-                spec["videoCodec"],
-                "-c:a",
-                "aac",
-                "-b:a",
-                "192k",
-                "-ar",
-                str(rate),
-                "-r",
-                f"{fps.numerator}/{fps.denominator}",
-                "-frames:v",
-                str(wend - wstart),
-                "-movflags",
-                "+faststart",
-                str(candidate),
-            ]
+        candidate = directory / (
+            "candidate.mkv" if spec.get("conformance") is True else "candidate.mp4"
         )
-        media = json.loads(
-            subprocess.run(
-                [
-                    "ffprobe",
-                    "-v",
-                    "error",
-                    "-show_streams",
-                    "-of",
-                    "json",
-                    str(candidate),
-                ],
-                capture_output=True,
-                text=True,
-                check=True,
-            ).stdout
+        media, metadata = _render_final(
+            listing, candidate, overlays, spec, fps, wstart, wend
         )
-        video = next(s for s in media["streams"] if s["codec_type"] == "video")
-        if (
-            int(video["nb_frames"]) != wend - wstart
-            or Fraction(video["r_frame_rate"]) != fps
-        ):
-            raise RuntimeError("Encoded proof violates its exact frame contract")
+        verify_inputs()
         candidate.replace(output)
-    return media
+    return media, metadata
 
 
-def execute_ffmpeg_proof(execution: dict[str, Any], output: Path) -> dict[str, Any]:
-    """Render the supported immutable graph without falling back to an EDL."""
-    spec, fps, rate = _output_settings(execution)
-    nodes = execution["audioGraph"]["nodes"]
-    node_by_range = _audio_nodes(nodes, rate)
-    _validate_resampling(execution["audioGraph"], nodes, rate)
-    audio_trims, encodes = _audio_operations(execution["audioGraph"])
-    cursor, segments = _segments(
-        execution, node_by_range, audio_trims, fps, rate, nodes
-    )
+def _proof_window(execution, cursor, encodes, fps, rate):
     total_samples = round(Fraction(cursor, 1) / fps * rate)
     if len(encodes) != 1 or encodes[0]["range"] != {
         "startSample": 0,
@@ -725,7 +830,58 @@ def execute_ffmpeg_proof(execution: dict[str, Any], output: Path) -> dict[str, A
     )
     if wend > cursor:
         raise RuntimeError("Microproof window exceeds ProofPlan output")
-    media = _render_media(output, segments, spec, fps, rate, wstart, wend)
+    return wstart, wend
+
+
+def _proof_overlays(generated, cursor):
+    overlays = [
+        asset
+        for asset in generated.values()
+        if asset["operation"]["kind"] == "overlay-video"
+    ]
+    if any(
+        asset["operation"]["outputRange"]["endFrameExclusive"] > cursor
+        for asset in overlays
+    ):
+        raise RuntimeError("Overlay exceeds complete program picture")
+    return overlays
+
+
+def execute_ffmpeg_proof(
+    execution: dict[str, Any],
+    output: Path,
+    *,
+    generated_asset_validator=None,
+) -> dict[str, Any]:
+    """Render the frozen graph; code-drawn reuse requires injected freshness checks."""
+    from . import proof_generated
+
+    output = Path(output)
+    spec, fps, rate = _output_settings(execution)
+    if spec.get("conformance") is True and output.suffix != ".mkv":
+        raise RuntimeError("Lossless conformance output requires .mkv")
+    _validate_events(execution)
+    nodes = execution["audioGraph"]["nodes"]
+    node_by_range = _audio_nodes(nodes, rate)
+    _validate_resampling(execution["audioGraph"], nodes, rate)
+    audio_trims, encodes = _audio_operations(execution["audioGraph"])
+    generated = _generated_inputs(execution, spec, fps, generated_asset_validator)
+    cursor, segments = _segments(
+        execution, node_by_range, audio_trims, fps, rate, nodes, generated
+    )
+    wstart, wend = _proof_window(execution, cursor, encodes, fps, rate)
+    overlays = _proof_overlays(generated, cursor)
+    media, overlay_metadata = _render_media(
+        output,
+        segments,
+        spec,
+        fps,
+        rate,
+        wstart,
+        wend,
+        overlays,
+        lambda: _revalidate_inputs(execution, generated, generated_asset_validator),
+    )
     return {
         "status": "pass",
         "output": file_fingerprint(output),
@@ -733,6 +889,13 @@ def execute_ffmpeg_proof(execution: dict[str, Any], output: Path) -> dict[str, A
         "audioEncodeCount": 1,
         "producer": {"name": "avo.ffmpeg-proof-plan", "version": "1"},
         "media": media,
-        "sourceVideoTailPolicies": [s[-2] for s in segments if s[-2] is not None],
+        "sourceVideoTailPolicies": [
+            segment[-2] for segment in segments if segment[-2] is not None
+        ],
         "sourceDialogueNoisePolicies": _noise_policy_records(execution["audioGraph"]),
+        "generatedOperations": [
+            proof_generated.operation_metadata(asset["operation"])
+            for asset in generated.values()
+        ],
+        "overlayOperations": overlay_metadata,
     }

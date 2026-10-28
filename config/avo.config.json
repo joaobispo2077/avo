@@ -17,8 +17,8 @@
       "description": "Understand / self-verify — THE LOOP (inspect/fix/verify). Local-first."
     },
     "motion": {
-      "local": ["hyperframes", "remotion"],
-      "description": "Motion / animation. HyperFrames default, Remotion when justified."
+      "local": ["hyperframes", "remotion", "code-drawn"],
+      "description": "Motion / animation. HyperFrames default, advanced code-drawn option, Remotion stub."
     },
     "render": {
       "local": "local-render",

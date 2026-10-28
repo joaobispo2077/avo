@@ -17,7 +17,7 @@ import inspect
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from avo.mcp import mrtr
 from avo.mcp.bridge import run_bridged
@@ -113,6 +113,12 @@ def _tool(
 
 def _core_bridge_defs() -> list[BridgeToolDef]:
     """Explicit map for pipeline / timeline / sync / animation / tracks."""
+    motion_json = ParamSpec("as_json", bool, default=True)
+    motion_context = (
+        ParamSpec("project", str | None, default=None),
+        ParamSpec("provider", str | None, default=None),
+        motion_json,
+    )
     return [
         # --- pipeline ---
         _tool(
@@ -123,6 +129,8 @@ def _core_bridge_defs() -> list[BridgeToolDef]:
             + "Initialize / run pipeline for a project (CLI: avo pipeline run).",
             destructive=True,
             extra_params=(
+                ParamSpec("motion_engine", str | None, default=None),
+                ParamSpec("new_request", bool, default=False),
                 ParamSpec("direction", str | None, default=None),
                 ParamSpec("brief_context", str | None, default=None),
                 ParamSpec("direction_reference", list[str] | None, default=None),
@@ -254,6 +262,163 @@ def _core_bridge_defs() -> list[BridgeToolDef]:
         ),
         # --- animation ---
         _tool(
+            "avo_animation_engine_show",
+            "animation",
+            "engine-show",
+            "Inspect saved motion-engine preferences, effective choice, and "
+            "readiness without writing settings, installing runtimes, or rendering "
+            "(CLI: avo cli animation engine-show).",
+            include_project=False,
+            extra_params=(
+                *motion_context,
+                ParamSpec("motion_engine", str | None, default=None),
+            ),
+        ),
+        _tool(
+            "avo_animation_engine_set",
+            "animation",
+            "engine-set",
+            "WARNING: Saves a motion-engine preference at the selected global, "
+            "provider, or project scope. Choose hyperframes, remotion, or "
+            "code-drawn; saving does not install a runtime or render "
+            "(CLI: avo cli animation engine-set).",
+            include_project=False,
+            extra_params=(
+                *motion_context,
+                ParamSpec("scope", str, required=True),
+                ParamSpec("engine", str, required=True),
+            ),
+        ),
+        _tool(
+            "avo_animation_engine_reset",
+            "animation",
+            "engine-reset",
+            "WARNING: Resets only the selected global, provider, or project "
+            "motion-engine preference to restore inheritance; preserves unrelated "
+            "settings and does not install a runtime or render "
+            "(CLI: avo cli animation engine-reset).",
+            include_project=False,
+            extra_params=(
+                *motion_context,
+                ParamSpec("scope", str, required=True),
+            ),
+        ),
+        _tool(
+            "avo_animation_runtime_install",
+            "animation",
+            "runtime-install",
+            "WARNING: Uses network access to download the matched code-drawn "
+            "browser runtime and optional local brush dependency. Writes the "
+            "selected runtime cache; does not render or change engine preferences "
+            "(CLI: avo cli animation runtime-install).",
+            include_project=False,
+            extra_params=(
+                ParamSpec("engine", Literal["code-drawn"], required=True),
+                ParamSpec("brush", bool, default=False),
+                motion_json,
+            ),
+        ),
+        _tool(
+            "avo_animation_code_drawn_scaffold",
+            "animation",
+            "code-drawn-scaffold",
+            "WARNING: Writes generic editable code-drawn source and project "
+            "documents to a new external destination without overwriting it. "
+            "No downloads or timeline changes (CLI: avo cli animation code-drawn-scaffold).",
+            include_project=False,
+            extra_params=(
+                ParamSpec("destination", str, required=True),
+                ParamSpec("route", Literal["canvas", "svg", "brush"], required=True),
+                ParamSpec("width", int, required=True),
+                ParamSpec("height", int, required=True),
+                ParamSpec("fps", str, required=True),
+                ParamSpec("frames", int, required=True),
+                ParamSpec(
+                    "background", Literal["opaque", "transparent"], default="opaque"
+                ),
+                ParamSpec("background_color", str | None, default=None),
+                motion_json,
+            ),
+        ),
+        _tool(
+            "avo_animation_code_drawn_check",
+            "animation",
+            "code-drawn-check",
+            "Check a local composition, selected runtime, and independent seeking; "
+            "optionally writes a new immutable standalone output lock. No downloads "
+            "or editorial approval changes (CLI: avo cli animation code-drawn-check).",
+            include_project=False,
+            extra_params=(
+                ParamSpec("composition", str, required=True),
+                ParamSpec("input_lock", str | None, default=None),
+                ParamSpec("output_lock", str | None, default=None),
+                motion_json,
+            ),
+        ),
+        _tool(
+            "avo_animation_code_drawn_snapshot",
+            "animation",
+            "code-drawn-snapshot",
+            "WARNING: Writes a lossless frame at the declared integer frame index "
+            "to a new external output path. No downloads, canonical proof, or "
+            "approval changes (CLI: avo cli animation code-drawn-snapshot).",
+            include_project=False,
+            extra_params=(
+                ParamSpec("composition", str, required=True),
+                ParamSpec("frame", int, required=True),
+                ParamSpec("output", str, required=True),
+                ParamSpec("input_lock", str | None, default=None),
+                motion_json,
+            ),
+        ),
+        _tool(
+            "avo_animation_code_drawn_render",
+            "animation",
+            "code-drawn-render",
+            "WARNING: Writes verified silent generated graphics and their receipt "
+            "at new external output paths from the supplied composition and lock. "
+            "No downloads or creator approval; this is not a canonical footage proof "
+            "(CLI: avo cli animation code-drawn-render).",
+            include_project=False,
+            extra_params=(
+                ParamSpec("composition", str, required=True),
+                ParamSpec("input_lock", str, required=True),
+                ParamSpec("output", str, required=True),
+                motion_json,
+            ),
+        ),
+        _tool(
+            "avo_animation_code_drawn_review",
+            "animation",
+            "code-drawn-review",
+            "Create exact-candidate decoded frames, contact sheets, small views and requested transition/loop strips from verified code-drawn sources; writes pending visual evidence with no creator approval (CLI: avo cli animation code-drawn-review).",
+            include_project=False,
+            extra_params=(
+                ParamSpec("candidate", str, required=True),
+                ParamSpec("source_receipt", list[str], required=True),
+                ParamSpec("output", str, required=True),
+                ParamSpec("project", str | None, default=None),
+                ParamSpec("video_id", str | None, default=None),
+                ParamSpec("render_profile", str, default="code-drawn"),
+                ParamSpec("materialization", str | None, default=None),
+                ParamSpec("dependency", list[str] | None, default=None),
+                ParamSpec("sample_frame", list[int] | None, default=None),
+                ParamSpec("transition", list[str] | None, default=None),
+                ParamSpec("loop", bool, default=False),
+                motion_json,
+            ),
+        ),
+        _tool(
+            "avo_animation_materialize",
+            "animation",
+            "materialize",
+            "Generate and admit the recorded code-drawn instance from current canonical source/Tracks bindings; writes a new asset without changing creator approval or pipeline stage (CLI: avo cli animation materialize).",
+            extra_params=(
+                ParamSpec("instance_id", str, required=True),
+                ParamSpec("output", str, required=True),
+            ),
+        ),
+        _tool(
             "avo_animation_author",
             "animation",
             "author",
@@ -262,6 +427,7 @@ def _core_bridge_defs() -> list[BridgeToolDef]:
             destructive=True,
             extra_params=(
                 ParamSpec("strategy", str, required=True),
+                ParamSpec("motion_engine", str | None, default=None),
                 ParamSpec("actor", str, required=True),
                 ParamSpec("reason", str, required=True),
             ),
@@ -493,6 +659,7 @@ def _remaining_bridge_defs() -> list[BridgeToolDef]:
                 ParamSpec("master", str, required=True),
                 ParamSpec("dependency", list[str] | None, default=None),
                 ParamSpec("model", str | None, default=None),
+                ParamSpec("motion_review", str | None, default=None),
             ),
         ),
         _tool(

@@ -185,6 +185,7 @@
       "description": "Per-provider overrides that patch the shared avo.config.json routing (jobs, confidence, transcription). Same shape as avo.config.json; only the keys to override need to be present.",
       "additionalProperties": true,
       "properties": {
+        "motion": {"$ref": "https://avo.local/avo.motion.schema.json#/$defs/config"},
         "watch": {
           "type": "object",
           "additionalProperties": false,

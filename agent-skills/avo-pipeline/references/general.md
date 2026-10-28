@@ -1,5 +1,14 @@
 # /avo.general reference
 
+**Motion engine gate:** Apply [shared arguments](arguments.md) and inspect native
+`animation engine-show` with available context before motion-specific skill/setup.
+HyperFrames remains the built-in default. For selected code-drawn, follow the
+[advanced workflow](code-drawn.md) and common canonical source/review gates.
+HyperFrames-only loaders and recipes below apply only to selected HyperFrames.
+Unavailable Remotion or incompatible treatments block; never silently substitute.
+
+ProjectDir is an editable project directory for the selected engine. A code-drawn custom composition uses its own local manifest/source contract, not HyperFrames project initialization.
+
 ## Step/state mapping
 
 **Durable state:** the child pipeline-run.json and its parent timeline lineage
@@ -12,17 +21,17 @@
 
 **Valid next commands:** /avo.watch
 
-Router to **custom HyperFrames composition** (`general-video`).
+Router to a custom composition. The selected HyperFrames branch uses `general-video`; code-drawn uses its portable workflow.
 
 ## Required args
 
 | Arg | Required | Example |
 | --- | -------- | ------- |
 | `Provider` | yes | Brand / motion tokens |
-| `ProjectDir` | yes | HyperFrames project root |
+| `ProjectDir` | yes | Selected-engine project root |
 | `Source` | yes | Composition brief, spec, or storyboard path |
 
-## Load skill
+## Selected HyperFrames skill
 
 - [`.agents/skills/general-video/SKILL.md`](../../../.agents/skills/general-video/SKILL.md)
 

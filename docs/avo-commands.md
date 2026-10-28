@@ -1,8 +1,10 @@
 # AVO slash commands
 
-Pipeline-shaped entry points for Cursor and compatible agents. Each command needs
+Pipeline-shaped entry points for Cursor and compatible agents. Footage-editing commands need
 **Provider** and **where the footage lives** (plain path or “this folder”); the
-agent maps that to `rawDir` internally.
+agent maps that to `rawDir` internally. Content authoring uses ProjectDir/Source.
+Native preference inspection, global set/reset and standalone drawing utilities
+need no footage project.
 
 Install Cursor commands (from AVO repo root):
 
@@ -23,6 +25,45 @@ Gateway skill (agent auto-load): [`agent-skills/avo-pipeline/SKILL.md`](../agent
 Spoken alias: **`/avo --help`** → `/avo.help`
 
 ---
+
+## Native motion commands
+
+These are native operations under the existing animation/pipeline groups.
+Installed prefix: `avo cli`. Checkout prefix: `python -m avo.cli`.
+Paths are absolute; `--json` is available.
+
+| Native operation | Arguments |
+| --- | --- |
+| `animation engine-show` | Optional `--project <avo.project.json>`, `--provider <slug>`, `--motion-engine hyperframes\|remotion\|code-drawn` |
+| `animation engine-set` | `--scope global\|provider\|project --engine <id>`; provider/project scope requires its exact target |
+| `animation engine-reset` | `--scope global\|provider\|project`; same target rules |
+| `animation runtime-install` | `--engine code-drawn`, optional `--brush`; explicit provisioning |
+| `animation code-drawn-scaffold` | `--destination <new-dir> --route canvas\|svg\|brush --width <int> --height <int> --fps <num/den> --frames <int>`; opaque needs `--background-color '#121212'` (example explicit color), or choose `--background transparent` |
+| `animation code-drawn-check` | `--composition <composition.json>`, optional `--input-lock <existing-lock>` / `--output-lock <new-lock>` |
+| `animation code-drawn-snapshot` | `--composition <composition.json> --frame <index> --output <new.png>`, optional `--input-lock <lock>` |
+| `animation code-drawn-render` | `--composition <composition.json> --input-lock <lock> --output <new.mkv>` |
+| `pipeline run` | `--project <avo.project.json>`, optional `--motion-engine <id>` / `--new-request` |
+| `animation author` | `--project <avo.project.json> --strategy <json> --actor <actor> --reason <reason>`, optional `--motion-engine <id>` agreeing with source `framework` |
+
+IDs are exactly `hyperframes`, `remotion`, `code-drawn`. HyperFrames is the
+built-in default; Remotion currently reports an unsupported adapter. Canvas,
+SVG and brush are drawing routes. There are no new dotted per-engine slash commands.
+
+No footage/provider is required for global preferences:
+
+```bash
+avo cli animation engine-show --json
+avo cli animation engine-set --scope global --engine code-drawn --json
+avo cli animation engine-reset --scope global --json
+```
+
+Resolution is invocation > project > provider/channel > global > built-in default.
+Readiness is separate. A recorded request survives resume; `--new-request`
+refreshes that context without resetting editorial lifecycle. Defaults cannot
+rewrite existing animation. Explicit different source authoring uses existing
+revision/invalidation services, never automatic conversion. See the
+[portable selection guide](../agent-skills/avo-pipeline/references/code-drawn/selection.md)
+and [advanced guide index](code-drawn-motion.md).
 
 ## Command index
 
@@ -59,7 +100,7 @@ Spoken alias: **`/avo --help`** → `/avo.help`
 | `/avo.sound` | Noise reduction, mix, SFX/Music ([source](../commands/avo/sound.md)) |
 | `/avo.sound create` | Creative SFX brief ([reference](../agent-skills/avo-pipeline/references/sound-create.md)) |
 | `/avo.audit` | Scoped QC ([source](../commands/avo/audit.md)) |
-| `/avo.motion` | HyperFrames motion ([source](../commands/avo/motion.md)) |
+| `/avo.motion` | Motion with selected engine (HyperFrames default) ([source](../commands/avo/motion.md)) |
 | `/avo.captions` | Embedded captions after overlays ([source](../commands/avo/captions.md)) |
 | `/avo.watch` | Full watch-skill LOOP ([source](../commands/avo/watch.md)) |
 
@@ -67,9 +108,9 @@ Spoken alias: **`/avo --help`** → `/avo.help`
 
 | Command | Purpose |
 | ------- | ------- |
-| `/avo.framework` | HyperFrames vs Remotion intake ([source](../commands/avo/framework.md)) |
+| `/avo.framework` | Motion engine/preference intake ([source](../commands/avo/framework.md)) |
 | `/avo.motion-graphics` | Short motion graphic ([source](../commands/avo/motion-graphics.md)) |
-| `/avo.general` | Custom HyperFrames composition ([source](../commands/avo/general.md)) |
+| `/avo.general` | Custom composition with selected engine ([source](../commands/avo/general.md)) |
 | `/avo.remotion-port` | Remotion → HyperFrames port ([source](../commands/avo/remotion-port.md)) |
 | `/avo.screencast` | Screencast + oversized cursor ([source](../commands/avo/screencast.md)) |
 
@@ -81,8 +122,11 @@ Spoken alias: **`/avo --help`** → `/avo.help`
 
 `/avo.shorts` batch mode persists a request and immutable plan, then exposes
 `validate`, `resolve`, `build --stage proof`, `qc`, `status`, and `promote` via
-`python -m avo.shorts`. HyperFrames remains an internal rendering adapter; no
-generated composition should be hand edited.
+`python -m avo.shorts`. Select the engine before graphics generation and verify
+that native path supports it; a standalone drawing render is not proof of
+canonical Shorts integration. HyperFrames remains the default compatible adapter;
+unsupported kits/operations block without fallback. Do not hand-edit generated
+composition state.
 | `/avo.reframe` | Vertical clip from long-form master ([source](../commands/avo/reframe.md)) |
 | `/avo.podcast-clip` | Podcast / interview clip extraction ([source](../commands/avo/podcast-clip.md)) |
 | `/avo.trailer` | Teaser / trailer from long-form master ([source](../commands/avo/trailer.md)) |
@@ -116,7 +160,7 @@ generated composition should be hand edited.
 | `/avo.pr-video` | GitHub PR → explainer video ([source](../commands/avo/pr-video.md)) |
 | `/avo.changelog-video` | Changelog → branded video ([source](../commands/avo/changelog-video.md)) |
 | `/avo.explainer` | Article → faceless explainer ([source](../commands/avo/explainer.md)) |
-| `/avo.slideshow` | Slide outline → HyperFrames slideshow ([source](../commands/avo/slideshow.md)) |
+| `/avo.slideshow` | Slide outline → supported video/deck workflow ([source](../commands/avo/slideshow.md)) |
 | `/avo.launch` | Product launch video ([source](../commands/avo/launch.md)) |
 | `/avo.music-video` | Music → visual video ([source](../commands/avo/music-video.md)) |
 | `/avo.beat-edit` | Beat-synced insert edit ([source](../commands/avo/beat-edit.md)) |
@@ -159,7 +203,8 @@ B-roll: D:/assets/broll/
 Music: D:/assets/music/
 from: 9:30
 to: 9:35
-ProjectDir: /path/to/hyperframes-project
+ProjectDir: /path/to/animation-project
+Motion engine: code-drawn
 Source: https://github.com/owner/repo/pull/123
 ```
 

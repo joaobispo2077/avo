@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Code-drawn brush study</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        overflow: hidden;
+        background: transparent;
+      }
+      #avo-stage {
+        display: block;
+        width: __WIDTH__px;
+        height: __HEIGHT__px;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="avo-stage" width="__WIDTH__" height="__HEIGHT__"></canvas>
+    <script>
+      'use strict';
+      const width = __WIDTH__;
+      const height = __HEIGHT__;
+      const background = __BACKGROUND__;
+      const recordedSeed = __SEED__;
+      const frameCount = __FRAMES__;
+      const fps = __FPS_NUM__ / __FPS_DEN__;
+      const stage = document.getElementById('avo-stage');
+      const picture = stage.getContext('2d');
+      const shortSide = Math.min(width, height);
+      const compact = width <= height;
+      const portrait = width / height < 0.82;
+      const art = {
+        x: width * 0.12,
+        y: height * (portrait ? 0.18 : 0.12),
+        width: width * 0.76,
+        height: height * (portrait ? 0.29 : compact ? 0.36 : 0.4),
+      };
+      const titleLines = compact
+        ? ['Code-drawn', 'motion']
+        : ['Code-drawn motion'];
+      let instantiateBrush;
+
+      function stableSeed(value) {
+        let seed = 2166136261;
+        for (const character of String(value)) {
+          seed = Math.imul(seed ^ character.codePointAt(0), 16777619);
+        }
+        return seed >>> 0;
+      }
+
+      function createBrush(seed) {
+        // The vendor initializes noise before exposing seed(); isolate that too.
+        const localMath = Object.create(Math);
+        let state = seed >>> 0;
+        localMath.random = () => {
+          state = (state + 0x6d2b79f5) >>> 0;
+          let value = Math.imul(state ^ (state >>> 15), state | 1);
+          value ^= value + Math.imul(value ^ (value >>> 7), value | 61);
+          return ((value ^ (value >>> 14)) >>> 0) / 4294967296;
+        };
+        const exports = {};
+        const module = { exports };
+        instantiateBrush(exports, module, localMath);
+        return module.exports;
+      }
+
+      function workSurface() {
+        const surface = document.createElement('canvas');
+        surface.width = width;
+        surface.height = height;
+        const graphics = surface.getContext('webgl2', {
+          alpha: true,
+          premultipliedAlpha: true,
+          preserveDrawingBuffer: true,
+        });
+        if (!graphics) {
+          throw new Error(
+            'The brush route requires an available WebGL2 context.',
+          );
+        }
+        const release = graphics.getExtension('WEBGL_lose_context');
+        if (!release) {
+          surface.width = surface.height = 0;
+          throw new Error(
+            'The brush route requires explicit temporary-context release.',
+          );
+        }
+        return { surface, graphics, release };
+      }
+
+      window.avoReady = (async () => {
+        if (!picture)
+          throw new Error('The brush presentation surface is unavailable.');
+        const response = await fetch('./assets/brush.js');
+        if (!response.ok)
+          throw new Error('The declared local brush dependency did not load.');
+        const source = await response.text();
+        instantiateBrush = new Function('exports', 'module', 'Math', source);
+        const probe = workSurface();
+        probe.release.loseContext();
+        probe.surface.width = probe.surface.height = 0;
+        await document.fonts.ready;
+        return true;
+      })();
+
+      function drawBrush(brush, seconds) {
+        const progress = Math.min(
+          1,
+          seconds / (Math.max(1, frameCount - 1) / fps),
+        );
+        if (background === null) brush.clear();
+        else brush.clear(background);
+        brush.push();
+        try {
+          brush.translate(-width / 2, -height / 2);
+          brush.noField();
+          brush.noHatch();
+          brush.noWash();
+          brush.noStroke();
+          brush.fill('#386cc4', 150);
+          brush.circle(
+            art.x + art.width * 0.72,
+            art.y + art.height * 0.5,
+            Math.min(art.width * 0.15, art.height * 0.36),
+          );
+          brush.noFill();
+          brush.set('marker', '#dd6849', 1.3);
+          brush.line(
+            art.x + art.width * 0.05,
+            art.y + art.height * 0.35,
+            art.x + art.width * (0.17 + progress * 0.58),
+            art.y + art.height * (0.35 - progress * 0.25),
+          );
+          brush.set('HB', '#31536a', 1);
+          brush.line(
+            art.x + art.width * 0.05,
+            art.y + art.height * 0.86,
+            art.x + art.width * 0.95,
+            art.y + art.height * 0.86,
+          );
+        } finally {
+          brush.pop();
+        }
+        brush.render();
+      }
+
+      function drawTitle() {
+        let fontSize = Math.max(
+          8,
+          Math.round(shortSide * (compact ? 0.085 : 0.075)),
+        );
+        picture.fillStyle = '#f1f4f5';
+        picture.textAlign = 'center';
+        picture.textBaseline = 'middle';
+        picture.font = '600 ' + fontSize + 'px sans-serif';
+        const widest = Math.max(
+          ...titleLines.map((line) => picture.measureText(line).width),
+        );
+        if (widest > width * 0.8) {
+          fontSize *= (width * 0.8) / widest;
+          picture.font = '600 ' + fontSize + 'px sans-serif';
+        }
+        const titleY = height * (portrait ? 0.61 : compact ? 0.64 : 0.73);
+        titleLines.forEach((line, index) => {
+          picture.fillText(line, width * 0.5, titleY + index * fontSize * 1.18);
+        });
+      }
+
+      window.seek = async (seconds) => {
+        await window.avoReady;
+        if (
+          !Number.isFinite(seconds) ||
+          seconds < 0 ||
+          seconds >= frameCount / fps
+        ) {
+          throw new Error('Requested time is outside this composition.');
+        }
+        // A new library instance also resets undocumented lazy brush/texture caches.
+        const seed = stableSeed(recordedSeed);
+        const brush = createBrush(seed);
+        const work = workSurface();
+        try {
+          brush.seed(seed);
+          brush.noiseSeed(seed);
+          brush.load(work.surface);
+          brush.scaleBrushes(Math.max(0.25, Math.min(width, height) / 180));
+          brush.angleMode(brush.RADIANS);
+          drawBrush(brush, seconds);
+          work.graphics.finish();
+          if (
+            work.graphics.isContextLost() ||
+            work.graphics.getError() !== work.graphics.NO_ERROR
+          ) {
+            throw new Error(
+              'The brush drawing pass reported a graphics error.',
+            );
+          }
+          picture.setTransform(1, 0, 0, 1, 0, 0);
+          picture.globalAlpha = 1;
+          picture.globalCompositeOperation = 'source-over';
+          picture.clearRect(0, 0, width, height);
+          // A translucent ink layer demonstrates straight-alpha overlay delivery.
+          picture.globalAlpha = background === null ? 0.85 : 1;
+          picture.drawImage(work.surface, 0, 0);
+          picture.globalAlpha = 1;
+          drawTitle();
+        } finally {
+          work.release.loseContext();
+          work.surface.width = work.surface.height = 0;
+        }
+        return true;
+      };
+    </script>
+  </body>
+</html>

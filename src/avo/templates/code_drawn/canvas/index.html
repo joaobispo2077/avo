@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Code-drawn drawing starter</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        background: transparent;
+      }
+      #avo-stage {
+        display: block;
+        width: __WIDTH__px;
+        height: __HEIGHT__px;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="avo-stage" width="__WIDTH__" height="__HEIGHT__"></canvas>
+    <script>
+      'use strict';
+      const W = __WIDTH__,
+        H = __HEIGHT__,
+        SEED = __SEED__;
+      const BACKGROUND = __BACKGROUND__;
+      const DURATION = (__FRAMES__ * __FPS_DEN__) / __FPS_NUM__;
+      const canvas = document.getElementById('avo-stage');
+      const g = canvas.getContext('2d');
+      const clamp = (value) => Math.min(1, Math.max(0, value));
+      const compact = W <= H;
+      const portrait = W / H < 0.82;
+      const size = Math.min(W, H);
+      const titleLines = compact
+        ? ['Code-drawn', 'motion']
+        : ['Code-drawn motion'];
+
+      function drawTitle() {
+        let fontSize = Math.max(
+          8,
+          Math.round(size * (compact ? 0.085 : 0.075)),
+        );
+        g.textAlign = 'center';
+        g.textBaseline = 'middle';
+        g.fillStyle = '#f1f4f5';
+        g.font = '600 ' + fontSize + 'px sans-serif';
+        const widest = Math.max(
+          ...titleLines.map((line) => g.measureText(line).width),
+        );
+        if (widest > W * 0.8) {
+          fontSize *= (W * 0.8) / widest;
+          g.font = '600 ' + fontSize + 'px sans-serif';
+        }
+        const titleY = H * (portrait ? 0.53 : compact ? 0.55 : 0.61);
+        titleLines.forEach((line, index) => {
+          g.fillText(line, W * 0.5, titleY + index * fontSize * 1.18);
+        });
+      }
+
+      window.seek = function seek(t) {
+        g.setTransform(1, 0, 0, 1, 0, 0);
+        g.globalAlpha = 1;
+        g.globalCompositeOperation = 'source-over';
+        g.clearRect(0, 0, W, H);
+        if (BACKGROUND !== null) {
+          g.fillStyle = BACKGROUND;
+          g.fillRect(0, 0, W, H);
+        }
+        const progress = clamp(t / Math.max(DURATION * 0.6, 0.001));
+        const eased = 1 - Math.pow(1 - progress, 3);
+        g.save();
+        g.fillStyle = '#68a6b8';
+        g.beginPath();
+        g.arc(
+          W * (0.27 + 0.46 * eased),
+          H * (compact ? 0.3 : 0.34),
+          size * (portrait ? 0.09 : 0.085),
+          0,
+          Math.PI * 2,
+        );
+        g.fill();
+        drawTitle();
+        g.fillStyle = '#68a6b8';
+        g.fillRect(
+          W * 0.18,
+          H * (portrait ? 0.77 : 0.8),
+          W * 0.64 * eased,
+          Math.max(2, size * 0.01),
+        );
+        g.restore();
+        return true;
+      };
+
+      window.avoReady = document.fonts.ready.then(() => window.seek(0));
+
+      if (!window.__AVO_RENDER__) {
+        const started = performance.now();
+        function preview(now) {
+          window.seek(((now - started) / 1000) % DURATION);
+          requestAnimationFrame(preview);
+        }
+        window.avoReady.then(() => requestAnimationFrame(preview));
+      }
+    </script>
+  </body>
+</html>

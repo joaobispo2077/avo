@@ -201,3 +201,62 @@ def test_generated_audio_ancestry_is_expanded_recursively(tmp_path):
     links = {(edge["from"], edge["to"]) for edge in graph["edges"]}
     assert ("generated-asset-inner-asset", "audio-generated-sfx") in links
     assert ("asset-input-inner-asset-0001", "generated-asset-inner-asset") in links
+
+
+def test_code_drawn_dependency_closure_is_not_relabelled_as_original_picture_or_audio(
+    tmp_path,
+):
+    a, b, drawing, font, lock = (
+        tmp_path / name
+        for name in ("a.mov", "b.mov", "drawing.mkv", "font.woff2", "input-lock.json")
+    )
+    for path in (a, b, drawing, font, lock):
+        path.write_bytes(("synthetic " + path.name).encode())
+    tracks = _tracks(drawing, tmp_path / "ignored.mp4")
+    layer = tracks["snapshot"]["videoTracks"]["layers"][1]
+    layer["source"]["generatedAssetId"] = "drawing-one"
+    binding = {
+        "adapterId": "code-drawn",
+        "assetId": "drawing-one",
+        "recordHash": "a" * 64,
+        "inputLockRef": {"path": str(lock), "sha256": file_fingerprint(lock)["sha256"]},
+    }
+    layer["generator"] = binding
+    record = {
+        "assetId": "drawing-one",
+        "recordHash": "a" * 64,
+        "generator": {"adapterId": "code-drawn"},
+        "parameters": {"codeDrawn": {"inputLockRef": binding["inputLockRef"]}},
+        "inputs": [
+            {
+                "artifactId": "font",
+                "ancestryRole": "dependency",
+                "fingerprint": file_fingerprint(font),
+            },
+            {
+                "artifactId": "input-lock:drawing-one",
+                "ancestryRole": "dependency",
+                "fingerprint": file_fingerprint(lock),
+            },
+        ],
+    }
+    graph = build_audiovisual_lineage(
+        cmap_revision=_revision(a, b),
+        tracks_revision=tracks,
+        canonical_input_lock={"cmapRevisionHash": "c" * 64},
+        projection_hash="p" * 64,
+        output={"locator": str(tmp_path / "out.mp4"), "sha256": "o" * 64},
+        render_contract={"transformations": []},
+        generated_assets={"drawing-one": record},
+    )
+    generated = next(node for node in graph["nodes"] if node["nodeId"] == "track-logo")
+    assert generated["kind"] == "generated"
+    assert generated["generator"] == binding
+    for path in (font, lock):
+        node = next(node for node in graph["nodes"] if node.get("locator") == str(path))
+        assert node["kind"] == "dependency"
+        assert node["mediaClass"] == "dependency"
+        assert node["sha256"] == file_fingerprint(path)["sha256"]
+        assert node["pictureCarrying"] is False
+        assert node["audioCarrying"] is False
+    assert validate_audiovisual_lineage(graph) == graph

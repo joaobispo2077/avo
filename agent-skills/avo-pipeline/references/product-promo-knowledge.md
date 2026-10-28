@@ -1,5 +1,14 @@
 # Product-promo HyperFrames knowledge
 
+**Motion engine gate:** Apply [shared arguments](arguments.md) and inspect native
+`animation engine-show` with available context before motion-specific skill/setup.
+HyperFrames remains the built-in default. For selected code-drawn, follow the
+[advanced workflow](code-drawn.md) and common canonical source/review gates.
+HyperFrames-only loaders and recipes below apply only to selected HyperFrames.
+Unavailable Remotion or incompatible treatments block; never silently substitute.
+
+This knowledge bundle contains HyperFrames-specific exemplars/components. For code-drawn, use its portable creative/scene workflow instead; reference grammar does not authorize component conversion.
+
 Router for SaaS/product launch motion work. Load **before** building product-promo slots or running `product-launch-video`.
 
 ## When to load

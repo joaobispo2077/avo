@@ -73,6 +73,15 @@
         "superseded"
       ]
     },
+    "executionChoices": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "motion": {
+          "$ref": "avo.motion.schema.json#/$defs/runSelection"
+        }
+      }
+    },
     "activeRefs": {
       "type": "object",
       "properties": {
@@ -183,7 +192,15 @@
     },
     "extensions": {
       "type": "object",
-      "additionalProperties": true
+      "additionalProperties": true,
+      "properties": {
+        "motionRequestHistory": {
+          "type": "array",
+          "items": {
+            "$ref": "avo.motion.schema.json#/$defs/runSelection"
+          }
+        }
+      }
     }
   }
 }

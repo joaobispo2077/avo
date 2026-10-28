@@ -77,13 +77,33 @@ def routing_token_for_job(config: dict[str, Any], job: str, label: str) -> str:
     return value
 
 
-def resolve_adapter(job: str, label: str, root: Path | None = None) -> JobAdapter:
+def resolve_adapter(
+    job: str,
+    label: str,
+    root: Path | None = None,
+    *,
+    motion_engine: str | None = None,
+    project: Path | str | None = None,
+    provider: str | None = None,
+    home: Path | None = None,
+) -> JobAdapter:
     from avo.adapters.registry import adapter_for_routing_suffix
 
     root = repo_root(root)
     config = load_routing_config(root)
     token = routing_token_for_job(config, job, label)
     _owner, suffix = parse_routing_token(token)
+    if job == "motion":
+        from avo.motion import inspect_motion
+
+        inspected = inspect_motion(
+            project=project,
+            provider=provider,
+            invocation=motion_engine,
+            root=root,
+            home=home,
+        )
+        suffix = inspected["selection"]["engine"]
     adapter_cls = adapter_for_routing_suffix(job, suffix)
     return adapter_cls()
 

@@ -80,6 +80,16 @@ pick_python() {
   if have python3; then PY=python3; elif have python; then PY=python; fi
 }
 
+# Same sentence as Require-Python311 in scripts/setup.ps1.
+require_python_311() {
+  local ver probe
+  probe='import sys; print("%d.%d.%d" % sys.version_info[:3]); raise SystemExit(0 if sys.version_info >= (3, 11) else 1)'
+  if ! ver="$("$PY" -c "$probe")"; then
+    printf '%s\n' "Python ${ver} found; Python 3.11+ is required." >&2
+    exit 1
+  fi
+}
+
 # ---- 0. Preflight -----------------------------------------------------------
 step "Preflight"
 UNAME="$(uname -s 2>/dev/null || echo unknown)"
@@ -87,7 +97,13 @@ IS_WSL=0
 if grep -qiE 'microsoft|wsl' /proc/version 2>/dev/null; then IS_WSL=1; fi
 info "OS: $UNAME  WSL: $IS_WSL  dry-run: $DRY_RUN"
 pick_python
-if [ -n "$PY" ]; then record python OK "$($PY --version 2>&1)"; else record python FAIL "not found"; fi
+if [ -n "$PY" ]; then
+  # Refuse anything below 3.11 before installing. $PY is the interpreter pick_python chose.
+  require_python_311
+  record python OK "$($PY --version 2>&1)"
+else
+  record python FAIL "not found"
+fi
 if have node; then record node OK "$(node --version)"; else record node WARN "not found (motion tools need Node >=18)"; fi
 if have npm;  then record npm OK "$(npm --version)"; else record npm WARN "not found"; fi
 if have git;  then record git OK "$(git --version)"; else record git WARN "not found"; fi
