@@ -2,14 +2,24 @@
 
 from __future__ import annotations
 
+import json
+import os
 from fractions import Fraction
 from math import isfinite
 from pathlib import Path
 
 import numpy as np
 
-from avo.adapters.media.cutting_audio import _execute, extract_dialogue_pcm, read_pcm
-from avo.adapters.media.proof_executor import _dialogue_noise_filter
+from avo.adapters.media.cutting_audio import (
+    _execute,
+    _source_fingerprint_batch,
+    extract_dialogue_pcm,
+    read_pcm,
+)
+from avo.adapters.media.proof_executor import (
+    PROOF_AUDIO_BITRATE,
+    _dialogue_noise_filter,
+)
 from avo.audio_restoration import validate_dialogue_noise_policy
 from avo.timeline.contracts import content_hash
 from avo.timeline.ports import ToolError
@@ -267,7 +277,40 @@ def _native_reference(entry, output_dir):
     return samples[:, 0].astype(float)
 
 
-def _native_package_reference(entries, output_dir):
+def _encoded_reference(original, samples, entries, encoding):
+    if encoding != {
+        "codec": "aac",
+        "sampleRate": 48000,
+        "channelLayout": "dual-mono",
+        "bitrate": PROOF_AUDIO_BITRATE,
+    } or any(
+        entry["processing"]["node"]["channelMap"] not in ([0, 0], [1, 1])
+        for entry in entries
+    ):
+        raise ValueError("unsupported native reference encoding or channel map")
+    encoded = original.with_suffix(".m4a")
+    _execute(
+        [
+            "ffmpeg",
+            "-v",
+            "error",
+            "-nostdin",
+            "-y",
+            "-i",
+            str(original),
+            "-af",
+            "pan=stereo|c0=c0|c1=c0",
+            "-c:a",
+            "aac",
+            "-b:a",
+            PROOF_AUDIO_BITRATE,
+            str(encoded),
+        ]
+    )
+    return encoded, f"atrim=end_sample={len(samples)},pan=mono|c0=c0,aresample=16000"
+
+
+def _native_package_reference(entries, output_dir, encoding=None):
     from scipy.io import wavfile
 
     if not all(entry.get("processing") for entry in entries):
@@ -282,6 +325,9 @@ def _native_package_reference(entries, output_dir):
     wavfile.write(
         original, 48000, np.clip(samples * 2**31, -(2**31), 2**31 - 1).astype("int32")
     )
+    input_path, filters = original, "aresample=16000"
+    if encoding is not None:
+        input_path, filters = _encoded_reference(original, samples, entries, encoding)
     _execute(
         [
             "ffmpeg",
@@ -290,9 +336,9 @@ def _native_package_reference(entries, output_dir):
             "-nostdin",
             "-y",
             "-i",
-            str(original),
+            str(input_path),
             "-af",
-            "aresample=16000",
+            filters,
             "-c:a",
             "pcm_s16le",
             str(derivative),
@@ -301,10 +347,16 @@ def _native_package_reference(entries, output_dir):
     return read_pcm(derivative)[0][:, 0].astype(float)
 
 
-def _reference_audio(entries, output_dir):
+def _reference_audio(entries, output_dir, encoding=None):
     entries = [entries] if isinstance(entries, dict) else entries
     if any(entry.get("processing") for entry in entries):
-        return _native_package_reference(entries, output_dir)
+        return _native_package_reference(entries, output_dir, encoding)
+    if encoding is not None:
+        raise ValueError("encoded reference requires native source processing recipes")
+    return _legacy_reference_audio(entries, output_dir)
+
+
+def _legacy_reference_audio(entries, output_dir):
     audio = []
     for entry in entries:
         decoded = extract_dialogue_pcm(
@@ -358,7 +410,11 @@ def _verify_window(candidate, fingerprint, window, request, output_dir):
             output_dir=output_dir / "candidate",
         )
         actual, rate = read_pcm(Path(decoded["analysisPath"]))
-        expected = _reference_audio(window["expectedAudio"], output_dir / "originals")
+        expected = _reference_audio(
+            window["expectedAudio"],
+            output_dir / "originals",
+            request.get("reference_encoding"),
+        )
         result = compare_retained_signal(
             expected,
             actual[:, 0],
@@ -398,6 +454,7 @@ class CuttingBoundaryVerifier:
     def __init__(self, output_dir: Path):
         self.output_dir = Path(output_dir)
 
+    @_source_fingerprint_batch()
     def verify(self, candidate: Path, **request):
         if not request.get("proposal_ref"):
             raise ToolError(
@@ -416,6 +473,7 @@ class CuttingBoundaryVerifier:
             "clockMaps": request.get("clock_maps", []),
             "checks": [],
             "status": "blocked",
+            "claims": {"referenceEncoding": request.get("reference_encoding")},
         }
         required = set(request.get("required_occurrences", []))
         for name in ("proofPlanRef", "graphHash"):
@@ -430,10 +488,18 @@ class CuttingBoundaryVerifier:
                 }
             )
             return payload
+        observed_windows = {}
         for window in request["windows"]:
-            result = _verify_window(
-                candidate, fingerprint, window, request, self.output_dir
+            identity = json.dumps(
+                {key: value for key, value in window.items() if key != "occurrenceId"},
+                default=os.fspath,
+                sort_keys=True,
             )
+            if identity not in observed_windows:
+                observed_windows[identity] = _verify_window(
+                    candidate, fingerprint, window, request, self.output_dir
+                )
+            result = observed_windows[identity]
             if result["status"] != "blocked":
                 payload["occurrenceCoverage"].append(window["occurrenceId"])
             payload["checks"].append(

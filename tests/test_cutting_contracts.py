@@ -4,11 +4,50 @@ import pytest
 
 from avo.timeline.contracts import ContractError
 from avo.timeline.cutting_contracts import (
+    _validate_ranges,
     make_document,
     occurrence_id,
     validate_cutting_document,
     validate_source_range,
 )
+
+
+def test_repeated_nested_ranges_validate_once_per_document(monkeypatch):
+    import avo.timeline.cutting_contracts as contracts
+
+    interval = {
+        "sourceId": "raw",
+        "startTicks": 1,
+        "endTicksExclusive": 2,
+        "timebase": {"num": 1, "den": 48000},
+    }
+    calls = []
+    original = contracts.validate_source_range
+
+    def observed(value):
+        calls.append(deepcopy(value))
+        return original(value)
+
+    monkeypatch.setattr(contracts, "validate_source_range", observed)
+    payload = [interval, {"nested": [dict(reversed(list(interval.items())))]}]
+    _validate_ranges(payload)
+    assert calls == [interval]
+    _validate_ranges(payload)
+    assert calls == [interval, interval]
+
+
+@pytest.mark.parametrize(
+    "changed", [{"endTicksExclusive": 1}, {"startTicks": 1.0}, {"startTicks": True}]
+)
+def test_range_reuse_does_not_hide_changed_or_invalid_clocks(changed):
+    interval = {
+        "sourceId": "raw",
+        "startTicks": 1,
+        "endTicksExclusive": 2,
+        "timebase": {"num": 1, "den": 48000},
+    }
+    with pytest.raises(ContractError):
+        _validate_ranges([interval, {"nested": {**interval, **changed}}])
 
 
 def test_document_hash_binds_payload_and_strict_fields():

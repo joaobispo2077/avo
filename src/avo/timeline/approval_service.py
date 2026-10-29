@@ -469,8 +469,17 @@ def _review_raw_fingerprints(dependencies, materialization):
 
 
 def _require_plan_sources(lock, dependencies, materialization):
-    raw = _review_raw_fingerprints(dependencies, materialization)
-    expected = {f"source:{key}": value for key, value in raw.items()}
+    if (materialization or {}).get("kind") == "proof-plan":
+        if dependencies.get("raw") != native_proof_dependencies(materialization)["raw"]:
+            raise ValueError("proof-plan raw source review binding is stale")
+        expected = {
+            key: digest
+            for key, digest in materialization["canonicalInputLock"].items()
+            if key.startswith("source:")
+        }
+    else:
+        raw = _review_raw_fingerprints(dependencies, materialization)
+        expected = {f"source:{key}": value for key, value in raw.items()}
     _merge_review_source_bindings(lock, dependencies, expected)
     for key, digest in expected.items():
         if key in lock and lock[key] != digest:
@@ -492,6 +501,8 @@ def _require_plan_current_inputs(workspace, plan, review, materialization):
             raise ValueError(f"proof-plan canonical dependency is stale: {name}")
     if materialization is not None:
         require_current_candidate_dependencies(workspace, materialization, dependencies)
+        if materialization.get("kind") == "proof-plan":
+            _require_native_plan_binding(materialization, plan)
         if (
             materialization.get("proofPlanHash", plan["proofPlanHash"])
             != plan["proofPlanHash"]

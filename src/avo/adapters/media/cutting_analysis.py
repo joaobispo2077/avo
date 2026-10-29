@@ -83,6 +83,7 @@ class CuttingAnalysisAdapter:
             transcription = {
                 "model": resolved.id,
                 "policyHash": resolved.policy_hash,
+                "runtime": self._transcription_runtime(),
                 **_dependency_files(directory / name for name in MODEL_FILES),
             }
         except (PreflightError, ToolError, OSError, RuntimeError, ValueError) as exc:
@@ -90,6 +91,18 @@ class CuttingAnalysisAdapter:
         return {
             "transcription": transcription,
             "alignment": _alignment_dependencies(runtime),
+        }
+
+    def _transcription_runtime(self):
+        runtime = (self.policy.effective.get("runtimeRefs") or {}).get(
+            "transcription"
+        ) or {}
+        device = runtime.get("device", "cpu")
+        if device not in {"cpu", "cuda"}:
+            raise ValueError("cutting transcription device must be cpu or cuda")
+        return {
+            "device": device,
+            "computeType": runtime.get("computeType", "int8"),
         }
 
     def _transcriber(self, language):
@@ -104,8 +117,14 @@ class CuttingAnalysisAdapter:
                 loaded["model"],
                 loaded["resolvedPolicyHash"],
                 loaded["modelFiles"],
+                {"device": loaded["device"], "computeType": loaded["computeType"]},
             )
-            observed = (current.get("model"), current.get("policyHash"), actual_files)
+            observed = (
+                current.get("model"),
+                current.get("policyHash"),
+                actual_files,
+                current.get("runtime"),
+            )
             if current.get("status") != "observed" or expected != observed:
                 raise ToolError(
                     "cutting-transcribe-stale",
@@ -123,21 +142,20 @@ class CuttingAnalysisAdapter:
                 )
             preflight(resolved)
             model_dir = Path(model_path)
-            # Cutting's initial acoustic runtime stays on CPU, leaving visual VRAM independent.
+            runtime = self._transcription_runtime()
             transcriber = LocalTranscriber(
                 model=resolved.id,
                 model_dir=model_dir,
                 language=language,
-                device="cpu",
-                compute_type="int8",
+                device=runtime["device"],
+                compute_type=runtime["computeType"],
                 num_workers=1,
             )
             self._model_bindings[language] = {
                 "engine": "faster-whisper",
                 "version": transcriber.engine_version,
                 "model": resolved.id,
-                "device": "cpu",
-                "computeType": "int8",
+                **runtime,
                 "modelFiles": {
                     name: source_fingerprint(model_dir / name)["sha256"]
                     for name in MODEL_FILES
@@ -167,10 +185,11 @@ class CuttingAnalysisAdapter:
             runtime["models"],
             nltk_data=Path(runtime["nltkData"]),
             timeout=runtime.get("timeoutSeconds", 120),
+            device=runtime.get("device", "cpu"),
         )
 
     def analyze(self, source, **request):
-        # One CPU model job at a time, even when callers share this adapter.
+        # Serialize speech jobs; GPU speech and visual stages must also be scheduled separately.
         with self._analysis_lock:
             return self._analyze(source, **request)
 

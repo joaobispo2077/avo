@@ -7,6 +7,8 @@ from copy import deepcopy
 from fractions import Fraction
 from pathlib import Path
 
+from avo.adapters.media.cutting_audio import _source_fingerprint_batch
+from avo.adapters.media.proof_executor import PROOF_AUDIO_BITRATE
 from avo.timeline.contracts import content_hash, file_fingerprint
 from avo.timeline.cutting_audit import audit_joins
 from avo.timeline.cutting_contracts import selection_graph_hash, source_interval
@@ -316,25 +318,26 @@ class CuttingPreviewAdapter:
             media_inputs=canonical_proof_media_inputs(self.workspace, plan),
             tool_readiness=self.render_port.proof_tool_readiness(plan),
         )
-        previews = []
-        for ordinal, window in enumerate(windows, 1):
-            frame_range = {
-                key: window[key] for key in ("startFrame", "endFrameExclusive")
-            }
-            rendered = _proof_render(
-                self.render_port,
-                plan,
-                directory / f"preview-{ordinal:03d}.mp4",
-                window=frame_range,
-            )
-            previews.append(
-                {
-                    "output": rendered["output"],
-                    "window": window,
-                    "graphHash": rendered["graphHash"],
-                    "clockMaps": self._clock_maps(plan, snapshot, frame_range),
+        with _source_fingerprint_batch():
+            previews = []
+            for ordinal, window in enumerate(windows, 1):
+                frame_range = {
+                    key: window[key] for key in ("startFrame", "endFrameExclusive")
                 }
-            )
+                rendered = _proof_render(
+                    self.render_port,
+                    plan,
+                    directory / f"preview-{ordinal:03d}.mp4",
+                    window=frame_range,
+                )
+                previews.append(
+                    {
+                        "output": rendered["output"],
+                        "window": window,
+                        "graphHash": rendered["graphHash"],
+                        "clockMaps": self._clock_maps(plan, snapshot, frame_range),
+                    }
+                )
         manifest = {
             "schemaVersion": "1.0.0",
             "mediaClass": "preview-package",
@@ -509,6 +512,7 @@ class CuttingPreviewAdapter:
             key=lambda word: word["start"],
         )
 
+    @_source_fingerprint_batch()
     def verify(self, candidate, *, proposal_ref, manifest_path):
         manifest = json.loads(Path(manifest_path).read_text(encoding="utf-8"))
         if (
@@ -533,6 +537,7 @@ class CuttingPreviewAdapter:
                     graph_hash=manifest["selectionHash"],
                     required_occurrences=preview["window"]["occurrenceIds"],
                     clock_maps=maps,
+                    reference_encoding=self._reference_encoding(manifest["plan"], maps),
                     candidate_selection={
                         "streamIndex": 1,
                         "channels": [0],
@@ -543,6 +548,27 @@ class CuttingPreviewAdapter:
                 )
             )
         return self._package_report(candidate, proposal_ref, manifest, reports)
+
+    @staticmethod
+    def _reference_encoding(plan, maps):
+        output = plan["output"]
+        if (
+            output.get("conformance") is not True
+            and output["audioCodec"] == "aac"
+            and output["audioSampleRate"] == 48000
+            and output["channelLayout"] == "stereo"
+            and maps
+            and all(
+                mapping["node"]["channelMap"] in ([0, 0], [1, 1]) for mapping in maps
+            )
+        ):
+            return {
+                "codec": "aac",
+                "sampleRate": 48000,
+                "channelLayout": "dual-mono",
+                "bitrate": PROOF_AUDIO_BITRATE,
+            }
+        return None
 
     @staticmethod
     def _reports_status(reports):
@@ -579,6 +605,7 @@ class CuttingPreviewAdapter:
                 "fullProgramReviewed": False,
                 "previewFiles": [preview["output"] for preview in manifest["previews"]],
                 "alternativeReviewRefs": manifest.get("alternativeReviewRefs", []),
+                "referenceEncodings": [report.get("claims", {}) for report in reports],
             },
         }
 
@@ -694,6 +721,7 @@ class CuttingPreviewAdapter:
             graph_hash=binding["graphHash"],
             required_occurrences=preview["window"]["occurrenceIds"],
             clock_maps=maps,
+            reference_encoding=self._reference_encoding(plan, maps),
             candidate_selection={
                 "streamIndex": 1,
                 "channels": [0],

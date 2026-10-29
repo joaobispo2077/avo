@@ -53,6 +53,12 @@ EXPECTED_QUALITY_CONCEPTS = (
 
 
 class QualityMatrixTests(unittest.TestCase):
+    def test_prerequisites_validate_all_workflow_contexts(self) -> None:
+        ci = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+        gate = ci.split("  prerequisites-gate:", 1)[1].split("  repo-unit-tests:", 1)[0]
+        self.assertIn("uses: docker://rhysd/actionlint:1.7.12", gate)
+        self.assertIn("args: -shellcheck= -pyflakes=", gate)
+
     def test_ci_uses_shared_test_runner(self) -> None:
         ci = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
         self.assertIn("run-unit-tests.sh", ci)

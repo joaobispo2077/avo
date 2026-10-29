@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import json
 import subprocess
+from contextlib import contextmanager
+from contextvars import ContextVar
 from fractions import Fraction
 from pathlib import Path
 
@@ -13,6 +15,40 @@ from avo.timeline.contracts import content_hash
 from avo.timeline.cutting_contracts import validate_source_range
 from avo.timeline.ports import ToolError
 from avo.transcribe import source_fingerprint
+
+_SOURCE_OBSERVATIONS: ContextVar[dict | None] = ContextVar(
+    "cutting_source_observations", default=None
+)
+
+
+@contextmanager
+def _source_fingerprint_batch():
+    if _SOURCE_OBSERVATIONS.get() is not None:
+        yield
+        return
+    observations = {}
+    token = _SOURCE_OBSERVATIONS.set(observations)
+    try:
+        yield
+        for path, observed in observations.items():
+            if source_fingerprint(path)["sha256"] != observed["sha256"]:
+                raise ToolError(
+                    "cutting-source-fingerprint",
+                    f"source changed during verification: {path}",
+                )
+    finally:
+        _SOURCE_OBSERVATIONS.reset(token)
+
+
+def _observed_source_fingerprint(path, *, observe=None):
+    observe = observe or source_fingerprint
+    observations = _SOURCE_OBSERVATIONS.get()
+    if observations is None:
+        return observe(path)
+    resolved = Path(path).resolve()
+    if resolved not in observations:
+        observations[resolved] = observe(resolved)
+    return dict(observations[resolved])
 
 
 def read_pcm(path: Path):
@@ -104,7 +140,7 @@ def extract_dialogue_pcm(
     source, *, selection, source_range, fingerprint, sync_ref, output_dir
 ):
     path = Path(source["locator"] if isinstance(source, dict) else source)
-    actual = source_fingerprint(path)
+    actual = _observed_source_fingerprint(path)
     if actual["sha256"] != fingerprint.get("sha256"):
         raise ToolError(
             "cutting-source-fingerprint", "source fingerprint differs from expected"
