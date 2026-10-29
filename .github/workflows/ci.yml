@@ -53,6 +53,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
+      - name: Validate all GitHub Actions workflows
+        uses: docker://rhysd/actionlint:1.7.12
+        with:
+          args: -shellcheck= -pyflakes=
+
       - name: Setup Python
         uses: actions/setup-python@v6
         with:
@@ -143,7 +148,6 @@ jobs:
     # Real capture checks must fail, rather than skip, when this runtime is absent.
     env:
       AVO_REQUIRE_CODE_DRAWN_RUNTIME: '1'
-      PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/avo-code-drawn-browsers
     outputs:
       evidence_url: ${{ steps.integration-evidence.outputs.artifact-url }}
     steps:

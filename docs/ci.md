@@ -42,6 +42,23 @@ Order in `.github/workflows/ci.yml` is enforced via job `needs:`.
 Unit and integration lanes run in parallel after Gate 1. Software quality does
 not run `tests/integration`; coverage is the unit suite only.
 
+Gate 1 also validates all GitHub Actions workflows with actionlint 1.7.12,
+including expression context availability. ShellCheck and Pyflakes are disabled
+in this check; the existing quality gates own source linting. Run the same check
+locally before pushing workflow changes:
+
+```sh
+docker run --rm -v "$(pwd):/repo" --workdir /repo rhysd/actionlint:1.7.12 -shellcheck= -pyflakes=
+```
+
+The default integration suite includes code-drawn browser capture tests alongside
+the other runtime tests. Its setup installs the optional capture dependency,
+Chromium, and the pinned brush asset so missing prerequisites fail CI instead of
+silently skipping capture coverage. Playwright uses its standard browser cache;
+no job-level browser path override is needed. Engine packaging retains its
+separate platform smoke tests and checks historical tags without requiring
+features those tags did not contain.
+
 ### Run selection and duplicate suppression
 
 CI validates PRs targeting `develop`, `release`, or `main`. Push triggers cover

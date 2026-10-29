@@ -104,8 +104,6 @@ jobs:
             platform: linux-x64
     runs-on: ${{ matrix.os }}
     timeout-minutes: 90
-    env:
-      PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/avo-code-drawn-browsers
     steps:
       - name: Checkout
         uses: actions/checkout@v6
