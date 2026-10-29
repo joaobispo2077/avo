@@ -15,6 +15,7 @@ def _word_chunks(words: list[dict]) -> list[list[dict]]:
     for word in words:
         if current and (
             float(word["start"]) - float(current[-1]["end"]) >= 0.25
+            or float(word["start"]) < float(current[-1]["start"])
             or str(current[-1]["text"]).rstrip().endswith((".", "?", "!"))
         ):
             chunks.append(current)
@@ -62,7 +63,7 @@ def _related(left: dict, right: dict) -> bool:
         source_interval(right["sourceRange"])[1]
         - source_interval(left["sourceRange"])[2]
     )
-    if distance > 30:
+    if distance < 0 or distance > 30:
         return False
     prefix = min(len(a), len(b), 2)
     return a[:prefix] == b[:prefix]

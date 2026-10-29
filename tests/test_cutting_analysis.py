@@ -155,6 +155,8 @@ def test_cached_transcriber_refuses_changed_managed_model_bytes(tmp_path):
     adapter._transcribers["en"] = object()
     adapter._model_bindings["en"] = {
         "model": "local",
+        "device": "cpu",
+        "computeType": "int8",
         "resolvedPolicyHash": "b" * 64,
         "modelFiles": {
             name: source_fingerprint(model / name)["sha256"] for name in MODEL_FILES
@@ -170,3 +172,44 @@ def test_cached_transcriber_refuses_changed_managed_model_bytes(tmp_path):
         (model / MODEL_FILES[0]).write_bytes(b"changed-model")
         with pytest.raises(ToolError, match="cached ASR"):
             adapter._transcriber("en")
+
+
+def test_cutting_gpu_transcription_is_explicit_and_bound_to_cached_runtime(tmp_path):
+    from avo.transcribe import MODEL_FILES
+
+    model = tmp_path / "model"
+    model.mkdir()
+    for name in MODEL_FILES:
+        (model / name).write_bytes(b"local-model")
+    runtime = {"device": "cuda", "computeType": "float16"}
+    policy = SimpleNamespace(effective={"runtimeRefs": {"transcription": runtime}})
+    adapter = CuttingAnalysisAdapter(SimpleNamespace(project={}), policy)
+    resolved = SimpleNamespace(
+        id="local",
+        policy_hash="a" * 64,
+        pin={"source": {"kind": "artifact", "artifactPath": str(model)}},
+    )
+    with (
+        mock.patch(
+            "avo.adapters.media.cutting_analysis.resolve_job", return_value=resolved
+        ),
+        mock.patch("avo.adapters.media.cutting_analysis.preflight"),
+        mock.patch(
+            "avo.adapters.media.cutting_analysis.LocalTranscriber"
+        ) as transcriber,
+    ):
+        adapter._transcriber("pt")
+        assert transcriber.call_args.kwargs["device"] == "cuda"
+        assert transcriber.call_args.kwargs["compute_type"] == "float16"
+        runtime["device"] = "cpu"
+        with pytest.raises(ToolError, match="cached ASR"):
+            adapter._transcriber("pt")
+
+
+def test_cutting_transcription_keeps_cpu_default_and_rejects_unknown_device():
+    policy = SimpleNamespace(effective={})
+    adapter = CuttingAnalysisAdapter(SimpleNamespace(project={}), policy)
+    assert adapter._transcription_runtime() == {"device": "cpu", "computeType": "int8"}
+    policy.effective["runtimeRefs"] = {"transcription": {"device": "invalid"}}
+    with pytest.raises(ValueError, match="device"):
+        adapter._transcription_runtime()

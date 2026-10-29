@@ -269,6 +269,7 @@ PY
   echo "smoke: provision pinned standalone brush inputs with the native launcher"
   "$LAUNCHER" cli animation runtime-install --engine code-drawn --brush --json >"$SMOKE_WORK/brush-runtime.json"
   for route in svg brush; do
+    echo "smoke: native $route starter seek and lossless alpha render"
     MOTION="$SMOKE_WORK/$route"
     "$LAUNCHER" cli animation code-drawn-scaffold --destination "$MOTION" --route "$route" --width 128 --height 96 --fps 30/1 --frames 3 --background transparent --json >"$SMOKE_WORK/$route-scaffold.json"
     "$LAUNCHER" cli animation code-drawn-check --composition "$MOTION/composition.json" --output-lock "$MOTION/input-lock.json" --json >"$SMOKE_WORK/$route-check.json"

@@ -14,9 +14,12 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
+from avo.adapters.media.cutting_audio import _observed_source_fingerprint
 from avo.audio_restoration import afftdn_filter, validate_dialogue_noise_policy
 from avo.capabilities import default_proof_capability_registry
 from avo.timeline.contracts import file_fingerprint
+
+PROOF_AUDIO_BITRATE = "192k"
 
 
 def _run(arguments: list[str]) -> None:
@@ -115,7 +118,9 @@ def _source(
     source, path, expected = _source_identity(parameters, lock)
     key = str(path.resolve())
     if key not in cache:
-        actual_hash = file_fingerprint(path)["sha256"]
+        actual_hash = _observed_source_fingerprint(path, observe=file_fingerprint)[
+            "sha256"
+        ]
         if actual_hash != expected:
             raise RuntimeError(f"ProofPlan source bytes changed: {path}")
         probe = json.loads(
@@ -576,13 +581,19 @@ def _validate_events(execution):
 def _revalidate_inputs(execution, generated, validator):
     from . import proof_generated
 
+    observed_sources = {}
     for operation in (
         execution["videoGraph"]["operations"] + execution["audioGraph"]["operations"]
     ):
         parameters = operation.get("parameters", {})
         if "source" in parameters:
             source = parameters["source"]
-            if file_fingerprint(Path(source["locator"]))["sha256"] != source["sha256"]:
+            path = Path(source["locator"]).resolve()
+            if path not in observed_sources:
+                observed_sources[path] = _observed_source_fingerprint(
+                    path, observe=file_fingerprint
+                )["sha256"]
+            if observed_sources[path] != source["sha256"]:
                 raise RuntimeError(
                     f"ProofPlan source changed during render: {source['locator']}"
                 )
@@ -720,7 +731,7 @@ def _encode_arguments(spec, fps, count):
     ]
     if spec.get("conformance") is True:
         return arguments + ["-pix_fmt", "bgra", "-f", "matroska"]
-    return arguments + ["-b:a", "192k", "-movflags", "+faststart"]
+    return arguments + ["-b:a", PROOF_AUDIO_BITRATE, "-movflags", "+faststart"]
 
 
 def _render_final(listing, candidate, overlays, spec, fps, wstart, wend):

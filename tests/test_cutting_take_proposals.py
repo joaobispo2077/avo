@@ -136,3 +136,15 @@ def test_timing_refinement_does_not_reset_retake_identity():
     analysis["words"][0].update(start=0.21, end=0.41)
     after = discover_retake_groups(analysis, snapshot["segments"][0])[0]["groupId"]
     assert before == after
+
+
+def test_backward_alignment_times_cannot_form_an_inverted_or_overlapping_retake():
+    snapshot, analysis = materials()
+    analysis["words"] = [
+        {"text": "Uma", "start": 2.0, "end": 2.2},
+        {"text": "coisa", "start": 2.2, "end": 2.4},
+        {"text": "Uma", "start": 0.1, "end": 0.3},
+        {"text": "coisa", "start": 0.3, "end": 0.5},
+    ]
+    assert discover_retake_groups(analysis, snapshot["segments"][0]) == []
+    assert propose_retakes(snapshot, {"seg": analysis}) == ([], [])

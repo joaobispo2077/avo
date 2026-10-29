@@ -174,8 +174,8 @@ def _decoded(path: Path) -> tuple[dict, list[bytes]]:
             str(path),
             "-map",
             "0:v:0",
-            "-vsync",
-            "0",
+            "-fps_mode",
+            "passthrough",
             "-pix_fmt",
             "rgba",
             "-f",
@@ -192,6 +192,43 @@ def _decoded(path: Path) -> tuple[dict, list[bytes]]:
     ]
 
 
+@pytest.mark.parametrize(
+    "route,software",
+    [("canvas", False), ("svg", False), ("brush", False), ("brush", True)],
+)
+@pytest.mark.parametrize("background", ["opaque", "transparent"])
+def test_packaged_starters_preserve_exact_rgba(
+    tmp_path, adapter_type, route, software, background, monkeypatch
+):
+    if software:
+        from playwright.sync_api import BrowserType
+
+        original = BrowserType.launch
+
+        def launch(browser_type, *args, **kwargs):
+            kwargs["args"] = [*kwargs.get("args", []), "--use-angle=swiftshader"]
+            return original(browser_type, *args, **kwargs)
+
+        monkeypatch.setattr(BrowserType, "launch", launch)
+    destination = tmp_path / route
+    _ok(
+        motion.scaffold_code_drawn(
+            destination=destination,
+            route=route,
+            width=WIDTH,
+            height=HEIGHT,
+            fps="30/1",
+            frames=3,
+            background=background,
+            background_color="#121212" if background == "opaque" else None,
+        )
+    )
+    composition = destination / "composition.json"
+    adapter = adapter_type()
+    lock = _freeze(adapter, composition, tmp_path)
+    _ok(adapter.render(composition, input_lock=lock, output=tmp_path / "asset.mkv"))
+
+
 @pytest.mark.parametrize("route", ["canvas", "svg", "brush"])
 def test_real_routes_seek_repeat_reverse_fresh_and_lossless_encode(
     tmp_path: Path, adapter_type, route: str, monkeypatch
@@ -201,7 +238,16 @@ def test_real_routes_seek_repeat_reverse_fresh_and_lossless_encode(
         # A portable authored project needs only its declared local brush bytes.
         empty_home = tmp_path / "empty-home"
         empty_home.mkdir()
-        monkeypatch.setattr(Path, "home", classmethod(lambda cls: empty_home))
+        from avo.templates.code_drawn import brush_cache_paths
+
+        monkeypatch.setattr(
+            "avo.adapters.motion.code_drawn.brush_cache_paths",
+            lambda: brush_cache_paths(empty_home),
+        )
+        monkeypatch.setattr(
+            "avo.motion_runtime.brush_cache_paths",
+            lambda: brush_cache_paths(empty_home),
+        )
     adapter = adapter_type()
     sequence = MOMENTS + MOMENTS + list(reversed(MOMENTS))
     captured = [_rgba(png) for png in adapter.capture_frames(composition, sequence)]

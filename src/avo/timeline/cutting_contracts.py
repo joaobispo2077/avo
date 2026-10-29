@@ -6,7 +6,12 @@ from copy import deepcopy
 from fractions import Fraction
 from typing import Any
 
-from .contracts import ContractError, content_hash, validate_document
+from .contracts import (
+    ContractError,
+    canonical_json_bytes,
+    content_hash,
+    validate_document,
+)
 
 
 def validate_source_range(value: dict[str, Any]) -> dict[str, Any]:
@@ -84,15 +89,20 @@ def occurrence_id(
     )
 
 
-def _validate_ranges(value: Any) -> None:
+def _validate_ranges(value: Any, validated: set[bytes] | None = None) -> None:
+    if validated is None:
+        validated = set()
     if isinstance(value, dict):
         if {"sourceId", "startTicks", "endTicksExclusive", "timebase"} <= value.keys():
-            validate_source_range(value)
+            identity = canonical_json_bytes(value)
+            if identity not in validated:
+                validate_source_range(value)
+                validated.add(identity)
         for child in value.values():
-            _validate_ranges(child)
+            _validate_ranges(child, validated)
     elif isinstance(value, list):
         for child in value:
-            _validate_ranges(child)
+            _validate_ranges(child, validated)
 
 
 def validate_cutting_document(
