@@ -13,6 +13,7 @@ from avo.timeline.contracts import file_fingerprint
 from avo.timeline.cutting_audit import audit_joins
 from avo.timeline.cutting_policy import resolve_cutting_policy
 from avo.timeline.cutting_service import CuttingService
+from avo.timeline.ports import ToolError
 from avo.timeline.sync_service import SyncService
 from cutting_fixtures import cutting_workspace, source_snapshot
 
@@ -177,3 +178,34 @@ def test_real_native_preview_verifies_then_applies_original_selection(tmp_path, 
     joins = audit_joins(snapshot, {"num": 30, "den": 1})
     assert {join["joinId"] for join in joins} <= set(report["occurrenceCoverage"])
     assert all(source["kind"] == "raw" for source in snapshot["sources"])
+
+
+@pytest.mark.integration
+@pytest.mark.skipif(not shutil.which("ffmpeg"), reason="FFmpeg required")
+def test_preview_source_change_prevents_manifest_publication(tmp_path, monkeypatch):
+    from avo.adapters.media import proof_executor
+
+    workspace, _ = native_workspace(tmp_path, False)
+    preview = CuttingPreviewAdapter(workspace)
+    service = CuttingService(
+        workspace,
+        policy=resolve_cutting_policy(
+            project_settings={"enabled": True, "family": "analysis-review"}
+        ),
+        analysis_port=SuppliedAlignedEvidence(),
+        preview_port=preview,
+        verification_port=preview,
+    )
+    proposal = service.analyze()["proposalRef"]
+    original_check = proof_executor._revalidate_inputs
+
+    def change_source_after_window(*args):
+        original_check(*args)
+        (workspace.raw_dir / "original.mkv").write_bytes(b"changed during preview")
+
+    monkeypatch.setattr(
+        proof_executor, "_revalidate_inputs", change_source_after_window
+    )
+    with pytest.raises(ToolError, match="changed"):
+        service.preview(proposal)
+    assert not list(preview.directory.glob("*/manifest.json"))

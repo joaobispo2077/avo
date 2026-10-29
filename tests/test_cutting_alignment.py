@@ -86,9 +86,47 @@ def test_offline_worker_environment_and_manifest_checked(tmp_path):
     assert kwargs["env"]["HF_HUB_OFFLINE"] == "1"
     assert kwargs["env"]["CUDA_VISIBLE_DEVICES"] == ""
     assert json.loads(kwargs["input"])["expectedVersion"] == "3.8.6"
+    assert json.loads(kwargs["input"])["device"] == "cpu"
     (model / "config.json").write_text("changed")
     with pytest.raises(ToolError, match="fingerprint"):
         adapter.align(tmp_path / "input.wav", language="pt-BR")
+
+
+def test_cuda_alignment_preserves_gpu_visibility_and_records_device(tmp_path):
+    model = tmp_path / "model"
+    model.mkdir()
+    (model / "config.json").write_bytes(b"{}")
+    nltk = tmp_path / "nltk"
+    (nltk / "tokenizers" / "punkt_tab" / "portuguese").mkdir(parents=True)
+    adapter = CuttingAlignmentAdapter(
+        sys.executable,
+        {
+            "pt": {
+                "path": str(model),
+                "files": {"config.json": hashlib.sha256(b"{}").hexdigest()},
+            }
+        },
+        nltk_data=nltk,
+        device="cuda",
+    )
+    response = subprocess.CompletedProcess(
+        [], 0, stdout=json.dumps({"raw": {"segments": []}, "dictionary": {}})
+    )
+    with (
+        mock.patch.dict("os.environ", {"CUDA_VISIBLE_DEVICES": "0"}),
+        mock.patch("subprocess.run", return_value=response) as run,
+    ):
+        result = adapter.align(tmp_path / "input.wav", language="pt-BR")
+    assert json.loads(run.call_args.kwargs["input"])["device"] == "cuda"
+    assert run.call_args.kwargs["env"]["CUDA_VISIBLE_DEVICES"] == "0"
+    assert result["bindings"]["device"] == "cuda"
+
+
+def test_alignment_rejects_unknown_device_without_starting_worker(tmp_path):
+    with mock.patch("subprocess.run") as run:
+        with pytest.raises(ValueError, match="device"):
+            CuttingAlignmentAdapter(tmp_path / "python", {}, device="auto")
+        run.assert_not_called()
 
 
 def test_missing_punkt_never_launches_worker(tmp_path):

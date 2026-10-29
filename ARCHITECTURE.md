@@ -45,6 +45,44 @@ The current skills' references to `helpers/` describe the former layout;
   mechanics must not erase validation, durability or representation differences.
 - Python 3.11 is the minimum supported version. No new package dependency is required here.
 
+## Proof input verification
+
+The native FFmpeg proof executor compares every operation's source lock during
+execution. Ordinary renders hash each resolved source path once per input-check
+phase. Contextual preview windows may share that observation within their
+explicit batch, which rehashes all originals before the preview manifest is
+written. A new ordinary render or batch starts fresh, conflicting claims still
+fail, and generated-asset validation stays independent. This removes duplicate
+raw-file reads without changing media selection, processing, or approval rules.
+Regression coverage: `tests/test_proof_input_revalidation.py` and the FFmpeg and
+code-drawn executor integration suites.
+
+## Cutting evidence validation
+
+Nested original-source ranges are validated once per distinct canonical JSON
+value within one cutting-document validation. Repeated acoustic evidence can
+reference the same speech interval many times; reusing that successful check
+does not alter the stored document or its hash. Changed ranges, invalid clock
+types and empty intervals still fail the existing validator. Each new document
+validation starts with an empty set, so no cross-document validation result is
+trusted. Regression coverage: `tests/test_cutting_contracts.py`, cutting-store
+and cutting-service tests.
+
+Native boundary verification shares original-source fingerprint observations
+only for one verification invocation or one enclosing preview-package check.
+Every extraction still compares its own expected fingerprint, rate, routing and
+sample coverage. Successful batches rehash every observed source before any
+result returns; a changed source blocks the batch, and the scope is reset on
+success or failure. Identical signal windows share one physical comparison
+within that invocation while retaining each required occurrence ID. Any changed
+window input is checked separately. Rendering and observation generation retain
+their independent source checks outside the explicit preview-package batch.
+Within that batch, before/after renderer source checks use the same observation
+and the enclosing batch rehashes originals before returning. Generated media
+fingerprinting is never cached. Regression coverage:
+`tests/test_cutting_verification_reuse.py` plus native preview and word-edge
+integration suites.
+
 ## Import enforcement
 
 `.importlinter` forbids adapters importing CLI/MCP, timeline importing CLI/MCP,
@@ -401,3 +439,32 @@ The provider settings validator retains its existing beside-launcher compatibili
 Compatibility also preserves generic projects whose inferred provider has no manifest: absent provider preferences inherit global/default settings. Explicit provider targets and existing malformed manifests still fail validation; inspection does not create provider files. This keeps optional creative briefing and raw project intake usable without broadening preference writes.
 
 Native proof review shares the existing cut-lineage dispatcher and source-fidelity adapter. Later checkpoints use the generic persisted ProofPlan verifier, while cut-proof retains its strict checkpoint verifier. Native final fidelity derives an explicit `nativeBasis` from current plan/source/generated provenance, microproof gate and actual FFprobe observations; it never fabricates legacy delivery-policy/picture-lineage envelopes. Its verified scope is progressive 8-bit SDR with the executor's supported frozen graph, exact geometry/rational rate/frame count/codecs/pixel format and stereo audio/duration. Untagged 8-bit source is interpreted as SDR; HDR/wide-gamut/high-bit-depth/interlaced or unsupported graphs remain blocked. Existing assembly evaluation and human, transcript, rights/accessibility and Watch authority are unchanged.
+
+Regression revalidation uses the native dependency dispatcher to verify native
+ProofPlan source aliases and their aggregate raw hash. Legacy assembly
+`rawFingerprints` retain their separate compatibility path. Neither format skips
+current-input, source-byte, graph or microproof validation. Coverage includes
+native cut regression approval and rejection of altered source bytes and locks.
+
+Cutting's existing runtime references now allow explicit CPU/CUDA execution for
+transcription and isolated WhisperX alignment. CPU remains the compatibility
+default. Device/precision bind the transcription cache; alignment records its
+requested device and fails when CUDA is unavailable. No runtime provisions
+packages or manages the vision server. The caller serializes GPU speech and
+vision stages, and the media adapter retains its per-instance speech lock.
+Offline model manifests, source clocks and character evidence retain their
+existing boundaries. Retake discovery separates backward timestamp jumps rather
+than creating inverted/overlapping attempts. Unit coverage checks device
+propagation, cache invalidation, CPU compatibility and nonmonotonic intervals.
+See [sequential GPU execution](docs/cutting-gpu-execution.md).
+
+Native cutting signal verification derives its optional AAC reference encoding
+from the frozen ProofPlan output and identical-channel routing. It reconstructs
+the complete window from fingerprinted originals with the declared node envelopes,
+then applies the executor's shared 192 kbps AAC contract before analysis decoding.
+This accounts for lossy codec changes in short consonant windows without weakening
+word, fade, sample-coverage, correlation or residual checks. Unknown contracts
+fail closed; lossless conformance and legacy PCM references keep their existing
+path. Candidate audio never supplies the expected signal. Verification claims
+record the reference encoding, and implementation bindings invalidate old proofs.
+Synthetic encoded tests preserve detection of missing quiet onsets and tails.

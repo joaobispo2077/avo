@@ -473,7 +473,12 @@ def test_native_window_rechecks_encoded_bytes_and_does_not_reuse_preview_pass(
     plan = {
         "proofPlanId": "current",
         "proofPlanHash": "b" * 64,
-        "output": {"frameRate": {"num": 30, "den": 1}},
+        "output": {
+            "frameRate": {"num": 30, "den": 1},
+            "audioCodec": "aac",
+            "audioSampleRate": 48000,
+            "channelLayout": "stereo",
+        },
         "validationPlan": {
             "cutting": {
                 "required": True,
@@ -490,3 +495,4 @@ def test_native_window_rechecks_encoded_bytes_and_does_not_reuse_preview_pass(
     assert result["candidateSha256"] == file_fingerprint(candidate)["sha256"]
     assert calls[0][0] == candidate
     assert calls[0][1]["required_occurrences"] == ["join-one"]
+    assert calls[0][1]["reference_encoding"] is None

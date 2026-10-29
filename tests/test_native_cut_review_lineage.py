@@ -6,6 +6,7 @@ from avo.cli import _materialization_dependencies
 from avo.timeline.approval_service import (
     _decision_materialization_lock,
     native_cut_dependencies,
+    require_candidate_regression,
     require_native_cut_materialization,
 )
 from avo.timeline.contracts import content_hash, file_fingerprint
@@ -195,3 +196,76 @@ def test_default_readiness_uses_materialization_boundary(monkeypatch):
         "proof-plan-executor": True,
     }
     assert plans == [plan]
+
+
+def _native_regression_review(tmp_path, monkeypatch):
+    workspace, plan, record, _ = native_materialization(tmp_path)
+    heads = {
+        name: workspace.store(name).revision(
+            workspace.require_active(name)["headRevisionId"]
+        )["contentHash"]
+        for name in ("cmap", "sync-map")
+    }
+    monkeypatch.setattr(
+        workspace, "active_dependency_snapshot", lambda: heads, raising=False
+    )
+    snapshot = {
+        "proofPlan": {
+            "artifactId": plan["proofPlanId"],
+            "sha256": plan["proofPlanHash"],
+        },
+        "iterationId": plan["iterationId"],
+    }
+    review = {
+        "evidence": [],
+        "candidate": {
+            "sha256": record["output"]["sha256"],
+            "dependencies": native_cut_dependencies(record),
+        },
+    }
+    result = {
+        "contractHash": plan["regressionContract"]["contractHash"],
+        "candidateSha256": record["output"]["sha256"],
+        "results": [],
+        "exceptions": [],
+        "summary": {},
+    }
+    path = tmp_path / "regression-result.json"
+    atomic_write_json(path, result)
+    return workspace, snapshot, review, record, path, result
+
+
+def test_native_cut_regression_accepts_its_source_alias_lock(tmp_path, monkeypatch):
+    workspace, snapshot, review, record, path, expected = _native_regression_review(
+        tmp_path, monkeypatch
+    )
+    assert "rawFingerprints" not in record["canonicalInputLock"]
+    assert (
+        require_candidate_regression(
+            workspace, snapshot, review, path, materialization=record
+        )
+        == expected
+    )
+
+
+@pytest.mark.parametrize("damage", ["raw-review", "source-review", "source-lock"])
+def test_native_cut_regression_rejects_stale_source_bindings(
+    tmp_path, monkeypatch, damage
+):
+    workspace, snapshot, review, record, path, _ = _native_regression_review(
+        tmp_path, monkeypatch
+    )
+    if damage == "raw-review":
+        review["candidate"]["dependencies"]["raw"] = "0" * 64
+    elif damage == "source-review":
+        review["candidate"]["dependencies"]["source:camera"] = "0" * 64
+    else:
+        record["canonicalInputLock"]["source:camera"] = "0" * 64
+        record["materializationHash"] = content_hash(
+            {k: v for k, v in record.items() if k != "materializationHash"}
+        )
+        review["candidate"]["dependencies"] = native_cut_dependencies(record)
+    with pytest.raises((ValueError, RuntimeError)):
+        require_candidate_regression(
+            workspace, snapshot, review, path, materialization=record
+        )
