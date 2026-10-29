@@ -1,4 +1,4 @@
-"""Serialized, explicitly provisioned offline CPU character alignment."""
+"""Serialized, explicitly provisioned offline character alignment."""
 
 from __future__ import annotations
 
@@ -112,12 +112,21 @@ def _verify_model_manifest(model):
 
 class CuttingAlignmentAdapter:
     def __init__(
-        self, python: Path, models: dict, *, nltk_data: Path | None = None, timeout=120
+        self,
+        python: Path,
+        models: dict,
+        *,
+        nltk_data: Path | None = None,
+        timeout=120,
+        device="cpu",
     ):
+        if device not in {"cpu", "cuda"}:
+            raise ValueError("alignment device must be cpu or cuda")
         self.python = Path(python)
         self.models = models
         self.nltk_data = Path(nltk_data) if nltk_data else None
         self.timeout = timeout
+        self.device = device
         self._lock = Lock()
 
     def _preflight(self, language):
@@ -151,6 +160,7 @@ class CuttingAlignmentAdapter:
             "nltkData": str(self.nltk_data.resolve()),
             "segments": request.get("segments", []),
             "expectedVersion": "3.8.6",
+            "device": self.device,
         }
         environment = {
             **os.environ,
@@ -158,9 +168,10 @@ class CuttingAlignmentAdapter:
             "TRANSFORMERS_OFFLINE": "1",
             "HF_DATASETS_OFFLINE": "1",
             "NLTK_DATA": payload["nltkData"],
-            "CUDA_VISIBLE_DEVICES": "",
             "PYTHONNOUSERSITE": "1",
         }
+        if self.device == "cpu":
+            environment["CUDA_VISIBLE_DEVICES"] = ""
         worker = Path(__file__).with_name("cutting_alignment_worker.py")
         try:
             with self._lock:
@@ -188,7 +199,7 @@ class CuttingAlignmentAdapter:
             "bindings": {
                 "engine": "whisperx",
                 "version": "3.8.6",
-                "device": "cpu",
+                "device": self.device,
                 "modelFiles": model["files"],
                 "language": language,
             },

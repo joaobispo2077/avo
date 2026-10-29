@@ -29,6 +29,11 @@ def execute(request):
     resource = "portuguese" if request["language"] == "pt" else "english"
     nltk.data.find(f"tokenizers/punkt_tab/{resource}/")
     torch.set_num_threads(1)
+    device = request.get("device", "cpu")
+    if device not in {"cpu", "cuda"}:
+        raise RuntimeError("alignment device must be cpu or cuda")
+    if device == "cuda" and not torch.cuda.is_available():
+        raise RuntimeError("requested CUDA alignment is unavailable")
     with wave.open(request["audioPath"], "rb") as stream:
         if (
             stream.getframerate() != 16000
@@ -44,7 +49,7 @@ def execute(request):
         )
     model, metadata = whisperx.load_align_model(
         language_code=request["language"],
-        device="cpu",
+        device=device,
         model_name=request["modelPath"],
         model_cache_only=True,
     )
@@ -53,7 +58,7 @@ def execute(request):
         model,
         metadata,
         audio,
-        "cpu",
+        device,
         interpolate_method="ignore",
         return_char_alignments=True,
     )
