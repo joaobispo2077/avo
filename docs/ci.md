@@ -59,6 +59,14 @@ no job-level browser path override is needed. Engine packaging retains its
 separate platform smoke tests and checks historical tags without requiring
 features those tags did not contain.
 
+The code-drawn decoder uses `-fps_mode passthrough`, supported by FFmpeg 7 and
+9; the removed `-vsync` option must not be used in this path. Integration tests
+exercise the packaged Canvas, SVG and brush starters with both opaque and
+transparent output and require exact decoded RGBA. The brush starter initializes
+its lazy graphics resources before `avoReady` resolves, then redraws each seek
+from the recorded seed. Brush portability checks isolate only the brush cache,
+leaving the installed browser location intact.
+
 ### Run selection and duplicate suppression
 
 CI validates PRs targeting `develop`, `release`, or `main`. Push triggers cover

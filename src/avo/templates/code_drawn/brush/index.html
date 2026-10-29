@@ -104,6 +104,8 @@
         probe.release.loseContext();
         probe.surface.width = probe.surface.height = 0;
         await document.fonts.ready;
+        // Initialize lazy graphics resources before any seek becomes evidence.
+        drawFrame(0);
         return true;
       })();
 
@@ -170,15 +172,7 @@
         });
       }
 
-      window.seek = async (seconds) => {
-        await window.avoReady;
-        if (
-          !Number.isFinite(seconds) ||
-          seconds < 0 ||
-          seconds >= frameCount / fps
-        ) {
-          throw new Error('Requested time is outside this composition.');
-        }
+      function drawFrame(seconds) {
         // A new library instance also resets undocumented lazy brush/texture caches.
         const seed = stableSeed(recordedSeed);
         const brush = createBrush(seed);
@@ -213,6 +207,18 @@
           work.surface.width = work.surface.height = 0;
         }
         return true;
+      }
+
+      window.seek = async (seconds) => {
+        await window.avoReady;
+        if (
+          !Number.isFinite(seconds) ||
+          seconds < 0 ||
+          seconds >= frameCount / fps
+        ) {
+          throw new Error('Requested time is outside this composition.');
+        }
+        return drawFrame(seconds);
       };
     </script>
   </body>
