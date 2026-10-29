@@ -192,11 +192,24 @@ def _decoded(path: Path) -> tuple[dict, list[bytes]]:
     ]
 
 
-@pytest.mark.parametrize("route", ["canvas", "svg", "brush"])
+@pytest.mark.parametrize(
+    "route,software",
+    [("canvas", False), ("svg", False), ("brush", False), ("brush", True)],
+)
 @pytest.mark.parametrize("background", ["opaque", "transparent"])
 def test_packaged_starters_preserve_exact_rgba(
-    tmp_path, adapter_type, route, background
+    tmp_path, adapter_type, route, software, background, monkeypatch
 ):
+    if software:
+        from playwright.sync_api import BrowserType
+
+        original = BrowserType.launch
+
+        def launch(browser_type, *args, **kwargs):
+            kwargs["args"] = [*kwargs.get("args", []), "--use-angle=swiftshader"]
+            return original(browser_type, *args, **kwargs)
+
+        monkeypatch.setattr(BrowserType, "launch", launch)
     destination = tmp_path / route
     _ok(
         motion.scaffold_code_drawn(

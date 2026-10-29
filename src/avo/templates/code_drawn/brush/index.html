@@ -122,8 +122,9 @@
           brush.noField();
           brush.noHatch();
           brush.noWash();
-          brush.noStroke();
-          brush.fill('#386cc4', 150);
+          // Vendor watercolor fills vary on software graphics; use seeded strokes.
+          brush.noFill();
+          brush.set('marker', '#386cc4', 1.3);
           brush.circle(
             art.x + art.width * 0.72,
             art.y + art.height * 0.5,

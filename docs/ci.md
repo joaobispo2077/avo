@@ -67,6 +67,13 @@ its lazy graphics resources before `avoReady` resolves, then redraws each seek
 from the recorded seed. Brush portability checks isolate only the brush cache,
 leaving the installed browser location intact.
 
+The generic brush starter uses seeded marker strokes rather than the vendor's
+watercolor fill, which can vary between identical seeks on software graphics.
+Its opaque and transparent starters are tested with SwiftShader explicitly,
+alongside the default graphics backend. This changes only newly scaffolded
+starters; existing compositions retain their source, and exact RGBA checks
+continue to reject nondeterministic output.
+
 ### Run selection and duplicate suppression
 
 CI validates PRs targeting `develop`, `release`, or `main`. Push triggers cover
