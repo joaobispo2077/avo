@@ -33,6 +33,7 @@ UNDERSTAND_ADAPTERS: dict[str, str] = {
 }
 
 MOTION_ADAPTERS: dict[str, str] = {
+    "code-drawn": "avo.adapters.motion.code_drawn:CodeDrawnAdapter",
     "hyperframes": "avo.adapters.motion.hyperframes:HyperframesAdapter",
     "remotion": "avo.adapters.stubs.motion_remotion:RemotionStubAdapter",
 }

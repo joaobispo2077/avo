@@ -1,5 +1,14 @@
 # Boil insert knowledge (pipeline router)
 
+**Motion engine gate:** Apply [shared arguments](arguments.md) and inspect native
+`animation engine-show` with available context before motion-specific skill/setup.
+HyperFrames remains the built-in default. For selected code-drawn, follow the
+[advanced workflow](code-drawn.md) and common canonical source/review gates.
+HyperFrames-only loaders and recipes below apply only to selected HyperFrames.
+Unavailable Remotion or incompatible treatments block; never silently substitute.
+
+The executable boil-insert helper/presets below are HyperFrames-specific. Do not claim code-drawn support or load its HyperFrames skill as a hidden dependency.
+
 Load when the user or brief asks for **wiggly**, **boiling**, **hand-drawn**, or **shaky** text/image/video **inserts** on existing footage.
 
 ## Load order

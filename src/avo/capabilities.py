@@ -123,6 +123,7 @@ class CapabilityRegistry:
 
 _PROOF_BUILTINS = {
     "trim": "ffmpeg.trim",
+    "generated-clip": "ffmpeg.generated-clip",
     "concatenate": "ffmpeg.concat",
     "crop": "ffmpeg.crop",
     "rotate": "ffmpeg.rotate",
@@ -143,8 +144,15 @@ _PROOF_BUILTINS = {
 
 _PROOF_CODE_PATHS = (
     Path(__file__).parent / "adapters" / "media" / "proof_executor.py",
+    Path(__file__).parent / "adapters" / "media" / "proof_generated.py",
     Path(__file__).parent / "adapters" / "media" / "timeline_render.py",
     Path(__file__).parent / "audio_restoration.py",
+    Path(__file__).parent / "timeline" / "proof_plan.py",
+    Path(__file__).parent / "timeline" / "materialize.py",
+    Path(__file__).parent / "timeline" / "generated_assets.py",
+    Path(__file__).parent / "timeline" / "media_admission.py",
+    Path(__file__).parent / "motion.py",
+    Path(__file__).parent / "proof_composition.py",
 )
 
 

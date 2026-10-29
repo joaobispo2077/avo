@@ -11,6 +11,14 @@ on:
       - src/avo/__main__.py
       - src/avo/paths.py
       - src/avo/transcribe.py
+      - src/avo/cli.py
+      - src/avo/motion.py
+      - src/avo/adapters/motion/code_drawn.py
+      - src/avo/templates/code_drawn/**
+      - schemas/avo.code-drawn.schema.json
+      - schemas/avo.motion.schema.json
+      - pyproject.toml
+      - uv.lock
       - scripts/ci/build-engine.sh
       - scripts/ci/build-engine.ps1
       - scripts/ci/engine-binary-smoke.sh
@@ -23,6 +31,14 @@ on:
       - src/avo/__main__.py
       - src/avo/paths.py
       - src/avo/transcribe.py
+      - src/avo/cli.py
+      - src/avo/motion.py
+      - src/avo/adapters/motion/code_drawn.py
+      - src/avo/templates/code_drawn/**
+      - schemas/avo.code-drawn.schema.json
+      - schemas/avo.motion.schema.json
+      - pyproject.toml
+      - uv.lock
       - scripts/ci/build-engine.sh
       - scripts/ci/build-engine.ps1
       - scripts/ci/engine-binary-smoke.sh
@@ -88,6 +104,8 @@ jobs:
             platform: linux-x64
     runs-on: ${{ matrix.os }}
     timeout-minutes: 90
+    env:
+      PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/avo-code-drawn-browsers
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -101,6 +119,65 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: pip
           cache-dependency-path: pyproject.toml
+
+      # Release tags may predate this optional runtime; preserve historical builds.
+      - name: Detect code-drawn runtime
+        id: code-drawn
+        shell: python
+        run: |
+          import os
+          import tomllib
+          from pathlib import Path
+
+          project = tomllib.loads(Path("pyproject.toml").read_text(encoding="utf-8"))
+          enabled = "code-drawn" in project["project"].get("optional-dependencies", {})
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              output.write(f"enabled={str(enabled).lower()}\n")
+
+      - name: Install code-drawn capture dependencies
+        if: steps.code-drawn.outputs.enabled == 'true'
+        run: python -m pip install -e ".[code-drawn]"
+
+      - name: Ensure FFmpeg and FFprobe (Linux)
+        if: steps.code-drawn.outputs.enabled == 'true' && runner.os == 'Linux'
+        run: |
+          if ! command -v ffmpeg >/dev/null || ! command -v ffprobe >/dev/null; then
+            sudo apt-get update
+            sudo apt-get install -y ffmpeg
+          fi
+          ffmpeg -version
+          ffprobe -version
+
+      - name: Ensure FFmpeg and FFprobe (macOS)
+        if: steps.code-drawn.outputs.enabled == 'true' && runner.os == 'macOS'
+        run: |
+          if ! command -v ffmpeg >/dev/null || ! command -v ffprobe >/dev/null; then
+            brew install ffmpeg
+          fi
+          ffmpeg -version
+          ffprobe -version
+
+      - name: Ensure FFmpeg and FFprobe (Windows)
+        if: steps.code-drawn.outputs.enabled == 'true' && runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          if (-not (Get-Command ffmpeg -ErrorAction SilentlyContinue) -or
+              -not (Get-Command ffprobe -ErrorAction SilentlyContinue)) {
+            choco install ffmpeg --yes --no-progress
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+          if (-not (Get-Command ffmpeg -ErrorAction SilentlyContinue) -or
+              -not (Get-Command ffprobe -ErrorAction SilentlyContinue)) {
+            throw "FFmpeg and FFprobe must be available for the native capture smoke."
+          }
+          ffmpeg -version
+          ffprobe -version
+
+      # The extracted launcher installs its own fresh browser cache during smoke.
+      - name: Install Chromium system dependencies (Linux)
+        if: steps.code-drawn.outputs.enabled == 'true' && runner.os == 'Linux'
+        timeout-minutes: 8
+        run: python -m playwright install-deps chromium
 
       - name: Build engine zip (Windows)
         if: runner.os == 'Windows'
@@ -123,6 +200,7 @@ jobs:
         shell: bash
         env:
           AVO_ENGINE_PLATFORM: ${{ matrix.platform }}
+          AVO_REQUIRE_CODE_DRAWN_RUNTIME: ${{ steps.code-drawn.outputs.enabled == 'true' && '1' || '0' }}
           AVO_CI_TRANSCRIBE_STUB: '1'
         run: bash scripts/ci/engine-binary-smoke.sh
 

@@ -212,3 +212,69 @@ def test_assembly_qc_rejects_rehashed_disconnected_lineage(assembly, field):
     )
     with pytest.raises(ValueError, match="lineage"):
         _check(assembly)
+
+
+@pytest.mark.parametrize("claimed_kind", ["generated", "source"])
+def test_assembly_qc_cannot_trust_resealed_code_drawn_metadata_without_current_receipt(
+    assembly, tmp_path, claimed_kind
+):
+    record = assembly[1]
+    drawing = tmp_path / "drawing.mkv"
+    drawing.write_bytes(b"synthetic generated overlay; not physically encoded")
+    record["renderContract"]["allowedTransformations"].append("place/composite")
+    record["renderContractHash"] = content_hash(record["renderContract"])
+    policy = record["deliveryFidelityPolicy"]
+    policy["renderContract"] = deepcopy(record["renderContract"])
+    policy["policyHash"] = content_hash(
+        {key: value for key, value in policy.items() if key != "policyHash"}
+    )
+    record["deliveryFidelityPolicyHash"] = policy["policyHash"]
+    assembly[3]["delivery-fidelity-policy"] = policy["policyHash"]
+    graph = record["pictureLineage"]
+    graph["nodes"].append(
+        {
+            "nodeId": "track-drawing",
+            "kind": claimed_kind,
+            "role": "overlay",
+            "mediaClass": "generated"
+            if claimed_kind == "generated"
+            else "overlay-asset",
+            "locator": str(drawing),
+            "sha256": file_fingerprint(drawing)["sha256"],
+            "pictureCarrying": True,
+            "media": {"width": 1920, "height": 1080},
+            "generator": {
+                "adapterId": "code-drawn",
+                "assetId": "unverified-drawing",
+                "recordHash": "a" * 64,
+                "inputLockRef": {
+                    "path": str(tmp_path / "missing-input-lock.json"),
+                    "sha256": "b" * 64,
+                },
+            },
+        }
+    )
+    graph["edges"].append(
+        {
+            "edgeId": "edge-drawing",
+            "from": "track-drawing",
+            "to": graph["rootIds"][0],
+            "operation": "place/composite",
+            "order": 1,
+            "parameters": {},
+        }
+    )
+    graph["pictureLineageHash"] = content_hash(
+        {key: value for key, value in graph.items() if key != "pictureLineageHash"}
+    )
+    record["pictureLineageHash"] = graph["pictureLineageHash"]
+    record["materializationHash"] = content_hash(
+        {key: value for key, value in record.items() if key != "materializationHash"}
+    )
+    atomic_write_json(assembly[4], record)
+    assembly[3]["picture-lineage"] = graph["pictureLineageHash"]
+    assembly[3]["materialization"] = record["materializationHash"]
+    with pytest.raises(
+        ValueError, match="(?i)code.drawn|generated|fresh|receipt|input.lock"
+    ):
+        _check(assembly)

@@ -1,5 +1,11 @@
 # /avo.beat-edit Command
 
+**Motion engine gate:** Resolve intent through [shared arguments](../../agent-skills/avo-pipeline/references/arguments.md)
+before motion-specific loaders. Selected code-drawn follows the
+[advanced workflow](../../agent-skills/avo-pipeline/references/code-drawn.md) and common
+canonical review. HyperFrames-specific instructions below require selected
+HyperFrames; unavailable engines/treatments block without silent substitution.
+
 **Timeline integration:** Profile
 
 ## Workflow guidance

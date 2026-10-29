@@ -354,3 +354,35 @@ def work_mode_advisory(provider: str, *, root: Path | None = None) -> str:
     except Exception:
         pass
     return " ".join(lines)
+
+
+def resolve_context_motion_selection(
+    ctx: VideoContext,
+    *,
+    root: Path | None = None,
+    home: Path | None = None,
+    invocation: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Resolve registry/project settings inside one project tier, without mutation."""
+    from avo.motion import (
+        inspect_motion,
+        resolve_motion_selection,
+        validate_motion_config,
+    )
+
+    shown = inspect_motion(provider=ctx.provider or None, root=root, home=home)
+    project_settings: dict[str, Any] = {}
+    for document in (((ctx.registry or {}).get("defaults") or {}), ctx.project):
+        if "motion" in document:
+            project_settings.update(validate_motion_config(document["motion"]))
+
+    def settings(scope: str) -> dict[str, Any] | None:
+        value = shown["savedPreferences"][scope]["engine"]
+        return {"engine": value} if value is not None else None
+
+    return resolve_motion_selection(
+        global_settings=settings("global"),
+        provider_settings=settings("provider"),
+        project_settings=project_settings,
+        invocation=invocation,
+    )

@@ -133,6 +133,236 @@ def _human_final_inputs(raw_dir: Path) -> dict[Path, str]:
     return required
 
 
+def _drawing_json(path: Path) -> dict[str, Any]:
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError) as error:
+        raise ReconstructionError(
+            f"cannot read retained drawing metadata: {path}"
+        ) from error
+    if not isinstance(value, dict):
+        raise ReconstructionError(
+            f"retained drawing metadata must be an object: {path}"
+        )
+    return value
+
+
+def _code_drawn_records(raw_dir: Path):
+    paths = set((raw_dir / "edit" / "timeline" / "generated-assets").rglob("*.json"))
+    paths.update(
+        (raw_dir / "edit" / "derived" / "components").rglob("*.generated-asset.json")
+    )
+    for path in sorted(paths):
+        try:
+            record = _drawing_json(path)
+        except ReconstructionError:
+            # Unidentified legacy metadata retains its existing preservation behavior.
+            continue
+        generator = record.get("generator")
+        if isinstance(generator, dict) and generator.get("adapterId") == "code-drawn":
+            yield path, record
+
+
+def _drawing_disposable_outputs(raw_dir: Path) -> set[Path]:
+    outputs = set()
+    for _path, record in _code_drawn_records(raw_dir):
+        output = record.get("output") or {}
+        if isinstance(output, dict) and output.get("locator"):
+            path = _local_media_path(raw_dir, output)
+            if path is not None and path.suffix == ".mkv":
+                outputs.add(path)
+    return outputs
+
+
+def _retain_drawing_ref(
+    raw_dir: Path, required: dict[Path, str | None], reference: dict[str, Any]
+) -> Path:
+    locator = reference.get("locator") or reference.get("path")
+    if not isinstance(locator, str) or not locator or "://" in locator:
+        raise ReconstructionError(
+            "retained drawing dependency requires a local locator"
+        )
+    path = _bundled_path(raw_dir, locator)
+    entry = _entry(raw_dir, path, "drawing-dependency")
+    if any(
+        field in reference and entry[field] != reference[field]
+        for field in ("sha256", "sizeBytes")
+    ):
+        raise ReconstructionError(
+            f"retained drawing dependency fingerprint changed: {path}"
+        )
+    if path in required and required[path] not in (None, entry["sha256"]):
+        raise ReconstructionError(f"conflicting retained drawing fingerprint: {path}")
+    required[path] = entry["sha256"]
+    return path
+
+
+def _retain_drawing_manifest(raw_dir: Path, required: dict, reference: dict):
+    from avo.motion import MotionError, load_composition
+
+    path = _retain_drawing_ref(raw_dir, required, reference)
+    try:
+        manifest = load_composition(path)
+    except MotionError as error:
+        raise ReconstructionError(
+            f"retained drawing source is invalid: {error}"
+        ) from error
+    inputs = {path}
+    for section in ("files", "assets", "dependencies"):
+        for item in manifest[section]:
+            inputs.add(
+                _retain_drawing_ref(
+                    raw_dir,
+                    required,
+                    {**item, "path": str(path.parent / item["path"])},
+                )
+            )
+    return path, manifest, inputs
+
+
+def _retain_drawing_inputs(
+    raw_dir: Path, required: dict, inputs: list[dict]
+) -> set[Path]:
+    return {
+        _retain_drawing_ref(raw_dir, required, item["fingerprint"]) for item in inputs
+    }
+
+
+def _validate_retained_drawing_binding(
+    manifest: dict, lock: dict, record: dict
+) -> None:
+    extension = record["parameters"]["codeDrawn"]
+    identities = {
+        "instanceId": lock["instanceId"],
+        "manifestRef": lock["manifestRef"],
+        "sourceRevision": manifest["sourceRevision"],
+        "drawingRoute": manifest["drawingRoute"],
+        "inputLockHash": lock["inputLockHash"],
+        "renderContractHash": content_hash(manifest["renderContract"]),
+        "inputsHash": lock["inputsHash"],
+    }
+    if any(extension.get(key) != expected for key, expected in identities.items()):
+        raise ReconstructionError(
+            "retained drawing receipt and original input lock disagree"
+        )
+    canonical = lock["bindingMode"] == "canonical"
+    if ("canonicalInputLock" in extension) != canonical or extension.get(
+        "canonicalInputLock"
+    ) != lock.get("canonicalInputLock"):
+        raise ReconstructionError(
+            "retained drawing receipt changes its original binding mode"
+        )
+    observations = [
+        (record["generator"], lock["generator"]),
+        (lock["renderContractHash"], identities["renderContractHash"]),
+        (extension["captureEvidence"].get("environment"), lock["environment"]),
+        (record["environment"]["platform"], lock["environment"]["platform"]),
+        (record["environment"]["dependencies"], lock["environment"]["dependencies"]),
+    ]
+    if any(actual != expected for actual, expected in observations):
+        raise ReconstructionError(
+            "retained drawing generator/render environment differs from its lock"
+        )
+
+
+def _retain_code_drawn_record(raw_dir: Path, required: dict, record: dict) -> None:
+    from avo.motion import MotionError, validate_input_lock
+
+    extension = record["parameters"]["codeDrawn"]
+    _manifest_path, manifest, source_paths = _retain_drawing_manifest(
+        raw_dir, required, extension["manifestRef"]
+    )
+    lock_path = _retain_drawing_ref(raw_dir, required, extension["inputLockRef"])
+    try:
+        lock = validate_input_lock(_drawing_json(lock_path))
+    except MotionError as error:
+        raise ReconstructionError(
+            f"invalid retained drawing input lock: {error}"
+        ) from error
+    _validate_retained_drawing_binding(manifest, lock, record)
+    locked_inputs = _retain_drawing_inputs(raw_dir, required, lock["inputs"])
+    receipt_inputs = _retain_drawing_inputs(raw_dir, required, record["inputs"])
+    if (
+        not source_paths <= locked_inputs
+        or not (locked_inputs | {lock_path}) <= receipt_inputs
+    ):
+        raise ReconstructionError(
+            "retained drawing dependency/input-lock coverage is incomplete"
+        )
+
+
+def _retain_generated_record(
+    raw_dir: Path,
+    required: dict,
+    path: Path,
+    *,
+    record_hash: str | None = None,
+) -> None:
+    from .contracts import ContractError
+
+    path = _retain_drawing_ref(raw_dir, required, {"path": str(path)})
+    record = _drawing_json(path)
+    try:
+        validate_document(record, "avo.generated-asset.schema.json")
+    except ContractError as error:
+        raise ReconstructionError(
+            f"invalid retained generated receipt: {path}: {error}"
+        ) from error
+    seal = document_hash_excluding(record, "recordHash")
+    if record.get("recordHash") != seal or record_hash not in (None, seal):
+        raise ReconstructionError(f"retained generated receipt hash mismatch: {path}")
+    if record["generator"]["adapterId"] == "code-drawn":
+        _retain_code_drawn_record(raw_dir, required, record)
+
+
+def _retain_generated_operation_inputs(
+    raw_dir: Path, required: dict, operation: dict
+) -> None:
+    from .contracts import ContractError
+
+    try:
+        validate_document(operation, "avo.proof-plan.schema.json#/$defs/operation")
+    except ContractError as error:
+        raise ReconstructionError(
+            f"invalid retained generated operation: {error}"
+        ) from error
+    parameters = operation["parameters"]
+    reference = parameters["generatedAssetRef"]
+    receipt = _bundled_path(raw_dir, reference["locator"])
+    _retain_generated_record(
+        raw_dir, required, receipt, record_hash=reference["recordHash"]
+    )
+    _retain_drawing_ref(raw_dir, required, parameters["inputLockRef"])
+
+
+def _retain_generated_plan_inputs(raw_dir: Path, required: dict) -> None:
+    for path in (raw_dir / "edit" / "timeline" / "proof-plans").rglob("*.json"):
+        plan = _drawing_json(path)
+        graph = plan.get("videoGraph") or {}
+        for operation in graph.get("operations") or []:
+            if operation.get("kind") in {"generated-clip", "overlay-video"}:
+                _retain_generated_operation_inputs(raw_dir, required, operation)
+
+
+def _retain_code_drawn_files(raw_dir: Path, required: dict) -> None:
+    for path, expected in list(required.items()):
+        if (
+            path.name == "composition.json"
+            and _drawing_json(path).get("engine") == "code-drawn"
+        ):
+            _retain_drawing_manifest(
+                raw_dir,
+                required,
+                {
+                    "path": str(path),
+                    **({"sha256": expected} if expected is not None else {}),
+                },
+            )
+    for path, _record in _code_drawn_records(raw_dir):
+        _retain_generated_record(raw_dir, required, path)
+    _retain_generated_plan_inputs(raw_dir, required)
+
+
 def _required_files(
     raw_dir: Path, canonical: list[dict[str, Any]]
 ) -> dict[Path, str | None]:
@@ -150,6 +380,7 @@ def _required_files(
                     f"conflicting canonical media fingerprints: {path}"
                 )
             required[path] = expected
+    _retain_code_drawn_files(raw_dir, required)
     return required
 
 
@@ -356,6 +587,7 @@ def _iteration_state_groups(
         "provider-animation-promotion-decision",
     )
     project_code: list[dict[str, Any]] = []
+    disposable = _drawing_disposable_outputs(raw_dir)
     for directory in (
         raw_dir / "edit" / "derived" / "components",
         raw_dir / "edit" / "derived" / "provider-components",
@@ -365,7 +597,7 @@ def _iteration_state_groups(
         project_code.extend(
             _entry(raw_dir, path, "project-component-code")
             for path in sorted(directory.rglob("*"))
-            if path.is_file()
+            if path.is_file() and path.resolve() not in disposable
         )
     groups["projectComponentCode"] = project_code
     return groups

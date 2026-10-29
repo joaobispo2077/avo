@@ -1,5 +1,14 @@
 # /avo.media reference
 
+**Motion engine gate:** Apply [shared arguments](arguments.md) and inspect native
+`animation engine-show` with available context before motion-specific skill/setup.
+HyperFrames remains the built-in default. For selected code-drawn, follow the
+[advanced workflow](code-drawn.md) and common canonical source/review gates.
+HyperFrames-only loaders and recipes below apply only to selected HyperFrames.
+Unavailable Remotion or incompatible treatments block; never silently substitute.
+
+Asset lookup, rights and freezing remain common. HyperFrames registry/paste-block installation is engine-specific; code-drawn declares local assets and dependencies in its manifest.
+
 ## Step/state mapping
 
 **Durable state:** pipeline-run.json plus the current canonical timeline revision

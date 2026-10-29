@@ -101,6 +101,23 @@ class ProofPlanCompiler:
             lock[f"source:{source_id}"] = str(sha256)
         return lock
 
+    def _require_recorded_motion_implementation(self, implementation):
+        if not implementation.adapter_id.startswith("hyperframes"):
+            return
+        index = self.workspace.store("animation").load_index()
+        if index["headRevisionId"] is None:
+            return
+        snapshot = self.workspace.store("animation").revision(index["headRevisionId"])[
+            "snapshot"
+        ]
+        engine = snapshot.get("framework", "hyperframes")
+        if engine != "hyperframes":
+            raise ProofPlanError(
+                "PROOF_ENGINE_INCOMPATIBLE",
+                f"HyperFrames capability is incompatible with recorded {engine} animation.",
+                "Use admitted generated-clip/overlay-video operations for code-drawn; engine selection does not convert provider kits.",
+            )
+
     def _resolve_video_graph(
         self, graph: dict[str, Any]
     ) -> tuple[dict[str, Any], list[dict[str, Any]], list[dict[str, Any]]]:
@@ -128,6 +145,7 @@ class ProofPlanCompiler:
                     }
                 )
                 continue
+            self._require_recorded_motion_implementation(implementation)
             operation["implementationId"] = implementation.implementation_id
             operations.append(operation)
             resolution.append(
@@ -151,6 +169,121 @@ class ProofPlanCompiler:
                 actual=gaps,
             )
         return {"operations": operations}, resolution, list(refs.values())
+
+    def _generated_receipt(self, reference):
+        from .generated_assets import GeneratedAssetService
+
+        record = GeneratedAssetService(self.workspace).load(reference["assetId"])
+        if reference["recordHash"] != record["recordHash"]:
+            raise ValueError("Generated record changed before proof compilation")
+        receipt = Path(reference["locator"])
+        if json.loads(receipt.read_text(encoding="utf-8")) != record:
+            raise ValueError(f"Generated receipt differs: {receipt}")
+        return record
+
+    @staticmethod
+    def _generated_original_lock(parameters):
+        input_ref = parameters["inputLockRef"]
+        input_path = Path(input_ref["path"])
+        if file_fingerprint(input_path)["sha256"] != input_ref["sha256"]:
+            raise ValueError(f"Generated input lock changed: {input_path}")
+        return json.loads(input_path.read_text(encoding="utf-8"))
+
+    @staticmethod
+    def _require_generated_output(record, parameters):
+        actual = file_fingerprint(Path(record["output"]["locator"]))
+        if any(actual[key] != record["output"][key] for key in ("sha256", "sizeBytes")):
+            raise ValueError("Generated output fingerprint changed")
+        if any(
+            parameters["sourceFingerprint"].get(key) != record["output"].get(key)
+            for key in ("locator", "sha256", "sizeBytes")
+        ):
+            raise ValueError("Generated operation source differs from its receipt")
+
+    @staticmethod
+    def _require_drawing_operation_geometry(operation, original):
+        parameters = operation["parameters"]
+        if operation["outputRange"] != original["range"]:
+            raise ValueError("Generated output range differs from canonical Tracks")
+        expected = {
+            "startFrame": 0,
+            "endFrameExclusive": original["range"]["endFrameExclusive"]
+            - original["range"]["startFrame"],
+        }
+        if parameters["sourceRange"] != expected:
+            raise ValueError("Generated source range differs from canonical drawing")
+        if operation["kind"] != "overlay-video":
+            return
+        if any(
+            parameters.get(key) != original["placement"][key]
+            for key in ("zOrder", "layerRole")
+        ):
+            raise ValueError(
+                "Generated overlay role/order differs from canonical Tracks"
+            )
+        if parameters.get("placement") != {
+            key: original["placement"][key] for key in ("x", "y", "width", "height")
+        }:
+            raise ValueError(
+                "Generated overlay placement differs from canonical Tracks"
+            )
+
+    def _require_canonical_generated(self, operation, record, original):
+        from avo.motion import verify_code_drawn_lock
+
+        extension = record["parameters"]["codeDrawn"]
+        if original["bindingMode"] != "canonical":
+            raise ValueError("Code-drawn proof input requires canonical binding")
+        composition = Path(extension["manifestRef"]["path"])
+        if not composition.is_absolute():
+            composition = self.workspace.raw_dir / composition
+        verify_code_drawn_lock(composition, original, workspace=self.workspace)
+        self._require_drawing_operation_geometry(operation, original)
+        if extension["inputLockRef"] != operation["parameters"]["inputLockRef"]:
+            raise ValueError(
+                "Frozen input-lock reference differs from the generated receipt"
+            )
+
+    def _generated_lock(self, graph: dict[str, Any]) -> dict[str, str]:
+        """Bind generated receipts and original locks without rewriting them."""
+        lock = {}
+        for operation in graph.get("operations") or []:
+            parameters = operation.get("parameters") or {}
+            reference = parameters.get("generatedAssetRef")
+            if not reference:
+                continue
+            record = self._generated_receipt(reference)
+            original = self._generated_original_lock(parameters)
+            self._require_generated_output(record, parameters)
+            if record.get("parameters", {}).get("codeDrawn"):
+                self._require_canonical_generated(operation, record, original)
+            lock["generated:" + record["assetId"]] = record["recordHash"]
+            lock["input-lock:" + original["instanceId"]] = original["inputLockHash"]
+        return lock
+
+    def _generated_preflight(self, plan, readiness):
+        blockers = []
+        try:
+            current = self._generated_lock(plan["videoGraph"])
+            frozen = plan["canonicalInputLock"]
+            if any(frozen.get(key) != value for key, value in current.items()):
+                raise ValueError(
+                    "Generated receipt/input-lock differs from the frozen proof plan"
+                )
+            for key in current:
+                if key.startswith("generated:") and readiness.get(key) is not True:
+                    raise ValueError(
+                        f"Current generated asset admission is required: {key}"
+                    )
+        except (ValueError, OSError, KeyError) as error:
+            blockers.append(
+                self._blocker(
+                    "PROOF_GENERATED_ASSET_STALE",
+                    str(error),
+                    "Rematerialize or restore exact drawing sources and rerun selected-runtime admission.",
+                )
+            )
+        return blockers
 
     @staticmethod
     def _contract_for_plan(contract: dict[str, Any]) -> dict[str, Any]:
@@ -190,6 +323,7 @@ class ProofPlanCompiler:
         video_graph, resolution, implementation_refs = self._resolve_video_graph(
             dict(request.get("videoGraph") or {})
         )
+        lock.update(self._generated_lock(video_graph))
         body: dict[str, Any] = {
             "schemaVersion": "1.0.0",
             "proofPlanId": "proof-plan-pending",
@@ -423,6 +557,7 @@ class ProofPlanCompiler:
                 )
             )
         blockers.extend(self._canonical_preflight(plan))
+        blockers.extend(self._generated_preflight(plan, tool_readiness))
         lock = plan.get("canonicalInputLock") or {}
         resolved_paths: dict[str, Path] = {}
         for key, expected in sorted(lock.items()):

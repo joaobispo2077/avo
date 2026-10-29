@@ -1,0 +1,334 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://avo.local/avo.motion.schema.json",
+  "title": "AVO motion selection and preferences",
+  "$ref": "#/$defs/preference",
+  "$defs": {
+    "engine": {
+      "enum": [
+        "hyperframes",
+        "remotion",
+        "code-drawn"
+      ]
+    },
+    "config": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [],
+      "properties": {
+        "engine": {
+          "enum": [
+            "hyperframes",
+            "remotion",
+            "code-drawn"
+          ]
+        }
+      }
+    },
+    "selection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "engine",
+        "source",
+        "advanced",
+        "resolutionHash",
+        "maskedChoices"
+      ],
+      "properties": {
+        "engine": {
+          "enum": [
+            "hyperframes",
+            "remotion",
+            "code-drawn"
+          ]
+        },
+        "source": {
+          "enum": [
+            "default",
+            "global",
+            "provider",
+            "project",
+            "invocation"
+          ]
+        },
+        "advanced": {
+          "type": "boolean"
+        },
+        "resolutionHash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "maskedChoices": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "engine",
+              "source"
+            ],
+            "properties": {
+              "engine": {
+                "enum": [
+                  "hyperframes",
+                  "remotion",
+                  "code-drawn"
+                ]
+              },
+              "source": {
+                "enum": [
+                  "default",
+                  "global",
+                  "provider",
+                  "project",
+                  "invocation"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "preference": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "schemaVersion"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": "1.0.0"
+        },
+        "motion": {
+          "$ref": "#/$defs/config"
+        }
+      }
+    },
+    "savedPreference": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "engine",
+        "target"
+      ],
+      "properties": {
+        "engine": {
+          "anyOf": [
+            {
+              "enum": [
+                "hyperframes",
+                "remotion",
+                "code-drawn"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "target": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 1
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "runSelection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "runId",
+        "requestId",
+        "engine",
+        "source",
+        "resolutionHash"
+      ],
+      "properties": {
+        "runId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "requestId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "engine": {
+          "enum": [
+            "hyperframes",
+            "remotion",
+            "code-drawn"
+          ]
+        },
+        "source": {
+          "enum": [
+            "default",
+            "global",
+            "provider",
+            "project",
+            "invocation"
+          ]
+        },
+        "resolutionHash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      }
+    },
+    "recordedAnimation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "revisionId",
+        "sha256",
+        "framework",
+        "components"
+      ],
+      "properties": {
+        "revisionId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "framework": {
+          "enum": [
+            "hyperframes",
+            "remotion",
+            "code-drawn"
+          ]
+        },
+        "components": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "instanceId",
+              "engine"
+            ],
+            "properties": {
+              "instanceId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "engine": {
+                "enum": [
+                  "hyperframes",
+                  "remotion",
+                  "code-drawn"
+                ]
+              },
+              "drawingRoute": {
+                "enum": [
+                  "canvas",
+                  "svg",
+                  "brush"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "readiness": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ready",
+        "state",
+        "checks",
+        "blockers",
+        "nextActions"
+      ],
+      "properties": {
+        "ready": {
+          "type": "boolean"
+        },
+        "state": {
+          "enum": [
+            "available",
+            "unavailable",
+            "unsupported"
+          ]
+        },
+        "checks": {
+          "type": "array"
+        },
+        "blockers": {
+          "type": "array"
+        },
+        "nextActions": {
+          "type": "array"
+        }
+      }
+    },
+    "resolvedSelection": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "selection",
+        "savedPreferences",
+        "readiness",
+        "runSelection",
+        "recordedAnimation"
+      ],
+      "properties": {
+        "selection": {
+          "$ref": "#/$defs/selection"
+        },
+        "savedPreferences": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "global",
+            "provider",
+            "project"
+          ],
+          "properties": {
+            "global": {
+              "$ref": "#/$defs/savedPreference"
+            },
+            "provider": {
+              "$ref": "#/$defs/savedPreference"
+            },
+            "project": {
+              "$ref": "#/$defs/savedPreference"
+            }
+          }
+        },
+        "readiness": {
+          "$ref": "#/$defs/readiness"
+        },
+        "runSelection": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/runSelection"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "recordedAnimation": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/recordedAnimation"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    }
+  }
+}

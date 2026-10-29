@@ -7,16 +7,155 @@
     "schemaVersion": { "const": "1.0.0" }, "assetId": { "$ref": "#/$defs/stableId" },
     "role": { "enum": ["authored-graphic", "overlay", "audio", "still", "other"] },
     "generator": { "type": "object", "additionalProperties": false, "required": ["adapterId", "version", "executableSha256"], "properties": { "adapterId": { "type": "string", "minLength": 1 }, "version": { "type": "string", "minLength": 1 }, "executableSha256": { "$ref": "#/$defs/sha256" }, "sourceSha256": { "$ref": "#/$defs/sha256" }, "custom": { "type": "boolean" } } },
-    "parameters": { "type": "object", "additionalProperties": true },
+    "parameters": { "type": "object", "additionalProperties": true, "properties": { "codeDrawn": { "$ref": "#/$defs/codeDrawnReceipt" } } },
     "inputs": { "type": "array", "items": { "$ref": "#/$defs/inputRef" } }, "sourceFree": { "type": "boolean" },
     "environment": { "type": "object", "additionalProperties": false, "required": ["platform", "dependencies"], "properties": { "platform": { "type": "string", "minLength": 1 }, "dependencies": { "type": "object", "additionalProperties": { "type": "string", "minLength": 1 } }, "seed": { "type": ["integer", "string", "null"] } } },
     "output": { "$ref": "#/$defs/fingerprint" }, "reproducibility": { "enum": ["verified", "declared", "unverified"] }, "approvalReference": { "type": ["string", "null"] }, "recordHash": { "$ref": "#/$defs/sha256" }
   },
   "allOf": [
     { "if": { "properties": { "sourceFree": { "const": false } } }, "then": { "properties": { "inputs": { "minItems": 1 } } } },
-    { "if": { "anyOf": [{ "properties": { "reproducibility": { "const": "declared" } } }, { "properties": { "generator": { "properties": { "custom": { "const": true } }, "required": ["custom"] } } }] }, "then": { "properties": { "approvalReference": { "type": "string", "minLength": 1 } } } }
+    { "if": { "anyOf": [{ "properties": { "reproducibility": { "const": "declared" } } }, { "properties": { "generator": { "properties": { "custom": { "const": true } }, "required": ["custom"] } } }] }, "then": { "properties": { "approvalReference": { "type": "string", "minLength": 1 } } } },
+    {
+      "if": {
+        "properties": {
+          "generator": {
+            "properties": {
+              "adapterId": {
+                "const": "code-drawn"
+              }
+            },
+            "required": [
+              "adapterId"
+            ]
+          }
+        },
+        "required": [
+          "generator"
+        ]
+      },
+      "then": {
+        "properties": {
+          "generator": {
+            "required": [
+              "sourceSha256"
+            ]
+          },
+          "parameters": {
+            "required": [
+              "codeDrawn"
+            ]
+          },
+          "role": {
+            "enum": [
+              "authored-graphic",
+              "overlay"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "parameters": {
+            "required": [
+              "codeDrawn"
+            ]
+          }
+        },
+        "required": [
+          "parameters"
+        ]
+      },
+      "then": {
+        "properties": {
+          "generator": {
+            "properties": {
+              "adapterId": {
+                "const": "code-drawn"
+              }
+            }
+          }
+        }
+      }
+    }
   ],
   "$defs": {
+    "fileRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "sha256"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "codeDrawnReceipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "instanceId",
+        "drawingRoute",
+        "manifestRef",
+        "sourceRevision",
+        "inputLockRef",
+        "inputLockHash",
+        "renderContractHash",
+        "inputsHash",
+        "captureEvidence",
+        "outputVerification"
+      ],
+      "properties": {
+        "instanceId": {
+          "$ref": "#/$defs/stableId"
+        },
+        "drawingRoute": {
+          "enum": [
+            "canvas",
+            "svg",
+            "brush"
+          ]
+        },
+        "manifestRef": {
+          "$ref": "#/$defs/fileRef"
+        },
+        "sourceRevision": {
+          "type": "string",
+          "minLength": 1
+        },
+        "inputLockRef": {
+          "$ref": "#/$defs/fileRef"
+        },
+        "inputLockHash": {
+          "$ref": "#/$defs/sha256"
+        },
+        "renderContractHash": {
+          "$ref": "#/$defs/sha256"
+        },
+        "inputsHash": {
+          "$ref": "#/$defs/sha256"
+        },
+        "canonicalInputLock": {
+          "$ref": "https://avo.local/avo.code-drawn.schema.json#/$defs/inputLock/properties/canonicalInputLock"
+        },
+        "captureEvidence": {
+          "type": "object",
+          "minProperties": 1
+        },
+        "outputVerification": {
+          "type": "object",
+          "minProperties": 1
+        }
+      }
+    },
     "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" }, "stableId": { "type": "string", "pattern": "^[a-z][a-z0-9-]{2,63}$" },
     "fingerprint": { "type": "object", "additionalProperties": false, "required": ["sha256", "sizeBytes"], "properties": { "sha256": { "$ref": "#/$defs/sha256" }, "sizeBytes": { "type": "integer", "minimum": 0 }, "locator": { "type": "string", "minLength": 1 }, "mediaSignature": { "type": "object", "additionalProperties": true } } },
     "inputRef": { "type": "object", "additionalProperties": false, "required": ["artifactId", "fingerprint", "ancestryRole"], "properties": { "artifactId": { "type": "string", "minLength": 1 }, "fingerprint": { "$ref": "#/$defs/fingerprint" }, "ancestryRole": { "enum": ["source", "generated", "dependency"] } } }

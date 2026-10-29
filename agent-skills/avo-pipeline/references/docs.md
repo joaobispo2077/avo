@@ -23,7 +23,7 @@ Topic router for AVO documentation. Read-only.
 | `commands` | [`docs/avo-commands.md`](../../avo-commands.md) |
 | `install` | [`docs/install/README.md`](../../../docs/install/README.md) (Tier 1 + Tier 2) |
 | `audio` | [`docs/audio-post-production-system.md`](../../audio-post-production-system.md) |
-| `animation` | [`docs/animation-system.md`](../../animation-system.md) + [`docs/hyperframes-workflow.md`](../../hyperframes-workflow.md) |
+| `animation` | [Engine intake](framework.md) + [portable code-drawn workflow](code-drawn.md); HyperFrames-only documentation applies only when selected |
 | `delivery` | [`docs/delivery-specifications.md`](../../delivery-specifications.md) |
 | `use-cases` | [README § Use cases](../../../README.md#use-cases) |
 | `rights` | [`AGENTS.md`](../../../AGENTS.md) (Rights section) |

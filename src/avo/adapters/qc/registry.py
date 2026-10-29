@@ -231,6 +231,7 @@ class CheckpointQcRegistry:
             materialization=request.get("materialization"),
             current_revision_hashes=request.get("current_revision_hashes"),
             materialization_path=request.get("materialization_path"),
+            workspace=request.get("workspace"),
         )
 
     def _checkpoint_evidence(

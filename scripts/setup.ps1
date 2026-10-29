@@ -90,11 +90,30 @@ function Pick-Python {
   return $null
 }
 
+# Same sentence as require_python_311 in scripts/setup.sh.
+function Require-Python311 {
+  $pref = Get-Variable PSNativeCommandUseErrorActionPreference -ErrorAction SilentlyContinue
+  if ($pref) { $PSNativeCommandUseErrorActionPreference = $false }
+  $code = 'import sys; print("%d.%d.%d" % sys.version_info[:3]); raise SystemExit(0 if sys.version_info >= (3, 11) else 1)'
+  $ver = & $PY -c $code
+  $rc = $LASTEXITCODE
+  if ($pref) { $PSNativeCommandUseErrorActionPreference = $pref.Value }
+  if ($rc -ne 0) {
+    $ver = "$ver".Trim()
+    [Console]::Error.WriteLine("Python $ver found; Python 3.11+ is required.")
+    exit 1
+  }
+}
+
 # ---- 0. Preflight -----------------------------------------------------------
 Step 'Preflight'
 $IsWsl = Have 'wsl'
 Info "OS: Windows  WSL available: $IsWsl  dry-run: $DryRun"
 $PY = Pick-Python
+if ($PY) {
+  # Refuse anything below 3.11 before installing. $PY is the interpreter Pick-Python chose.
+  Require-Python311
+}
 if ($PY) { Record 'python' 'OK' ((& $PY --version) 2>&1) } else { Record 'python' 'FAIL' 'not found' }
 if (Have 'node') { Record 'node' 'OK' (node --version) } else { Record 'node' 'WARN' 'not found (motion tools need Node >=18)' }
 if (Have 'npm')  { Record 'npm' 'OK' (npm --version) } else { Record 'npm' 'WARN' 'not found' }

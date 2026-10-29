@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from copy import deepcopy
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
 
@@ -166,6 +167,49 @@ def _assert_no_timing(value: Any) -> None:
         )
 
 
+def _validate_code_drawn_strategy(value: dict[str, Any], root: Path) -> None:
+    from avo.motion import MotionError, validate_code_drawn_reference
+    from avo.timeline.contracts import ContractError, validate_document
+
+    try:
+        validate_document(
+            value,
+            "avo.animation.schema.json#/$defs/videoStrategy",
+        )
+        component_ids, instance_ids = set(), set()
+        for component in value["components"]:
+            component_id = component["componentId"]
+            reference = component["extensions"]["codeDrawn"]
+            instance_id = reference["instanceId"]
+            if component_id in component_ids or instance_id in instance_ids:
+                raise AnimationError(
+                    "Code-drawn component and instance IDs must be unique."
+                )
+            component_ids.add(component_id)
+            instance_ids.add(instance_id)
+            validate_code_drawn_reference(reference, root=root)
+    except (ContractError, MotionError) as error:
+        raise AnimationError(f"Invalid code-drawn strategy: {error}") from error
+
+
+def _validate_strategy_engine(value: dict[str, Any], root: Path) -> None:
+    from avo.motion import MotionError, validate_engine
+
+    try:
+        engine = validate_engine(value.get("framework", "hyperframes"))
+    except MotionError as error:
+        raise AnimationError(str(error)) from error
+    if engine == "code-drawn":
+        _validate_code_drawn_strategy(value, root)
+    elif any(
+        "codeDrawn" in (component.get("extensions") or {})
+        for component in value["components"]
+    ):
+        raise AnimationError(
+            "Code-drawn references require the recorded code-drawn engine."
+        )
+
+
 class AnimationService:
     def __init__(self, workspace: Any):
         self.workspace = workspace
@@ -203,6 +247,9 @@ class AnimationService:
             )
         if not value.get("components"):
             raise AnimationError("animation strategy requires declared components")
+        dependencies = self._dependencies()
+        value["dependencies"] = dependencies
+        _validate_strategy_engine(value, Path(self.workspace.raw_dir))
         for component in value["components"]:
             lifecycle = component.get("lifecycle") or {}
             if not all(
@@ -211,8 +258,6 @@ class AnimationService:
                 raise AnimationError(
                     "every component requires pre-entry/entrance/hold/exit"
                 )
-        dependencies = self._dependencies()
-        value["dependencies"] = dependencies
         index = self.store.load_index()
         expected = None
         if index["headRevisionId"]:

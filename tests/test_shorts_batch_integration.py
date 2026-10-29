@@ -579,6 +579,128 @@ class ShortsPlanningIntegrationTests(unittest.TestCase):
         self.assertEqual(new_status["items"][0]["proofArtifactRevision"], 1)
         self.assertEqual(new_status["items"][1]["proofRevision"], 0)
 
+    def test_plan_revision_preserves_only_unchanged_item_evidence(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            request = self.stage_request(root)
+            old_path = root / "plans" / "shorts.plan-v001.json"
+            shorts_plan.resolve_request_file(request, old_path)
+            self.approve_plan(old_path)
+            old_plan = shorts_contract.load_document(old_path, "plan")
+            status = shorts._new_status(old_plan, old_path)
+            for row in status["items"][:2]:
+                row.update(
+                    state="proof-approved",
+                    dirty=False,
+                    dirtyReasons=[],
+                    proofRevision=3,
+                    proofArtifactRevision=3,
+                )
+                row["approvals"] = [
+                    {
+                        "gate": "motion-proof",
+                        "status": "approved",
+                        "reference": "human://exact-proof",
+                    }
+                ]
+            status_path = root / "shorts.status.json"
+            shorts_contract.atomic_write_json(status_path, status)
+            new_plan = json.loads(json.dumps(old_plan))
+            new_plan["items"][1]["inputFingerprint"] = "a" * 64
+            new_plan["planApproval"] = {"status": "pending"}
+            new_plan["planHash"] = shorts_contract.plan_hash(new_plan)
+            result = shorts._load_or_reset_status(
+                new_plan,
+                root / "plans" / "shorts.plan-v002.json",
+                status_path,
+                paths=None,
+            )
+            self.assertEqual(result["items"][0], status["items"][0])
+            changed = result["items"][1]
+            self.assertTrue(changed["dirty"])
+            self.assertEqual(changed["proofRevision"], 3)
+            self.assertFalse(changed.get("approvals"))
+            self.assertFalse(changed["artifacts"])
+            self.assertFalse(result["batchApprovals"])
+            self.assertFalse(result["deliveryComplete"])
+            self.assertEqual(result["planHash"], new_plan["planHash"])
+            self.assertEqual(
+                json.loads(status_path.read_text())["planHash"], old_plan["planHash"]
+            )
+
+    def test_shared_render_change_invalidates_unchanged_item_approval(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            request = self.stage_request(root)
+            old_path = root / "plans" / "shorts.plan-v001.json"
+            shorts_plan.resolve_request_file(request, old_path)
+            old_plan = shorts_contract.load_document(old_path, "plan")
+            status = shorts._new_status(old_plan, old_path)
+            status["items"][0].update(
+                state="proof-approved",
+                dirty=False,
+                proofRevision=3,
+                proofArtifactRevision=3,
+            )
+            status["items"][0]["approvals"] = [
+                {
+                    "gate": "motion-proof",
+                    "status": "approved",
+                    "reference": "human://old-profile",
+                }
+            ]
+            status_path = root / "shorts.status.json"
+            shorts_contract.atomic_write_json(status_path, status)
+            new_plan = json.loads(json.dumps(old_plan))
+            new_plan["output"]["width"] *= 2
+            new_plan["planHash"] = shorts_contract.plan_hash(new_plan)
+            result = shorts._load_or_reset_status(
+                new_plan,
+                root / "plans" / "shorts.plan-v002.json",
+                status_path,
+                paths=None,
+            )
+            row = result["items"][0]
+            self.assertTrue(row["dirty"])
+            self.assertFalse(row.get("approvals"))
+            self.assertEqual(row["proofRevision"], 3)
+
+    def test_missing_previous_plan_cannot_carry_approval(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            request = self.stage_request(root)
+            old_path = root / "plans" / "shorts.plan-v001.json"
+            shorts_plan.resolve_request_file(request, old_path)
+            old_plan = shorts_contract.load_document(old_path, "plan")
+            status = shorts._new_status(old_plan, old_path)
+            status["planPath"] = str(root / "missing-plan.json")
+            status["items"][0].update(
+                state="proof-approved",
+                dirty=False,
+                proofRevision=3,
+                proofArtifactRevision=3,
+            )
+            status["items"][0]["approvals"] = [
+                {
+                    "gate": "motion-proof",
+                    "status": "approved",
+                    "reference": "human://unverifiable-plan",
+                }
+            ]
+            status_path = root / "shorts.status.json"
+            shorts_contract.atomic_write_json(status_path, status)
+            new_plan = json.loads(json.dumps(old_plan))
+            new_plan["planRevision"] += 1
+            new_plan["planHash"] = shorts_contract.plan_hash(new_plan)
+            result = shorts._load_or_reset_status(
+                new_plan,
+                root / "plans" / "shorts.plan-v002.json",
+                status_path,
+                paths=None,
+            )
+            self.assertFalse(result["items"][0].get("approvals"))
+            self.assertTrue(result["items"][0]["dirty"])
+
 
 if __name__ == "__main__":
     unittest.main()

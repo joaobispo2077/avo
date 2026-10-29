@@ -1,11 +1,17 @@
 # Remotion Decision Guide
 
-Remotion is a conditional alternative, not the default animation framework for
-this repository.
+HyperFrames remains AVO's built-in default; advanced code-drawn is the supported
+framework-free option. Remotion can be saved or selected, but its current AVO
+execution adapter is a stub and reports unsupported readiness. Never claim that
+a saved preference installs or enables a renderer, or silently fall back.
+See [selection](../agent-skills/avo-pipeline/references/code-drawn/selection.md)
+and the [code-drawn index](code-drawn-motion.md).
 
 ## When Remotion Is Justified
 
-Use Remotion when one or more are true:
+These criteria assess a maintained external project or an explicit integration
+choice; they do not enable AVO's unsupported adapter. Consider Remotion when one
+or more are true:
 
 - The repository already contains a maintained Remotion project.
 - The team is standardized on React and TypeScript.
@@ -31,13 +37,13 @@ Use Remotion when one or more are true:
 
 ## License Review
 
-Review the current Remotion license before organizational or commercial use. At
-research time, the license described free use for individuals, non-profits, and
-for-profit organizations with up to three employees, while other entities require
-a Company License. Do not infer current eligibility without reviewing the current
-license text and project context.
+Review the [current upstream Remotion license](https://www.remotion.dev/license)
+for the intended software version, organization and use before organizational or
+commercial work. Record the applicable terms/decision; do not infer eligibility
+from a remembered employee threshold or a previous version's summary. The link
+was checked on 2026-10-26; licensing and execution readiness are separate checks.
 
-## Authoring Expectations
+## External Remotion source expectations
 
 - Use React components with clear composition boundaries.
 - Drive motion from `useCurrentFrame()` and metadata from `useVideoConfig()`.
@@ -53,9 +59,13 @@ license text and project context.
 
 ## Interoperability Boundaries
 
-Do not mix Remotion and HyperFrames in one deliverable without a documented
-boundary. Acceptable patterns include rendering a self-contained Remotion asset
+Do not mix engines in one deliverable without a documented boundary and a
+supported native admission/composition path. A source port requires explicit user
+intent and compatible output; selecting code-drawn does not automatically port a
+Remotion composition or HyperFrames kit. Acceptable patterns include rendering a self-contained Remotion asset
 for import into a HyperFrames master, rendering a HyperFrames overlay for an
 existing Remotion master, or porting a composition using an official migration
-workflow. Assign one master timeline owner and QC intermediate and final renders
-separately.
+workflow. Assign one canonical master/timing owner and QC intermediate and final renders
+separately. Preserve fingerprints, recursive source ancestry, current input locks,
+reconstruction and normal Watch/transcript/human approval gates. A prior proof or
+export cannot become the source of a new canonical proof.

@@ -310,10 +310,10 @@ Validation includes neutral contract/service tests, real coordinator handoffs, f
 
 The native Shorts plan can drive a specialized registered source-fidelity
 renderer: original picture and finite inserts remain in FFmpeg at 10 bits,
-while HyperFrames supplies graphics alpha only. Dialogue restoration precedes
+while the recorded engine supplies admitted graphics alpha only. Dialogue restoration precedes
 the independent PCM effects mix. Timing and source identity remain owned by the
 resolved plan; generated HTML and prior exports carry no editorial authority.
-This boundary does not extend the sequential ProofPlan executor. Contracts,
+The specialized Shorts path retains its source-fidelity contract. The canonical ProofPlan executor also supports admitted generated bases and alpha overlays through its separate frozen graph. Contracts,
 compatibility limits and validation are documented in
 [Timed Shorts inserts and source fidelity](docs/shorts-timed-inserts-source-fidelity.md).
 
@@ -383,3 +383,21 @@ The dedicated 100,000-observation benchmark passes the five-second report target
 See [cost transparency](docs/video-cost-transparency.md) and the
 [validation record](specs/011-video-cost-transparency/quickstart.md).
 
+
+## Motion engine selection and code-drawn capture (feature 012)
+
+HyperFrames remains the default. The pure shared motion policy resolves invocation, pinned run, project/video, provider/channel and global preferences, in that order. Strict saved IDs are hyperframes, remotion, and code-drawn; Remotion retains its existing unsupported execution adapter. A new default never rewrites a recorded animation revision or creator decision. Explicit new engine/source authoring uses existing revision invalidation. Installed motion and pipeline routers resolve current no-framework intent before loading engine-specific skills.
+
+The advanced code-drawn route is model-neutral Canvas, SVG, or optional pinned standalone p5.brush. The shared motion module owns preferences, source contracts and canonical coordination; motion_runtime owns read-only optional-runtime discovery. The motion adapter owns Playwright/Chromium capture, local allowlisting, independent arbitrary-frame checks, PNG capture and FFmpeg lossless silent FFV1/BGRA publication. Playwright's pinned driver, internal Node and templates ship in the onedir engine; managed browser binaries, FFmpeg and optional local brush provisioning remain explicit runtime installation. There is one packaged template owner.
+
+Canonical authority flows manifest/source snapshot → logical Animation + Tracks source reference → original input lock → generated receipt → frozen ProofPlan. CMap/Sync approvals and current BMap/Tracks/Animation dependencies are derived from real workspace stores. BMap/Tracks own timing and placement; source strategy has no clock and cannot point forward to output hashes. The injected outer composition observes the actual browser/driver/graphics/encoder environment. Timeline services consume observations or a trusted verifier callback and import no renderer. Direct and recursive admission reject stale bytes, bindings, implementations and prohibited output ancestry even when a file is renamed as a font or dependency. Standalone capture conveys no canonical admission or creator approval.
+
+The existing FFmpeg ProofPlan path handles generated-clip and overlay-video. It freezes receipt, lock, frame range, placement and stable z-order; partial proofs retain the original local-frame phase across cuts. Original source audio keeps its canonical graph and envelope. Unsupported mixing/event envelopes fail before output. Explicit FFV1/PCM Matroska conformance uses this same graph for exact decoded pixel and sample checks; normal delivery encoding stays separately checked. Reconstruction retains the complete declared source/dependency/receipt/lock closure and can remove only regenerable output under existing cleanup authority.
+
+Validation is recorded in specs/012-code-drawn-motion/validation.md: schema/legacy compatibility, seven installed agent profiles, source and extracted native capture, current-environment admission, physical alpha/phase/audio checks, and source-only rematerialization. Local execution identifies Windows AMD64 and its actual graphics renderer; configured Linux/macOS lanes are not claimed as executed locally. See [code-drawn motion](docs/code-drawn-motion.md).
+
+The provider settings validator retains its existing beside-launcher compatibility lookup. Both binary build scripts copy only `providers/avo.provider.schema.json` there before archiving; no provider identities, footage paths or global preferences are packaged. An explicit external `AVO_ROOT` remains responsible for its standard public-schema tree. Scoped writes are validated before replacement and retain unrelated settings.
+
+Compatibility also preserves generic projects whose inferred provider has no manifest: absent provider preferences inherit global/default settings. Explicit provider targets and existing malformed manifests still fail validation; inspection does not create provider files. This keeps optional creative briefing and raw project intake usable without broadening preference writes.
+
+Native proof review shares the existing cut-lineage dispatcher and source-fidelity adapter. Later checkpoints use the generic persisted ProofPlan verifier, while cut-proof retains its strict checkpoint verifier. Native final fidelity derives an explicit `nativeBasis` from current plan/source/generated provenance, microproof gate and actual FFprobe observations; it never fabricates legacy delivery-policy/picture-lineage envelopes. Its verified scope is progressive 8-bit SDR with the executor's supported frozen graph, exact geometry/rational rate/frame count/codecs/pixel format and stereo audio/duration. Untagged 8-bit source is interpreted as SDR; HDR/wide-gamut/high-bit-depth/interlaced or unsupported graphs remain blocked. Existing assembly evaluation and human, transcript, rights/accessibility and Watch authority are unchanged.

@@ -930,3 +930,348 @@ def _notify_editlog_from_review_dir(directory: Path) -> None:
     from avo.editlog import after_canonical_write
 
     after_canonical_write(raw_dir)
+
+
+def _code_drawn_review_header(package: dict[str, Any]) -> None:
+    from .contracts import document_hash_excluding
+
+    fields = {
+        "schemaVersion",
+        "kind",
+        "packagePath",
+        "candidate",
+        "dependencyLockSha256",
+        "candidateContract",
+        "sources",
+        "sampleFrames",
+        "transitionRanges",
+        "loopRequested",
+        "artifacts",
+        "findings",
+        "state",
+        "approval",
+        "createdAt",
+        "reviewHash",
+    }
+    if not isinstance(package, dict) or set(package) != fields:
+        raise GateError("Incomplete code-drawn review package.")
+    if package["schemaVersion"] != "1.0.0" or package["kind"] != "code-drawn-review":
+        raise GateError("Unsupported code-drawn review package.")
+    if type(package["loopRequested"]) is not bool:
+        raise GateError("Code-drawn loop request must be a boolean.")
+    if package["approval"] is not None or package["state"] != "needs-human-judgment":
+        raise GateError("A prepared code-drawn review cannot grant creator approval.")
+    if package["reviewHash"] != document_hash_excluding(package, "reviewHash"):
+        raise GateError("Code-drawn review seal changed.")
+
+
+def _code_drawn_review_binding(
+    package, *, candidate, dependencies, render_profile
+) -> None:
+    from avo.motion import _code_drawn_review_sources, _review_candidate_contract
+
+    from .contracts import dependency_lock_hash
+
+    identity = candidate_identity(Path(candidate), dependencies, render_profile)
+    keys = ("sha256", "byteSize", "dependencies", "renderProfile", "identityHash")
+    if any(package["candidate"].get(key) != identity[key] for key in keys):
+        raise GateError("Code-drawn review candidate/dependency identity is stale.")
+    if package["dependencyLockSha256"] != dependency_lock_hash(dependencies):
+        raise GateError("Code-drawn review dependency lock changed.")
+    if not isinstance(render_profile, str) or not render_profile:
+        raise GateError("Code-drawn review requires a render profile.")
+    validate_document(
+        dependencies,
+        "avo.review-evidence.schema.json#/$defs/evidence/properties/dependencyHashes",
+    )
+    _review_candidate_contract(package["candidateContract"])
+    paths = [Path(source["receiptRef"]["path"]) for source in package["sources"]]
+    if _code_drawn_review_sources(paths, dependencies) != package["sources"]:
+        raise GateError("Code-drawn review source/lock/runtime identity changed.")
+
+
+def _code_drawn_artifact_family(package: dict, kind: str) -> list[dict]:
+    return [item for item in package["artifacts"] if item["kind"] == kind]
+
+
+def _code_drawn_artifact_coverage(package: dict) -> None:
+    samples = set(package["sampleFrames"])
+    for kind in ("frame", "small-display"):
+        covered = {
+            item.get("frame") for item in _code_drawn_artifact_family(package, kind)
+        }
+        if not samples <= covered:
+            raise GateError(f"Code-drawn review lacks required {kind} evidence.")
+    if not _code_drawn_artifact_family(package, "contact-sheet"):
+        raise GateError("Code-drawn review lacks its contact sheet.")
+    strips = _code_drawn_artifact_family(package, "transition-strip")
+    if any(
+        not any(item.get("range") == bounds for item in strips)
+        for bounds in package["transitionRanges"]
+    ):
+        raise GateError("Code-drawn review lacks a requested transition strip.")
+    loops = _code_drawn_artifact_family(package, "loop-strip")
+    if bool(loops) != package["loopRequested"]:
+        raise GateError("Loop-strip evidence must match the explicit loop request.")
+
+
+def _code_drawn_artifact_fields(item: dict, count: int) -> None:
+    from avo.motion import _review_transition_range
+
+    allowed = {"kind", "path", "sha256", "sizeBytes", "frame", "range", "frames"}
+    kinds = {
+        "frame",
+        "small-display",
+        "contact-sheet",
+        "transition-strip",
+        "loop-strip",
+    }
+    if set(item) - allowed or item.get("kind") not in kinds:
+        raise GateError("Code-drawn review contains an unsupported preview artifact.")
+    if "frame" in item and (
+        type(item["frame"]) is not int or not 0 <= item["frame"] < count
+    ):
+        raise GateError("Code-drawn review artifact frame is invalid.")
+    if "range" in item:
+        _review_transition_range(item["range"], count)
+
+
+def _code_drawn_review_artifacts(package: dict) -> None:
+    from avo.motion import _review_artifacts, _review_sample_plan
+
+    count = package["candidateContract"]["frameCount"]
+    frames, transitions = _review_sample_plan(
+        count, package["sampleFrames"], package["transitionRanges"]
+    )
+    if frames != package["sampleFrames"] or transitions != package["transitionRanges"]:
+        raise GateError("Code-drawn review frame plan changed.")
+    for item in package["artifacts"]:
+        _code_drawn_artifact_fields(item, count)
+    directory = Path(package["packagePath"]).resolve().parent
+    if _review_artifacts(package["artifacts"], directory) != package["artifacts"]:
+        raise GateError("Code-drawn review preview artifact changed.")
+    _code_drawn_artifact_coverage(package)
+
+
+def _code_drawn_review_time(value: str):
+    from datetime import datetime
+
+    try:
+        stamp = datetime.fromisoformat(value)
+    except (AttributeError, TypeError, ValueError) as error:
+        raise GateError("Code-drawn finding requires an actual timestamp.") from error
+    if stamp.tzinfo is None:
+        raise GateError("Code-drawn finding timestamp must identify its timezone.")
+    return stamp
+
+
+def _code_drawn_recheck_clock(entry: dict, recheck: dict) -> None:
+    fixed = _code_drawn_review_time(entry.get("fixedAt"))
+    if not entry.get("fixRevisionRef") or fixed < _code_drawn_review_time(
+        entry["observedAt"]
+    ):
+        raise GateError(
+            "Code-drawn recheck requires its recorded fix revision and chronology."
+        )
+    if _code_drawn_review_time(recheck["observedAt"]) < fixed:
+        raise GateError("Code-drawn recheck predates its fix.")
+    if entry["finding"]["status"] == "resolved" and recheck["status"] != "pass":
+        raise GateError("A failed code-drawn recheck cannot resolve a finding.")
+
+
+def _code_drawn_recheck_evidence(entry: dict, recheck: dict, package: dict) -> None:
+    from avo.motion import _review_transition_range
+
+    bounds, original = recheck["programRange"], entry["finding"].get("programRange")
+    _review_transition_range(bounds, package["candidateContract"]["frameCount"])
+    if original and not (
+        bounds["startFrame"] <= original["startFrame"]
+        and bounds["endFrameExclusive"] >= original["endFrameExclusive"]
+    ):
+        raise GateError("Code-drawn recheck does not cover its finding range.")
+    known = {(item["path"], item["sha256"]) for item in package["artifacts"]}
+    if not recheck["evidenceRefs"] or any(
+        (item.get("path"), item.get("sha256")) not in known
+        for item in recheck["evidenceRefs"]
+    ):
+        raise GateError("Code-drawn recheck lacks current hashed preview evidence.")
+
+
+def _code_drawn_recheck(entry: dict, package: dict) -> None:
+    recheck = entry.get("recheck") or {}
+    required = {
+        "candidateSha256",
+        "dependencyLockSha256",
+        "observedAt",
+        "programRange",
+        "evidenceRefs",
+        "status",
+    }
+    if set(recheck) != required or recheck["status"] not in {"pass", "fail"}:
+        raise GateError("Code-drawn finding requires a complete current recheck.")
+    if (
+        recheck["candidateSha256"] != package["candidate"]["sha256"]
+        or recheck["dependencyLockSha256"] != package["dependencyLockSha256"]
+    ):
+        raise GateError(
+            "Code-drawn finding recheck belongs to another candidate/dependency lock."
+        )
+    _code_drawn_recheck_clock(entry, recheck)
+    _code_drawn_recheck_evidence(entry, recheck, package)
+
+
+def _code_drawn_finding_binding(entry: dict, package: dict, known: set[str]) -> dict:
+    from avo.motion import _review_transition_range
+
+    from .vision_review import validate_vision_finding
+
+    finding = validate_vision_finding(entry["finding"])
+    _code_drawn_review_time(entry["observedAt"])
+    if finding["programRange"] is not None:
+        _review_transition_range(
+            finding["programRange"], package["candidateContract"]["frameCount"]
+        )
+    if any(ref["sha256"] not in known for ref in finding["evidenceRefs"]):
+        raise GateError("Code-drawn finding lacks its exact preview evidence.")
+    if entry["candidateSha256"] != package["candidate"]["sha256"] and not entry.get(
+        "recheck"
+    ):
+        raise GateError(
+            "Code-drawn finding belongs to an old candidate without a current recheck."
+        )
+    disposition = finding.get("humanDisposition")
+    if (
+        disposition
+        and disposition.get("candidateSha256") != package["candidate"]["sha256"]
+    ):
+        raise GateError("Code-drawn finding disposition belongs to another candidate.")
+    return finding
+
+
+def _code_drawn_review_findings(package: dict) -> tuple[list[dict], list[str]]:
+    findings, fixes, seen = [], [], set()
+    known = {item["sha256"] for item in package["artifacts"]}
+    for entry in package["findings"]:
+        finding = _code_drawn_finding_binding(entry, package, known)
+        if finding["findingId"] in seen:
+            raise GateError("Code-drawn finding IDs must be unique.")
+        seen.add(finding["findingId"])
+        if finding["status"] == "resolved" or entry.get("recheck"):
+            _code_drawn_recheck(entry, package)
+            fixes.append(entry["fixRevisionRef"])
+        findings.append(finding)
+    return findings, sorted(set(fixes))
+
+
+def _validate_code_drawn_package(
+    package: dict, *, candidate: Path, dependencies: dict[str, str], render_profile: str
+) -> tuple[list[dict], list[str]]:
+    from avo.motion import MotionError
+
+    from .contracts import ContractError
+
+    try:
+        _code_drawn_review_header(package)
+        _code_drawn_review_binding(
+            package,
+            candidate=candidate,
+            dependencies=dependencies,
+            render_profile=render_profile,
+        )
+        _code_drawn_review_artifacts(package)
+        return _code_drawn_review_findings(package)
+    except (
+        MotionError,
+        ContractError,
+        OSError,
+        KeyError,
+        TypeError,
+        ValueError,
+    ) as error:
+        if isinstance(error, GateError):
+            raise
+        raise GateError(
+            f"Invalid or stale code-drawn review evidence: {error}"
+        ) from error
+
+
+def validate_code_drawn_review(
+    package: dict, *, candidate: Path, dependencies: dict[str, str], render_profile: str
+) -> dict[str, Any]:
+    """Bind prepared previews to existing visual-QC evidence, never approval."""
+    from avo.motion import _review_json
+
+    from .vision_review import aggregate_finding_status
+
+    findings, fixes = _validate_code_drawn_package(
+        package,
+        candidate=candidate,
+        dependencies=dependencies,
+        render_profile=render_profile,
+    )
+    path = Path(package["packagePath"])
+    if _review_json(path) != package:
+        raise GateError("Saved code-drawn review package changed.")
+    reference = {
+        "path": str(path),
+        "sha256": file_fingerprint(path)["sha256"],
+        "reviewHash": package["reviewHash"],
+        "state": package["state"],
+        "approval": None,
+    }
+    contract = package["candidateContract"]
+    seconds = contract["frameRate"]["den"] / contract["frameRate"]["num"]
+    windows = [
+        {
+            "start": frame * seconds,
+            "end": (frame + 1) * seconds,
+            "reason": "code-drawn frame",
+        }
+        for frame in package["sampleFrames"]
+    ]
+    windows.extend(
+        {
+            "start": bounds["startFrame"] * seconds,
+            "end": bounds["endFrameExclusive"] * seconds,
+            "reason": "code-drawn transition",
+        }
+        for bounds in package["transitionRanges"]
+    )
+    status = aggregate_finding_status(findings, required_passes_complete=True)
+    evidence = {
+        "evidenceId": "code-drawn-review-" + package["reviewHash"][:16],
+        "kind": "visual-qc",
+        "tool": {"name": "avo-code-drawn-review", "version": "1"},
+        "runAt": package["createdAt"],
+        "candidateHash": package["candidate"]["sha256"],
+        "candidateIdentityHash": package["candidate"]["identityHash"],
+        "dependencyLockSha256": package["dependencyLockSha256"],
+        "dependencyHashes": deepcopy(dependencies),
+        "dependencyProfile": "exact-candidate",
+        "scope": {
+            "mode": "windows",
+            "windows": windows,
+            "rationale": "Prepared previews require visual judgment; they do not replace full Watch/transcript review.",
+        },
+        "coverage": {
+            "durationSeconds": contract["frameCount"] * seconds,
+            "reviewedSeconds": 0,
+            "requiredWindows": len(windows),
+            "reviewedWindows": 0,
+            "requestedFrames": package["sampleFrames"],
+            "decodedFrames": package["sampleFrames"],
+            "inspectedFrames": [],
+            "loopRequested": package["loopRequested"],
+        },
+        "status": "fail" if status == "fail" else "pending",
+        "findings": findings,
+        "fixRevisionRefs": fixes,
+        "artifacts": [
+            {key: item[key] for key in ("kind", "path", "sha256")}
+            for item in package["artifacts"]
+        ],
+        "attempt": 1,
+        "reviewContext": {"codeDrawnReview": reference},
+    }
+    validate_document(evidence, "avo.review-evidence.schema.json#/$defs/evidence")
+    return evidence

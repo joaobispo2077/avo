@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Code-drawn SVG starter</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+        background: transparent;
+      }
+      svg {
+        display: block;
+      }
+      text {
+        font-family: sans-serif;
+      }
+    </style>
+  </head>
+  <body>
+    <svg
+      id="avo-stage"
+      xmlns="http://www.w3.org/2000/svg"
+      width="__WIDTH__"
+      height="__HEIGHT__"
+      viewBox="0 0 __WIDTH__ __HEIGHT__"
+      role="img"
+      aria-labelledby="scene-title scene-description"
+    >
+      <title id="scene-title">Code-drawn motion</title>
+      <desc id="scene-description">
+        A generic vector starter with a readable title and three shapes revealed
+        in sequence.
+      </desc>
+      <rect id="backdrop" width="__WIDTH__" height="__HEIGHT__" fill="none" />
+      <g id="card">
+        <rect id="panel" fill="#111827" stroke="#475569" />
+        <text id="eyebrow" fill="#cbd5e1" font-weight="600">MAKE IT YOURS</text>
+        <text id="headline-one" fill="#f8fafc" font-weight="700">
+          Code-drawn motion
+        </text>
+        <text id="headline-two" fill="#f8fafc" font-weight="700"></text>
+        <path
+          id="connector"
+          fill="none"
+          stroke="#64748b"
+          stroke-linecap="round"
+        />
+        <g id="shape-one"><circle id="circle" fill="#5eead4" /></g>
+        <g id="shape-two"><rect id="square" fill="#f8fafc" /></g>
+        <g id="shape-three"><path id="diamond" fill="#5eead4" /></g>
+        <text id="footer" fill="#cbd5e1" text-anchor="middle">
+          One clear idea.
+        </text>
+      </g>
+    </svg>
+    <script src="./scene.js"></script>
+  </body>
+</html>

@@ -59,7 +59,7 @@ def test_human_final_pipeline_dispatches_archive_without_faking_stages(monkeypat
     monkeypatch.setattr("avo.cli._emit", lambda value: None)
     monkeypatch.setattr(
         "avo.timeline.pipeline.TimelinePipeline",
-        lambda workspace: SimpleNamespace(
+        lambda workspace, *, motion_materializer: SimpleNamespace(
             adopt_human_final_delivery=lambda **kw: calls.append(kw)
         ),
     )

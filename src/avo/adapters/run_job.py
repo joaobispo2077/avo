@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 
 from avo.adapters.base import AdapterError, JobRequest, resolve_adapter
+from avo.motion import MotionError
 from avo.paths import repo_root
 
 
@@ -24,10 +25,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--root", type=Path, default=None, help="Repo root override")
     parser.add_argument(
-        "adapter_argv",
-        nargs=argparse.REMAINDER,
-        help="Arguments after -- forwarded to the adapter",
+        "--motion-engine",
+        choices=["hyperframes", "remotion", "code-drawn"],
+        help="One-invocation motion engine override",
     )
+    parser.add_argument("--project", type=Path, help="Motion project file or directory")
+    parser.add_argument("--provider", help="Motion provider/channel id")
     return parser
 
 
@@ -53,15 +56,25 @@ def _emit_result(args, adapter, result) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
-    args = build_parser().parse_args(argv)
+    values = list(sys.argv[1:] if argv is None else argv)
+    boundary = values.index("--") if "--" in values else len(values)
+    args = build_parser().parse_args(values[:boundary])
+    adapter_argv = values[boundary + 1 :] if boundary < len(values) else []
     root = repo_root(args.root)
-    adapter_argv = args.adapter_argv
-    if adapter_argv and adapter_argv[0] == "--":
-        adapter_argv = adapter_argv[1:]
     request = JobRequest(job=args.job, label=args.label, argv=adapter_argv, root=root)
     try:
-        adapter = resolve_adapter(args.job, args.label, root)
+        adapter = resolve_adapter(
+            args.job,
+            args.label,
+            root,
+            motion_engine=args.motion_engine,
+            project=args.project,
+            provider=args.provider,
+        )
         result = adapter.run(request)
+    except MotionError as exc:
+        print(json.dumps(exc.to_dict()), file=sys.stderr)
+        return 2
     except AdapterError as exc:
         print(str(exc), file=sys.stderr)
         return 2
