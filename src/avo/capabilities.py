@@ -147,6 +147,7 @@ _PROOF_CODE_PATHS = (
     Path(__file__).parent / "adapters" / "media" / "proof_generated.py",
     Path(__file__).parent / "adapters" / "media" / "proof_audio_bridge.py",
     Path(__file__).parent / "adapters" / "media" / "proof_audio_mix.py",
+    Path(__file__).parent / "adapters" / "media" / "proof_rendered_events.py",
     Path(__file__).parent / "adapters" / "media" / "timeline_render.py",
     Path(__file__).parent / "audio_restoration.py",
     Path(__file__).parent / "timeline" / "proof_plan.py",

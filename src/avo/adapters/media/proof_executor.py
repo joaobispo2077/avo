@@ -571,8 +571,9 @@ def _generated_inputs(execution, spec, fps, validator):
     return generated
 
 
-def _validate_events(execution):
+def _validate_events(execution, generated=None):
     from .proof_audio_bridge import validate_audio_events
+    from .proof_rendered_events import bound_visual_event
 
     audio_events = validate_audio_events(execution)
     visual = {"main-scene", "overlay-video", "authored-graphic", "caption"}
@@ -583,7 +584,7 @@ def _validate_events(execution):
         region = event.get("visibleRange")
         if (
             event.get("role") not in visual
-            or region not in ranges
+            or (region not in ranges and not bound_visual_event(event, generated))
             or event.get("audio")
         ):
             raise RuntimeError(
@@ -945,7 +946,7 @@ def _execute_ffmpeg_proof(
     _validate_resampling(lead_execution["audioGraph"], nodes, rate)
     audio_trims, encodes = _audio_operations(lead_execution["audioGraph"])
     generated = _generated_inputs(execution, spec, fps, generated_asset_validator)
-    _validate_events(execution)
+    _validate_events(execution, generated)
     cursor, segments = _segments(
         execution, node_by_range, audio_trims, fps, rate, nodes, generated
     )
