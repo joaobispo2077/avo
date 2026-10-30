@@ -386,6 +386,8 @@ class CuttingPreviewAdapter:
         }
         maps = []
         for node in plan["audioGraph"]["nodes"]:
+            if node["kind"] in {"music", "sfx", "ambience"}:
+                continue
             if node["nodeId"] not in trims:
                 continue
             start = max(first, node["outputRange"]["startSample"])
@@ -641,11 +643,11 @@ class CuttingPreviewAdapter:
                 "windowOffsetSamples": mapping["windowOffsetSamples"],
                 "windowLengthSamples": mapping["windowLengthSamples"],
             }
-            expected.append(item)
             if "dialogueTreatmentPolicy" in mapping["parameters"]:
                 item["processing"]["dialogueTreatmentPolicy"] = mapping["parameters"][
                     "dialogueTreatmentPolicy"
                 ]
+            expected.append(item)
             if mapping["fadeInSeconds"]:
                 fades.append(
                     {

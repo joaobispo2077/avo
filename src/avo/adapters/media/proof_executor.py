@@ -572,9 +572,14 @@ def _generated_inputs(execution, spec, fps, validator):
 
 
 def _validate_events(execution):
+    from .proof_audio_bridge import validate_audio_events
+
+    audio_events = validate_audio_events(execution)
     visual = {"main-scene", "overlay-video", "authored-graphic", "caption"}
     ranges = [item["outputRange"] for item in execution["videoGraph"]["operations"]]
     for event in execution["events"]:
+        if event.get("eventId") in audio_events:
+            continue
         region = event.get("visibleRange")
         if (
             event.get("role") not in visual
@@ -751,7 +756,7 @@ def _encode_arguments(spec, fps, count):
 
 
 def _render_final(
-    listing, candidate, overlays, spec, fps, wstart, wend
+    listing, candidate, overlays, spec, fps, wstart, wend, mixed_audio=None
 ):
     from . import proof_generated
 
@@ -760,7 +765,8 @@ def _render_final(
     )
     timebase = f"{fps.denominator}/{fps.numerator}"
     video = f"[0:v:0]settb=expr={timebase},setpts=N,format=rgba[picture]"
-    audio = "[0:a:0]asetpts=N/SR/TB[a]"
+    audio_index = 1 + len(overlays) if mixed_audio is not None else 0
+    audio = f"[{audio_index}:a:0]asetpts=N/SR/TB[a]"
     encode_arguments = _encode_arguments(spec, fps, wend - wstart)
     # A frame-count output stop can discard a final PCM packet, including when
     # a stateful dialogue filter changes packet boundaries. Let finite audio end.
@@ -781,6 +787,7 @@ def _render_final(
             "-i",
             str(listing),
             *extra,
+            *(["-i", str(mixed_audio)] if mixed_audio is not None else []),
             "-filter_complex",
             ";".join([video, *filters, audio]),
             "-map",
@@ -816,7 +823,16 @@ def _render_final(
 
 
 def _render_media(
-    output, segments, spec, fps, rate, wstart, wend, overlays, verify_inputs
+    output,
+    segments,
+    spec,
+    fps,
+    rate,
+    wstart,
+    wend,
+    overlays,
+    verify_inputs,
+    audio_mix=None,
 ):
     if output.exists():
         raise RuntimeError(f"Refusing to replace existing proof: {output}")
@@ -843,8 +859,19 @@ def _render_media(
         candidate = directory / (
             "candidate.mkv" if spec.get("conformance") is True else "candidate.mp4"
         )
+        mixed_audio = None
+        if audio_mix is not None:
+            from .proof_audio_bridge import render_mix
+
+            mixed_audio = render_mix(
+                listing,
+                directory,
+                audio_mix,
+                start_sample=round(Fraction(wstart, 1) / fps * rate),
+                end_sample=round(Fraction(wend, 1) / fps * rate),
+            )
         media, metadata = _render_final(
-            listing, candidate, overlays, spec, fps, wstart, wend
+            listing, candidate, overlays, spec, fps, wstart, wend, mixed_audio
         )
         verify_inputs()
         candidate.replace(output)
@@ -895,10 +922,7 @@ def execute_ffmpeg_proof(
 
 
 def _execute_ffmpeg_proof(
-    execution: dict[str, Any],
-    output: Path,
-    *,
-    generated_asset_validator=None,
+    execution: dict[str, Any], output: Path, *, generated_asset_validator=None
 ) -> dict[str, Any]:
     """Render the frozen graph; code-drawn reuse requires injected freshness checks."""
     from . import proof_generated
@@ -907,12 +931,21 @@ def _execute_ffmpeg_proof(
     spec, fps, rate = _output_settings(execution)
     if spec.get("conformance") is True and output.suffix != ".mkv":
         raise RuntimeError("Lossless conformance output requires .mkv")
-    _validate_events(execution)
-    nodes = execution["audioGraph"]["nodes"]
+    from .proof_audio_bridge import prepare_mix
+
+    source_cache = {}
+    lead_execution, audio_mix = prepare_mix(
+        execution,
+        lambda node, parameters: _source(
+            parameters, execution["canonicalInputLock"], source_cache, audio_node=node
+        ),
+    )
+    nodes = lead_execution["audioGraph"]["nodes"]
     node_by_range = _audio_nodes(nodes, rate)
-    _validate_resampling(execution["audioGraph"], nodes, rate)
-    audio_trims, encodes = _audio_operations(execution["audioGraph"])
+    _validate_resampling(lead_execution["audioGraph"], nodes, rate)
+    audio_trims, encodes = _audio_operations(lead_execution["audioGraph"])
     generated = _generated_inputs(execution, spec, fps, generated_asset_validator)
+    _validate_events(execution)
     cursor, segments = _segments(
         execution, node_by_range, audio_trims, fps, rate, nodes, generated
     )
@@ -928,12 +961,14 @@ def _execute_ffmpeg_proof(
         wend,
         overlays,
         lambda: _revalidate_inputs(execution, generated, generated_asset_validator),
+        audio_mix,
     )
     return {
         "status": "pass",
         "output": file_fingerprint(output),
         "path": str(output),
         "audioEncodeCount": 1,
+        "audioMix": audio_mix.get("result") if audio_mix else None,
         "producer": {"name": "avo.ffmpeg-proof-plan", "version": "1"},
         "media": media,
         "sourceVideoTailPolicies": [
