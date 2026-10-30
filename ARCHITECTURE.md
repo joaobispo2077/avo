@@ -468,3 +468,71 @@ fail closed; lossless conformance and legacy PCM references keep their existing
 path. Candidate audio never supplies the expected signal. Verification claims
 record the reference encoding, and implementation bindings invalidate old proofs.
 Synthetic encoded tests preserve detection of missing quiet onsets and tails.
+
+Native ProofPlan mixing keeps the existing sequential source-cut dialogue path
+and adds explicitly declared music, SFX and ambience nodes in the absolute
+48 kHz sample domain. The media adapter validates every original through the
+same fingerprint, ancestry and channel-routing boundary before rendering. Audio
+events must identify their exact declared node and onset; unsupported effects,
+missing events and clock mismatches fail closed. The mix adapter accepts only
+finite ranges, literal gain, bounded fades and declared sidechain ducking. A
+lossless same-plan dialogue intermediate supplies the lead without reading an
+earlier proof. Float PCM preserves headroom until the single final audio encode.
+Independent finite picture/audio inputs reach EOF so a video frame-count stop
+cannot discard the last PCM packet of a microproof.
+
+Tracks regions may declare their rational timebase. Omitted timebases retain
+legacy milliseconds. Cue containment compares exact rational seconds rather
+than integers from potentially different clocks; the compatibility video/audio
+compilers already consume the region timebase. Coverage includes frame-domain
+projection, cross-clock truncation rejection, source validation, actual mixed
+audio placement and absolute-clock microproof equivalence. See
+[native proof audio mixing](docs/native-proof-audio-mixing.md).
+
+Proof execution opts into a context-local fingerprint stage so repeated references
+to the same immutable multi-gigabyte source share one byte observation. The
+default fingerprint API remains uncached. File identity/stat changes invalidate
+an observation; returned dictionaries cannot mutate the cache. Before publishing
+an encoded candidate, a fresh nested stage rehashes sources and generated closure
+inputs rather than reusing render-start observations. This detects changes even
+when size and modification time were preserved. Exceptions restore the previous
+context. Tests cover cache scope, unmodified default behavior, changed bytes and
+the final proof-publication guard. No source/proof ancestry admission is removed.
+
+An admitted generated asset may carry several visual events. Smaller event
+windows require exactly one matching `parameters.eventBindings` declaration in
+the checked generated receipt, including role and asset-local frame range. The
+executor projects that range through the frozen source/output placement and
+rejects missing, shifted, ambiguous or mismatched bindings. This supports a
+shared seek-safe alpha carrier without falsely declaring its complete duration
+as every title's visible range. Existing exact-operation event behavior remains
+compatible; generated admission and pixel/runtime checks remain independent.
+
+SFX events may retain a source attack before the impact frame. Their explicit
+native-rate transient offset is converted with the shared sample-boundary rule;
+the node starts at impact minus that offset. Rate, source bounds and any declared
+resolved offset must agree. This avoids silently scheduling effects with leading
+quiet material late or trimming their attack to force synchronization.
+
+Native microproof execution has an explicit immutable validation batch in
+`avo.timeline.proof_validation_stage`. It shares byte observations and decoded
+pixel observations across required windows, then freshly hashes every observed
+dependency before publishing the batch gate. A changed dependency, including
+changed bytes with preserved file metadata, prevents publication. Standalone
+proof execution retains its separate fresh final validation stage. The timeline
+context exposes no media implementation dependency; media adapters opt into it.
+
+Repeated generic generated-asset admissions can share a checked record within
+one validation stage. The key includes the source, generated record and input
+lock, with current canonical locks and record bytes checked on reuse. Placement
+and range checks still run for each operation; code-drawn runtime admission is
+never cached this way. Generated video inspection decodes the complete frame
+stream once to obtain both frame count and alpha observations. Large-file
+inspection budgets scale with byte size, while required frame coverage and
+opacity checks remain unchanged.
+
+Automatically selected representative operation windows are bounded to five
+seconds at the declared rational output frame rate. Explicit requested windows,
+historical windows and mandatory editorial join coverage retain their full
+declared ranges. This limits redundant representative rendering without
+truncating a required verification window.
