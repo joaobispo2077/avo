@@ -24,7 +24,7 @@
       "description": "Optional working title for this video project."
     },
     "motion": {"$ref": "https://avo.local/avo.motion.schema.json#/$defs/config"},
-    "cutting": {"$ref": "avo.cutting.schema.json#/$defs/config"},
+    "cutting": {"$ref": "https://avo.local/avo.cutting.schema.json#/$defs/config"},
     "direction": {
       "type": "object",
       "additionalProperties": false,
