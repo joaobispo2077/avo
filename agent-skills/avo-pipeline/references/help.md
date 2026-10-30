@@ -21,6 +21,7 @@ Spoken alias: **`/avo --help`**. Cursor file: `commands/avo/help.md` → `/avo.h
 | Command | When to use |
 | ------- | ----------- |
 | `/avo.help` | List all commands (this index) |
+| `/avo.organize` | Review a footage folder tree, search recordings, and explicitly approve safe moves or bounded local transcription |
 | `/avo.docs` | Open topic documentation |
 | `/avo.issues` | Prepare a GitHub issue (environment + template chooser) |
 | `/avo.supporters` | Sponsor links + backlog prioritization policy |
@@ -138,4 +139,6 @@ Content routers use `ProjectDir` + `Source` instead of footage when applicable.
 
 Or, if the user opened the folder in the IDE: *The footage is in this folder.*
 
-Shared args: [`arguments.md`](arguments.md) · User index: [`docs/avo-commands.md`](../../avo-commands.md)
+Library organization needs a configured provider and an external footage root. Its default is inventory plus offline visual/text review, with no ASR or source moves. See [organize.md](organize.md) for exact packet approval, search and batch limits; BL-011 composition remains separate.
+
+Shared args: [`arguments.md`](arguments.md) · User index: [`docs/avo-commands.md`](../../../docs/avo-commands.md)

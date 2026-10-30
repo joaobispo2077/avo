@@ -536,3 +536,93 @@ seconds at the declared rational output frame rate. Explicit requested windows,
 historical windows and mandatory editorial join coverage retain their full
 declared ranges. This limits redundant representative rendering without
 truncating a required verification window.
+
+## Footage library administration (BL-010 / feature 013)
+
+The [library organization implementation](docs/library-organize.md) adds a
+library boundary alongside video editing, with its own explicitly selected
+external root and provider. `library_cli` is the shared clone/installed command
+adapter; `LibraryService` coordinates inventory, proposals, evidence, moves,
+search and batches. The slash gateway routes `/avo.organize` to the same native
+operations. Default scan probes metadata and builds an offline HTML/text folder
+review without model calls, source moves or a video manifest. Browser edits are
+untrusted requests for native validation, never filesystem or approval authority.
+The shared command registry classifies `organize` as `Admin` with no canonical
+timeline mutation permission; library approval cannot authorize editing or rendering.
+
+`avo.library.rules` owns record/path validation; `store` owns immutable library
+documents, the small atomic `edit/library-index.json` head and a nonblocking
+OS-owned writer lock. Library bodies reuse canonical hashing and publication
+utilities, not timeline artifact schemas or editorial revision authority.
+Inventory snapshots retain stable recording identities, observations and
+transcript references. Metadata observations permit cheap unchanged refreshes;
+exact selected-source hashes and file identity are prepared for move/transcript
+approval and rechecked at execution. Preparation, decisions, operation events,
+recovery and handoffs live under the footage root's `edit/library/` tree.
+
+Source mutation depends on the media adapter
+`avo.adapters.media.library_moves`, not an agent shell walker. The tested
+capability is fixed local Windows NTFS. A source handle denies concurrent writes
+and deletes; verified non-reparse ancestor handles prevent directory replacement.
+`SetFileInformationByHandle` performs a no-replace rename, followed by byte and
+file-identity verification through the same source handle. The tested Win32
+implementation rejects a non-null relative `RootDirectory`; its absolute target
+is derived from the pinned destination-directory handle while all ancestors
+remain held. This is a documented platform-specific exception, not a copying,
+overwriting or undocumented-API fallback. Other storage/platforms refuse apply.
+Referenced or unverifiably owned media stays at registered paths; immutable
+video timelines are not relinked by rewriting historical JSON.
+
+Move orchestration records intent before mutation and verified outcomes before
+publishing new inventory. Resume reconciles durable state against actual
+source/destination evidence. Reversal is another prepared proposal and explicit
+decision. Cancellation has a separate durable control record so it can be
+acknowledged while a mutation/worker owns the main lock; the owner stops new
+admissions and reports an already running item until settled.
+
+Search builds a disposable SQLite/FTS projection from committed inventory and
+admitted transcript evidence. Results, cursors and selection bind a generation;
+warm queries freshly validate bounded returned candidates and actual quoted
+transcript bytes, while broader coverage remains an explicitly labeled snapshot.
+Handoff revalidates original-source paths/ranges and carries restrictions and
+shared usage references. Missing speech evidence stays unsearched. Cache loss,
+network storage or unavailable FTS has an explicit degraded path, without model
+downloads or a claim that performance targets remain met.
+
+Approved batches resolve the existing model/routing catalog and dispatch the
+local transcription adapter through `avo.adapters.run_job`. The supervised
+worker admits only the exact approved recordings/configuration, uses prepared
+CPU/int8 model files, one worker and bounded CPU threads, preserves per-record
+outputs and resumes valid completed work. The cumulative time allowance stops
+new admissions rather than killing current inference; interrupted downtime is
+conservative and cannot reset the approved budget. Paid dispatch remains
+unavailable without an enforceable maximum-charge adapter. Library usage belongs
+once to the batch attempt; video handoffs reference it without allocating it
+once per video. Default single-file/directory transcription remains compatible;
+explicit output paths, CPU limits and requested-versus-detected language cache
+metadata are additive interfaces.
+
+Independent progress heartbeats contain lightweight observed state and unknowns.
+Footprint/disk observations happen at boundaries, and explicit completion writes
+an immutable report without changing the authority head. CLI boundary telemetry
+uses the existing reporter; heartbeats do not repeatedly write global state.
+Metadata-only phases supply an explicit empty model-source disclosure, avoiding
+unrelated hardware/model resolution while preserving the reporter's legacy defaults.
+Closed video/preservation receipts block library mutations. Cleanup integrates
+the exact reviewed persistent paths through existing `cleanup.preservePaths`
+and reconstruction protection, including library raw sources; disposable search
+cache/review output is not retained as recovery authority. The canonical
+instruction explicitly distinguishes durable library metadata from disposable
+post-render scratch. Organization never performs automatic post-render cleanup.
+
+Validation covers library contracts/inventory/proposals, real native move and
+recovery fault boundaries, bounded search/handoffs, offline review, prepared
+local ASR, cancellation/resume, retention and legacy compatibility. Installer
+checks copy the routed organize guidance through all seven existing fallback
+profiles and the Cursor wrapper. These checks do not certify a network installer
+run or every packaged release. Frozen reference measurements pass native search,
+actual-ASR contention, visible review/interaction and unchanged-refresh budgets.
+The requested five-person comprehension study remains explicitly pending, with
+no participant results claimed. Full repository quality signoff is separately
+blocked by an existing locked dependency advisory. See the local feature 013
+validation records for acceptance evidence.

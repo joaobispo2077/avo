@@ -3,6 +3,7 @@
 | Slash command | Shipped file | Skill reference |
 | ------------- | ------------ | --------------- |
 | `/avo.help` | `commands/avo/help.md` | `references/help.md` |
+| `/avo.organize` | `commands/avo/organize.md` | `references/organize.md` |
 | `/avo.guidelines` | `commands/avo/guidelines.md` | `references/guidelines.md` (+ flag slices) |
 | `/avo.docs` | `commands/avo/docs.md` | `references/docs.md` |
 | `/avo.pipeline` | `commands/avo/pipeline.md` | `references/pipeline.md` |

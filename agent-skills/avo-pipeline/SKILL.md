@@ -1,6 +1,6 @@
 ---
 name: avo-pipeline
-description: Gateway for AVO slash commands (/avo.help, /avo.direction, /avo.briefstart, /avo.guidelines, /avo.pipeline, /avo.trim, /avo.transcribe, /avo.sound, /avo.sync, /avo.audit, /avo.watch, /avo.motion, /avo.captions, /avo.talking-head, /avo.rights, /avo.audio-qc, /avo.color, /avo.grade, /avo.format, /avo.framework, /avo.chapters, /avo.thumbnail, /avo.end-screen, /avo.deliver, /avo.shorts, /avo.reframe, /avo.podcast-clip, /avo.trailer, /avo.pr-video, /avo.changelog-video, /avo.explainer, /avo.slideshow, /avo.launch, /avo.music-video, /avo.beat-edit, /avo.figma, /avo.media, /avo.motion-graphics, /avo.general, /avo.remotion-port, /avo.screencast, /avo.retention, /avo.animation-qc, /avo.telemetry, /avo.learndown, /avo.cleanup, /avo.update, /avo.stats, /avo.costs, /avo.metrics, /avo.models, /avo.docs). Load when the user invokes any /avo.* command or declares Footage/rawDir asset paths.
+description: Gateway for AVO slash commands (/avo.help, /avo.organize, /avo.direction, /avo.briefstart, /avo.guidelines, /avo.pipeline, /avo.trim, /avo.transcribe, /avo.sound, /avo.sync, /avo.audit, /avo.watch, /avo.motion, /avo.captions, /avo.talking-head, /avo.rights, /avo.audio-qc, /avo.color, /avo.grade, /avo.format, /avo.framework, /avo.chapters, /avo.thumbnail, /avo.end-screen, /avo.deliver, /avo.shorts, /avo.reframe, /avo.podcast-clip, /avo.trailer, /avo.pr-video, /avo.changelog-video, /avo.explainer, /avo.slideshow, /avo.launch, /avo.music-video, /avo.beat-edit, /avo.figma, /avo.media, /avo.motion-graphics, /avo.general, /avo.remotion-port, /avo.screencast, /avo.retention, /avo.animation-qc, /avo.telemetry, /avo.learndown, /avo.cleanup, /avo.update, /avo.stats, /avo.costs, /avo.metrics, /avo.models, /avo.docs). Load when the user invokes any /avo.* command or declares Footage/rawDir asset paths.
 ---
 
 # AVO pipeline commands (gateway)
@@ -21,6 +21,8 @@ Engine zip contains **AVO Python and the bundled Playwright driver (including No
 
 ## Motion engine selection before workflow loading
 
+This section applies to motion-authoring workflows. `/avo.organize` routes directly to its library reference without selecting or provisioning a motion engine.
+
 Parse the current direct user instruction using the shared arguments before any engine-specific workflow. Run `avo cli animation engine-show --json`, adding the exact `--project`/`--provider` context and canonical `--motion-engine` override when supplied. Checkout equivalent: `python -m avo.cli animation engine-show`. Global inspection/preferences and runtime setup need no footage project.
 
 HyperFrames remains the built-in default. Direct "no frameworks", "without a framework", "framework-free", or unqualified "avoid HyperFrames" means invocation `code-drawn`; a compatible named Remotion alternative remains explicit Remotion and must disclose its unavailable AVO adapter. Preserve skip-motion. Quoted material, questions, and negated exclusions have no execution authority. Resolve contradictory explicit choices once before source mutations.
@@ -33,6 +35,7 @@ For code-drawn, load the portable [advanced code-drawn guide](references/code-dr
 | ------------ | ---- |
 | /avo.costs or /avo.metrics | [references/costs.md](references/costs.md) |
 | `/avo.help` (alias `/avo --help`) | [`references/help.md`](references/help.md) |
+| `/avo.organize` | [`references/organize.md`](references/organize.md) |
 | `/avo.guidelines --youtube` | [`references/guidelines-youtube.md`](references/guidelines-youtube.md) |
 | `/avo.guidelines --eq` | [`references/guidelines-eq.md`](references/guidelines-eq.md) |
 | `/avo.guidelines --breathing` | [`references/guidelines-breathing.md`](references/guidelines-breathing.md) |
@@ -103,9 +106,10 @@ completion response with exactly one four-line footer.
 ## Non-negotiable
 
 1. Declare `provider` + `rawDir` before footage stages. Standalone code-drawn uses an explicit external ProjectDir; global preference/runtime operations require no footage context.
-2. **Agent pre-human gate:** exact-candidate Watch + transcript analysis +
+2. **Video-candidate pre-human gate:** exact-candidate Watch + transcript analysis +
    canonical lineage/projection/QC before each human approval gate (see [`references/cuts.md`](references/cuts.md),
    [`references/watch.md`](references/watch.md), workflow §4b).
+   Library move/transcription approvals instead bind the exact prepared source packet under `references/organize.md`; they do not select an edit or confer video-candidate approval.
 3. Subtitles last in filter chain; 30ms audio fades at cuts.
 4. Session outputs only under `<rawDir>/edit/`.
 
@@ -122,8 +126,8 @@ Or install per [`docs/avo-commands.md`](../../docs/avo-commands.md).
 
 ## Canonical timeline gateway
 
-Every command resolves the same video/provider context and declares its integration mode. CMap is raw-only. BMap is based only on the latest exact approved cut. Tracks resolve BMap; animation strategy references provider patterns; sync is raw-based. Candidate evidence and approvals bind content/dependency hashes. No command keeps private timeline or approval truth, and no human gate opens before current Watch plus candidate transcript analysis.
+Every editing command resolves the same video/provider context and declares its integration mode. CMap is raw-only. BMap is based only on the latest exact approved cut. Tracks resolve BMap; animation strategy references provider patterns; sync is raw-based. Candidate evidence and approvals bind content/dependency hashes. No editing command keeps private timeline or approval truth, and no video-candidate human gate opens before current Watch plus candidate transcript analysis. Library administration uses its separate root/provider inventory and prepared-packet approvals; it never writes canonical timeline authority or starts BL-011 composition.
 
 ## Artistic briefing at authoring boundaries
 
-Before proposing structure, CMap cuts, BMap inserts, motion or sound direction, read the project's native `pipeline status` and matching `briefing.stageContexts` payload. Use the selected version's concrete treatment, scoped statements and exclusions. This is offered context, never edit/render approval. No selection means proceed with normal format diagnosis and current instructions; no artistic questionnaire or provider-history scan is mandatory. The brief index is the sole selection authority. Read [briefstart](references/briefstart.md) for raw, built-in, provider and personal-reference entry.
+Before proposing editorial structure, CMap cuts, BMap inserts, motion or sound direction, read the project's native `pipeline status` and matching `briefing.stageContexts` payload. Use the selected version's concrete treatment, scoped statements and exclusions. This is offered context, never edit/render approval. No selection means proceed with normal format diagnosis and current instructions; no artistic questionnaire or provider-history scan is mandatory. The brief index is the sole selection authority. Read [briefstart](references/briefstart.md) for raw, built-in, provider and personal-reference entry. A library folder proposal uses the organize inventory instead; indexing does not initialize a video's artistic briefing.

@@ -24,6 +24,7 @@ Specs: [`avo-wave4-skills`](../specs/active/avo-wave4-skills/feature-brief.md) Â
 
 ## In progress / near term
 
+- **BL-010 implementation delivered, acceptance pending:** visual folder review, approved safe moves, searchable footage and bounded local transcription. The five-person comprehension study and full reference-scale performance acceptance remain pending; see [library organization](library-organize.md).
 - Provider-scoped learning and manifest hardening
 - Expanded command parity tests and install smoke coverage
 - Documentation index cleanup (`docs/README.md`, delivery specs)
@@ -59,11 +60,11 @@ Use [Sponsor](../README.md#sponsor) to help prioritize.
 | BL-008 | Sponsor surface | Sponsorship links + roadmap prioritization policy | `/avo.supporters` |
 | BL-009 | Creators showcase | Opt-in curated channel list | `/avo.creators` |
 
-### Library, transparency & interchange (planned)
+### Library, transparency & interchange
 
-| ID | Title | Summary | Future slash surface |
+| ID | Title | Summary | Slash surface / status |
 | -- | ----- | ------- | -------------------- |
-| BL-010 | Library organize v1 | Folder index + batch transcribe with cost gates | `/avo.organize` |
+| BL-010 | [Library organize v1](library-organize.md) | Visual folder review, approved moves, search and bounded local batches | `/avo.organize` _(implementation delivered; acceptance pending)_ |
 | BL-011 | Composition planning | Selected clips â†’ brief + draft EDL (no auto-render) | `/avo.composition` |
 | BL-012 | Voiceover lite path | Merge clips + external VO + EQ (no motion) | `/avo.voiceover` _(shipped)_ |
 | BL-013 | Multicam metadata | CAM1/CAM2/CAM3 registration in `multicam.json` | `/avo.multicam` |

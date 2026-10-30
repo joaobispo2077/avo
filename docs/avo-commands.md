@@ -72,6 +72,7 @@ and [advanced guide index](code-drawn-motion.md).
 | Command | Purpose |
 | ------- | ------- |
 | `/avo.help` | Master command index ([source](../commands/avo/help.md)) |
+| `/avo.organize` | Visual folder review, searchable footage, approved moves and bounded local transcription ([guide](library-organize.md), [source](../commands/avo/organize.md)) |
 | `/avo.docs` | Route to topic docs ([source](../commands/avo/docs.md)) |
 | `/avo.issues` | Prepare GitHub issue with environment context ([source](../commands/avo/issues.md)) |
 | `/avo.supporters` | Sponsor links + backlog policy ([source](../commands/avo/supporters.md)) |
@@ -188,7 +189,7 @@ Skill: [`avo-provider`](../agent-skills/avo-provider/SKILL.md) · Concept: [`doc
 | `/avo.stats` | Local aggregate metrics ([source](../commands/avo/stats.md)) |
 | `/avo.models` | Inspect catalog pins and resolved sources ([source](../commands/avo/models.md)) |
 
-Shipped command files: [`../commands/avo/`](../commands/avo/) (53 commands)
+Shipped command files: [`../commands/avo/`](../commands/avo/) (58 commands)
 
 ---
 
@@ -239,6 +240,16 @@ Provider: my-channel
 The footage is at C:/Videos/review
 Footage: C:/Videos/review/raw/take.mp4
 ```
+
+**Review a footage library before organizing:**
+
+```text
+/avo.organize
+Provider: my-channel
+The footage is at D:/Footage/library
+```
+
+Default: inventory and visual/text folder proposal. Include subfolders explicitly; source moves and local batch transcription need exact prepared-packet approval. See [library organization](library-organize.md) for native operations, search, resource controls and acceptance status.
 
 **Full pipeline:**
 
