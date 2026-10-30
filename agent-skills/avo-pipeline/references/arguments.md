@@ -49,6 +49,12 @@ python -m avo.videos resolve --provider <slug> --video-id <id>
 
 `rawDir` is the workflow root. All session output goes in `<rawDir>/edit/`. Never write inside the AVO repo.
 
+## Footage library organization
+
+`/avo.organize` accepts the same plain-language footage location or explicit `rawDir`, mapped to native `--root <absolute-folder>`, plus the configured `--provider`. It does not require a video registration/manifest or select a motion engine. An unspecified action means `scan` and visual/text review. Subfolders require explicit `--recursive` scope; new transcription and source moves require separately prepared, explicitly approved packets.
+
+Native operations are `scan`, `propose`, `review`, `prepare`, `approve`, `apply`, `status`, `resume`, `reverse`, `search`, `select`, `cancel` and `batch prepare|run`. Request imports use `--request <file> --request-sha256 <exact-reviewed-file-hash>`; move preparation uses a reviewed `--selection <file>`. Repeat `--transcript RECORDING_ID=ROOT_RELATIVE_PATH` on scan to admit existing native transcript evidence. Source ranges use original seconds. See [organize.md](organize.md) for strict request fields, local CPU/thread/time limits and unsupported paid routes. No library argument is an implicit editing, rendering or cleanup approval.
+
 ## Non-footage workflows (content routers)
 
 For `/avo.pr-video`, `/avo.changelog-video`, `/avo.explainer`, `/avo.slideshow`, `/avo.launch`, `/avo.music-video`, `/avo.beat-edit`, `/avo.figma`, `/avo.media`, `/avo.motion-graphics`, `/avo.general`, `/avo.remotion-port`, and `/avo.screencast`:

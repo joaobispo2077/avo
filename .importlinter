@@ -1,6 +1,20 @@
 [importlinter]
 root_package = avo
 
+[importlinter:contract:library-rules-not-execution]
+name = Library validation and persistence must not import execution or entry points
+type = forbidden
+source_modules =
+    avo.library.rules
+    avo.library.store
+forbidden_modules =
+    avo.cli
+    avo.library_cli
+    avo.mcp
+    avo.adapters
+    avo.proof_composition
+    avo.transcribe
+
 [importlinter:contract:direction-not-execution]
 name = Artistic direction must not import CLI MCP or media execution
 type = forbidden

@@ -159,14 +159,55 @@ def inspect_cache(
         or "engine" not in payload
     ):
         return "legacy"
+    try:
+        cached_code = _cache_requested_code(payload)
+        requested_code = resolve_language(language_code)[1]
+    except (ValueError, TypeError, AttributeError, KeyError):
+        return "invalid"
     expected = (
-        payload.get("schema_version") == SCHEMA_VERSION
-        and payload.get("engine") == ENGINE
-        and payload.get("language_code") == language_code
+        payload.get("engine") == ENGINE
+        and cached_code == requested_code
         and payload.get("model") == model
         and payload.get("source", {}).get("sha256") == fingerprint["sha256"]
     )
     return "valid" if expected else "stale"
+
+
+def _cache_requested_code(payload):
+    validate_transcript_payload(payload)
+    if not isinstance(payload["text"], str) or not isinstance(payload["words"], list):
+        raise ValueError("transcript text/words have invalid types")
+    cached_language = payload.get("requested_language", payload["language_code"])
+    if not isinstance(cached_language, str) or not cached_language.strip():
+        raise ValueError("cached requested language is invalid")
+    return resolve_language(cached_language)[1]
+
+
+def _bind_requested_language(payload: dict[str, Any], requested: str | None):
+    if requested is not None:
+        payload["requested_language"] = resolve_language(requested)[1]
+    return payload
+
+
+def _cpu_options(cpu_threads):
+    if cpu_threads is None:
+        return {}
+    if type(cpu_threads) is not int or cpu_threads < 0:
+        raise ValueError(
+            "CPU thread count must be a positive integer, or 0/None for default"
+        )
+    return {"cpu_threads": cpu_threads} if cpu_threads else {}
+
+
+def _resolve_output(video: Path, edit_dir: Path, output_path: Path | None):
+    target = (
+        Path(output_path).resolve()
+        if output_path is not None
+        else transcript_path(video, edit_dir)
+    )
+    if target == video or (target.exists() and target.samefile(video)):
+        raise ValueError("transcript output cannot replace the source recording")
+    return target
 
 
 def _value(item: Any, name: str, default: Any = None) -> Any:
@@ -317,7 +358,9 @@ class LocalTranscriber:
         compute_type: str = "auto",
         num_workers: int = 1,
         language: str | None = None,
+        cpu_threads: int | None = 0,
     ) -> None:
+        cpu_options = _cpu_options(cpu_threads)
         self.model_name = validate_model_name(model)
         self.language = language
         self.model_dir = resolve_model_dir(self.model_name, model_dir)
@@ -345,6 +388,7 @@ class LocalTranscriber:
                 compute_type=compute_type,
                 num_workers=num_workers,
                 local_files_only=True,
+                **cpu_options,
             )
         except Exception as exc:
             raise RuntimeError(
@@ -371,7 +415,7 @@ class LocalTranscriber:
             if whisper_lang is None:
                 detected = str(getattr(info, "language", "") or "").strip() or "en"
                 _, language_code, engine_language = resolve_language(detected)
-            return build_transcript_payload(
+            payload = build_transcript_payload(
                 list(segments),
                 fingerprint,
                 self.model_name,
@@ -379,6 +423,7 @@ class LocalTranscriber:
                 language_code=language_code,
                 engine_language=engine_language,
             )
+            return _bind_requested_language(payload, self.language)
         except Exception as exc:
             raise RuntimeError(
                 f"local transcription failed for {video.name}: {exc}"
@@ -426,7 +471,7 @@ class LocalTranscriber:
             word["end"] += source_start
         payload["analysisProvenance"] = analysis_provenance
         payload["sourceStart"] = source_start
-        return payload
+        return _bind_requested_language(payload, self.language)
 
 
 def _maybe_ci_transcript_stub(
@@ -452,6 +497,7 @@ def _maybe_ci_transcript_stub(
         language_code=language_code,
         engine_language=engine_language,
     )
+    _bind_requested_language(payload, language)
     atomic_write_json(out_path, payload)
     if verbose:
         print(f"  ci-stub: {out_path.name}", flush=True)
@@ -470,14 +516,16 @@ def transcribe_one(
     verbose: bool = True,
     fingerprint: dict[str, Any] | None = None,
     language: str | None = None,
+    output_path: Path | None = None,
 ) -> Path:
+    """Reuse or write a native transcript, optionally at an explicit recording path."""
     video = video.resolve()
     if not video.is_file():
         raise FileNotFoundError(f"video not found: {video}")
     model = validate_model_name(model)
     requested = language if language is not None else language_from_project(edit_dir)
     _, language_code, _engine_language = resolve_language(requested)
-    out_path = transcript_path(video, edit_dir)
+    out_path = _resolve_output(video, edit_dir, output_path)
     stub = _maybe_ci_transcript_stub(
         video, out_path, model, fingerprint, verbose, language=requested
     )
@@ -507,6 +555,7 @@ def transcribe_one(
     if requested is not None:
         runtime.language = requested
     payload = runtime.transcribe(video, fingerprint)
+    _bind_requested_language(payload, requested)
     atomic_write_json(out_path, payload)
     if verbose:
         elapsed = time.monotonic() - started

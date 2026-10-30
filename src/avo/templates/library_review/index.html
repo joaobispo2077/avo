@@ -1,0 +1,14 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="__CSP__">
+<title>Footage library | Organization review</title><style>__STYLE__</style></head>
+<body>
+<header><div class="eyebrow">AVO / FOOTAGE LIBRARY</div><h1>A clear home for every recording.</h1><p id="context"></p><div class="snapshot">Snapshot <span id="revision"></span> · Local review · Files stay unchanged until native approval</div></header>
+<main><section id="summary" class="summary" aria-label="Change summary"></section>
+<section class="toolbar" aria-label="Review filters"><label>Find a recording<input id="query" type="search" placeholder="Filename, path or proposed folder"></label><label>Show<select id="filter"><option value="all">All actions</option><option value="move">Proposed moves</option><option value="blocked">Conflicts</option><option value="unresolved">Needs review</option><option value="keep">Unchanged</option><option value="exclude">Excluded</option></select></label><button id="export">Export requested changes</button><button id="undo">Undo unsaved edits</button></section>
+<p id="notice" role="status" aria-live="polite">Review the proposal. Exported edits must be validated by the native organize command.</p>
+<div class="workspace"><section class="pane"><div class="pane-title"><h2>Current structure</h2><span>Original locations</span></div><div id="current-tree" class="tree"></div></section><section class="pane"><div class="pane-title"><h2>Proposed structure</h2><span>Reviewable suggestions</span></div><div id="proposed-tree" class="tree"></div></section><aside id="inspector" class="pane" aria-label="Selected recording"><h2>Recording details</h2><p>Select a recording to inspect its exact path and grouping evidence.</p></aside></div>
+<nav class="paging" aria-label="Recording pages"><button id="previous">Previous</button><span id="page"></span><button id="next">Next</button></nav>
+<section class="footnote"><h2>Review before you move</h2><p>Group names come from folder and filename evidence or your explicit edits. Uncertain recordings stay visible. Indexing does not establish rights, content accuracy or editorial approval.</p><p>This page is a dated snapshot. Use the native status command for current progress. Native preparation verifies selected source files and presents estimates before approval.</p><pre id="import-command"></pre></section>
+</main><script id="library-data" type="application/json">__DATA__</script><script>__SCRIPT__</script></body></html>

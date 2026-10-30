@@ -213,10 +213,48 @@ def verify(operation, canonical_lock, validator, ancestry_validator):
     return {"operation": deepcopy(operation), "record": record, "path": path}
 
 
+def verify_cached(
+    operation, canonical_lock, validator, ancestry_validator, observations
+):
+    """Reuse generic admission locally; callers still validate and inspect each op."""
+    params = operation["parameters"]
+    key = json.dumps(
+        {
+            name: params[name]
+            for name in ("generatedAssetRef", "inputLockRef", "sourceFingerprint")
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+        allow_nan=False,
+    )
+    # Record JSON is an input too: the batch's final fresh guard must see it.
+    fingerprint = file_fingerprint(Path(params["generatedAssetRef"]["locator"]))
+    previous = observations.get(key) if observations is not None else None
+    if previous is not None and previous["canonicalLock"] == canonical_lock:
+        if fingerprint != previous["recordFingerprint"]:
+            raise RuntimeError("Generated record bytes changed during observation")
+        asset = deepcopy(previous["asset"])
+        asset["operation"] = deepcopy(operation)
+        return asset
+    asset = verify(operation, canonical_lock, validator, ancestry_validator)
+    if (
+        observations is not None
+        and asset["record"]["generator"]["adapterId"] != "code-drawn"
+    ):
+        observations[key] = {
+            "canonicalLock": deepcopy(canonical_lock),
+            "recordFingerprint": fingerprint,
+            "asset": deepcopy(asset),
+        }
+    return asset
+
+
 def _capture(arguments, path):
+    # Long lossless inputs on external storage need a bounded byte-size budget.
+    budget = max(300, min(7200, 60 + (Path(path).stat().st_size + 8388607) // 8388608))
     try:
         return subprocess.run(
-            arguments, capture_output=True, text=True, check=True, timeout=300
+            arguments, capture_output=True, text=True, check=True, timeout=budget
         ).stdout
     except (OSError, subprocess.SubprocessError) as error:
         raise RuntimeError(
@@ -231,7 +269,6 @@ def _probe(path):
                 "ffprobe",
                 "-v",
                 "error",
-                "-count_frames",
                 "-show_streams",
                 "-of",
                 "json",
@@ -248,7 +285,7 @@ def _probe(path):
     return videos[0]
 
 
-def _is_opaque(path, width, height, count):
+def _alpha_observation(path, width, height):
     text = _capture(
         [
             "ffmpeg",
@@ -263,6 +300,8 @@ def _is_opaque(path, width, height, count):
             "alphaextract",
             "-pix_fmt",
             "gray",
+            "-fps_mode",
+            "passthrough",
             "-f",
             "framemd5",
             "-",
@@ -270,22 +309,37 @@ def _is_opaque(path, width, height, count):
         path,
     )
     rows = [line for line in text.splitlines() if line and not line.startswith("#")]
-    if len(rows) != count:
-        raise RuntimeError(f"Generated alpha decode count differs from picture: {path}")
+    if not rows:
+        raise RuntimeError(f"Generated source has no decoded alpha frames: {path}")
     expected = hashlib.md5(
         bytes([255]) * width * height, usedforsecurity=False
     ).hexdigest()
-    return all(row.rsplit(",", 1)[-1].strip() == expected for row in rows)
+    return len(rows), all(row.rsplit(",", 1)[-1].strip() == expected for row in rows)
 
 
-def inspect(asset, spec, fps):
-    operation = asset["operation"]
-    params = operation["parameters"]
+def _pixel_observation(asset, observations):
+    # The caller verifies this output's bytes before every operation. Reuse only
+    # inside that one execution stage; operation geometry is still checked below.
+    key = (str(asset["path"]), asset["record"]["output"]["sha256"])
+    if observations is not None and key in observations:
+        return observations[key]
     video = _probe(asset["path"])
     if video["codec_name"] != "ffv1" or video["pix_fmt"] != "bgra":
         raise RuntimeError(
             f"Generated asset requires lossless FFV1/BGRA alpha pixels: {asset['path']}"
         )
+    count, opaque = _alpha_observation(asset["path"], video["width"], video["height"])
+    video["nb_read_frames"] = str(count)
+    result = (video, opaque)
+    if observations is not None:
+        observations[key] = result
+    return result
+
+
+def inspect(asset, spec, fps, *, observations=None):
+    operation = asset["operation"]
+    params = operation["parameters"]
+    video, opaque = _pixel_observation(asset, observations)
     if Fraction(video["r_frame_rate"]) != fps:
         raise RuntimeError("Generated asset frame rate differs from ProofPlan")
     count = int(video.get("nb_read_frames") or 0)
@@ -300,7 +354,6 @@ def inspect(asset, spec, fps):
             "Generated source frame range differs from output duration or available frames"
         )
     width, height = video["width"], video["height"]
-    opaque = _is_opaque(asset["path"], width, height, count)
     if operation["kind"] == "generated-clip":
         if not opaque or (width, height) != (spec["width"], spec["height"]):
             raise RuntimeError(

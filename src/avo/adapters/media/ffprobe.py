@@ -123,6 +123,34 @@ def media_duration(path: Path) -> float | None:
         return None
 
 
+def library_metadata(path: Path) -> dict[str, Any]:
+    """Probe library metadata without hashing footage or invoking inference."""
+    result = subprocess.run(
+        [
+            "ffprobe",
+            "-v",
+            "error",
+            "-show_entries",
+            "format=duration:stream=codec_type",
+            "-of",
+            "json",
+            str(path),
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
+        timeout=30,
+    )
+    value = json.loads(result.stdout)
+    duration = (value.get("format") or {}).get("duration")
+    return {
+        "durationSeconds": float(duration) if duration is not None else None,
+        "audio": any(
+            item.get("codec_type") == "audio" for item in value.get("streams", [])
+        ),
+    }
+
+
 def audio_sample_rate(selection: dict, locator: Path) -> int:
     probe = subprocess.run(
         ["ffprobe", "-v", "error", "-show_streams", "-of", "json", str(locator)],

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import hashlib
 import json
+from contextlib import contextmanager
+from contextvars import ContextVar
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
@@ -13,6 +15,52 @@ from avo.paths import schema_path
 
 class ContractError(ValueError):
     """Raised when a canonical timeline document violates its contract."""
+
+
+_FINGERPRINT_STAGE: ContextVar[dict | None] = ContextVar(
+    "fingerprint_stage", default=None
+)
+
+
+@contextmanager
+def fingerprint_stage(*, reuse_current=False, verify_on_exit=False):
+    """Cache an immutable stage, optionally sharing it and freshly checking its end."""
+    current = _FINGERPRINT_STAGE.get()
+    observations = current if reuse_current and current is not None else {}
+    token = _FINGERPRINT_STAGE.set(observations)
+    try:
+        yield observations
+        if verify_on_exit:
+            expected = {key[0]: value for key, value in observations.items()}
+            # A fresh nested stage deliberately ignores the shared stat cache.
+            with fingerprint_stage():
+                for value in expected.values():
+                    try:
+                        actual = file_fingerprint(Path(value["locator"]))
+                    except OSError as exc:
+                        raise ContractError(
+                            f"file changed during fingerprint stage: {value['locator']}"
+                        ) from exc
+                    if any(
+                        actual[key] != value[key] for key in ("sha256", "sizeBytes")
+                    ):
+                        raise ContractError(
+                            f"file changed during fingerprint stage: {value['locator']}"
+                        )
+    finally:
+        _FINGERPRINT_STAGE.reset(token)
+
+
+def _fingerprint_key(path):
+    stat = path.stat()
+    return (
+        str(path.resolve()),
+        stat.st_size,
+        stat.st_mtime_ns,
+        stat.st_ctime_ns,
+        stat.st_dev,
+        stat.st_ino,
+    )
 
 
 def canonical_json_bytes(value: Any) -> bytes:
@@ -34,13 +82,32 @@ def content_hash(value: Any) -> str:
 
 
 def file_fingerprint(path: Path) -> dict[str, Any]:
+    path = Path(path)
+    observations = _FINGERPRINT_STAGE.get()
+    key = _fingerprint_key(path) if observations is not None else None
+    if observations is not None and key in observations:
+        return {**observations[key], "locator": str(path)}
     digest = hashlib.sha256()
     size = 0
     with Path(path).open("rb") as handle:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
             size += len(chunk)
             digest.update(chunk)
-    return {"sha256": digest.hexdigest(), "sizeBytes": size, "locator": str(path)}
+    result = {"sha256": digest.hexdigest(), "sizeBytes": size, "locator": str(path)}
+    if observations is not None:
+        _remember_fingerprint(observations, key, result, path)
+    return result
+
+
+def _remember_fingerprint(observations, key, result, path):
+    if _fingerprint_key(path) != key:
+        raise ContractError(f"media changed while fingerprinting: {path}")
+    for previous_key, previous in observations.items():
+        if previous_key[0] == key[0] and any(
+            previous[field] != result[field] for field in ("sha256", "sizeBytes")
+        ):
+            raise ContractError(f"file changed within fingerprint stage: {path}")
+    observations[key] = dict(result)
 
 
 def _schema_and_fragment(

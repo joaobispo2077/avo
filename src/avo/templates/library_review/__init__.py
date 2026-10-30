@@ -1,0 +1,1 @@
+"""Offline library review assets."""

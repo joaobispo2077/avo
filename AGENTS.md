@@ -879,10 +879,19 @@ only.
   `approval-gate.md` from [`docs/templates/review/approval-gate-manifest.md`](docs/templates/review/approval-gate-manifest.md),
   and wait for explicit approval before promoting resolution, advancing stages, or
   running cleanup. watch-skill high confidence alone is **not** approval.
-- Post-render, keep **only**: the raw file, the initial transcript, the final
-  transcript (generated from the final master), and the final master. Delete all
-  other run-created files with a cross-platform delete (`rimraf`). This
-  preserved-set invariant is release-blocking.
+- Post-render, preserve the raw file, initial transcript, final transcript
+  (generated from the final master), final master, and required canonical
+  source/reconstruction/approval evidence. BL-010 FR-018 additionally preserves
+  library authority, approval/recovery and batch-usage records and valid source
+  transcripts through exact reviewed `cleanup.preservePaths` and native
+  inventory/reconstruction coverage. The bounded paths and integration gate are
+  defined in [`docs/cleanup-safety.md`](docs/cleanup-safety.md); never blanket-retain
+  `edit/library/`, its cache, regenerated reviews or worker scratch. Until native
+  coverage is verified, refuse overlapping library/video cleanup. Closed roots
+  remain blocked for library metadata mutation and moves; never rewrite closure
+  receipts. Non-library cleanup behavior is unchanged. After the human approval
+  gate, delete only verified disposable run-created files with a cross-platform
+  delete (`rimraf`). This preserved-set invariant is release-blocking.
 
 ### ai-jail sandbox (optional)
 

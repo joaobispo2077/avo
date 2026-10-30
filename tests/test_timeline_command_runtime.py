@@ -14,9 +14,9 @@ from avo.timeline.command_registry import (
 
 def test_all_command_wrappers_have_exactly_one_runtime_mode():
     wrappers = {path.stem for path in Path("commands/avo").glob("*.md")}
-    assert len(wrappers) == 57
+    assert len(wrappers) == 58
     assert wrappers == set(COMMANDS)
-    assert len(registry_document()["commands"]) == 57
+    assert len(registry_document()["commands"]) == 58
     assert all(
         spec.mode in {"Owns", "Evidence", "Consumes", "Profile", "Admin"}
         for spec in COMMANDS.values()
@@ -39,7 +39,16 @@ def test_runtime_wrappers_declare_state_stops_and_next_command():
 
 @pytest.mark.parametrize(
     "name",
-    ["chapters", "deliver", "retention", "thumbnail", "cleanup", "stats", "models"],
+    [
+        "chapters",
+        "deliver",
+        "retention",
+        "thumbnail",
+        "cleanup",
+        "stats",
+        "models",
+        "organize",
+    ],
 )
 def test_read_only_and_admin_commands_cannot_mutate(name):
     with pytest.raises(CommandPermissionError):
