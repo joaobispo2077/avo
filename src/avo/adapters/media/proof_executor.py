@@ -22,7 +22,11 @@ from avo.audio_restoration import (
     validate_dialogue_treatment_policy,
 )
 from avo.capabilities import default_proof_capability_registry
-from avo.timeline.contracts import file_fingerprint
+from avo.timeline.contracts import file_fingerprint, fingerprint_stage
+from avo.timeline.proof_validation_stage import (
+    in_proof_validation_batch,
+    proof_pixel_observations,
+)
 
 PROOF_AUDIO_BITRATE = "192k"
 
@@ -556,17 +560,26 @@ def _generated_inputs(execution, spec, fps, validator):
 
     registry = default_proof_capability_registry()
     refs = {item["implementationId"]: item for item in execution["implementationRefs"]}
-    generated = {}
+    generated, checked_assets = {}, {}
+    observations = proof_pixel_observations()
+    if observations is None:
+        observations = {}
     for operation in execution["videoGraph"]["operations"]:
         if operation["kind"] not in {"generated-clip", "overlay-video"}:
             continue
         if operation["operationId"] in generated:
             raise RuntimeError("Duplicate generated operation identity")
         proof_generated.parameters(operation, refs, registry)
-        asset = proof_generated.verify(
-            operation, execution["canonicalInputLock"], validator, _validate_ancestry
+        asset = proof_generated.verify_cached(
+            operation,
+            execution["canonicalInputLock"],
+            validator,
+            _validate_ancestry,
+            checked_assets,
         )
-        generated[operation["operationId"]] = proof_generated.inspect(asset, spec, fps)
+        generated[operation["operationId"]] = proof_generated.inspect(
+            asset, spec, fps, observations=observations
+        )
     proof_generated.validate_layers(list(generated.values()))
     return generated
 
@@ -598,6 +611,11 @@ def _validate_events(execution, generated=None):
 
 
 def _revalidate_inputs(execution, generated, validator):
+    with fingerprint_stage(reuse_current=in_proof_validation_batch()):
+        _revalidate_fresh_inputs(execution, generated, validator)
+
+
+def _revalidate_fresh_inputs(execution, generated, validator):
     from . import proof_generated
 
     observed_sources = {}
@@ -609,19 +627,21 @@ def _revalidate_inputs(execution, generated, validator):
             source = parameters["source"]
             path = Path(source["locator"]).resolve()
             if path not in observed_sources:
-                observed_sources[path] = _observed_source_fingerprint(
-                    path, observe=file_fingerprint
-                )["sha256"]
+                fresh = file_fingerprint(path)
+                _observed_source_fingerprint(path, observe=lambda _, value=fresh: value)
+                observed_sources[path] = fresh["sha256"]
             if observed_sources[path] != source["sha256"]:
                 raise RuntimeError(
                     f"ProofPlan source changed during render: {source['locator']}"
                 )
+    checked_assets = {}
     for asset in generated.values():
-        proof_generated.verify(
+        proof_generated.verify_cached(
             asset["operation"],
             execution["canonicalInputLock"],
             validator,
             _validate_ancestry,
+            checked_assets,
         )
 
 
@@ -917,9 +937,10 @@ def execute_ffmpeg_proof(
     *,
     generated_asset_validator=None,
 ) -> dict[str, Any]:
-    return _execute_ffmpeg_proof(
-        execution, output, generated_asset_validator=generated_asset_validator
-    )
+    with fingerprint_stage(reuse_current=in_proof_validation_batch()):
+        return _execute_ffmpeg_proof(
+            execution, output, generated_asset_validator=generated_asset_validator
+        )
 
 
 def _execute_ffmpeg_proof(

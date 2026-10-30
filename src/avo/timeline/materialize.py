@@ -997,16 +997,21 @@ def render_proof_microproofs(
 
     compiler, plan = _proof_plan_value(workspace, proof_plan)
     port = _configured_proof_port(render_port, workspace, plan)
-    readiness = _proof_readiness(port, plan)
-    preflight = compiler.require_preflight(
-        plan,
-        media_inputs=media_inputs,
-        tool_readiness=readiness,
-    )
-    windows = select_microproof_windows(plan)
-    directory = Path(workspace.timeline_dir) / "microproofs" / str(plan["proofPlanId"])
-    suffix = Path(plan["output"]["path"]).suffix or ".mp4"
-    results = _render_required_microproofs(port, plan, windows, directory, suffix)
+    from .proof_validation_stage import proof_validation_batch
+
+    # Per-window files are internal checks. Publish a gate only after the whole
+    # immutable batch has freshly rehashed every original/generated dependency.
+    with proof_validation_batch():
+        readiness = _proof_readiness(port, plan)
+        preflight = compiler.require_preflight(
+            plan, media_inputs=media_inputs, tool_readiness=readiness
+        )
+        windows = select_microproof_windows(plan)
+        directory = (
+            Path(workspace.timeline_dir) / "microproofs" / str(plan["proofPlanId"])
+        )
+        suffix = Path(plan["output"]["path"]).suffix or ".mp4"
+        results = _render_required_microproofs(port, plan, windows, directory, suffix)
     gate = {
         "schemaVersion": "1.0.0",
         "proofPlanId": plan["proofPlanId"],
