@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import itertools
+import math
 from copy import deepcopy
 
 ENGINE_DEFAULT_PCT = 35
@@ -108,6 +109,104 @@ def validate_dialogue_noise_policy(
     _validate_noise_values(policy)
     _validate_noise_routing(policy, stream_index, channels)
     return deepcopy(policy)
+
+
+def _treatment_number(value, minimum, maximum):
+    if type(value) not in (int, float) or not math.isfinite(value):
+        raise ValueError("Dialogue treatment requires finite numeric values")
+    if not minimum <= value <= maximum:
+        raise ValueError("Dialogue treatment value is outside its supported range")
+    return value
+
+
+def _treatment_section(section, bounds):
+    if not isinstance(section, dict) or set(section) != set(bounds):
+        raise ValueError("Dialogue treatment section requires exact supported keys")
+    for key, (minimum, maximum) in bounds.items():
+        _treatment_number(section[key], minimum, maximum)
+
+
+def validate_dialogue_treatment_policy(policy: dict) -> dict:
+    """Validate explicit, bounded presenter EQ/dynamics without filter injection."""
+    keys = {
+        "mode",
+        "role",
+        "approvedByUser",
+        "highpassHz",
+        "compression",
+        "makeupGainDb",
+        "limiter",
+    }
+    if not isinstance(policy, dict) or set(policy) != keys:
+        raise ValueError("Dialogue treatment requires exact supported keys")
+    if policy["mode"] != "clarity-v1" or policy["role"] != "presenter-dialogue":
+        raise ValueError("Unsupported dialogue treatment mode or role")
+    if policy["approvedByUser"] is not True:
+        raise ValueError("Dialogue treatment requires explicit user authorization")
+    highpass = _treatment_number(policy["highpassHz"], 0, 200)
+    if highpass != 0 and highpass < 50:
+        raise ValueError("Dialogue highpass must be off or between 50 and 200 Hz")
+    _treatment_number(policy["makeupGainDb"], 0, 24)
+    _treatment_section(
+        policy["compression"],
+        {
+            "thresholdDb": (-60, -6),
+            "ratio": (1, 6),
+            "attackMs": (1, 100),
+            "releaseMs": (20, 1000),
+        },
+    )
+    _validate_treatment_limiter(policy["limiter"])
+    return deepcopy(policy)
+
+
+def _validate_treatment_limiter(limiter):
+    if not isinstance(limiter, dict) or set(limiter) != {
+        "ceilingDbfs",
+        "attackMs",
+        "releaseMs",
+        "latencyCompensated",
+    }:
+        raise ValueError("Dialogue limiter requires exact supported keys")
+    if limiter["latencyCompensated"] is not True:
+        raise ValueError("Dialogue limiter requires compensated latency")
+    _treatment_section(
+        {key: value for key, value in limiter.items() if key != "latencyCompensated"},
+        {
+            "ceilingDbfs": (-12, -1),
+            "attackMs": (0.1, 80),
+            "releaseMs": (1, 8000),
+        },
+    )
+
+
+def dialogue_treatment_filter(policy: dict) -> str:
+    """Apply after routed dialogue NR, before complete-node fades/window trims.
+
+    Limiter lookahead is compensated by FFmpeg; automatic level makeup is off.
+    The caller supplies measured makeup gain and retains the full-node state.
+    """
+    value = validate_dialogue_treatment_policy(policy)
+    parts = []
+    if value["highpassHz"]:
+        parts.append(f"highpass=f={value['highpassHz']:g}:p=2")
+    compressor = value["compression"]
+    if compressor["ratio"] > 1:
+        threshold = 10 ** (compressor["thresholdDb"] / 20)
+        parts.append(
+            f"acompressor=threshold={threshold:.12g}:ratio={compressor['ratio']:g}:"
+            f"attack={compressor['attackMs']:g}:release={compressor['releaseMs']:g}:"
+            "detection=rms:makeup=1:link=average"
+        )
+    if value["makeupGainDb"]:
+        parts.append(f"volume={value['makeupGainDb']:g}dB")
+    limiter = value["limiter"]
+    ceiling = 10 ** (limiter["ceilingDbfs"] / 20)
+    parts.append(
+        f"alimiter=limit={ceiling:.12g}:attack={limiter['attackMs']:g}:"
+        f"release={limiter['releaseMs']:g}:level=false:latency=true"
+    )
+    return ",".join(parts)
 
 
 def _validate_noise_values(policy):

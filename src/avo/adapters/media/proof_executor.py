@@ -15,7 +15,12 @@ from pathlib import Path
 from typing import Any
 
 from avo.adapters.media.cutting_audio import _observed_source_fingerprint
-from avo.audio_restoration import afftdn_filter, validate_dialogue_noise_policy
+from avo.audio_restoration import (
+    afftdn_filter,
+    dialogue_treatment_filter,
+    validate_dialogue_noise_policy,
+    validate_dialogue_treatment_policy,
+)
 from avo.capabilities import default_proof_capability_registry
 from avo.timeline.contracts import file_fingerprint
 
@@ -323,8 +328,13 @@ def _audio_operations(graph: dict) -> tuple:
                 "fadeInSamples",
                 "fadeOutSamples",
                 "dialogueNoiseReductionPolicy",
+                "dialogueTreatmentPolicy",
             }:
                 raise RuntimeError("Unsupported audio trim parameters")
+            if "dialogueTreatmentPolicy" in parameters:
+                validate_dialogue_treatment_policy(
+                    parameters["dialogueTreatmentPolicy"]
+                )
             if parameters["nodeId"] in audio_trims:
                 raise RuntimeError("Duplicate audio trim operation")
             audio_trims[parameters["nodeId"]] = operation
@@ -528,6 +538,9 @@ def _segments(execution, node_by_range, audio_trims, fps, rate, nodes, generated
                     node,
                     audio,
                     fades,
+                    audio_trims.get(node["nodeId"], {})
+                    .get("parameters", {})
+                    .get("dialogueTreatmentPolicy"),
                     tail,
                     _dialogue_noise_policy(node, audio_trims),
                 )
@@ -652,6 +665,7 @@ def _render_piece(segment, left, right, spec, fps, rate, piece):
         node,
         audio,
         fades,
+        treatment_policy,
         tail,
         noise_policy,
     ) = segment
@@ -686,6 +700,8 @@ def _render_piece(segment, left, right, spec, fps, rate, piece):
         if node["sourceSampleRate"] != rate:
             afilter += f",aresample={rate}"
         afilter += _dialogue_noise_filter(noise_policy, node)
+        if treatment_policy is not None:
+            afilter += "," + dialogue_treatment_filter(treatment_policy)
         afilter += f",apad,atrim=end_sample={full_length}"
         if fades[0]:
             afilter += f",afade=t=in:ss=0:ns={fades[0]}"
@@ -734,7 +750,9 @@ def _encode_arguments(spec, fps, count):
     return arguments + ["-b:a", PROOF_AUDIO_BITRATE, "-movflags", "+faststart"]
 
 
-def _render_final(listing, candidate, overlays, spec, fps, wstart, wend):
+def _render_final(
+    listing, candidate, overlays, spec, fps, wstart, wend
+):
     from . import proof_generated
 
     extra, filters, metadata = proof_generated.overlay_filters(
@@ -743,6 +761,13 @@ def _render_final(listing, candidate, overlays, spec, fps, wstart, wend):
     timebase = f"{fps.denominator}/{fps.numerator}"
     video = f"[0:v:0]settb=expr={timebase},setpts=N,format=rgba[picture]"
     audio = "[0:a:0]asetpts=N/SR/TB[a]"
+    encode_arguments = _encode_arguments(spec, fps, wend - wstart)
+    # A frame-count output stop can discard a final PCM packet, including when
+    # a stateful dialogue filter changes packet boundaries. Let finite audio end.
+    stop = encode_arguments.index("-frames:v")
+    del encode_arguments[stop : stop + 2]
+    filters.append(f"[v]trim=end_frame={wend - wstart}[bounded-picture]")
+    video_map = "[bounded-picture]"
     _run(
         [
             "ffmpeg",
@@ -759,10 +784,10 @@ def _render_final(listing, candidate, overlays, spec, fps, wstart, wend):
             "-filter_complex",
             ";".join([video, *filters, audio]),
             "-map",
-            "[v]",
+            video_map,
             "-map",
             "[a]",
-            *_encode_arguments(spec, fps, wend - wstart),
+            *encode_arguments,
             str(candidate),
         ]
     )
@@ -915,6 +940,18 @@ def _execute_ffmpeg_proof(
             segment[-2] for segment in segments if segment[-2] is not None
         ],
         "sourceDialogueNoisePolicies": _noise_policy_records(execution["audioGraph"]),
+        "sourceDialogueTreatmentPolicies": [
+            {
+                "nodeId": operation["parameters"]["nodeId"],
+                "policy": operation["parameters"]["dialogueTreatmentPolicy"],
+                "filter": dialogue_treatment_filter(
+                    operation["parameters"]["dialogueTreatmentPolicy"]
+                ),
+            }
+            for operation in execution["audioGraph"]["operations"]
+            if operation["kind"] == "trim"
+            and "dialogueTreatmentPolicy" in operation["parameters"]
+        ],
         "generatedOperations": [
             proof_generated.operation_metadata(asset["operation"])
             for asset in generated.values()

@@ -642,6 +642,10 @@ class CuttingPreviewAdapter:
                 "windowLengthSamples": mapping["windowLengthSamples"],
             }
             expected.append(item)
+            if "dialogueTreatmentPolicy" in mapping["parameters"]:
+                item["processing"]["dialogueTreatmentPolicy"] = mapping["parameters"][
+                    "dialogueTreatmentPolicy"
+                ]
             if mapping["fadeInSeconds"]:
                 fades.append(
                     {
