@@ -40,6 +40,59 @@ def test_python_distribution_declares_runtime_schema_data() -> None:
     assert '"share/avo/schemas" = ["schemas/*.json"]' in configuration
 
 
+def test_library_review_resources_are_packaged_and_available():
+    import tomllib
+    from importlib import resources
+
+    metadata = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    assert metadata["tool"]["setuptools"]["package-data"][
+        "avo.templates.library_review"
+    ]
+    assets = resources.files("avo.templates.library_review")
+    for name in ("index.html", "review.css", "review.js"):
+        assert assets.joinpath(name).is_file()
+    assert (ROOT / "schemas/avo.library.schema.json").is_file()
+    assert ("collect_data_files", "avo.templates.library_review") in _packaging_calls()
+
+
+def test_frozen_library_worker_has_native_dispatch_without_python_m(
+    monkeypatch, tmp_path
+):
+    import sys
+    from types import SimpleNamespace
+
+    from avo.adapters.base import JobRequest
+    from avo.adapters.transcribe.faster_whisper import FasterWhisperAdapter
+    from avo.engine_cli import _MODULES
+
+    monkeypatch.setattr(sys, "frozen", True, raising=False)
+    calls = []
+
+    def invoke(argv, **kwargs):
+        calls.append(argv)
+        return SimpleNamespace(returncode=0, stdout="{}", stderr="")
+
+    monkeypatch.setattr("avo.adapters.transcribe.faster_whisper.subprocess.run", invoke)
+    result = FasterWhisperAdapter().run(
+        JobRequest(
+            "transcribe",
+            "local",
+            [
+                "--library-batch",
+                str(tmp_path),
+                "--provider",
+                "example",
+                "--operation",
+                "a" * 32,
+            ],
+        )
+    )
+    assert result.exit_code == 0 and "-m" not in calls[0]
+    assert calls[0][1] == "library-worker"
+    assert _MODULES["library-worker"] == "avo.library.batch"
+    assert _MODULES["run_job"] == "avo.adapters.run_job"
+
+
 def test_spec_cpu_only_ctranslate2() -> None:
     assert '_collect("ctranslate2")' in SPEC or 'collect_all("ctranslate2")' in SPEC
     assert (

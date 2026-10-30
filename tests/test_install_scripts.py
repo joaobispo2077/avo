@@ -172,3 +172,78 @@ def test_normal_installer_uses_supported_canonical_skills_agent_ids(profile, can
     assert arguments[:4] == ["-y", "skills", "add", "github:example/avo#test-ref"]
     assert arguments[arguments.index("-a") + 1] == canonical
     assert "--yes" in arguments
+
+
+def _fallback_copy_probe():
+    return """
+const fs = require('fs');
+const path = require('path');
+const vm = require('vm');
+const [filename, root, home, requested] = process.argv.slice(1);
+const sandbox = {
+  __filename: filename,
+  module: {exports:{}},
+  console: {log(){}, error(){}},
+  process: {platform:process.platform, env:{}, cwd:()=>home},
+  require(name) {
+    if (name === 'os') return {...require('os'), homedir:()=>home};
+    if (name === 'child_process') return {spawnSync(){return {status:1};}};
+    return require(name);
+  },
+};
+vm.runInNewContext(fs.readFileSync(filename,'utf8') + '\\nglobalThis.probe={PROVIDERS,installProvider,skillDestBase};', sandbox, {filename});
+const provider = sandbox.probe.PROVIDERS.find(item=>item.id === requested);
+if (!provider || !sandbox.probe.installProvider(provider,root,{yes:true,dryRun:false})) throw new Error('Fallback failed');
+console.log(JSON.stringify({base:sandbox.probe.skillDestBase(provider.profile),commands:path.join(home,'.cursor','commands','avo')}));
+"""
+
+
+@pytest.mark.parametrize(
+    "profile", ["cursor", "claude", "codex", "windsurf", "cline", "gemini", "opencode"]
+)
+def test_fallback_installer_copies_organize_route_and_local_guidance(tmp_path, profile):
+    import json
+
+    home = tmp_path / "isolated-home"
+    home.mkdir()
+    result = subprocess.run(
+        [
+            "node",
+            "-e",
+            _fallback_copy_probe(),
+            str(ROOT / "bin/install.cjs"),
+            str(ROOT),
+            str(home),
+            profile,
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    paths = json.loads(result.stdout)
+    pipeline = Path(paths["base"]) / "avo-pipeline"
+    files = (
+        "SKILL.md",
+        "references/organize.md",
+        "references/step-status.md",
+        "references/command-map.md",
+        "references/help.md",
+        "references/arguments.md",
+    )
+    for relative in files:
+        assert (pipeline / relative).read_bytes() == (
+            ROOT / "agent-skills/avo-pipeline" / relative
+        ).read_bytes()
+    assert "/avo.organize" in (pipeline / "SKILL.md").read_text(encoding="utf-8")
+    assert "`references/organize.md`" in (
+        pipeline / "references/command-map.md"
+    ).read_text(encoding="utf-8")
+    assert "/avo.organize" in (pipeline / "references/help.md").read_text(
+        encoding="utf-8"
+    )
+    if profile == "cursor":
+        assert (Path(paths["commands"]) / "organize.md").read_bytes() == (
+            ROOT / "commands/avo/organize.md"
+        ).read_bytes()
