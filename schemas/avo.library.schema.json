@@ -1,0 +1,758 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://avo.local/schemas/avo.library.schema.json",
+  "title": "AVO library version 1 bodies",
+  "$defs": {
+    "head": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "libraryId": {
+          "type": "string"
+        },
+        "root": {
+          "type": "string"
+        },
+        "rootIdentity": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "device": {
+              "type": "integer"
+            },
+            "fileId": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "device",
+            "fileId"
+          ]
+        },
+        "provider": {
+          "type": "string"
+        },
+        "inventoryRef": {
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "proposalRef": {
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "activeOperation": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "updatedAt": {
+          "type": "string"
+        },
+        "headHash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "libraryId",
+        "root",
+        "provider",
+        "inventoryRef",
+        "proposalRef",
+        "activeOperation",
+        "updatedAt",
+        "headHash"
+      ]
+    },
+    "inventory": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "recordings": {
+          "type": "array"
+        },
+        "summary": {
+          "type": "object"
+        },
+        "scope": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "recordings",
+        "summary",
+        "scope"
+      ]
+    },
+    "recording": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "version": {
+          "type": "string"
+        },
+        "path": {
+          "type": "string"
+        },
+        "originalPath": {
+          "type": "string"
+        },
+        "observation": {
+          "type": "object"
+        },
+        "metadata": {
+          "type": "object"
+        },
+        "availability": {
+          "type": "string"
+        },
+        "transcript": {
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "restrictions": {
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "version",
+        "path",
+        "originalPath",
+        "observation",
+        "metadata",
+        "availability",
+        "transcript",
+        "restrictions"
+      ]
+    },
+    "proposal": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "proposalId": {
+          "type": "string"
+        },
+        "revision": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "parent": {
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "inventoryRef": {
+          "type": "object"
+        },
+        "groups": {
+          "type": "array"
+        },
+        "actions": {
+          "type": "array"
+        },
+        "summary": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "proposalId",
+        "revision",
+        "parent",
+        "inventoryRef",
+        "groups",
+        "actions",
+        "summary"
+      ]
+    },
+    "prepared": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "packetId": {
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "moves",
+            "batch"
+          ]
+        },
+        "proposalRef": {
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "inventoryRef": {
+          "type": "object"
+        },
+        "selected": {
+          "type": "array"
+        },
+        "locks": {
+          "type": "array"
+        },
+        "config": {
+          "type": "object"
+        },
+        "estimates": {
+          "type": "object"
+        },
+        "root": {
+          "type": "string"
+        },
+        "provider": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "packetId",
+        "kind",
+        "proposalRef",
+        "inventoryRef",
+        "selected",
+        "locks",
+        "config",
+        "estimates",
+        "root",
+        "provider"
+      ]
+    },
+    "decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "kind": {
+          "const": "decision"
+        },
+        "requestId": {
+          "type": "string"
+        },
+        "libraryId": {
+          "type": "string"
+        },
+        "expectedHeadHash": {
+          "type": "string"
+        },
+        "packetId": {
+          "type": "string"
+        },
+        "packetHash": {
+          "type": "string"
+        },
+        "approvedIds": {
+          "type": "array"
+        },
+        "decision": {
+          "enum": [
+            "approved",
+            "rejected"
+          ]
+        },
+        "actor": {
+          "type": "string"
+        },
+        "creatorInstruction": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "kind",
+        "requestId",
+        "libraryId",
+        "expectedHeadHash",
+        "packetId",
+        "packetHash",
+        "approvedIds",
+        "decision",
+        "actor",
+        "creatorInstruction",
+        "createdAt"
+      ]
+    },
+    "edits": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "kind": {
+          "const": "edits"
+        },
+        "requestId": {
+          "type": "string"
+        },
+        "libraryId": {
+          "type": "string"
+        },
+        "expectedHeadHash": {
+          "type": "string"
+        },
+        "baseProposalId": {
+          "type": "string"
+        },
+        "baseRevision": {
+          "type": "integer"
+        },
+        "baseProposalHash": {
+          "type": "string"
+        },
+        "edits": {
+          "type": "array",
+          "maxItems": 10000,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "type": {
+                "enum": [
+                  "rename-group",
+                  "assign-recording",
+                  "exclude-recording",
+                  "keep-recording"
+                ]
+              },
+              "groupId": {
+                "type": "string"
+              },
+              "recordingId": {
+                "type": "string"
+              },
+              "label": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "type"
+            ]
+          }
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "kind",
+        "requestId",
+        "libraryId",
+        "expectedHeadHash",
+        "baseProposalId",
+        "baseRevision",
+        "baseProposalHash",
+        "edits"
+      ]
+    },
+    "selection": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "actionIds": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string"
+          }
+        },
+        "unboundSourceIds": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "actionIds",
+        "unboundSourceIds"
+      ]
+    },
+    "handoffRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "kind": {
+          "const": "handoffRequest"
+        },
+        "requestId": {
+          "type": "string"
+        },
+        "libraryId": {
+          "type": "string"
+        },
+        "expectedHeadHash": {
+          "type": "string"
+        },
+        "generation": {
+          "type": "string"
+        },
+        "recordingIds": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 100,
+          "uniqueItems": true,
+          "items": {
+            "type": "string"
+          }
+        },
+        "ranges": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "kind",
+        "requestId",
+        "libraryId",
+        "expectedHeadHash",
+        "generation",
+        "recordingIds"
+      ]
+    },
+    "operation": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "operationId": {
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "moves",
+            "batch"
+          ]
+        },
+        "packetRef": {
+          "type": "object"
+        },
+        "decisionRef": {
+          "type": "object"
+        },
+        "selected": {
+          "type": "array"
+        },
+        "completed": {
+          "type": "array"
+        },
+        "failed": {
+          "type": "array"
+        },
+        "status": {
+          "type": "string"
+        },
+        "startedAt": {
+          "type": "string"
+        },
+        "elapsedSeconds": {
+          "type": "number"
+        },
+        "previousEvent": {
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "result": {
+          "type": "object"
+        }
+      },
+      "required": [
+        "operationId",
+        "kind",
+        "packetRef",
+        "decisionRef",
+        "selected",
+        "completed",
+        "failed",
+        "status",
+        "startedAt",
+        "elapsedSeconds",
+        "previousEvent",
+        "result"
+      ]
+    },
+    "event": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "operationId": {
+          "type": "string"
+        },
+        "sequence": {
+          "type": "integer"
+        },
+        "previous": {
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "type": {
+          "type": "string"
+        },
+        "actionId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "evidence": {
+          "type": "object"
+        },
+        "time": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "operationId",
+        "sequence",
+        "previous",
+        "type",
+        "actionId",
+        "evidence",
+        "time"
+      ]
+    },
+    "batchRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schemaVersion": {
+          "const": 1
+        },
+        "kind": {
+          "const": "batchRequest"
+        },
+        "requestId": {
+          "type": "string"
+        },
+        "libraryId": {
+          "type": "string"
+        },
+        "expectedHeadHash": {
+          "type": "string"
+        },
+        "recordingIds": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {
+            "type": "string"
+          }
+        },
+        "route": {
+          "const": "local"
+        },
+        "model": {
+          "type": "string"
+        },
+        "language": {
+          "type": "string"
+        },
+        "limits": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "workers": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1
+            },
+            "cpuThreads": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "maxProcessingSeconds": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "maxTemporaryBytes": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "monetary": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "currency": {
+                  "type": "string"
+                },
+                "maximum": {
+                  "type": "string",
+                  "pattern": "^[0-9]+(\\.[0-9]+)?$"
+                }
+              },
+              "required": [
+                "currency",
+                "maximum"
+              ]
+            }
+          },
+          "required": [
+            "workers",
+            "cpuThreads",
+            "maxProcessingSeconds"
+          ]
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "kind",
+        "requestId",
+        "libraryId",
+        "expectedHeadHash",
+        "recordingIds",
+        "route",
+        "model",
+        "language",
+        "limits"
+      ]
+    },
+    "handoff": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "libraryId": {
+          "type": "string"
+        },
+        "generation": {
+          "type": "string"
+        },
+        "provider": {
+          "type": "string"
+        },
+        "recordings": {
+          "type": "array"
+        },
+        "usageRefs": {
+          "type": "array"
+        }
+      },
+      "required": [
+        "libraryId",
+        "generation",
+        "provider",
+        "recordings",
+        "usageRefs"
+      ]
+    },
+    "report": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "operationId": {
+          "type": "string"
+        },
+        "phase": {
+          "type": "string"
+        },
+        "status": {
+          "type": "string"
+        },
+        "elapsedSeconds": {
+          "type": "number"
+        },
+        "estimates": {
+          "type": "object"
+        },
+        "counts": {
+          "type": "object"
+        },
+        "resources": {
+          "type": "object"
+        },
+        "usage": {
+          "type": "object"
+        },
+        "remaining": {
+          "type": "array"
+        }
+      },
+      "required": [
+        "operationId",
+        "phase",
+        "status",
+        "elapsedSeconds",
+        "estimates",
+        "counts",
+        "resources",
+        "usage",
+        "remaining"
+      ]
+    },
+    "usage": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "batchId": {
+          "type": "string"
+        },
+        "attemptId": {
+          "type": "string"
+        },
+        "recordingId": {
+          "type": "string"
+        },
+        "tokens": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "amount": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "currency": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "basis": {
+          "type": "string"
+        },
+        "coverage": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "batchId",
+        "attemptId",
+        "recordingId",
+        "tokens",
+        "amount",
+        "currency",
+        "basis",
+        "coverage"
+      ]
+    }
+  }
+}
