@@ -1,6 +1,44 @@
 from avo.timeline.review_runner import select_microproof_windows
 
 
+def test_long_carrier_selects_five_seconds_without_truncating_declared_or_historical_risks():
+    from copy import deepcopy
+
+    plan = {
+        "output": {"frameRate": {"num": 60, "den": 1}},
+        "validationPlan": {
+            "microproof": [{"startFrame": 9000, "endFrameExclusive": 9600}]
+        },
+        "regressionContract": {
+            "historicalRiskWindows": [{"startFrame": 6000, "endFrameExclusive": 6600}]
+        },
+        "videoGraph": {
+            "operations": [
+                {
+                    "operationId": "long-alpha",
+                    "kind": "overlay-video",
+                    "outputRange": {"startFrame": 0, "endFrameExclusive": 107610},
+                }
+            ]
+        },
+    }
+    original = deepcopy(plan)
+    windows = select_microproof_windows(plan)
+    assert [(w["startFrame"], w["endFrameExclusive"]) for w in windows] == [
+        (0, 300),
+        (6000, 6600),
+        (9000, 9600),
+    ]
+    assert windows[0]["operationIds"] == ["long-alpha"]
+    assert plan == original
+    plan["validationPlan"]["microproof"].append(
+        {"startFrame": 0, "endFrameExclusive": 107610}
+    )
+    assert any(
+        w["endFrameExclusive"] == 107610 for w in select_microproof_windows(plan)
+    )
+
+
 def test_selects_declared_historical_and_one_representative_per_operation_kind():
     plan = {
         "validationPlan": {"microproof": [{"startFrame": 0, "endFrameExclusive": 30}]},
