@@ -1,10 +1,10 @@
 """Crash boundaries preserve exact approved media and support reversal."""
 
-import os
 from uuid import uuid4
 
 import pytest
 
+from avo.adapters.media import library_moves
 from avo.library.rules import source_lock
 from avo.library.service import LibraryService
 from avo.timeline.store import now_iso
@@ -41,6 +41,9 @@ def approved(service, proposal_ref):
 
 
 def fixture_service(tmp_path, monkeypatch):
+    support = library_moves.capability(tmp_path)
+    if not support["available"]:
+        pytest.skip(support["reason"])
     install_provider(tmp_path / "install")
     monkeypatch.setenv("AVO_ROOT", str(tmp_path / "install"))
     root = tmp_path / "footage"
@@ -53,8 +56,6 @@ def fixture_service(tmp_path, monkeypatch):
     "stage", ["after-intent", "after-move", "after-verification", "before-head"]
 )
 def test_resume_each_crash_boundary_and_reverse(tmp_path, monkeypatch, stage):
-    if os.name != "nt":
-        pytest.skip("native Windows move guarantee")
     service = fixture_service(tmp_path, monkeypatch)
     first = service.scan()
     before = source_lock(service.root / "xpto-01.mp4")
