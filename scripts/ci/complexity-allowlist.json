@@ -851,13 +851,6 @@
       "reason": "Media/render pipeline with ffmpeg/qc branches"
     },
     {
-      "path": "src/avo/timeline/materialize.py",
-      "name": "render_proof_microproofs",
-      "complexity": 13,
-      "rank": "C",
-      "reason": "Feature 006 validation/orchestration branch matrix; recorded for explicit decomposition follow-up"
-    },
-    {
       "path": "src/avo/timeline/review_runner.py",
       "name": "actual_coverage",
       "complexity": 13,
