@@ -864,6 +864,17 @@ def execute_ffmpeg_proof(
     *,
     generated_asset_validator=None,
 ) -> dict[str, Any]:
+    return _execute_ffmpeg_proof(
+        execution, output, generated_asset_validator=generated_asset_validator
+    )
+
+
+def _execute_ffmpeg_proof(
+    execution: dict[str, Any],
+    output: Path,
+    *,
+    generated_asset_validator=None,
+) -> dict[str, Any]:
     """Render the frozen graph; code-drawn reuse requires injected freshness checks."""
     from . import proof_generated
 
