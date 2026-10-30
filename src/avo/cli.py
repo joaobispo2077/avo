@@ -47,6 +47,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="avo")
     sub = parser.add_subparsers(dest="command", required=True)
 
+    from avo.library_cli import configure as configure_library
+
+    configure_library(sub)
+
     from avo.costs_cli import configure as configure_costs
 
     configure_costs(sub)
@@ -2435,6 +2439,10 @@ def _trim(args: argparse.Namespace) -> int:
 
 
 def _run_cli(args: argparse.Namespace) -> int:
+    if args.command == "organize":
+        from avo.library_cli import run as library_run
+
+        return library_run(args)
     if args.command in {"costs", "metrics"}:
         from avo.costs_cli import run as costs_run
 

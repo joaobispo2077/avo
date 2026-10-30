@@ -52,6 +52,7 @@ _MATRIX = {
     "motion": ("Owns", ("bmap", "tracks", "animation")),
     "motion-graphics": ("Profile", ()),
     "music-video": ("Profile", ()),
+    "organize": ("Admin", ()),
     "pipeline": (
         "Owns",
         (
