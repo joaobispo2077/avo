@@ -1,0 +1,71 @@
+{
+  "description": "Inert bounded request examples. IDs and hashes are synthetic fixture values; these are not creator approvals for any real library. Resolve envelope keys through the native contracts before admission.",
+  "seed": 10,
+  "common": {
+    "schemaVersion": 1,
+    "libraryId": "00000000-0000-4000-8000-000000000010",
+    "expectedHeadHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "requests": [
+    {
+      "requestId": "fixture-group-edit",
+      "kind": "group-edits",
+      "baseProposalId": "fixture-proposal",
+      "baseRevision": "1",
+      "baseProposalHash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "edits": [
+        {"operation": "rename-group", "groupId": "group-000", "label": "XPTO camera"},
+        {"operation": "assign-recording", "recordingId": "recording-00001", "groupId": "group-000"},
+        {"operation": "exclude-recording", "recordingId": "recording-00002"},
+        {"operation": "keep-recording", "recordingId": "recording-00003"}
+      ]
+    },
+    {
+      "requestId": "fixture-move-selection",
+      "kind": "move-selection",
+      "actionIds": ["action-00000", "action-00001"],
+      "ownershipDeclarations": [
+        {"recordingId": "recording-00000", "ownership": "unbound"},
+        {"recordingId": "recording-00001", "ownership": "unbound"}
+      ]
+    },
+    {
+      "requestId": "fixture-rejection",
+      "kind": "decision",
+      "packetId": "fixture-packet",
+      "packetHash": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+      "approvedIds": [],
+      "decision": "rejected",
+      "actor": "fixture-reviewer",
+      "creatorInstruction": {
+        "text": "Reject this synthetic packet.",
+        "time": "2026-10-30T00:00:00Z",
+        "source": "fixture-only"
+      }
+    },
+    {
+      "requestId": "fixture-local-batch",
+      "kind": "batch",
+      "recordingIds": ["recording-00000", "recording-00001"],
+      "route": "local",
+      "model": "small",
+      "language": "auto",
+      "limits": {"workers": 1, "cpuThreads": 2, "maxProcessingSeconds": 120, "maxTemporaryBytes": 10485760}
+    },
+    {
+      "requestId": "fixture-handoff",
+      "kind": "handoff",
+      "generation": "fixture-generation-1",
+      "selection": [
+        {"recordingId": "recording-00000", "matchId": "match-00000", "range": {"start": 0.0, "end": 0.8}}
+      ]
+    }
+  ],
+  "fixtureSets": {
+    "F1": {"builder": "make_library", "count": 1000, "playable": true, "initialPreparation": "save-valid-probes-before-timing"},
+    "F2": {"builder": "large_library_data", "recordings": 10000, "segments": 100000, "groups": 100},
+    "F3": {"builder": "make_library", "count": 100, "playable": true, "transcriptCases": ["valid", "missing", "stale-source", "wrong-model", "wrong-language", "invalid-json", "failed"]},
+    "F4": {"builder": "large_library_data", "recordings": 100, "segments": 100, "groups": 10, "reviewCases": ["occupied-destination", "ambiguous-group"]},
+    "F5": {"builder": "make_library", "count": 6, "playable": false, "faults": ["source-swap", "occupied-destination", "case-conflict", "referenced-project", "closed-project", "junction", "after-intent", "after-move", "after-verify", "before-head-publication"]}
+  }
+}
