@@ -144,8 +144,7 @@ jobs:
     name: Integration tests (AVO repo)
     runs-on: ubuntu-24.04
     needs: prerequisites-gate
-    # Browser setup and capture tests can exceed 20 minutes on slower runners.
-    timeout-minutes: 30
+    timeout-minutes: 20
     # Real capture checks must fail, rather than skip, when this runtime is absent.
     env:
       AVO_REQUIRE_CODE_DRAWN_RUNTIME: '1'
@@ -200,7 +199,7 @@ jobs:
       - name: Run integration tests
         env:
           PYTEST_ADDOPTS: --junitxml=reports/quality/integration-tests.xml
-        run: python scripts/ci/run_quality_gate.py --gate integration-tests --artifact reports/quality/integration-tests.xml -- bash scripts/ci/run-integration-tests.sh
+        run: python scripts/ci/run_quality_gate.py --gate integration-tests --artifact reports/quality/integration-tests.xml -- bash scripts/ci/run-integration-tests.sh -n 2 --dist=worksteal --durations=20
 
       - name: Upload integration execution evidence
         id: integration-evidence
