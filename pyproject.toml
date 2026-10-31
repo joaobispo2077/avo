@@ -20,6 +20,7 @@ code-drawn = [
 dev = [
     "pytest>=8.0",
     "pytest-cov>=5.0",
+    "pytest-xdist>=3.8,<4",
     "ruff>=0.16",
     "xenon>=0.9",
     "vulture>=2.14",
