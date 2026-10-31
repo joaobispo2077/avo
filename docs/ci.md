@@ -134,6 +134,50 @@ On `develop` / `release` / `main`, require these
 Do **not** require a separate Gate 3 / quality workflow check — software quality is
 the `Software quality` job inside workflow **CI**.
 
+### Integration performance
+
+The integration lane runs the complete `tests/integration` population with two
+pytest worker processes and `--dist=worksteal`. The worker count is fixed to avoid
+unbounded browser/encoder concurrency. The existing runner, one combined JUnit
+report, execution receipt, and failure propagation remain in place. The job keeps
+its 20-minute timeout, including browser and dependency setup. The locked
+`pytest-xdist` dependency belongs only to the development extra. See the
+[pytest-xdist scheduling documentation](https://pytest-xdist.readthedocs.io/en/stable/distribution.html).
+
+Code-drawn rendering uses the actual encoding pass's frame hashes and observed
+runtime as its independent fresh-session reference. A separate browser still
+checks repeated and reversed seeks, and the encoded candidate is still decoded
+and compared frame by frame before publication. Standalone `code-drawn-check`
+continues to open two independent browser sessions. No frame evidence is reused
+across operations and no pixels, source locks, or runtime identity checks are
+replaced by metadata-only cache hits.
+
+The 2026-10-31 PR #131 timing artifact recorded 979.858 seconds across 246
+integration cases: `test_code_drawn_render.py` accounted for 519.002 seconds and
+the canonical drawing test another 121.894 seconds. A paired local comparison
+on Windows/Python 3.11.3 ran the same three horizontal HD route cases (Canvas,
+SVG, brush), including actual alpha, seek, encoding, decoded-pixel, and review
+artifact checks:
+
+| Configuration | Wall time | Result |
+| --- | --- | --- |
+| Renderer at `7caacd0`, serial execution | 119.771 s | 3 passed |
+| Encoded-frame verification reuse, two workers | 81.266 s | Same 3 cases passed |
+
+This single paired local measurement is 32.1% faster; it is not a percentile or
+a measurement of the entire hosted CI job. Browser installation was outside both
+timed runs. The selected tests can be reproduced after provisioning the managed
+runtime with `pytest -q tests/integration/test_code_drawn_render.py -k
+"actual_hd and horizontal" -n 2 --dist=worksteal --durations=20`.
+
+A full local two-worker trial accounted for all 254 collected integration cases
+exactly once. It exposed a Windows launcher cancellation issue: the child encoder
+retained the temporary log after its launcher was stopped. Cleanup now stops the
+owned process tree and closes process pipes. Final verification passed 107 focused
+runtime/contract/workflow/package tests and all 43 actual browser/encoder cases,
+including cancellation with no retained attempt directory. The entire hosted CI
+runtime still requires a fresh run; the local sample is not its acceptance result.
+
 ### Related workflows (expected paths)
 
 | Workflow | Role |
