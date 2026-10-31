@@ -613,7 +613,13 @@ class CodeDrawnAdapter:
     def _moments(count: int) -> list[int]:
         return [round(i * (count - 1) / 9) for i in range(10)]
 
-    def _seek_evidence(self, composition: Path, manifest: dict) -> tuple[dict, dict]:
+    def _seek_evidence(
+        self,
+        composition: Path,
+        manifest: dict,
+        *,
+        fresh_capture: tuple[list[str], dict] | None = None,
+    ) -> tuple[dict, dict]:
         moments = self._moments(manifest["renderContract"]["frameCount"])
         sequence = moments + moments + list(reversed(moments))
         with self._session(composition, manifest) as (page, failures, environment):
@@ -623,17 +629,22 @@ class CodeDrawnAdapter:
                 ).hexdigest()
                 for frame in sequence
             ]
-        with self._session(composition, manifest) as (
-            page,
-            failures,
-            fresh_environment,
-        ):
-            fresh = [
-                hashlib.sha256(
-                    self._pixels(self._capture(page, manifest, frame, failures))
-                ).hexdigest()
-                for frame in moments
-            ]
+        if fresh_capture is None:
+            with self._session(composition, manifest) as (
+                page,
+                failures,
+                fresh_environment,
+            ):
+                fresh = [
+                    hashlib.sha256(
+                        self._pixels(self._capture(page, manifest, frame, failures))
+                    ).hexdigest()
+                    for frame in moments
+                ]
+        else:
+            # Encoding already captured every frame in an independent browser.
+            hashes, fresh_environment = fresh_capture
+            fresh = [hashes[frame] for frame in moments]
         if environment != fresh_environment:
             raise MotionError(
                 "CODE_DRAWN_LOCK_STALE", "Runtime changed between independent sessions."
@@ -788,6 +799,22 @@ class CodeDrawnAdapter:
             str(output),
         ]
 
+    @staticmethod
+    def _kill_process(process) -> None:
+        if process.poll() is not None:
+            return
+        if os.name == "nt":
+            # Windows launchers can leave the actual encoder holding open files.
+            subprocess.run(
+                ["taskkill", "/PID", str(process.pid), "/T", "/F"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=10,
+                check=False,
+            )
+        if process.poll() is None:
+            process.kill()
+
     @contextmanager
     def _process(
         self,
@@ -799,15 +826,21 @@ class CodeDrawnAdapter:
         stderr=None,
     ):
         process = subprocess.Popen(command, stdin=stdin, stdout=stdout, stderr=stderr)
-        watchdog = threading.Timer(seconds, process.kill)
+        watchdog = threading.Timer(seconds, self._kill_process, args=(process,))
         watchdog.start()
         try:
             yield process
         finally:
             watchdog.cancel()
             if process.poll() is None:
-                process.kill()
+                self._kill_process(process)
             process.wait(timeout=10)
+            for stream in (process.stdin, process.stdout):
+                if stream is not None:
+                    try:
+                        stream.close()
+                    except OSError:
+                        pass
 
     def _encode(
         self,
@@ -817,7 +850,7 @@ class CodeDrawnAdapter:
         candidate: Path,
         *,
         workspace=None,
-    ) -> list[str]:
+    ) -> tuple[list[str], dict]:
         from avo.motion import verify_code_drawn_lock
 
         count = manifest["renderContract"]["frameCount"]
@@ -866,7 +899,7 @@ class CodeDrawnAdapter:
                         "FFmpeg encode failed: "
                         + log.read(4096).decode("utf-8", errors="replace"),
                     )
-        return hashes
+        return hashes, environment
 
     @staticmethod
     def _read_decoded_frame(stream, size: int) -> bytes:
@@ -1101,17 +1134,21 @@ class CodeDrawnAdapter:
             )
         lock = self._read_lock(input_lock)
         verify_code_drawn_lock(composition, lock, workspace=workspace)
-        evidence, environment = self._seek_evidence(composition, manifest)
-        verify_code_drawn_lock(
-            composition, lock, environment=environment, workspace=workspace
-        )
         output.parent.mkdir(parents=True, exist_ok=True)
         with tempfile.TemporaryDirectory(
             prefix=".avo-drawing-", dir=output.parent
         ) as attempt:
             candidate = Path(attempt) / "candidate.mkv"
-            hashes = self._encode(
+            hashes, encoded_environment = self._encode(
                 composition, manifest, lock, candidate, workspace=workspace
+            )
+            evidence, environment = self._seek_evidence(
+                composition,
+                manifest,
+                fresh_capture=(hashes, encoded_environment),
+            )
+            verify_code_drawn_lock(
+                composition, lock, environment=environment, workspace=workspace
             )
             verification = self._verify_output(candidate, manifest, hashes)
             verify_code_drawn_lock(

@@ -199,7 +199,7 @@ jobs:
       - name: Run integration tests
         env:
           PYTEST_ADDOPTS: --junitxml=reports/quality/integration-tests.xml
-        run: python scripts/ci/run_quality_gate.py --gate integration-tests --artifact reports/quality/integration-tests.xml -- bash scripts/ci/run-integration-tests.sh
+        run: python scripts/ci/run_quality_gate.py --gate integration-tests --artifact reports/quality/integration-tests.xml -- bash scripts/ci/run-integration-tests.sh -n 2 --dist=worksteal --durations=20
 
       - name: Upload integration execution evidence
         id: integration-evidence
