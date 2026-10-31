@@ -61,6 +61,35 @@ additive: it never removes canonical protection. Inspect the resulting dry-run
 before destructive execution. Private per-video choices belong in the external
 project, not in reusable orchestrator code.
 
+BL-010 FR-018 adds a bounded library-retention exception to the post-render
+deliverable shorthand in `AGENTS.md`. For an overlapping footage/video root,
+reviewed `cleanup.preservePaths` must retain `edit/library-index.json` and the
+existing persistent subdirectories `edit/library/inventory`,
+`edit/library/recordings`, `edit/library/proposals`, `edit/library/prepared`,
+`edit/library/decisions`, `edit/library/operations`, `edit/library/batches`,
+`edit/library/transcripts`, `edit/library/handoffs` and `edit/library/reports`.
+These retain reachable authority/history, exact source locks, explicit approvals,
+move/reversal recovery evidence, batch admission/outcome/usage history, valid
+source transcripts and handoff/report evidence. Valid referenced source
+transcripts outside the library need their own exact retained paths. No automatic
+history pruning may discard evidence needed for recovery or reversal.
+
+The native configuration preview must list concrete existing project-relative
+paths and their estimated footprint for explicit review. No globs, nonexistent
+entries or blanket `edit/library/` retention qualify. The exception excludes
+`edit/library/cache`, regenerated `edit/library/review` exports and worker scratch;
+it does not preserve disposable media or waive canonical media protections.
+Configuration must never be silently rewritten. Before supporting overlapping
+cleanup, native inventory and reconstruction must cover the retained library
+dependencies and prove cleanup/resume/reversal compatibility; otherwise refuse
+that cleanup. This policy clarification alone does not enable runtime support.
+
+All source-byte, reconstruction, creator-approval and finalization gates still
+apply. Library discovery is not media admission or approval to delete files.
+Closed video/preservation roots reject library metadata mutation and moves until
+a supported explicit reopen flow exists; organization must not regenerate or
+rewrite closure receipts. Non-library cleanup behavior remains unchanged.
+
 Execution writes `edit/cleanup/cleanup-result.json`: intent first, actual outcome
 afterward. Only files verified absent after the attempted deletion contribute to
 `deleted` and `freedBytes`. Failed deletions produce an incomplete result and

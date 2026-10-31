@@ -40,6 +40,7 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 "avo.templates.shorts_hyperframes" = ["*.html", "*.css", "*.js", "*.json"]
+"avo.templates.library_review" = ["*.html", "*.css", "*.js"]
 "avo.templates.code_drawn" = [
     "**/*.html",
     "**/*.js",

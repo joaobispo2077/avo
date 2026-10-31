@@ -192,7 +192,10 @@ def _native_recipe_basis(entry):
         "windowOffsetSamples",
         "windowLengthSamples",
     }
-    if set(recipe) != keys or recipe["recipe"] != "native-dialogue-v1":
+    if (
+        set(recipe) - {"dialogueTreatmentPolicy"} != keys
+        or recipe["recipe"] != "native-dialogue-v1"
+    ):
         raise ValueError("unsupported dialogue reference recipe")
     node, selection = recipe["node"], entry["selection"]
     rate = node["sourceSampleRate"]
@@ -241,7 +244,12 @@ def _native_reference(entry, output_dir):
     chain = f"atrim=end_sample={raw_length},asetpts=PTS-STARTPTS"
     if node["sourceSampleRate"] != 48000:
         chain += ",aresample=48000"
-    chain += _dialogue_noise_filter(policy, node) + f",apad,atrim=end_sample={length}"
+    chain += _dialogue_noise_filter(policy, node)
+    if "dialogueTreatmentPolicy" in recipe:
+        from avo.audio_restoration import dialogue_treatment_filter
+
+        chain += "," + dialogue_treatment_filter(recipe["dialogueTreatmentPolicy"])
+    chain += f",apad,atrim=end_sample={length}"
     fade_in, fade_out = recipe["fadeSamples"]
     if fade_in:
         chain += f",afade=t=in:ss=0:ns={fade_in}"

@@ -6,6 +6,7 @@ import json
 import unittest
 
 from avo.paths import schema_path
+from avo.timeline.contracts import ContractError, validate_document
 from jsonschema_support import validator_for
 
 
@@ -63,6 +64,35 @@ class ShortsProjectSchemaTests(unittest.TestCase):
             "deliverable": {"profile": "beat-edit", "aspect": "1:1"},
         }
         self.assertEqual(list(self.validator.iter_errors(document)), [])
+
+
+class CuttingProjectSchemaTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self.base = {"provider": "bishop", "rawDir": "/media/raw"}
+
+    def test_production_validator_resolves_cutting_configuration(self) -> None:
+        document = {
+            **self.base,
+            "cutting": {
+                "enabled": True,
+                "intensity": "dynamic",
+                "guards": {"beforeMs": 120, "afterMs": 180},
+            },
+        }
+        self.assertIs(validate_document(document, "avo.project.schema.json"), document)
+
+    def test_production_validator_keeps_cutting_configuration_strict(self) -> None:
+        for cutting, message in [
+            ({"enabled": "yes"}, "is not of type 'boolean'"),
+            ({"intensity": "invalid"}, "is not one of"),
+            ({"guards": {"beforeMs": 119}}, "is less than the minimum"),
+            ({"unknown": True}, "Additional properties"),
+        ]:
+            with self.subTest(cutting=cutting):
+                with self.assertRaisesRegex(ContractError, message):
+                    validate_document(
+                        {**self.base, "cutting": cutting}, "avo.project.schema.json"
+                    )
 
 
 if __name__ == "__main__":

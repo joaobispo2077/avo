@@ -367,7 +367,10 @@ def _required_files(
     raw_dir: Path, canonical: list[dict[str, Any]]
 ) -> dict[Path, str | None]:
     """Current local media plus authoring/delivery evidence, not disposable caches."""
+    from avo.library.retention import library_paths
+
     required: dict[Path, str | None] = dict.fromkeys(_authoring_files(raw_dir))
+    required.update(dict.fromkeys(library_paths(raw_dir)))
     required.update(_human_final_inputs(raw_dir))
     for artifact in canonical:
         for ref in _head_media_refs(raw_dir, artifact):
@@ -417,17 +420,24 @@ def _verify_coverage(raw_dir: Path, bundle: dict[str, Any]) -> None:
 
 
 def _raw_sources(raw_dir: Path) -> list[Path]:
+    from avo.library.retention import library_sources
+
+    indexed = library_sources(raw_dir)
     raw_root = raw_dir / "raw"
     if raw_root.is_dir():
-        return sorted(path for path in raw_root.rglob("*") if path.is_file())
+        return sorted(
+            set(indexed).union(path for path in raw_root.rglob("*") if path.is_file())
+        )
     excluded = {"avo.project.json", "EDITLOG.md", "SOURCE-LOG.md"}
     return sorted(
-        path
-        for path in raw_dir.iterdir()
-        if path.is_file()
-        and path.name not in excluded
-        and not path.name.startswith(".")
-        and not path.name.startswith("avo.wrap.")
+        set(indexed).union(
+            path
+            for path in raw_dir.iterdir()
+            if path.is_file()
+            and path.name not in excluded
+            and not path.name.startswith(".")
+            and not path.name.startswith("avo.wrap.")
+        )
     )
 
 

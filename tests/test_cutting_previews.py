@@ -3,6 +3,53 @@ import pytest
 from avo.timeline.cutting_previews import group_preview_windows
 
 
+def test_physical_speech_clock_maps_exclude_mix_beds_but_keep_raw_endpoints():
+    from copy import deepcopy
+
+    from avo.adapters.media.cutting_preview import CuttingPreviewAdapter
+
+    source = {
+        "sourceId": "raw",
+        "locator": "raw.mkv",
+        "fingerprint": {"sha256": "a" * 64},
+        "streamMetadata": {"audioSelection": {"streamIndex": 2, "channels": [0]}},
+    }
+    lead = {
+        "nodeId": "voice",
+        "kind": "source",
+        "sourceSampleRate": 48000,
+        "sourceRange": {"startSample": 1000, "endSampleExclusive": 5800},
+        "outputRange": {"startSample": 0, "endSampleExclusive": 4800},
+    }
+    bed = {**deepcopy(lead), "nodeId": "trailer", "kind": "music"}
+    plan = {
+        "output": {"frameRate": {"num": 60, "den": 1}},
+        "audioGraph": {
+            "sampleRate": 48000,
+            "nodes": [lead, bed],
+            "operations": [
+                {"kind": "trim", "parameters": {"nodeId": "voice", "sourceId": "raw"}},
+                {
+                    "kind": "trim",
+                    "parameters": {"nodeId": "trailer", "sourceId": "official"},
+                },
+            ],
+        },
+    }
+    maps = CuttingPreviewAdapter._clock_maps(
+        plan, {"sources": [source]}, {"startFrame": 0, "endFrameExclusive": 6}
+    )
+    assert len(maps) == 1
+    assert maps[0]["sourceId"] == "raw"
+    assert maps[0]["sourceRange"]["startTicks"] == 1000
+    assert maps[0]["sourceRange"]["endTicksExclusive"] == 5800
+    bed["kind"] = "source"
+    with pytest.raises(KeyError, match="official"):
+        CuttingPreviewAdapter._clock_maps(
+            plan, {"sources": [source]}, {"startFrame": 0, "endFrameExclusive": 6}
+        )
+
+
 def test_opted_in_clock_half_tie_uses_native_half_up_and_legacy_stays_even():
     from fractions import Fraction
 

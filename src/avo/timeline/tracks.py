@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
@@ -26,6 +27,19 @@ def _seconds(ticks: int, timebase: dict[str, int] | None = None) -> float:
     num = int((timebase or {}).get("num", 1))
     den = int((timebase or {}).get("den", 1000))
     return float(ticks) * num / den
+
+
+def _region_covers_cue(region, cue):
+    base = region.get("timebase") or {"num": 1, "den": 1000}
+    start = Fraction(region["startTicks"] * base["num"], base["den"])
+    end = Fraction(region["endTicks"] * base["num"], base["den"])
+
+    def point(value):
+        return Fraction(
+            value["ticks"] * value["timebase"]["num"], value["timebase"]["den"]
+        )
+
+    return start <= point(cue["start"]) and end >= point(cue["end"])
 
 
 def _validated_video_role(layer: dict[str, Any]) -> str:
@@ -199,12 +213,7 @@ def resolve_tracks(
                 if cues and has_range:
                     for cue_id in linked:
                         cue = cues[cue_id]
-                        cue_start = int(cue["start"]["ticks"])
-                        cue_end = int(cue["end"]["ticks"])
-                        if (
-                            int(region["startTicks"]) > cue_start
-                            or int(region["endTicks"]) < cue_end
-                        ):
+                        if not _region_covers_cue(region, cue):
                             raise TrackError(
                                 f"track region invents/truncates cue timing: {layer_id}/{cue_id}"
                             )

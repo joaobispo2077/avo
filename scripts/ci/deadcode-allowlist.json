@@ -1132,13 +1132,6 @@
     },
     {
       "path": "src/avo/adapters/understand/cutting_alignment_worker.py",
-      "name": "connect",
-      "kind": "attribute",
-      "confidence": 60,
-      "reason": "Offline worker replaces socket/ NLTK functions by attribute assignment; exercised by worker contract tests, not dead methods."
-    },
-    {
-      "path": "src/avo/adapters/understand/cutting_alignment_worker.py",
       "name": "connect_ex",
       "kind": "attribute",
       "confidence": 60,

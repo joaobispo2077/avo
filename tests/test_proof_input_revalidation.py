@@ -70,7 +70,7 @@ def test_revalidation_does_not_cache_across_calls(tmp_path):
         _revalidate_inputs(execution, {}, None)
 
 
-def test_preview_batch_reuses_source_observation_and_rechecks_before_return(tmp_path):
+def test_preview_batch_still_rehashes_before_each_proof_publication(tmp_path):
     path = tmp_path / "raw.mkv"
     path.write_bytes(b"original")
     execution = execution_with_sources([file_fingerprint(path)])
@@ -80,7 +80,7 @@ def test_preview_batch_reuses_source_observation_and_rechecks_before_return(tmp_
         with _source_fingerprint_batch():
             _revalidate_inputs(execution, {}, None)
             _revalidate_inputs(execution, {}, None)
-        assert fingerprint.call_count == 1
+        assert fingerprint.call_count == 2
 
 
 def test_preview_batch_cannot_return_after_source_changes(tmp_path):
