@@ -144,7 +144,8 @@ jobs:
     name: Integration tests (AVO repo)
     runs-on: ubuntu-24.04
     needs: prerequisites-gate
-    timeout-minutes: 20
+    # Browser setup and capture tests can exceed 20 minutes on slower runners.
+    timeout-minutes: 30
     # Real capture checks must fail, rather than skip, when this runtime is absent.
     env:
       AVO_REQUIRE_CODE_DRAWN_RUNTIME: '1'
