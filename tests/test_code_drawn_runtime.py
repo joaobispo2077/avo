@@ -12,6 +12,7 @@ import sys
 import tempfile
 import types
 import urllib.error
+from contextlib import contextmanager
 from hashlib import sha256
 from pathlib import Path
 
@@ -21,6 +22,96 @@ from avo import motion
 from avo.motion import MotionError, load_composition
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+@pytest.mark.parametrize("platform_name", ["nt", "posix"])
+def test_encoder_cleanup_stops_owned_windows_descendants(monkeypatch, platform_name):
+    runtime = capture_runtime()
+    events = []
+
+    class Process:
+        pid = 123456
+        returncode = None
+
+        def poll(self):
+            return self.returncode
+
+        def kill(self):
+            events.append("kill")
+            self.returncode = -9
+
+    process = Process()
+
+    def stop_tree(command, **kwargs):
+        events.append(command)
+        process.returncode = -1
+        assert kwargs["timeout"] == 10
+        return subprocess.CompletedProcess(command, 0)
+
+    monkeypatch.setattr(runtime, "os", types.SimpleNamespace(name=platform_name))
+    monkeypatch.setattr(runtime.subprocess, "run", stop_tree)
+    runtime.CodeDrawnAdapter._kill_process(process)
+    assert events == (
+        [["taskkill", "/PID", "123456", "/T", "/F"]]
+        if platform_name == "nt"
+        else ["kill"]
+    )
+    runtime.CodeDrawnAdapter._kill_process(process)
+    assert len(events) == 1  # An exited process must never be targeted again.
+
+
+@pytest.mark.parametrize("changed", [None, "pixels", "environment"])
+def test_seek_proof_uses_fresh_encode_without_recapturing_it(monkeypatch, changed):
+    runtime = capture_runtime()
+    adapter = runtime.CodeDrawnAdapter()
+    manifest = {"renderContract": {"frameCount": 12}}
+    environment = {"browserVersion": "observed-test-browser"}
+    hashes = [sha256(bytes([frame])).hexdigest() for frame in range(12)]
+    fresh_environment = dict(environment)
+    sessions, captured = [], []
+
+    @contextmanager
+    def session(*_args):
+        page = object()
+        sessions.append(page)
+        yield page, [], environment
+
+    def capture(_page, _manifest, frame, _failures):
+        captured.append(frame)
+        return bytes([frame])
+
+    monkeypatch.setattr(adapter, "_session", session)
+    monkeypatch.setattr(adapter, "_capture", capture)
+    monkeypatch.setattr(adapter, "_pixels", lambda png: png)
+    if changed == "pixels":
+        hashes[0] = sha256(b"different actual encoded pixels").hexdigest()
+    elif changed == "environment":
+        fresh_environment["browserVersion"] = "changed-test-browser"
+
+    if changed:
+        with pytest.raises(MotionError) as caught:
+            adapter._seek_evidence(
+                Path("composition.json"),
+                manifest,
+                fresh_capture=(hashes, fresh_environment),
+            )
+        assert caught.value.code == (
+            "CODE_DRAWN_LOCK_STALE"
+            if changed == "environment"
+            else "CODE_DRAWN_SEEK_MISMATCH"
+        )
+    else:
+        evidence, observed = adapter._seek_evidence(
+            Path("composition.json"),
+            manifest,
+            fresh_capture=(hashes, fresh_environment),
+        )
+        assert evidence["passes"] == ["repeat", "reverse", "fresh-session"]
+        assert evidence["rgbaSha256"] == [hashes[frame] for frame in evidence["frames"]]
+        assert observed == environment
+    moments = adapter._moments(12)
+    assert captured == moments + moments + list(reversed(moments))
+    assert len(sessions) == 1
 
 
 def capture_runtime():
