@@ -788,6 +788,22 @@ class CodeDrawnAdapter:
             str(output),
         ]
 
+    @staticmethod
+    def _kill_process(process) -> None:
+        if process.poll() is not None:
+            return
+        if os.name == "nt":
+            # Windows launchers can leave the actual encoder holding open files.
+            subprocess.run(
+                ["taskkill", "/PID", str(process.pid), "/T", "/F"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                timeout=10,
+                check=False,
+            )
+        if process.poll() is None:
+            process.kill()
+
     @contextmanager
     def _process(
         self,
@@ -799,15 +815,21 @@ class CodeDrawnAdapter:
         stderr=None,
     ):
         process = subprocess.Popen(command, stdin=stdin, stdout=stdout, stderr=stderr)
-        watchdog = threading.Timer(seconds, process.kill)
+        watchdog = threading.Timer(seconds, self._kill_process, args=(process,))
         watchdog.start()
         try:
             yield process
         finally:
             watchdog.cancel()
             if process.poll() is None:
-                process.kill()
+                self._kill_process(process)
             process.wait(timeout=10)
+            for stream in (process.stdin, process.stdout):
+                if stream is not None:
+                    try:
+                        stream.close()
+                    except OSError:
+                        pass
 
     def _encode(
         self,
