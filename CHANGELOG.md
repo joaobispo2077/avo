@@ -1,3 +1,15 @@
+## [1.19.1](https://github.com/joaobispo2077/avo/compare/v1.19.0...v1.19.1) (2026-10-31)
+
+
+### Bug Fixes
+
+* **motion:** stop encoder descendants on cancel ([1afb175](https://github.com/joaobispo2077/avo/commit/1afb1751ef4b803daf5e00d94760587f4a6a4f96))
+
+
+### Performance Improvements
+
+* **motion:** reuse encoded frames for seek checks ([20fec61](https://github.com/joaobispo2077/avo/commit/20fec61e9eb294468c200ce94dfb8d4a80e6add8))
+
 # [1.19.0](https://github.com/joaobispo2077/avo/compare/v1.18.0...v1.19.0) (2026-10-31)
 
 
