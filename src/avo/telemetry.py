@@ -107,12 +107,17 @@ def _attach_model_disclosure(
     project: dict[str, Any] | None,
     video_key: str | None,
     video_id: str | None,
+    model_sources: dict[str, Any] | None = None,
 ) -> dict[str, str]:
     if active_models is None:
         active_models = _resolve_active_models(project, video_key)
     if active_models:
         record["activeModels"] = active_models
-    sources = _resolve_model_sources(project, video_key)
+    sources = (
+        _resolve_model_sources(project, video_key)
+        if model_sources is None
+        else model_sources
+    )
     if sources:
         record["resolvedModelSources"] = sources
     if video_key:
@@ -161,12 +166,14 @@ class Telemetry:
         total: int | None = None,
         volume: Path | None = None,
         active_models: dict[str, str] | None = None,
+        model_sources: dict[str, Any] | None = None,
         session_id: str | None = None,
         video_key: str | None = None,
         video_id: str | None = None,
         project: dict[str, Any] | None = None,
         emit: bool = True,
     ) -> dict[str, Any]:
+        """Report a phase; source None resolves automatically, an explicit dict does not."""
         self._phase_count += 1
         idx = index if index is not None else self._phase_count
         tot = total if total is not None else self.total_phases
@@ -201,6 +208,7 @@ class Telemetry:
         active_models = _attach_model_disclosure(
             record,
             active_models=active_models,
+            model_sources=model_sources,
             project=project,
             video_key=video_key,
             video_id=video_id,

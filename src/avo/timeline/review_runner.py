@@ -166,6 +166,20 @@ def fuse_review_evidence(
     }
 
 
+def _representative_operation_window(proof_plan, operation):
+    rate = (proof_plan.get("output") or {}).get("frameRate") or {"num": 30, "den": 1}
+    if any(type(rate.get(key)) is not int or rate[key] <= 0 for key in ("num", "den")):
+        raise ValueError("microproof frame rate must be a positive rational")
+    start = int(operation["outputRange"]["startFrame"])
+    return {
+        "startFrame": start,
+        "endFrameExclusive": min(
+            int(operation["outputRange"]["endFrameExclusive"]),
+            start + max(1, 5 * rate["num"] // rate["den"]),
+        ),
+    }
+
+
 def select_microproof_windows(proof_plan: dict[str, Any]) -> list[dict[str, Any]]:
     """Select deterministic changed-operation and historical-risk windows."""
     selected: dict[tuple[int, int], dict[str, Any]] = {}
@@ -205,7 +219,7 @@ def select_microproof_windows(proof_plan: dict[str, Any]) -> list[dict[str, Any]
             continue
         seen_kinds.add(kind)
         add(
-            operation["outputRange"],
+            _representative_operation_window(proof_plan, operation),
             reason=f"changed-operation:{kind}",
             operation_id=str(operation["operationId"]),
         )

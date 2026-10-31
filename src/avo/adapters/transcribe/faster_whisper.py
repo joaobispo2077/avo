@@ -23,6 +23,8 @@ class FasterWhisperAdapter:
     routing_id = "faster-whisper"
 
     def run(self, request: JobRequest) -> JobResult:
+        if request.argv[:1] == ["--library-batch"]:
+            return _library_batch(request)
         from avo.model_sources import (
             PreflightError,
             disclosure_for,
@@ -82,3 +84,24 @@ class FasterWhisperAdapter:
             models_used={"transcribe": model_label},
             model_sources={"transcribe": disclosure_for(resolved)},
         )
+
+
+def _library_batch(request: JobRequest) -> JobResult:
+    if request.label != "local" or len(request.argv) != 6:
+        return JobResult(
+            exit_code=2, stderr="Invalid explicit local library batch request"
+        )
+    if request.argv[2] != "--provider" or request.argv[4] != "--operation":
+        return JobResult(exit_code=2, stderr="Invalid library batch context")
+    prefix = (
+        [sys.executable, "library-worker"]
+        if getattr(sys, "frozen", False)
+        else [sys.executable, "-m", "avo.library.batch"]
+    )
+    command = [*prefix, "--root", *request.argv[1:]]
+    result = subprocess.run(
+        command, env={**os.environ, **request.env}, capture_output=True, text=True
+    )
+    return JobResult(
+        exit_code=result.returncode, stdout=result.stdout, stderr=result.stderr
+    )

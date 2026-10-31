@@ -122,6 +122,60 @@ class TelemetryModelsTests(unittest.TestCase):
         err_lines = err.getvalue().strip().splitlines()
         self.assertTrue(any(line.startswith("AVO_JSON ") for line in err_lines))
 
+    @mock.patch("avo.telemetry.avo_state.save_state")
+    @mock.patch("avo.telemetry.avo_state.load_state", return_value={"stats": {}})
+    def test_explicit_empty_disclosures_skip_model_and_hardware_resolution(
+        self, load_state: mock.Mock, save_state: mock.Mock
+    ) -> None:
+        from avo.telemetry import Telemetry
+
+        with (
+            mock.patch("avo.telemetry._resolve_active_models") as models,
+            mock.patch("avo.telemetry._resolve_model_sources") as sources,
+            mock.patch("avo.models._hardware_tier") as hardware,
+        ):
+            record = Telemetry(volume=ROOT).report(
+                "library-scan", active_models={}, model_sources={}, emit=False
+            )
+
+        models.assert_not_called()
+        sources.assert_not_called()
+        hardware.assert_not_called()
+        self.assertNotIn("activeModels", record)
+        self.assertNotIn("resolvedModelSources", record)
+
+    @mock.patch("avo.telemetry.avo_state.save_state")
+    @mock.patch("avo.telemetry.avo_state.load_state", return_value={"stats": {}})
+    def test_omitted_source_override_preserves_automatic_disclosure(
+        self, load_state: mock.Mock, save_state: mock.Mock
+    ) -> None:
+        from avo.telemetry import Telemetry
+
+        disclosure = {"transcribe": {"model": "small", "source": "local-cache"}}
+        with mock.patch(
+            "avo.telemetry._resolve_model_sources", return_value=disclosure
+        ) as sources:
+            record = Telemetry(volume=ROOT).report("cut", active_models={}, emit=False)
+
+        sources.assert_called_once_with(None, None)
+        self.assertEqual(record["resolvedModelSources"], disclosure)
+
+    @mock.patch("avo.telemetry.avo_state.save_state")
+    @mock.patch("avo.telemetry.avo_state.load_state", return_value={"stats": {}})
+    def test_explicit_source_snapshot_is_attached_without_resolving_again(
+        self, load_state: mock.Mock, save_state: mock.Mock
+    ) -> None:
+        from avo.telemetry import Telemetry
+
+        disclosure = {"transcribe": {"model": "small", "source": "prepared-local"}}
+        with mock.patch("avo.telemetry._resolve_model_sources") as sources:
+            record = Telemetry(volume=ROOT).report(
+                "transcribe", active_models={}, model_sources=disclosure, emit=False
+            )
+
+        sources.assert_not_called()
+        self.assertEqual(record["resolvedModelSources"], disclosure)
+
 
 if __name__ == "__main__":
     unittest.main()

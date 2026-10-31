@@ -295,12 +295,19 @@ def diff_inventories(pre: dict[str, int], post: dict[str, int]) -> FileDiff:
 
 
 def _resolve_raw_sources(raw_dir: Path) -> list[Path]:
+    from avo.library.retention import library_sources
+
+    indexed = library_sources(raw_dir)
     raw_subdir = raw_dir / RAW_SUBDIR
     if raw_subdir.is_dir():
         return sorted(
-            path
-            for path in raw_subdir.rglob("*")
-            if path.is_file() and not path.is_symlink() and not _is_hidden(path.name)
+            set(indexed).union(
+                path
+                for path in raw_subdir.rglob("*")
+                if path.is_file()
+                and not path.is_symlink()
+                and not _is_hidden(path.name)
+            )
         )
 
     sources: list[Path] = []
@@ -315,7 +322,7 @@ def _resolve_raw_sources(raw_dir: Path) -> list[Path]:
         if name in TOP_LEVEL_EXCLUDE_NAMES or _matches_wrap_sidecar(name):
             continue
         sources.append(entry)
-    return sorted(sources)
+    return sorted(set(sources).union(indexed))
 
 
 def _resolve_initial_transcript(
@@ -480,12 +487,23 @@ def _project_retention(raw_dir: Path) -> list[str]:
     return values
 
 
+def _library_retention(raw_dir: Path) -> list[Path]:
+    from avo.library.retention import library_paths
+    from avo.library.rules import LibraryError
+
+    try:
+        return library_paths(raw_dir)
+    except LibraryError as exc:
+        raise PreservedSetViolation(str(exc)) from exc
+
+
 def _retained_paths(raw_dir: Path) -> list[Path]:
     paths = [
         path
         for value in _project_retention(raw_dir)
         for path in _files_under(_preserve_root(raw_dir, value))
     ]
+    paths.extend(_library_retention(raw_dir))
     cleanup = raw_dir / "edit" / "cleanup"
     paths.extend(path for path in cleanup.rglob("*") if path.is_file())
     costs = raw_dir / "edit" / "costs"
