@@ -1,5 +1,7 @@
 import pytest
 
+from avo.timeline.cutting_policy import resolve_cutting_policy
+from avo.timeline.cutting_service import CuttingService
 from avo.timeline.vision_review import VisionReviewError, compile_review_coverage
 
 
@@ -47,3 +49,54 @@ def test_empty_window_review_fails_closed():
             max_frames_per_pass=4,
             include_overview=False,
         )
+
+
+def contextual_call_count(duration_us, sections=None):
+    service = object.__new__(CuttingService)
+    service.policy = resolve_cutting_policy(
+        project_settings={
+            "enabled": True,
+            "family": "analysis-review",
+            "intensity": "conservative",
+            **({"sections": sections} if sections else {}),
+        }
+    )
+    calls = []
+
+    class Context:
+        def analyze_pause(self, *args, **kwargs):
+            calls.append(1)
+            return {}
+
+    service.context_port = Context()
+    analysis = {
+        "sourceRef": {"locator": "original", "sha256": "a" * 64},
+        "routing": {"streamIndex": 2},
+        "pauseCandidates": [
+            {
+                "sourceRange": {
+                    "sourceId": "s",
+                    "startTicks": 0,
+                    "endTicksExclusive": duration_us,
+                    "timebase": {"num": 1, "den": 1000000},
+                },
+                "evidence": {},
+            }
+        ],
+    }
+    result = service._contextual_analysis({}, analysis, {})
+    assert result == analysis
+    return len(calls)
+
+
+def test_policy_retained_pause_needs_no_visual_context():
+    assert contextual_call_count(100000) == 0
+    assert contextual_call_count(600000) == 0
+
+
+def test_potential_cut_still_requires_visual_context():
+    assert contextual_call_count(2000000) == 1
+
+
+def test_section_policy_keeps_existing_context_path():
+    assert contextual_call_count(600000, {"dense": {"intensity": "dynamic"}}) == 1
