@@ -536,10 +536,67 @@ def test_participation_rejects_unknown_predecessor_and_parent_cycle(tmp_path):
         validate_fact_graph([first, second])
 
 
+def test_evidence_variants_require_explicit_revision(tmp_path):
+    from avo.cost_participation import resolve_evidence, validate_reconciliation
+
+    store, _ = production(tmp_path)
+    original = evidence(fact())
+    revised = evidence(fact(), acquisition="automatic")
+    unresolved = resolve_evidence([original, revised], [])
+    assert unresolved["selected"] == []
+    assert unresolved["conflicts"]
+    decision = reconciliation(store, original, revised)
+    validate_reconciliation(
+        decision, known_refs={item["evidenceId"]: item for item in (original, revised)}
+    )
+    resolved = resolve_evidence([original, revised], [decision])
+    assert resolved == {"selected": [revised], "conflicts": []}
 
 
+def test_evidence_revision_cannot_change_observation_payload(tmp_path):
+    from avo.cost_participation import validate_reconciliation
+
+    store, _ = production(tmp_path)
+    original = evidence(fact())
+    other_row = evidence(fact(model="different-served-model"))
+    decision = reconciliation(store, original, other_row)
+    with pytest.raises(ValueError, match="observation|key|payload"):
+        validate_reconciliation(
+            decision,
+            known_refs={item["evidenceId"]: item for item in (original, other_row)},
+        )
 
 
+def test_competing_evidence_decisions_need_explicit_supersession(tmp_path):
+    from avo.cost_participation import resolve_evidence
+
+    store, _ = production(tmp_path)
+    original = evidence(fact())
+    first = evidence(fact(), acquisition="automatic")
+    second = evidence(fact(), nature="manual")
+    left = reconciliation(store, original, first)
+    right = reconciliation(store, original, second, operationId="reconcile-2")
+    variants = [original, first, second]
+    assert resolve_evidence(variants, [left, right])["conflicts"]
+    final = reconciliation(
+        store,
+        first,
+        second,
+        operationId="reconcile-3",
+        supersedes=[left["reconciliationId"], right["reconciliationId"]],
+    )
+    # The explicit final choice must cover every retained variant, including original.
+    direct = reconciliation(
+        store,
+        original,
+        second,
+        operationId="reconcile-4",
+        supersedes=[left["reconciliationId"], right["reconciliationId"]],
+    )
+    assert resolve_evidence(variants, [left, right, final, direct]) == {
+        "selected": [second],
+        "conflicts": [],
+    }
 
 
 def test_context_replay_does_not_depend_on_generated_time(
@@ -1297,23 +1354,271 @@ def test_context_merge_requires_all_review_fields(missing):
         validate_context_descriptor(descriptor)
 
 
+def _metadata_variants(tmp_path, *, three=False):
+    store = registered_ledger(tmp_path)
+    row = fact()
+    variants = [
+        evidence(row, nature="manual", modelBasis="unknown", acquisition=route)
+        for route in (
+            ("manual", "imported", "automatic") if three else ("manual", "imported")
+        )
+    ]
+    for index, metadata in enumerate(variants):
+        store.ingest_packet(
+            packet(
+                store, [row], evidence_rows=[metadata], operation_id=f"metadata-{index}"
+            ),
+            allow_synthetic=True,
+        )
+    return store, variants
 
 
+def reconcile_request(store, old, new, **changes):
+    value = reconciliation(store, old, new, **changes)
+    value.pop("reconciliationId")
+    value.pop("createdAt")
+    return value
 
 
+def test_reconcile_metadata_revision_and_withdraw_preserve_originals(
+    tmp_path, offline_accounting
+):
+    from avo.cost_participation import reconcile_costs, resolve_evidence
+
+    store, variants = _metadata_variants(tmp_path)
+    original_bytes = {
+        path: path.read_bytes() for path in store.path("batches").glob("*.json")
+    }
+    request = reconcile_request(store, *variants)
+    result = reconcile_costs(store, request)
+    assert reconcile_costs(store, request)["replayed"] is True
+    assert resolve_evidence(variants, store.capture()["reconciliations"])[
+        "selected"
+    ] == [variants[1]]
+    withdraw = {
+        "schemaVersion": "2.0.0",
+        "accountingVideoId": store.identity()["accountingVideoId"],
+        "operationId": "withdraw-1",
+        "relation": "withdraw",
+        "references": [{"kind": "decision", "id": result["reconciliationId"]}],
+        "scope": request["scope"],
+        "selectedRepresentation": None,
+        "actor": "synthetic-reviewer",
+        "reason": "withdraw prior metadata choice",
+        "proofRefs": ["a" * 64],
+        "supersedes": [result["reconciliationId"]],
+    }
+    reconcile_costs(store, withdraw)
+    assert resolve_evidence(variants, store.capture()["reconciliations"])["conflicts"]
+    assert len(store.capture()["reconciliations"]) == 2
+    assert {path: path.read_bytes() for path in original_bytes} == original_bytes
 
 
+def test_reconcile_competing_choices_need_explicit_supersession(
+    tmp_path, offline_accounting
+):
+    from avo.cost_participation import reconcile_costs, resolve_evidence
+
+    store, variants = _metadata_variants(tmp_path, three=True)
+    decisions = [
+        reconcile_costs(
+            store,
+            reconcile_request(
+                store, variants[0], target, operationId="choice-" + str(index)
+            ),
+        )
+        for index, target in enumerate(variants[1:])
+    ]
+    assert resolve_evidence(variants, store.capture()["reconciliations"])["conflicts"]
+    request = reconcile_request(
+        store,
+        variants[0],
+        variants[2],
+        operationId="review-all-variants",
+        references=[
+            {"kind": "evidence", "id": item["evidenceId"]} for item in variants
+        ],
+        supersedes=[item["reconciliationId"] for item in decisions],
+    )
+    reconcile_costs(store, request)
+    assert resolve_evidence(variants, store.capture()["reconciliations"])[
+        "selected"
+    ] == [variants[2]]
 
 
+@pytest.mark.parametrize("bad", ["kind", "unknown", "foreign", "empty-proof"])
+def test_reconcile_invalid_reference_never_publishes(tmp_path, offline_accounting, bad):
+    from avo.cost_participation import reconcile_costs
+
+    store, variants = _metadata_variants(tmp_path)
+    request = reconcile_request(store, *variants)
+    if bad == "kind":
+        request["references"][0]["kind"] = "estimate"
+    elif bad == "unknown":
+        request["references"][0]["id"] = "f" * 64
+    elif bad == "foreign":
+        request["accountingVideoId"] = "00000000-0000-4000-8000-000000000099"
+    else:
+        request["proofRefs"] = []
+    with pytest.raises(ValueError):
+        reconcile_costs(store, request)
+    assert store.capture()["reconciliations"] == []
 
 
+def test_reconcile_changed_operation_payload_conflicts(tmp_path, offline_accounting):
+    from avo.cost_participation import reconcile_costs
+
+    store, variants = _metadata_variants(tmp_path)
+    request = reconcile_request(store, *variants)
+    reconcile_costs(store, request)
+    with pytest.raises(ValueError, match="operation|replay"):
+        reconcile_costs(store, {**request, "reason": "different reviewed choice"})
+    assert len(store.capture()["reconciliations"]) == 1
 
 
+def test_same_activity_cannot_replace_complete_tree_with_one_child(
+    tmp_path, offline_accounting
+):
+    from avo.cost_participation import validate_reconciliation
+
+    store = registered_ledger(tmp_path)
+    children = [evidence(fact("child-" + str(index))) for index in range(2)]
+    aggregate = evidence(
+        fact("tree"),
+        aggregateScope={
+            "kind": "tree",
+            "members": [item["key"] for item in children],
+            "proofRefs": ["a" * 64],
+        },
+    )
+    selected = {"kind": "evidence", "id": children[0]["evidenceId"]}
+    decision = {
+        "schemaVersion": "2.0.0",
+        "accountingVideoId": store.identity()["accountingVideoId"],
+        "operationId": "false-partial-alias",
+        "relation": "same-activity",
+        "references": [{"kind": "evidence", "id": aggregate["evidenceId"]}, selected],
+        "scope": aggregate["attribution"]["scope"],
+        "selectedRepresentation": selected,
+        "actor": "synthetic-reviewer",
+        "reason": "a child alone is not the complete parent tree",
+        "proofRefs": ["a" * 64],
+        "supersedes": [],
+        "createdAt": FIXED_TIME,
+    }
+    decision["reconciliationId"] = content_hash(decision)
+    known = {item["evidenceId"]: item for item in [aggregate, *children]}
+    with pytest.raises(ValueError, match="partial|tree|rollup"):
+        validate_reconciliation(decision, known_refs=known)
 
 
+def test_reconcile_metadata_cycle_is_rejected_before_append(
+    tmp_path, offline_accounting
+):
+    from avo.cost_participation import reconcile_costs
+
+    store, variants = _metadata_variants(tmp_path)
+    reconcile_costs(store, reconcile_request(store, *variants))
+    reverse = reconcile_request(
+        store, variants[1], variants[0], operationId="cyclic-revision"
+    )
+    with pytest.raises(ValueError, match="cycle"):
+        reconcile_costs(store, reverse)
+    assert len(store.capture()["reconciliations"]) == 1
 
 
+@pytest.mark.parametrize("known_model", [False, True])
+def test_reconcile_served_model_upgrade_requires_frozen_source_proof(
+    tmp_path, offline_accounting, known_model
+):
+    from avo.cost_participation import validate_reconciliation
+
+    store = registered_ledger(tmp_path)
+    row = fact(model="model-a" if known_model else None)
+    old = evidence(row, nature="manual", modelBasis="selected-only")
+    new = evidence(row, nature="manual", modelBasis="served")
+    decision = reconciliation(store, old, new)
+    known = {
+        old["evidenceId"]: old,
+        new["evidenceId"]: new,
+        profile()["profileId"]: profile(),
+        old["key"]["sourceDigest"]: {"key": old["key"], "observation": row},
+    }
+    if known_model:
+        assert validate_reconciliation(decision, known_refs=known) == decision
+    else:
+        with pytest.raises(ValueError, match="served|qualified|model"):
+            validate_reconciliation(decision, known_refs=known)
 
 
+def test_reconcile_duplicate_allocation_requires_explicit_supersession(
+    tmp_path, offline_accounting
+):
+    from avo.cost_participation import reconcile_costs, validate_reconciliation
+
+    store, variants = _metadata_variants(tmp_path)
+    metadata = variants[0]
+    reference = {"kind": "evidence", "id": metadata["evidenceId"]}
+    allocation = {
+        "accountingVideoId": store.identity()["accountingVideoId"],
+        "scope": metadata["attribution"]["scope"],
+        "reference": reference,
+    }
+    request = {
+        "schemaVersion": "2.0.0",
+        "accountingVideoId": store.identity()["accountingVideoId"],
+        "operationId": "allocation-1",
+        "relation": "allocation",
+        "references": [reference],
+        "scope": allocation["scope"],
+        "selectedRepresentation": None,
+        "allocations": [allocation],
+        "actor": "synthetic-reviewer",
+        "reason": "one exact activity allocation",
+        "proofRefs": ["a" * 64],
+        "supersedes": [],
+    }
+    first = reconcile_costs(store, request)
+    saved = store.capture()["reconciliations"][0]
+    assert validate_reconciliation(saved, known_refs=store.references()) == saved
+    duplicate = {**deepcopy(request), "operationId": "allocation-2"}
+    with pytest.raises(ValueError, match="allocation|supersede"):
+        reconcile_costs(store, duplicate)
+    duplicate["supersedes"] = [first["reconciliationId"]]
+    assert reconcile_costs(store, duplicate)["status"] == "ok"
 
 
+def test_concurrent_opposite_revisions_cannot_commit_cycle(
+    tmp_path, monkeypatch, offline_accounting
+):
+    from avo.cost_participation import reconcile_costs
+
+    store, variants = _metadata_variants(tmp_path)
+    barrier = Barrier(2)
+    append = store.append_record
+
+    def start_together(kind, record):
+        if kind == "reconciliations":
+            barrier.wait(timeout=10)
+        return append(kind, record)
+
+    def reviewed(request):
+        try:
+            reconcile_costs(store, request)
+            return "ok"
+        except ValueError:
+            return "conflict"
+
+    monkeypatch.setattr(store, "append_record", start_together)
+    requests = [
+        reconcile_request(
+            store, variants[0], variants[1], operationId="concurrent-left"
+        ),
+        reconcile_request(
+            store, variants[1], variants[0], operationId="concurrent-right"
+        ),
+    ]
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(pool.map(reviewed, requests))
+    assert sorted(results) == ["conflict", "ok"]
+    assert len(store.capture()["reconciliations"]) == 1
