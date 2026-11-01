@@ -339,64 +339,407 @@ def project_participation_facts(facts):
     return _project_fact_records(_validated_fact_records(facts))
 
 
+def _key(record):
+    return record.get("key", record.get("observationKey"))
 
 
+def _scope(record):
+    return record.get("scope", record.get("attribution", {}).get("scope"))
 
 
+def _known(reference, known_refs):
+    record = known_refs.get(reference["id"])
+    if record is None:
+        _fail("unknown cost reconciliation reference")
+    _validate_reference_identity(reference, record)
+    return record
 
 
+def _validate_reference_identity(reference, record):
+    if _reference_family(record) != reference["kind"]:
+        _fail("cost reconciliation reference kind does not match its record family")
+    if (
+        reference["kind"] == "observation"
+        and reference["id"] != record["key"]["sourceDigest"]
+    ):
+        _fail("cost observation reference must identify its exact source digest")
+    if reference.get("key") is not None and _key(record) != reference["key"]:
+        _fail("cost reconciliation observation key does not match its reference")
+    if reference.get("scope") is not None and _scope(record) != reference["scope"]:
+        _fail("cost reconciliation reference scope does not match its producer")
 
 
+def _reference_family(record):
+    fields = {
+        "evidenceId": "evidence",
+        "estimateId": "estimate",
+        "reconciliationId": "decision",
+        "aggregateId": "aggregate",
+    }
+    found = [family for field, family in fields.items() if field in record]
+    if len(found) == 1:
+        return found[0]
+    return "observation" if not found and "key" in record else None
 
 
+def _decision_records(known_refs):
+    return {
+        key: value for key, value in known_refs.items() if "reconciliationId" in value
+    }
 
 
+def _validate_reconciliation_base(record):
+    _validate_reconciliation_audit(record)
+    if not record["proofRefs"]:
+        _fail("cost reconciliation requires explicit proof references")
+    refs = record["references"]
+    if len({content_hash(ref) for ref in refs}) != len(refs):
+        _fail("duplicate cost reconciliation reference")
+    if record["reconciliationId"] in {ref["id"] for ref in refs} | set(
+        record["supersedes"]
+    ):
+        _fail("cost reconciliation cannot reference itself")
+    selected = record["selectedRepresentation"]
+    if selected is not None and selected not in refs:
+        _fail("cost reconciliation selection must be an exact affected reference")
 
 
+def _validate_reconciliation_audit(record):
+    if (
+        not record["actor"].strip()
+        or not record["reason"].strip()
+        or any(not proof.strip() for proof in record["proofRefs"])
+    ):
+        _fail(
+            "cost reconciliation requires meaningful actor, reason and proof references"
+        )
 
 
+def _validate_reference_scope(record, target):
+    if record["relation"] in {"same-activity", "covers-rollup", "allocation"}:
+        return
+    target_scope = _scope(target)
+    if target_scope:
+        for field in ("sourceInstanceId", "sourceSessionId", "counterEpoch"):
+            if (
+                field in record["scope"]
+                and field in target_scope
+                and record["scope"][field] != target_scope[field]
+            ):
+                _fail("cost reconciliation reference is outside its declared scope")
 
 
+def _validate_reconciliation_refs(record, known_refs):
+    for ref in record["references"]:
+        target = _known(ref, known_refs)
+        if (
+            target.get(
+                "accountingVideoId",
+                target.get("_accountingVideoId", record["accountingVideoId"]),
+            )
+            != record["accountingVideoId"]
+            and record["relation"] != "allocation"
+        ):
+            _fail("cost reconciliation reference belongs to another production")
+        _validate_reference_scope(record, target)
 
 
+def _validate_supersession(record, known_refs):
+    for decision_id in record["supersedes"]:
+        previous = known_refs.get(decision_id)
+        if previous is None or "reconciliationId" not in previous:
+            _fail("unknown superseded cost reconciliation")
+        if previous["accountingVideoId"] != record["accountingVideoId"]:
+            _fail("superseded cost reconciliation belongs to another production")
+    decisions = _decision_records(known_refs)
+    decisions[record["reconciliationId"]] = record
+    _acyclic(
+        {key: value["supersedes"] for key, value in decisions.items()},
+        "cost reconciliation supersession cycle",
+    )
 
 
+def _validate_evidence_revision(record, known_refs):
+    old_id, new_id = record["oldEvidenceId"], record["newEvidenceId"]
+    if old_id == new_id:
+        _fail("cost evidence revision requires different metadata identities")
+    old, new = known_refs.get(old_id), known_refs.get(new_id)
+    if old is None or new is None:
+        _fail("unknown cost evidence revision reference")
+    if not _key(old) or _key(old) != _key(new):
+        _fail("cost evidence revision cannot change an observation payload or key")
+    _validate_revision_selection(record, old_id, new_id)
+    _validate_revision_members(record, known_refs, old, new)
+    _validate_revision_cycle(record, known_refs)
 
 
+def _validate_revision_selection(record, old_id, new_id):
+    identities = {
+        ref["id"] for ref in record["references"] if ref["kind"] == "evidence"
+    }
+    selected = record["selectedRepresentation"] or {}
+    if (
+        not {old_id, new_id}.issubset(identities)
+        or selected.get("kind") != "evidence"
+        or selected.get("id") != new_id
+    ):
+        _fail("cost evidence revision must select its exact new evidence identity")
 
 
+def _active_reconciliation_records(record, known_refs):
+    decisions = _decision_records(known_refs)
+    decisions[record["reconciliationId"]] = record
+    superseded = {
+        identity for item in decisions.values() for identity in item["supersedes"]
+    }
+    return [item for identity, item in decisions.items() if identity not in superseded]
 
 
+def _validate_revision_cycle(record, known_refs):
+    revisions = [
+        item
+        for item in _active_reconciliation_records(record, known_refs)
+        if item["relation"] == "revises-evidence"
+    ]
+    _selected_revision_edges(revisions)
 
 
+def _validate_revision_members(record, known_refs, old, new):
+    for ref in record["references"]:
+        if ref["kind"] != "evidence" or _key(_known(ref, known_refs)) != _key(new):
+            _fail(
+                "metadata revision references must share one unchanged observation key"
+            )
+    if old.get("participationId") and old["participationId"] != new.get(
+        "participationId"
+    ):
+        _fail(
+            "metadata revision cannot reassign a participation; use explicit allocation"
+        )
+    _validate_served_model_revision(old, new, known_refs)
 
 
+def _validate_served_model_revision(old, new, known_refs):
+    if new.get("modelBasis") != "served" or old.get("modelBasis") == "served":
+        return
+    row = known_refs.get(new["key"]["sourceDigest"], {}).get("observation", {})
+    profile = known_refs.get(new.get("profileId"), {})
+    qualified = profile.get("capability") == "qualified"
+    supported = (
+        "model" in profile.get("allowedFields", [])
+        or profile.get("qualification", {}).get("kind") == "synthetic"
+    )
+    if not row.get("model") or not qualified or not supported:
+        _fail(
+            "selected model hint cannot become served model evidence without qualified source proof"
+        )
 
 
+def _validate_representations(record, known_refs):
+    if len(record["references"]) < 2 or record["selectedRepresentation"] is None:
+        _fail(
+            "cost reconciliation requires multiple representations and an explicit selection"
+        )
+    if any(ref["kind"] != "evidence" for ref in record["references"]):
+        _fail("same-activity requires exact admitted evidence references")
+    observations = [
+        _known(ref, known_refs)["key"]["observationId"] for ref in record["references"]
+    ]
+    if len(set(observations)) != len(observations):
+        _fail(
+            "one observation requires metadata revision or row correction, not an activity alias"
+        )
+    if _scope(_known(record["selectedRepresentation"], known_refs)) != record["scope"]:
+        _fail("activity covered scope must match the selected producer scope")
+    _validate_same_activity_composition(record, known_refs)
 
 
+def _validate_same_activity_composition(record, known_refs):
+    footprints = []
+    for ref in record["references"]:
+        item = _known(ref, known_refs)
+        members = item.get("aggregateScope", {}).get("members") or [item["key"]]
+        footprints.append({content_hash(key) for key in members})
+    composite = any(
+        _known(ref, known_refs).get("aggregateScope", {}).get("members")
+        for ref in record["references"]
+    )
+    if composite and any(members != footprints[0] for members in footprints[1:]):
+        _fail("partial tree activity requires complete covers-rollup selection")
 
 
+def _validate_estimate_replacement(record, known_refs):
+    selected = record["selectedRepresentation"]
+    estimates = [ref for ref in record["references"] if ref["kind"] == "estimate"]
+    if len(estimates) != 1 or selected is None or selected["kind"] == "estimate":
+        _fail(
+            "cost estimate replacement requires one estimate and stronger selected evidence"
+        )
+    if any(
+        _scope(_known(ref, known_refs)) != record["scope"]
+        for ref in record["references"]
+    ):
+        _fail("partial estimate scope requires explicit bounded decomposition")
+    _validate_stronger_estimate_evidence(
+        _known(estimates[0], known_refs), _known(selected, known_refs), selected
+    )
 
 
+def _validate_stronger_estimate_evidence(estimate, evidence, selected):
+    if selected["kind"] != "evidence" or evidence.get("nature") not in {
+        "measured",
+        "manual",
+    }:
+        _fail("estimate replacement requires explicit measured or manual evidence")
+    if evidence.get("attribution", {}).get("status") != "assigned":
+        _fail("estimate replacement requires assigned evidence")
+    if evidence.get("participationId") != estimate["participationId"]:
+        _fail("estimate replacement evidence belongs to another participation")
 
 
+def _validate_allocation(record, known_refs):
+    allocations = record.get("allocations", [])
+    if not allocations:
+        _fail("cost allocation requires explicit bounded partitions")
+    allocated = set()
+    for allocation in allocations:
+        target = _known(allocation["reference"], known_refs)
+        if (
+            allocation["reference"] not in record["references"]
+            or _scope(target) != allocation["scope"]
+        ):
+            _fail(
+                "cost allocation requires exact affected references and producer scopes"
+            )
+        key = content_hash(allocation["reference"])
+        if key in allocated:
+            _fail("duplicate cost allocation requires explicit disjoint decomposition")
+        allocated.add(key)
+    _validate_prior_allocations(record, known_refs, allocated)
 
 
+def _validate_prior_allocations(record, known_refs, allocated):
+    decisions = _decision_records(known_refs)
+    superseded = set(record["supersedes"]) | {
+        identity for item in decisions.values() for identity in item["supersedes"]
+    }
+    for identity, previous in decisions.items():
+        if (
+            identity == record["reconciliationId"]
+            or identity in superseded
+            or previous["relation"] != "allocation"
+        ):
+            continue
+        previous_refs = {
+            content_hash(item["reference"]) for item in previous.get("allocations", [])
+        }
+        if previous_refs & allocated:
+            _fail(
+                "cost activity already has an active allocation; explicitly supersede it"
+            )
 
 
+def _validate_withdrawal(record, known_refs):
+    if not record["supersedes"]:
+        _fail("cost withdrawal requires explicit superseded decisions")
+    refs = {ref["id"] for ref in record["references"] if ref["kind"] == "decision"}
+    if refs != set(record["supersedes"]) or len(refs) != len(record["references"]):
+        _fail("withdrawal must reference exactly its superseded decisions")
 
 
+def validate_reconciliation(record, *, known_refs):
+    _validate_record("reconciliation", record, "reconciliationId")
+    _operations(
+        list(_decision_records(known_refs).values()) + [record], "reconciliationId"
+    )
+    _validate_reconciliation_base(record)
+    _validate_reconciliation_refs(record, known_refs)
+    _validate_supersession(record, known_refs)
+    handlers = {
+        "revises-evidence": _validate_evidence_revision,
+        "same-activity": _validate_representations,
+        "covers-rollup": _validate_rollup_selection,
+        "replaces-estimate": _validate_estimate_replacement,
+        "allocation": _validate_allocation,
+        "withdraw": _validate_withdrawal,
+    }
+    handlers[record["relation"]](record, known_refs)
+    return record
 
 
+def _evidence_groups(evidence):
+    variants = {}
+    groups = defaultdict(dict)
+    for item in evidence:
+        identity = item["evidenceId"]
+        expected = (
+            legacy_evidence_id(item["key"])
+            if item.get("nature") == "legacy-unknown"
+            else evidence_id(item)
+        )
+        if identity != expected:
+            _fail("cost evidence integrity verification failed")
+        if identity in variants and variants[identity] != item:
+            _fail("conflicting cost evidence identity")
+        variants[identity] = item
+        groups[content_hash(item["key"])][identity] = item
+    return variants, groups
 
 
+def _revision_edges(variants, reconciliations, known_refs=None):
+    decisions = {item["reconciliationId"]: item for item in reconciliations}
+    known_refs = {**variants, **decisions, **(known_refs or {})}
+    revisions = [
+        item for item in decisions.values() if item["relation"] == "revises-evidence"
+    ]
+    for decision in revisions:
+        validate_reconciliation(decision, known_refs=known_refs)
+    superseded = {
+        identity for item in decisions.values() for identity in item["supersedes"]
+    }
+    active = [item for item in revisions if item["reconciliationId"] not in superseded]
+    return _selected_revision_edges(active)
 
 
+def _selected_revision_edges(active):
+    edges = defaultdict(set)
+    for item in active:
+        for ref in item["references"]:
+            if ref["id"] != item["newEvidenceId"]:
+                edges[ref["id"]].add(item["newEvidenceId"])
+    _acyclic(edges, "cost evidence revision cycle")
+    return edges
 
 
+def _evidence_terminals(group, edges):
+    terminals = set()
+    for identity in group:
+        while edges.get(identity):
+            if len(edges[identity]) != 1:
+                return set()
+            identity = next(iter(edges[identity]))
+        terminals.add(identity)
+    return terminals
 
 
+def resolve_evidence(evidence, reconciliations, *, known_refs=None):
+    """Select exact revisions only; never choose metadata by strength or timestamp."""
+    variants, groups = _evidence_groups(evidence)
+    edges = _revision_edges(variants, reconciliations, known_refs)
+    selected, conflicts = [], []
+    for group in groups.values():
+        terminals = _evidence_terminals(group, edges)
+        if len(terminals) == 1:
+            selected.append(group[next(iter(terminals))])
+        else:
+            conflicts.append(
+                {
+                    "code": "cost-evidence-conflict",
+                    "observationId": next(iter(group.values()))["key"]["observationId"],
+                    "evidenceIds": sorted(group),
+                }
+            )
+    return {"selected": selected, "conflicts": conflicts}
 
 
 
@@ -463,18 +806,123 @@ def _source_lineage(state):
 
 
 
+def _rollup_representations(record, known_refs):
+    if any(ref["kind"] != "evidence" for ref in record["references"]):
+        _fail("rollup selection requires exact admitted evidence references")
+    items = [_known(ref, known_refs) for ref in record["references"]]
+    aggregates = [
+        item for item in items if item.get("aggregateScope", {}).get("members")
+    ]
+    if len(aggregates) != 1:
+        _fail("rollup selection requires one exact known composition")
+    aggregate = aggregates[0]
+    leaves = [item for item in items if item["evidenceId"] != aggregate["evidenceId"]]
+    return aggregate, leaves
 
 
+def _validate_rollup_proof(record, aggregate, leaves, known_refs):
+    composition = aggregate["aggregateScope"]
+    profile = known_refs.get(aggregate.get("profileId"), {})
+    if not composition["proofRefs"] or profile.get("capability") != "qualified":
+        _fail("rollup composition requires qualified source proof")
+    if profile.get("semantics", {}).get("aggregateScope") != composition["kind"]:
+        _fail("rollup composition disagrees with its frozen source profile")
+    members = {content_hash(key) for key in composition["members"]}
+    if (
+        members != {content_hash(item["key"]) for item in leaves}
+        or content_hash(aggregate["key"]) in members
+    ):
+        _fail("rollup selection requires complete exact leaf membership")
+    if _scope(aggregate) != record["scope"]:
+        _fail("rollup covered scope must match its producer scope")
 
 
+def _validate_rollup_selection(record, known_refs):
+    aggregate, leaves = _rollup_representations(record, known_refs)
+    _validate_rollup_proof(record, aggregate, leaves, known_refs)
+    plural = record.get("selectedRepresentations")
+    if plural is not None:
+        selected = {ref["id"] for ref in plural}
+        if record["selectedRepresentation"] is not None or selected != {
+            item["evidenceId"] for item in leaves
+        }:
+            _fail("rollup leaf selection requires the complete reviewed leaf set")
+        if any(ref not in record["references"] for ref in plural):
+            _fail("rollup leaf selection must use exact affected references")
+        return
+    selected = record["selectedRepresentation"] or {}
+    if selected.get("id") != aggregate["evidenceId"]:
+        _fail("rollup requires its aggregate or the complete explicit leaf set")
 
 
+def _normalized_reconcile_request(request):
+    value = deepcopy(request)
+    for field in ("references", "selectedRepresentations", "allocations"):
+        if field in value:
+            value[field] = sorted(value[field], key=content_hash)
+    for field in ("supersedes", "proofRefs"):
+        value[field] = sorted(value[field])
+    return value
 
 
+def _reconcile_result(record, replayed):
+    return {
+        "schemaVersion": "2.0.0",
+        "status": "ok",
+        "accountingVideoId": record["accountingVideoId"],
+        "reconciliationId": record["reconciliationId"],
+        "recordIds": [record["reconciliationId"]],
+        "replayed": replayed,
+        "diagnostics": [],
+    }
 
 
+def _reconcile_replay(records, request):
+    previous = next(
+        (item for item in records if item["operationId"] == request["operationId"]),
+        None,
+    )
+    if previous is None:
+        return None
+    payload = {
+        key: value
+        for key, value in previous.items()
+        if key not in {"reconciliationId", "createdAt", "recordedOrder"}
+    }
+    if _normalized_reconcile_request(payload) != request:
+        _fail("cost reconciliation operation replay conflicts with accepted content")
+    return _reconcile_result(previous, True)
 
 
+def reconcile_costs(store, request):
+    """Append a reviewed relation; retain all source evidence and prior decisions."""
+    from avo.avo_state import now_iso
+    from avo.cost_store import CostError, validate
+
+    validate("reconcile-request", request)
+    if (
+        not store.identity()
+        or request["accountingVideoId"] != store.identity()["accountingVideoId"]
+    ):
+        _fail("cost reconciliation belongs to an unknown or different production")
+    request = _normalized_reconcile_request(request)
+    view = store.capture()
+    replay = _reconcile_replay(view["reconciliations"], request)
+    if replay:
+        store.amend_if_closed()
+        return replay
+    record = {**request, "createdAt": now_iso()}
+    record["reconciliationId"] = content_hash(record)
+    validate_reconciliation(record, known_refs=store.references(view))
+    try:
+        saved = store.append_record("reconciliations", record)
+    except CostError:
+        replay = _reconcile_replay(store.capture()["reconciliations"], request)
+        if replay:
+            store.amend_if_closed()
+            return replay
+        raise
+    return _reconcile_result(saved, False)
 
 
 def _interval_parent_state(fact, records, states):

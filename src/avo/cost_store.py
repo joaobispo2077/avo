@@ -494,38 +494,206 @@ class CostStore:
 
 
 
+def _cost_claim_lock():
+    from avo import avo_state
+
+    registry = CostStore(avo_state.state_dir() / "cost-locators", archive=True)
+    return _directory_lock(registry.path("exclusive-claims.lock"), attempts=3000)
 
 
+def _remember_claim_store(store):
+    from avo.cost_history import remember
+
+    remember(store)
 
 
+def _packet_claims(packet):
+    return [
+        (item["key"], item["attribution"]["scope"])
+        for item in packet["evidence"]
+        if item["attribution"]["status"] == "assigned"
+    ]
 
 
+def _other_claim_stores(store):
+    from avo.cost_history import _history_sources
+
+    owner = store.identity()["accountingVideoId"]
+    selected = {}
+    for candidate in _history_sources(store, include_provider_exports=False):
+        try:
+            identity = candidate.identity()
+        except (OSError, CostError, ValueError):
+            continue
+        if not identity or identity["accountingVideoId"] == owner:
+            continue
+        key = identity["accountingVideoId"]
+        if _prefer_claim_copy(selected.get(key), candidate):
+            selected[key] = (candidate, identity)
+    yield from selected.values()
 
 
+def _prefer_claim_copy(previous, candidate):
+    return previous is None or (
+        previous[0].portable_status() is not None
+        and candidate.portable_status() is None
+    )
 
 
+def _batch_claim_keys(batch):
+    if batch.get("schemaVersion", "1.0.0") == "1.0.0":
+        return batch.get("observationKeys", CostStore.keys_for(batch["observations"]))
+    return [
+        item["key"]
+        for item in batch.get("evidence", [])
+        if item["attribution"]["status"] == "assigned"
+    ]
 
 
+def _prior_claims(candidate, identity, requested):
+    result = []
+    for batch in candidate.documents("batches"):
+        keys = [
+            key for key in _batch_claim_keys(batch) if key["observationId"] in requested
+        ]
+        if keys:
+            _verify_batch(batch, identity)
+            result.extend(keys)
+    return result
 
 
+def _active_allocations(decisions):
+    superseded = {identity for item in decisions for identity in item["supersedes"]}
+    return [
+        allocation
+        for item in decisions
+        if item["relation"] == "allocation"
+        and item["reconciliationId"] not in superseded
+        for allocation in item.get("allocations", [])
+    ]
 
 
+def _allocated_key(reference, known):
+    record = known.get(reference["id"], {})
+    return reference.get("key", record.get("key"))
 
 
+def _claim_destinations(candidate, key):
+    if candidate.portable_status() is not None:
+        return set()
+    known = candidate.references()
+    return {
+        (item["accountingVideoId"], content_hash(item["scope"]))
+        for item in _active_allocations(candidate.documents("reconciliations"))
+        if _allocated_key(item["reference"], known) == key
+    }
 
 
+def _follow_claim_transfer(candidate, key, owner, scope_digest, stores, visited):
+    while candidate.identity()["accountingVideoId"] not in visited:
+        visited.add(candidate.identity()["accountingVideoId"])
+        choices = _claim_destinations(candidate, key)
+        if len(choices) != 1:
+            return False
+        destination, declared_scope = next(iter(choices))
+        if destination == owner:
+            return declared_scope == scope_digest
+        candidate = stores.get(destination)
+        if candidate is None:
+            return False
+    return False
 
 
+def _registered_claim_store(owner):
+    from avo import avo_state
+
+    for path in (avo_state.state_dir() / "cost-locators").glob("*.json"):
+        try:
+            locator = read_json(path)
+        except (OSError, ValueError):
+            continue
+        if locator.get("accountingVideoId") == owner:
+            return CostStore(locator["rawDir"], archive=locator.get("archive", False))
+    return None
 
 
+def _allocation_unchanged(record, allocation, known):
+    if record["relation"] != "allocation":
+        return False
+    key = _allocated_key(allocation["reference"], known)
+    return any(
+        _allocated_key(item["reference"], known) == key
+        and item["accountingVideoId"] == allocation["accountingVideoId"]
+        and item["scope"] == allocation["scope"]
+        for item in record.get("allocations", [])
+    )
 
 
+def _transfer_returned(store, allocation, scope, known):
+    owner = store.identity()["accountingVideoId"]
+    destination = allocation["accountingVideoId"]
+    if destination == owner:
+        return True
+    target = _registered_claim_store(destination)
+    if target is None:
+        return True
+    if not target.identity():
+        raise CostError(
+            "consumed transfer authority is unavailable; retain its allocation"
+        )
+    key = _allocated_key(allocation["reference"], known)
+    claims = _prior_claims(target, target.identity(), {key["observationId"]})
+    if not claims:
+        return True
+    return _claim_destinations(target, key) == {(owner, content_hash(scope))}
 
 
+def _validate_transfer_supersession(store, record, view):
+    known = store.references(view)
+    previous = {item["reconciliationId"]: item for item in view["reconciliations"]}
+    for identity in record["supersedes"]:
+        decision = previous[identity]
+        for allocation in decision.get("allocations", []):
+            if _allocation_unchanged(record, allocation, known):
+                continue
+            reference = known[allocation["reference"]["id"]]
+            scope = reference.get("attribution", {}).get("scope", decision["scope"])
+            if not _transfer_returned(store, allocation, scope, known):
+                raise CostError(
+                    "consumed cost transfer requires an exact audited reverse allocation"
+                )
 
 
+def _claim_transferred(candidate, old_key, incoming, owner):
+    key, scope = incoming
+    if key != old_key or scope is None:
+        return False
+    stores = {
+        identity["accountingVideoId"]: item
+        for item, identity in _other_claim_stores(candidate)
+    }
+    return _follow_claim_transfer(
+        candidate, key, owner, content_hash(scope), stores, set()
+    )
 
 
+def _assert_exclusive_claims(store, claims):
+    if not claims:
+        return
+    requested = {}
+    for key, scope in claims:
+        requested.setdefault(key["observationId"], []).append((key, scope))
+    owner = store.identity()["accountingVideoId"]
+    for candidate, identity in _other_claim_stores(store):
+        for previous in _prior_claims(candidate, identity, requested):
+            if not all(
+                _claim_transferred(candidate, previous, current, owner)
+                for current in requested[previous["observationId"]]
+            ):
+                raise CostError(
+                    "native cost activity is already assigned to another production; "
+                    "use an exact audited allocation or retain unallocated evidence"
+                )
 
 
 def _is_storage_link(path):
