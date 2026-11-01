@@ -74,7 +74,7 @@ Orchestrate stages 0–7: plan (optional Spec Kit) → transcribe → edit → w
 1. **Parse inputs and motion intent** per [shared arguments](../../agent-skills/avo-pipeline/references/arguments.md). Inspect the effective engine before loading engine-only workflows.
 2. **Resolve provider** manifest and exact project context, then inspect that engine context without saving a default.
 3. **Write or update** `<rawDir>/avo.project.json` with declared asset paths only.
-4. **Start session (REQUIRED):** use the resolved runtime's `session start --raw-dir <rawDir> --provider <provider> [--title TEXT]`, installed as `avo session start` or checkout `python -m avo.session start`. This writes `.avo/sessions/<id>/pre.json` baseline inventory for wrap diff and stats.
+4. **Start session (REQUIRED):** use the resolved runtime's `session start --raw-dir <rawDir> --provider <provider> [--title TEXT] [--cost-context <JSON>]`, installed as `avo session start` or checkout `python -m avo.session start`. Supply only explicit metadata context when available; omission records an unknown expected host. This writes `.avo/sessions/<id>/pre.json` baseline inventory for wrap diff and stats.
 5. **Inventory** sources (`ffprobe`), transcribe and pack transcripts.
 6. **Converse** → propose strategy → **wait for required confirmation**.
 7. **Execute** edit proof using its declared profile → current QC/Watch/transcript analysis → write `edit/review/edit-proof/approval-gate.md` → **wait for approval**.
@@ -155,6 +155,8 @@ Before structure/CMap/BMap/motion/sound authoring, read `pipeline status` and `b
 
 ## Cost recording and completion response
 
-Use the existing runtime to inspect recorded costs (python -m avo.cli costs --project <project> in a checkout; avo costs installed). Read [cost guidance](../../agent-skills/avo-pipeline/references/costs.md) for explicit usage-source binding and model/provider switches. Refresh bound local sources with costs collect before learndown and after verified cleanup, before final wrap. This adds no inference calls. Missing telemetry stays unknown.
+Use the existing runtime to inspect recorded costs (`python -m avo.cli costs --project <project>` in a checkout; `avo costs` installed). Read [cost guidance](../../agent-skills/avo-pipeline/references/costs.md) for explicit context, scoped source attachment and agent/model transitions. Pass available metadata through `--cost-context <JSON>` on pipeline run/resume; reuse an operation ID only for an unchanged retry. No context means unknown expected-host coverage, not a previous agent or inferred human/CI mode.
+
+Context registration measures no conversation and reads no source. Automatic collection requires its exact accepted fact, authorized binding and qualified exact-version profile. Refresh those bound sources with `costs collect` before learndown and after verified cleanup, before final wrap. Missing/denied sources produce scoped diagnostics and editing continues. Skills without an existing runtime cannot claim collection; no hooks, OTel, SDKs or account polling are activated to fill the gap. EOF is not terminal/flush proof.
 
 Learndown MUST automatically display the persisted draft cost/token summary, valuation basis, coverage, cutoff and pending turn before the existing step-status footer. Cleanup MUST automatically display the final persisted summary after verified cleanup and final wrap/export. Only successful production closure can say the video is finished. Accounting/export failure after deletion requires accounting-only retry, never repeating cleanup deletion. Do not generate recursive responses to meter the still-open closing turn.

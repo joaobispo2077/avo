@@ -25,6 +25,12 @@ This interpretation belongs to the driving agent; native CLI/MCP receive canonic
 
 Global `engine-show`, `engine-set --scope global`, `engine-reset --scope global`, and `runtime-install` require no provider or footage. Standalone code-drawn authoring needs an explicit external ProjectDir; outputs stay in that project. Footage editing retains the context requirements below. A one-run choice survives that request's pauses; `pipeline run --new-request` explicitly resolves current defaults for new authoring without resetting editorial lifecycle. Existing immutable animation stays pinned until deliberately revised through the canonical services.
 
+## Optional invocation cost context
+
+Accept `Cost context: <metadata-only descriptor>` or native `--cost-context <JSON>` for session start/pipeline run. The descriptor uses the shipped v2 context contract: stable operation ID, explicit mode, available agent family/surface/version/role, source session and attributable boundaries, plus provenance. Keep prompts, conversations, tool arguments, secrets and local client paths out of this descriptor. Include a `sourceAttachment` only when its existing local binding and frozen profile are explicitly authorized.
+
+Omit unavailable facts. Missing metadata records an unknown expected host and does not block editing; it is not permission to assume the last agent or declare human/CI execution. An explicit `human-ci` declaration requires bounded scope. MCP client name/version and request IDs do not establish a host conversation or source grant. See [cost guidance](costs.md) for file-based context registration, structured packets, source qualification and fallback.
+
 ## Required context
 
 ```text

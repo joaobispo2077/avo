@@ -19,6 +19,14 @@ Engine zip contains **AVO Python and the bundled Playwright driver (including No
 2. **Opened folder is an AVO checkout** — `pyproject.toml` name `avo` **and** `src/avo/` **and** `AGENTS.md` contains `<!-- avo:orchestrator:start -->` → `python -m avo.*`. Do **not** use `~/.avo/bin/avo`.
 3. **Else** → `~/.avo/bin/avo`. Missing? Run the installer. Do not clone unless asked.
 
+## Invocation cost context
+
+Read [cost guidance](references/costs.md) when starting/resuming a video or changing its driving agent. Pass an explicit metadata-only descriptor through `--cost-context <JSON>` on session start/pipeline run when the caller can supply it. Reuse its operation ID only for the same retry. Missing context remains an unknown expected host; do not borrow the previous agent, infer human/CI execution, or derive a session from an MCP transport ID.
+
+Context registration alone does not read source files, qualify a collector or measure a host conversation. Automatic collection requires the accepted context's explicit source attachment and exact-version qualified profile. Report collection diagnostics while continuing authorized editing. A model or agent switch preserves earlier evidence and the video's accounting identity.
+
+Use the runtime resolved for the requested workflow. With skills only and no engine/checkout/MCP runtime, explain that descriptors can be prepared but no ledger mutation or collection has executed. Do not install vendor SDKs, activate hooks/OTel, poll accounts or clone/install AVO solely to manufacture accounting. Normal runtime setup for a requested editing workflow remains governed by the Runtime section.
+
 ## Motion engine selection before workflow loading
 
 This section applies to motion-authoring workflows. `/avo.organize` routes directly to its library reference without selecting or provisioning a motion engine.

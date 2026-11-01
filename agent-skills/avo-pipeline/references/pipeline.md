@@ -108,6 +108,10 @@ Before structure/CMap/BMap/motion/sound authoring, read `pipeline status` and `b
 
 ## Cost recording and completion response
 
-Use the existing runtime to inspect recorded costs (python -m avo.cli costs --project <project> in a checkout; avo costs installed). Read [cost guidance](costs.md) for explicit usage-source binding and model/provider switches. Refresh bound local sources with costs collect before learndown and after verified cleanup, before final wrap. This adds no inference calls. Missing telemetry stays unknown.
+Use the existing runtime and [cost guidance](costs.md). At session start/pipeline run or resume, pass `--cost-context <JSON>` when explicit metadata is available; a distinct entry/change gets a new operation ID, while an unchanged retry keeps its ID. Missing context declares unknown expected-host coverage. Registration is metadata-only; source collection uses only the exact accepted fact's authorized binding/profile and preserves scoped diagnostics if unavailable.
+
+Use explicit `costs transition` requests for sequential/concurrent agent changes, preserving the accounting video ID, parent relationships and earlier evidence. A new agent does not implicitly end another interval; a selected model is not proof of a served model. Human/CI execution is an explicit bounded declaration. Missing telemetry alone does not block editing.
+
+Inspect recorded costs with `python -m avo.cli costs --project <project>` in a checkout or `avo costs --project <project>` installed. Refresh authorized bound sources with `costs collect` before learndown and after verified cleanup, before final wrap. These operations add no inference calls. Skills without a runtime cannot execute registration/collection, and EOF does not prove source closure or final flush.
 
 Learndown MUST automatically display the persisted draft cost/token summary, valuation basis, coverage, cutoff and pending turn before the existing step-status footer. Cleanup MUST automatically display the final persisted summary after verified cleanup and final wrap/export. Only successful production closure can say the video is finished. Accounting/export failure after deletion requires accounting-only retry, never repeating cleanup deletion. Do not generate recursive responses to meter the still-open closing turn.
