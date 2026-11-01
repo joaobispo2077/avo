@@ -13,29 +13,53 @@ python -m avo.cli costs capabilities
 
 Installed engine users use `avo costs` with the same arguments. A report reads recorded data; collect refreshes explicitly bound local sources. Neither starts inference, fetches tariffs or uploads usage. Unknown amounts remain unknown. All amounts show their basis: reported cost, calculated estimate, API-equivalent value or manual report. Unlike currencies and native credits remain separate. Subscription API equivalents are not your subscription invoice. Labor, hardware, electricity and unreported service use are excluded.
 
-## Supported collection paths
+## Supported contribution paths
 
-| Agent | Local input | Limitations |
+The [agent continuity guide](agent-cost-continuity.md) documents context, handoffs,
+manual bootstrap, estimates and reconciliation. `costs capabilities --json`
+reports ten separate environments:
+
+| Environment | Bundled host-native status | Contribution available now |
 | --- | --- | --- |
-| Codex CLI | Documented exec JSONL with thread.started and completed-turn usage | Requires explicit thread binding; model/provider/time remain unknown when absent. Interactive/Desktop rollout formats are not silently guessed. |
-| OpenCode | Completed assistant-message export | Session/model/provider identity retained; partial messages wait for completion. |
-| Claude Code | Projected api_request event metadata | Source must include matching session/request identity; no raw prompt logging needed. |
-| Gemini CLI | Projected api_response metadata | Missing category overlap remains unknown; aggregate counters alone cannot identify a video's requests. |
-| Cursor | Normalized authorized usage export or manual metadata | Optional conversation identity must be explicitly attributed; no private dashboard endpoint or admin key required. |
-| Cline | Normalized per-task report or manual metadata | No promise of a stable universal native export schema. |
-| Windsurf | Normalized/native-unit manual report | Credits/ACUs are not tokens; no universal credit conversion. |
+| Codex CLI | Candidate | Scoped manual report, typed packet or explicit estimate |
+| Codex Desktop | Candidate, qualified separately from CLI | Scoped manual report, typed packet or explicit estimate |
+| ChatGPT | Manual-only | Supplied structured metadata or explicit estimate |
+| Cursor | Candidate | Scoped manual report, typed packet or explicit estimate |
+| Claude Code | Candidate | Scoped manual report, typed packet or explicit estimate |
+| OpenCode | Candidate | Scoped manual report, typed packet or explicit estimate |
+| Gemini CLI | Candidate | Scoped manual report, typed packet or explicit estimate |
+| Cline | Candidate | Scoped manual report, typed packet or explicit estimate |
+| Windsurf | Manual-only | Attributable native-unit/manual data or explicit estimate |
+| Unknown or custom agent | Manual-only | Preserve its supplied identity; use scoped manual data or an estimate |
 
-All seven accept normalized imports/manual reports. `capabilities` describes source shapes, not a guarantee every installed agent version exposes that format. Account-wide collection, background daemons and remote admin fetching are not required. Files are bounded to 32 MiB per input, with at most 100,000 observations per import; split larger exports into attributable parts.
+No bundled host-native profile is currently qualified. Documentation and synthetic
+fixtures do not certify a vendor source/version. Native measurement needs an
+explicitly admitted, fixture-qualified profile and an authorized scoped source.
+Unknown versions do not inherit an old parser. Codex cumulative exec output is
+not treated as per-turn usage or as a proven final flush.
+
+The existing seven installer profiles remain unchanged. Skills-only installation
+does not supply a runtime or capture host usage. Account-wide collection,
+background daemons and remote admin fetching are not activated. Typed/manual
+inputs are bounded to 32 MiB and 100,000 observations; split larger sources into
+attributable parts. Incremental qualified collection additionally limits each
+call to 8 MiB, 10,000 records and 1 MiB per record.
 
 ## Bind and collect
 
 ```powershell
-python -m avo.cli costs bind --project C:/videos/demo/avo.project.json --source C:/usage/scoped.jsonl --agent codex --session-id THREAD_ID --boundary beginning --format codex
+python -m avo.cli costs bind --project C:/videos/demo/avo.project.json --source C:/usage/scoped.jsonl --agent cursor --session-id video-session --boundary beginning --format normalized
 python -m avo.cli costs collect --project C:/videos/demo/avo.project.json
 python -m avo.cli costs close-binding --project C:/videos/demo/avo.project.json --binding-id BINDING_ID --end-boundary LAST_REQUEST
 ```
 
 Choose beginning only when the entire supplied session belongs to this video. Otherwise specify the last request before the video began. Close a binding before using that session for another video. Independent sessions may run concurrently; unknown shared intervals stay unallocated. Each record retains its original model, service provider and billing basis, so switching mid-pipeline cannot retroactively price earlier usage with the newly selected model. The channel provider is a separate identity from the AI service provider.
+
+This legacy normalized route retains its evidence limitations. To identify a new
+manual declaration explicitly, first register its context and use
+`report-manual --participation-fact-id <factId> --operation-id <stable-id>`.
+That route freezes a manual-only profile; it never certifies native measurement.
+MCP callers can supply a structured manual request without a shared file path.
 
 ## Normalized example
 

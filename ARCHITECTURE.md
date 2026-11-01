@@ -371,55 +371,103 @@ out-of-window use, or mismatched lineage fails closed. Review stems are audit
 artifacts and cannot become picture or delivery ancestors. Proof approval,
 music/rights approval, and master promotion remain separate human gates.
 
-## Video cost accounting (feature 011)
+## Video cost accounting (features 011 and 015)
 
-Implemented by the [feature 011 plan](specs/011-video-cost-transparency/plan.md):
-local metadata accounting outside editorial timeline authority. Pure
-normalization/pricing/aggregation functions consume versioned source-reader
-output; CLI, skills, wrap/export and optional MCP use the same accounting
-service. Source readers and filesystem persistence depend on the accounting
-contracts, while accounting rules do not depend on agent SDKs or model calls.
+[Feature 011](specs/011-video-cost-transparency/plan.md) and
+[feature 015](specs/015-agent-cost-continuity/plan.md) provide local metadata
+accounting outside editorial timeline authority. CLI, installed engine, skills,
+wrap/learndown and optional local-stdio MCP use the same services. Accounting
+never selects footage, changes editorial approvals or starts inference/rendering.
 
-Immutable usage batches and snapshots live in the footage project's
-`edit/costs/`, preserved by canonical and legacy cleanup. Channel provider and
-AI service provider are separate identities. Each observation retains its
-actual model/service/billing basis through switches. Existing timeline and
-session IDs remain aliases; an accounting UUID prevents master-name changes
-from splitting video history. Legacy wraps without costs stay readable.
+`cost_store` owns contained immutable publication, schema/version dispatch,
+source/evidence references, captured membership, snapshots and portable readers.
+`cost_sources` owns explicitly authorized bounded readers and version-qualified
+projections; `cost_profiles` freezes parser/fixture/temporal/category/tree proof.
+`cost_participation` validates lifecycle/decision DAGs, separates responsibility
+intervals from source grants and implements context/transition/reconciliation.
+`cost_estimates` processes explicit manual ranges or supplied visible text with
+installed pinned local tokenizer assets, retaining safe metadata only. `costs`
+normalizes accepted representations and Decimal financial views from one capture;
+`cost_closure` coordinates verified closure and mutation-only recovery. Domain
+rules do not depend on vendor SDKs, a daemon, remote telemetry or MCP registration.
 
-Learndown and verified cleanup responses automatically display draft/final
-snapshots with coverage and cutoff; production completion does not imply an
-exact invoice or a fully reported closing turn. Validation must prove
-deduplication, category overlap, switching, cleanup preservation, portable
-history, privacy and same-snapshot agreement across response/wrap/export.
-`costs_cli` and optional MCP call `cost_store`, `cost_sources`, `costs` and
-`cost_history`; wrap/export call `cost_closure`. `cost_services` captures only
-available response usage from AVO-owned review/probe calls. None of these
-modules selects media or changes editorial approvals. History reads declared
-`.avo/cost-locators` and provider exports, independent of bounded session stats.
+Canonical identity and evidence live in `<rawDir>/edit/costs/`, retained by normal
+cleanup. Editorial provider, inference provider, product/surface, served model,
+billing mode and agent role remain distinct. Production UUID survives rename;
+runs/devices/sessions are aliases. Missing current context records an expected
+unknown executor, never the prior active host. Selected-model hints do not
+rewrite historical served-model evidence. AVO-owned response usage is captured
+by `cost_services`; host-native capture requires its own admitted profile/source.
+No bundled vendor host profile is currently qualified; nine named environments
+plus an unknown route have explicit candidate/manual/unavailable fallbacks.
 
-Immutable publication uses an exclusive per-document directory lock, an fsynced
-same-directory temporary file and atomic replacement. Interrupted locks fail
-closed and require explicit recovery. Batches freeze tariff references and
-precompute observation keys; reports verify batch integrity and capture one
-membership set. Snapshots retain that exact set. Conflicts need an explicit
-selection/exclusion; revaluation appends evidence and preserves old snapshots.
-Portable exports preserve document IDs, including snapshot drill-down paths.
+V2 batches atomically publish unchanged observation payloads, separately hashed
+evidence and receipts, including receipt-only or metadata-only commits. Frozen
+profiles, participation facts, estimates, reconciliations, bindings, prices and
+corrections all enter capture/integrity/export membership. Source collection is
+bounded to 8 MiB/10,000 records per call and 1 MiB per record; typed/manual inputs
+remain capped at 32 MiB/100,000 observations. Native IDs/epochs/baselines and
+explicit boundaries govern attribution; counts or timestamps never establish
+identity, copied-history ownership or a guessed proportional split.
 
-Compatibility is additive: legacy videos remain readable with unknown costs,
-manual/normalized evidence works for every installer agent, and documented
-local import shapes are offered only for Codex exec, OpenCode exports and
-projected Claude/Gemini metadata. Interactive/Desktop log formats are not
-guessed. Imported evidence cannot establish account-wide completeness; current
-coverage remains partial or not-recorded, even after production is finished.
+Publication uses exclusive directory locks, fsynced same-directory temporary
+files and atomic replacement. Per-operation replay checks, reconciliation-family
+serialization and explicit local activity claims prevent conflicting concurrent
+publication and double allocation. Audited transfer chains/reversals preserve
+all records; contradictory choices remain conflicts. Local source locators are
+explicit discovery hints, not portable access grants. No multi-host/cloud-sync
+merge guarantee is implied.
 
-Regression tests cover source isolation, source intervals across three videos,
-model/provider switches, counters and rollups, incomplete pricing dimensions,
-atomic-write failure, identity races, immutable export/history, cleanup retention,
-private-field rejection, engine/MCP routing and automatic response instructions.
-The dedicated 100,000-observation benchmark passes the five-second report target.
-See [cost transparency](docs/video-cost-transparency.md) and the
-[validation record](specs/011-video-cost-transparency/quickstart.md).
+Evidence quality, acquisition and financial basis are independent. Measured,
+manual and legacy-unknown accepted counts remain visible; modeled usage and
+overlap conflicts are separate. Reported charges, tariff estimates, API reference
+equivalents and manual allocations group by unit/basis, never as one invoice.
+Prices freeze at admission; unknown model/rate/currency interpretation does not
+erase known counts/charges. Subscription percentages/credits have no universal
+conversion, and local inference does not imply zero hardware cost.
+
+Closure completeness requires every expected responsibility interval, qualified
+source semantics, applicable counter baseline, exact accepted frontier and linked
+terminal flush, with no unresolved coverage gaps. V2 pending states map to
+true/true/null/false for open/settling/unknown/none. Reports/history never collect
+or repair; committed late data is disclosed as stale. Authorized mutation/replay
+repairs a linked amendment while retaining exact old closures. Wrap, learndown,
+history and current reports share captured values before rounding.
+
+V1 payloads/IDs/hash rules and exact snapshot lookup remain intact. Current v2
+views expose historical evidence as legacy-unknown, without mass migration or
+retroactive completeness. Unsupported major schemas fail closed. A format
+marker cannot force an unmodified old executable to honor v2, so one compatible
+writer runtime is required. Portable projections retain safe accounting values,
+original digests and explicit omitted-preimage/replay limits; they never present
+redacted data as original verified bytes, and collection needs reauthorization.
+
+Regression proof covers context/lifecycle transports, manual bootstrap, source
+versions/bounds, three-agent/four-model resumes, child/aggregate overlap,
+metadata correction/withdrawal, exact-scope estimates, concurrent ownership,
+privacy, canonical cleanup retention, immutable closures and portable history.
+Synthetic acceptance includes privacy, immutable closure recovery, portable
+replay and all-family retention through normal cleanup after temporary source
+removal. The integrated accounting/public-surface suite passes 506 tests;
+architecture, dead-code and duplication gates pass. Existing unrelated
+complexity and dependency-audit failures are recorded in the validation guide.
+Corrected external-root rechecks resolve library/media fixture-harness failures;
+combined same-revision coverage is 78.20% against the 68% floor. The existing
+complexity contract still fails and repeats in the completed serial-unit run.
+The last quiet 100k report measured 5.906732s and failed the original `<5s`
+requirement. On 2026-11-01 the user approved retaining the complete auditable
+report with a scoped `<7s` H: reference-machine cap. The first fresh attempt
+measured 7.726554s and failed; host background CPU remained elevated after team
+tests exited. Idle-qualified verification is pending, the failed sample is
+preserved and the approved cap is unchanged. This is not a NAS/CI or
+other-machine latency guarantee.
+The feature-011 benchmark is a historical reference only.
+On 2026-11-01 the user accepted delivery with T056 performance verification
+deferred; the seven-second cap and failed samples remain unchanged, with no
+active benchmark or idle monitoring.
+See [agent cost continuity](docs/agent-cost-continuity.md),
+[cost transparency](docs/video-cost-transparency.md) and the
+[feature-015 validation guide](specs/015-agent-cost-continuity/quickstart.md).
 
 
 ## Motion engine selection and code-drawn capture (feature 012)
@@ -626,3 +674,4 @@ The requested five-person comprehension study remains explicitly pending, with
 no participant results claimed. Full repository quality signoff is separately
 blocked by an existing locked dependency advisory. See the local feature 013
 validation records for acceptance evidence.
+
