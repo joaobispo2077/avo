@@ -355,6 +355,14 @@ class CuttingService:
             return analysis
         result = deepcopy(analysis)
         for candidate in result.get("pauseCandidates", []):
+            if (
+                not self.policy.effective.get("sections")
+                and propose_pause(
+                    candidate["sourceRange"], self.policy, candidate["evidence"]
+                )["disposition"]
+                == "keep"
+            ):
+                continue
             observation = self.context_port.analyze_pause(
                 source, candidate, analysis, sync_ref=sync_ref
             )

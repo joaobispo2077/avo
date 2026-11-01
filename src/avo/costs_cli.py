@@ -10,6 +10,22 @@ from pathlib import Path
 from avo.cost_store import CostError, CostStore, read_json
 from avo.costs import render_summary, summarize
 
+STRUCTURED_REQUESTS = {
+    "context": ("descriptor", "context"),
+    "observe": ("packet", "packet"),
+    "transition": ("request", "transition"),
+    "estimate": ("request", "estimate-request"),
+    "reconcile": ("reconciliation", "reconcile-request"),
+    "report-manual": ("request", "manual-request"),
+}
+_REQUEST_FILES = {
+    "context": "descriptor",
+    "observe": "file",
+    "transition": "request",
+    "estimate": "request",
+    "reconcile": "file",
+}
+
 
 def configure(sub):
     parser = sub.add_parser(
@@ -30,29 +46,52 @@ def configure(sub):
         "close-binding",
         "fork",
         "revalue",
+        "context",
+        "observe",
+        "transition",
+        "estimate",
+        "reconcile",
     ):
         item = operations.add_parser(name)
         _options(item, inherit=True)
-        if name in {"import", "report-manual", "price", "correct", "revalue"}:
-            item.add_argument("--file", type=Path, required=True)
-        if name == "bind":
-            item.add_argument("--source", type=Path, required=True)
-            item.add_argument("--boundary", required=True)
-            item.add_argument("--run-id")
-        if name in {"bind", "import"}:
-            item.add_argument("--session-id")
-            item.add_argument("--format", default="normalized")
-        if name == "snapshot":
-            item.add_argument(
-                "--stage", choices=("draft", "final", "amendment"), default="draft"
-            )
-        if name in {"collect", "close-binding"}:
-            item.add_argument("--binding-id")
-        if name == "close-binding":
-            item.add_argument("--end-boundary", required=True)
-        if name == "fork":
-            item.add_argument("--new-video-id", required=True)
-        item.add_argument("--agent")
+        _operation_arguments(item, name)
+
+
+def _metadata_arguments(item, name):
+    inputs = item.add_mutually_exclusive_group(required=True)
+    inputs.add_argument("--" + _REQUEST_FILES[name], type=Path)
+    inputs.add_argument("--payload-json", help=argparse.SUPPRESS)
+
+
+def _operation_arguments(item, name):
+    if name in _REQUEST_FILES:
+        _metadata_arguments(item, name)
+    if name in {"import", "price", "correct", "revalue"}:
+        item.add_argument("--file", type=Path, required=True)
+    if name == "report-manual":
+        inputs = item.add_mutually_exclusive_group(required=True)
+        inputs.add_argument("--file", type=Path)
+        inputs.add_argument("--payload-json", help=argparse.SUPPRESS)
+        item.add_argument("--participation-fact-id")
+        item.add_argument("--operation-id")
+    if name == "bind":
+        item.add_argument("--source", type=Path, required=True)
+        item.add_argument("--boundary", required=True)
+        item.add_argument("--run-id")
+    if name in {"bind", "import"}:
+        item.add_argument("--session-id")
+        item.add_argument("--format", default="normalized")
+    if name == "snapshot":
+        item.add_argument(
+            "--stage", choices=("draft", "final", "amendment"), default="draft"
+        )
+    if name in {"collect", "close-binding"}:
+        item.add_argument("--binding-id")
+    if name == "close-binding":
+        item.add_argument("--end-boundary", required=True)
+    if name == "fork":
+        item.add_argument("--new-video-id", required=True)
+    item.add_argument("--agent")
 
 
 def _options(parser, *, inherit=False):
@@ -88,6 +127,10 @@ def _run(args):
     from avo.cost_sources import capabilities
 
     operation = args.cost_operation
+    if operation in _REQUEST_FILES:
+        args.cost_payload = _request_payload(args)
+    if operation == "report-manual":
+        args.manual_request = _manual_payload(args)
     if operation == "capabilities":
         return {
             "agents": [
@@ -97,6 +140,11 @@ def _run(args):
     if args.history or args.trends:
         return _history(args)
     workspace = _workspace(args)
+    return _project_operation(args, workspace)
+
+
+def _project_operation(args, workspace):
+    operation = args.cost_operation
     store = CostStore(workspace.raw_dir)
     if operation in {None, "report"}:
         if args.snapshot_id:
@@ -124,11 +172,9 @@ def _history(args):
 def _read_snapshot(store, snapshot_id):
     import re
 
-    from avo.cost_store import validate
-
     if not re.fullmatch(r"[a-f0-9]{64}", snapshot_id):
         raise CostError("invalid snapshot identity")
-    value = validate("snapshot", read_json(store.path(f"snapshots/{snapshot_id}.json")))
+    value = store.read_snapshot(snapshot_id)
     if value["accountingVideoId"] != store.identity()["accountingVideoId"]:
         raise CostError("snapshot belongs to another video")
     return value
@@ -150,13 +196,120 @@ def _mutate(store, workspace, args):
         "fork": lambda: _fork(store, args.new_video_id),
         "revalue": lambda: _revalue(store, read_json(args.file)),
         "snapshot": lambda: _snapshot(store, workspace, args.stage),
+        "context": lambda: _register_context(store, args.cost_payload),
+        "observe": lambda: _observe(store, args.cost_payload),
+        "transition": lambda: _transition(store, args.cost_payload),
+        "estimate": lambda: _estimate(store, args.cost_payload),
+        "reconcile": lambda: _reconcile(store, args.cost_payload),
     }
     return handlers[args.cost_operation]()
+
+
+def _request_payload(args):
+    from avo.cost_participation import validate_context_descriptor
+    from avo.cost_store import validate
+
+    if args.payload_json is not None:
+        payload = json.loads(args.payload_json)
+    else:
+        field = _REQUEST_FILES[args.cost_operation]
+        payload = read_json(getattr(args, field))
+    if args.cost_operation == "context":
+        return validate_context_descriptor(payload)
+    if args.cost_operation == "estimate":
+        from avo.cost_estimates import validate_estimate_request
+
+        validate_estimate_request(payload)
+        return payload
+    validate(STRUCTURED_REQUESTS[args.cost_operation][1], payload)
+    return payload
+
+
+def _register_context(store, payload):
+    from avo.cost_participation import register_context
+
+    return register_context(store, payload)
+
+
+def _observe(store, payload):
+    return {
+        "schemaVersion": "2.0.0",
+        "accountingVideoId": store.identity()["accountingVideoId"],
+        **store.ingest_packet(payload),
+    }
+
+
+def _transition(store, payload):
+    from avo.cost_participation import transition_context
+
+    return transition_context(store, payload)
+
+
+def _estimate(store, payload):
+    from avo.cost_estimates import create_estimate
+
+    return create_estimate(store, payload)
+
+
+def _reconcile(store, payload):
+    from avo.cost_participation import reconcile_costs
+
+    return reconcile_costs(store, payload)
+
+
+def cost_context_argument(value):
+    """Argparse adapter never echoes an invalid metadata payload."""
+    from avo.cost_participation import validate_context_descriptor
+
+    try:
+        return validate_context_descriptor(json.loads(value))
+    except (ValueError, TypeError) as exc:
+        raise argparse.ArgumentTypeError(
+            "invalid cost context; supply v2 metadata only"
+        ) from exc
+
+
+def _manual_payload(args):
+    from avo.cost_sources import import_file
+    from avo.cost_store import validate
+
+    fact_id, operation_id = args.participation_fact_id, args.operation_id
+    if args.payload_json is not None:
+        if fact_id is not None or operation_id is not None:
+            raise CostError("choose structured manual metadata or file flags")
+        payload = json.loads(args.payload_json)
+    elif fact_id is not None or operation_id is not None:
+        if not fact_id or not operation_id:
+            raise CostError(
+                "manual usage requires both participation fact and operation ID"
+            )
+        if args.file.stat().st_size > 32 * 1024 * 1024:
+            raise CostError("manual usage source exceeds 32 MiB")
+        payload = {
+            "schemaVersion": "2.0.0",
+            "operationId": operation_id,
+            "participationFactId": fact_id,
+            "observations": import_file(args.file, "normalized"),
+        }
+    else:
+        return None
+    validate("manual-request", payload)
+    return payload
 
 
 def _import_rows(store, args):
     from avo.cost_sources import import_file
 
+    if getattr(args, "manual_request", None) is not None:
+        from avo.cost_sources import report_manual
+
+        payload = args.manual_request
+        return report_manual(
+            store,
+            payload["observations"],
+            participation_fact_id=payload["participationFactId"],
+            operation_id=payload["operationId"],
+        )
     rows = import_file(
         args.file,
         getattr(args, "format", "normalized"),
@@ -229,7 +382,7 @@ def _revalue(store, price):
         if not amount:
             continue
         original_id = row.pop("observationId")
-        row.pop("_prices", None)
+        row = {k: v for k, v in row.items() if not k.startswith("_")}
         row["amounts"] = amount
         store.ingest([row])
         store.correct(

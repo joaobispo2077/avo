@@ -543,3 +543,83 @@ def test_native_window_rechecks_encoded_bytes_and_does_not_reuse_preview_pass(
     assert calls[0][0] == candidate
     assert calls[0][1]["required_occurrences"] == ["join-one"]
     assert calls[0][1]["reference_encoding"] is None
+
+
+def analysis_cache_fixture(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    from avo.adapters.media.cutting_preview import CuttingPreviewAdapter
+
+    adapter = CuttingPreviewAdapter(
+        SimpleNamespace(timeline_dir=tmp_path), render_port=object(), verifier=object()
+    )
+    directory = adapter.directory.parent
+    directory.mkdir(parents=True)
+    evidence = directory / "source.json"
+    evidence.write_text("original evidence")
+    proposal = {
+        "occurrences": [],
+        "implementationBindings": {
+            "sourceAnalysisRefs": [{"locator": "source.json", "sha256": "a" * 64}]
+        },
+    }
+    loads = []
+
+    def load(_proposal):
+        loads.append(True)
+        return [
+            {
+                "sourceRef": {"sha256": "a" * 64},
+                "routing": {},
+                "syncRef": {},
+                "words": [{"text": "retained", "eligibleEdge": True}],
+                "frames": [0] * 1000,
+            }
+        ]
+
+    monkeypatch.setattr(adapter, "_load_analysis_documents", load)
+    return adapter, proposal, evidence, loads
+
+
+def test_analysis_cache_is_batch_scoped_and_cannot_mutate_words(tmp_path, monkeypatch):
+    from avo.timeline.proof_validation_stage import proof_validation_batch
+
+    adapter, proposal, _evidence, loads = analysis_cache_fixture(tmp_path, monkeypatch)
+    with proof_validation_batch():
+        first = adapter._analysis_documents(proposal)
+        assert "frames" not in first[0]
+        first[0]["words"][0]["text"] = "mutated"
+        assert (
+            adapter._analysis_documents(proposal)[0]["words"][0]["text"] == "retained"
+        )
+        assert len(loads) == 1
+    with proof_validation_batch():
+        adapter._analysis_documents(proposal)
+    assert len(loads) == 2
+    adapter._analysis_documents(proposal)
+    adapter._analysis_documents(proposal)
+    assert len(loads) == 4
+
+
+def test_analysis_cache_keeps_evidence_mutation_guard(tmp_path, monkeypatch):
+    from avo.timeline.proof_validation_stage import proof_validation_batch
+
+    adapter, proposal, evidence, _loads = analysis_cache_fixture(tmp_path, monkeypatch)
+    with pytest.raises(ValueError, match="changed"):
+        with proof_validation_batch():
+            adapter._analysis_documents(proposal)
+            evidence.write_text("changed evidence")
+            adapter._analysis_documents(proposal)
+
+
+def test_analysis_cache_rejects_escaping_reference_before_read(tmp_path, monkeypatch):
+    from avo.timeline.proof_validation_stage import proof_validation_batch
+
+    adapter, proposal, _evidence, loads = analysis_cache_fixture(tmp_path, monkeypatch)
+    proposal["implementationBindings"]["sourceAnalysisRefs"][0]["locator"] = (
+        "../outside.json"
+    )
+    with pytest.raises(ValueError, match="escapes"):
+        with proof_validation_batch():
+            adapter._analysis_documents(proposal)
+    assert not loads

@@ -131,6 +131,7 @@ def _core_bridge_defs() -> list[BridgeToolDef]:
             extra_params=(
                 ParamSpec("motion_engine", str | None, default=None),
                 ParamSpec("new_request", bool, default=False),
+                ParamSpec("cost_context", dict[str, Any] | None, default=None),
                 ParamSpec("direction", str | None, default=None),
                 ParamSpec("brief_context", str | None, default=None),
                 ParamSpec("direction_reference", list[str] | None, default=None),
@@ -159,6 +160,7 @@ def _core_bridge_defs() -> list[BridgeToolDef]:
                 ParamSpec("actor", str, required=True),
                 ParamSpec("reason", str, required=True),
                 ParamSpec("recovery_event", str, required=True),
+                ParamSpec("cost_context", dict[str, Any] | None, default=None),
             ),
         ),
         _tool(
@@ -876,6 +878,11 @@ def _cost_bridge_defs():
     )
     files = (ParamSpec("file", str, required=True),)
     operations = {
+        "context": (ParamSpec("descriptor", dict[str, Any], required=True),),
+        "observe": (ParamSpec("packet", dict[str, Any], required=True),),
+        "transition": (ParamSpec("request", dict[str, Any], required=True),),
+        "estimate": (ParamSpec("request", dict[str, Any], required=True),),
+        "reconcile": (ParamSpec("reconciliation", dict[str, Any], required=True),),
         "report": (
             ParamSpec("history", bool, default=False),
             ParamSpec("phase", str | None),
@@ -895,7 +902,12 @@ def _cost_bridge_defs():
         ),
         "collect": (ParamSpec("binding_id", str | None),),
         "import": files + optional_source,
-        "report-manual": files,
+        "report-manual": (
+            ParamSpec("file", str | None, default=None),
+            ParamSpec("request", dict[str, Any] | None, default=None),
+            ParamSpec("participation_fact_id", str | None, default=None),
+            ParamSpec("operation_id", str | None, default=None),
+        ),
         "snapshot": (ParamSpec("stage", str, default="draft"),),
         "price": files,
         "correct": files,
@@ -979,7 +991,7 @@ def _run_destructive_gated(defn: BridgeToolDef, kwargs: dict[str, Any]) -> Any:
     try:
         gate_args = _decision_gate_args(defn, bridge_args)
     except (OSError, ValueError) as exc:
-        return mrtr.gate_error_envelope(str(exc))
+        return _bridge_gate_error(exc)
 
     decision = mrtr.evaluate_destructive_gate(
         tool=defn.spec.name,
@@ -1003,7 +1015,7 @@ def _run_destructive_gated(defn: BridgeToolDef, kwargs: dict[str, Any]) -> Any:
                 "Decision document changed during confirmation"
             )
     except (OSError, ValueError) as exc:
-        return mrtr.gate_error_envelope(str(exc))
+        return _bridge_gate_error(exc)
     if "_decisionDocumentSha256" in gate_args:
         bridge_args = {
             **bridge_args,
@@ -1012,7 +1024,23 @@ def _run_destructive_gated(defn: BridgeToolDef, kwargs: dict[str, Any]) -> Any:
     return run_bridged(defn.cli_prefix, bridge_args).to_dict()
 
 
+def _bridge_gate_error(exc):
+    from avo.cost_store import CostError
+
+    if isinstance(exc, CostError):
+        import json
+
+        from avo.mcp.bridge import BridgeResult
+
+        error = json.dumps({"status": "invalid-input", "message": str(exc)})
+        return BridgeResult(False, 2, "", error).to_dict()
+    return mrtr.gate_error_envelope(str(exc))
+
+
 def _decision_gate_args(defn, bridge_args):
+    from avo.mcp.bridge import normalize_cost_arguments
+
+    normalize_cost_arguments(defn.cli_prefix, bridge_args)
     if defn.cli_prefix not in {("direction", "decide"), ("briefstart", "decide")}:
         return bridge_args
     with Path(bridge_args["request"]).expanduser().open("rb") as stream:

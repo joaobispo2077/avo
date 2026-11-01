@@ -63,6 +63,8 @@ reply. Do not phrase an approval request as though approval already exists.
 
 ## Blockers and completion
 
+Report cost coverage, financial availability, cutoff and `pendingState` before the footer when relevant. These are separate from the editing workflow's status: missing host telemetry or a candidate native source does not by itself block editing. Unknown pending state stays unknown; do not turn it into a zero-cost or closed-source claim. Only observed accounting results establish recorded costs, and only verified media/workflow gates establish editing completion. See [cost guidance](costs.md).
+
 A blocked response names the failed prerequisite and evidence, gives the minimum
 unblocking action, and states that later gates have not been evaluated. It must
 not imply a content failure when the actual problem is missing or stale proof.
