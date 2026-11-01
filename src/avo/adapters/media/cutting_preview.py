@@ -689,6 +689,8 @@ class CuttingPreviewAdapter:
 
     def verify_cutting_window(self, plan, candidate, *, window):
         """Decode each current native window; approved previews are evidence only."""
+        from avo.adapters.qc.cutting_mix_reference import mix_reference_context
+
         binding = plan["validationPlan"]["cutting"]
         store = self.workspace.store("cmap")
         snapshot = store.revision(store.load_index()["headRevisionId"])["snapshot"]
@@ -728,6 +730,7 @@ class CuttingPreviewAdapter:
             required_occurrences=preview["window"]["occurrenceIds"],
             clock_maps=maps,
             reference_encoding=self._reference_encoding(plan, maps),
+            mix_reference=mix_reference_context(plan, window),
             candidate_selection={
                 "streamIndex": 1,
                 "channels": [0],

@@ -7,17 +7,21 @@ import subprocess
 from contextlib import contextmanager
 from contextvars import ContextVar
 from fractions import Fraction
+from math import ceil
 from pathlib import Path
 
 import numpy as np
 
-from avo.timeline.contracts import content_hash
+from avo.timeline.contracts import content_hash, file_fingerprint
 from avo.timeline.cutting_contracts import validate_source_range
 from avo.timeline.ports import ToolError
 from avo.transcribe import source_fingerprint
 
 _SOURCE_OBSERVATIONS: ContextVar[dict | None] = ContextVar(
     "cutting_source_observations", default=None
+)
+_NATIVE_PCM_OBSERVATIONS: ContextVar[dict | None] = ContextVar(
+    "cutting_native_pcm_observations", default=None
 )
 
 
@@ -28,6 +32,7 @@ def _source_fingerprint_batch():
         return
     observations = {}
     token = _SOURCE_OBSERVATIONS.set(observations)
+    pcm_token = _NATIVE_PCM_OBSERVATIONS.set({})
     try:
         yield
         for path, observed in observations.items():
@@ -37,6 +42,7 @@ def _source_fingerprint_batch():
                     f"source changed during verification: {path}",
                 )
     finally:
+        _NATIVE_PCM_OBSERVATIONS.reset(pcm_token)
         _SOURCE_OBSERVATIONS.reset(token)
 
 
@@ -69,9 +75,11 @@ def read_pcm(path: Path):
         raise ToolError("cutting-audio-decode", str(exc)) from exc
 
 
-def _execute(command):
+def _execute(command, *, timeout=120):
     try:
-        result = subprocess.run(command, capture_output=True, check=True, timeout=120)
+        result = subprocess.run(
+            command, capture_output=True, check=True, timeout=timeout
+        )
         return result.stdout
     except (OSError, subprocess.SubprocessError) as exc:
         raise ToolError(
@@ -136,9 +144,81 @@ def _selected_stream(path, selection):
     return stream, channels
 
 
-def extract_dialogue_pcm(
-    source, *, selection, source_range, fingerprint, sync_ref, output_dir
+def _native_source_pcm(path, bindings, channels, rate, output_dir):
+    """Decode originals once per batch; seek PCM without container PTS rounding."""
+    key = content_hash(
+        {
+            k: bindings[k]
+            for k in ("sourceFingerprint", "selection", "syncRef", "decoder")
+        }
+    )
+    cache = _NATIVE_PCM_OBSERVATIONS.get()
+    cached = cache.get(key) if cache is not None else None
+    if cached is None:
+        stem = Path(output_dir) / ("source-" + key + ".wav")
+        stem.parent.mkdir(parents=True, exist_ok=True)
+        pan = "|".join(f"c{i}=c{channel}" for i, channel in enumerate(channels))
+        timeout = min(7200, max(120, ceil(path.stat().st_size / (16 * 1024**2)) + 120))
+        _execute(
+            [
+                "ffmpeg",
+                "-v",
+                "error",
+                "-nostdin",
+                "-y",
+                "-i",
+                str(path),
+                "-map",
+                f"0:{bindings['selection']['streamIndex']}",
+                "-af",
+                f"pan={len(channels)}c|{pan}",
+                "-ar",
+                str(rate),
+                "-c:a",
+                "pcm_s32le",
+                "-rf64",
+                "auto",
+                str(stem),
+            ],
+            timeout=timeout,
+        )
+        cached = file_fingerprint(stem)
+        _observed_source_fingerprint(stem, observe=lambda _: cached)
+        if cache is not None:
+            cache[key] = cached
+    if file_fingerprint(Path(cached["locator"])) != cached:
+        raise ToolError("cutting-source-fingerprint", "native source PCM changed")
+    return dict(cached)
+
+
+def _extraction_input(
+    path, stream_index, channels, rate, bindings, output_dir, first, native_seek
 ):
+    if not native_seek:
+        return path, stream_index, channels, first, []
+    stem = _native_source_pcm(path, bindings, channels, rate, output_dir)
+    bindings["nativeOriginalPcm"] = stem
+    return (
+        Path(stem["locator"]),
+        0,
+        list(range(len(channels))),
+        0,
+        ["-ss", str(first / rate)],
+    )
+
+
+def extract_dialogue_pcm(
+    source,
+    *,
+    selection,
+    source_range,
+    fingerprint,
+    sync_ref,
+    output_dir,
+    native_render_seek=False,
+):
+    if type(native_render_seek) is not bool:
+        raise ToolError("cutting-audio-routing", "native render seek must be boolean")
     path = Path(source["locator"] if isinstance(source, dict) else source)
     actual = _observed_source_fingerprint(path)
     if actual["sha256"] != fingerprint.get("sha256"):
@@ -164,23 +244,37 @@ def extract_dialogue_pcm(
         "sourceRange": source_range,
         "syncRef": sync_ref,
         "decoder": _execute(["ffmpeg", "-version"]).decode("utf-8").splitlines()[0],
-        "preprocessing": "native-s32/analysis-mono-s16-16k-v1",
+        "preprocessing": "native-s32/analysis-mono-s16-16k-v1"
+        + ("/native-source-pcm-seek-v1" if native_render_seek else ""),
     }
+    input_path, stream_index, routed_channels, offset, seek = _extraction_input(
+        path,
+        stream["index"],
+        channels,
+        rate,
+        bindings,
+        output_dir,
+        start_sample,
+        native_render_seek,
+    )
     destination = Path(output_dir) / content_hash(bindings)
     destination.mkdir(parents=True, exist_ok=True)
     native, analysis = destination / "native.wav", destination / "analysis.wav"
-    pan = "|".join(f"c{index}=c{channel}" for index, channel in enumerate(channels))
-    filters = f"atrim=start_sample={start_sample}:end_sample={end_sample},asetpts=PTS-STARTPTS,pan={len(channels)}c|{pan}"
+    pan = "|".join(
+        f"c{index}=c{channel}" for index, channel in enumerate(routed_channels)
+    )
+    filters = f"atrim=start_sample={offset}:end_sample={offset + end_sample - start_sample},asetpts=PTS-STARTPTS,pan={len(channels)}c|{pan}"
     _execute(
         [
             "ffmpeg",
             "-v",
             "error",
             "-y",
+            *seek,
             "-i",
-            str(path),
+            str(input_path),
             "-map",
-            f"0:{stream['index']}",
+            f"0:{stream_index}",
             "-af",
             filters,
             "-c:a",

@@ -236,6 +236,7 @@ def _native_reference(entry, output_dir):
             for key in ("selection", "source_range", "fingerprint", "sync_ref")
         },
         output_dir=output_dir,
+        native_render_seek=True,
     )
     if decoded["sampleRate"] != node["sourceSampleRate"]:
         raise ValueError("native recipe source sample rate differs from original")
@@ -281,11 +282,23 @@ def _native_reference(entry, output_dir):
             str(destination),
         ]
     )
-    samples, _rate = read_pcm(destination)
-    return samples[:, 0].astype(float)
+    from scipy.io import wavfile
+
+    rate, samples = wavfile.read(destination)
+    if (
+        rate != 48000
+        or samples.dtype != np.int32
+        or samples.ndim != 1
+        or not len(samples)
+    ):
+        raise ValueError(
+            "native reference requires nonempty mono 48 kHz signed 32-bit PCM"
+        )
+    # Preserve every source-derived PCM bit before mixing and lossy encoding.
+    return samples.astype(np.float64) / 2**31
 
 
-def _encoded_reference(original, samples, entries, encoding):
+def _encoded_reference(original, samples, entries, encoding, *, stereo=False):
     if encoding != {
         "codec": "aac",
         "sampleRate": 48000,
@@ -306,8 +319,7 @@ def _encoded_reference(original, samples, entries, encoding):
             "-y",
             "-i",
             str(original),
-            "-af",
-            "pan=stereo|c0=c0|c1=c0",
+            *([] if stereo else ["-af", "pan=stereo|c0=c0|c1=c0"]),
             "-c:a",
             "aac",
             "-b:a",
@@ -320,7 +332,8 @@ def _encoded_reference(original, samples, entries, encoding):
     return encoded, f"atrim=end_sample={len(samples)},pan=mono|c0=c0,aresample=16000"
 
 
-def _native_package_reference(entries, output_dir, encoding=None):
+@_source_fingerprint_batch()
+def _native_package_reference(entries, output_dir, encoding=None, mix_reference=None):
     from scipy.io import wavfile
 
     if not all(entry.get("processing") for entry in entries):
@@ -333,11 +346,27 @@ def _native_package_reference(entries, output_dir, encoding=None):
         output_dir / "package-analysis.wav",
     )
     wavfile.write(
-        original, 48000, np.clip(samples * 2**31, -(2**31), 2**31 - 1).astype("int32")
+        original,
+        48000,
+        np.clip(
+            np.column_stack((samples, samples)) * 2**31,
+            -(2**31),
+            2**31 - 1,
+        ).astype("int32")
+        if mix_reference is not None
+        else np.clip(samples * 2**31, -(2**31), 2**31 - 1).astype("int32"),
     )
+    if mix_reference is not None:
+        from .cutting_mix_reference import render_mixed_reference
+
+        original = render_mixed_reference(
+            original, output_dir / "package-mixed.wav", mix_reference
+        )
     input_path, filters = original, "aresample=16000"
     if encoding is not None:
-        input_path, filters = _encoded_reference(original, samples, entries, encoding)
+        input_path, filters = _encoded_reference(
+            original, samples, entries, encoding, stereo=mix_reference is not None
+        )
     _execute(
         [
             "ffmpeg",
@@ -357,10 +386,12 @@ def _native_package_reference(entries, output_dir, encoding=None):
     return read_pcm(derivative)[0][:, 0].astype(float)
 
 
-def _reference_audio(entries, output_dir, encoding=None):
+def _reference_audio(entries, output_dir, encoding=None, mix_reference=None):
     entries = [entries] if isinstance(entries, dict) else entries
     if any(entry.get("processing") for entry in entries):
-        return _native_package_reference(entries, output_dir, encoding)
+        return _native_package_reference(entries, output_dir, encoding, mix_reference)
+    if mix_reference is not None:
+        raise ValueError("mixed reference requires native source processing recipes")
     if encoding is not None:
         raise ValueError("encoded reference requires native source processing recipes")
     return _legacy_reference_audio(entries, output_dir)
@@ -397,6 +428,13 @@ def _legacy_reference_audio(entries, output_dir):
 
 
 def _verify_window(candidate, fingerprint, window, request, output_dir):
+    # Each immutable window owns its scratch paths throughout a validation batch.
+    output_dir = output_dir / content_hash(
+        {
+            "candidate": fingerprint["sha256"],
+            "window": json.dumps(window, default=os.fspath, sort_keys=True),
+        }
+    )
     try:
         if window.get("retainedWordEdges") is None or window.get("fadeRanges") is None:
             raise ToolError(
@@ -424,6 +462,7 @@ def _verify_window(candidate, fingerprint, window, request, output_dir):
             window["expectedAudio"],
             output_dir / "originals",
             request.get("reference_encoding"),
+            request.get("mix_reference"),
         )
         result = compare_retained_signal(
             expected,
