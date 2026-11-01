@@ -4,9 +4,12 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import stat
 import tempfile
 import time
+from contextlib import contextmanager
+from copy import deepcopy
 from datetime import datetime
 from functools import lru_cache
 from pathlib import Path
@@ -19,6 +22,45 @@ from avo.timeline.contracts import content_hash
 
 class CostError(ValueError):
     """Invalid or inconsistent accounting evidence (safe for user output)."""
+
+
+RECORD_TYPES = {
+    "participations": ("participation", "factId"),
+    "profiles": ("profile", "profileId"),
+    "estimates": ("estimate", "estimateId"),
+    "reconciliations": ("reconciliation", "reconciliationId"),
+}
+CAPTURE_FAMILIES = ("batches", "corrections", "prices", "bindings", *RECORD_TYPES)
+
+
+_V2_DEFINITIONS = {
+    "profile": "profile",
+    "participation": "participationFact",
+    "evidence": "evidence",
+    "receipt": "receipt",
+    "estimate": "estimateRecord",
+    "reconciliation": "reconciliationRecord",
+    "context": "contextRequest",
+    "transition": "transitionRequest",
+    "packet": "observePacket",
+    "estimate-request": "estimateRequest",
+    "manual-request": "manualRequest",
+    "reconcile-request": "reconcileRequest",
+}
+
+
+@lru_cache(maxsize=1)
+def _schema_registry():
+    from referencing import Registry, Resource
+
+    documents = []
+    for path in schema_path("avo.cost-observation.schema.json").parent.glob(
+        "avo.cost-*.schema.json"
+    ):
+        value = json.loads(path.read_text("utf-8"))
+        documents.append((value["$id"], Resource.from_contents(value)))
+    # No HTTP retrieval callback: only bundled schemas are resolvable.
+    return Registry().with_resources(documents)
 
 
 @lru_cache(maxsize=12)
@@ -51,6 +93,18 @@ def validate(kind, value):
     return value
 
 
+def _validate_timestamps(kind, value):
+    for field in ("occurredAt", "createdAt", "effectiveAt", "cutoff"):
+        stamp = value.get(field)
+        if stamp is not None:
+            try:
+                parsed = datetime.fromisoformat(stamp)
+                if parsed.tzinfo is None:
+                    raise ValueError("missing UTC offset")
+            except (ValueError, TypeError, AttributeError) as exc:
+                raise CostError(f"invalid cost {kind} timestamp") from exc
+
+
 def _validate_integer_counts(kind, value):
     if kind == "observation" and any(
         v is not None and type(v) is not int for v in value["tokens"].values()
@@ -58,6 +112,20 @@ def _validate_integer_counts(kind, value):
         raise CostError("invalid cost count; tokens must be integers")
     if kind == "price" and type(value["denominator"]) is not int:
         raise CostError("invalid price denominator; expected an integer")
+
+
+def _check_token_integers(value):
+    if isinstance(value, list):
+        for item in value:
+            _check_token_integers(item)
+    elif isinstance(value, dict):
+        tokens = value.get("tokens")
+        if isinstance(tokens, dict) and any(
+            count is not None and type(count) is not int for count in tokens.values()
+        ):
+            raise CostError("invalid cost count; tokens must be integers")
+        for item in value.values():
+            _check_token_integers(item)
 
 
 def read_json(path):
@@ -79,6 +147,11 @@ class CostStore:
         self.root = self.raw_dir if archive else self.raw_dir / "edit" / "costs"
 
     digest = staticmethod(content_hash)
+
+
+
+
+
 
     def path(self, relative):
         candidate = Path(os.path.abspath(self.root / relative))
@@ -208,6 +281,16 @@ class CostStore:
         self.amend_if_closed()
         return {"status": "ok", "imported": len(rows), "batchId": value["batchId"]}
 
+
+
+
+
+
+
+
+
+
+
     def capture(self):
         return {
             kind: self.documents(kind)
@@ -272,6 +355,8 @@ class CostStore:
         self.amend_if_closed()
         return result
 
+
+
     def amend_if_closed(self):
         snapshots = self.documents("snapshots")
         if any(s.get("lifecycle") in {"final", "amendment"} for s in snapshots):
@@ -318,6 +403,7 @@ class CostStore:
         validate("snapshot", value)
         return self.publish(f"snapshots/{key}.json", value)
 
+
     def bind(
         self,
         *,
@@ -354,6 +440,8 @@ class CostStore:
         remember(self)
         return value
 
+
+
     def close_binding(self, binding_id, end_boundary):
         bindings = self.documents("bindings")
         binding = next((v for v in bindings if v["bindingId"] == binding_id), None)
@@ -368,6 +456,7 @@ class CostStore:
         }
         validate("binding", value)
         return self.publish(f"bindings/{value['bindingId']}.json", value)
+
 
     def export(self, destination):
         target = CostStore(destination, archive=True)
@@ -399,6 +488,46 @@ class CostStore:
                 target.publish(f"{kind}/{key}.json", value)
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 def _is_storage_link(path):
     try:
         metadata = path.lstat()
@@ -407,6 +536,8 @@ def _is_storage_link(path):
     return stat.S_ISLNK(metadata.st_mode) or bool(
         getattr(metadata, "st_file_attributes", 0) & 0x400
     )
+
+
 
 
 def _verify_batch(batch, identity):
@@ -471,3 +602,53 @@ def _resolve_variants(variants, decisions):
                 }
             )
     return result, diagnostics
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
