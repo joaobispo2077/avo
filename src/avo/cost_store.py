@@ -63,33 +63,44 @@ def _schema_registry():
     return Registry().with_resources(documents)
 
 
-@lru_cache(maxsize=12)
-def _validator(kind):
-    from jsonschema import Draft202012Validator, FormatChecker
+@lru_cache(maxsize=48)
+def _validator(kind, version="1.0.0"):
+    from jsonschema import Draft202012Validator, FormatChecker, validators
 
-    schema = json.loads(schema_path(f"avo.cost-{kind}.schema.json").read_text("utf-8"))
-    return Draft202012Validator(schema, format_checker=FormatChecker())
+    strict = validators.extend(
+        Draft202012Validator,
+        type_checker=Draft202012Validator.TYPE_CHECKER.redefine(
+            "integer", lambda _checker, instance: type(instance) is int
+        ),
+    )
+    if kind in _V2_DEFINITIONS:
+        schema = {
+            "$ref": "https://avo.local/schemas/avo.cost-evidence.schema.json"
+            + "#/$defs/"
+            + _V2_DEFINITIONS[kind]
+        }
+    else:
+        suffix = ".v2" if kind in {"batch", "snapshot"} and version == "2.0.0" else ""
+        schema = json.loads(
+            schema_path(f"avo.cost-{kind}{suffix}.schema.json").read_text("utf-8")
+        )
+    return strict(schema, registry=_schema_registry(), format_checker=FormatChecker())
 
 
 def validate(kind, value):
-    if not _validator(kind).is_valid(value):
-        raise CostError(f"invalid cost {kind}; check the documented metadata schema")
+    version = value.get("schemaVersion", "1.0.0") if isinstance(value, dict) else None
+    if version not in {"1.0.0", "2.0.0"}:
+        raise CostError("unsupported cost schema version; use a compatible runtime")
     _validate_integer_counts(kind, value)
+    if not _validator(kind, version).is_valid(value):
+        raise CostError(f"invalid cost {kind}; check the documented metadata schema")
     if kind == "snapshot":
         payload = {
             k: v for k, v in value.items() if k not in {"snapshotId", "recordedOrder"}
         }
         if content_hash(payload) != value["snapshotId"]:
             raise CostError("cost snapshot integrity verification failed")
-    for field in ("occurredAt", "createdAt", "effectiveAt", "cutoff"):
-        stamp = value.get(field)
-        if stamp is not None:
-            try:
-                parsed = datetime.fromisoformat(stamp)
-                if parsed.tzinfo is None:
-                    raise ValueError("missing UTC offset")
-            except (ValueError, TypeError, AttributeError) as exc:
-                raise CostError(f"invalid cost {kind} timestamp") from exc
+    _validate_timestamps(kind, value)
     return value
 
 
@@ -106,11 +117,12 @@ def _validate_timestamps(kind, value):
 
 
 def _validate_integer_counts(kind, value):
-    if kind == "observation" and any(
-        v is not None and type(v) is not int for v in value["tokens"].values()
+    _check_token_integers(value)
+    if (
+        kind == "price"
+        and isinstance(value, dict)
+        and type(value.get("denominator")) is not int
     ):
-        raise CostError("invalid cost count; tokens must be integers")
-    if kind == "price" and type(value["denominator"]) is not int:
         raise CostError("invalid price denominator; expected an integer")
 
 
@@ -221,18 +233,10 @@ class CostStore:
         return candidate
 
     def publish(self, relative, value):
+        self.assert_writable()
         target = self.path(relative)
-        target.parent.mkdir(parents=True, exist_ok=True)
         lock = target.with_suffix(".lock")
-        for _ in range(200):
-            try:
-                lock.mkdir()
-                break
-            except FileExistsError:
-                time.sleep(0.01)
-        else:
-            raise CostError("cost write locked; retry or recover an interrupted writer")
-        try:
+        with _directory_lock(lock):
             if target.exists():
                 if read_json(target) != value:
                     raise CostError(
@@ -240,8 +244,6 @@ class CostStore:
                     )
                 return value
             return self._publish_locked(target, value)
-        finally:
-            lock.rmdir()
 
     @staticmethod
     def _publish_locked(target, value):
@@ -264,6 +266,7 @@ class CostStore:
         return validate("identity", read_json(path)) if path.exists() else None
 
     def initialize(self, provider, video_id):
+        self.assert_writable()
         existing = self.identity()
         if existing:
             if existing["provider"] != provider:
@@ -293,6 +296,11 @@ class CostStore:
         return content_hash({k: row.get(k) for k in keys})
 
     def documents(self, kind):
+        from avo.cost_history import _portable_documents, _portable_manifest
+
+        manifest = _portable_manifest(self)
+        if manifest is not None:
+            return _portable_documents(self, kind, manifest)
         directory = self.path(kind)
         return [
             self._read_document(kind, p.name) for p in sorted(directory.glob("*.json"))
@@ -305,10 +313,18 @@ class CostStore:
             "prices": "price",
             "corrections": "correction",
             "snapshots": "snapshot",
+            **{name: fields[0] for name, fields in RECORD_TYPES.items()},
         }.get(kind)
-        return validate(schema, value) if schema else value
+        if schema:
+            validate(schema, value)
+        if kind in RECORD_TYPES:
+            _verify_record(kind, value)
+            _record_owner(value, self.identity())
+        return value
 
     def ingest(self, rows):
+        self.assert_writable()
+        self._check_format()
         identity = self.identity()
         if not identity:
             raise CostError("initialize a video with costs bind or import first")
@@ -316,25 +332,8 @@ class CostStore:
             raise CostError("invalid cost observations or record limit exceeded")
         for row in rows:
             validate("observation", row)
-        rows = _new_rows(rows, self.documents("batches"))
-        if not rows:
-            return {"status": "ok", "imported": 0, "batchId": None}
-        value = {
-            "schemaVersion": "1.0.0",
-            "batchId": str(uuid4()),
-            "accountingVideoId": identity["accountingVideoId"],
-            "createdAt": now_iso(),
-            "observations": rows,
-            "observationKeys": self.keys_for(rows),
-            "recordedOrder": time.time_ns(),
-            "priceScheduleIds": sorted(
-                content_hash(p) for p in self.documents("prices")
-            ),
-        }
-        value["contentHash"] = content_hash(value)
-        self.publish(f"batches/{value['batchId']}.json", value)
-        self.amend_if_closed()
-        return {"status": "ok", "imported": len(rows), "batchId": value["batchId"]}
+        with _cost_claim_lock():
+            return self._ingest_rows(rows, identity)
 
     def _ingest_rows(self, rows, identity):
         rows = _new_rows(rows, self.documents("batches"))
@@ -525,16 +524,24 @@ class CostStore:
         }
 
     def capture(self):
-        return {
-            kind: self.documents(kind)
-            for kind in ("batches", "corrections", "prices", "bindings")
-        }
+        from avo.cost_history import _portable_documents, _portable_manifest
+
+        self._check_format()
+        manifest = _portable_manifest(self)
+        if manifest is not None:
+            return {
+                kind: _portable_documents(self, kind, manifest)
+                for kind in CAPTURE_FAMILIES
+            }
+        return {kind: self.documents(kind) for kind in CAPTURE_FAMILIES}
 
     def observations(self, view=None):
         view = view if view is not None else self.capture()
         variants = self._variants(view)
         decisions = _decisions(view["corrections"])
-        return _resolve_variants(variants, decisions)
+        rows, diagnostics = _resolve_variants(variants, decisions)
+        diagnostics.extend(_receipt_conflicts(view["batches"]))
+        return rows, diagnostics
 
     def _variants(self, view):
         variants = {}
@@ -561,6 +568,7 @@ class CostStore:
         ]
 
     def correct(self, observation_id, action, actor, reason, *, selected=None):
+        self.assert_writable()
         _validate_correction_target(
             self._variants(self.capture()), observation_id, action, selected
         )
@@ -617,13 +625,23 @@ class CostStore:
         }
 
     def amend_if_closed(self):
-        snapshots = self.documents("snapshots")
-        if any(s.get("lifecycle") in {"final", "amendment"} for s in snapshots):
+        """Repair committed late metadata only during an authorized mutation."""
+        self.assert_writable()
+        if not self._closed_snapshots():
+            return None
+        with _directory_lock(self.path("locks/closure-family.lock"), attempts=3000):
+            view = self.capture()
+            state = self.closure_status(view)
+            if not state["stale"]:
+                return None
             from avo.costs import summarize
 
-            self.snapshot(summarize(self), "amendment")
+            report = summarize(self, view=view)
+            report["previousClosureId"] = state["previousClosureId"]
+            return self.snapshot(report, "amendment")
 
     def price(self, value):
+        self.assert_writable()
         validate("price", value)
         identity = ("model", "serviceProvider", "effectiveAt", "dimensions")
         for previous in self.documents("prices"):
@@ -636,9 +654,11 @@ class CostStore:
                 )
         key = content_hash(value)
         self.publish(f"prices/{key}.json", value)
+        self.amend_if_closed()
         return key
 
     def snapshot(self, report, stage, *, closure=None):
+        self.assert_writable()
         if stage not in {"working", "draft", "final", "amendment"}:
             raise CostError("invalid cost snapshot stage")
         if stage == "final" and not closure:
@@ -652,15 +672,20 @@ class CostStore:
         }
         value.pop("snapshotId", None)
         value.pop("recordedOrder", None)
+        _snapshot_context(value, stage)
         # Generation time does not create a new logical snapshot.
         key = content_hash(value)
         target = self.path(f"snapshots/{key}.json")
         if target.is_file():
-            return validate("snapshot", read_json(target))
+            return self._finish_snapshot(validate("snapshot", read_json(target)), stage)
         value["snapshotId"] = key
         value["recordedOrder"] = time.time_ns()
         validate("snapshot", value)
-        return self.publish(f"snapshots/{key}.json", value)
+        if value["schemaVersion"] == "2.0.0":
+            self._enable_v2()
+        return self._finish_snapshot(
+            self.publish(f"snapshots/{key}.json", value), stage
+        )
 
     def _finish_snapshot(self, value, stage):
         if stage == "final":
@@ -678,30 +703,23 @@ class CostStore:
         run_id=None,
         phase=None,
     ):
-        path = Path(source).expanduser().resolve()
-        if not path.is_file():
-            raise CostError("bound usage source is unavailable")
-        from avo.cost_history import assert_binding_available, remember
-
-        assert_binding_available(self, path, session_id, boundary)
-        value = {
-            "schemaVersion": "1.0.0",
-            "bindingId": str(uuid4()),
-            "source": str(path),
+        self.assert_writable()
+        payload = {
+            "source": source,
             "agent": agent,
-            "sourceSessionId": session_id,
+            "session_id": session_id,
             "boundary": boundary,
-            "format": source_format,
-            "createdAt": now_iso(),
+            "source_format": source_format,
+            "run_id": run_id,
+            "phase": phase,
         }
-        if run_id:
-            value["runId"] = run_id
-        if phase:
-            value["phase"] = phase
-        validate("binding", value)
-        self.publish(f"bindings/{value['bindingId']}.json", value)
-        remember(self)
-        return value
+        key = content_hash(
+            {"source": str(Path(source).expanduser().resolve()), "session": session_id}
+        )
+        with _directory_lock(self.path(f"locks/binding-{key}.lock")):
+            result = self._bind(**payload)
+        self.amend_if_closed()
+        return result
 
     def _bind(
         self, *, source, agent, session_id, boundary, source_format, run_id, phase
@@ -746,19 +764,10 @@ class CostStore:
         return _binding_projection(binding_id, records)
 
     def close_binding(self, binding_id, end_boundary):
-        bindings = self.documents("bindings")
-        binding = next((v for v in bindings if v["bindingId"] == binding_id), None)
-        if not binding or binding.get("supersedesBindingId"):
-            raise CostError("unknown cost binding")
-        value = {
-            **binding,
-            "bindingId": str(uuid4()),
-            "supersedesBindingId": binding_id,
-            "endBoundary": end_boundary,
-            "createdAt": now_iso(),
-        }
-        validate("binding", value)
-        return self.publish(f"bindings/{value['bindingId']}.json", value)
+        self.assert_writable()
+        result = self._close_binding(binding_id, end_boundary)
+        self.amend_if_closed()
+        return result
 
     def _close_binding(self, binding_id, end_boundary):
         self.assert_writable()
@@ -784,33 +793,9 @@ class CostStore:
         return self.publish(f"bindings/{value['bindingId']}.json", value)
 
     def export(self, destination):
-        target = CostStore(destination, archive=True)
-        if not self.identity():
-            return
-        target.publish("identity.json", self.identity())
-        for kind in ("bindings", "batches", "prices", "corrections", "snapshots"):
-            for value in self.documents(kind):
-                validate(
-                    {
-                        "bindings": "binding",
-                        "batches": "batch",
-                        "prices": "price",
-                        "corrections": "correction",
-                        "snapshots": "snapshot",
-                    }[kind],
-                    value,
-                )
-                key = value.get(
-                    {
-                        "bindings": "bindingId",
-                        "batches": "batchId",
-                        "corrections": "correctionId",
-                        "snapshots": "snapshotId",
-                        "prices": "priceId",
-                    }[kind],
-                    content_hash(value),
-                )
-                target.publish(f"{kind}/{key}.json", value)
+        from avo.cost_history import _portable_export
+
+        return _portable_export(self, destination)
 
 
 def _membership_entries(membership):
@@ -1066,6 +1051,8 @@ def _directory_lock(lock, *, attempts=200):
 
 
 def _verify_batch(batch, identity):
+    if batch.get("schemaVersion", "1.0.0") not in {"1.0.0", "2.0.0"}:
+        raise CostError("unsupported cost batch schema; use a compatible runtime")
     payload = {k: v for k, v in batch.items() if k != "contentHash"}
     if batch.get("contentHash") != content_hash(payload):
         raise CostError("cost batch integrity verification failed")
@@ -1116,8 +1103,15 @@ def _resolve_variants(variants, decisions):
         if selected:
             versions = {k: v for k, v in versions.items() if k in selected}
         if len(versions) == 1:
-            row, prices = next(iter(versions.values()))
-            result.append({**row, "observationId": key, "_prices": prices})
+            digest, (row, prices) = next(iter(versions.items()))
+            result.append(
+                {
+                    **row,
+                    "observationId": key,
+                    "_sourceDigest": digest,
+                    "_prices": prices,
+                }
+            )
         elif versions or (selected and selected != {None}):
             diagnostics.append(
                 {

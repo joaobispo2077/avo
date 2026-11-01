@@ -25,6 +25,7 @@ def _leaves(rows, diagnostics):
                     row["sourceInstanceId"],
                     row["sourceSessionId"],
                     row.get("counterEpoch"),
+                    (row.get("_evidence") or {}).get("profileId"),
                 )
             ].append(row)
         else:
@@ -34,7 +35,7 @@ def _leaves(rows, diagnostics):
             diagnostics.append({"code": "counter-request-overlap"})
             continue
         _series_deltas(series, result, diagnostics)
-    rollups = {_rollup_key(r) for r in result if r.get("inclusion") == "rollup"}
+    rollups = {_rollup_key(r) for r in result if _legacy_rollup(r)}
     return [r for r in result if _rollup_key(r, parent=True) not in rollups]
 
 
@@ -70,24 +71,17 @@ def _series_deltas(series, result, diagnostics):
 
 
 def _delta(previous, row, result, diagnostics):
-    same = row["semantics"] == previous["semantics"]
-    keys = set(row["tokens"]) | set(previous["tokens"])
-    values = {k: row["tokens"].get(k) for k in keys}
-    known = all(
-        v is not None and previous["tokens"].get(k) is not None
-        for k, v in values.items()
-    )
-    if (
-        not same
-        or not known
-        or any(v < previous["tokens"][k] for k, v in values.items())
-    ):
+    delta = _counter_values(previous, row)
+    state = _counter_attribution(previous, row)
+    if delta is None:
         diagnostics.append({"code": "ambiguous-counter-interval"})
-        return
-    delta = {k: v - previous["tokens"][k] for k, v in values.items()}
+        delta = {key: None for key in set(previous["tokens"]) | set(row["tokens"])}
+        state = "unallocated"
+    elif state == "unallocated" and row.get("_attributionState") == "assigned":
+        diagnostics.append({"code": "counter-attribution-ambiguous"})
     result.append(
         _counter_identity(
-            previous, {**row, "tokens": delta, "amounts": []}, diagnostics
+            previous, {**row, "tokens": delta, "_attributionState": state}, diagnostics
         )
     )
 
@@ -143,10 +137,16 @@ def _has_request_overlap(series, rows):
 
 
 def _counter_identity(previous, row, diagnostics):
-    if any(row.get(k) != previous.get(k) for k in ("model", "serviceProvider")):
+    if row.get("_nature") != previous.get("_nature"):
+        diagnostics.append({"code": "mixed-evidence-counter-interval"})
+        row = {**row, "_nature": "legacy-unknown"}
+    changed = [
+        key for key in ("model", "serviceProvider") if row.get(key) != previous.get(key)
+    ]
+    if changed:
         diagnostics.append({"code": "mixed-model-counter-interval"})
-        return {**row, "model": None, "serviceProvider": None, "_prices": []}
-    return row
+        row = {**row, **{key: None for key in changed}, "_prices": []}
+    return _counter_dimensions(previous, row, diagnostics)
 
 
 def _counter_dimensions(previous, row, diagnostics):
@@ -196,10 +196,7 @@ def _estimate(row, prices):
     buckets = _priced_buckets(row, price)
     if buckets is None:
         return []
-    value = (
-        sum(Decimal(rate) * buckets[k] for k, rate in price["rates"].items())
-        / price["denominator"]
-    )
+    value = _tariff_value(price["rates"], buckets, price["denominator"])
     return [
         {
             "basis": price["basis"],
@@ -312,7 +309,7 @@ def _measurement(row, prices):
 
 
 def _aggregate(rows, prices):
-    amounts = defaultdict(Decimal)
+    amounts = defaultdict(list)
     tokens = {}
     totals = []
     unpriced = 0
@@ -322,13 +319,13 @@ def _aggregate(rows, prices):
         for key, value in items:
             tokens[key] = tokens.get(key, 0) + value
         for key, value in values:
-            amounts[key] += value
+            amounts[key].append(value)
         unpriced += missing
     tokens["total"] = sum(totals) if totals and None not in totals else None
     return (
         tokens,
         [
-            {"basis": b, "unit": u, "amount": format(v, "f")}
+            {"basis": b, "unit": u, "amount": format(_decimal_sum(v), "f")}
             for (b, u), v in sorted(amounts.items())
         ],
         unpriced,
@@ -348,7 +345,14 @@ def _decimal_sum(values):
 
 def _breakdowns(rows, prices, total):
     breakdowns = {}
-    for dimension in ("model", "serviceProvider", "agent", "phase", "serviceClass"):
+    for dimension in (
+        "model",
+        "serviceProvider",
+        "agent",
+        "phase",
+        "serviceClass",
+        "billingMode",
+    ):
         groups = defaultdict(list)
         for row in rows:
             groups[row.get(dimension) or "unknown"].append(row)
@@ -364,36 +368,47 @@ def _group_report(rows, prices):
     return {"tokens": tokens, "amounts": amounts}
 
 
-def summarize(store, *, phase=None):
+def summarize(store, *, phase=None, view=None):
     identity = store.identity() or {}
-    view = store.capture()
+    view = view if view is not None else store.capture()
     observations, diagnostics = store.observations(view)
-    rows = _leaves(observations, diagnostics)
+    projection = _evidence_projection(store, view, observations, diagnostics)
+    rows = projection["assigned"]
     if phase:
         rows = [r for r in rows if r.get("phase") == phase]
     prices = view["prices"]
     tokens, amounts, unpriced = _aggregate(rows, prices)
     if unpriced:
         diagnostics.append({"code": "unpriced-usage", "count": unpriced})
-    # Imported events alone cannot prove all external usage has been collected.
-    coverage = "partial" if rows or diagnostics else "not-recorded"
+    total = {"tokens": tokens, "amounts": amounts}
+    continuity = _continuity_fields(store, view, projection, rows, diagnostics, tokens)
+    breakdowns = _breakdowns(rows, prices, total)
+    breakdowns["agentRole"] = _role_breakdowns(
+        [
+            row
+            for row in projection.get("roleRows", rows)
+            if not phase or row.get("phase") == phase
+        ],
+        continuity["participations"],
+        prices,
+        total_rows=rows,
+        total=total,
+    )
     return {
-        "schemaVersion": "1.0.0",
+        "schemaVersion": "2.0.0",
         "status": "ok",
         "accountingVideoId": identity.get("accountingVideoId"),
         "provider": identity.get("provider"),
         "videoId": identity.get("videoId"),
         "lifecycle": "working",
-        "coverage": coverage,
         "cutoff": _cutoff(rows),
         "lastCollectedAt": _last_collected(view["batches"]),
         "sourceWatermarks": _watermarks(observations),
         "tokens": tokens,
         "amounts": amounts,
+        "financialViews": _financial_views(rows, prices, store, amounts),
         "observationCount": len(rows),
-        "breakdowns": _breakdowns(rows, prices, {"tokens": tokens, "amounts": amounts}),
-        "diagnostics": diagnostics,
-        "pendingTurn": True,
+        "breakdowns": breakdowns,
         "excludedCosts": [
             "labor",
             "hardware",
@@ -402,6 +417,7 @@ def summarize(store, *, phase=None):
             "unreported service usage",
         ],
         "membership": _membership(view, store),
+        **continuity,
     }
 
 
@@ -1607,12 +1623,7 @@ def _safe_diagnostic(item):
 
 
 def _membership(view, store):
-    return {
-        kind: sorted(
-            v["contentHash"] if kind == "batches" else store.digest(v) for v in docs
-        )
-        for kind, docs in view.items()
-    }
+    return store.membership(view)
 
 
 def _last_collected(batches):
@@ -1647,6 +1658,8 @@ def render_summary(report):
         return "Cost data not recorded for this video."
     if report.get("persistence") == "failed":
         return report["message"]
+    if report.get("schemaVersion") == "2.0.0":
+        return _render_current_summary(report)
     amounts = (
         "; ".join(
             f"{a['amount']} {a['unit']} ({a['basis']})" for a in report["amounts"]

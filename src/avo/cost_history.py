@@ -25,15 +25,9 @@ def remember(store):
 def assert_binding_available(store, source, session, boundary):
     from avo.cost_sources import _active_bindings
 
-    sources = [store]
-    for path in (avo_state.state_dir() / "cost-locators").glob("*.json"):
-        try:
-            locator = read_json(path)
-            sources.append(
-                CostStore(locator["rawDir"], archive=locator.get("archive", False))
-            )
-        except (OSError, ValueError, KeyError):
-            continue
+    sources = _history_sources(
+        store, include_provider_exports=False, include_portable=False
+    )
     bindings = {
         b["bindingId"]: b
         for candidate in sources
@@ -72,7 +66,7 @@ def _interval_end(intervals, cursor):
     return cursor
 
 
-def _history_sources(store):
+def _history_sources(store, *, include_provider_exports=True, include_portable=True):
     sources = [store] if store else []
     for path in (avo_state.state_dir() / "cost-locators").glob("*.json"):
         try:
@@ -82,8 +76,11 @@ def _history_sources(store):
             )
         except (OSError, ValueError, KeyError):
             continue
-    for path in providers_dir().glob("*/learndowns/*/costs/identity.json"):
-        sources.append(CostStore(path.parent, archive=True))
+    if include_provider_exports:
+        for path in providers_dir().glob("*/learndowns/*/costs/identity.json"):
+            sources.append(CostStore(path.parent, archive=True))
+    if not include_portable:
+        sources = [source for source in sources if source.portable_status() is None]
     return sources
 
 
@@ -95,9 +92,13 @@ def _source_report(source, provider, video_id):
         or (video_id and identity["videoId"] != video_id)
     ):
         return None
-    snapshots = source.documents("snapshots")
-    closed = [s for s in snapshots if s.get("lifecycle") in {"final", "amendment"}]
-    report = max(closed, key=_snapshot_order) if closed else summarize(source)
+    view = source.capture()
+    closure = source.closure_status(view)
+    report = (
+        source.read_snapshot(closure["previousClosureId"])
+        if closure["previousClosureId"] and not closure["stale"]
+        else summarize(source, view=view)
+    )
     return identity["accountingVideoId"], report
 
 
@@ -140,6 +141,7 @@ def _consider_history_report(videos, projections, diagnostics, key, report, stat
 
 def history(*, provider=None, video_id=None, store=None):
     videos = {}
+    projections = {}
     diagnostics = []
     for source in _history_sources(store):
         try:
@@ -147,15 +149,14 @@ def history(*, provider=None, video_id=None, store=None):
             if selected is None:
                 continue
             key, report = selected
-            # Prefer explicit snapshot chronology; never sum copies of a video.
-            if key not in videos or _snapshot_order(report) > _snapshot_order(
-                videos[key]
-            ):
-                videos[key] = report
+            status = source.portable_status()
+            _consider_history_report(
+                videos, projections, diagnostics, key, report, status
+            )
         except (OSError, CostError, KeyError, TypeError):
             diagnostics.append({"code": "history-source-unavailable"})
     videos.update(_legacy_reports(provider, video_id))
-    return {
+    result = {
         "schemaVersion": "1.0.0",
         "status": "ok",
         "videos": list(videos.values()),
@@ -164,6 +165,9 @@ def history(*, provider=None, video_id=None, store=None):
         if videos
         else "No recorded video costs. Run a pipeline with an explicitly bound usage source.",
     }
+    if projections:
+        result["portableProjections"] = list(projections.values())
+    return result
 
 
 def _legacy_reports(provider, video_id):

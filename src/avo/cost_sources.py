@@ -10,9 +10,6 @@ from pathlib import Path
 
 from avo.cost_store import CostError, content_hash, read_json, validate
 
-
-AGENTS = ("cursor", "claude", "codex", "windsurf", "cline", "gemini", "opencode")
-
 FORMATS = {
     "codex": "documented exec JSONL",
     "opencode": "completed assistant-message export",
@@ -26,17 +23,9 @@ COLLECTION_PACKET_BYTE_LIMIT = 32 * 1024 * 1024
 
 
 def capabilities():
-    return [
-        {
-            "agent": agent,
-            "modes": ["normalized-import", "manual"]
-            + (["local-import"] if agent in FORMATS else []),
-            "sourceFormat": FORMATS.get(agent),
-            "versions": ["documented-shape-v1"] if agent in FORMATS else [],
-            "limitations": "Explicit session binding required; fields absent from evidence remain unknown. No account billing reconciliation.",
-        }
-        for agent in AGENTS
-    ]
+    from avo.cost_profiles import surface_capabilities
+
+    return surface_capabilities()
 
 
 def _base(agent, session, request, occurred=None):
@@ -45,7 +34,7 @@ def _base(agent, session, request, occurred=None):
         "sourceSessionId": session,
         "requestId": str(request),
         "agent": agent,
-        "agentVersion": "documented-shape-v1",
+        "agentVersion": "unknown",
         "model": None,
         "serviceProvider": None,
         "billingMode": "unknown",
@@ -55,34 +44,6 @@ def _base(agent, session, request, occurred=None):
         "semantics": {},
         "amounts": [],
     }
-
-
-def _codex(values, session):
-    result = []
-    for index, event in enumerate(values):
-        if event.get("type") != "turn.completed":
-            continue
-        usage = event.get("usage") or {}
-        row = _base(
-            "codex",
-            session,
-            event.get("turn_id") or f"line-{index}",
-            event.get("timestamp"),
-        )
-        row["tokens"] = {
-            key: usage.get(native)
-            for key, native in {
-                "input": "input_tokens",
-                "output": "output_tokens",
-                "cacheRead": "cached_input_tokens",
-                "reasoning": "reasoning_output_tokens",
-            }.items()
-        }
-        row["semantics"] = {"cacheRead": "input", "reasoning": "output"}
-        row["model"] = event.get("model")
-        row["serviceProvider"] = event.get("provider")
-        result.append(row)
-    return result
 
 
 def _opencode(value, session):
@@ -197,6 +158,10 @@ def import_file(path, source_format="normalized", *, session_id=None):
         raise CostError(
             "unsupported usage format; use normalized import or report-manual"
         )
+    if source_format == "codex":
+        raise CostError(
+            "Codex cumulative native usage is not qualified; supply a normalized packet with native IDs, epoch and explicit baseline, or use manual/estimate fallback"
+        )
     value = read_json(path) if source_format == "normalized" else _read_events(path)
     if source_format == "normalized":
         rows = value if isinstance(value, list) else value.get("observations")
@@ -209,11 +174,7 @@ def import_file(path, source_format="normalized", *, session_id=None):
             raise CostError(
                 "invalid native usage metadata; use normalized import"
             ) from exc
-    if not isinstance(rows, list) or len(rows) > 100000:
-        raise CostError("invalid usage export or record limit exceeded")
-    for row in rows:
-        validate("observation", row)
-    return rows
+    return _validated_import_rows(rows)
 
 
 def _validated_import_rows(rows):
@@ -226,16 +187,15 @@ def _validated_import_rows(rows):
 
 def _native(value, source_format, session_id):
     if source_format == "opencode":
-        return _opencode(value, session_id)
-    events = value if isinstance(value, list) else [value]
-    if source_format == "codex":
-        threads = {
-            v.get("thread_id") for v in events if v.get("type") == "thread.started"
-        }
-        if threads != {session_id}:
-            raise CostError("source thread differs from explicitly bound session")
-        return _codex(events, session_id)
-    return _telemetry(events, source_format, session_id)
+        rows = _opencode(value, session_id)
+    else:
+        events = value if isinstance(value, list) else [value]
+        rows = _telemetry(events, source_format, session_id)
+    if not rows:
+        raise CostError(
+            "native source has no attributable completed request metadata; use normalized import, typed packet or manual/estimate fallback"
+        )
+    return rows
 
 
 def _active_bindings(store, binding_id):
@@ -289,10 +249,17 @@ def _binding_context(row, binding):
 
 
 def collect(store, binding_id=None):
+    store.assert_writable()
     imported = 0
     diagnostics = []
     for binding in _active_bindings(store, binding_id):
         try:
+            context = _attached_context(store, binding)
+            if context is not None:
+                result = collect_context(store, context)
+                imported += result["imported"]
+                diagnostics.extend(result["diagnostics"])
+                continue
             rows = _binding_rows(binding)
             # Binding identity is a local correlation; source identity remains stable across imports.
             if rows:

@@ -25,35 +25,20 @@ def record_response(candidate, response, endpoint, *, phase="review"):
 
 
 def _record(store, response, endpoint, phase):
-    usage = response.get("usage") or {}
-    host = urlsplit(endpoint).hostname
-    local = host in {"localhost", "127.0.0.1", "::1"}
-    row = {
-        "sourceInstanceId": "avo.review",
-        "sourceSessionId": store.identity()["accountingVideoId"],
-        "requestId": str(response.get("id") or uuid4()),
-        "agent": "avo",
-        "agentVersion": "1",
-        "model": response.get("model"),
-        "serviceProvider": host,
-        "billingMode": "local" if local else "unknown",
-        "serviceClass": "pipeline-service",
-        "phase": phase,
-        "occurredAt": now_iso(),
-        "tokens": {
-            "input": usage.get("prompt_tokens"),
-            "output": usage.get("completion_tokens"),
-            "cacheRead": (usage.get("prompt_tokens_details") or {}).get(
-                "cached_tokens"
-            ),
-            "reasoning": (usage.get("completion_tokens_details") or {}).get(
-                "reasoning_tokens"
-            ),
-        },
-        "semantics": {"cacheRead": "input", "reasoning": "output"},
-        "amounts": [],
-    }
-    return store.ingest([row])
+    if not isinstance(response, dict) or (
+        response.get("id") is not None and not isinstance(response["id"], str)
+    ):
+        raise CostError("invalid owned response metadata")
+    request_id = str(response.get("id") or uuid4())
+    key = content_hash(
+        {
+            "domain": "owned-response",
+            "session": store.identity()["accountingVideoId"],
+            "request": request_id,
+        }
+    )
+    with _directory_lock(store.path(f"locks/{key}.lock")):
+        return _record_locked(store, response, endpoint, phase, request_id)
 
 
 def _record_locked(store, response, endpoint, phase, request_id):
