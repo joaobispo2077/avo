@@ -617,20 +617,24 @@ def test_native_nr_preserves_selected_voice_timing_stereo_and_sample_count(tmp_p
     )
 
 
-def test_valid_one_frame_nr_with_bounded_fades_preserves_signal_and_duration(tmp_path):
+@pytest.mark.parametrize("frame_count", [1, 61])
+def test_valid_short_nr_with_bounded_fades_preserves_signal_and_duration(
+    tmp_path, frame_count
+):
     execution = _execution(tmp_path)
     execution["output"]["frameRate"] = {"num": 60, "den": 1}
     execution["videoGraph"]["operations"] = execution["videoGraph"]["operations"][:1]
     execution["videoGraph"]["operations"][0]["outputRange"] = {
         "startFrame": 0,
-        "endFrameExclusive": 1,
+        "endFrameExclusive": frame_count,
     }
     execution["videoGraph"]["operations"][0]["parameters"]["sourceRange"][
         "endTicks"
-    ] = 20
+    ] = (frame_count * 1000 + 59) // 60
     node = execution["audioGraph"]["nodes"][0]
-    node["sourceRange"]["endSampleExclusive"] = 960
-    node["outputRange"] = {"startSample": 0, "endSampleExclusive": 800}
+    sample_count = frame_count * 800
+    node["sourceRange"]["endSampleExclusive"] = sample_count
+    node["outputRange"] = {"startSample": 0, "endSampleExclusive": sample_count}
     execution["audioGraph"]["nodes"] = [node]
     trim = execution["audioGraph"]["operations"][0]
     trim["range"] = node["outputRange"]
@@ -643,10 +647,14 @@ def test_valid_one_frame_nr_with_bounded_fades_preserves_signal_and_duration(tmp
     output = tmp_path / "one-frame.mp4"
     record = execute_ffmpeg_proof(execution, output)
     samples = _pcm(output)
+    assert len(samples) >= sample_count
+    audio = next(s for s in record["media"]["streams"] if s["codec_type"] == "audio")
+    assert audio["time_base"] == "1/48000"
+    assert audio["duration_ts"] == sample_count
     assert np.max(np.abs(samples[:800])) > 0.001
-    assert record["media"]["streams"][0]["nb_frames"] == "1"
+    assert record["media"]["streams"][0]["nb_frames"] == str(frame_count)
     assert record["audioEncodeCount"] == 1
-    execution["window"] = {"startFrame": 0, "endFrameExclusive": 1}
+    execution["window"] = {"startFrame": 0, "endFrameExclusive": frame_count}
     micro = tmp_path / "one-frame-window.mp4"
     execute_ffmpeg_proof(execution, micro)
     np.testing.assert_array_equal(_pcm(micro), samples)

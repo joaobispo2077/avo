@@ -1,5 +1,6 @@
 """Lossy encoding belongs in the source reference, never in relaxed thresholds."""
 
+import json
 import shutil
 import subprocess
 from copy import deepcopy
@@ -75,6 +76,46 @@ def test_native_reference_preserves_low_pcm_bits_before_encoding(tmp_path, monke
     rate, pcm = wavfile.read(processed)
     assert rate == 48000 and pcm.dtype == np.int32
     np.testing.assert_array_equal((reference * 2**31).astype("int32"), pcm)
+
+
+@pytest.mark.integration
+@pytest.mark.skipif(
+    not shutil.which("ffmpeg") or not shutil.which("ffprobe"),
+    reason="FFmpeg and FFprobe required",
+)
+@pytest.mark.parametrize("sample_count", [800, 48800, 288800])
+def test_encoded_reference_preserves_non_millisecond_sample_boundary(
+    tmp_path, sample_count
+):
+    rate = 48000
+    clock = np.arange(sample_count) / rate
+    source = tmp_path / "original.wav"
+    wavfile.write(
+        source, rate, (np.sin(clock * 2 * np.pi * 440) * 2**28).astype("int32")
+    )
+    entry = _entry(source, rate)
+    entry["source_range"]["endTicksExclusive"] = sample_count
+    recipe = entry["processing"]
+    recipe["windowLengthSamples"] = sample_count
+    for bounds in ("sourceRange", "outputRange"):
+        recipe["node"][bounds]["endSampleExclusive"] = sample_count
+    reference = _reference_audio(entry, tmp_path / "ref", _encoding())
+    probe = json.loads(
+        subprocess.check_output(
+            [
+                "ffprobe",
+                "-v",
+                "error",
+                "-show_streams",
+                "-of",
+                "json",
+                str(tmp_path / "ref/package-native.m4a"),
+            ]
+        )
+    )["streams"][0]
+    assert probe["time_base"] == "1/48000"
+    assert probe["duration_ts"] == sample_count
+    assert len(reference) == (sample_count + 2) // 3
 
 
 @pytest.mark.integration
