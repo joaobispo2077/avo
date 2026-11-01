@@ -148,10 +148,65 @@ class CostStore:
 
     digest = staticmethod(content_hash)
 
+    def membership_digest(self, kind, value):
+        """Return the accepted record identity used by a captured report."""
+        from avo.cost_history import _portable_membership
 
+        projected = _portable_membership(self, kind, value)
+        if projected is not None:
+            return projected
+        return value["contentHash"] if kind == "batches" else self.digest(value)
 
+    def membership(self, view=None):
+        captured = self.capture() if view is None else view
+        return {
+            kind: sorted(self.membership_digest(kind, value) for value in records)
+            for kind, records in captured.items()
+        }
 
+    def assert_writable(self):
+        if self.path("portable.json").exists():
+            raise CostError(
+                "portable cost projection is read-only; reauthorize sources in a production ledger"
+            )
 
+    def portable_status(self):
+        from avo.cost_history import _portable_manifest
+
+        manifest = _portable_manifest(self)
+        if manifest is None:
+            return None
+        keys = (
+            "manifestId",
+            "verification",
+            "sourceReauthorizationRequired",
+            "limitations",
+        )
+        return {key: deepcopy(manifest[key]) for key in keys}
+
+    def read_snapshot(self, snapshot_id):
+        from avo.cost_history import _portable_manifest, _portable_read_snapshot
+
+        if not isinstance(snapshot_id, str) or not re.fullmatch(
+            r"[a-f0-9]{64}", snapshot_id
+        ):
+            raise CostError("invalid cost snapshot identity")
+        manifest = _portable_manifest(self)
+        if manifest is not None:
+            snapshot = _portable_read_snapshot(self, snapshot_id, manifest)
+        else:
+            if not self.path(f"snapshots/{snapshot_id}.json").is_file():
+                raise CostError("unknown cost snapshot")
+            snapshot = self._read_document("snapshots", snapshot_id + ".json")
+        identity = self.identity()
+        if (
+            not identity
+            or snapshot["accountingVideoId"] != identity["accountingVideoId"]
+        ):
+            raise CostError("cost snapshot belongs to another production")
+        if snapshot["snapshotId"] != snapshot_id:
+            raise CostError("cost snapshot identity mismatch")
+        return snapshot
 
     def path(self, relative):
         candidate = Path(os.path.abspath(self.root / relative))
