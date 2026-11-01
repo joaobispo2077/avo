@@ -1,11 +1,9 @@
 """Deterministic token accounting and frozen decimal valuations."""
 
 from __future__ import annotations
-
 from collections import defaultdict
 from datetime import datetime
 from decimal import Decimal
-
 from avo.cost_store import CostError
 
 
@@ -30,6 +28,8 @@ def _leaves(rows, diagnostics):
         _series_deltas(series, result, diagnostics)
     rollups = {_rollup_key(r) for r in result if r.get("inclusion") == "rollup"}
     return [r for r in result if _rollup_key(r, parent=True) not in rollups]
+
+
 
 
 def _rollup_key(row, *, parent=False):
@@ -79,6 +79,14 @@ def _delta(previous, row, result, diagnostics):
     )
 
 
+
+
+
+
+
+
+
+
 def _has_request_overlap(series, rows):
     key = (series[0]["sourceInstanceId"], series[0]["sourceSessionId"])
     return any(
@@ -93,6 +101,8 @@ def _counter_identity(previous, row, diagnostics):
         diagnostics.append({"code": "mixed-model-counter-interval"})
         return {**row, "model": None, "serviceProvider": None, "_prices": []}
     return row
+
+
 
 
 def _token_total(row):
@@ -140,6 +150,16 @@ def _estimate(row, prices):
             "provenance": price["provenance"],
         }
     ]
+
+
+def _tariff_value(rates, counts, denominator):
+    """Keep finite products exact; recurring ratios use at least 28 significant digits."""
+    terms = [(Decimal(rate), counts[key]) for key, rate in rates.items()]
+    high = max(rate.adjusted() + len(str(count)) for rate, count in terms)
+    low = min(rate.as_tuple().exponent for rate, _ in terms)
+    precision = high - low + len(str(len(terms))) + 4 * len(str(denominator)) + 4
+    with localcontext(prec=max(28, precision)):
+        return sum((rate * count for rate, count in terms), Decimal(0)) / denominator
 
 
 def _matching_price(row, prices):
@@ -257,6 +277,17 @@ def _aggregate(rows, prices):
     )
 
 
+def _decimal_sum(values):
+    values = list(values)
+    if not values:
+        return Decimal(0)
+    precision = max(value.adjusted() for value in values) - min(
+        value.as_tuple().exponent for value in values
+    )
+    with localcontext(prec=max(28, precision + len(str(len(values))) + 2)):
+        return sum(values, Decimal(0))
+
+
 def _breakdowns(rows, prices, total):
     breakdowns = {}
     for dimension in ("model", "serviceProvider", "agent", "phase", "serviceClass"):
@@ -316,6 +347,400 @@ def summarize(store, *, phase=None):
     }
 
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+def _active_decisions(decisions):
+    superseded = {identity for item in decisions for identity in item["supersedes"]}
+    return [item for item in decisions if item["reconciliationId"] not in superseded]
+
+
+def _replacement_choices(view, known):
+    choices = defaultdict(set)
+    for decision in _active_decisions(view["reconciliations"]):
+        if decision["relation"] != "replaces-estimate":
+            continue
+        validate_reconciliation(decision, known_refs=known)
+        selected = decision["selectedRepresentation"]
+        for ref in decision["references"]:
+            if ref["kind"] == "estimate":
+                choices[ref["id"]].add((selected["kind"], selected["id"]))
+    return choices
+
+
+def _estimate_views(store, view, rows, diagnostics, known):
+    selected = {row["_evidence"]["evidenceId"] for row in rows}
+    choices = _replacement_choices(view, known)
+    result = []
+    for item in sorted(view["estimates"], key=lambda value: value["estimateId"]):
+        candidates = choices.get(item["estimateId"], set())
+        status, representation = _estimate_selection(candidates, selected)
+        if status == "active" and _estimate_overlap(item, view["estimates"], rows):
+            status = "conflict"
+        if status == "conflict":
+            diagnostics.append(
+                {
+                    "code": "cost-estimate-overlap-unresolved",
+                    "variants": [item["estimateId"]],
+                }
+            )
+        result.append(
+            _estimate_view(item, view["prices"], status, representation, store)
+        )
+    return result
+
+
+def _estimate_selection(candidates, selected):
+    if not candidates:
+        return "active", None
+    if len(candidates) == 1:
+        kind, identity = next(iter(candidates))
+        if kind == "evidence" and identity in selected:
+            return "replaced", {"kind": kind, "id": identity}
+    return "conflict", None
+
+
+def _estimate_overlap(item, estimates, rows):
+    others = [value for value in estimates if value["estimateId"] != item["estimateId"]]
+    others.extend(
+        {
+            "participationId": row["_evidence"].get("participationId"),
+            "scope": row["_evidence"].get("attribution", {}).get("scope", {}),
+        }
+        for row in rows
+    )
+    return any(
+        _same_estimate_subject(item, value)
+        and _scopes_may_overlap(item["scope"], value["scope"])
+        for value in others
+    )
+
+
+def _same_estimate_subject(left, right):
+    if left["participationId"] == right["participationId"]:
+        return True
+    fields = ("sourceInstanceId", "sourceSessionId", "counterEpoch")
+    return all(
+        left["scope"].get(key) is not None
+        and left["scope"].get(key) == right["scope"].get(key)
+        for key in fields
+    )
+
+
+def _scopes_may_overlap(left, right):
+    for field in ("sourceInstanceId", "sourceSessionId", "counterEpoch"):
+        if left.get(field) and right.get(field) and left[field] != right[field]:
+            return False
+    return not (_scope_precedes(left, right) or _scope_precedes(right, left))
+
+
+def _scope_precedes(left, right):
+    ending, beginning = left.get("ending", {}), right.get("beginning", {})
+    if ending.get("at") and beginning.get("at"):
+        return _time(ending["at"]) <= _time(beginning["at"])
+    return bool(ending.get("reference") and ending == beginning and left != right)
+
+
+def _estimate_view(item, prices, status, representation, store):
+    result = {
+        key: item[key]
+        for key in (
+            "estimateId",
+            "participationId",
+            "scope",
+            "method",
+            "methodVersion",
+            "inputManifest",
+            "tokens",
+            "ranges",
+            "assumptions",
+            "limitations",
+        )
+    }
+    result.update(
+        status=status,
+        selectedRepresentation=representation,
+        priceScheduleIds=item.get("priceScheduleIds", []),
+    )
+    if "manualBasis" in item:
+        result["manualBasis"] = item["manualBasis"]
+    return {**result, **_estimate_finances(item, prices, store)}
+
+
+def _estimate_finances(item, prices, store):
+    context = item.get("pricingContext")
+    empty = {
+        "amounts": [],
+        "amountRanges": [],
+        "missingPrerequisites": [],
+        "pricingContext": context,
+        "selectedPriceScheduleId": None,
+        "valuationEffectiveAt": None,
+    }
+    if not context:
+        return {**empty, "missingPrerequisites": ["pricing-context-missing"]}
+    model = item["inputManifest"]["model"]
+    if model is not None and model != context["model"]:
+        return {**empty, "missingPrerequisites": ["estimate-model-mismatch"]}
+    frozen = [
+        price
+        for price in prices
+        if store.digest(price) in item.get("priceScheduleIds", [])
+    ]
+    row = {**context, "pricingDimensions": context["dimensions"]}
+    price = _matching_price(row, frozen)
+    if price is None:
+        return {**empty, "missingPrerequisites": ["frozen-price-unavailable"]}
+    empty.update(
+        selectedPriceScheduleId=store.digest(price),
+        valuationEffectiveAt=price["effectiveAt"],
+    )
+    values = _estimate_values(item, price)
+    if values is None:
+        return {**empty, "missingPrerequisites": ["estimate-categories-unpriceable"]}
+    amount = {
+        "basis": price["basis"],
+        "unit": price["unit"],
+        "provenance": price["provenance"],
+    }
+    if item["ranges"] is not None:
+        return {
+            **empty,
+            "amountRanges": [
+                {
+                    **amount,
+                    "min": values[0],
+                    "max": values[1],
+                    "priceScheduleId": store.digest(price),
+                }
+            ],
+        }
+    return {**empty, "amounts": [{**amount, "amount": values[0]}]}
+
+
+def _estimate_values(item, price):
+    counts = item["ranges"] if item["ranges"] is not None else item["tokens"]
+    categories = set(counts or {}) - {"total"}
+    if not categories or not categories <= {"input", "output"}:
+        return None
+    if any(key not in price["rates"] or counts[key] is None for key in categories):
+        return None
+    endpoints = ("minimum", "maximum") if item["ranges"] is not None else (None,)
+    return [
+        _estimate_value(counts, categories, price, endpoint) for endpoint in endpoints
+    ]
+
+
+def _estimate_value(counts, categories, price, endpoint):
+    buckets = {
+        key: counts[key][endpoint] if endpoint else counts[key] for key in categories
+    }
+    rates = {key: price["rates"][key] for key in categories}
+    value = _tariff_value(rates, buckets, price["denominator"])
+    return format(value, "f")
+
+
+def _financial_views(rows, prices, store, amounts):
+    groups = defaultdict(list)
+    for row in rows:
+        values = row["amounts"] or _estimate(row, row.get("_prices", prices))
+        for value in values:
+            groups[(value["basis"], value["unit"])].append(
+                _valuation_detail(row, value, store)
+            )
+    totals = {(value["basis"], value["unit"]): value["amount"] for value in amounts}
+    return [
+        {
+            "basis": basis,
+            "unit": unit,
+            "amount": totals[(basis, unit)],
+            "interpretation": _financial_interpretation(basis),
+            "valuations": values,
+        }
+        for (basis, unit), values in sorted(groups.items())
+    ]
+
+
+def _valuation_detail(row, value, store):
+    metadata = row["_evidence"]
+    price = None if row["amounts"] else _matching_price(row, row.get("_prices", []))
+    return {
+        "reference": {"kind": "evidence", "id": metadata["evidenceId"]},
+        "amount": value["amount"],
+        "provenance": value["provenance"],
+        "model": row["model"],
+        "serviceProvider": row["serviceProvider"],
+        "modelBasis": metadata.get("modelBasis", "unknown"),
+        "occurredAt": row["occurredAt"],
+        "priceScheduleId": store.digest(price) if price else None,
+        "effectiveAt": price["effectiveAt"] if price else None,
+        "dimensions": row.get("pricingDimensions", {}),
+    }
+
+
+def _financial_interpretation(basis):
+    return {
+        "source-reported": "reported amount; charge interpretation unverified",
+        "calculated-estimate": "calculated estimate",
+        "api-equivalent": "API reference equivalent",
+        "manual": "manual allocation/declaration",
+    }[basis]
+
+
+def _usage_by_nature(rows, estimates, prices, tokens):
+    groups = defaultdict(list)
+    for row in rows:
+        groups[row["_nature"]].append(row)
+    result = {
+        kind: tokens
+        if rows and len(groups[kind]) == len(rows)
+        else _aggregate(groups[kind], prices)[0]
+        for kind in ("measured", "manual", "legacy-unknown")
+    }
+    estimated = [
+        {
+            "tokens": item["tokens"],
+            "semantics": {},
+            "amounts": [],
+            "model": None,
+            "serviceProvider": None,
+            "occurredAt": None,
+            "_prices": [],
+        }
+        for item in estimates
+        if item["tokens"] is not None
+    ]
+    result["estimated"] = _aggregate(estimated, [])[0]
+    return result
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 def _membership(view, store):
     return {
         kind: sorted(
@@ -370,3 +795,66 @@ def render_summary(report):
         f"Collected: {report.get('lastCollectedAt') or 'not recorded'}. "
         "Closing/current turn may still be pending; this is not an invoice."
     )
+
+
+
+
+
+
+def _render_financial_views(views):
+    return [
+        f"Financial view: {item['amount']} {item['unit']} ({item['interpretation']})."
+        for item in views
+    ]
+
+
+
+
+
+
+def _render_estimate(item):
+    counts = _render_estimate_counts(item)
+    if item["missingPrerequisites"]:
+        valuation = "valuation unavailable: " + ", ".join(item["missingPrerequisites"])
+    else:
+        valuation = _render_estimate_amounts(item)
+    basis = f" Basis: {item['manualBasis']}." if item.get("manualBasis") else ""
+    return (
+        f"Estimate {item['estimateId'][:12]} ({item['method']} {item['methodVersion']}, {item['status']}): "
+        f"{counts}. {valuation}. Limits: {'; '.join(item['limitations'])}.{basis}"
+    )
+
+
+def _render_estimate_counts(item):
+    if item["ranges"] is not None:
+        return "; ".join(
+            f"{key} {value['minimum']}–{value['maximum']} tokens"
+            for key, value in item["ranges"].items()
+        )
+    return (
+        "; ".join(
+            f"{key} {value if value is not None else 'unknown'} tokens"
+            for key, value in (item["tokens"] or {}).items()
+        )
+        or "unknown tokens"
+    )
+
+
+def _render_estimate_amounts(item):
+    values = [
+        f"{value['amount']} {value['unit']} ({_financial_interpretation(value['basis'])})"
+        for value in item["amounts"]
+    ]
+    values.extend(
+        f"{value['min']}–{value['max']} {value['unit']} ({_financial_interpretation(value['basis'])})"
+        for value in item["amountRanges"]
+    )
+    return "; ".join(values) or "valuation unavailable"
+
+
+
+
+
+
+
+
