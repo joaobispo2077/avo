@@ -15,9 +15,18 @@ from pathlib import Path
 from typing import Any
 
 from avo.adapters.media.cutting_audio import _observed_source_fingerprint
-from avo.audio_restoration import afftdn_filter, validate_dialogue_noise_policy
+from avo.audio_restoration import (
+    afftdn_filter,
+    dialogue_treatment_filter,
+    validate_dialogue_noise_policy,
+    validate_dialogue_treatment_policy,
+)
 from avo.capabilities import default_proof_capability_registry
-from avo.timeline.contracts import file_fingerprint
+from avo.timeline.contracts import file_fingerprint, fingerprint_stage
+from avo.timeline.proof_validation_stage import (
+    in_proof_validation_batch,
+    proof_pixel_observations,
+)
 
 PROOF_AUDIO_BITRATE = "192k"
 
@@ -323,8 +332,13 @@ def _audio_operations(graph: dict) -> tuple:
                 "fadeInSamples",
                 "fadeOutSamples",
                 "dialogueNoiseReductionPolicy",
+                "dialogueTreatmentPolicy",
             }:
                 raise RuntimeError("Unsupported audio trim parameters")
+            if "dialogueTreatmentPolicy" in parameters:
+                validate_dialogue_treatment_policy(
+                    parameters["dialogueTreatmentPolicy"]
+                )
             if parameters["nodeId"] in audio_trims:
                 raise RuntimeError("Duplicate audio trim operation")
             audio_trims[parameters["nodeId"]] = operation
@@ -528,6 +542,9 @@ def _segments(execution, node_by_range, audio_trims, fps, rate, nodes, generated
                     node,
                     audio,
                     fades,
+                    audio_trims.get(node["nodeId"], {})
+                    .get("parameters", {})
+                    .get("dialogueTreatmentPolicy"),
                     tail,
                     _dialogue_noise_policy(node, audio_trims),
                 )
@@ -543,29 +560,44 @@ def _generated_inputs(execution, spec, fps, validator):
 
     registry = default_proof_capability_registry()
     refs = {item["implementationId"]: item for item in execution["implementationRefs"]}
-    generated = {}
+    generated, checked_assets = {}, {}
+    observations = proof_pixel_observations()
+    if observations is None:
+        observations = {}
     for operation in execution["videoGraph"]["operations"]:
         if operation["kind"] not in {"generated-clip", "overlay-video"}:
             continue
         if operation["operationId"] in generated:
             raise RuntimeError("Duplicate generated operation identity")
         proof_generated.parameters(operation, refs, registry)
-        asset = proof_generated.verify(
-            operation, execution["canonicalInputLock"], validator, _validate_ancestry
+        asset = proof_generated.verify_cached(
+            operation,
+            execution["canonicalInputLock"],
+            validator,
+            _validate_ancestry,
+            checked_assets,
         )
-        generated[operation["operationId"]] = proof_generated.inspect(asset, spec, fps)
+        generated[operation["operationId"]] = proof_generated.inspect(
+            asset, spec, fps, observations=observations
+        )
     proof_generated.validate_layers(list(generated.values()))
     return generated
 
 
-def _validate_events(execution):
+def _validate_events(execution, generated=None):
+    from .proof_audio_bridge import validate_audio_events
+    from .proof_rendered_events import bound_visual_event
+
+    audio_events = validate_audio_events(execution)
     visual = {"main-scene", "overlay-video", "authored-graphic", "caption"}
     ranges = [item["outputRange"] for item in execution["videoGraph"]["operations"]]
     for event in execution["events"]:
+        if event.get("eventId") in audio_events:
+            continue
         region = event.get("visibleRange")
         if (
             event.get("role") not in visual
-            or region not in ranges
+            or (region not in ranges and not bound_visual_event(event, generated))
             or event.get("audio")
         ):
             raise RuntimeError(
@@ -579,6 +611,11 @@ def _validate_events(execution):
 
 
 def _revalidate_inputs(execution, generated, validator):
+    with fingerprint_stage(reuse_current=in_proof_validation_batch()):
+        _revalidate_fresh_inputs(execution, generated, validator)
+
+
+def _revalidate_fresh_inputs(execution, generated, validator):
     from . import proof_generated
 
     observed_sources = {}
@@ -590,19 +627,21 @@ def _revalidate_inputs(execution, generated, validator):
             source = parameters["source"]
             path = Path(source["locator"]).resolve()
             if path not in observed_sources:
-                observed_sources[path] = _observed_source_fingerprint(
-                    path, observe=file_fingerprint
-                )["sha256"]
+                fresh = file_fingerprint(path)
+                _observed_source_fingerprint(path, observe=lambda _, value=fresh: value)
+                observed_sources[path] = fresh["sha256"]
             if observed_sources[path] != source["sha256"]:
                 raise RuntimeError(
                     f"ProofPlan source changed during render: {source['locator']}"
                 )
+    checked_assets = {}
     for asset in generated.values():
-        proof_generated.verify(
+        proof_generated.verify_cached(
             asset["operation"],
             execution["canonicalInputLock"],
             validator,
             _validate_ancestry,
+            checked_assets,
         )
 
 
@@ -652,6 +691,7 @@ def _render_piece(segment, left, right, spec, fps, rate, piece):
         node,
         audio,
         fades,
+        treatment_policy,
         tail,
         noise_policy,
     ) = segment
@@ -686,6 +726,8 @@ def _render_piece(segment, left, right, spec, fps, rate, piece):
         if node["sourceSampleRate"] != rate:
             afilter += f",aresample={rate}"
         afilter += _dialogue_noise_filter(noise_policy, node)
+        if treatment_policy is not None:
+            afilter += "," + dialogue_treatment_filter(treatment_policy)
         afilter += f",apad,atrim=end_sample={full_length}"
         if fades[0]:
             afilter += f",afade=t=in:ss=0:ns={fades[0]}"
@@ -734,7 +776,9 @@ def _encode_arguments(spec, fps, count):
     return arguments + ["-b:a", PROOF_AUDIO_BITRATE, "-movflags", "+faststart"]
 
 
-def _render_final(listing, candidate, overlays, spec, fps, wstart, wend):
+def _render_final(
+    listing, candidate, overlays, spec, fps, wstart, wend, mixed_audio=None
+):
     from . import proof_generated
 
     extra, filters, metadata = proof_generated.overlay_filters(
@@ -742,7 +786,15 @@ def _render_final(listing, candidate, overlays, spec, fps, wstart, wend):
     )
     timebase = f"{fps.denominator}/{fps.numerator}"
     video = f"[0:v:0]settb=expr={timebase},setpts=N,format=rgba[picture]"
-    audio = "[0:a:0]asetpts=N/SR/TB[a]"
+    audio_index = 1 + len(overlays) if mixed_audio is not None else 0
+    audio = f"[{audio_index}:a:0]asetpts=N/SR/TB[a]"
+    encode_arguments = _encode_arguments(spec, fps, wend - wstart)
+    # A frame-count output stop can discard a final PCM packet, including when
+    # a stateful dialogue filter changes packet boundaries. Let finite audio end.
+    stop = encode_arguments.index("-frames:v")
+    del encode_arguments[stop : stop + 2]
+    filters.append(f"[v]trim=end_frame={wend - wstart}[bounded-picture]")
+    video_map = "[bounded-picture]"
     _run(
         [
             "ffmpeg",
@@ -756,13 +808,14 @@ def _render_final(listing, candidate, overlays, spec, fps, wstart, wend):
             "-i",
             str(listing),
             *extra,
+            *(["-i", str(mixed_audio)] if mixed_audio is not None else []),
             "-filter_complex",
             ";".join([video, *filters, audio]),
             "-map",
-            "[v]",
+            video_map,
             "-map",
             "[a]",
-            *_encode_arguments(spec, fps, wend - wstart),
+            *encode_arguments,
             str(candidate),
         ]
     )
@@ -791,7 +844,16 @@ def _render_final(listing, candidate, overlays, spec, fps, wstart, wend):
 
 
 def _render_media(
-    output, segments, spec, fps, rate, wstart, wend, overlays, verify_inputs
+    output,
+    segments,
+    spec,
+    fps,
+    rate,
+    wstart,
+    wend,
+    overlays,
+    verify_inputs,
+    audio_mix=None,
 ):
     if output.exists():
         raise RuntimeError(f"Refusing to replace existing proof: {output}")
@@ -818,8 +880,19 @@ def _render_media(
         candidate = directory / (
             "candidate.mkv" if spec.get("conformance") is True else "candidate.mp4"
         )
+        mixed_audio = None
+        if audio_mix is not None:
+            from .proof_audio_bridge import render_mix
+
+            mixed_audio = render_mix(
+                listing,
+                directory,
+                audio_mix,
+                start_sample=round(Fraction(wstart, 1) / fps * rate),
+                end_sample=round(Fraction(wend, 1) / fps * rate),
+            )
         media, metadata = _render_final(
-            listing, candidate, overlays, spec, fps, wstart, wend
+            listing, candidate, overlays, spec, fps, wstart, wend, mixed_audio
         )
         verify_inputs()
         candidate.replace(output)
@@ -864,6 +937,15 @@ def execute_ffmpeg_proof(
     *,
     generated_asset_validator=None,
 ) -> dict[str, Any]:
+    with fingerprint_stage(reuse_current=in_proof_validation_batch()):
+        return _execute_ffmpeg_proof(
+            execution, output, generated_asset_validator=generated_asset_validator
+        )
+
+
+def _execute_ffmpeg_proof(
+    execution: dict[str, Any], output: Path, *, generated_asset_validator=None
+) -> dict[str, Any]:
     """Render the frozen graph; code-drawn reuse requires injected freshness checks."""
     from . import proof_generated
 
@@ -871,12 +953,21 @@ def execute_ffmpeg_proof(
     spec, fps, rate = _output_settings(execution)
     if spec.get("conformance") is True and output.suffix != ".mkv":
         raise RuntimeError("Lossless conformance output requires .mkv")
-    _validate_events(execution)
-    nodes = execution["audioGraph"]["nodes"]
+    from .proof_audio_bridge import prepare_mix
+
+    source_cache = {}
+    lead_execution, audio_mix = prepare_mix(
+        execution,
+        lambda node, parameters: _source(
+            parameters, execution["canonicalInputLock"], source_cache, audio_node=node
+        ),
+    )
+    nodes = lead_execution["audioGraph"]["nodes"]
     node_by_range = _audio_nodes(nodes, rate)
-    _validate_resampling(execution["audioGraph"], nodes, rate)
-    audio_trims, encodes = _audio_operations(execution["audioGraph"])
+    _validate_resampling(lead_execution["audioGraph"], nodes, rate)
+    audio_trims, encodes = _audio_operations(lead_execution["audioGraph"])
     generated = _generated_inputs(execution, spec, fps, generated_asset_validator)
+    _validate_events(execution, generated)
     cursor, segments = _segments(
         execution, node_by_range, audio_trims, fps, rate, nodes, generated
     )
@@ -892,18 +983,32 @@ def execute_ffmpeg_proof(
         wend,
         overlays,
         lambda: _revalidate_inputs(execution, generated, generated_asset_validator),
+        audio_mix,
     )
     return {
         "status": "pass",
         "output": file_fingerprint(output),
         "path": str(output),
         "audioEncodeCount": 1,
+        "audioMix": audio_mix.get("result") if audio_mix else None,
         "producer": {"name": "avo.ffmpeg-proof-plan", "version": "1"},
         "media": media,
         "sourceVideoTailPolicies": [
             segment[-2] for segment in segments if segment[-2] is not None
         ],
         "sourceDialogueNoisePolicies": _noise_policy_records(execution["audioGraph"]),
+        "sourceDialogueTreatmentPolicies": [
+            {
+                "nodeId": operation["parameters"]["nodeId"],
+                "policy": operation["parameters"]["dialogueTreatmentPolicy"],
+                "filter": dialogue_treatment_filter(
+                    operation["parameters"]["dialogueTreatmentPolicy"]
+                ),
+            }
+            for operation in execution["audioGraph"]["operations"]
+            if operation["kind"] == "trim"
+            and "dialogueTreatmentPolicy" in operation["parameters"]
+        ],
         "generatedOperations": [
             proof_generated.operation_metadata(asset["operation"])
             for asset in generated.values()

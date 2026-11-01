@@ -1,6 +1,6 @@
 [project]
 name = "avo"
-version = "1.18.0"
+version = "1.19.1"
 description = "Local-first Python helpers for AVO — transcription, captions, grading, render, and telemetry on your machine."
 license = { file = "LICENSE" }
 requires-python = ">=3.11"
@@ -20,6 +20,7 @@ code-drawn = [
 dev = [
     "pytest>=8.0",
     "pytest-cov>=5.0",
+    "pytest-xdist>=3.8,<4",
     "ruff>=0.16",
     "xenon>=0.9",
     "vulture>=2.14",
@@ -40,6 +41,7 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 "avo.templates.shorts_hyperframes" = ["*.html", "*.css", "*.js", "*.json"]
+"avo.templates.library_review" = ["*.html", "*.css", "*.js"]
 "avo.templates.code_drawn" = [
     "**/*.html",
     "**/*.js",

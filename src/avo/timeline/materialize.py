@@ -997,48 +997,21 @@ def render_proof_microproofs(
 
     compiler, plan = _proof_plan_value(workspace, proof_plan)
     port = _configured_proof_port(render_port, workspace, plan)
-    readiness = _proof_readiness(port, plan)
-    preflight = compiler.require_preflight(
-        plan,
-        media_inputs=media_inputs,
-        tool_readiness=readiness,
-    )
-    windows = select_microproof_windows(plan)
-    directory = Path(workspace.timeline_dir) / "microproofs" / str(plan["proofPlanId"])
-    suffix = Path(plan["output"]["path"]).suffix or ".mp4"
-    results: list[dict[str, Any]] = []
-    for index, window in enumerate(windows, 1):
-        frame_range = {
-            "startFrame": int(window["startFrame"]),
-            "endFrameExclusive": int(window["endFrameExclusive"]),
-        }
-        output = directory / f"window-{index:04d}{suffix}"
-        try:
-            rendered = _proof_render(
-                port,
-                plan,
-                output,
-                window=frame_range,
-            )
-            status = str(rendered.get("status") or "pass")
-            result = {
-                "window": frame_range,
-                "reasons": list(window["reasons"]),
-                "operationIds": list(window["operationIds"]),
-                "status": status,
-                "output": rendered["output"],
-                "graphHash": str(rendered.get("graphHash") or ""),
-            }
-            _attach_cutting_verification(port, plan, result, frame_range)
-        except Exception as exc:
-            result = {
-                "window": frame_range,
-                "reasons": list(window["reasons"]),
-                "operationIds": list(window["operationIds"]),
-                "status": "fail",
-                "error": str(exc),
-            }
-        results.append(result)
+    from .proof_validation_stage import proof_validation_batch
+
+    # Per-window files are internal checks. Publish a gate only after the whole
+    # immutable batch has freshly rehashed every original/generated dependency.
+    with proof_validation_batch():
+        readiness = _proof_readiness(port, plan)
+        preflight = compiler.require_preflight(
+            plan, media_inputs=media_inputs, tool_readiness=readiness
+        )
+        windows = select_microproof_windows(plan)
+        directory = (
+            Path(workspace.timeline_dir) / "microproofs" / str(plan["proofPlanId"])
+        )
+        suffix = Path(plan["output"]["path"]).suffix or ".mp4"
+        results = _render_required_microproofs(port, plan, windows, directory, suffix)
     gate = {
         "schemaVersion": "1.0.0",
         "proofPlanId": plan["proofPlanId"],
@@ -1066,6 +1039,37 @@ def render_proof_microproofs(
     gate_path = directory / f"gate-{gate['gateHash'][:12]}.json"
     write_immutable_json(gate_path, gate)
     return {**json.loads(json.dumps(gate)), "path": str(gate_path)}
+
+
+def _render_required_microproofs(port, plan, windows, directory, suffix):
+    results = []
+    for index, window in enumerate(windows, 1):
+        frame_range = {
+            "startFrame": int(window["startFrame"]),
+            "endFrameExclusive": int(window["endFrameExclusive"]),
+        }
+        output = directory / f"window-{index:04d}{suffix}"
+        try:
+            rendered = _proof_render(port, plan, output, window=frame_range)
+            result = {
+                "window": frame_range,
+                "reasons": list(window["reasons"]),
+                "operationIds": list(window["operationIds"]),
+                "status": str(rendered.get("status") or "pass"),
+                "output": rendered["output"],
+                "graphHash": str(rendered.get("graphHash") or ""),
+            }
+            _attach_cutting_verification(port, plan, result, frame_range)
+        except Exception as exc:
+            result = {
+                "window": frame_range,
+                "reasons": list(window["reasons"]),
+                "operationIds": list(window["operationIds"]),
+                "status": "fail",
+                "error": str(exc),
+            }
+        results.append(result)
+    return results
 
 
 def _load_microproof_gate(value: dict[str, Any] | str | Path) -> dict[str, Any]:

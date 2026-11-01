@@ -467,6 +467,7 @@ def test_inflight_cancellation_closes_real_attempt_without_success(
     assert caught.value.code == "CODE_DRAWN_CANCELLED"
     assert not output.exists()
     assert not output.with_suffix(".generated-asset.json").exists()
+    assert not list(tmp_path.glob(".avo-drawing-*"))
 
 
 LAYOUTS = [

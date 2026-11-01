@@ -514,6 +514,9 @@
                         "regionId"
                       ],
                       "properties": {
+                        "timebase": {
+                          "$ref": "#/$defs/timebase"
+                        },
                         "startTicks": {
                           "type": "integer"
                         },
@@ -682,6 +685,9 @@
                         "regionId"
                       ],
                       "properties": {
+                        "timebase": {
+                          "$ref": "#/$defs/timebase"
+                        },
                         "startTicks": {
                           "type": "integer"
                         },

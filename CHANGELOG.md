@@ -1,3 +1,61 @@
+## [1.19.1](https://github.com/joaobispo2077/avo/compare/v1.19.0...v1.19.1) (2026-10-31)
+
+
+### Bug Fixes
+
+* **motion:** stop encoder descendants on cancel ([1afb175](https://github.com/joaobispo2077/avo/commit/1afb1751ef4b803daf5e00d94760587f4a6a4f96))
+
+
+### Performance Improvements
+
+* **motion:** reuse encoded frames for seek checks ([20fec61](https://github.com/joaobispo2077/avo/commit/20fec61e9eb294468c200ce94dfb8d4a80e6add8))
+
+# [1.19.0](https://github.com/joaobispo2077/avo/compare/v1.18.0...v1.19.0) (2026-10-31)
+
+
+### Bug Fixes
+
+* **deps:** bump msgpack to 1.2.4 ([46d72e2](https://github.com/joaobispo2077/avo/commit/46d72e25d420c39bc1c4869d94cc40893be494db))
+* **tracks:** compare cue clocks exactly ([9c8d730](https://github.com/joaobispo2077/avo/commit/9c8d73045d2cf89e27f6cbabcce5517067766596))
+* **setup:** fail early when Python is below 3.11 ([affa69f](https://github.com/joaobispo2077/avo/commit/affa69ff19de94335fd6b1bf9daee59e6beb0a44))
+* **cutting:** harden native proof verification ([0a0bd50](https://github.com/joaobispo2077/avo/commit/0a0bd50039872e93b077c2f0f975639494e74143))
+* **brush:** keep starters deterministic in software ([2bbfdf1](https://github.com/joaobispo2077/avo/commit/2bbfdf1aaa0fff736beb4a689158ac2a84e7e535))
+* **install:** map official skill agent IDs ([c365592](https://github.com/joaobispo2077/avo/commit/c36559274ad4e90c9b48b0657a418048e20247cb))
+* **schema:** resolve cutting references locally ([aed67d6](https://github.com/joaobispo2077/avo/commit/aed67d6ef5df5e9de59c159e0cbfbb0513e370db))
+* **code-drawn:** restore cross-platform checks ([5b2f2e9](https://github.com/joaobispo2077/avo/commit/5b2f2e9349d9958834820c08ad75ba284e191574))
+* **ci:** restore workflow validation ([beb765e](https://github.com/joaobispo2077/avo/commit/beb765e0d936d2795c07dde3d1e0abe811946214))
+* **shorts:** retain unchanged item review state ([d4c73a0](https://github.com/joaobispo2077/avo/commit/d4c73a0d1d0a505f6477caa23ea9673fa95176b7))
+
+
+### Features
+
+* **library:** add approved recoverable moves ([bd306d8](https://github.com/joaobispo2077/avo/commit/bd306d84461414457363207219a8b1b01fa82ad4))
+* **library:** add bounded local ASR batches ([d578624](https://github.com/joaobispo2077/avo/commit/d578624a5c63a55f18559ebb3b5c3dbb38cf5a76))
+* **code-drawn:** add editable drawing starters ([90fc34f](https://github.com/joaobispo2077/avo/commit/90fc34f99299525e930a3c390ba803b42ae4cbc1))
+* **library:** add editable folder previews ([e374128](https://github.com/joaobispo2077/avo/commit/e37412899b9926e7d835a371f7768b11a6f33632))
+* **library:** add immutable library records ([b27c65e](https://github.com/joaobispo2077/avo/commit/b27c65ea7b523920a561d596feceb0a72bb13e12))
+* **motion:** add scoped engine preferences ([3afd30e](https://github.com/joaobispo2077/avo/commit/3afd30e01c8b60b2face682289fbd4ba7217d905))
+* **library:** add source-bound footage search ([88a80ca](https://github.com/joaobispo2077/avo/commit/88a80cae613d9fb16ef895f987aae9d6d7aec4d1))
+* **timeline:** admit canonical motion assets ([998a6fa](https://github.com/joaobispo2077/avo/commit/998a6fa782b98bf4ca2bf3a6903cd4136c041b35))
+* **audio:** apply approved dialogue treatment ([0561a67](https://github.com/joaobispo2077/avo/commit/0561a67c9d3999e37f3c55b2bdb26f2574b60fbc))
+* **proof:** bind generated event visibility ([ff13ddf](https://github.com/joaobispo2077/avo/commit/ff13ddf4a3b832c7c212a2bfda5c9b7348962b1b))
+* **code-drawn:** capture seekable browser frames ([ab70e78](https://github.com/joaobispo2077/avo/commit/ab70e78d51a441cbbaffb2b187aa9d2675692749))
+* **proof:** composite generated motion ([63c9c7a](https://github.com/joaobispo2077/avo/commit/63c9c7ae02aaae322901246903b1c738b10264b5))
+* **code-drawn:** define frozen source contracts ([f6a6c8f](https://github.com/joaobispo2077/avo/commit/f6a6c8f96af1e3b9bb7c25b5f39fa73a1f3afb29))
+* **cli:** expose native motion workflows ([a023744](https://github.com/joaobispo2077/avo/commit/a02374463e99ccce6a84e09f59ef4f0e94de663c))
+* **library:** expose native organize commands ([324d9a2](https://github.com/joaobispo2077/avo/commit/324d9a270c5405c4b8819976892ea016c08319b4))
+* **proof:** mix declared finite audio sources ([c9b9a20](https://github.com/joaobispo2077/avo/commit/c9b9a203291a326727fa3da11293ef65ad745fc8))
+* **shorts:** render admitted drawing overlays ([5d38054](https://github.com/joaobispo2077/avo/commit/5d38054a9e888a5a1fbe0d40920921d1b2d06317))
+* **pipeline:** retain drawing source closures ([8f48937](https://github.com/joaobispo2077/avo/commit/8f4893737791ffc8a3104acf1c22975ce7708e16))
+* **review:** verify native motion delivery ([640d2d0](https://github.com/joaobispo2077/avo/commit/640d2d0cadf0b5dd1c43b2f362c20420417a66cb))
+
+
+### Performance Improvements
+
+* **proof:** bound representative risk windows ([45eb71e](https://github.com/joaobispo2077/avo/commit/45eb71e62d52e536debdf0df61a4d84a6aebe592))
+* **proof:** reuse immutable validation work ([dae7185](https://github.com/joaobispo2077/avo/commit/dae7185e07f68bfb07ca86efac997feeec6ba86c))
+* **telemetry:** skip unused model discovery ([f7bdfc4](https://github.com/joaobispo2077/avo/commit/f7bdfc4493ef78f800c2d96bf8ba9d3526d531fe))
+
 # [1.18.0](https://github.com/joaobispo2077/avo/compare/v1.17.1...v1.18.0) (2026-10-25)
 
 
