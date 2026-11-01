@@ -118,9 +118,85 @@ def test_measured_quiet_tail_is_not_erased_by_early_word_estimate(tmp_path):
     assert candidates[0]["evidence"]["context"]["dispensable"] is None
 
 
-def test_source_fingerprint_mismatch_rejected_before_decode(tmp_path):
+@pytest.mark.parametrize("native_seek", [False, True])
+def test_source_fingerprint_mismatch_rejected_before_decode(tmp_path, native_seek):
     path = make_wave(tmp_path / "source.wav", np.zeros((48000, 1)))
     args = request(path, tmp_path / "out")
     args["fingerprint"]["sha256"] = "f" * 64
     with pytest.raises(ToolError, match="fingerprint"):
-        extract_dialogue_pcm(path, **args)
+        extract_dialogue_pcm(path, **args, native_render_seek=native_seek)
+
+
+@pytest.mark.skipif(not shutil.which("ffmpeg"), reason="FFmpeg required")
+def test_native_seek_keeps_sample_bounds_routing_and_missing_tail_guard(
+    tmp_path, monkeypatch
+):
+    from avo.adapters.media import cutting_audio
+
+    rate = 48000
+    values = np.random.default_rng(42).normal(0, 0.1, (rate * 3, 2))
+    source = make_wave(tmp_path / "raw.wav", values)
+    args = request(source, tmp_path / "legacy")
+    args["source_range"].update(
+        startTicks=100003, endTicksExclusive=104099, timebase={"num": 1, "den": rate}
+    )
+    args["selection"]["channels"] = [1]
+    legacy = extract_dialogue_pcm(source, **args)
+    commands, execute = [], cutting_audio._execute
+
+    def recorded(command, **kwargs):
+        commands.append(command)
+        return execute(command, **kwargs)
+
+    monkeypatch.setattr(cutting_audio, "_execute", recorded)
+    args["output_dir"] = tmp_path / "native"
+    with cutting_audio._source_fingerprint_batch():
+        native = extract_dialogue_pcm(source, **args, native_render_seek=True)
+        native["bindings"]["nativeOriginalPcm"]["sha256"] = "f" * 64
+        second = {
+            **args,
+            "source_range": {
+                **args["source_range"],
+                "startTicks": 104099,
+                "endTicksExclusive": 108195,
+            },
+        }
+        other = extract_dialogue_pcm(source, **second, native_render_seek=True)
+        assert other["bindings"]["nativeOriginalPcm"]["sha256"] != "f" * 64
+        other_pcm, _ = cutting_audio.read_pcm(other["nativePath"])
+        expected = (values[104099:108195, 1] * 32000).astype("<i2").astype(
+            np.float32
+        ) / 32768
+        np.testing.assert_array_equal(other_pcm[:, 0], expected)
+        assert sum(str(source) in c and "-i" in c for c in commands) == 1
+    old, _ = cutting_audio.read_pcm(legacy["nativePath"])
+    new, _ = cutting_audio.read_pcm(native["nativePath"])
+    np.testing.assert_array_equal(old, new)
+    assert len(new) == 4096 and native["channels"] == [1]
+    command = next(c for c in commands if "-ss" in c)
+    assert command.index("-ss") < command.index("-i")
+    assert "atrim=start_sample=0:end_sample=4096" in command[command.index("-af") + 1]
+    assert native["sourceStart"] == 100003 / rate
+    assert native["bindings"]["preprocessing"].endswith("/native-source-pcm-seek-v1")
+    args["source_range"].update(
+        startTicks=rate * 3 - 100, endTicksExclusive=rate * 3 + 100
+    )
+    with pytest.raises(ToolError, match="cover"):
+        extract_dialogue_pcm(source, **args, native_render_seek=True)
+
+
+@pytest.mark.skipif(not shutil.which("ffmpeg"), reason="FFmpeg required")
+def test_native_source_pcm_mutation_is_not_reused(tmp_path):
+    from pathlib import Path
+
+    from avo.adapters.media.cutting_audio import _source_fingerprint_batch
+
+    source = make_wave(tmp_path / "raw.wav", np.ones((48000, 1)) * 0.1)
+    args = request(source, tmp_path / "validation")
+    with pytest.raises(ToolError, match="changed"):
+        with _source_fingerprint_batch():
+            result = extract_dialogue_pcm(source, **args, native_render_seek=True)
+            Path(result["bindings"]["nativeOriginalPcm"]["locator"]).write_bytes(
+                b"tampered"
+            )
+            extract_dialogue_pcm(source, **args, native_render_seek=True)
