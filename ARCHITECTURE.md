@@ -675,3 +675,39 @@ no participant results claimed. Full repository quality signoff is separately
 blocked by an existing locked dependency advisory. See the local feature 013
 validation records for acceptance evidence.
 
+Native cutting microproofs with music, effects or ambience reconstruct the
+declared mix around independently extracted original dialogue before comparing
+the encoded candidate. The QC adapter reuses source admission, sample clocks,
+routing, gain and ducking from the frozen audio graph; it never extracts its
+reference from a candidate. Stereo is preserved through the reference AAC encode.
+Dialogue-only checks retain their existing path and thresholds. Integration
+checks cover a valid stereo bed, missing consonant onsets/tails and changed
+source fingerprints. This physical conformance evidence does not replace
+intelligibility review or human listening approval.
+
+Each cutting verification window owns scratch paths bound to its candidate and
+review basis, so an immutable validation batch never overwrites a fingerprinted
+mix from another window. Native-reference extraction opts into the renderer's
+sample-addressed input seek from a same-batch original PCM decode, avoiding
+container timestamp rounding while preserving fingerprint, stream, channel,
+sample-count and truncation checks. The decode is shared only within the source
+verification batch and checked for mutation; rendering still reads the original
+media. Original alignment and
+analysis extraction retain their existing default sample-clock path. Tests
+compare exact routed PCM bounds, reject a missing source tail and verify two
+mixed windows under the same closing fingerprint guard.
+
+Within one immutable proof-validation batch, cutting previews validate source
+analysis documents once and retain only the word/routing projection needed for
+subsequent windows. Every reuse checks the original file fingerprints, and the
+batch still closes with fresh byte hashes. The cache ends with that batch;
+ordinary analysis reads retain full validation. Mutation, path containment,
+scope changes and caller modifications to returned words have regression checks.
+
+Native MP4 proofs and independently encoded QC references use the output audio
+sample rate for the movie clock. The
+default millisecond movie clock can round an AAC edit-list boundary down and
+discard retained samples at a video-frame edge. This changes container timing
+precision only; source ranges, fades, PCM mixing and QC coverage checks remain
+unchanged. Actual-codec tests verify exact audio duration for short 60 fps proofs
+and matching microproofs, including boundaries between milliseconds.
