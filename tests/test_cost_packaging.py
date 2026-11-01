@@ -624,12 +624,107 @@ def test_shipped_schema_paths_exist():
         "snapshot",
     ):
         assert schema_path(f"avo.cost-{kind}.schema.json").is_file()
+    for name in (
+        "avo.cost-evidence.schema.json",
+        "avo.cost-batch.v2.schema.json",
+        "avo.cost-snapshot.v2.schema.json",
+    ):
+        assert schema_path(name).is_file()
 
 
+def test_engine_costs_runs_without_optional_host_or_mcp_sdks(monkeypatch, capsys):
+    original = builtins.__import__
+
+    def optional_unavailable(name, *args, **kwargs):
+        if name.split(".")[0] in {"mcp", "openai", "anthropic", "claude_agent_sdk"}:
+            raise ImportError("optional runtime intentionally absent")
+        return original(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", optional_unavailable)
+    assert engine_cli.main(["costs", "capabilities", "--json"]) == 0
+    assert json.loads(capsys.readouterr().out)["agents"]
 
 
+def test_skills_only_missing_engine_preserves_accounting_boundary(
+    tmp_path, monkeypatch
+):
+    import socket
+    import subprocess
+    from pathlib import Path
+
+    from avo.consume_mode import resolve_consume_mode
+    from test_install_scripts import ROOT, _fallback_copy_probe
+
+    home = tmp_path / "isolated-home"
+    home.mkdir()
+    copied = subprocess.run(
+        [
+            "node",
+            "-e",
+            _fallback_copy_probe(),
+            str(ROOT / "bin/install.cjs"),
+            str(ROOT),
+            str(home),
+            "codex",
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert copied.returncode == 0, copied.stderr
+    pipeline = Path(json.loads(copied.stdout)["base"]) / "avo-pipeline"
+    gateway = (pipeline / "SKILL.md").read_text(encoding="utf-8")
+    guidance = (pipeline / "references/costs.md").read_text(encoding="utf-8")
+    assert "no engine/checkout/MCP runtime" in gateway
+    assert "no ledger mutation or collection has executed" in gateway
+    assert "Do not silently clone/install a runtime" in guidance
+    workspace = tmp_path / "video"
+    workspace.mkdir()
+
+    def forbidden(*args, **kwargs):
+        raise AssertionError("missing accounting runtime must not install or capture")
+
+    monkeypatch.setattr(socket, "create_connection", forbidden)
+    monkeypatch.setattr(subprocess, "run", forbidden)
+    monkeypatch.setattr(subprocess, "Popen", forbidden)
+    before = _json_bytes(tmp_path)
+    resolved = resolve_consume_mode(workspace, home=home)
+    assert resolved.mode == "binary"
+    assert Path(resolved.command_prefix) == home / ".avo/bin/avo"
+    assert not Path(resolved.command_prefix).exists()
+    assert not (workspace / "edit/costs").exists()
+    assert _json_bytes(tmp_path) == before
 
 
+def test_headless_engine_accepts_explicit_manual_packet_without_vendor_sdk(
+    tmp_path, capsys
+):
+    from avo.costs import summarize
+    from test_cost_continuity import evidence, packet, registered_ledger
+    from test_costs import fact
+
+    store = registered_ledger(tmp_path)
+    row = fact()
+    supplied = packet(store, [row], evidence_rows=[evidence(row, nature="manual")])
+    path = tmp_path / "supplied-packet.json"
+    path.write_text(json.dumps(supplied), encoding="utf-8")
+    assert (
+        engine_cli.main(
+            [
+                "costs",
+                "observe",
+                "--project",
+                str(store.raw_dir / "avo.project.json"),
+                "--file",
+                str(path),
+                "--json",
+            ]
+        )
+        == 0
+    )
+    assert json.loads(capsys.readouterr().out)["imported"] == 1
+    assert summarize(store)["usageByNature"]["manual"]["total"] == 120
 
 
 def test_portable_binding_scope_omits_locator_and_cannot_grant_collection(tmp_path):

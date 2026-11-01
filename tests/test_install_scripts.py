@@ -231,6 +231,8 @@ def test_fallback_installer_copies_organize_route_and_local_guidance(tmp_path, p
         "references/command-map.md",
         "references/help.md",
         "references/arguments.md",
+        "references/costs.md",
+        "references/pipeline.md",
     )
     for relative in files:
         assert (pipeline / relative).read_bytes() == (

@@ -29,7 +29,11 @@ class SessionHelperTests(unittest.TestCase):
     def _patch_sessions(self) -> mock._patch:
         from avo import avo_state
 
-        return mock.patch.object(avo_state, "repo_root", return_value=self.tmp_path)
+        return mock.patch.multiple(
+            avo_state,
+            repo_root=lambda: self.tmp_path,
+            state_dir=lambda: self.tmp_path / ".avo",
+        )
 
     def test_normalize_path_resolves_and_uses_posix(self) -> None:
         base = self.tmp_path / "project"
@@ -180,3 +184,78 @@ class SessionHelperTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_session_start_registers_explicit_cost_context(tmp_path, monkeypatch):
+    from avo import avo_state
+    from avo.cost_store import CostStore
+    from test_cost_continuity import context_descriptor
+
+    raw = tmp_path / "footage"
+    raw.mkdir()
+    monkeypatch.setattr(avo_state, "repo_root", lambda: tmp_path)
+    monkeypatch.setattr(avo_state, "state_dir", lambda: tmp_path / "state")
+    session.start_session(raw, "bishop", cost_context=context_descriptor())
+    facts = CostStore(raw).capture()["participations"]
+    assert len(facts) == 1
+    assert facts[0]["agent"]["family"] == "codex"
+
+
+def test_session_start_rejects_malformed_context_before_inventory(
+    tmp_path, monkeypatch
+):
+    import pytest
+
+    from avo import avo_state
+
+    raw = tmp_path / "footage"
+    raw.mkdir()
+    monkeypatch.setattr(avo_state, "repo_root", lambda: tmp_path)
+    with pytest.raises(ValueError):
+        session.start_session(
+            raw, "bishop", cost_context={"prompt": "private-sentinel"}
+        )
+    assert not (raw / "edit").exists()
+    assert not (tmp_path / ".avo").exists()
+
+
+def test_session_cli_start_accepts_inline_cost_context(tmp_path, monkeypatch, capsys):
+    from avo import avo_state
+    from avo.cost_store import CostStore
+    from test_cost_continuity import context_descriptor
+
+    raw = tmp_path / "footage"
+    raw.mkdir()
+    monkeypatch.setattr(avo_state, "repo_root", lambda: tmp_path)
+    monkeypatch.setattr(avo_state, "state_dir", lambda: tmp_path / "state")
+    assert (
+        session.main(
+            [
+                "start",
+                "--raw-dir",
+                str(raw),
+                "--provider",
+                "bishop",
+                "--cost-context",
+                json.dumps(context_descriptor()),
+            ]
+        )
+        == 0
+    )
+    capsys.readouterr()
+    assert CostStore(raw).capture()["participations"][0]["agent"]["family"] == "codex"
+
+
+def test_session_start_without_context_registers_unknown_caller(tmp_path, monkeypatch):
+    from avo import avo_state
+    from avo.cost_store import CostStore
+
+    raw = tmp_path / "footage"
+    raw.mkdir()
+    monkeypatch.setattr(avo_state, "repo_root", lambda: tmp_path)
+    monkeypatch.setattr(avo_state, "state_dir", lambda: tmp_path / "state")
+    session.start_session(raw, "bishop")
+    facts = CostStore(raw).capture()["participations"]
+    assert len(facts) == 1
+    assert facts[0]["mode"] == "identity-unknown"
+    assert facts[0]["agent"]["family"] == "unknown"
