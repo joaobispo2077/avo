@@ -588,7 +588,33 @@ class CostStore:
         self.amend_if_closed()
         return result
 
+    def _closed_snapshots(self):
+        snapshots = [
+            value
+            for value in self.documents("snapshots")
+            if value.get("lifecycle") in {"final", "amendment"}
+        ]
+        for snapshot in snapshots:
+            _record_owner(snapshot, self.identity())
+        return snapshots
 
+    def closure_status(self, view=None):
+        """Inspect the closure applicable to this captured membership, without writes."""
+        snapshots = self._closed_snapshots()
+        if not snapshots:
+            return {"previousClosureId": None, "stale": False}
+        members = _membership_entries(self.membership(view))
+        compatible = [
+            value
+            for value in snapshots
+            if _membership_entries(value["membership"]).issubset(members)
+        ]
+        previous = max(compatible, key=_closure_order, default=None)
+        return {
+            "previousClosureId": previous["snapshotId"] if previous else None,
+            "stale": previous is not None
+            and _membership_entries(previous["membership"]) != members,
+        }
 
     def amend_if_closed(self):
         snapshots = self.documents("snapshots")
@@ -636,6 +662,10 @@ class CostStore:
         validate("snapshot", value)
         return self.publish(f"snapshots/{key}.json", value)
 
+    def _finish_snapshot(self, value, stage):
+        if stage == "final":
+            return self.amend_if_closed() or value
+        return value
 
     def bind(
         self,
@@ -783,10 +813,25 @@ class CostStore:
                 target.publish(f"{kind}/{key}.json", value)
 
 
+def _membership_entries(membership):
+    return frozenset(
+        (kind, value) for kind, values in membership.items() for value in values
+    )
 
 
+def _closure_order(value):
+    return (value.get("recordedOrder", 0), value["snapshotId"])
 
 
+def _snapshot_context(value, stage):
+    if value["schemaVersion"] != "2.0.0":
+        return
+    if stage in {"final", "amendment"}:
+        value["diagnostics"] = [
+            item for item in value["diagnostics"] if item["code"] != "closure-stale"
+        ]
+    if stage == "final":
+        value["previousClosureId"] = None
 
 
 def _cost_claim_lock():

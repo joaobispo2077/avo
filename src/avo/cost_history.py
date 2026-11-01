@@ -101,10 +101,41 @@ def _source_report(source, provider, video_id):
     return identity["accountingVideoId"], report
 
 
+def _history_preference(report, previous, projected, previous_projected):
+    from avo.cost_store import _membership_entries
+
+    current = _membership_entries(report.get("membership", {}))
+    earlier = _membership_entries(previous.get("membership", {}))
+    if current > earlier:
+        return True
+    if earlier > current or current != earlier:
+        return False
+    if projected != previous_projected:
+        return not projected
+    return _snapshot_order(report) > _snapshot_order(previous)
 
 
+def _history_capture_conflict(report, previous):
+    from avo.cost_store import _membership_entries
+
+    current = _membership_entries(report.get("membership", {}))
+    earlier = _membership_entries(previous.get("membership", {}))
+    return not current.issubset(earlier) and not earlier.issubset(current)
 
 
+def _consider_history_report(videos, projections, diagnostics, key, report, status):
+    if key in videos and _history_capture_conflict(report, videos[key]):
+        diagnostics.append(
+            {"code": "history-capture-conflict", "accountingVideoId": key}
+        )
+    if key not in videos or _history_preference(
+        report, videos[key], status is not None, key in projections
+    ):
+        videos[key] = report
+        if status:
+            projections[key] = {"accountingVideoId": key, **status}
+        else:
+            projections.pop(key, None)
 
 
 def history(*, provider=None, video_id=None, store=None):
