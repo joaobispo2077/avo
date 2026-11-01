@@ -312,6 +312,8 @@ def _encoded_reference(original, samples, entries, encoding):
             "aac",
             "-b:a",
             PROOF_AUDIO_BITRATE,
+            "-movie_timescale",
+            str(encoding["sampleRate"]),
             str(encoded),
         ]
     )
