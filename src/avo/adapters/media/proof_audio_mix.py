@@ -465,8 +465,11 @@ def _mix_filters(rendered, effects, filters, first, last):
     consumers = {name: [name + "mix"] for name in mix_names}
     duck_sides = _sidechain_routes(effects, rendered, consumers)
     for name, targets in consumers.items():
+        # Keep finite-input EOF beyond the requested window while sidechain
+        # consumers drain. The final trim removes this verified-silence guard.
         filters.append(
-            f"[{name}]asplit={len(targets)}" + "".join(f"[{t}]" for t in targets)
+            f"[{name}]apad=whole_len={last - first + 48000},asplit={len(targets)}"
+            + "".join(f"[{t}]" for t in targets)
         )
     for ordinal, (node_id, side_labels) in enumerate(duck_sides.items()):
         params = effects[node_id]["duck"]
