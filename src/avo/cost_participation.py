@@ -742,46 +742,361 @@ def resolve_evidence(evidence, reconciliations, *, known_refs=None):
     return {"selected": selected, "conflicts": conflicts}
 
 
+def validate_context_descriptor(descriptor):
+    """Preflight metadata before any lifecycle or accounting mutation."""
+    from avo.cost_store import validate
+
+    validate("context", descriptor)
+    value = deepcopy(descriptor)
+    value["scope"]["runAliases"] = sorted(set(value["scope"]["runAliases"]))
+    if "predecessors" in value:
+        value["predecessors"] = sorted(value["predecessors"])
+    agent_session = value["agent"].get("sourceSessionId")
+    scope_session = value["scope"].get("sourceSessionId")
+    if agent_session and scope_session and agent_session != scope_session:
+        _fail("cost context session does not match its declared scope")
+    if value["mode"] == "human-ci":
+        boundaries = [value["scope"]["beginning"], value["scope"].get("ending")]
+        if any(
+            not boundary or boundary["kind"] in {"unknown", "uncertain"}
+            for boundary in boundaries
+        ):
+            _fail("human/CI cost context requires an explicitly bounded scope ending")
+    return value
 
 
+def _unknown_context(run_alias, operation_id):
+    if not run_alias or not operation_id:
+        _fail(
+            "missing cost context requires an explicit lifecycle alias and operation ID"
+        )
+    return {
+        "schemaVersion": "2.0.0",
+        "operationId": operation_id,
+        "mode": "identity-unknown",
+        "agent": {
+            "family": "unknown",
+            "surface": "unknown",
+            "version": None,
+            "role": "driver",
+        },
+        "scope": {"runAliases": [run_alias], "beginning": {"kind": "unknown"}},
+        "provenance": {
+            "producer": "avo-lifecycle",
+            "reference": "caller-context-absent",
+        },
+    }
 
 
+def _context_result(fact, replayed, descriptor=None):
+    if "contextRequestDigest" in fact:
+        missing = (
+            descriptor
+            and descriptor.get("sourceAttachment")
+            and not fact.get("sourceAttachment")
+        )
+        diagnostics = [{"code": "cost-context-source-unavailable"}] if missing else []
+    else:
+        diagnostics = [{"code": code} for code in fact["reason"].split("|")[1:]]
+    return {
+        "schemaVersion": "2.0.0",
+        "status": "ok",
+        "accountingVideoId": fact["accountingVideoId"],
+        "participationId": fact["participationId"],
+        "factId": fact["factId"],
+        "recordIds": [fact["factId"]],
+        "replayed": replayed,
+        "diagnostics": diagnostics,
+    }
 
 
+def _context_replay(facts, descriptor):
+    previous = next(
+        (fact for fact in facts if fact["operationId"] == descriptor["operationId"]),
+        None,
+    )
+    if previous is None:
+        return None
+    requested = content_hash(descriptor)
+    recorded = previous.get("contextRequestDigest") or previous.get("reason", "").split(
+        "|"
+    )[0].removeprefix("context:")
+    if recorded != requested:
+        _fail("cost context operation replay conflicts with accepted content")
+    return _context_result(previous, True, descriptor)
 
 
+def _context_identity(descriptor):
+    agent = {
+        key: value
+        for key, value in descriptor["agent"].items()
+        if key != "selectedModel"
+    }
+    scope = {
+        key: value for key, value in descriptor["scope"].items() if key != "runAliases"
+    }
+    return {"agent": agent, "scope": scope, "mode": descriptor["mode"]}
 
 
+def _active_context_facts(facts):
+    return [
+        state
+        for state in project_participation_facts(facts)["participations"]
+        if not state["conflicted"]
+    ]
 
 
+def _current_participation(facts, descriptor):
+    if "participationId" in descriptor:
+        return _reviewed_context_participation(facts, descriptor)
+    session = descriptor["agent"].get("sourceSessionId")
+    if not session or descriptor["scope"].get("sourceSessionId") != session:
+        return None
+    matches = [
+        fact
+        for fact in _active_context_facts(facts)
+        if _context_identity(fact) == _context_identity(descriptor)
+    ]
+    return matches[0] if len(matches) == 1 else None
 
 
+def _reviewed_context_participation(facts, descriptor):
+    projection = project_participation_facts(facts)
+    identity = descriptor["participationId"]
+    frontier = projection["frontiers"].get(identity)
+    if frontier is None or frontier != descriptor["predecessors"]:
+        _fail(
+            "reviewed cost context requires the exact current owned predecessor frontier"
+        )
+    return {
+        "participationId": identity,
+        "frontier": frontier,
+        "scope": deepcopy(descriptor["scope"]),
+    }
 
 
+def _binding_matches(descriptor, binding):
+    scope = descriptor["scope"]
+    session = descriptor["agent"].get("sourceSessionId")
+    if (
+        not session
+        or session != binding["sourceSessionId"]
+        or scope.get("sourceSessionId") != session
+    ):
+        return False
+    if scope["beginning"].get("reference") != binding["boundary"]:
+        return False
+    ending = scope.get("ending")
+    return ending is None or ending.get("reference") == binding.get("endBoundary")
 
 
+def _attachment_profile_matches(descriptor, profile):
+    agent = descriptor["agent"]
+    return (
+        profile["capability"] == "qualified"
+        and agent["family"] == profile["agent"]
+        and agent["surface"] == profile["surface"]
+        and agent["version"] in profile["versions"]
+    )
 
 
+def _attachment_profile(profiles, identity):
+    return next((item for item in profiles if item["profileId"] == identity), None)
 
 
+def _context_attachment(store, descriptor, view, previous):
+    from avo.cost_store import CostError
+
+    requested = descriptor.get("sourceAttachment") or (previous or {}).get(
+        "sourceAttachment"
+    )
+    if not requested:
+        return None, []
+    try:
+        binding = store.resolve_binding(
+            requested["bindingId"], bindings=view["bindings"]
+        )
+    except CostError:
+        return None, ["cost-context-binding-unavailable"]
+    profile = _attachment_profile(view["profiles"], requested["profileId"])
+    if binding is None:
+        return None, ["cost-context-binding-unavailable"]
+    if profile is None or not _attachment_profile_matches(descriptor, profile):
+        return None, ["cost-context-profile-unavailable"]
+    if not _binding_matches(descriptor, binding):
+        return None, ["cost-context-source-scope-mismatch"]
+    return {**deepcopy(requested), "bindingId": binding["bindingId"]}, []
 
 
+def _context_fact(store, descriptor, view):
+    from avo.avo_state import now_iso
+
+    previous = _current_participation(view["participations"], descriptor)
+    attachment, diagnostics = _context_attachment(store, descriptor, view, previous)
+    scope = deepcopy(descriptor["scope"])
+    if previous:
+        scope["runAliases"] = sorted(
+            set(scope["runAliases"] + previous["scope"]["runAliases"])
+        )
+    participation_id = (
+        previous["participationId"]
+        if previous
+        else str(
+            uuid5(
+                NAMESPACE_URL,
+                "avo-cost-context/"
+                + store.identity()["accountingVideoId"]
+                + "/"
+                + descriptor["operationId"],
+            )
+        )
+    )
+    kind = (
+        "declare-no-external-agent" if descriptor["mode"] == "human-ci" else "declare"
+    )
+    payload = {
+        "schemaVersion": "2.0.0",
+        "accountingVideoId": store.identity()["accountingVideoId"],
+        "participationId": participation_id,
+        "operationId": descriptor["operationId"],
+        "kind": "revise" if previous else kind,
+        "createdAt": now_iso(),
+        "predecessors": previous["frontier"] if previous else [],
+        "actor": descriptor["provenance"]["producer"],
+        "provenance": deepcopy(descriptor["provenance"]),
+        "agent": deepcopy(descriptor["agent"]),
+        "scope": scope,
+        "mode": descriptor["mode"],
+        "reason": "|".join(["context:" + content_hash(descriptor), *diagnostics]),
+    }
+    if attachment:
+        payload["sourceAttachment"] = attachment
+    if "participationId" in descriptor:
+        payload["contextRequestDigest"] = content_hash(descriptor)
+        payload["reason"] = descriptor["reason"]
+    return build_participation_fact(payload)
 
 
+def register_context(store, descriptor, *, run_alias=None, operation_id=None):
+    """Declare the current caller, without discovery, collection or last-host inference."""
+    from avo.cost_store import CostError
+
+    if not store.identity():
+        _fail("initialize accounting before registering cost context")
+    descriptor = validate_context_descriptor(
+        descriptor
+        if descriptor is not None
+        else _unknown_context(run_alias, operation_id)
+    )
+    view = store.capture()
+    replay = _context_replay(view["participations"], descriptor)
+    if replay:
+        store.amend_if_closed()
+        return replay
+    fact = _context_fact(store, descriptor, view)
+    try:
+        saved = store.append_record("participations", fact)
+    except CostError:
+        replay = _context_replay(store.capture()["participations"], descriptor)
+        if replay:
+            store.amend_if_closed()
+            return replay
+        raise
+    return _context_result(saved, False, descriptor)
 
 
+def _transition_result(fact, replayed):
+    result = {
+        "schemaVersion": "2.0.0",
+        "status": "ok",
+        "accountingVideoId": fact["accountingVideoId"],
+        "participationId": fact["participationId"],
+        "fromParticipationId": fact["fromParticipationId"],
+        "toParticipationId": fact["toParticipationId"],
+        "factId": fact["factId"],
+        "recordIds": [fact["factId"]],
+        "replayed": replayed,
+        "diagnostics": [
+            {"code": code} for code in fact["provenance"]["reference"].split("|")[1:]
+        ],
+    }
+    return result
 
 
+def _transition_replay(facts, request):
+    previous = next(
+        (fact for fact in facts if fact["operationId"] == request["operationId"]), None
+    )
+    if previous is None:
+        return None
+    if previous["kind"] != "transition" or previous["provenance"].get(
+        "digest"
+    ) != content_hash(request):
+        _fail("cost transition operation replay conflicts with accepted content")
+    return _transition_result(previous, True)
 
 
+def _validate_transition_request(store, request):
+    from avo.cost_store import validate
+
+    validate("transition", request)
+    value = deepcopy(request)
+    value.setdefault("accountingVideoId", store.identity()["accountingVideoId"])
+    if value["accountingVideoId"] != store.identity()["accountingVideoId"]:
+        _fail("cost transition belongs to another production")
+    if "declaration" in value:
+        value["declaration"] = validate_context_descriptor(value["declaration"])
+    return value
 
 
+def _transition_participant(states, identity):
+    state = next((item for item in states if item["participationId"] == identity), None)
+    if state is None:
+        _fail("unknown cost transition participation")
+    if state["conflicted"]:
+        _fail("cost transition requires an explicit predecessor conflict merge")
+    return state
 
 
+def _embedded_transition_descriptor(request):
+    descriptor = deepcopy(request["declaration"])
+    # A compound operation reserves a distinct stable replay key for its declaration.
+    descriptor["operationId"] = content_hash(
+        {
+            "domain": "transition-context/v2",
+            "operationId": request["operationId"],
+            "declarationOperationId": descriptor["operationId"],
+        }
+    )
+    return descriptor
 
 
+def _transition_target(store, request, view, states):
+    if "toParticipationId" in request:
+        return _transition_participant(states, request["toParticipationId"]), None
+    descriptor = _embedded_transition_descriptor(request)
+    prospective = _context_fact(store, descriptor, view)
+    projected = project_participation_facts([*view["participations"], prospective])
+    return _transition_participant(
+        projected["participations"], prospective["participationId"]
+    ), descriptor
 
 
+def _validate_transition_roles(request, source, target):
+    if (
+        source["participationId"] == target["participationId"]
+        and request["kind"] != "resume"
+    ):
+        _fail("cost transition cannot link a participation to itself")
+    if request["kind"] == "delegation":
+        agent = target["agent"]
+        if (
+            agent["role"] != "subagent"
+            or agent.get("parentParticipationId") != source["participationId"]
+        ):
+            _fail(
+                "cost delegation requires an explicitly declared child and parent lineage"
+            )
 
 
 def _source_lineage(state):
@@ -792,18 +1107,142 @@ def _source_lineage(state):
     )
 
 
+def _baseline_row(view, key):
+    rows = (row for batch in view["batches"] for row in batch["observations"])
+    return next(
+        (row for row in rows if content_hash(row) == key.get("sourceDigest")), None
+    )
 
 
+def _baseline_supported(record, row, view):
+    profile = _attachment_profile(view["profiles"], record.get("profileId"))
+    return bool(
+        record.get("nature") == "measured"
+        and row
+        and row.get("measurementKind") == "cumulative"
+        and row.get("counterEpoch")
+        and profile
+        and profile["capability"] == "qualified"
+        and row["agentVersion"] in profile["versions"]
+    )
 
 
+def _transition_baseline(store, request, view, source, target):
+    reference = request.get("baselineRef")
+    if not reference:
+        return None, ["cost-transition-baseline-unavailable"] if target["scope"].get(
+            "counterEpoch"
+        ) else []
+    record = store.references(view).get(reference)
+    if record is None:
+        return None, ["cost-transition-baseline-unavailable"]
+    key = record.get("key", {})
+    row = _baseline_row(view, key)
+    if not _baseline_supported(record, row, view):
+        return None, ["cost-transition-baseline-unavailable"]
+    lineage = tuple(
+        (row or {}).get(key)
+        for key in ("sourceInstanceId", "sourceSessionId", "counterEpoch")
+    )
+    if (
+        row is None
+        or lineage != _source_lineage(source)
+        or lineage != _source_lineage(target)
+    ):
+        return None, ["cost-transition-baseline-lineage-mismatch"]
+    return reference, []
 
 
+def _transition_lifecycle(request, source, target):
+    kind = request["kind"]
+    if kind == "delegation":
+        return "open", []
+    if kind == "resume":
+        if _source_lineage(source) != _source_lineage(target) or not all(
+            _source_lineage(source)[:2]
+        ):
+            return "unknown", ["cost-transition-source-lineage-changed"]
+        if not _known_transition_boundary(source, request["boundary"]):
+            return "unknown", ["cost-transition-boundary-unproven"]
+        return "open", []
+    if kind == "sequential" and _known_transition_boundary(source, request["boundary"]):
+        return "closed", []
+    return "unknown", ["cost-transition-boundary-unproven"]
 
 
+def _build_transition_fact(
+    store, request, source, target, baseline, diagnostics, lifecycle
+):
+    from avo.avo_state import now_iso
+
+    predecessors = list(source["frontier"])
+    if target["participationId"] != source["participationId"]:
+        predecessors.extend(target["frontier"])
+    return build_participation_fact(
+        {
+            "schemaVersion": "2.0.0",
+            "accountingVideoId": store.identity()["accountingVideoId"],
+            "participationId": source["participationId"],
+            "operationId": request["operationId"],
+            "kind": "transition",
+            "createdAt": now_iso(),
+            "predecessors": sorted(set(predecessors)),
+            "actor": request["actor"],
+            "reason": request["reason"],
+            "provenance": {
+                "producer": "avo-transition",
+                "reference": "|".join(["transition-request", *diagnostics]),
+                "digest": content_hash(request),
+            },
+            "fromParticipationId": source["participationId"],
+            "toParticipationId": target["participationId"],
+            "transitionKind": request["kind"],
+            "boundary": deepcopy(request["boundary"]),
+            "baselineRef": baseline,
+            "lifecycle": lifecycle,
+        }
+    )
 
 
+def _publish_transition(store, request, fact):
+    from avo.cost_store import CostError
+
+    try:
+        saved = store.append_record("participations", fact)
+    except CostError:
+        replay = _transition_replay(store.capture()["participations"], request)
+        if replay:
+            store.amend_if_closed()
+            return replay
+        raise
+    return _transition_result(saved, False)
 
 
+def transition_context(store, request):
+    """Record an explicit handoff or resume without moving historical usage."""
+    if not store.identity():
+        _fail("initialize accounting before accepting a cost transition")
+    request = _validate_transition_request(store, request)
+    view = store.capture()
+    replay = _transition_replay(view["participations"], request)
+    if replay:
+        store.amend_if_closed()
+        return replay
+    states = project_participation_facts(view["participations"])["participations"]
+    source = _transition_participant(states, request["fromParticipationId"])
+    target, descriptor = _transition_target(store, request, view, states)
+    _validate_transition_roles(request, source, target)
+    baseline, diagnostics = _transition_baseline(store, request, view, source, target)
+    lifecycle, gaps = _transition_lifecycle(request, source, target)
+    if descriptor:
+        accepted = register_context(store, descriptor)
+        target["frontier"] = [accepted["factId"]]
+        if source["participationId"] == target["participationId"]:
+            source["frontier"] = target["frontier"]
+    fact = _build_transition_fact(
+        store, request, source, target, baseline, diagnostics + gaps, lifecycle
+    )
+    return _publish_transition(store, request, fact)
 
 
 def _rollup_representations(record, known_refs):
