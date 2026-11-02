@@ -282,6 +282,10 @@ def _native_reference(entry, output_dir):
             str(destination),
         ]
     )
+    return _read_native_reference(destination)
+
+
+def _read_native_reference(destination):
     from scipy.io import wavfile
 
     rate, samples = wavfile.read(destination)
