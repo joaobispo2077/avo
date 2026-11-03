@@ -307,6 +307,25 @@ else
   echo "historical engine: capture unavailable; existing smoke completed"
 fi
 
+if "$LAUNCHER" cli costs context --help >/dev/null 2>&1; then
+  echo "smoke: bundled cost schemas and no-inference command surface"
+  "$LAUNCHER" cli costs capabilities --json >"$SMOKE_WORK/cost-capabilities.json"
+  for verb in context observe transition estimate reconcile; do
+    "$LAUNCHER" cli costs "$verb" --help >/dev/null
+  done
+  "$PYTHON" - "$SMOKE_WORK/cost-capabilities.json" <<'PY'
+import json
+from pathlib import Path
+import sys
+
+rows = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))["agents"]
+assert len(rows) == 10
+assert {row["environment"] for row in rows} >= {"codex-cli", "codex-desktop", "chatgpt", "unknown"}
+assert all(row["routes"] and row["limitations"] for row in rows)
+print("cost capability and command dispatch smoke passed")
+PY
+fi
+
 echo "smoke artifacts retained: $SMOKE_NATIVE"
 
 echo "done. Zip smoke passed for avo ${VERSION} (${PLATFORM})."

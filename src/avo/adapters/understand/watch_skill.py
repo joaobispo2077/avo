@@ -1401,6 +1401,7 @@ def _native_review(review: _ReviewRequest, model_pin: dict[str, Any]) -> dict[st
         ],
         required_windows=windows,
         max_frames_per_pass=int(effective["maxImagesPerPass"]),
+        include_overview=review.scope != "windows",
     )
     if coverage_plan["coverageHoles"]:
         raise VisionReviewError("mandatory vision coverage could not be planned")

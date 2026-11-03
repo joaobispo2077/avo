@@ -72,6 +72,7 @@ def kwargs_to_argv(
     - ``as_json`` → ``--json`` (CLI dest name differs from the flag)
     - other keys → ``--{key}`` with underscores replaced by dashes
     """
+    kwargs = normalize_cost_arguments(prefix, kwargs)
     overrides = {**_FLAG_OVERRIDES, **(flag_overrides or {})}
     argv = [str(part) for part in prefix]
     for key, value in kwargs.items():
@@ -90,6 +91,58 @@ def kwargs_to_argv(
             continue
         argv.extend([flag, str(value)])
     return argv
+
+
+def normalize_cost_arguments(prefix, kwargs):
+    """Serialize only declared metadata objects, never arbitrary bridge values."""
+    from avo.costs_cli import STRUCTURED_REQUESTS
+
+    result = dict(kwargs)
+    operation = tuple(prefix)
+    if operation in {("pipeline", "run"), ("pipeline", "resume")}:
+        if result.get("cost_context") is not None:
+            result["cost_context"] = _cost_json("context", result["cost_context"])
+    elif (
+        len(operation) == 2
+        and operation[0] == "costs"
+        and operation[1] in STRUCTURED_REQUESTS
+    ):
+        _normalize_cost_payload(operation[1], result)
+    return result
+
+
+def _normalize_cost_payload(operation, result):
+    from avo.costs_cli import STRUCTURED_REQUESTS
+
+    field, schema = STRUCTURED_REQUESTS[operation]
+    if operation == "report-manual" and result.get(field) is None:
+        result.pop(field, None)
+        return
+    if field in result:
+        result["payload_json"] = _cost_json(schema, result.pop(field))
+
+
+def _cost_json(kind, value):
+    from avo.cost_participation import validate_context_descriptor
+    from avo.cost_store import CostError, validate
+
+    if not isinstance(value, Mapping):
+        raise CostError("cost metadata must be a structured object, not a client path")
+    try:
+        raw = json.dumps(value, allow_nan=False, sort_keys=True)
+    except (TypeError, ValueError) as exc:
+        raise CostError("invalid structured cost metadata") from exc
+    if len(raw.encode()) > 32 * 1024 * 1024:
+        raise CostError("cost input exceeds 32 MiB")
+    if kind == "context":
+        validate_context_descriptor(value)
+    elif kind == "estimate-request":
+        from avo.cost_estimates import validate_estimate_request
+
+        validate_estimate_request(value, allow_input_path=False)
+    else:
+        validate(kind, value)
+    return raw
 
 
 def run_cli(argv: list[str]) -> BridgeResult:
@@ -154,7 +207,14 @@ def run_bridged(
     ``requestState`` / ``inputResponses`` into argparse argv.
     """
     safe = strip_mrtr_kwargs(kwargs)
-    return run_cli(kwargs_to_argv(prefix, safe, flag_overrides=flag_overrides))
+    from avo.cost_store import CostError
+
+    try:
+        argv = kwargs_to_argv(prefix, safe, flag_overrides=flag_overrides)
+    except CostError as exc:
+        error = json.dumps({"status": "invalid-input", "message": str(exc)})
+        return BridgeResult(False, 2, "", error)
+    return run_cli(argv)
 
 
 def argv_from_parts(*parts: str) -> list[str]:

@@ -1,0 +1,104 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {
+      "const": "2.0.0"
+    },
+    "operationId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 500
+    },
+    "accountingVideoId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "profileId": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "observations": {
+      "type": "array",
+      "maxItems": 100000,
+      "items": {
+        "$ref": "https://avo.local/schemas/avo.cost-observation.schema.json"
+      }
+    },
+    "evidence": {
+      "type": "array",
+      "maxItems": 100000,
+      "items": {
+        "$ref": "https://avo.local/schemas/avo.cost-evidence.schema.json#/$defs/evidence"
+      }
+    },
+    "receipts": {
+      "type": "array",
+      "maxItems": 100000,
+      "items": {
+        "$ref": "https://avo.local/schemas/avo.cost-evidence.schema.json#/$defs/receipt"
+      },
+      "minItems": 1
+    },
+    "batchId": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "createdAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "contentHash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "recordedOrder": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "observationKeys": {
+      "type": "array",
+      "maxItems": 100000,
+      "items": {
+        "$ref": "https://avo.local/schemas/avo.cost-evidence.schema.json#/$defs/observationKey"
+      }
+    },
+    "priceScheduleIds": {
+      "type": "array",
+      "maxItems": 100000,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[a-f0-9]{64}$"
+      }
+    },
+    "profileIds": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 100000,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[a-f0-9]{64}$"
+      }
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "operationId",
+    "accountingVideoId",
+    "profileId",
+    "observations",
+    "evidence",
+    "receipts",
+    "batchId",
+    "createdAt",
+    "contentHash",
+    "recordedOrder",
+    "observationKeys",
+    "priceScheduleIds",
+    "profileIds"
+  ],
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://avo.local/schemas/avo.cost-batch.v2.schema.json"
+}

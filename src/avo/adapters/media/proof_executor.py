@@ -773,7 +773,15 @@ def _encode_arguments(spec, fps, count):
     ]
     if spec.get("conformance") is True:
         return arguments + ["-pix_fmt", "bgra", "-f", "matroska"]
-    return arguments + ["-b:a", PROOF_AUDIO_BITRATE, "-movflags", "+faststart"]
+    # MP4's default millisecond movie clock can truncate an AAC tail at a frame edge.
+    return arguments + [
+        "-b:a",
+        PROOF_AUDIO_BITRATE,
+        "-movie_timescale",
+        str(spec["audioSampleRate"]),
+        "-movflags",
+        "+faststart",
+    ]
 
 
 def _render_final(

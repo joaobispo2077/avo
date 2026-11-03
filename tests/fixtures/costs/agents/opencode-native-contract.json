@@ -1,0 +1,10 @@
+{
+  "fixtureKind":"synthetic-native-shaped-contract-not-qualification",
+  "reviewedVersion":"1.19.4",
+  "export":{"messages":[
+    {"info":{"id":"original-message","role":"assistant","sessionID":"opencode-fixture","modelID":"model-a","providerID":"provider-a","time":{"completed":1792684801000},"tokens":{"input":100,"output":20,"reasoning":4,"cache":{"read":30,"write":5}},"cost":0.01},"parts":[{"type":"step-finish","tokens":{"input":100,"output":20,"reasoning":4}},{"text":"PRIVATE-PART"}]},
+    {"info":{"id":"copied-new-message-id","role":"assistant","sessionID":"opencode-fixture","modelID":"model-a","providerID":"provider-a","time":{"completed":1792684801000},"tokens":{"input":100,"output":20,"reasoning":4,"cache":{"read":30,"write":5}},"cost":0.01},"parts":[]},
+    {"info":{"id":"new-work","role":"assistant","sessionID":"opencode-fixture","modelID":"model-b","providerID":"provider-b","time":{"completed":1792684802000},"tokens":{"input":20,"output":5,"reasoning":1,"cache":{"read":0,"write":0}},"cost":0.001},"parts":[]}
+  ]},
+  "missingProof":["authorized-native-fixture","copied-history-boundary","message-final-revision","step-message-overlap"]
+}

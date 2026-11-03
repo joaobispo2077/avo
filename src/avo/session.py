@@ -124,13 +124,30 @@ def load_session_meta(session_id: str) -> dict[str, Any]:
     return json.loads(meta_path.read_text(encoding="utf-8"))
 
 
-def start_session(raw_dir: Path, provider: str, title: str = "") -> SessionContext:
+def start_session(
+    raw_dir: Path, provider: str, title: str = "", *, cost_context=None
+) -> SessionContext:
+    from uuid import uuid4
+
+    from avo.cost_participation import register_context, validate_context_descriptor
+    from avo.cost_sources import collect_context
+    from avo.cost_store import CostStore
+
+    if cost_context is not None:
+        cost_context = validate_context_descriptor(cost_context)
     raw_dir = Path(raw_dir).expanduser().resolve()
     started_at = avo_state.now_iso()
     session_id = provisional_session_id(raw_dir, started_at)
     pre_files = scan_inventory(raw_dir, relative_to=raw_dir)
 
     cost_identity = _accounting_identity(raw_dir, provider)
+    contribution = register_context(
+        CostStore(raw_dir),
+        cost_context,
+        run_alias=session_id,
+        operation_id="session:" + uuid4().hex,
+    )
+    contribution["collection"] = collect_context(CostStore(raw_dir), contribution)
     sdir = session_dir(session_id)
     sdir.mkdir(parents=True, exist_ok=True)
 
@@ -141,6 +158,7 @@ def start_session(raw_dir: Path, provider: str, title: str = "") -> SessionConte
         "startedAt": started_at,
         "masterBasename": None,
         "accountingVideoId": cost_identity["accountingVideoId"],
+        "costContext": contribution,
     }
     if title:
         meta["title"] = title
@@ -231,6 +249,9 @@ def main(argv: list[str] | None = None) -> int:
     )
     p_start.add_argument("--provider", required=True, help="Provider slug.")
     p_start.add_argument("--title", default="", help="Optional working title.")
+    from avo.costs_cli import cost_context_argument
+
+    p_start.add_argument("--cost-context", type=cost_context_argument)
 
     p_finalize = sub.add_parser(
         "finalize", help="Set master basename and compute final session id."
@@ -245,7 +266,12 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     if args.cmd == "start":
-        ctx = start_session(Path(args.raw_dir), args.provider, title=args.title)
+        ctx = start_session(
+            Path(args.raw_dir),
+            args.provider,
+            title=args.title,
+            cost_context=args.cost_context,
+        )
         sys.stdout.write(
             json.dumps(_context_to_dict(ctx), indent=2, ensure_ascii=False) + "\n"
         )
