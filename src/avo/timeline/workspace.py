@@ -144,6 +144,155 @@ def resolve_project_raw_dir(
     raise _missing_raw_dir_error(candidate, attempted, parent_fallback)
 
 
+_IMPORT_EVIDENCE_NAMES = (
+    "session",
+    "export",
+    "activation",
+    "validation",
+    "proposal",
+    "activationResult",
+)
+_IMPORT_REVIEW_ACTION = (
+    "Build the canonical cut proof, then obtain current transcript, Watch, "
+    "listening and creator review"
+)
+
+
+def _valid_pending_import(value):
+    return set(value) == {"importId", "operationId"} and all(
+        isinstance(item, str) and re.fullmatch(r"[a-f0-9]{64}", item)
+        for item in value.values()
+    )
+
+
+def _pending_import_status(marker):
+    if not marker.exists() and not marker.is_symlink():
+        return None
+    result = {"path": str(marker), "status": "invalid"}
+    try:
+        if marker.is_symlink() or marker.stat().st_size > 4096:
+            return result
+        from .otio_import import parse_export_bytes
+
+        with marker.open("rb") as stream:
+            data = stream.read(4097)
+        if len(data) > 4096:
+            return result
+        _, value, _ = parse_export_bytes(data)
+        if not _valid_pending_import(value):
+            return result
+    except (OSError, ValueError, TypeError):
+        return result
+    return {**result, **value, "status": "pending"}
+
+
+def _import_evidence_status(workspace, revision):
+    from .contracts import fingerprint_stage
+    from .import_evidence import verify_import_origin
+
+    paths = verify_import_origin(workspace, revision)
+    packet = paths[0].parent
+    # Hash the displayed refs around another verification, so the reported
+    # byte identities belong to the exact chain that was actually checked.
+    with fingerprint_stage(verify_on_exit=True):
+        refs = {}
+        for name, path in zip(_IMPORT_EVIDENCE_NAMES, paths, strict=True):
+            actual = file_fingerprint(path)
+            refs[name] = {
+                "path": path.relative_to(packet).as_posix(),
+                "sha256": actual["sha256"],
+                "sizeBytes": actual["sizeBytes"],
+            }
+        if verify_import_origin(workspace, revision) != paths:
+            raise ValueError("Activated evidence paths changed during status")
+    origin = revision["snapshot"]["originRef"]
+    return {
+        "source": {
+            "sha256": origin["exportSha256"],
+            "sizeBytes": refs["export"]["sizeBytes"],
+            "timelinePointer": origin["timelinePointer"],
+        },
+        "packet": {
+            "importId": origin["importId"],
+            "path": str(packet),
+            "refs": refs,
+        },
+        "compatibilityState": "verified-activation",
+    }
+
+
+def _import_status_blocker(code, message):
+    return {
+        "code": code,
+        "message": message,
+        "blocking": True,
+        "remediation": "Restore the exact retained import evidence or reconcile its activation before continuing.",
+    }
+
+
+def _import_status_result(workspace, revision, pending):
+    snapshot = revision["snapshot"] if revision else {}
+    imported = bool(
+        {"originRef", "sourceAssemblyPolicy", "importOutput"}.intersection(snapshot)
+    )
+    if not imported and pending is None:
+        return None
+    result = {
+        "status": "active-draft" if imported else "recovery-required",
+        "originRef": snapshot.get("originRef"),
+        "provider": workspace.project.get("provider"),
+        "videoId": workspace.video_id,
+        "capabilityLevel": (
+            "placed-experimental"
+            if snapshot.get("layoutMode") == "placed"
+            else "contiguous-experimental"
+        )
+        if imported
+        else None,
+        "compatibilityState": "not-checked",
+        "recoveryRequired": pending is not None,
+        "pendingActivation": pending,
+        "pendingFinishing": [],
+        "blockers": [],
+        "reviewState": "normal-current-candidate-gates-required",
+        "nextAction": _IMPORT_REVIEW_ACTION,
+    }
+    if imported:
+        result["currentCanonical"] = {
+            "revisionId": revision["revisionId"],
+            "contentHash": revision["contentHash"],
+        }
+        _check_import_status(workspace, revision, result)
+    if pending is not None:
+        result["status"] = "recovery-required"
+        result["blockers"].append(
+            _import_status_blocker(
+                "OTIO_RECOVERY_REQUIRED", "An import activation requires reconciliation"
+            )
+        )
+        result["nextAction"] = (
+            "Reconcile the exact pending import activation before editing or rendering"
+        )
+    return result
+
+
+def _check_import_status(workspace, revision, result):
+    try:
+        result.update(_import_evidence_status(workspace, revision))
+    except (KeyError, TypeError, ValueError, OSError, RuntimeError):
+        result["status"] = "blocked"
+        result["compatibilityState"] = "blocked"
+        result["blockers"].append(
+            _import_status_blocker(
+                "OTIO_SOURCE_CHANGED",
+                "Immutable activated import evidence could not be verified",
+            )
+        )
+        result["nextAction"] = (
+            "Restore and verify the exact activated import packet before continuing"
+        )
+
+
 class TimelineWorkspace:
     def __init__(
         self,
@@ -344,6 +493,9 @@ class TimelineWorkspace:
             "provider": str(self.project.get("provider") or ""),
             "artifacts": artifacts,
         }
+        imported = self.timeline_import_status()
+        if imported is not None:
+            result["timelineImport"] = imported
         if self.pipeline_run_path.is_file():
             from .lifecycle import PipelineRunStore
 
@@ -356,6 +508,19 @@ class TimelineWorkspace:
                 "updatedAt": run["updatedAt"],
             }
         return result
+
+    def timeline_import_status(self):
+        """Report only canonical selection and its exact retained activation."""
+        pending = _pending_import_status(
+            self.timeline_dir / "import-activation.pending.json"
+        )
+        revision = None
+        if self.artifact_path("cmap").is_file():
+            store = self.store("cmap")
+            index = store.load_index()
+            if index["headRevisionId"]:
+                revision = store.revision(index["headRevisionId"])
+        return _import_status_result(self, revision, pending)
 
     def active_dependency_snapshot(self) -> dict[str, str]:
         result: dict[str, str] = {}
