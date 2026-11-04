@@ -25,6 +25,7 @@ def close_costs(raw_dir, stage, *, preservation=False):
     if not store.identity():
         return summarize(store)
     refreshed = collect(store)
+    store.amend_if_closed()
     report = summarize(store)
     report["diagnostics"].extend(refreshed["diagnostics"])
     closure = None

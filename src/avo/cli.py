@@ -52,6 +52,7 @@ def build_parser() -> argparse.ArgumentParser:
     configure_library(sub)
 
     from avo.costs_cli import configure as configure_costs
+    from avo.costs_cli import cost_context_argument
 
     configure_costs(sub)
 
@@ -76,6 +77,7 @@ def build_parser() -> argparse.ArgumentParser:
     pipeline_resume.add_argument("--actor", required=True)
     pipeline_resume.add_argument("--reason", required=True)
     pipeline_resume.add_argument("--recovery-event", required=True)
+    pipeline_resume.add_argument("--cost-context", type=cost_context_argument)
     pipeline_stage = pipeline_sub.add_parser("stage")
     _project_arg(pipeline_stage)
     pipeline_stage.add_argument("--stage", required=True)
@@ -380,10 +382,12 @@ def build_parser() -> argparse.ArgumentParser:
 
 def _add_pipeline_entry_args(parser, operation):
     if operation == "run":
+        from avo.costs_cli import cost_context_argument
         from avo.motion import ENGINE_IDS
 
         parser.add_argument("--motion-engine", choices=ENGINE_IDS)
         parser.add_argument("--new-request", action="store_true")
+        parser.add_argument("--cost-context", type=cost_context_argument)
         parser.add_argument("--direction")
         parser.add_argument("--brief-context", type=Path)
         parser.add_argument("--direction-reference", type=Path, action="append")
@@ -452,17 +456,29 @@ def _initialize_pipeline_run(pipeline, args: argparse.Namespace) -> dict:
         motion_selection=shown["selection"],
         new_request=args.new_request or changed_explicit_engine,
     )
-    from avo.cost_store import CostStore
-
-    identity = CostStore(workspace.raw_dir).initialize(
-        workspace.project["provider"], workspace.video_id
-    )
-    result["accountingVideoId"] = identity["accountingVideoId"]
+    _pipeline_cost_context(workspace, result, getattr(args, "cost_context", None))
     result["briefingPreparation"] = preparation
     result["motion"] = inspect_motion(
         project=workspace.project_path, invocation=args.motion_engine
     )
     return result
+
+
+def _pipeline_cost_context(workspace, result, descriptor):
+    from uuid import uuid4
+
+    from avo.cost_participation import register_context
+    from avo.cost_sources import collect_context
+    from avo.cost_store import CostStore
+
+    store = CostStore(workspace.raw_dir)
+    identity = store.initialize(workspace.project["provider"], workspace.video_id)
+    result["accountingVideoId"] = identity["accountingVideoId"]
+    alias = str(result.get("runId") or workspace.video_id)
+    result["costContext"] = register_context(
+        store, descriptor, run_alias=alias, operation_id="pipeline:" + uuid4().hex
+    )
+    result["costContext"]["collection"] = collect_context(store, result["costContext"])
 
 
 def _pipeline(args: argparse.Namespace) -> int:
@@ -490,6 +506,7 @@ def _pipeline(args: argparse.Namespace) -> int:
             reason=args.reason,
             recovery_event=args.recovery_event,
         )
+        _pipeline_cost_context(workspace, result, getattr(args, "cost_context", None))
     elif args.pipeline_command == "adopt-delivery":
         result = pipeline.adopt_delivery(
             approval_path=args.approval,

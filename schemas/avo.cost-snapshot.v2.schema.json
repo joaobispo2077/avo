@@ -1,0 +1,720 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://avo.local/schemas/avo.cost-snapshot.v2.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "snapshotId",
+    "coverage",
+    "lifecycle",
+    "accountingVideoId",
+    "provider",
+    "videoId",
+    "cutoff",
+    "status",
+    "tokens",
+    "amounts",
+    "observationCount",
+    "pendingTurn",
+    "recordedOrder",
+    "excludedCosts",
+    "membership",
+    "closureEvidence",
+    "diagnostics",
+    "breakdowns",
+    "lastCollectedAt",
+    "sourceWatermarks",
+    "pendingState",
+    "usageByNature",
+    "participations",
+    "coverageBySource",
+    "selectedEvidenceIds",
+    "activeEstimateIds",
+    "unallocated",
+    "conflicts",
+    "previousClosureId"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "2.0.0"
+    },
+    "snapshotId": {
+      "$ref": "https://avo.local/schemas/avo.cost-snapshot.schema.json#/properties/snapshotId"
+    },
+    "coverage": {
+      "$ref": "https://avo.local/schemas/avo.cost-snapshot.schema.json#/properties/coverage"
+    },
+    "lifecycle": {
+      "$ref": "https://avo.local/schemas/avo.cost-snapshot.schema.json#/properties/lifecycle"
+    },
+    "accountingVideoId": {
+      "$ref": "https://avo.local/schemas/avo.cost-snapshot.schema.json#/properties/accountingVideoId"
+    },
+    "provider": {
+      "$ref": "https://avo.local/schemas/avo.cost-snapshot.schema.json#/properties/provider"
+    },
+    "videoId": {
+      "$ref": "https://avo.local/schemas/avo.cost-snapshot.schema.json#/properties/videoId"
+    },
+    "cutoff": {
+      "$ref": "https://avo.local/schemas/avo.cost-snapshot.schema.json#/properties/cutoff"
+    },
+    "status": {
+      "$ref": "https://avo.local/schemas/avo.cost-snapshot.schema.json#/properties/status"
+    },
+    "tokens": {
+      "$ref": "https://avo.local/schemas/avo.cost-snapshot.schema.json#/properties/tokens"
+    },
+    "amounts": {
+      "$ref": "#/$defs/derivedAmounts"
+    },
+    "observationCount": {
+      "$ref": "https://avo.local/schemas/avo.cost-snapshot.schema.json#/properties/observationCount"
+    },
+    "pendingTurn": {
+      "type": [
+        "boolean",
+        "null"
+      ]
+    },
+    "recordedOrder": {
+      "$ref": "https://avo.local/schemas/avo.cost-snapshot.schema.json#/properties/recordedOrder"
+    },
+    "excludedCosts": {
+      "$ref": "https://avo.local/schemas/avo.cost-snapshot.schema.json#/properties/excludedCosts"
+    },
+    "membership": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "batches",
+        "bindings",
+        "prices",
+        "corrections",
+        "participations",
+        "profiles",
+        "estimates",
+        "reconciliations"
+      ],
+      "properties": {
+        "batches": {
+          "type": "array",
+          "maxItems": 100000,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          }
+        },
+        "bindings": {
+          "type": "array",
+          "maxItems": 100000,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          }
+        },
+        "prices": {
+          "type": "array",
+          "maxItems": 100000,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          }
+        },
+        "corrections": {
+          "type": "array",
+          "maxItems": 100000,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          }
+        },
+        "participations": {
+          "type": "array",
+          "maxItems": 100000,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          }
+        },
+        "profiles": {
+          "type": "array",
+          "maxItems": 100000,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          }
+        },
+        "estimates": {
+          "type": "array",
+          "maxItems": 100000,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          }
+        },
+        "reconciliations": {
+          "type": "array",
+          "maxItems": 100000,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          }
+        }
+      }
+    },
+    "closureEvidence": {
+      "$ref": "https://avo.local/schemas/avo.cost-snapshot.schema.json#/properties/closureEvidence"
+    },
+    "diagnostics": {
+      "type": "array",
+      "maxItems": 100000,
+      "items": {
+        "$ref": "https://avo.local/schemas/avo.cost-evidence.schema.json#/$defs/diagnostic"
+      }
+    },
+    "breakdowns": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "model": {
+          "$ref": "#/$defs/breakdown"
+        },
+        "serviceProvider": {
+          "$ref": "#/$defs/breakdown"
+        },
+        "agent": {
+          "$ref": "#/$defs/breakdown"
+        },
+        "phase": {
+          "$ref": "#/$defs/breakdown"
+        },
+        "serviceClass": {
+          "$ref": "#/$defs/breakdown"
+        },
+        "agentRole": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "https://avo.local/schemas/avo.cost-evidence.schema.json#/$defs/summaryValues"
+          }
+        },
+        "billingMode": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "https://avo.local/schemas/avo.cost-evidence.schema.json#/$defs/summaryValues"
+          }
+        }
+      }
+    },
+    "lastCollectedAt": {
+      "$ref": "https://avo.local/schemas/avo.cost-snapshot.schema.json#/properties/lastCollectedAt"
+    },
+    "sourceWatermarks": {
+      "$ref": "https://avo.local/schemas/avo.cost-snapshot.schema.json#/properties/sourceWatermarks"
+    },
+    "pendingState": {
+      "$ref": "https://avo.local/schemas/avo.cost-evidence.schema.json#/$defs/pendingState"
+    },
+    "usageByNature": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "measured",
+        "manual",
+        "legacy-unknown",
+        "estimated"
+      ],
+      "properties": {
+        "measured": {
+          "$ref": "https://avo.local/schemas/avo.cost-evidence.schema.json#/$defs/tokenVector"
+        },
+        "manual": {
+          "$ref": "https://avo.local/schemas/avo.cost-evidence.schema.json#/$defs/tokenVector"
+        },
+        "legacy-unknown": {
+          "$ref": "https://avo.local/schemas/avo.cost-evidence.schema.json#/$defs/tokenVector"
+        },
+        "estimated": {
+          "$ref": "https://avo.local/schemas/avo.cost-evidence.schema.json#/$defs/tokenVector"
+        }
+      }
+    },
+    "participations": {
+      "type": "array",
+      "maxItems": 100000,
+      "items": {
+        "$ref": "https://avo.local/schemas/avo.cost-evidence.schema.json#/$defs/participationSummary"
+      }
+    },
+    "coverageBySource": {
+      "type": "array",
+      "maxItems": 100000,
+      "items": {
+        "$ref": "https://avo.local/schemas/avo.cost-evidence.schema.json#/$defs/sourceCoverage"
+      }
+    },
+    "selectedEvidenceIds": {
+      "type": "array",
+      "maxItems": 100000,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[a-f0-9]{64}$"
+      }
+    },
+    "activeEstimateIds": {
+      "type": "array",
+      "maxItems": 100000,
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "pattern": "^[a-f0-9]{64}$"
+      }
+    },
+    "unallocated": {
+      "$ref": "https://avo.local/schemas/avo.cost-evidence.schema.json#/$defs/summaryValues"
+    },
+    "conflicts": {
+      "$ref": "https://avo.local/schemas/avo.cost-evidence.schema.json#/$defs/summaryValues"
+    },
+    "previousClosureId": {
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "financialViews": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/financialView"
+      }
+    },
+    "activityEvidenceIds": {"type": "array", "uniqueItems": true, "description": "Assigned normalized consuming endpoint evidence IDs; excludes baselines and equivalent covered alternatives.", "items": {"$ref": "https://avo.local/schemas/avo.cost-evidence.schema.json#/$defs/hash"}},
+    "unallocatedEvidenceIds": {"type": "array", "uniqueItems": true, "description": "Normalized evidence whose production/participation attribution remains unresolved.", "items": {"$ref": "https://avo.local/schemas/avo.cost-evidence.schema.json#/$defs/hash"}},
+    "conflictEvidenceIds": {"type": "array", "uniqueItems": true, "description": "Normalized evidence in unresolved representation or attribution conflicts.", "items": {"$ref": "https://avo.local/schemas/avo.cost-evidence.schema.json#/$defs/hash"}},
+    "representationConflicts": {"type": "array", "description": "Individually known overlapping alternatives; these values do not form a known unique subtotal.", "items": {"type": "object", "additionalProperties": false, "required": ["evidenceId", "key", "tokens", "amounts"], "properties": {
+      "evidenceId": {"$ref": "https://avo.local/schemas/avo.cost-evidence.schema.json#/$defs/hash"},
+      "key": {"$ref": "https://avo.local/schemas/avo.cost-evidence.schema.json#/$defs/observationKey"},
+      "tokens": {"$ref": "https://avo.local/schemas/avo.cost-evidence.schema.json#/$defs/tokenVector"},
+      "amounts": {"$ref": "#/$defs/derivedAmounts"}
+    }}},
+    "excludedEvidenceIds": {"type": "array", "uniqueItems": true, "description": "Equivalent or covered representations excluded by exact correlation or reviewed allocation.", "items": {"$ref": "https://avo.local/schemas/avo.cost-evidence.schema.json#/$defs/hash"}},
+    "estimateViews": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/estimateView"
+      }
+    }
+  },
+  "$defs": {
+    "derivedAmounts": {"type": "array", "maxItems": 100000, "items": {"$ref": "https://avo.local/schemas/avo.cost-evidence.schema.json#/$defs/summaryAmount"}},
+    "breakdown": {"type": "object", "additionalProperties": {"$ref": "https://avo.local/schemas/avo.cost-evidence.schema.json#/$defs/summaryValues"}},
+    "derivedAmount": {"type": "object", "additionalProperties": false, "required": ["basis", "unit", "amount", "provenance"], "properties": {
+      "basis": {"$ref": "https://avo.local/schemas/avo.cost-observation.schema.json#/properties/amounts/items/properties/basis"},
+      "unit": {"$ref": "https://avo.local/schemas/avo.cost-evidence.schema.json#/$defs/identifier"},
+      "amount": {"$ref": "#/$defs/decimal"},
+      "provenance": {"$ref": "https://avo.local/schemas/avo.cost-evidence.schema.json#/$defs/identifier"}
+    }},
+    "decimal": {
+      "type": "string",
+      "pattern": "^[0-9]+(?:\\.[0-9]+)?$",
+      "maxLength": 256
+    },
+    "nullableHash": {
+      "anyOf": [
+        {
+          "$ref": "https://avo.local/schemas/avo.cost-evidence.schema.json#/$defs/hash"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "nullableTime": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "format": "date-time"
+    },
+    "nullableIdentity": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "maxLength": 500
+    },
+    "dimensions": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 500
+      }
+    },
+    "valuation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "reference",
+        "amount",
+        "provenance",
+        "model",
+        "serviceProvider",
+        "modelBasis",
+        "occurredAt",
+        "priceScheduleId",
+        "effectiveAt",
+        "dimensions"
+      ],
+      "properties": {
+        "reference": {
+          "$ref": "https://avo.local/schemas/avo.cost-evidence.schema.json#/$defs/recordRef"
+        },
+        "amount": {
+          "$ref": "#/$defs/decimal"
+        },
+        "provenance": {
+          "$ref": "https://avo.local/schemas/avo.cost-evidence.schema.json#/$defs/identifier"
+        },
+        "model": {
+          "$ref": "#/$defs/nullableIdentity"
+        },
+        "serviceProvider": {
+          "$ref": "#/$defs/nullableIdentity"
+        },
+        "modelBasis": {
+          "enum": [
+            "served",
+            "selected-only",
+            "unknown"
+          ]
+        },
+        "occurredAt": {
+          "$ref": "#/$defs/nullableTime"
+        },
+        "priceScheduleId": {
+          "$ref": "#/$defs/nullableHash"
+        },
+        "effectiveAt": {
+          "$ref": "#/$defs/nullableTime"
+        },
+        "dimensions": {
+          "$ref": "#/$defs/dimensions"
+        }
+      }
+    },
+    "financialView": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "basis",
+        "unit",
+        "amount",
+        "interpretation",
+        "valuations"
+      ],
+      "properties": {
+        "basis": {
+          "$ref": "https://avo.local/schemas/avo.cost-observation.schema.json#/properties/amounts/items/properties/basis"
+        },
+        "unit": {
+          "$ref": "https://avo.local/schemas/avo.cost-evidence.schema.json#/$defs/identifier"
+        },
+        "amount": {
+          "$ref": "#/$defs/decimal"
+        },
+        "interpretation": {
+          "enum": [
+            "reported amount; charge interpretation unverified",
+            "calculated estimate",
+            "API reference equivalent",
+            "manual allocation/declaration"
+          ]
+        },
+        "valuations": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/valuation"
+          }
+        }
+      }
+    },
+    "amountRange": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "basis",
+        "unit",
+        "min",
+        "max",
+        "provenance",
+        "priceScheduleId"
+      ],
+      "properties": {
+        "basis": {
+          "enum": [
+            "calculated-estimate",
+            "api-equivalent"
+          ]
+        },
+        "unit": {
+          "$ref": "https://avo.local/schemas/avo.cost-evidence.schema.json#/$defs/identifier"
+        },
+        "min": {
+          "$ref": "#/$defs/decimal"
+        },
+        "max": {
+          "$ref": "#/$defs/decimal"
+        },
+        "provenance": {
+          "$ref": "https://avo.local/schemas/avo.cost-evidence.schema.json#/$defs/identifier"
+        },
+        "priceScheduleId": {
+          "$ref": "https://avo.local/schemas/avo.cost-evidence.schema.json#/$defs/hash"
+        }
+      }
+    },
+    "estimateView": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "estimateId",
+        "participationId",
+        "scope",
+        "method",
+        "methodVersion",
+        "inputManifest",
+        "tokens",
+        "ranges",
+        "assumptions",
+        "limitations",
+        "status",
+        "selectedRepresentation",
+        "amounts",
+        "amountRanges",
+        "priceScheduleIds",
+        "missingPrerequisites",
+        "pricingContext",
+        "selectedPriceScheduleId",
+        "valuationEffectiveAt"
+      ],
+      "properties": {
+        "estimateId": {
+          "$ref": "https://avo.local/schemas/avo.cost-evidence.schema.json#/$defs/hash"
+        },
+        "participationId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "scope": {
+          "$ref": "https://avo.local/schemas/avo.cost-evidence.schema.json#/$defs/scope"
+        },
+        "method": {
+          "enum": [
+            "manual-range",
+            "visible-content-tokenizer"
+          ]
+        },
+        "methodVersion": {
+          "$ref": "https://avo.local/schemas/avo.cost-evidence.schema.json#/$defs/identifier"
+        },
+        "inputManifest": {
+          "$ref": "https://avo.local/schemas/avo.cost-evidence.schema.json#/$defs/inputManifest"
+        },
+        "tokens": {
+          "anyOf": [
+            {
+              "$ref": "https://avo.local/schemas/avo.cost-evidence.schema.json#/$defs/tokenVector"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "ranges": {
+          "anyOf": [
+            {
+              "$ref": "https://avo.local/schemas/avo.cost-evidence.schema.json#/$defs/tokenRanges"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "assumptions": {
+          "type": "array",
+          "items": {
+            "$ref": "https://avo.local/schemas/avo.cost-evidence.schema.json#/$defs/identifier"
+          }
+        },
+        "limitations": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "https://avo.local/schemas/avo.cost-evidence.schema.json#/$defs/identifier"
+          }
+        },
+        "manualBasis": {
+          "$ref": "https://avo.local/schemas/avo.cost-evidence.schema.json#/$defs/identifier"
+        },
+        "status": {
+          "enum": [
+            "active",
+            "replaced",
+            "conflict"
+          ]
+        },
+        "selectedRepresentation": {
+          "anyOf": [
+            {
+              "$ref": "https://avo.local/schemas/avo.cost-evidence.schema.json#/$defs/recordRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "amounts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/derivedAmount"
+          }
+        },
+        "amountRanges": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/amountRange"
+          }
+        },
+        "priceScheduleIds": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "$ref": "https://avo.local/schemas/avo.cost-evidence.schema.json#/$defs/hash"
+          }
+        },
+        "missingPrerequisites": {
+          "type": "array",
+          "items": {
+            "$ref": "https://avo.local/schemas/avo.cost-evidence.schema.json#/$defs/identifier"
+          }
+        },
+        "pricingContext": {
+          "anyOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "model",
+                "serviceProvider",
+                "occurredAt",
+                "dimensions"
+              ],
+              "properties": {
+                "model": {
+                  "$ref": "https://avo.local/schemas/avo.cost-evidence.schema.json#/$defs/identifier"
+                },
+                "serviceProvider": {
+                  "$ref": "https://avo.local/schemas/avo.cost-evidence.schema.json#/$defs/identifier"
+                },
+                "occurredAt": {
+                  "$ref": "https://avo.local/schemas/avo.cost-evidence.schema.json#/$defs/timestamp"
+                },
+                "dimensions": {
+                  "$ref": "#/$defs/dimensions"
+                }
+              }
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "selectedPriceScheduleId": {
+          "$ref": "#/$defs/nullableHash"
+        },
+        "valuationEffectiveAt": {
+          "$ref": "#/$defs/nullableTime"
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "pendingState": {
+            "enum": [
+              "open",
+              "settling"
+            ]
+          }
+        },
+        "required": [
+          "pendingState"
+        ]
+      },
+      "then": {
+        "properties": {
+          "pendingTurn": {
+            "const": true
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "pendingState": {
+            "const": "none"
+          }
+        },
+        "required": [
+          "pendingState"
+        ]
+      },
+      "then": {
+        "properties": {
+          "pendingTurn": {
+            "const": false
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "pendingState": {
+            "const": "unknown"
+          }
+        },
+        "required": [
+          "pendingState"
+        ]
+      },
+      "then": {
+        "properties": {
+          "pendingTurn": {
+            "type": "null"
+          }
+        }
+      }
+    }
+  ]
+}

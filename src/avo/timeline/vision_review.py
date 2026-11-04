@@ -191,6 +191,24 @@ def _sample_section(section: dict[str, Any]) -> list[int]:
     return [start, start + (end - start - 1) // 2, end - 1]
 
 
+def _overview_frames(duration_frames, sections, story_checkpoints, *, enabled, windows):
+    if not enabled:
+        if not windows:
+            raise VisionReviewError("window review requires a bounded window")
+        return []
+    frames = sorted(
+        {
+            0,
+            duration_frames - 1,
+            *(int(frame) for frame in (story_checkpoints or [])),
+            *(frame for section in sections for frame in _sample_section(section)),
+        }
+    )
+    if any(frame < 0 or frame >= duration_frames for frame in frames):
+        raise VisionReviewError("story/payoff checkpoint is outside the program")
+    return frames
+
+
 def compile_review_coverage(
     *,
     duration_frames: int,
@@ -200,22 +218,20 @@ def compile_review_coverage(
     story_checkpoints: list[int] | None = None,
     repair_windows: list[dict[str, Any]] | None = None,
     comparison_windows: list[dict[str, Any]] | None = None,
+    include_overview: bool = True,
 ) -> dict[str, Any]:
     """Compile deterministic sparse section coverage and dense risk windows."""
     if duration_frames <= 0 or max_frames_per_pass <= 0 or not sections:
         raise VisionReviewError(
             "duration, sections, and pass frame budget are required"
         )
-    sparse_frames = sorted(
-        {
-            0,
-            duration_frames - 1,
-            *(int(frame) for frame in (story_checkpoints or [])),
-            *(frame for section in sections for frame in _sample_section(section)),
-        }
+    sparse_frames = _overview_frames(
+        duration_frames,
+        sections,
+        story_checkpoints,
+        enabled=include_overview,
+        windows=any((required_windows, repair_windows, comparison_windows)),
     )
-    if any(frame < 0 or frame >= duration_frames for frame in sparse_frames):
-        raise VisionReviewError("story/payoff checkpoint is outside the program")
     passes: list[dict[str, Any]] = []
     holes: list[dict[str, Any]] = []
     for index in range(0, len(sparse_frames), max_frames_per_pass):
@@ -321,6 +337,7 @@ def compile_review_coverage(
                 "planned": len(set(_sample_section(section))),
             }
             for section in sections
+            if include_overview
         },
         "coverageByRiskClass": {
             risk: {
@@ -341,7 +358,9 @@ def compile_review_coverage(
                 }
             )
         },
-        "samplingMode": "sparse-by-section+dense-risk",
+        "samplingMode": (
+            "sparse-by-section+dense-risk" if include_overview else "dense-risk"
+        ),
     }
 
 
