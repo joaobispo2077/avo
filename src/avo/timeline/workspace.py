@@ -666,3 +666,44 @@ class TimelineWorkspace:
         from avo.editlog import after_canonical_write
 
         return after_canonical_write(self.raw_dir)
+
+
+def resolve_timeline_workspace(raw_dir, *, project_path=None, canonical_cmap_path=None):
+    """Resolve one declared project for retention without scanning or initializing."""
+    raw = Path(raw_dir).resolve()
+    known = (
+        Path(canonical_cmap_path).resolve() if canonical_cmap_path is not None else None
+    )
+    selected = (
+        Path(project_path)
+        if project_path is not None
+        else _retained_project_path(raw, known)
+    )
+    if selected is None:
+        return None
+    workspace = TimelineWorkspace.from_project(selected)
+    timeline = workspace.timeline_dir.resolve()
+    if workspace.raw_dir.resolve() != raw or not timeline.is_relative_to(raw / "edit"):
+        raise WorkspaceError(
+            "Retained canonical target differs from the declared project/edit directory"
+        )
+    if known is not None and workspace.artifact_path("cmap").resolve() != known:
+        raise WorkspaceError(
+            "Retained canonical CMap path differs from the declared project"
+        )
+    return workspace
+
+
+def _retained_project_path(raw, known):
+    if known is not None:
+        run_path = known.parent / "pipeline-run.json"
+        if run_path.is_file():
+            from .otio_import import parse_export_bytes
+
+            with run_path.open("rb") as stream:
+                data = stream.read(64 * 1024 * 1024 + 1)
+            _, run, _ = parse_export_bytes(data)
+            validate_document(run, "avo.pipeline-run.schema.json")
+            return Path(run["projectPath"])
+    conventional = raw / "avo.project.json"
+    return conventional if conventional.is_file() else None

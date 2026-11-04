@@ -2074,8 +2074,12 @@ def _cleanup(args: argparse.Namespace) -> int:
         return 0
 
     if args.cleanup_command == "verify":
-        errors = verify_preserved_complete(raw_dir, args.master_basename)
-        preserved = resolve_preserved_set(raw_dir, args.master_basename)
+        errors = verify_preserved_complete(
+            raw_dir, args.master_basename, project_path=workspace.project_path
+        )
+        preserved = resolve_preserved_set(
+            raw_dir, args.master_basename, project_path=workspace.project_path
+        )
         _emit(
             compact_cleanup_result(
                 status="pass" if not errors else "blocked",
@@ -2091,6 +2095,7 @@ def _cleanup(args: argparse.Namespace) -> int:
         outcome = run_cleanup(
             raw_dir,
             args.master_basename,
+            project_path=workspace.project_path,
             dry_run=args.cleanup_command == "dry-run",
             session_id=session_id,
             purge_session=False,
