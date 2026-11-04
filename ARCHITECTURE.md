@@ -844,3 +844,57 @@ prepare/validate with intentionally missing originals; other frozen platforms,
 real Resolve exports, long-source throughput and creator review remain separate
 qualification. Existing ordinary canonical layouts/default audio/engine and
 source-only import preservation remain distinct, with compatibility regressions.
+
+## Planned editing craft parity (feature 017, not implemented)
+
+The local working design is `specs/017-editing-craft-parity/plan.md`; numbered
+working specs remain ignored by existing repository policy. This section records
+the proposed evolution and does not claim delivered capabilities.
+
+Motion map and linked lightweight storyboard become built-in, engine-independent
+projections at applicable motion planning/review. They join the selected brief,
+untimed proposals and exact available CMap/BMap/Tracks/Animation/Sync heads,
+including absence/static/unresolved state. Status remains metadata-only and
+cannot initialize canonical records, run models or render. Explicit authoring
+and review publish immutable derived views; no second timeline is introduced.
+
+Camera movement, face anchoring, sound matching, reference analysis, spoken
+notes/recovery and editor handoff are selected options resolved through existing
+settings scopes and frozen requests. Preferences seed future work and cannot
+reinterpret an active or approved edit. Existing canonical ownership, command
+permissions, creator gates and source-only proof ancestry remain authoritative.
+
+BMap owns camera cue timing; a strict versioned Animation extension holds only
+relative behavior; Tracks identifies the original-source contribution. A new
+proof v2 camera capability/implementation must be added to compiler, preflight,
+executor and fidelity/lineage checks together. It transforms source picture
+before independent overlays/captions. Legacy strategy/proof v1 remains supported;
+old consumers fail closed on advanced behavior rather than silently ignoring it.
+Because generic revision snapshots currently accept arbitrary objects, advanced
+publication also needs an atomic Animation index-v2 reader-capability guard.
+New readers support legacy/new indexes and validate advanced snapshots; old
+index validators reject v2 before compiling. Default views never upgrade indexes.
+
+Optional bounded CV/semantic adapters produce frozen source/model-bound evidence.
+Direction stays document-only; renderer seeking starts no detector. A focused
+read-only SFX catalogue reuses waveform/event-clock facts, keeps perceptual-marker
+review separate from measurement cache, and never invokes footage move workflows.
+Selected sound still becomes BMap/Tracks state through its current owners.
+
+Editor handoff uses a bounded supported XML adapter with exact target-version
+qualification and source/occurrence accounting; existing OTIO reader plugin
+isolation remains intact. Returned edits are base/current/returned proposals,
+with unsupported finishing preserved and conflicts reviewed before normal
+activation. Export generation alone is not interoperability evidence.
+
+Dependency direction remains CLI/MCP -> services/pure rules -> injected
+media/model/format ports, with adapters registered at the boundary. No new
+application framework, central state file, event bus, vector database or
+repository-wide architecture refactor is planned. Reconstruction/inventory
+must retain bounded selected authorial/source/rights/analysis/handoff/recovery
+evidence and regenerate disposable views/indexes.
+
+Implementation validation requires default/no-option and legacy compatibility,
+pure frame/clock/merge rules, real encoded source-fidelity/audio checks,
+native/MCP/package parity, existing full software-quality gates and actual
+creator/target-editor acceptance. These remain future delivery gates.
