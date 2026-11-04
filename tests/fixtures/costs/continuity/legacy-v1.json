@@ -1,0 +1,151 @@
+{
+  "batch": {
+    "accountingVideoId": "00000000-0000-4000-8000-000000000011",
+    "batchId": "00000000-0000-4000-8000-000000000012",
+    "contentHash": "8e531831d4123103ae0424bcaab2e497c2069b3e23a327d91894ec15f21cc3d4",
+    "createdAt": "2026-10-22T16:00:00Z",
+    "observationKeys": [
+      {
+        "observationId": "5ac3607a203cd481c1c0a7c6d3fb851c346166654f3bd63b8cfad52f8e6b30c7",
+        "sourceDigest": "f30be96ea46f1b84e6e54ec10df1e30666e772623b45448eaf39db33f2c25528"
+      }
+    ],
+    "observations": [
+      {
+        "agent": "qwen",
+        "agentVersion": "synthetic-manual-v1",
+        "amounts": [],
+        "billingMode": "local",
+        "measurementKind": "manual",
+        "model": "qwen3.5-4b",
+        "occurredAt": "2026-10-22T16:00:00Z",
+        "phase": "motion",
+        "requestId": "r1",
+        "semantics": {},
+        "serviceClass": "pipeline-service",
+        "serviceProvider": "lmstudio",
+        "sourceInstanceId": "synthetic",
+        "sourceSessionId": "session",
+        "tokens": {
+          "input": 2100000,
+          "output": 0
+        }
+      }
+    ],
+    "priceScheduleIds": [],
+    "recordedOrder": 11000000000,
+    "schemaVersion": "1.0.0"
+  },
+  "identity": {
+    "accountingVideoId": "00000000-0000-4000-8000-000000000011",
+    "createdAt": "2026-10-22T16:00:00Z",
+    "provider": "channel",
+    "schemaVersion": "1.0.0",
+    "videoId": "legacy-video"
+  },
+  "provenance": "synthetic; no private source or paid inference",
+  "snapshot": {
+    "accountingVideoId": "00000000-0000-4000-8000-000000000011",
+    "amounts": [],
+    "breakdowns": {
+      "agent": {
+        "qwen": {
+          "amounts": [],
+          "tokens": {
+            "input": 2100000,
+            "output": 0,
+            "total": 2100000
+          }
+        }
+      },
+      "model": {
+        "qwen3.5-4b": {
+          "amounts": [],
+          "tokens": {
+            "input": 2100000,
+            "output": 0,
+            "total": 2100000
+          }
+        }
+      },
+      "phase": {
+        "motion": {
+          "amounts": [],
+          "tokens": {
+            "input": 2100000,
+            "output": 0,
+            "total": 2100000
+          }
+        }
+      },
+      "serviceClass": {
+        "pipeline-service": {
+          "amounts": [],
+          "tokens": {
+            "input": 2100000,
+            "output": 0,
+            "total": 2100000
+          }
+        }
+      },
+      "serviceProvider": {
+        "lmstudio": {
+          "amounts": [],
+          "tokens": {
+            "input": 2100000,
+            "output": 0,
+            "total": 2100000
+          }
+        }
+      }
+    },
+    "closureEvidence": null,
+    "coverage": "partial",
+    "cutoff": "2026-10-22T16:00:00Z",
+    "diagnostics": [
+      {
+        "code": "unpriced-usage",
+        "count": 1
+      }
+    ],
+    "excludedCosts": [
+      "labor",
+      "hardware",
+      "electricity",
+      "unallocated subscriptions",
+      "unreported service usage"
+    ],
+    "lastCollectedAt": "2026-10-22T16:00:00Z",
+    "lifecycle": "draft",
+    "membership": {
+      "batches": [
+        "8e531831d4123103ae0424bcaab2e497c2069b3e23a327d91894ec15f21cc3d4"
+      ],
+      "bindings": [],
+      "corrections": [],
+      "prices": []
+    },
+    "observationCount": 1,
+    "pendingTurn": true,
+    "provider": "channel",
+    "recordedOrder": 11000000000,
+    "schemaVersion": "1.0.0",
+    "snapshotId": "f9a90a2f82911485a7922ad6117c77be606f06562ed66f8d7caa3f6a22a6fd7e",
+    "sourceWatermarks": [
+      {
+        "lastImportedRequestId": "r1",
+        "occurredAt": "2026-10-22T16:00:00Z",
+        "sourceInstanceId": "synthetic",
+        "sourceSessionId": "session"
+      }
+    ],
+    "status": "ok",
+    "tokens": {
+      "input": 2100000,
+      "output": 0,
+      "total": 2100000
+    },
+    "videoId": "legacy-video"
+  },
+  "sourceFixture": "../agents/codex.json"
+}

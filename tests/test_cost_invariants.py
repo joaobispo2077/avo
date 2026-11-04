@@ -2,10 +2,30 @@
 
 import json
 
+import pytest
+
 from avo.cost_sources import collect
-from avo.cost_store import CostStore
+from avo.cost_store import CostError, CostStore
 from avo.costs import summarize
+from test_cost_continuity import (
+    FIXED_TIME,
+    PARTICIPATION_ID,
+    evidence,
+    observation_key,
+    packet,
+    participation_fact,
+    profile,
+    receipt,
+    registered_ledger,
+)
 from test_costs import fact
+
+
+@pytest.fixture(autouse=True)
+def isolated_cost_registry(tmp_path, monkeypatch):
+    from avo import avo_state
+
+    monkeypatch.setattr(avo_state, "state_dir", lambda: tmp_path / "state")
 
 
 def ledger(tmp_path):
@@ -274,3 +294,447 @@ def test_explicit_child_session_rollup_is_not_double_counted(tmp_path):
         ]
     )
     assert summarize(store)["tokens"]["total"] == 1200
+
+
+def test_v2_receipt_only_packet_is_committed_without_fake_usage(tmp_path):
+    store = registered_ledger(tmp_path)
+    terminal = receipt(
+        lifecycle={"state": "closed", "reference": "a" * 64},
+        flush={"status": "accepted", "reference": "a" * 64},
+    )
+    result = store.ingest_packet(
+        packet(store, receipts=[terminal]), allow_synthetic=True
+    )
+    batches = store.capture()["batches"]
+    assert result["batchId"]
+    assert len(batches) == 1
+    assert batches[0]["observations"] == []
+    assert batches[0]["evidence"] == []
+    assert batches[0]["receipts"] == [terminal]
+    assert not store.path("receipts").exists()
+
+
+def test_v2_known_row_keeps_new_evidence_without_double_counting(tmp_path):
+    store = registered_ledger(tmp_path)
+    row = fact()
+    original = evidence(row)
+    revised = evidence(row, acquisition="automatic")
+    store.ingest_packet(
+        packet(store, [row], evidence_rows=[original]), allow_synthetic=True
+    )
+    store.ingest_packet(
+        packet(store, [row], evidence_rows=[revised], operation_id="packet-2"),
+        allow_synthetic=True,
+    )
+    batches = store.capture()["batches"]
+    accepted_ids = {
+        item["evidenceId"] for batch in batches for item in batch["evidence"]
+    }
+    assert accepted_ids == {original["evidenceId"], revised["evidenceId"]}
+    rows, _ = store.observations()
+    assert len(rows) <= 1
+    report = summarize(store)
+    assert report["tokens"]["total"] is None
+    assert report["observationCount"] == 0
+    assert report["conflicts"]["tokens"]["total"] == 120
+
+
+def test_v2_atomic_publish_failure_does_not_advance_receipt(tmp_path, monkeypatch):
+    store = registered_ledger(tmp_path)
+    row = fact()
+    received = receipt(keys=[observation_key(row)])
+    incoming = packet(store, [row], receipts=[received])
+    original_publish = store._publish_locked
+
+    def interrupted(target, value):
+        if target.parent.name == "batches":
+            raise OSError("synthetic interrupted commit")
+        return original_publish(target, value)
+
+    with monkeypatch.context() as scope:
+        scope.setattr(store, "_publish_locked", interrupted)
+        with pytest.raises((CostError, OSError)):
+            store.ingest_packet(incoming, allow_synthetic=True)
+    assert store.capture()["batches"] == []
+    assert store.observations()[0] == []
+    store.ingest_packet(incoming, allow_synthetic=True)
+    assert len(store.capture()["batches"]) == 1
+    assert store.capture()["batches"][0]["receipts"] == [received]
+
+
+def test_v2_operation_replay_is_identical_and_changed_content_rejected(tmp_path):
+    store = registered_ledger(tmp_path)
+    incoming = packet(
+        store, [fact()], receipts=[receipt(keys=[observation_key(fact())])]
+    )
+    first = store.ingest_packet(incoming, allow_synthetic=True)
+    second = store.ingest_packet(incoming, allow_synthetic=True)
+    assert second["batchId"] == first["batchId"]
+    assert len(store.capture()["batches"]) == 1
+    changed = packet(store, [fact("different")], operation_id=incoming["operationId"])
+    with pytest.raises(CostError):
+        store.ingest_packet(changed, allow_synthetic=True)
+    assert len(store.capture()["batches"]) == 1
+
+
+def test_v2_invalid_metadata_cannot_leave_observation_or_receipt(tmp_path):
+    store = registered_ledger(tmp_path)
+    row = fact()
+    incoming = packet(store, [row], receipts=[receipt(keys=[observation_key(row)])])
+    incoming["evidence"][0]["profileId"] = "f" * 64
+    with pytest.raises(CostError):
+        store.ingest_packet(incoming, allow_synthetic=True)
+    assert store.capture()["batches"] == []
+    assert store.observations()[0] == []
+
+
+def test_v2_receipt_predecessor_branches_remain_visible(tmp_path):
+    store = registered_ledger(tmp_path)
+    start = receipt(watermark={"kind": "event", "value": "start"})
+    left = receipt(
+        predecessor=start["receiptId"], watermark={"kind": "event", "value": "left"}
+    )
+    right = receipt(
+        predecessor=start["receiptId"], watermark={"kind": "event", "value": "right"}
+    )
+    for index, accepted in enumerate((start, left, right)):
+        store.ingest_packet(
+            packet(store, receipts=[accepted], operation_id=f"receipt-{index}"),
+            allow_synthetic=True,
+        )
+    saved = [item for batch in store.capture()["batches"] for item in batch["receipts"]]
+    assert {item["receiptId"] for item in saved} == {
+        start["receiptId"],
+        left["receiptId"],
+        right["receiptId"],
+    }
+    report = summarize(store)
+    assert report["coverage"] != "complete-for-declared-sources"
+    assert any(
+        "receipt" in str(item).lower() or "cursor" in str(item).lower()
+        for item in report["diagnostics"]
+    )
+
+
+def _activity_decision(
+    store, members, *, relation="same-activity", selected=None, **changes
+):
+    value = {
+        "schemaVersion": "2.0.0",
+        "accountingVideoId": store.identity()["accountingVideoId"],
+        "operationId": "activity-decision",
+        "relation": relation,
+        "references": [
+            {"kind": "evidence", "id": item["evidenceId"]} for item in members
+        ],
+        "scope": members[0]["attribution"]["scope"],
+        "selectedRepresentation": {"kind": "evidence", "id": selected["evidenceId"]}
+        if selected
+        else None,
+        "actor": "synthetic-reviewer",
+        "reason": "explicit source correlation proof",
+        "proofRefs": [store.digest("synthetic-native-correlation")],
+        "supersedes": [],
+        "createdAt": FIXED_TIME,
+    }
+    value.update(changes)
+    value["reconciliationId"] = store.digest(value)
+    return value
+
+
+def _ingest_activity(
+    store, rows, metadata, *, accepted_profile=None, operation="activity-packet"
+):
+    accepted_profile = accepted_profile or profile()
+    store.append_record("profiles", accepted_profile)
+    incoming = packet(store, rows, evidence_rows=metadata, operation_id=operation)
+    incoming["profileId"] = accepted_profile["profileId"]
+    for received in incoming["receipts"]:
+        received["profileId"] = accepted_profile["profileId"]
+        received.pop("receiptId")
+        received["receiptId"] = store.digest(received)
+    return store.ingest_packet(incoming, allow_synthetic=True)
+
+
+def test_us5_explicit_same_activity_selects_exact_membership_once(tmp_path):
+    store = registered_ledger(tmp_path)
+    rows = [fact("sdk"), fact("export", sourceInstanceId="synthetic-export")]
+    metadata = [evidence(row) for row in rows]
+    _ingest_activity(store, rows, metadata)
+    before = store.snapshot(summarize(store), "draft")
+    decision = _activity_decision(store, metadata, selected=metadata[0])
+    store.append_record("reconciliations", decision)
+    current = summarize(store)
+    assert current["activityEvidenceIds"] == [metadata[0]["evidenceId"]]
+    assert current["excludedEvidenceIds"] == [metadata[1]["evidenceId"]]
+    assert current["selectedEvidenceIds"] == sorted(
+        item["evidenceId"] for item in metadata
+    )
+    assert current["observationCount"] == 1
+    assert current["tokens"]["total"] == 120
+    assert current["amounts"] == [
+        {"basis": "source-reported", "unit": "USD", "amount": "0.10"}
+    ]
+    assert (
+        next(
+            item
+            for item in store.documents("snapshots")
+            if item["snapshotId"] == before["snapshotId"]
+        )
+        == before
+    )
+
+
+def test_us5_identical_numbers_and_times_do_not_correlate_native_activities(tmp_path):
+    store = registered_ledger(tmp_path)
+    rows = [fact("first"), fact("second")]
+    metadata = [evidence(row) for row in rows]
+    _ingest_activity(store, rows, metadata)
+    report = summarize(store)
+    assert set(report["activityEvidenceIds"]) == {
+        item["evidenceId"] for item in metadata
+    }
+    assert report["excludedEvidenceIds"] == []
+    assert report["tokens"]["total"] == 240
+
+
+@pytest.mark.parametrize("select_leaves", [False, True])
+def test_us5_known_tree_selects_aggregate_or_complete_exact_leaves(
+    tmp_path, select_leaves
+):
+    store = registered_ledger(tmp_path)
+    semantics = {**profile()["semantics"], "aggregateScope": "tree"}
+    frozen = profile(semantics=semantics)
+    children = [
+        fact("child-one", tokens={"total": 100}, amounts=[]),
+        fact("child-two", tokens={"total": 140}, amounts=[]),
+    ]
+    child_metadata = []
+    for index, row in enumerate(children):
+        child_id = f"00000000-0000-4000-8000-0000000000{16 + index}"
+        store.append_record(
+            "participations",
+            participation_fact(
+                store,
+                operation_id=f"child-{index}",
+                participationId=child_id,
+                agent={
+                    "family": "codex",
+                    "surface": "synthetic-export",
+                    "version": "fixture-1",
+                    "role": "subagent",
+                    "parentParticipationId": PARTICIPATION_ID,
+                },
+            ),
+        )
+        child_metadata.append(
+            evidence(row, participation_id=child_id, profile_id=frozen["profileId"])
+        )
+    aggregate = fact("tree", tokens={"total": 240}, amounts=[])
+    aggregate_metadata = evidence(
+        aggregate,
+        profile_id=frozen["profileId"],
+        aggregateScope={
+            "kind": "tree",
+            "members": [observation_key(row) for row in children],
+            "proofRefs": [store.digest("native-complete-tree-membership")],
+        },
+    )
+    members = [aggregate_metadata, *child_metadata]
+    _ingest_activity(store, [aggregate, *children], members, accepted_profile=frozen)
+    options = (
+        {
+            "selectedRepresentations": [
+                {"kind": "evidence", "id": item["evidenceId"]}
+                for item in child_metadata
+            ]
+        }
+        if select_leaves
+        else {}
+    )
+    decision = _activity_decision(
+        store,
+        members,
+        relation="covers-rollup",
+        selected=None if select_leaves else aggregate_metadata,
+        **options,
+    )
+    store.append_record("reconciliations", decision)
+    report = summarize(store)
+    chosen, excluded = (
+        (child_metadata, [aggregate_metadata])
+        if select_leaves
+        else ([aggregate_metadata], child_metadata)
+    )
+    assert set(report["activityEvidenceIds"]) == {item["evidenceId"] for item in chosen}
+    assert set(report["excludedEvidenceIds"]) == {
+        item["evidenceId"] for item in excluded
+    }
+    assert report["tokens"]["total"] == 240
+    assert report["observationCount"] == len(chosen)
+    assert set(report["breakdowns"]["agentRole"]) == {"subagent"}
+
+
+def test_us5_unproved_tree_membership_does_not_silently_add_parent_and_children(
+    tmp_path,
+):
+    store = registered_ledger(tmp_path)
+    semantics = {**profile()["semantics"], "aggregateScope": "tree"}
+    frozen = profile(semantics=semantics)
+    rows = [
+        fact("tree", tokens={"total": 240}),
+        fact("child", parentRequestId="tree", tokens={"total": 100}),
+    ]
+    metadata = [
+        evidence(
+            rows[0],
+            profile_id=frozen["profileId"],
+            aggregateScope={"kind": "tree", "members": [], "proofRefs": []},
+        ),
+        evidence(rows[1], profile_id=frozen["profileId"]),
+    ]
+    _ingest_activity(store, rows, metadata, accepted_profile=frozen)
+    report = summarize(store)
+    assert report["activityEvidenceIds"] == []
+    assert set(report["conflictEvidenceIds"]) == {
+        item["evidenceId"] for item in metadata
+    }
+    assert report["tokens"]["total"] is None
+    assert report["conflicts"]["tokens"]["total"] is None
+    assert {item["tokens"]["total"] for item in report["representationConflicts"]} == {
+        240,
+        100,
+    }
+    assert any(
+        item["code"] == "cost-aggregate-composition-unproven"
+        for item in report["diagnostics"]
+    )
+
+
+def test_us5_copied_fork_new_ids_need_exact_inheritance_mapping(tmp_path):
+    store = registered_ledger(tmp_path)
+    frozen = profile(semantics={**profile()["semantics"], "fork": "copied-history"})
+    original = fact("original")
+    copied = fact(
+        "new-fork-id",
+        sourceSessionId="fork",
+        parentSessionId="session",
+        parentRequestId="original",
+    )
+    metadata = [
+        evidence(row, profile_id=frozen["profileId"]) for row in (original, copied)
+    ]
+    _ingest_activity(store, [original, copied], metadata, accepted_profile=frozen)
+    unresolved = summarize(store)
+    assert unresolved["activityEvidenceIds"] == [metadata[0]["evidenceId"]]
+    assert unresolved["unallocatedEvidenceIds"] == [metadata[1]["evidenceId"]]
+    assert unresolved["tokens"]["total"] == 120
+    store.append_record(
+        "reconciliations", _activity_decision(store, metadata, selected=metadata[0])
+    )
+    resolved = summarize(store)
+    assert resolved["activityEvidenceIds"] == [metadata[0]["evidenceId"]]
+    assert resolved["excludedEvidenceIds"] == [metadata[1]["evidenceId"]]
+
+
+def test_us5_shared_native_activity_requires_explicit_production_allocation(tmp_path):
+    first, second = (
+        registered_ledger(tmp_path / "first"),
+        registered_ledger(tmp_path / "second"),
+    )
+    row = fact("shared-native-request")
+    metadata = evidence(row)
+    _ingest_activity(first, [row], [metadata])
+    with pytest.raises(CostError, match="(scope|production|claim|allocation)"):
+        _ingest_activity(second, [row], [metadata])
+    allocation = _activity_decision(
+        first,
+        [metadata],
+        relation="allocation",
+        allocations=[
+            {
+                "accountingVideoId": second.identity()["accountingVideoId"],
+                "scope": metadata["attribution"]["scope"],
+                "reference": {"kind": "evidence", "id": metadata["evidenceId"]},
+            }
+        ],
+    )
+    first.append_record("reconciliations", allocation)
+    _ingest_activity(second, [row], [metadata])
+    assert summarize(first)["activityEvidenceIds"] == []
+    assert summarize(first)["excludedEvidenceIds"] == [metadata["evidenceId"]]
+    assert summarize(second)["activityEvidenceIds"] == [metadata["evidenceId"]]
+    assert summarize(second)["tokens"]["total"] == 120
+
+
+def test_us5_explicit_collected_fork_boundary_preserves_new_interval(tmp_path):
+    from avo.cost_sources import collect_context
+    from test_cost_sources import _automatic_context
+
+    rows = [
+        fact("copied", agent="fixture-executor", parentSessionId="old-session"),
+        fact("new-work", agent="fixture-executor", parentSessionId="old-session"),
+    ]
+    store, context, *_ = _automatic_context(
+        tmp_path,
+        rows,
+        source_shape="normalized-jsonl",
+        fork="copied-history",
+        boundary="copied",
+    )
+    assert collect_context(store, context)["imported"] == 1
+    report = summarize(store)
+    assert report["observationCount"] == 1
+    assert report["tokens"]["total"] == 120
+    assert report["unallocatedEvidenceIds"] == []
+    assert report["activityEvidenceIds"] == [
+        store.capture()["batches"][0]["evidence"][0]["evidenceId"]
+    ]
+
+
+def test_us5_cross_source_child_alias_remains_covered_by_proven_tree(tmp_path):
+    store = registered_ledger(tmp_path)
+    frozen = profile(semantics={**profile()["semantics"], "aggregateScope": "tree"})
+    rows = [
+        fact("tree", tokens={"total": 240}, amounts=[]),
+        fact("child-one", tokens={"total": 100}, amounts=[]),
+        fact("child-two", tokens={"total": 140}, amounts=[]),
+        fact(
+            "exported-child",
+            sourceInstanceId="synthetic-export",
+            tokens={"total": 100},
+            amounts=[],
+        ),
+    ]
+    metadata = [evidence(row, profile_id=frozen["profileId"]) for row in rows]
+    metadata[0] = evidence(
+        rows[0],
+        profile_id=frozen["profileId"],
+        aggregateScope={
+            "kind": "tree",
+            "members": [observation_key(row) for row in rows[1:3]],
+            "proofRefs": [store.digest("known-native-membership")],
+        },
+    )
+    _ingest_activity(store, rows, metadata, accepted_profile=frozen)
+    store.append_record(
+        "reconciliations",
+        _activity_decision(store, [metadata[1], metadata[3]], selected=metadata[3]),
+    )
+    report = summarize(store)
+    assert report["activityEvidenceIds"] == [metadata[0]["evidenceId"]]
+    assert set(report["excludedEvidenceIds"]) == {
+        item["evidenceId"] for item in metadata[1:]
+    }
+    assert report["conflictEvidenceIds"] == []
+    assert report["tokens"]["total"] == 240
+
+
+def test_us5_activity_selection_handles_long_explicit_chains_without_recursion():
+    from avo.costs import _resolve_activity_choices
+
+    indexed = {str(index): None for index in range(2000)}
+    choices = {str(index): {frozenset({str(index + 1)})} for index in range(1999)}
+    selected, conflicts = _resolve_activity_choices(indexed, choices, set())
+    assert selected == {"1999"}
+    assert conflicts == set()

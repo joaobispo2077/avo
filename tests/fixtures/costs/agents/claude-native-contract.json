@@ -1,0 +1,13 @@
+{
+  "fixtureKind":"synthetic-native-shaped-contract-not-qualification",
+  "sdkResults":[
+    {"version":"2.1.276","session_id":"claude-fixture","type":"result","usage":{"input_tokens":5},"modelUsage":{"model-a":{"inputTokens":12}},"total_cost_usd":0.01},
+    {"version":"2.1.277","session_id":"claude-fixture","type":"result","usage":{"input_tokens":105},"modelUsage":{"model-a":{"inputTokens":112}},"total_cost_usd":1.01},
+    {"version":"2.1.310","session_id":"claude-fixture","type":"subagent_completed","total_tokens":7,"last_request_only":true}
+  ],
+  "messageRevisions":[
+    {"id":"same-native-message","output_tokens":0,"final":false},
+    {"id":"same-native-message","output_tokens":20,"final":true}
+  ],
+  "missingProof":["authorized-native-fixture","resume-and-fork-boundaries","tree-membership","final-revision","usage-is-estimated-money-not-invoice"]
+}

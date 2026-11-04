@@ -1,0 +1,55 @@
+{
+  "legacy": {
+    "accountingVideoId": "00000000-0000-4000-8000-000000000011",
+    "batchHash": "8e531831d4123103ae0424bcaab2e497c2069b3e23a327d91894ec15f21cc3d4",
+    "batchId": "00000000-0000-4000-8000-000000000012",
+    "hostCoverage": "unknown",
+    "observationKeys": [
+      {
+        "observationId": "5ac3607a203cd481c1c0a7c6d3fb851c346166654f3bd63b8cfad52f8e6b30c7",
+        "sourceDigest": "f30be96ea46f1b84e6e54ec10df1e30666e772623b45448eaf39db33f2c25528"
+      }
+    ],
+    "serviceTokens": 2100000,
+    "snapshotId": "f9a90a2f82911485a7922ad6117c77be606f06562ed66f8d7caa3f6a22a6fd7e"
+  },
+  "legacyFixture": "legacy-v1.json",
+  "legacyFixtureSha256": "1f7cecec4b15631f3bd87833e8cfea68908c13681aac21b4fc562a85b93b599e",
+  "provenance": "synthetic; no private source or paid inference",
+  "scenarios": {
+    "handoffResumes": {
+      "activities": [
+        {"requestId": "plan-a", "agent": "codex", "model": "model-a", "participant": "first", "input": 100, "output": 20, "phase": "planning"},
+        {"requestId": "review-b", "agent": "codex", "model": "model-b", "participant": "first", "input": 200, "output": 30, "phase": "review"},
+        {"requestId": "handoff-c", "agent": "claude", "model": "model-c", "participant": "second", "input": 300, "output": 40, "phase": "motion"},
+        {"requestId": "handoff-d", "agent": "opencode", "model": "model-d", "participant": "third", "input": 400, "output": 50, "phase": "motion"},
+        {"requestId": "resume-d", "agent": "opencode", "model": "model-d", "participant": "third", "input": 500, "output": 60, "phase": "review"},
+        {"requestId": "child-b", "agent": "codex", "model": "model-b", "participant": "child-one", "input": 60, "output": 10, "phase": "review"},
+        {"requestId": "child-d", "agent": "opencode", "model": "model-d", "participant": "child-two", "input": 70, "output": 10, "phase": "motion"}
+      ],
+      "uniqueTokens": 1850,
+      "amount": "2.07",
+      "unit": "USD",
+      "resumes": 2,
+      "children": 2,
+      "price": {"input": "1", "output": "2", "denominator": 1000}
+    },
+    "counterResume": {
+      "baseline": 10000,
+      "endpoint": 11200,
+      "uniqueTokens": 1200
+    },
+    "hostAndService": {
+      "host": {
+        "input": 1000,
+        "output": 200
+      },
+      "service": {
+        "input": 300,
+        "output": 50
+      },
+      "uniqueTokens": 1550
+    }
+  },
+  "schemaVersion": "1.0.0"
+}

@@ -460,3 +460,125 @@ def test_motion_authoring_mcp_maps_native_flags_without_an_extra_tool(name, tmp_
     if name == "avo_pipeline_run":
         assert parsed.new_request is True
     assert argv.count("--motion-engine") == 1
+
+
+def test_pipeline_context_registers_host_and_status_is_read_only(
+    pipeline_motion_context, capsys
+):
+    from avo.cost_store import CostStore
+    from test_cost_continuity import context_descriptor
+
+    context = pipeline_motion_context
+    arguments = [
+        "pipeline",
+        "run",
+        "--project",
+        str(context["project"]),
+        "--cost-context",
+        json.dumps(context_descriptor()),
+    ]
+    assert main(arguments) == 0
+    capsys.readouterr()
+    store = CostStore(context["raw"])
+    facts = store.capture()["participations"]
+    assert len(facts) == 1
+    assert facts[0]["agent"]["family"] == "codex"
+    before = {
+        path: path.read_bytes() for path in context["raw"].rglob("*") if path.is_file()
+    }
+    assert main(["pipeline", "status", "--project", str(context["project"])]) == 0
+    capsys.readouterr()
+    assert {path: path.read_bytes() for path in before} == before
+    assert store.capture()["participations"] == facts
+
+
+def test_pipeline_resume_without_context_does_not_inherit_known_host(
+    pipeline_motion_context, capsys
+):
+    from avo.cost_store import CostStore
+    from avo.timeline.lifecycle import PipelineRunStore
+    from test_cost_continuity import context_descriptor
+
+    context = pipeline_motion_context
+    assert (
+        main(
+            [
+                "pipeline",
+                "run",
+                "--project",
+                str(context["project"]),
+                "--cost-context",
+                json.dumps(context_descriptor()),
+            ]
+        )
+        == 0
+    )
+    capsys.readouterr()
+    run = PipelineRunStore(context["raw"] / "edit/timeline/pipeline-run.json")
+    run.enter_side_state("blocked", actor="synthetic-test", reason="Review")
+    assert (
+        main(
+            [
+                "pipeline",
+                "resume",
+                "--project",
+                str(context["project"]),
+                "--actor",
+                "synthetic-test",
+                "--reason",
+                "Review done",
+                "--recovery-event",
+                "review-ready",
+            ]
+        )
+        == 0
+    )
+    capsys.readouterr()
+    facts = CostStore(context["raw"]).capture()["participations"]
+    assert any(item.get("mode") == "identity-unknown" for item in facts)
+    assert len({item["participationId"] for item in facts}) == 2
+
+
+def test_pipeline_malformed_cost_context_fails_before_mutation(
+    pipeline_motion_context, capsys
+):
+    context = pipeline_motion_context
+    before = {
+        path: path.read_bytes() for path in context["raw"].rglob("*") if path.is_file()
+    }
+    with pytest.raises(SystemExit) as rejected:
+        main(
+            [
+                "pipeline",
+                "run",
+                "--project",
+                str(context["project"]),
+                "--cost-context",
+                json.dumps({"prompt": "private-sentinel"}),
+            ]
+        )
+    assert rejected.value.code == 2
+    captured = capsys.readouterr()
+    assert "private-sentinel" not in captured.out + captured.err
+    assert {
+        path: path.read_bytes() for path in context["raw"].rglob("*") if path.is_file()
+    } == before
+
+
+def test_pipeline_mcp_preserves_structured_context_as_json(tmp_path):
+    from avo.cli import build_parser
+    from avo.mcp.bridge import kwargs_to_argv
+    from avo.mcp.tools.cli_tools import all_bridge_defs
+    from test_cost_continuity import context_descriptor
+
+    tool = next(
+        item for item in all_bridge_defs() if item.spec.name == "avo_pipeline_run"
+    )
+    descriptor = context_descriptor()
+    argv = kwargs_to_argv(
+        tool.cli_prefix,
+        {"project": str(tmp_path / "avo.project.json"), "cost_context": descriptor},
+    )
+    assert json.loads(argv[argv.index("--cost-context") + 1]) == descriptor
+    parsed = build_parser().parse_args(argv)
+    assert parsed.cost_context == descriptor

@@ -23,6 +23,19 @@ def repo_root() -> Path:
     return ROOT
 
 
+@pytest.fixture(autouse=True)
+def isolated_cost_registry(request, monkeypatch, tmp_path):
+    """Cost/lifecycle entry-point tests never discover or register real videos."""
+    module = Path(str(request.node.fspath)).stem
+    if module.startswith("test_cost") or module in {
+        "test_pipeline_cli",
+        "test_session",
+    }:
+        from avo import avo_state
+
+        monkeypatch.setattr(avo_state, "state_dir", lambda: tmp_path / "cost-state")
+
+
 @pytest.fixture(scope="session")
 def avo_dir(repo_root: Path) -> Path:
     return repo_root / "src" / "avo"

@@ -447,13 +447,8 @@ class CuttingPreviewAdapter:
             )
         return maps
 
-    def _analysis_documents(self, proposal):
-        store = CuttingStore(
-            Path(self.workspace.timeline_dir) / "cutting",
-            video_id=self.workspace.video_id,
-            provider=self.workspace.project["provider"],
-        )
-        analyses = []
+    @staticmethod
+    def _analysis_references(proposal):
         refs = list(
             proposal.get("implementationBindings", {}).get("sourceAnalysisRefs", [])
         )
@@ -462,7 +457,60 @@ class CuttingPreviewAdapter:
             for occurrence in proposal["occurrences"]
             for ref in occurrence.get("evidenceRefs", [])
         )
-        for ref in {content_hash(ref): ref for ref in refs}.values():
+        return list({content_hash(ref): ref for ref in refs}.values())
+
+    def _analysis_fingerprints(self, proposal):
+        directory = self.directory.parent.resolve()
+        result = []
+        for ref in self._analysis_references(proposal):
+            path = (directory / ref["locator"]).resolve()
+            if not path.is_relative_to(directory):
+                raise ValueError("cutting reference escapes evidence directory")
+            result.append(file_fingerprint(path))
+        return result
+
+    def _analysis_documents(self, proposal):
+        from avo.timeline.proof_validation_stage import proof_pixel_observations
+
+        scope = proof_pixel_observations()
+        if scope is None:
+            self._analysis_cache = None
+            return self._load_analysis_documents(proposal)
+        key, fingerprints = (
+            content_hash(proposal),
+            self._analysis_fingerprints(proposal),
+        )
+        cached = getattr(self, "_analysis_cache", None)
+        if cached is None or cached["scope"] is not scope or cached["key"] != key:
+            analyses = self._load_analysis_documents(proposal)
+            if self._analysis_fingerprints(proposal) != fingerprints:
+                raise ValueError("cutting evidence changed during validation")
+            cached = {
+                "scope": scope,
+                "key": key,
+                "fingerprints": fingerprints,
+                "analyses": [
+                    {
+                        k: v
+                        for k, v in item.items()
+                        if k in {"sourceRef", "syncRef", "routing", "words"}
+                    }
+                    for item in analyses
+                ],
+            }
+            self._analysis_cache = cached
+        if cached["fingerprints"] != fingerprints:
+            raise ValueError("cutting evidence changed within validation batch")
+        return deepcopy(cached["analyses"])
+
+    def _load_analysis_documents(self, proposal):
+        store = CuttingStore(
+            Path(self.workspace.timeline_dir) / "cutting",
+            video_id=self.workspace.video_id,
+            provider=self.workspace.project["provider"],
+        )
+        analyses = []
+        for ref in self._analysis_references(proposal):
             document = store.load_document(ref)
             if (
                 document["documentType"] == "source-analysis"
@@ -689,6 +737,8 @@ class CuttingPreviewAdapter:
 
     def verify_cutting_window(self, plan, candidate, *, window):
         """Decode each current native window; approved previews are evidence only."""
+        from avo.adapters.qc.cutting_mix_reference import mix_reference_context
+
         binding = plan["validationPlan"]["cutting"]
         store = self.workspace.store("cmap")
         snapshot = store.revision(store.load_index()["headRevisionId"])["snapshot"]
@@ -728,6 +778,7 @@ class CuttingPreviewAdapter:
             required_occurrences=preview["window"]["occurrenceIds"],
             clock_maps=maps,
             reference_encoding=self._reference_encoding(plan, maps),
+            mix_reference=mix_reference_context(plan, window),
             candidate_selection={
                 "streamIndex": 1,
                 "channels": [0],

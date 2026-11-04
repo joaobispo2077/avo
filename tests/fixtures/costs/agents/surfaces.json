@@ -1,0 +1,15 @@
+{
+  "fixtureKind": "synthetic-contract-scenarios-not-native-qualification",
+  "environments": [
+    {"environment":"codex-cli","agent":"codex","surface":"cli","nativeCapability":"candidate","trap":"cumulative exec usage needs native epoch and explicit resume baseline"},
+    {"environment":"codex-desktop","agent":"codex","surface":"desktop","nativeCapability":"candidate","trap":"no universal passive Desktop observer"},
+    {"environment":"chatgpt","agent":"chatgpt","surface":"app-browser","nativeCapability":"manual-only","trap":"visible reply and MCP calls do not reveal global usage"},
+    {"environment":"cursor","agent":"cursor","surface":"ide-sdk","nativeCapability":"candidate","trap":"selected router model is not served request model"},
+    {"environment":"claude-code","agent":"claude","surface":"cli-sdk","nativeCapability":"candidate","trap":"resume versions and main-loop versus tree counters differ"},
+    {"environment":"opencode","agent":"opencode","surface":"cli-sdk","nativeCapability":"candidate","trap":"forks can copy usage with new message IDs"},
+    {"environment":"gemini-cli","agent":"gemini","surface":"cli","nativeCapability":"candidate","trap":"AfterModel chunks are not additive requests"},
+    {"environment":"cline","agent":"cline","surface":"ide-cli-sdk","nativeCapability":"candidate","trap":"current versus total and aggregate cache need temporal proof"},
+    {"environment":"windsurf","agent":"windsurf","surface":"cascade","nativeCapability":"manual-only","trap":"successor keys and ACU or CREDITS do not establish token usage"},
+    {"environment":"unknown","agent":"unknown","surface":"unspecified","nativeCapability":"manual-only","trap":"an unlisted agent keeps its own identity and has no inherited parser"}
+  ]
+}

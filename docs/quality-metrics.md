@@ -4,25 +4,25 @@ Release readout of the exact commit and CI run. Measurements and thresholds do n
 
 | Field | Value |
 |---|---|
-| Version | 1.19.1 |
-| Tag | v1.19.1 |
-| SHA | `27f82e6c7c0a3f8faa372bccfe18787fe2c0db1c` |
-| Recorded (UTC) | 2026-10-31T20:13:54Z |
+| Version | 1.20.0 |
+| Tag | v1.20.0 |
+| SHA | `aea974a6d093447cdcb574c612efa494d5a405df` |
+| Recorded (UTC) | 2026-11-04T16:16:41Z |
 
 ## AVO quality
 
 **Overall: PASS**
 
-Commit: `27f82e6c7c0a3f8faa372bccfe18787fe2c0db1c` · Run: `41236348310`
+Commit: `aea974a6d093447cdcb574c612efa494d5a405df` · Run: `41861815173`
 
 PR head: `Unavailable`
 PR base: `Unavailable`
-Tested revision: `27f82e6c7c0a3f8faa372bccfe18787fe2c0db1c`
+Tested revision: `aea974a6d093447cdcb574c612efa494d5a405df`
 Attempt: 1. Passed producer evidence may come from earlier attempts of the same run.
 
 All mandatory gate decisions and required jobs passed.
 
-![Quality dashboard](quality/charts/1.19.1/dashboard.png)
+![Quality dashboard](quality/charts/1.20.0/dashboard.png)
 
 **Measurements**
 
@@ -32,9 +32,9 @@ Unavailable evidence: Safety branch coverage.
 
 | Metric | Measured | Scope | Evidence |
 |---|---|---|---|
-| Line coverage | 75.81% | unit suite; src/avo | 28,390/37,447 executable lines [coverage.json](https://github.com/joaobispo2077/avo/actions/runs/41236348310/artifacts/13055623112) (SHA-256 `1c0b6f7dd595`) |
-| Duplication | 0.59% | source lines; src/avo | 487/82,239 duplicated lines; 47 clone pairs [jscpd/jscpd-report.json](https://github.com/joaobispo2077/avo/actions/runs/41236348310/artifacts/13055623112) (SHA-256 `436803676ca6`) |
-| Mutation efficacy | 64.89% | light profile; selected Python modules | 207 killed / 112 survived / 319 total; 0 unresolved [mutation-metrics.json](https://github.com/joaobispo2077/avo/actions/runs/41236348310/artifacts/13056401661) (SHA-256 `4bfb23149290`) |
+| Line coverage | 77.26% | unit suite; src/avo | 31,584/40,882 executable lines [coverage.json](https://github.com/joaobispo2077/avo/actions/runs/41861815173/artifacts/13340584610) (SHA-256 `9cd4daae38f3`) |
+| Duplication | 0.54% | source lines; src/avo | 478/89,057 duplicated lines; 46 clone pairs [jscpd/jscpd-report.json](https://github.com/joaobispo2077/avo/actions/runs/41861815173/artifacts/13340584610) (SHA-256 `9af211fb1005`) |
+| Mutation efficacy | 62.57% | light profile; selected Python modules | 219 killed / 131 survived / 350 total; 0 unresolved [mutation-metrics.json](https://github.com/joaobispo2077/avo/actions/runs/41861815173/artifacts/13341622540) (SHA-256 `bc95a9b1cfea`) |
 
 ### Mutation efficacy by source
 
@@ -43,57 +43,57 @@ Existing mutation enforcement applies to the aggregate profile. Source colors an
 
 ![Mutation efficacy and outcome accounting](kpi-chart:mutation-efficacy.png)
 
-Aggregate: 207 killed / 112 survived / 319 total; 0 unresolved. Complete execution: True.
+Aggregate: 219 killed / 131 survived / 350 total; 0 unresolved. Complete execution: True.
 
 Source excerpt: 5/5. Missing/incomplete first, then lowest measured efficacy; M IDs sort by full source path.
 
 | Source ID and full path | Efficacy / state | Actual outcome counts |
 |---|---|---|
-| M005: [src/avo/validate_usability.py](https://github.com/joaobispo2077/avo/blob/27f82e6c7c0a3f8faa372bccfe18787fe2c0db1c/src/avo/validate_usability.py) | Zero mutants; efficacy unavailable. | 0 killed / 0 survived / 0 total; 0 unresolved |
-| M004: [src/avo/validate_dependencies.py](https://github.com/joaobispo2077/avo/blob/27f82e6c7c0a3f8faa372bccfe18787fe2c0db1c/src/avo/validate_dependencies.py) | 52.13% | 110 killed / 101 survived / 211 total; 0 unresolved |
-| M002: [src/avo/mcp/bridge.py](https://github.com/joaobispo2077/avo/blob/27f82e6c7c0a3f8faa372bccfe18787fe2c0db1c/src/avo/mcp/bridge.py) | 87.18% | 68 killed / 10 survived / 78 total; 0 unresolved |
-| M003: [src/avo/mcp/registry.py](https://github.com/joaobispo2077/avo/blob/27f82e6c7c0a3f8faa372bccfe18787fe2c0db1c/src/avo/mcp/registry.py) | 95.65% | 22 killed / 1 survived / 23 total; 0 unresolved |
-| M001: [src/avo/adapters/registry.py](https://github.com/joaobispo2077/avo/blob/27f82e6c7c0a3f8faa372bccfe18787fe2c0db1c/src/avo/adapters/registry.py) | 100.00% | 7 killed / 0 survived / 7 total; 0 unresolved |
+| M005: [src/avo/validate_usability.py](https://github.com/joaobispo2077/avo/blob/aea974a6d093447cdcb574c612efa494d5a405df/src/avo/validate_usability.py) | Zero mutants; efficacy unavailable. | 0 killed / 0 survived / 0 total; 0 unresolved |
+| M004: [src/avo/validate_dependencies.py](https://github.com/joaobispo2077/avo/blob/aea974a6d093447cdcb574c612efa494d5a405df/src/avo/validate_dependencies.py) | 52.13% | 110 killed / 101 survived / 211 total; 0 unresolved |
+| M002: [src/avo/mcp/bridge.py](https://github.com/joaobispo2077/avo/blob/aea974a6d093447cdcb574c612efa494d5a405df/src/avo/mcp/bridge.py) | 73.39% | 80 killed / 29 survived / 109 total; 0 unresolved |
+| M003: [src/avo/mcp/registry.py](https://github.com/joaobispo2077/avo/blob/aea974a6d093447cdcb574c612efa494d5a405df/src/avo/mcp/registry.py) | 95.65% | 22 killed / 1 survived / 23 total; 0 unresolved |
+| M001: [src/avo/adapters/registry.py](https://github.com/joaobispo2077/avo/blob/aea974a6d093447cdcb574c612efa494d5a405df/src/avo/adapters/registry.py) | 100.00% | 7 killed / 0 survived / 7 total; 0 unresolved |
 
 [Complete mutation source index and outcome proof (text archive)](kpi-detail:mutation-efficacy.md)
 
 
 ### Complexity and CRAP review
 
-3419 observed functions; 3369 measured CRAP; 50 observed functions unmeasured; 0 source-analysis errors. Total population known.
+3832 observed functions; 3782 measured CRAP; 50 observed functions unmeasured; 0 source-analysis errors. Total population known.
 CRAP reference 30 is informational. Existing complexity policy and exceptions remain separate.
 
 ![Complexity and CRAP hotspots](kpi-chart:hotspots.png)
 
-**Cyclomatic complexity: 10/3419 eligible candidates shown**. highest observed values, capped at 10; ties: descending value, then canonical path, definition line, qualified name.
+**Cyclomatic complexity: 10/3832 eligible candidates shown**. highest observed values, capped at 10; ties: descending value, then canonical path, definition line, qualified name.
 
 | ID | Full source identity | Observed value | Unit |
 |---|---|---:|---|
-| U0009 | [src/avo/adapters/media/audio_tracks.py:61 compile_continuous_audio_graph](https://github.com/joaobispo2077/avo/blob/27f82e6c7c0a3f8faa372bccfe18787fe2c0db1c/src/avo/adapters/media/audio_tracks.py#L61) | 51 | independent paths |
-| U3316 | [src/avo/validate_edl.py:110 _bluray_ps5_semantic_errors](https://github.com/joaobispo2077/avo/blob/27f82e6c7c0a3f8faa372bccfe18787fe2c0db1c/src/avo/validate_edl.py#L110) | 49 | independent paths |
-| U1277 | [src/avo/learndown_export.py:87 build_timeline_learning_snapshot](https://github.com/joaobispo2077/avo/blob/27f82e6c7c0a3f8faa372bccfe18787fe2c0db1c/src/avo/learndown_export.py#L87) | 44 | independent paths |
-| U2947 | [src/avo/timeline/proof_plan.py:541 ProofPlanCompiler.preflight](https://github.com/joaobispo2077/avo/blob/27f82e6c7c0a3f8faa372bccfe18787fe2c0db1c/src/avo/timeline/proof_plan.py#L541) | 43 | independent paths |
-| U3190 | [src/avo/timeline/vision_review.py:194 compile_review_coverage](https://github.com/joaobispo2077/avo/blob/27f82e6c7c0a3f8faa372bccfe18787fe2c0db1c/src/avo/timeline/vision_review.py#L194) | 43 | independent paths |
-| U3321 | [src/avo/validate_edl.py:289 _comparison_semantic_errors](https://github.com/joaobispo2077/avo/blob/27f82e6c7c0a3f8faa372bccfe18787fe2c0db1c/src/avo/validate_edl.py#L289) | 42 | independent paths |
-| U2382 | [src/avo/timeline/approval_service.py:1196 ApprovalService.decide](https://github.com/joaobispo2077/avo/blob/27f82e6c7c0a3f8faa372bccfe18787fe2c0db1c/src/avo/timeline/approval_service.py#L1196) | 41 | independent paths |
-| U3277 | [src/avo/update.py:282 run_update](https://github.com/joaobispo2077/avo/blob/27f82e6c7c0a3f8faa372bccfe18787fe2c0db1c/src/avo/update.py#L282) | 40 | independent paths |
-| U0798 | [src/avo/cli.py:1706 _review_batch](https://github.com/joaobispo2077/avo/blob/27f82e6c7c0a3f8faa372bccfe18787fe2c0db1c/src/avo/cli.py#L1706) | 38 | independent paths |
-| U2661 | [src/avo/timeline/iterations.py:255 IterationLedgerService.record_iteration](https://github.com/joaobispo2077/avo/blob/27f82e6c7c0a3f8faa372bccfe18787fe2c0db1c/src/avo/timeline/iterations.py#L255) | 38 | independent paths |
+| U0009 | [src/avo/adapters/media/audio_tracks.py:61 compile_continuous_audio_graph](https://github.com/joaobispo2077/avo/blob/aea974a6d093447cdcb574c612efa494d5a405df/src/avo/adapters/media/audio_tracks.py#L61) | 51 | independent paths |
+| U3729 | [src/avo/validate_edl.py:110 _bluray_ps5_semantic_errors](https://github.com/joaobispo2077/avo/blob/aea974a6d093447cdcb574c612efa494d5a405df/src/avo/validate_edl.py#L110) | 49 | independent paths |
+| U1685 | [src/avo/learndown_export.py:87 build_timeline_learning_snapshot](https://github.com/joaobispo2077/avo/blob/aea974a6d093447cdcb574c612efa494d5a405df/src/avo/learndown_export.py#L87) | 44 | independent paths |
+| U3359 | [src/avo/timeline/proof_plan.py:541 ProofPlanCompiler.preflight](https://github.com/joaobispo2077/avo/blob/aea974a6d093447cdcb574c612efa494d5a405df/src/avo/timeline/proof_plan.py#L541) | 43 | independent paths |
+| U3734 | [src/avo/validate_edl.py:289 _comparison_semantic_errors](https://github.com/joaobispo2077/avo/blob/aea974a6d093447cdcb574c612efa494d5a405df/src/avo/validate_edl.py#L289) | 42 | independent paths |
+| U2794 | [src/avo/timeline/approval_service.py:1196 ApprovalService.decide](https://github.com/joaobispo2077/avo/blob/aea974a6d093447cdcb574c612efa494d5a405df/src/avo/timeline/approval_service.py#L1196) | 41 | independent paths |
+| U3690 | [src/avo/update.py:282 run_update](https://github.com/joaobispo2077/avo/blob/aea974a6d093447cdcb574c612efa494d5a405df/src/avo/update.py#L282) | 40 | independent paths |
+| U0807 | [src/avo/cli.py:1723 _review_batch](https://github.com/joaobispo2077/avo/blob/aea974a6d093447cdcb574c612efa494d5a405df/src/avo/cli.py#L1723) | 38 | independent paths |
+| U3073 | [src/avo/timeline/iterations.py:255 IterationLedgerService.record_iteration](https://github.com/joaobispo2077/avo/blob/aea974a6d093447cdcb574c612efa494d5a405df/src/avo/timeline/iterations.py#L255) | 38 | independent paths |
+| U3603 | [src/avo/timeline/vision_review.py:212 compile_review_coverage](https://github.com/joaobispo2077/avo/blob/aea974a6d093447cdcb574c612efa494d5a405df/src/avo/timeline/vision_review.py#L212) | 38 | independent paths |
 
-**CRAP: 10/3369 eligible candidates shown**. highest observed values, capped at 10; ties: descending value, then canonical path, definition line, qualified name.
+**CRAP: 10/3782 eligible candidates shown**. highest observed values, capped at 10; ties: descending value, then canonical path, definition line, qualified name.
 
 | ID | Full source identity | Observed value | Unit |
 |---|---|---:|---|
-| U3316 | [src/avo/validate_edl.py:110 _bluray_ps5_semantic_errors](https://github.com/joaobispo2077/avo/blob/27f82e6c7c0a3f8faa372bccfe18787fe2c0db1c/src/avo/validate_edl.py#L110) | 2450 | CRAP score |
-| U3321 | [src/avo/validate_edl.py:289 _comparison_semantic_errors](https://github.com/joaobispo2077/avo/blob/27f82e6c7c0a3f8faa372bccfe18787fe2c0db1c/src/avo/validate_edl.py#L289) | 1806 | CRAP score |
-| U0798 | [src/avo/cli.py:1706 _review_batch](https://github.com/joaobispo2077/avo/blob/27f82e6c7c0a3f8faa372bccfe18787fe2c0db1c/src/avo/cli.py#L1706) | 1482 | CRAP score |
-| U0516 | [src/avo/adapters/understand/watch_skill.py:1374 _native_review](https://github.com/joaobispo2077/avo/blob/27f82e6c7c0a3f8faa372bccfe18787fe2c0db1c/src/avo/adapters/understand/watch_skill.py#L1374) | 870 | CRAP score |
-| U2874 | [src/avo/timeline/pipeline.py:791 TimelinePipeline.advance](https://github.com/joaobispo2077/avo/blob/27f82e6c7c0a3f8faa372bccfe18787fe2c0db1c/src/avo/timeline/pipeline.py#L791) | 735.738 | CRAP score |
-| U1896 | [src/avo/render.py:1259 main](https://github.com/joaobispo2077/avo/blob/27f82e6c7c0a3f8faa372bccfe18787fe2c0db1c/src/avo/render.py#L1259) | 663.228 | CRAP score |
-| U0486 | [src/avo/adapters/understand/watch_skill.py:721 execute_bounded_passes](https://github.com/joaobispo2077/avo/blob/27f82e6c7c0a3f8faa372bccfe18787fe2c0db1c/src/avo/adapters/understand/watch_skill.py#L721) | 600 | CRAP score |
-| U0543 | [src/avo/audio_analysis.py:320 main](https://github.com/joaobispo2077/avo/blob/27f82e6c7c0a3f8faa372bccfe18787fe2c0db1c/src/avo/audio_analysis.py#L320) | 600 | CRAP score |
-| U3114 | [src/avo/timeline/stills.py:182 StillExtractionService.extract](https://github.com/joaobispo2077/avo/blob/27f82e6c7c0a3f8faa372bccfe18787fe2c0db1c/src/avo/timeline/stills.py#L182) | 552 | CRAP score |
-| U0760 | [src/avo/cli.py:610 _sync](https://github.com/joaobispo2077/avo/blob/27f82e6c7c0a3f8faa372bccfe18787fe2c0db1c/src/avo/cli.py#L610) | 462 | CRAP score |
+| U3729 | [src/avo/validate_edl.py:110 _bluray_ps5_semantic_errors](https://github.com/joaobispo2077/avo/blob/aea974a6d093447cdcb574c612efa494d5a405df/src/avo/validate_edl.py#L110) | 2450 | CRAP score |
+| U3734 | [src/avo/validate_edl.py:289 _comparison_semantic_errors](https://github.com/joaobispo2077/avo/blob/aea974a6d093447cdcb574c612efa494d5a405df/src/avo/validate_edl.py#L289) | 1806 | CRAP score |
+| U0807 | [src/avo/cli.py:1723 _review_batch](https://github.com/joaobispo2077/avo/blob/aea974a6d093447cdcb574c612efa494d5a405df/src/avo/cli.py#L1723) | 1482 | CRAP score |
+| U0524 | [src/avo/adapters/understand/watch_skill.py:1374 _native_review](https://github.com/joaobispo2077/avo/blob/aea974a6d093447cdcb574c612efa494d5a405df/src/avo/adapters/understand/watch_skill.py#L1374) | 870 | CRAP score |
+| U3286 | [src/avo/timeline/pipeline.py:791 TimelinePipeline.advance](https://github.com/joaobispo2077/avo/blob/aea974a6d093447cdcb574c612efa494d5a405df/src/avo/timeline/pipeline.py#L791) | 735.738 | CRAP score |
+| U2308 | [src/avo/render.py:1259 main](https://github.com/joaobispo2077/avo/blob/aea974a6d093447cdcb574c612efa494d5a405df/src/avo/render.py#L1259) | 663.228 | CRAP score |
+| U0494 | [src/avo/adapters/understand/watch_skill.py:721 execute_bounded_passes](https://github.com/joaobispo2077/avo/blob/aea974a6d093447cdcb574c612efa494d5a405df/src/avo/adapters/understand/watch_skill.py#L721) | 600 | CRAP score |
+| U0551 | [src/avo/audio_analysis.py:320 main](https://github.com/joaobispo2077/avo/blob/aea974a6d093447cdcb574c612efa494d5a405df/src/avo/audio_analysis.py#L320) | 600 | CRAP score |
+| U3526 | [src/avo/timeline/stills.py:182 StillExtractionService.extract](https://github.com/joaobispo2077/avo/blob/aea974a6d093447cdcb574c612efa494d5a405df/src/avo/timeline/stills.py#L182) | 552 | CRAP score |
+| U0769 | [src/avo/cli.py:627 _sync](https://github.com/joaobispo2077/avo/blob/aea974a6d093447cdcb574c612efa494d5a405df/src/avo/cli.py#L627) | 462 | CRAP score |
 
 
 [Complete function index: hotspots.md (text archive)](kpi-detail:hotspots.md)
@@ -101,98 +101,98 @@ CRAP reference 30 is informational. Existing complexity policy and exceptions re
 
 ### File coupling: CE / CA
 
-225 actual files at 79 positions; 713 distinct internal module edges; 1 namespace containers excluded from file points.
+229 actual files at 82 positions; 750 distinct internal module edges; 1 namespace containers excluded from file points.
 CE is horizontal (uses others); CA is vertical (used by others). Median references: CE 2, CA 2; all measured actual files including isolates, equality on the lower side. Spacing: piecewise log2(1 + count) around raw median; ticks show raw counts. Equal-area halves use independent scales around each median; equal areas do not mean equal numeric ranges. Regions describe connectivity, not architectural health or gate status.
 
 ![Indexed file coupling](kpi-chart:coupling-files.png)
 
-Lookup excerpt: 13/79 coordinate groups; 80/225 files. Groups ordered by CE then CA; all members of each shown group are retained.
+Lookup excerpt: 15/82 coordinate groups; 80/229 files. Groups ordered by CE then CA; all members of each shown group are retained.
 
 <details>
 <summary>Indexed positions and files (bidirectional lookup)</summary>
 
 | Position | CE | CA | Members | File ID and complete source identity |
 |---|---:|---:|---:|---|
-| G01 | 0 | 0 | 20 | F003: [src/avo/adapters/__init__.py](https://github.com/joaobispo2077/avo/blob/27f82e6c7c0a3f8faa372bccfe18787fe2c0db1c/src/avo/adapters/__init__.py) |
-| G01 | 0 | 0 | 20 | F005: [src/avo/adapters/media/__init__.py](https://github.com/joaobispo2077/avo/blob/27f82e6c7c0a3f8faa372bccfe18787fe2c0db1c/src/avo/adapters/media/__init__.py) |
-| G01 | 0 | 0 | 20 | F023: [src/avo/adapters/motion/__init__.py](https://github.com/joaobispo2077/avo/blob/27f82e6c7c0a3f8faa372bccfe18787fe2c0db1c/src/avo/adapters/motion/__init__.py) |
-| G01 | 0 | 0 | 20 | F026: [src/avo/adapters/qc/__init__.py](https://github.com/joaobispo2077/avo/blob/27f82e6c7c0a3f8faa372bccfe18787fe2c0db1c/src/avo/adapters/qc/__init__.py) |
-| G01 | 0 | 0 | 20 | F034: [src/avo/adapters/stubs/__init__.py](https://github.com/joaobispo2077/avo/blob/27f82e6c7c0a3f8faa372bccfe18787fe2c0db1c/src/avo/adapters/stubs/__init__.py) |
-| G01 | 0 | 0 | 20 | F040: [src/avo/adapters/transcribe/__init__.py](https://github.com/joaobispo2077/avo/blob/27f82e6c7c0a3f8faa372bccfe18787fe2c0db1c/src/avo/adapters/transcribe/__init__.py) |
-| G01 | 0 | 0 | 20 | F044: [src/avo/adapters/understand/__init__.py](https://github.com/joaobispo2077/avo/blob/27f82e6c7c0a3f8faa372bccfe18787fe2c0db1c/src/avo/adapters/understand/__init__.py) |
-| G01 | 0 | 0 | 20 | F046: [src/avo/adapters/understand/cutting_alignment_worker.py](https://github.com/joaobispo2077/avo/blob/27f82e6c7c0a3f8faa372bccfe18787fe2c0db1c/src/avo/adapters/understand/cutting_alignment_worker.py) |
-| G01 | 0 | 0 | 20 | F077: [src/avo/direction/__init__.py](https://github.com/joaobispo2077/avo/blob/27f82e6c7c0a3f8faa372bccfe18787fe2c0db1c/src/avo/direction/__init__.py) |
-| G01 | 0 | 0 | 20 | F087: [src/avo/engine_install.py](https://github.com/joaobispo2077/avo/blob/27f82e6c7c0a3f8faa372bccfe18787fe2c0db1c/src/avo/engine_install.py) |
-| G01 | 0 | 0 | 20 | F089: [src/avo/generate_sfx.py](https://github.com/joaobispo2077/avo/blob/27f82e6c7c0a3f8faa372bccfe18787fe2c0db1c/src/avo/generate_sfx.py) |
-| G01 | 0 | 0 | 20 | F094: [src/avo/library/__init__.py](https://github.com/joaobispo2077/avo/blob/27f82e6c7c0a3f8faa372bccfe18787fe2c0db1c/src/avo/library/__init__.py) |
-| G01 | 0 | 0 | 20 | F127: [src/avo/pack_transcripts.py](https://github.com/joaobispo2077/avo/blob/27f82e6c7c0a3f8faa372bccfe18787fe2c0db1c/src/avo/pack_transcripts.py) |
-| G01 | 0 | 0 | 20 | F134: [src/avo/resources/directions/__init__.py](https://github.com/joaobispo2077/avo/blob/27f82e6c7c0a3f8faa372bccfe18787fe2c0db1c/src/avo/resources/directions/__init__.py) |
-| G01 | 0 | 0 | 20 | F153: [src/avo/srt_to_centered_ass.py](https://github.com/joaobispo2077/avo/blob/27f82e6c7c0a3f8faa372bccfe18787fe2c0db1c/src/avo/srt_to_centered_ass.py) |
-| G01 | 0 | 0 | 20 | F156: [src/avo/templates/__init__.py](https://github.com/joaobispo2077/avo/blob/27f82e6c7c0a3f8faa372bccfe18787fe2c0db1c/src/avo/templates/__init__.py) |
-| G01 | 0 | 0 | 20 | F158: [src/avo/templates/library_review/__init__.py](https://github.com/joaobispo2077/avo/blob/27f82e6c7c0a3f8faa372bccfe18787fe2c0db1c/src/avo/templates/library_review/__init__.py) |
-| G01 | 0 | 0 | 20 | F159: [src/avo/templates/shorts_hyperframes/__init__.py](https://github.com/joaobispo2077/avo/blob/27f82e6c7c0a3f8faa372bccfe18787fe2c0db1c/src/avo/templates/shorts_hyperframes/__init__.py) |
-| G01 | 0 | 0 | 20 | F160: [src/avo/timeline/__init__.py](https://github.com/joaobispo2077/avo/blob/27f82e6c7c0a3f8faa372bccfe18787fe2c0db1c/src/avo/timeline/__init__.py) |
-| G01 | 0 | 0 | 20 | F195: [src/avo/timeline/models.py](https://github.com/joaobispo2077/avo/blob/27f82e6c7c0a3f8faa372bccfe18787fe2c0db1c/src/avo/timeline/models.py) |
-| G02 | 0 | 1 | 9 | F017: [src/avo/adapters/media/proof_rendered_events.py](https://github.com/joaobispo2077/avo/blob/27f82e6c7c0a3f8faa372bccfe18787fe2c0db1c/src/avo/adapters/media/proof_rendered_events.py) |
-| G02 | 0 | 1 | 9 | F027: [src/avo/adapters/qc/code_drawn_review.py](https://github.com/joaobispo2077/avo/blob/27f82e6c7c0a3f8faa372bccfe18787fe2c0db1c/src/avo/adapters/qc/code_drawn_review.py) |
-| G02 | 0 | 1 | 9 | F068: [src/avo/consume_mode.py](https://github.com/joaobispo2077/avo/blob/27f82e6c7c0a3f8faa372bccfe18787fe2c0db1c/src/avo/consume_mode.py) |
-| G02 | 0 | 1 | 9 | F090: [src/avo/grade.py](https://github.com/joaobispo2077/avo/blob/27f82e6c7c0a3f8faa372bccfe18787fe2c0db1c/src/avo/grade.py) |
-| G02 | 0 | 1 | 9 | F091: [src/avo/hardware.py](https://github.com/joaobispo2077/avo/blob/27f82e6c7c0a3f8faa372bccfe18787fe2c0db1c/src/avo/hardware.py) |
-| G02 | 0 | 1 | 9 | F117: [src/avo/mcp/request_state.py](https://github.com/joaobispo2077/avo/blob/27f82e6c7c0a3f8faa372bccfe18787fe2c0db1c/src/avo/mcp/request_state.py) |
-| G02 | 0 | 1 | 9 | F139: [src/avo/shorts_captions.py](https://github.com/joaobispo2077/avo/blob/27f82e6c7c0a3f8faa372bccfe18787fe2c0db1c/src/avo/shorts_captions.py) |
-| G02 | 0 | 1 | 9 | F176: [src/avo/timeline/cutting_previews.py](https://github.com/joaobispo2077/avo/blob/27f82e6c7c0a3f8faa372bccfe18787fe2c0db1c/src/avo/timeline/cutting_previews.py) |
-| G02 | 0 | 1 | 9 | F209: [src/avo/timeline/sync.py](https://github.com/joaobispo2077/avo/blob/27f82e6c7c0a3f8faa372bccfe18787fe2c0db1c/src/avo/timeline/sync.py) |
-| G03 | 0 | 2 | 6 | F065: [src/avo/build_captions.py](https://github.com/joaobispo2077/avo/blob/27f82e6c7c0a3f8faa372bccfe18787fe2c0db1c/src/avo/build_captions.py) |
-| G03 | 0 | 2 | 6 | F112: [src/avo/mcp/__init__.py](https://github.com/joaobispo2077/avo/blob/27f82e6c7c0a3f8faa372bccfe18787fe2c0db1c/src/avo/mcp/__init__.py) |
-| G03 | 0 | 2 | 6 | F166: [src/avo/timeline/command_registry.py](https://github.com/joaobispo2077/avo/blob/27f82e6c7c0a3f8faa372bccfe18787fe2c0db1c/src/avo/timeline/command_registry.py) |
-| G03 | 0 | 2 | 6 | F177: [src/avo/timeline/cutting_profiles.py](https://github.com/joaobispo2077/avo/blob/27f82e6c7c0a3f8faa372bccfe18787fe2c0db1c/src/avo/timeline/cutting_profiles.py) |
-| G03 | 0 | 2 | 6 | F184: [src/avo/timeline/diff.py](https://github.com/joaobispo2077/avo/blob/27f82e6c7c0a3f8faa372bccfe18787fe2c0db1c/src/avo/timeline/diff.py) |
-| G03 | 0 | 2 | 6 | F214: [src/avo/timeline_view.py](https://github.com/joaobispo2077/avo/blob/27f82e6c7c0a3f8faa372bccfe18787fe2c0db1c/src/avo/timeline_view.py) |
-| G04 | 0 | 3 | 2 | F157: [src/avo/templates/code_drawn/__init__.py](https://github.com/joaobispo2077/avo/blob/27f82e6c7c0a3f8faa372bccfe18787fe2c0db1c/src/avo/templates/code_drawn/__init__.py) |
-| G04 | 0 | 3 | 2 | F191: [src/avo/timeline/mapping.py](https://github.com/joaobispo2077/avo/blob/27f82e6c7c0a3f8faa372bccfe18787fe2c0db1c/src/avo/timeline/mapping.py) |
-| G05 | 0 | 4 | 1 | F066: [src/avo/capabilities.py](https://github.com/joaobispo2077/avo/blob/27f82e6c7c0a3f8faa372bccfe18787fe2c0db1c/src/avo/capabilities.py) |
-| G06 | 0 | 5 | 4 | F062: [src/avo/breath_control.py](https://github.com/joaobispo2077/avo/blob/27f82e6c7c0a3f8faa372bccfe18787fe2c0db1c/src/avo/breath_control.py) |
-| G06 | 0 | 5 | 4 | F137: [src/avo/settings.py](https://github.com/joaobispo2077/avo/blob/27f82e6c7c0a3f8faa372bccfe18787fe2c0db1c/src/avo/settings.py) |
-| G06 | 0 | 5 | 4 | F151: [src/avo/shorts_rules.py](https://github.com/joaobispo2077/avo/blob/27f82e6c7c0a3f8faa372bccfe18787fe2c0db1c/src/avo/shorts_rules.py) |
-| G06 | 0 | 5 | 4 | F185: [src/avo/timeline/event_clock.py](https://github.com/joaobispo2077/avo/blob/27f82e6c7c0a3f8faa372bccfe18787fe2c0db1c/src/avo/timeline/event_clock.py) |
-| G07 | 0 | 9 | 1 | F057: [src/avo/audio_restoration.py](https://github.com/joaobispo2077/avo/blob/27f82e6c7c0a3f8faa372bccfe18787fe2c0db1c/src/avo/audio_restoration.py) |
-| G08 | 0 | 11 | 1 | F198: [src/avo/timeline/ports.py](https://github.com/joaobispo2077/avo/blob/27f82e6c7c0a3f8faa372bccfe18787fe2c0db1c/src/avo/timeline/ports.py) |
-| G09 | 0 | 33 | 1 | F128: [src/avo/paths.py](https://github.com/joaobispo2077/avo/blob/27f82e6c7c0a3f8faa372bccfe18787fe2c0db1c/src/avo/paths.py) |
-| G10 | 1 | 0 | 12 | F001: [src/avo/__init__.py](https://github.com/joaobispo2077/avo/blob/27f82e6c7c0a3f8faa372bccfe18787fe2c0db1c/src/avo/__init__.py) |
-| G10 | 1 | 0 | 12 | F002: [src/avo/__main__.py](https://github.com/joaobispo2077/avo/blob/27f82e6c7c0a3f8faa372bccfe18787fe2c0db1c/src/avo/__main__.py) |
-| G10 | 1 | 0 | 12 | F022: [src/avo/adapters/media/waveform.py](https://github.com/joaobispo2077/avo/blob/27f82e6c7c0a3f8faa372bccfe18787fe2c0db1c/src/avo/adapters/media/waveform.py) |
-| G10 | 1 | 0 | 12 | F035: [src/avo/adapters/stubs/memory_ai_memory.py](https://github.com/joaobispo2077/avo/blob/27f82e6c7c0a3f8faa372bccfe18787fe2c0db1c/src/avo/adapters/stubs/memory_ai_memory.py) |
-| G10 | 1 | 0 | 12 | F036: [src/avo/adapters/stubs/motion_hyperframes.py](https://github.com/joaobispo2077/avo/blob/27f82e6c7c0a3f8faa372bccfe18787fe2c0db1c/src/avo/adapters/stubs/motion_hyperframes.py) |
-| G10 | 1 | 0 | 12 | F037: [src/avo/adapters/stubs/motion_remotion.py](https://github.com/joaobispo2077/avo/blob/27f82e6c7c0a3f8faa372bccfe18787fe2c0db1c/src/avo/adapters/stubs/motion_remotion.py) |
-| G10 | 1 | 0 | 12 | F038: [src/avo/adapters/stubs/plan_speckit.py](https://github.com/joaobispo2077/avo/blob/27f82e6c7c0a3f8faa372bccfe18787fe2c0db1c/src/avo/adapters/stubs/plan_speckit.py) |
-| G10 | 1 | 0 | 12 | F113: [src/avo/mcp/__main__.py](https://github.com/joaobispo2077/avo/blob/27f82e6c7c0a3f8faa372bccfe18787fe2c0db1c/src/avo/mcp/__main__.py) |
-| G10 | 1 | 0 | 12 | F129: [src/avo/prepare_transcription.py](https://github.com/joaobispo2077/avo/blob/27f82e6c7c0a3f8faa372bccfe18787fe2c0db1c/src/avo/prepare_transcription.py) |
-| G10 | 1 | 0 | 12 | F174: [src/avo/timeline/cutting_evaluation.py](https://github.com/joaobispo2077/avo/blob/27f82e6c7c0a3f8faa372bccfe18787fe2c0db1c/src/avo/timeline/cutting_evaluation.py) |
-| G10 | 1 | 0 | 12 | F216: [src/avo/transcribe_batch.py](https://github.com/joaobispo2077/avo/blob/27f82e6c7c0a3f8faa372bccfe18787fe2c0db1c/src/avo/transcribe_batch.py) |
-| G10 | 1 | 0 | 12 | F220: [src/avo/validate_usability.py](https://github.com/joaobispo2077/avo/blob/27f82e6c7c0a3f8faa372bccfe18787fe2c0db1c/src/avo/validate_usability.py) |
-| G11 | 1 | 1 | 10 | F019: [src/avo/adapters/media/sync_materializer.py](https://github.com/joaobispo2077/avo/blob/27f82e6c7c0a3f8faa372bccfe18787fe2c0db1c/src/avo/adapters/media/sync_materializer.py) |
-| G11 | 1 | 1 | 10 | F021: [src/avo/adapters/media/video_tracks.py](https://github.com/joaobispo2077/avo/blob/27f82e6c7c0a3f8faa372bccfe18787fe2c0db1c/src/avo/adapters/media/video_tracks.py) |
-| G11 | 1 | 1 | 10 | F048: [src/avo/adapters/understand/cutting_semantics.py](https://github.com/joaobispo2077/avo/blob/27f82e6c7c0a3f8faa372bccfe18787fe2c0db1c/src/avo/adapters/understand/cutting_semantics.py) |
-| G11 | 1 | 1 | 10 | F061: [src/avo/breath_analysis.py](https://github.com/joaobispo2077/avo/blob/27f82e6c7c0a3f8faa372bccfe18787fe2c0db1c/src/avo/breath_analysis.py) |
-| G11 | 1 | 1 | 10 | F085: [src/avo/edl_timeline.py](https://github.com/joaobispo2077/avo/blob/27f82e6c7c0a3f8faa372bccfe18787fe2c0db1c/src/avo/edl_timeline.py) |
-| G11 | 1 | 1 | 10 | F086: [src/avo/engine_cli.py](https://github.com/joaobispo2077/avo/blob/27f82e6c7c0a3f8faa372bccfe18787fe2c0db1c/src/avo/engine_cli.py) |
-| G11 | 1 | 1 | 10 | F100: [src/avo/library/progress.py](https://github.com/joaobispo2077/avo/blob/27f82e6c7c0a3f8faa372bccfe18787fe2c0db1c/src/avo/library/progress.py) |
-| G11 | 1 | 1 | 10 | F108: [src/avo/library/usage.py](https://github.com/joaobispo2077/avo/blob/27f82e6c7c0a3f8faa372bccfe18787fe2c0db1c/src/avo/library/usage.py) |
-| G11 | 1 | 1 | 10 | F114: [src/avo/mcp/bridge.py](https://github.com/joaobispo2077/avo/blob/27f82e6c7c0a3f8faa372bccfe18787fe2c0db1c/src/avo/mcp/bridge.py) |
-| G11 | 1 | 1 | 10 | F115: [src/avo/mcp/mrtr.py](https://github.com/joaobispo2077/avo/blob/27f82e6c7c0a3f8faa372bccfe18787fe2c0db1c/src/avo/mcp/mrtr.py) |
-| G12 | 1 | 2 | 11 | F012: [src/avo/adapters/media/library_moves.py](https://github.com/joaobispo2077/avo/blob/27f82e6c7c0a3f8faa372bccfe18787fe2c0db1c/src/avo/adapters/media/library_moves.py) |
-| G12 | 1 | 2 | 11 | F050: [src/avo/adapters/understand/watch_policy.py](https://github.com/joaobispo2077/avo/blob/27f82e6c7c0a3f8faa372bccfe18787fe2c0db1c/src/avo/adapters/understand/watch_policy.py) |
-| G12 | 1 | 2 | 11 | F054: [src/avo/audio_eq.py](https://github.com/joaobispo2077/avo/blob/27f82e6c7c0a3f8faa372bccfe18787fe2c0db1c/src/avo/audio_eq.py) |
-| G12 | 1 | 2 | 11 | F076: [src/avo/delivery_fidelity.py](https://github.com/joaobispo2077/avo/blob/27f82e6c7c0a3f8faa372bccfe18787fe2c0db1c/src/avo/delivery_fidelity.py) |
-| G12 | 1 | 2 | 11 | F098: [src/avo/library/inventory.py](https://github.com/joaobispo2077/avo/blob/27f82e6c7c0a3f8faa372bccfe18787fe2c0db1c/src/avo/library/inventory.py) |
-| G12 | 1 | 2 | 11 | F101: [src/avo/library/proposals.py](https://github.com/joaobispo2077/avo/blob/27f82e6c7c0a3f8faa372bccfe18787fe2c0db1c/src/avo/library/proposals.py) |
-| G12 | 1 | 2 | 11 | F135: [src/avo/scratch.py](https://github.com/joaobispo2077/avo/blob/27f82e6c7c0a3f8faa372bccfe18787fe2c0db1c/src/avo/scratch.py) |
-| G12 | 1 | 2 | 11 | F146: [src/avo/shorts_paths.py](https://github.com/joaobispo2077/avo/blob/27f82e6c7c0a3f8faa372bccfe18787fe2c0db1c/src/avo/shorts_paths.py) |
-| G12 | 1 | 2 | 11 | F152: [src/avo/shorts_visuals.py](https://github.com/joaobispo2077/avo/blob/27f82e6c7c0a3f8faa372bccfe18787fe2c0db1c/src/avo/shorts_visuals.py) |
-| G12 | 1 | 2 | 11 | F201: [src/avo/timeline/proof_validation_stage.py](https://github.com/joaobispo2077/avo/blob/27f82e6c7c0a3f8faa372bccfe18787fe2c0db1c/src/avo/timeline/proof_validation_stage.py) |
-| G12 | 1 | 2 | 11 | F212: [src/avo/timeline/vision_review.py](https://github.com/joaobispo2077/avo/blob/27f82e6c7c0a3f8faa372bccfe18787fe2c0db1c/src/avo/timeline/vision_review.py) |
-| G13 | 1 | 3 | 2 | F111: [src/avo/master_artifacts.py](https://github.com/joaobispo2077/avo/blob/27f82e6c7c0a3f8faa372bccfe18787fe2c0db1c/src/avo/master_artifacts.py) |
-| G13 | 1 | 3 | 2 | F116: [src/avo/mcp/registry.py](https://github.com/joaobispo2077/avo/blob/27f82e6c7c0a3f8faa372bccfe18787fe2c0db1c/src/avo/mcp/registry.py) |
+| G01 | 0 | 0 | 20 | F003: [src/avo/adapters/__init__.py](https://github.com/joaobispo2077/avo/blob/aea974a6d093447cdcb574c612efa494d5a405df/src/avo/adapters/__init__.py) |
+| G01 | 0 | 0 | 20 | F005: [src/avo/adapters/media/__init__.py](https://github.com/joaobispo2077/avo/blob/aea974a6d093447cdcb574c612efa494d5a405df/src/avo/adapters/media/__init__.py) |
+| G01 | 0 | 0 | 20 | F023: [src/avo/adapters/motion/__init__.py](https://github.com/joaobispo2077/avo/blob/aea974a6d093447cdcb574c612efa494d5a405df/src/avo/adapters/motion/__init__.py) |
+| G01 | 0 | 0 | 20 | F026: [src/avo/adapters/qc/__init__.py](https://github.com/joaobispo2077/avo/blob/aea974a6d093447cdcb574c612efa494d5a405df/src/avo/adapters/qc/__init__.py) |
+| G01 | 0 | 0 | 20 | F035: [src/avo/adapters/stubs/__init__.py](https://github.com/joaobispo2077/avo/blob/aea974a6d093447cdcb574c612efa494d5a405df/src/avo/adapters/stubs/__init__.py) |
+| G01 | 0 | 0 | 20 | F041: [src/avo/adapters/transcribe/__init__.py](https://github.com/joaobispo2077/avo/blob/aea974a6d093447cdcb574c612efa494d5a405df/src/avo/adapters/transcribe/__init__.py) |
+| G01 | 0 | 0 | 20 | F045: [src/avo/adapters/understand/__init__.py](https://github.com/joaobispo2077/avo/blob/aea974a6d093447cdcb574c612efa494d5a405df/src/avo/adapters/understand/__init__.py) |
+| G01 | 0 | 0 | 20 | F047: [src/avo/adapters/understand/cutting_alignment_worker.py](https://github.com/joaobispo2077/avo/blob/aea974a6d093447cdcb574c612efa494d5a405df/src/avo/adapters/understand/cutting_alignment_worker.py) |
+| G01 | 0 | 0 | 20 | F081: [src/avo/direction/__init__.py](https://github.com/joaobispo2077/avo/blob/aea974a6d093447cdcb574c612efa494d5a405df/src/avo/direction/__init__.py) |
+| G01 | 0 | 0 | 20 | F091: [src/avo/engine_install.py](https://github.com/joaobispo2077/avo/blob/aea974a6d093447cdcb574c612efa494d5a405df/src/avo/engine_install.py) |
+| G01 | 0 | 0 | 20 | F093: [src/avo/generate_sfx.py](https://github.com/joaobispo2077/avo/blob/aea974a6d093447cdcb574c612efa494d5a405df/src/avo/generate_sfx.py) |
+| G01 | 0 | 0 | 20 | F098: [src/avo/library/__init__.py](https://github.com/joaobispo2077/avo/blob/aea974a6d093447cdcb574c612efa494d5a405df/src/avo/library/__init__.py) |
+| G01 | 0 | 0 | 20 | F131: [src/avo/pack_transcripts.py](https://github.com/joaobispo2077/avo/blob/aea974a6d093447cdcb574c612efa494d5a405df/src/avo/pack_transcripts.py) |
+| G01 | 0 | 0 | 20 | F138: [src/avo/resources/directions/__init__.py](https://github.com/joaobispo2077/avo/blob/aea974a6d093447cdcb574c612efa494d5a405df/src/avo/resources/directions/__init__.py) |
+| G01 | 0 | 0 | 20 | F157: [src/avo/srt_to_centered_ass.py](https://github.com/joaobispo2077/avo/blob/aea974a6d093447cdcb574c612efa494d5a405df/src/avo/srt_to_centered_ass.py) |
+| G01 | 0 | 0 | 20 | F160: [src/avo/templates/__init__.py](https://github.com/joaobispo2077/avo/blob/aea974a6d093447cdcb574c612efa494d5a405df/src/avo/templates/__init__.py) |
+| G01 | 0 | 0 | 20 | F162: [src/avo/templates/library_review/__init__.py](https://github.com/joaobispo2077/avo/blob/aea974a6d093447cdcb574c612efa494d5a405df/src/avo/templates/library_review/__init__.py) |
+| G01 | 0 | 0 | 20 | F163: [src/avo/templates/shorts_hyperframes/__init__.py](https://github.com/joaobispo2077/avo/blob/aea974a6d093447cdcb574c612efa494d5a405df/src/avo/templates/shorts_hyperframes/__init__.py) |
+| G01 | 0 | 0 | 20 | F164: [src/avo/timeline/__init__.py](https://github.com/joaobispo2077/avo/blob/aea974a6d093447cdcb574c612efa494d5a405df/src/avo/timeline/__init__.py) |
+| G01 | 0 | 0 | 20 | F199: [src/avo/timeline/models.py](https://github.com/joaobispo2077/avo/blob/aea974a6d093447cdcb574c612efa494d5a405df/src/avo/timeline/models.py) |
+| G02 | 0 | 1 | 9 | F017: [src/avo/adapters/media/proof_rendered_events.py](https://github.com/joaobispo2077/avo/blob/aea974a6d093447cdcb574c612efa494d5a405df/src/avo/adapters/media/proof_rendered_events.py) |
+| G02 | 0 | 1 | 9 | F027: [src/avo/adapters/qc/code_drawn_review.py](https://github.com/joaobispo2077/avo/blob/aea974a6d093447cdcb574c612efa494d5a405df/src/avo/adapters/qc/code_drawn_review.py) |
+| G02 | 0 | 1 | 9 | F069: [src/avo/consume_mode.py](https://github.com/joaobispo2077/avo/blob/aea974a6d093447cdcb574c612efa494d5a405df/src/avo/consume_mode.py) |
+| G02 | 0 | 1 | 9 | F094: [src/avo/grade.py](https://github.com/joaobispo2077/avo/blob/aea974a6d093447cdcb574c612efa494d5a405df/src/avo/grade.py) |
+| G02 | 0 | 1 | 9 | F095: [src/avo/hardware.py](https://github.com/joaobispo2077/avo/blob/aea974a6d093447cdcb574c612efa494d5a405df/src/avo/hardware.py) |
+| G02 | 0 | 1 | 9 | F121: [src/avo/mcp/request_state.py](https://github.com/joaobispo2077/avo/blob/aea974a6d093447cdcb574c612efa494d5a405df/src/avo/mcp/request_state.py) |
+| G02 | 0 | 1 | 9 | F143: [src/avo/shorts_captions.py](https://github.com/joaobispo2077/avo/blob/aea974a6d093447cdcb574c612efa494d5a405df/src/avo/shorts_captions.py) |
+| G02 | 0 | 1 | 9 | F180: [src/avo/timeline/cutting_previews.py](https://github.com/joaobispo2077/avo/blob/aea974a6d093447cdcb574c612efa494d5a405df/src/avo/timeline/cutting_previews.py) |
+| G02 | 0 | 1 | 9 | F213: [src/avo/timeline/sync.py](https://github.com/joaobispo2077/avo/blob/aea974a6d093447cdcb574c612efa494d5a405df/src/avo/timeline/sync.py) |
+| G03 | 0 | 2 | 6 | F066: [src/avo/build_captions.py](https://github.com/joaobispo2077/avo/blob/aea974a6d093447cdcb574c612efa494d5a405df/src/avo/build_captions.py) |
+| G03 | 0 | 2 | 6 | F116: [src/avo/mcp/__init__.py](https://github.com/joaobispo2077/avo/blob/aea974a6d093447cdcb574c612efa494d5a405df/src/avo/mcp/__init__.py) |
+| G03 | 0 | 2 | 6 | F170: [src/avo/timeline/command_registry.py](https://github.com/joaobispo2077/avo/blob/aea974a6d093447cdcb574c612efa494d5a405df/src/avo/timeline/command_registry.py) |
+| G03 | 0 | 2 | 6 | F181: [src/avo/timeline/cutting_profiles.py](https://github.com/joaobispo2077/avo/blob/aea974a6d093447cdcb574c612efa494d5a405df/src/avo/timeline/cutting_profiles.py) |
+| G03 | 0 | 2 | 6 | F188: [src/avo/timeline/diff.py](https://github.com/joaobispo2077/avo/blob/aea974a6d093447cdcb574c612efa494d5a405df/src/avo/timeline/diff.py) |
+| G03 | 0 | 2 | 6 | F218: [src/avo/timeline_view.py](https://github.com/joaobispo2077/avo/blob/aea974a6d093447cdcb574c612efa494d5a405df/src/avo/timeline_view.py) |
+| G04 | 0 | 3 | 2 | F161: [src/avo/templates/code_drawn/__init__.py](https://github.com/joaobispo2077/avo/blob/aea974a6d093447cdcb574c612efa494d5a405df/src/avo/templates/code_drawn/__init__.py) |
+| G04 | 0 | 3 | 2 | F195: [src/avo/timeline/mapping.py](https://github.com/joaobispo2077/avo/blob/aea974a6d093447cdcb574c612efa494d5a405df/src/avo/timeline/mapping.py) |
+| G05 | 0 | 4 | 1 | F067: [src/avo/capabilities.py](https://github.com/joaobispo2077/avo/blob/aea974a6d093447cdcb574c612efa494d5a405df/src/avo/capabilities.py) |
+| G06 | 0 | 5 | 3 | F063: [src/avo/breath_control.py](https://github.com/joaobispo2077/avo/blob/aea974a6d093447cdcb574c612efa494d5a405df/src/avo/breath_control.py) |
+| G06 | 0 | 5 | 3 | F141: [src/avo/settings.py](https://github.com/joaobispo2077/avo/blob/aea974a6d093447cdcb574c612efa494d5a405df/src/avo/settings.py) |
+| G06 | 0 | 5 | 3 | F155: [src/avo/shorts_rules.py](https://github.com/joaobispo2077/avo/blob/aea974a6d093447cdcb574c612efa494d5a405df/src/avo/shorts_rules.py) |
+| G07 | 0 | 6 | 1 | F189: [src/avo/timeline/event_clock.py](https://github.com/joaobispo2077/avo/blob/aea974a6d093447cdcb574c612efa494d5a405df/src/avo/timeline/event_clock.py) |
+| G08 | 0 | 9 | 1 | F058: [src/avo/audio_restoration.py](https://github.com/joaobispo2077/avo/blob/aea974a6d093447cdcb574c612efa494d5a405df/src/avo/audio_restoration.py) |
+| G09 | 0 | 11 | 1 | F202: [src/avo/timeline/ports.py](https://github.com/joaobispo2077/avo/blob/aea974a6d093447cdcb574c612efa494d5a405df/src/avo/timeline/ports.py) |
+| G10 | 0 | 33 | 1 | F132: [src/avo/paths.py](https://github.com/joaobispo2077/avo/blob/aea974a6d093447cdcb574c612efa494d5a405df/src/avo/paths.py) |
+| G11 | 1 | 0 | 12 | F001: [src/avo/__init__.py](https://github.com/joaobispo2077/avo/blob/aea974a6d093447cdcb574c612efa494d5a405df/src/avo/__init__.py) |
+| G11 | 1 | 0 | 12 | F002: [src/avo/__main__.py](https://github.com/joaobispo2077/avo/blob/aea974a6d093447cdcb574c612efa494d5a405df/src/avo/__main__.py) |
+| G11 | 1 | 0 | 12 | F022: [src/avo/adapters/media/waveform.py](https://github.com/joaobispo2077/avo/blob/aea974a6d093447cdcb574c612efa494d5a405df/src/avo/adapters/media/waveform.py) |
+| G11 | 1 | 0 | 12 | F036: [src/avo/adapters/stubs/memory_ai_memory.py](https://github.com/joaobispo2077/avo/blob/aea974a6d093447cdcb574c612efa494d5a405df/src/avo/adapters/stubs/memory_ai_memory.py) |
+| G11 | 1 | 0 | 12 | F037: [src/avo/adapters/stubs/motion_hyperframes.py](https://github.com/joaobispo2077/avo/blob/aea974a6d093447cdcb574c612efa494d5a405df/src/avo/adapters/stubs/motion_hyperframes.py) |
+| G11 | 1 | 0 | 12 | F038: [src/avo/adapters/stubs/motion_remotion.py](https://github.com/joaobispo2077/avo/blob/aea974a6d093447cdcb574c612efa494d5a405df/src/avo/adapters/stubs/motion_remotion.py) |
+| G11 | 1 | 0 | 12 | F039: [src/avo/adapters/stubs/plan_speckit.py](https://github.com/joaobispo2077/avo/blob/aea974a6d093447cdcb574c612efa494d5a405df/src/avo/adapters/stubs/plan_speckit.py) |
+| G11 | 1 | 0 | 12 | F117: [src/avo/mcp/__main__.py](https://github.com/joaobispo2077/avo/blob/aea974a6d093447cdcb574c612efa494d5a405df/src/avo/mcp/__main__.py) |
+| G11 | 1 | 0 | 12 | F133: [src/avo/prepare_transcription.py](https://github.com/joaobispo2077/avo/blob/aea974a6d093447cdcb574c612efa494d5a405df/src/avo/prepare_transcription.py) |
+| G11 | 1 | 0 | 12 | F178: [src/avo/timeline/cutting_evaluation.py](https://github.com/joaobispo2077/avo/blob/aea974a6d093447cdcb574c612efa494d5a405df/src/avo/timeline/cutting_evaluation.py) |
+| G11 | 1 | 0 | 12 | F220: [src/avo/transcribe_batch.py](https://github.com/joaobispo2077/avo/blob/aea974a6d093447cdcb574c612efa494d5a405df/src/avo/transcribe_batch.py) |
+| G11 | 1 | 0 | 12 | F224: [src/avo/validate_usability.py](https://github.com/joaobispo2077/avo/blob/aea974a6d093447cdcb574c612efa494d5a405df/src/avo/validate_usability.py) |
+| G12 | 1 | 1 | 9 | F019: [src/avo/adapters/media/sync_materializer.py](https://github.com/joaobispo2077/avo/blob/aea974a6d093447cdcb574c612efa494d5a405df/src/avo/adapters/media/sync_materializer.py) |
+| G12 | 1 | 1 | 9 | F021: [src/avo/adapters/media/video_tracks.py](https://github.com/joaobispo2077/avo/blob/aea974a6d093447cdcb574c612efa494d5a405df/src/avo/adapters/media/video_tracks.py) |
+| G12 | 1 | 1 | 9 | F049: [src/avo/adapters/understand/cutting_semantics.py](https://github.com/joaobispo2077/avo/blob/aea974a6d093447cdcb574c612efa494d5a405df/src/avo/adapters/understand/cutting_semantics.py) |
+| G12 | 1 | 1 | 9 | F062: [src/avo/breath_analysis.py](https://github.com/joaobispo2077/avo/blob/aea974a6d093447cdcb574c612efa494d5a405df/src/avo/breath_analysis.py) |
+| G12 | 1 | 1 | 9 | F089: [src/avo/edl_timeline.py](https://github.com/joaobispo2077/avo/blob/aea974a6d093447cdcb574c612efa494d5a405df/src/avo/edl_timeline.py) |
+| G12 | 1 | 1 | 9 | F090: [src/avo/engine_cli.py](https://github.com/joaobispo2077/avo/blob/aea974a6d093447cdcb574c612efa494d5a405df/src/avo/engine_cli.py) |
+| G12 | 1 | 1 | 9 | F104: [src/avo/library/progress.py](https://github.com/joaobispo2077/avo/blob/aea974a6d093447cdcb574c612efa494d5a405df/src/avo/library/progress.py) |
+| G12 | 1 | 1 | 9 | F112: [src/avo/library/usage.py](https://github.com/joaobispo2077/avo/blob/aea974a6d093447cdcb574c612efa494d5a405df/src/avo/library/usage.py) |
+| G12 | 1 | 1 | 9 | F119: [src/avo/mcp/mrtr.py](https://github.com/joaobispo2077/avo/blob/aea974a6d093447cdcb574c612efa494d5a405df/src/avo/mcp/mrtr.py) |
+| G13 | 1 | 2 | 10 | F012: [src/avo/adapters/media/library_moves.py](https://github.com/joaobispo2077/avo/blob/aea974a6d093447cdcb574c612efa494d5a405df/src/avo/adapters/media/library_moves.py) |
+| G13 | 1 | 2 | 10 | F051: [src/avo/adapters/understand/watch_policy.py](https://github.com/joaobispo2077/avo/blob/aea974a6d093447cdcb574c612efa494d5a405df/src/avo/adapters/understand/watch_policy.py) |
+| G13 | 1 | 2 | 10 | F055: [src/avo/audio_eq.py](https://github.com/joaobispo2077/avo/blob/aea974a6d093447cdcb574c612efa494d5a405df/src/avo/audio_eq.py) |
+| G13 | 1 | 2 | 10 | F080: [src/avo/delivery_fidelity.py](https://github.com/joaobispo2077/avo/blob/aea974a6d093447cdcb574c612efa494d5a405df/src/avo/delivery_fidelity.py) |
+| G13 | 1 | 2 | 10 | F102: [src/avo/library/inventory.py](https://github.com/joaobispo2077/avo/blob/aea974a6d093447cdcb574c612efa494d5a405df/src/avo/library/inventory.py) |
+| G13 | 1 | 2 | 10 | F105: [src/avo/library/proposals.py](https://github.com/joaobispo2077/avo/blob/aea974a6d093447cdcb574c612efa494d5a405df/src/avo/library/proposals.py) |
+| G13 | 1 | 2 | 10 | F139: [src/avo/scratch.py](https://github.com/joaobispo2077/avo/blob/aea974a6d093447cdcb574c612efa494d5a405df/src/avo/scratch.py) |
+| G13 | 1 | 2 | 10 | F150: [src/avo/shorts_paths.py](https://github.com/joaobispo2077/avo/blob/aea974a6d093447cdcb574c612efa494d5a405df/src/avo/shorts_paths.py) |
+| G13 | 1 | 2 | 10 | F156: [src/avo/shorts_visuals.py](https://github.com/joaobispo2077/avo/blob/aea974a6d093447cdcb574c612efa494d5a405df/src/avo/shorts_visuals.py) |
+| G13 | 1 | 2 | 10 | F216: [src/avo/timeline/vision_review.py](https://github.com/joaobispo2077/avo/blob/aea974a6d093447cdcb574c612efa494d5a405df/src/avo/timeline/vision_review.py) |
+| G14 | 1 | 3 | 3 | F115: [src/avo/master_artifacts.py](https://github.com/joaobispo2077/avo/blob/aea974a6d093447cdcb574c612efa494d5a405df/src/avo/master_artifacts.py) |
+| G14 | 1 | 3 | 3 | F120: [src/avo/mcp/registry.py](https://github.com/joaobispo2077/avo/blob/aea974a6d093447cdcb574c612efa494d5a405df/src/avo/mcp/registry.py) |
+| G14 | 1 | 3 | 3 | F205: [src/avo/timeline/proof_validation_stage.py](https://github.com/joaobispo2077/avo/blob/aea974a6d093447cdcb574c612efa494d5a405df/src/avo/timeline/proof_validation_stage.py) |
+| G15 | 1 | 4 | 1 | F197: [src/avo/timeline/media_admission.py](https://github.com/joaobispo2077/avo/blob/aea974a6d093447cdcb574c612efa494d5a405df/src/avo/timeline/media_admission.py) |
 
 </details>
 
@@ -202,17 +202,17 @@ Lookup excerpt: 13/79 coordinate groups; 80/225 files. Groups ordered by CE then
 
 **Findings and accepted debt**
 
-- Dependency findings: PASS, 0 critical, 4 high, 23 moderate, 0 low: zod@3.25.76 GHSA-mrhx-c7xc-m3w5, sharp@0.35.4 GHSA-wq5f-xc86-pv6w, source-map-js@1.2.1 GHSA-68fv-2mgg-jv7q, undici@7.30.0 GHSA-4qv8-2p9j-2685 (MEASURED). [npm-audit-summary.json](https://github.com/joaobispo2077/avo/actions/runs/41236348310/artifacts/13055623112) (SHA-256 `6ae82e311195`); [deps-findings.json](https://github.com/joaobispo2077/avo/actions/runs/41236348310/artifacts/13055623112) (SHA-256 `c4769a32b091`); [pip-audit-raw.json](https://github.com/joaobispo2077/avo/actions/runs/41236348310/artifacts/13055623112) (SHA-256 `7b65f75774a1`); [npm-audit-raw.json](https://github.com/joaobispo2077/avo/actions/runs/41236348310/artifacts/13055623112) (SHA-256 `e52fd773ae68`)
-- Dead-code findings: 146 reported; 0 unwaived (MEASURED). [deadcode.json](https://github.com/joaobispo2077/avo/actions/runs/41236348310/artifacts/13055623112) (SHA-256 `262769c2f969`)
-- Import boundaries: 7 kept; 0 broken (MEASURED). [gates/architecture/gate.json](https://github.com/joaobispo2077/avo/actions/runs/41236348310/artifacts/13055623112) (SHA-256 `7ecc345c31b5`); [gates/architecture/gate.log](https://github.com/joaobispo2077/avo/actions/runs/41236348310/artifacts/13055623112) (SHA-256 `b7cb2e1fea1e`)
-- Dependency hoist plan: 24 proposed package changes (MEASURED). [dependency-tree.json](https://github.com/joaobispo2077/avo/actions/runs/41236348310/artifacts/13055623112) (SHA-256 `51155fcc9c90`)
+- Dependency findings: PASS, 0 critical, 4 high, 23 moderate, 0 low: zod@3.25.76 GHSA-mrhx-c7xc-m3w5, sharp@0.35.4 GHSA-wq5f-xc86-pv6w, source-map-js@1.2.1 GHSA-68fv-2mgg-jv7q, undici@7.30.0 GHSA-4qv8-2p9j-2685 (MEASURED). [npm-audit-summary.json](https://github.com/joaobispo2077/avo/actions/runs/41861815173/artifacts/13340584610) (SHA-256 `6ae82e311195`); [deps-findings.json](https://github.com/joaobispo2077/avo/actions/runs/41861815173/artifacts/13340584610) (SHA-256 `c4769a32b091`); [pip-audit-raw.json](https://github.com/joaobispo2077/avo/actions/runs/41861815173/artifacts/13340584610) (SHA-256 `8729315d69d6`); [npm-audit-raw.json](https://github.com/joaobispo2077/avo/actions/runs/41861815173/artifacts/13340584610) (SHA-256 `46344fea34c2`)
+- Dead-code findings: 146 reported; 0 unwaived (MEASURED). [deadcode.json](https://github.com/joaobispo2077/avo/actions/runs/41861815173/artifacts/13340584610) (SHA-256 `71764ef64205`)
+- Import boundaries: 7 kept; 0 broken (MEASURED). [gates/architecture/gate.json](https://github.com/joaobispo2077/avo/actions/runs/41861815173/artifacts/13340584610) (SHA-256 `6521ec50277d`); [gates/architecture/gate.log](https://github.com/joaobispo2077/avo/actions/runs/41861815173/artifacts/13340584610) (SHA-256 `dcb5a7a85281`)
+- Dependency hoist plan: 26 proposed package changes (MEASURED). [dependency-tree.json](https://github.com/joaobispo2077/avo/actions/runs/41861815173/artifacts/13340584610) (SHA-256 `9627fb383941`)
 - complexity: 171 configured entries; 171 matched findings; 171 unique affected path/name identities; stale: 0; 0 unwaived findings. Groups are non-additive; these counts are not defect removal.
 - deadcode: 146 configured entries; 146 matched findings; 146 unique affected path/name identities; stale: 0; 0 unwaived findings. Groups are non-additive; these counts are not defect removal.
 
 **Executed test evidence**
 
-- repo-integration-tests: 226 passed / 0 failed / 0 errors / 20 skipped; 246 testcase events. MEASURED. Repeated events are not additional unique tests.
-- repo-unit-tests: 4401 passed / 0 failed / 0 errors / 8 skipped; 4409 testcase events. MEASURED. Repeated events are not additional unique tests.
+- repo-integration-tests: 235 passed / 0 failed / 0 errors / 20 skipped; 255 testcase events. MEASURED. Repeated events are not additional unique tests.
+- repo-unit-tests: 4773 passed / 0 failed / 0 errors / 13 skipped; 4786 testcase events. MEASURED. Repeated events are not additional unique tests.
 
 **Gate decisions**
 
@@ -224,16 +224,16 @@ Status badges are categorical. Missing execution proof cannot certify a recorded
 
 | Gate | Decision | Policy | Execution evidence |
 |---|---|---|---|
-| Lint | **PASS** | Ruff (&#96;src/avo&#96;, &#96;tests&#96;, &#96;helpers&#96;) + ESLint | Captured exit 0. Numeric finding count not exported.. [gates/lint/gate.json](https://github.com/joaobispo2077/avo/actions/runs/41236348310/artifacts/13055623112) (SHA-256 `9d97fa156593`); [gates/lint/gate.log](https://github.com/joaobispo2077/avo/actions/runs/41236348310/artifacts/13055623112) (SHA-256 `1237e674bddf`) |
-| Format | **PASS** | Ruff format --check + Prettier --check | Captured exit 0. Numeric finding count not exported.. [gates/format/gate.json](https://github.com/joaobispo2077/avo/actions/runs/41236348310/artifacts/13055623112) (SHA-256 `659fb088a11a`); [gates/format/gate.log](https://github.com/joaobispo2077/avo/actions/runs/41236348310/artifacts/13055623112) (SHA-256 `4404c67ecb78`) |
-| Coverage | **PASS** | pytest-cov fail-under on &#96;src/avo&#96;; Minimum 68%; comparison rounded to 0 decimal places | 75.81% · 28,390/37,447 executable lines. [gates/coverage/gate.json](https://github.com/joaobispo2077/avo/actions/runs/41236348310/artifacts/13055623112) (SHA-256 `b79825538069`); [gates/coverage/gate.log](https://github.com/joaobispo2077/avo/actions/runs/41236348310/artifacts/13055623112) (SHA-256 `f0db822b2737`) |
-| Complexity | **PASS** | xenon max-absolute **B** · Ruff C901 ≤ 31 | 0 unwaived · 171 observed accepted findings. [gates/complexity/gate.json](https://github.com/joaobispo2077/avo/actions/runs/41236348310/artifacts/13055623112) (SHA-256 `b8a028b550a0`); [gates/complexity/gate.log](https://github.com/joaobispo2077/avo/actions/runs/41236348310/artifacts/13055623112) (SHA-256 `74723c4e6af0`) |
-| Dependency audit | **PASS · yellow** | pip-audit on dev + MCP; unwaived Python advisories and npm critical block (&#96;deps-audit-allowlist.json&#96;); high or moderate is a yellow PASS, low-only or clean is a green PASS; the metric names each high package | PASS, 0 critical, 4 high, 23 moderate, 0 low: zod@3.25.76 GHSA-mrhx-c7xc-m3w5, sharp@0.35.4 GHSA-wq5f-xc86-pv6w, source-map-js@1.2.1 GHSA-68fv-2mgg-jv7q, undici@7.30.0 GHSA-4qv8-2p9j-2685. [gates/deps/gate.json](https://github.com/joaobispo2077/avo/actions/runs/41236348310/artifacts/13055623112) (SHA-256 `f9a2833592ff`); [gates/deps/gate.log](https://github.com/joaobispo2077/avo/actions/runs/41236348310/artifacts/13055623112) (SHA-256 `dcdcc910d762`) |
-| Dead code | **PASS** | vulture confidence ≥ 60 (&#96;deadcode-allowlist.json&#96;) | 146 reported; 0 unwaived. [gates/deadcode/gate.json](https://github.com/joaobispo2077/avo/actions/runs/41236348310/artifacts/13055623112) (SHA-256 `9389f1a9ea4d`); [gates/deadcode/gate.log](https://github.com/joaobispo2077/avo/actions/runs/41236348310/artifacts/13055623112) (SHA-256 `f7b3f7a5dc86`) |
-| Duplication | **PASS** | jscpd on &#96;src/avo&#96;; Maximum 2% | 0.59% · 487/82,239 duplicated lines; 47 clone pairs. [gates/duplication/gate.json](https://github.com/joaobispo2077/avo/actions/runs/41236348310/artifacts/13055623112) (SHA-256 `892ac1d9751b`); [gates/duplication/gate.log](https://github.com/joaobispo2077/avo/actions/runs/41236348310/artifacts/13055623112) (SHA-256 `b24188c22d62`) |
-| Architecture | **PASS** | import-linter (&#96;.importlinter&#96;) | 7 kept; 0 broken. [gates/architecture/gate.json](https://github.com/joaobispo2077/avo/actions/runs/41236348310/artifacts/13055623112) (SHA-256 `7ecc345c31b5`); [gates/architecture/gate.log](https://github.com/joaobispo2077/avo/actions/runs/41236348310/artifacts/13055623112) (SHA-256 `b7cb2e1fea1e`) |
-| Dependency tree | **PASS** | npm find-dupes · command fail blocks · hoist plan report-only | 24 proposed package changes · 1 additions / 6 removals / 17 changes; not applied. [gates/tree/gate.json](https://github.com/joaobispo2077/avo/actions/runs/41236348310/artifacts/13055623112) (SHA-256 `28f50529833b`); [gates/tree/gate.log](https://github.com/joaobispo2077/avo/actions/runs/41236348310/artifacts/13055623112) (SHA-256 `2e5713d38ca1`) |
-| Mutation | **PASS** | Complete accounting; Minimum 40%; light profile; selected Python modules | [mutation-metrics.json](https://github.com/joaobispo2077/avo/actions/runs/41236348310/artifacts/13056401661) (SHA-256 `4bfb23149290`) |
+| Lint | **PASS** | Ruff (&#96;src/avo&#96;, &#96;tests&#96;, &#96;helpers&#96;) + ESLint | Captured exit 0. Numeric finding count not exported.. [gates/lint/gate.json](https://github.com/joaobispo2077/avo/actions/runs/41861815173/artifacts/13340584610) (SHA-256 `069e764d1253`); [gates/lint/gate.log](https://github.com/joaobispo2077/avo/actions/runs/41861815173/artifacts/13340584610) (SHA-256 `1237e674bddf`) |
+| Format | **PASS** | Ruff format --check + Prettier --check | Captured exit 0. Numeric finding count not exported.. [gates/format/gate.json](https://github.com/joaobispo2077/avo/actions/runs/41861815173/artifacts/13340584610) (SHA-256 `dc573cba0c8d`); [gates/format/gate.log](https://github.com/joaobispo2077/avo/actions/runs/41861815173/artifacts/13340584610) (SHA-256 `34233c2159db`) |
+| Coverage | **PASS** | pytest-cov fail-under on &#96;src/avo&#96;; Minimum 68%; comparison rounded to 0 decimal places | 77.26% · 31,584/40,882 executable lines. [gates/coverage/gate.json](https://github.com/joaobispo2077/avo/actions/runs/41861815173/artifacts/13340584610) (SHA-256 `6b681cb8de52`); [gates/coverage/gate.log](https://github.com/joaobispo2077/avo/actions/runs/41861815173/artifacts/13340584610) (SHA-256 `f5c3f551ed21`) |
+| Complexity | **PASS** | xenon max-absolute **B** · Ruff C901 ≤ 31 | 0 unwaived · 171 observed accepted findings. [gates/complexity/gate.json](https://github.com/joaobispo2077/avo/actions/runs/41861815173/artifacts/13340584610) (SHA-256 `1001c85e3b0f`); [gates/complexity/gate.log](https://github.com/joaobispo2077/avo/actions/runs/41861815173/artifacts/13340584610) (SHA-256 `74723c4e6af0`) |
+| Dependency audit | **PASS · yellow** | pip-audit on dev + MCP; unwaived Python advisories and npm critical block (&#96;deps-audit-allowlist.json&#96;); high or moderate is a yellow PASS, low-only or clean is a green PASS; the metric names each high package | PASS, 0 critical, 4 high, 23 moderate, 0 low: zod@3.25.76 GHSA-mrhx-c7xc-m3w5, sharp@0.35.4 GHSA-wq5f-xc86-pv6w, source-map-js@1.2.1 GHSA-68fv-2mgg-jv7q, undici@7.30.0 GHSA-4qv8-2p9j-2685. [gates/deps/gate.json](https://github.com/joaobispo2077/avo/actions/runs/41861815173/artifacts/13340584610) (SHA-256 `16f3073ccb22`); [gates/deps/gate.log](https://github.com/joaobispo2077/avo/actions/runs/41861815173/artifacts/13340584610) (SHA-256 `3c97aa626ec9`) |
+| Dead code | **PASS** | vulture confidence ≥ 60 (&#96;deadcode-allowlist.json&#96;) | 146 reported; 0 unwaived. [gates/deadcode/gate.json](https://github.com/joaobispo2077/avo/actions/runs/41861815173/artifacts/13340584610) (SHA-256 `15935981052d`); [gates/deadcode/gate.log](https://github.com/joaobispo2077/avo/actions/runs/41861815173/artifacts/13340584610) (SHA-256 `2edb2925016a`) |
+| Duplication | **PASS** | jscpd on &#96;src/avo&#96;; Maximum 2% | 0.54% · 478/89,057 duplicated lines; 46 clone pairs. [gates/duplication/gate.json](https://github.com/joaobispo2077/avo/actions/runs/41861815173/artifacts/13340584610) (SHA-256 `5145e3f7e21a`); [gates/duplication/gate.log](https://github.com/joaobispo2077/avo/actions/runs/41861815173/artifacts/13340584610) (SHA-256 `446193b16b65`) |
+| Architecture | **PASS** | import-linter (&#96;.importlinter&#96;) | 7 kept; 0 broken. [gates/architecture/gate.json](https://github.com/joaobispo2077/avo/actions/runs/41861815173/artifacts/13340584610) (SHA-256 `6521ec50277d`); [gates/architecture/gate.log](https://github.com/joaobispo2077/avo/actions/runs/41861815173/artifacts/13340584610) (SHA-256 `dcb5a7a85281`) |
+| Dependency tree | **PASS** | npm find-dupes · command fail blocks · hoist plan report-only | 26 proposed package changes · 1 additions / 6 removals / 19 changes; not applied. [gates/tree/gate.json](https://github.com/joaobispo2077/avo/actions/runs/41861815173/artifacts/13340584610) (SHA-256 `091927167a54`); [gates/tree/gate.log](https://github.com/joaobispo2077/avo/actions/runs/41861815173/artifacts/13340584610) (SHA-256 `848c1b91c7cb`) |
+| Mutation | **PASS** | Complete accounting; Minimum 40%; light profile; selected Python modules | [mutation-metrics.json](https://github.com/joaobispo2077/avo/actions/runs/41861815173/artifacts/13341622540) (SHA-256 `bc95a9b1cfea`) |
 
 <details>
 <summary>Execution results</summary>
@@ -243,8 +243,8 @@ Status badges are categorical. Missing execution proof cannot certify a recorded
 | ci-readiness | **SUCCESS** | Job result; testcase counts not captured. Not captured |
 | mutation-light | **SUCCESS** | Job result; testcase counts not captured. Not captured |
 | prerequisites-gate | **SUCCESS** | Job result; testcase counts not captured. Not captured |
-| repo-integration-tests | **SUCCESS** | 226 passed / 0 failed / 0 errors / 20 skipped; 246 JUnit testcases. MEASURED: Counts from actual native JUnit testcase events. [integration-tests.xml](https://github.com/joaobispo2077/avo/actions/runs/41236348310/artifacts/13056082648) (SHA-256 `5d10e17845ed`); [gates/integration-tests/gate.log](https://github.com/joaobispo2077/avo/actions/runs/41236348310/artifacts/13056082648) (SHA-256 `cf7cdfe2355a`) |
-| repo-unit-tests | **SUCCESS** | 4401 passed / 0 failed / 0 errors / 8 skipped; 4409 JUnit testcases. MEASURED: Counts from actual native JUnit testcase events. [unit-tests.xml](https://github.com/joaobispo2077/avo/actions/runs/41236348310/artifacts/13055487422) (SHA-256 `9d6291ffab26`); [gates/unit-tests/gate.log](https://github.com/joaobispo2077/avo/actions/runs/41236348310/artifacts/13055487422) (SHA-256 `9a3459f50dac`) |
+| repo-integration-tests | **SUCCESS** | 235 passed / 0 failed / 0 errors / 20 skipped; 255 JUnit testcases. MEASURED: Counts from actual native JUnit testcase events. [integration-tests.xml](https://github.com/joaobispo2077/avo/actions/runs/41861815173/artifacts/13341726017) (SHA-256 `0a009fc35c3f`); [gates/integration-tests/gate.log](https://github.com/joaobispo2077/avo/actions/runs/41861815173/artifacts/13341726017) (SHA-256 `848766283911`) |
+| repo-unit-tests | **SUCCESS** | 4773 passed / 0 failed / 0 errors / 13 skipped; 4786 JUnit testcases. MEASURED: Counts from actual native JUnit testcase events. [unit-tests.xml](https://github.com/joaobispo2077/avo/actions/runs/41861815173/artifacts/13340853112) (SHA-256 `9ed3f4ea7107`); [gates/unit-tests/gate.log](https://github.com/joaobispo2077/avo/actions/runs/41861815173/artifacts/13340853112) (SHA-256 `546b4f079ae3`) |
 | software-quality | **SUCCESS** | Job result; testcase counts not captured. Not captured |
 | usability-gate | **SUCCESS** | Job result; testcase counts not captured. Not captured |
 
@@ -274,11 +274,16 @@ Recorded skip/failure reasons: 20/20 non-passing testcase events shown; complete
 | pytest:tests.integration.test_watch_adapter_runtime:test_bundled_watch_skill_executable_contract | skipped | watch-skill is not installed under tools/watch-skill /home/runner/work/avo/avo/tests/integration/test_watch_adapter_runtime.py:12: watch-skill is not installed under tools/watch-skill |
 
 
-Recorded skip/failure reasons: 8/8 non-passing testcase events shown; complete events and full reasons remain in the raw JUnit evidence.
+Recorded skip/failure reasons: 13/13 non-passing testcase events shown; complete events and full reasons remain in the raw JUnit evidence.
 
 | Suite / case | Outcome | Recorded reason |
 |---|---|---|
 | pytest:tests.acceptance.test_library_comprehension:test_five_creators_can_read_the_folder_proposal | skipped | Requires actual five-person comprehension study results /home/runner/work/avo/avo/tests/acceptance/test_library_comprehension.py:10: Requires actual five-person comprehension study results |
+| pytest:tests.test_cost_mcp:test_sdk_cost_arguments_require_structured_payload_and_drop_cli_overrides\[context-descriptor\] | skipped | could not import 'mcp.server.mcpserver.tools.base': No module named 'mcp' /home/runner/work/avo/avo/tests/test_cost_mcp.py:83: could not import 'mcp.server.mcpserver.tools.base': No module named 'mcp' |
+| pytest:tests.test_cost_mcp:test_sdk_cost_arguments_require_structured_payload_and_drop_cli_overrides\[observe-packet\] | skipped | could not import 'mcp.server.mcpserver.tools.base': No module named 'mcp' /home/runner/work/avo/avo/tests/test_cost_mcp.py:83: could not import 'mcp.server.mcpserver.tools.base': No module named 'mcp' |
+| pytest:tests.test_cost_mcp:test_sdk_cost_arguments_require_structured_payload_and_drop_cli_overrides\[transition-request\] | skipped | could not import 'mcp.server.mcpserver.tools.base': No module named 'mcp' /home/runner/work/avo/avo/tests/test_cost_mcp.py:83: could not import 'mcp.server.mcpserver.tools.base': No module named 'mcp' |
+| pytest:tests.test_cost_mcp:test_sdk_cost_arguments_require_structured_payload_and_drop_cli_overrides\[estimate-request\] | skipped | could not import 'mcp.server.mcpserver.tools.base': No module named 'mcp' /home/runner/work/avo/avo/tests/test_cost_mcp.py:83: could not import 'mcp.server.mcpserver.tools.base': No module named 'mcp' |
+| pytest:tests.test_cost_mcp:test_sdk_cost_arguments_require_structured_payload_and_drop_cli_overrides\[reconcile-reconciliation\] | skipped | could not import 'mcp.server.mcpserver.tools.base': No module named 'mcp' /home/runner/work/avo/avo/tests/test_cost_mcp.py:83: could not import 'mcp.server.mcpserver.tools.base': No module named 'mcp' |
 | pytest:tests.test_master_artifacts:test_legacy_windows_stem_matching_remains_case_insensitive | skipped | legacy Windows glob is case-insensitive /home/runner/work/avo/avo/tests/test_master_artifacts.py:80: legacy Windows glob is case-insensitive |
 | pytest:tests.test_mcp_bridge:test_register_cli_tools_on_server | skipped | could not import 'mcp': No module named 'mcp' /home/runner/work/avo/avo/tests/test_mcp_bridge.py:376: could not import 'mcp': No module named 'mcp' |
 | pytest:tests.test_mcp_meta:test_registered_meta_tools_on_server | skipped | could not import 'mcp': No module named 'mcp' /home/runner/work/avo/avo/tests/test_mcp_meta.py:102: could not import 'mcp': No module named 'mcp' |
@@ -290,7 +295,7 @@ Recorded skip/failure reasons: 8/8 non-passing testcase events shown; complete e
 
 Successful execution is not a measured quality score. Uncaptured counts remain unavailable.
 
-[Run logs and downloadable artifacts](https://github.com/joaobispo2077/avo/actions/runs/41236348310)
+[Run logs and downloadable artifacts](https://github.com/joaobispo2077/avo/actions/runs/41861815173)
 
 </details>
 

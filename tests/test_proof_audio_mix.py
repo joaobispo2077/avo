@@ -326,3 +326,50 @@ def test_short_ephemeral_dialogue_cannot_be_padded_as_valid(tmp_path):
             lead_node_ids={"voice"},
         )
     assert not (tmp_path / "mix.wav").exists()
+
+
+def test_finite_ducked_beds_preserve_tails_and_do_not_repeat(tmp_path):
+    dialogue = np.zeros((96000, 2))
+    dialogue[:4800] = 10000
+    voice = pcm(tmp_path / "quiet-lead.wav", dialogue)
+    first = pcm(tmp_path / "first-bed.wav", np.full((32000, 2), 2000))
+    second = pcm(tmp_path / "second-bed.wav", np.full((32000, 2), 4000))
+    nodes = [
+        node("voice", "source", 0, 96000),
+        node("first", "music", 0, 32000),
+        node("second", "music", 48000, 80000),
+    ]
+    ducks = [
+        {
+            "operationId": "duck-" + item["nodeId"],
+            "kind": "duck",
+            "range": item["outputRange"],
+            "parameters": {
+                "nodeId": item["nodeId"],
+                "sidechainNodeIds": ["voice"],
+                "amountDb": 2,
+            },
+        }
+        for item in nodes[1:]
+    ]
+    source_graph = graph(
+        nodes, {"voice": voice, "first": first, "second": second}, ducks
+    )
+    expected = np.zeros((96000, 2))
+    expected[:32000] = 2000 / 32768
+    expected[48000:80000] = 4000 / 32768
+    reference = None
+    for attempt in range(8):
+        destination = tmp_path / f"mix-{attempt}.wav"
+        render_proof_audio_mix(
+            source_graph,
+            destination,
+            source_resolver=resolve,
+            lead_pcm=voice,
+            lead_node_ids={"voice"},
+        )
+        observed = read(destination)
+        np.testing.assert_allclose(observed[30000:], expected[30000:], atol=1e-6)
+        if reference is not None:
+            np.testing.assert_array_equal(observed, reference)
+        reference = observed

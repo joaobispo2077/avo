@@ -1,0 +1,2557 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://avo.local/schemas/avo.cost-evidence.schema.json",
+  "$defs": {
+    "hash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "identifier": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 500
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "count": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "observationKey": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "observationId": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "sourceDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      },
+      "required": [
+        "observationId",
+        "sourceDigest"
+      ]
+    },
+    "tokenVector": {
+      "$ref": "https://avo.local/schemas/avo.cost-observation.schema.json#/properties/tokens"
+    },
+    "amount": {
+      "$ref": "https://avo.local/schemas/avo.cost-observation.schema.json#/properties/amounts/items"
+    },
+    "summaryAmount": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["basis", "unit", "amount"],
+      "properties": {
+        "basis": {"$ref": "https://avo.local/schemas/avo.cost-observation.schema.json#/properties/amounts/items/properties/basis"},
+        "unit": {"$ref": "#/$defs/identifier"},
+        "amount": {"type": "string", "pattern": "^[0-9]+(?:\\.[0-9]+)?$", "maxLength": 256}
+      }
+    },
+    "boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": [
+            "declared",
+            "event",
+            "turn",
+            "uncertain",
+            "unknown"
+          ]
+        },
+        "reference": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "at": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "kind"
+      ]
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "runAliases": {
+          "type": "array",
+          "maxItems": 1000,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          }
+        },
+        "beginning": {
+          "$ref": "#/$defs/boundary"
+        },
+        "ending": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/boundary"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "sourceInstanceId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "sourceSessionId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "counterEpoch": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1,
+          "maxLength": 500
+        }
+      },
+      "required": [
+        "runAliases",
+        "beginning"
+      ]
+    },
+    "interval": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "sourceSessionId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "counterEpoch": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "start": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/boundary"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "end": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/boundary"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "sourceSessionId",
+        "counterEpoch",
+        "start",
+        "end"
+      ]
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "producer": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "reference": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "digest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "profileId": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      },
+      "required": [
+        "producer",
+        "reference"
+      ]
+    },
+    "agent": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "family": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "surface": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "version": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "role": {
+          "enum": [
+            "driver",
+            "subagent"
+          ]
+        },
+        "sourceSessionId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "parentParticipationId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "selectedModel": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1,
+          "maxLength": 500
+        }
+      },
+      "required": [
+        "family",
+        "surface",
+        "version",
+        "role"
+      ]
+    },
+    "sourceAttachment": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "bindingId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "profileId": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "grantId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        }
+      },
+      "required": [
+        "bindingId",
+        "profileId"
+      ]
+    },
+    "aggregateScope": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": [
+            "request",
+            "thread",
+            "run",
+            "tree",
+            "unknown"
+          ]
+        },
+        "members": {
+          "type": "array",
+          "maxItems": 100000,
+          "items": {
+            "$ref": "#/$defs/observationKey"
+          }
+        },
+        "proofRefs": {
+          "type": "array",
+          "maxItems": 1000,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          }
+        }
+      },
+      "required": [
+        "kind",
+        "members",
+        "proofRefs"
+      ]
+    },
+    "attribution": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "enum": [
+            "assigned",
+            "unallocated",
+            "conflict"
+          ]
+        },
+        "basis": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "scope": {
+          "$ref": "#/$defs/scope"
+        }
+      },
+      "required": [
+        "status",
+        "basis",
+        "scope"
+      ]
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "evidenceId": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "key": {
+          "$ref": "#/$defs/observationKey"
+        },
+        "participationId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "participationFactId": {
+          "$ref": "#/$defs/hash"
+        },
+        "profileId": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "nature": {
+          "enum": [
+            "measured",
+            "manual"
+          ]
+        },
+        "acquisition": {
+          "enum": [
+            "automatic",
+            "imported",
+            "manual"
+          ]
+        },
+        "sourceEventId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "interval": {
+          "$ref": "#/$defs/interval"
+        },
+        "attribution": {
+          "$ref": "#/$defs/attribution"
+        },
+        "modelBasis": {
+          "enum": [
+            "served",
+            "selected-only",
+            "unknown"
+          ]
+        },
+        "aggregateScope": {
+          "$ref": "#/$defs/aggregateScope"
+        }
+      },
+      "required": [
+        "evidenceId",
+        "key",
+        "participationId",
+        "profileId",
+        "nature",
+        "acquisition",
+        "sourceEventId",
+        "interval",
+        "attribution",
+        "modelBasis",
+        "aggregateScope"
+      ]
+    },
+    "receipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "receiptId": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "profileId": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "bindingId": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "sourceInstanceId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "sourceSessionId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "predecessorReceiptId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "counterEpoch": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "watermark": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 500
+            },
+            "value": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1024
+            }
+          },
+          "required": [
+            "kind",
+            "value"
+          ]
+        },
+        "observationKeys": {
+          "type": "array",
+          "maxItems": 100000,
+          "items": {
+            "$ref": "#/$defs/observationKey"
+          }
+        },
+        "baseline": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "status": {
+              "enum": [
+                "accepted",
+                "missing",
+                "not-applicable"
+              ]
+            },
+            "reference": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "minLength": 1,
+              "maxLength": 500
+            }
+          },
+          "required": [
+            "status",
+            "reference"
+          ]
+        },
+        "lifecycle": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "state": {
+              "enum": [
+                "open",
+                "settling",
+                "closed",
+                "unknown"
+              ]
+            },
+            "reference": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "minLength": 1,
+              "maxLength": 500
+            }
+          },
+          "required": [
+            "state",
+            "reference"
+          ]
+        },
+        "flush": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "status": {
+              "enum": [
+                "accepted",
+                "missing",
+                "unknown"
+              ]
+            },
+            "reference": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "minLength": 1,
+              "maxLength": 500
+            }
+          },
+          "required": [
+            "status",
+            "reference"
+          ]
+        },
+        "interval": {
+          "$ref": "#/$defs/interval"
+        },
+        "gaps": {
+          "type": "array",
+          "maxItems": 1000,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          }
+        },
+        "collectedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "receiptId",
+        "profileId",
+        "bindingId",
+        "sourceInstanceId",
+        "sourceSessionId",
+        "predecessorReceiptId",
+        "counterEpoch",
+        "watermark",
+        "observationKeys",
+        "baseline",
+        "lifecycle",
+        "flush",
+        "interval",
+        "gaps",
+        "collectedAt"
+      ]
+    },
+    "profile": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schemaVersion": {
+          "const": "2.0.0"
+        },
+        "profileId": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "agent": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "surface": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "versions": {
+          "type": "array",
+          "maxItems": 1000,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "uniqueItems": true
+        },
+        "sourceFormat": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "parserVersion": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "parserDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "fixtureDigests": {
+          "type": "array",
+          "maxItems": 100000,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "uniqueItems": true
+        },
+        "references": {
+          "type": "array",
+          "maxItems": 1000,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "url": {
+                "type": "string",
+                "format": "uri",
+                "maxLength": 2000
+              },
+              "date": {
+                "type": "string",
+                "format": "date"
+              }
+            },
+            "required": [
+              "url",
+              "date"
+            ]
+          }
+        },
+        "capability": {
+          "enum": [
+            "qualified",
+            "candidate",
+            "manual-only",
+            "unavailable"
+          ]
+        },
+        "semantics": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "counter": {
+              "enum": [
+                "request",
+                "cumulative",
+                "snapshot",
+                "unknown"
+              ]
+            },
+            "categoryOverlap": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "input": {
+                  "enum": [
+                    "input",
+                    "output",
+                    "disjoint",
+                    "unknown"
+                  ]
+                },
+                "output": {
+                  "enum": [
+                    "input",
+                    "output",
+                    "disjoint",
+                    "unknown"
+                  ]
+                },
+                "cacheRead": {
+                  "enum": [
+                    "input",
+                    "output",
+                    "disjoint",
+                    "unknown"
+                  ]
+                },
+                "cacheWrite": {
+                  "enum": [
+                    "input",
+                    "output",
+                    "disjoint",
+                    "unknown"
+                  ]
+                },
+                "reasoning": {
+                  "enum": [
+                    "input",
+                    "output",
+                    "disjoint",
+                    "unknown"
+                  ]
+                },
+                "tool": {
+                  "enum": [
+                    "input",
+                    "output",
+                    "disjoint",
+                    "unknown"
+                  ]
+                },
+                "total": {
+                  "enum": [
+                    "input",
+                    "output",
+                    "disjoint",
+                    "unknown"
+                  ]
+                }
+              }
+            },
+            "aggregateScope": {
+              "enum": [
+                "request",
+                "thread",
+                "run",
+                "tree",
+                "unknown"
+              ]
+            },
+            "revision": {
+              "enum": [
+                "immutable",
+                "explicit-final",
+                "unknown"
+              ]
+            },
+            "resume": {
+              "enum": [
+                "baseline-required",
+                "new-activities",
+                "unknown"
+              ]
+            },
+            "fork": {
+              "enum": [
+                "baseline-required",
+                "copied-history",
+                "new-activities",
+                "unknown"
+              ]
+            },
+            "reset": {
+              "enum": [
+                "epoch-required",
+                "not-applicable"
+              ]
+            },
+            "finality": {
+              "enum": [
+                "source-flush",
+                "best-effort",
+                "unknown"
+              ]
+            }
+          },
+          "required": [
+            "counter",
+            "categoryOverlap",
+            "aggregateScope",
+            "revision",
+            "resume",
+            "fork",
+            "reset",
+            "finality"
+          ]
+        },
+        "identityFields": {
+          "type": "array",
+          "maxItems": 1000,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          }
+        },
+        "allowedFields": {
+          "type": "array",
+          "maxItems": 1000,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          }
+        },
+        "limitations": {
+          "type": "array",
+          "maxItems": 1000,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          }
+        },
+        "qualification": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "enum": [
+                "synthetic",
+                "native"
+              ]
+            },
+            "evidenceRefs": {
+              "type": "array",
+              "maxItems": 100000,
+              "items": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              },
+              "uniqueItems": true
+            }
+          },
+          "required": [
+            "kind",
+            "evidenceRefs"
+          ]
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "profileId",
+        "agent",
+        "surface",
+        "versions",
+        "sourceFormat",
+        "parserVersion",
+        "parserDigest",
+        "fixtureDigests",
+        "references",
+        "capability",
+        "semantics",
+        "identityFields",
+        "allowedFields",
+        "limitations",
+        "qualification"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "capability": {
+                "const": "qualified"
+              }
+            },
+            "required": [
+              "capability"
+            ]
+          },
+          "then": {
+            "properties": {
+              "versions": {
+                "minItems": 1
+              },
+              "fixtureDigests": {
+                "minItems": 1
+              },
+              "qualification": {
+                "properties": {
+                  "evidenceRefs": {
+                    "minItems": 1
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "contextRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schemaVersion": {
+          "const": "2.0.0"
+        },
+        "operationId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "mode": {
+          "enum": [
+            "agent",
+            "human-ci",
+            "identity-unknown"
+          ]
+        },
+        "agent": {
+          "$ref": "#/$defs/agent"
+        },
+        "scope": {
+          "$ref": "#/$defs/scope"
+        },
+        "provenance": {
+          "$ref": "#/$defs/provenance"
+        },
+        "sourceAttachment": {
+          "$ref": "#/$defs/sourceAttachment"
+        },
+        "participationId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "predecessors": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 100000,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          }
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "operationId",
+        "mode",
+        "agent",
+        "scope",
+        "provenance"
+      ],
+      "dependentRequired": {
+        "participationId": [
+          "predecessors",
+          "reason"
+        ],
+        "predecessors": [
+          "participationId",
+          "reason"
+        ],
+        "reason": [
+          "participationId",
+          "predecessors"
+        ]
+      }
+    },
+    "transitionRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schemaVersion": {
+          "const": "2.0.0"
+        },
+        "operationId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "accountingVideoId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "fromParticipationId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "toParticipationId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "declaration": {
+          "$ref": "#/$defs/contextRequest"
+        },
+        "kind": {
+          "enum": [
+            "sequential",
+            "delegation",
+            "resume",
+            "boundary-unknown"
+          ]
+        },
+        "boundary": {
+          "$ref": "#/$defs/boundary"
+        },
+        "baselineRef": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "actor": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "operationId",
+        "fromParticipationId",
+        "kind",
+        "boundary",
+        "actor",
+        "reason"
+      ],
+      "oneOf": [
+        {
+          "required": [
+            "toParticipationId"
+          ],
+          "not": {
+            "required": [
+              "declaration"
+            ]
+          }
+        },
+        {
+          "required": [
+            "declaration"
+          ],
+          "not": {
+            "required": [
+              "toParticipationId"
+            ]
+          }
+        }
+      ]
+    },
+    "observePacket": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schemaVersion": {
+          "const": "2.0.0"
+        },
+        "operationId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "accountingVideoId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "profileId": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "observations": {
+          "type": "array",
+          "maxItems": 100000,
+          "items": {
+            "$ref": "https://avo.local/schemas/avo.cost-observation.schema.json"
+          }
+        },
+        "evidence": {
+          "type": "array",
+          "maxItems": 100000,
+          "items": {
+            "$ref": "#/$defs/evidence"
+          }
+        },
+        "receipts": {
+          "type": "array",
+          "maxItems": 100000,
+          "items": {
+            "$ref": "#/$defs/receipt"
+          },
+          "minItems": 1
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "operationId",
+        "accountingVideoId",
+        "profileId",
+        "observations",
+        "evidence",
+        "receipts"
+      ]
+    },
+    "recordRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": [
+            "observation",
+            "evidence",
+            "estimate",
+            "aggregate",
+            "decision"
+          ]
+        },
+        "id": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "key": {
+          "$ref": "#/$defs/observationKey"
+        },
+        "scope": {
+          "$ref": "#/$defs/scope"
+        }
+      },
+      "required": [
+        "kind",
+        "id"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "observation"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "required": [
+              "key"
+            ]
+          }
+        }
+      ]
+    },
+    "tokenRange": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "minimum": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "maximum": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "minimum",
+        "maximum"
+      ]
+    },
+    "tokenRanges": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "input": {
+          "$ref": "#/$defs/tokenRange"
+        },
+        "output": {
+          "$ref": "#/$defs/tokenRange"
+        },
+        "cacheRead": {
+          "$ref": "#/$defs/tokenRange"
+        },
+        "cacheWrite": {
+          "$ref": "#/$defs/tokenRange"
+        },
+        "reasoning": {
+          "$ref": "#/$defs/tokenRange"
+        },
+        "tool": {
+          "$ref": "#/$defs/tokenRange"
+        },
+        "total": {
+          "$ref": "#/$defs/tokenRange"
+        }
+      }
+    },
+    "tokenizerInputs": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "inputPath": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "content": {
+          "type": "string",
+          "maxLength": 33554432
+        },
+        "model": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "encoding": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "tokenizer": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "tokenizerVersion": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "assetsDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "assetsPath": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "mappingPath": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        }
+      },
+      "required": [
+        "model",
+        "encoding",
+        "tokenizer",
+        "tokenizerVersion",
+        "assetsDigest"
+      ],
+      "oneOf": [
+        {
+          "required": [
+            "inputPath"
+          ],
+          "not": {
+            "required": [
+              "content"
+            ]
+          }
+        },
+        {
+          "required": [
+            "content"
+          ],
+          "not": {
+            "required": [
+              "inputPath"
+            ]
+          }
+        }
+      ]
+    },
+    "manualRangeInputs": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "ranges": {
+          "$ref": "#/$defs/tokenRanges"
+        },
+        "basis": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        }
+      },
+      "required": [
+        "ranges",
+        "basis"
+      ]
+    },
+    "estimateRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schemaVersion": {
+          "const": "2.0.0"
+        },
+        "operationId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "participationId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "scope": {
+          "$ref": "#/$defs/scope"
+        },
+        "method": {
+          "enum": [
+            "visible-content-tokenizer",
+            "manual-range"
+          ]
+        },
+        "inputs": {},
+        "assumptions": {
+          "type": "array",
+          "maxItems": 1000,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          }
+        },
+        "limitations": {
+          "type": "array",
+          "maxItems": 1000,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "minItems": 1
+        },
+        "provenance": {
+          "$ref": "#/$defs/provenance"
+        },
+        "pricingContext": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "serviceProvider": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 500
+            },
+            "model": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 500
+            },
+            "occurredAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "dimensions": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "tier": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 100
+                },
+                "region": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 100
+                },
+                "contextBand": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 100
+                }
+              }
+            }
+          },
+          "required": [
+            "serviceProvider",
+            "model",
+            "occurredAt",
+            "dimensions"
+          ]
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "operationId",
+        "participationId",
+        "scope",
+        "method",
+        "inputs",
+        "assumptions",
+        "limitations",
+        "provenance"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "method": {
+                "const": "visible-content-tokenizer"
+              }
+            },
+            "required": [
+              "method"
+            ]
+          },
+          "then": {
+            "properties": {
+              "inputs": {
+                "$ref": "#/$defs/tokenizerInputs"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "inputs": {
+                "$ref": "#/$defs/manualRangeInputs"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "inputManifest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "contentDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "byteCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "itemCount": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "model": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "encoding": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "tokenizerVersion": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "assetsDigest": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "contentDigest",
+        "byteCount",
+        "itemCount",
+        "model",
+        "encoding",
+        "tokenizerVersion",
+        "assetsDigest"
+      ]
+    },
+    "estimateRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schemaVersion": {
+          "const": "2.0.0"
+        },
+        "estimateId": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "accountingVideoId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "operationId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "participationId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "scope": {
+          "$ref": "#/$defs/scope"
+        },
+        "method": {
+          "enum": [
+            "visible-content-tokenizer",
+            "manual-range"
+          ]
+        },
+        "methodVersion": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "inputManifest": {
+          "$ref": "#/$defs/inputManifest"
+        },
+        "tokens": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/tokenVector"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "ranges": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/tokenRanges"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "assumptions": {
+          "type": "array",
+          "maxItems": 1000,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          }
+        },
+        "limitations": {
+          "type": "array",
+          "maxItems": 1000,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          },
+          "minItems": 1
+        },
+        "provenance": {
+          "$ref": "#/$defs/provenance"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "recordedOrder": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "requestDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "manualBasis": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "pricingContext": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "serviceProvider": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 500
+            },
+            "model": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 500
+            },
+            "occurredAt": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "dimensions": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "tier": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 100
+                },
+                "region": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 100
+                },
+                "contextBand": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 100
+                }
+              }
+            }
+          },
+          "required": [
+            "serviceProvider",
+            "model",
+            "occurredAt",
+            "dimensions"
+          ]
+        },
+        "priceScheduleIds": {
+          "type": "array",
+          "maxItems": 100000,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          }
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "estimateId",
+        "accountingVideoId",
+        "operationId",
+        "participationId",
+        "scope",
+        "method",
+        "methodVersion",
+        "inputManifest",
+        "tokens",
+        "ranges",
+        "assumptions",
+        "limitations",
+        "provenance",
+        "createdAt"
+      ],
+      "anyOf": [
+        {
+          "properties": {
+            "tokens": {
+              "$ref": "#/$defs/tokenVector"
+            }
+          }
+        },
+        {
+          "properties": {
+            "ranges": {
+              "$ref": "#/$defs/tokenRanges"
+            }
+          }
+        }
+      ]
+    },
+    "reconciliationRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schemaVersion": {
+          "const": "2.0.0"
+        },
+        "reconciliationId": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "accountingVideoId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "operationId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "relation": {
+          "enum": [
+            "same-activity",
+            "covers-rollup",
+            "replaces-estimate",
+            "revises-evidence",
+            "allocation",
+            "withdraw"
+          ]
+        },
+        "references": {
+          "type": "array",
+          "maxItems": 100000,
+          "items": {
+            "$ref": "#/$defs/recordRef"
+          }
+        },
+        "scope": {
+          "$ref": "#/$defs/scope"
+        },
+        "selectedRepresentation": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/recordRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "oldEvidenceId": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "newEvidenceId": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "allocations": {
+          "type": "array",
+          "maxItems": 100000,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "accountingVideoId": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "scope": {
+                "$ref": "#/$defs/scope"
+              },
+              "reference": {
+                "$ref": "#/$defs/recordRef"
+              }
+            },
+            "required": [
+              "accountingVideoId",
+              "scope",
+              "reference"
+            ]
+          }
+        },
+        "actor": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "proofRefs": {
+          "type": "array",
+          "maxItems": 1000,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          }
+        },
+        "supersedes": {
+          "type": "array",
+          "maxItems": 100000,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "uniqueItems": true
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "recordedOrder": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "selectedRepresentations": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 100000,
+          "uniqueItems": true,
+          "items": {
+            "allOf": [
+              {
+                "$ref": "#/$defs/recordRef"
+              },
+              {
+                "properties": {
+                  "kind": {
+                    "const": "evidence"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "reconciliationId",
+        "accountingVideoId",
+        "operationId",
+        "relation",
+        "references",
+        "scope",
+        "selectedRepresentation",
+        "actor",
+        "reason",
+        "proofRefs",
+        "supersedes",
+        "createdAt"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "relation": {
+                "const": "revises-evidence"
+              }
+            },
+            "required": [
+              "relation"
+            ]
+          },
+          "then": {
+            "required": [
+              "oldEvidenceId",
+              "newEvidenceId"
+            ]
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "selectedRepresentations"
+            ]
+          },
+          "then": {
+            "properties": {
+              "relation": {
+                "const": "covers-rollup"
+              },
+              "selectedRepresentation": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "participationFact": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schemaVersion": {
+          "const": "2.0.0"
+        },
+        "factId": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "accountingVideoId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "participationId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "operationId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "kind": {
+          "enum": [
+            "declare",
+            "attach-source",
+            "boundary",
+            "transition",
+            "revise",
+            "declare-no-external-agent"
+          ]
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "recordedOrder": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "predecessors": {
+          "type": "array",
+          "maxItems": 100000,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "uniqueItems": true
+        },
+        "actor": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "provenance": {
+          "$ref": "#/$defs/provenance"
+        },
+        "agent": {
+          "$ref": "#/$defs/agent"
+        },
+        "scope": {
+          "$ref": "#/$defs/scope"
+        },
+        "mode": {
+          "enum": [
+            "agent",
+            "human-ci",
+            "identity-unknown"
+          ]
+        },
+        "sourceAttachment": {
+          "$ref": "#/$defs/sourceAttachment"
+        },
+        "fromParticipationId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "toParticipationId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "transitionKind": {
+          "enum": [
+            "sequential",
+            "delegation",
+            "resume",
+            "boundary-unknown"
+          ]
+        },
+        "boundary": {
+          "$ref": "#/$defs/boundary"
+        },
+        "baselineRef": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "lifecycle": {
+          "enum": [
+            "open",
+            "settling",
+            "closed",
+            "unknown"
+          ]
+        },
+        "contextRequestDigest": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "factId",
+        "accountingVideoId",
+        "participationId",
+        "operationId",
+        "kind",
+        "createdAt",
+        "predecessors",
+        "actor",
+        "provenance"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "enum": [
+                  "declare",
+                  "declare-no-external-agent"
+                ]
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "required": [
+              "agent",
+              "scope",
+              "mode"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "attach-source"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "required": [
+              "sourceAttachment"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "boundary"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "required": [
+              "boundary"
+            ]
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "transition"
+              }
+            },
+            "required": [
+              "kind"
+            ]
+          },
+          "then": {
+            "required": [
+              "fromParticipationId",
+              "toParticipationId",
+              "transitionKind",
+              "boundary"
+            ]
+          }
+        }
+      ]
+    },
+    "coverage": {
+      "enum": [
+        "complete-for-declared-sources",
+        "partial",
+        "unavailable",
+        "not-recorded"
+      ]
+    },
+    "pendingState": {
+      "enum": [
+        "open",
+        "settling",
+        "unknown",
+        "none"
+      ]
+    },
+    "diagnostic": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "participationId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "profileId": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "bindingId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "observationId": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "evidenceId": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "variants": {
+          "type": "array",
+          "maxItems": 100000,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "code"
+      ]
+    },
+    "summaryValues": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "tokens": {
+          "$ref": "#/$defs/tokenVector"
+        },
+        "amounts": {
+          "type": "array",
+          "maxItems": 100000,
+          "items": {
+            "$ref": "#/$defs/summaryAmount"
+          }
+        }
+      },
+      "required": [
+        "tokens",
+        "amounts"
+      ]
+    },
+    "participationSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "expectedIntervals": {"type": "array", "items": {"$ref": "#/$defs/expectedIntervalSummary"}},
+        "participationId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "agent": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/agent"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "scope": {
+          "$ref": "#/$defs/scope"
+        },
+        "coverage": {
+          "$ref": "#/$defs/coverage"
+        },
+        "pendingState": {
+          "$ref": "#/$defs/pendingState"
+        },
+        "trackingState": {
+          "enum": [
+            "active",
+            "needs-setup",
+            "unavailable",
+            "identity-unknown"
+          ]
+        },
+        "diagnostics": {
+          "type": "array",
+          "maxItems": 100000,
+          "items": {
+            "$ref": "#/$defs/diagnostic"
+          }
+        }
+      },
+      "required": [
+        "participationId",
+        "agent",
+        "scope",
+        "coverage",
+        "pendingState",
+        "trackingState",
+        "diagnostics"
+      ]
+    },
+    "sourceCoverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "sourceScope": {"$ref": "#/$defs/scope"},
+        "participationId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "profileId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "bindingId": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "coverage": {
+          "$ref": "#/$defs/coverage"
+        },
+        "pendingState": {
+          "$ref": "#/$defs/pendingState"
+        },
+        "baselineStatus": {
+          "enum": [
+            "accepted",
+            "missing",
+            "not-applicable"
+          ]
+        },
+        "receiptIds": {
+          "type": "array",
+          "maxItems": 100000,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "uniqueItems": true
+        },
+        "gaps": {
+          "type": "array",
+          "maxItems": 1000,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          }
+        },
+        "lastCollectedAt": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "participationId",
+        "profileId",
+        "bindingId",
+        "coverage",
+        "pendingState",
+        "baselineStatus",
+        "receiptIds",
+        "gaps",
+        "lastCollectedAt"
+      ]
+    },
+    "expectedIntervalSummary": {
+      "type": "object", "additionalProperties": false,
+      "required": ["scope", "lifecycle", "startFactId", "endFactId", "factIds", "conflicted", "coverage", "pendingState"],
+      "properties": {
+        "scope": {"$ref": "#/$defs/scope"},
+        "lifecycle": {"enum": ["open", "closed", "unknown"]},
+        "startFactId": {"$ref": "#/$defs/hash"},
+        "endFactId": {"anyOf": [{"$ref": "#/$defs/hash"}, {"type": "null"}]},
+        "factIds": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/hash"}},
+        "conflicted": {"type": "boolean"},
+        "coverage": {"$ref": "#/$defs/coverage"},
+        "pendingState": {"$ref": "#/$defs/pendingState"}
+      }
+    },
+    "manualRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schemaVersion": {"const": "2.0.0"},
+        "operationId": {"$ref": "#/$defs/identifier"},
+        "participationFactId": {"$ref": "#/$defs/hash"},
+        "observations": {
+          "type": "array", "minItems": 1, "maxItems": 100000,
+          "items": {"$ref": "https://avo.local/schemas/avo.cost-observation.schema.json"}
+        }
+      },
+      "required": ["schemaVersion", "operationId", "participationFactId", "observations"]
+    },
+    "reconcileRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "schemaVersion": {
+          "const": "2.0.0"
+        },
+        "accountingVideoId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "operationId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "relation": {
+          "enum": [
+            "same-activity",
+            "covers-rollup",
+            "replaces-estimate",
+            "revises-evidence",
+            "allocation",
+            "withdraw"
+          ]
+        },
+        "references": {
+          "type": "array",
+          "maxItems": 100000,
+          "items": {
+            "$ref": "#/$defs/recordRef"
+          }
+        },
+        "scope": {
+          "$ref": "#/$defs/scope"
+        },
+        "selectedRepresentation": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/recordRef"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "oldEvidenceId": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "newEvidenceId": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "allocations": {
+          "type": "array",
+          "maxItems": 100000,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "accountingVideoId": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "scope": {
+                "$ref": "#/$defs/scope"
+              },
+              "reference": {
+                "$ref": "#/$defs/recordRef"
+              }
+            },
+            "required": [
+              "accountingVideoId",
+              "scope",
+              "reference"
+            ]
+          }
+        },
+        "actor": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "proofRefs": {
+          "type": "array",
+          "maxItems": 1000,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          }
+        },
+        "supersedes": {
+          "type": "array",
+          "maxItems": 100000,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "uniqueItems": true
+        },
+        "selectedRepresentations": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 100000,
+          "uniqueItems": true,
+          "items": {
+            "allOf": [
+              {
+                "$ref": "#/$defs/recordRef"
+              },
+              {
+                "properties": {
+                  "kind": {
+                    "const": "evidence"
+                  }
+                }
+              }
+            ]
+          }
+        }
+      },
+      "required": [
+        "schemaVersion",
+        "accountingVideoId",
+        "operationId",
+        "relation",
+        "references",
+        "scope",
+        "selectedRepresentation",
+        "actor",
+        "reason",
+        "proofRefs",
+        "supersedes"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "relation": {
+                "const": "revises-evidence"
+              }
+            },
+            "required": [
+              "relation"
+            ]
+          },
+          "then": {
+            "required": [
+              "oldEvidenceId",
+              "newEvidenceId"
+            ]
+          }
+        },
+        {
+          "if": {
+            "required": [
+              "selectedRepresentations"
+            ]
+          },
+          "then": {
+            "properties": {
+              "relation": {
+                "const": "covers-rollup"
+              },
+              "selectedRepresentation": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

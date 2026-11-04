@@ -1,3 +1,36 @@
+# [1.20.0](https://github.com/joaobispo2077/avo/compare/v1.19.1...v1.20.0) (2026-11-04)
+
+
+### Bug Fixes
+
+* **deps:** align msgpack with develop ([3659184](https://github.com/joaobispo2077/avo/commit/36591845f0ec896ed6c26d3e006f4dc007d52d1b))
+* **deps:** patch msgpack parser vulnerability ([64a289f](https://github.com/joaobispo2077/avo/commit/64a289f9ac91bdbf5fd3da1fbb790344978cd626))
+* **proof:** preserve AAC sample boundaries ([4eb85c6](https://github.com/joaobispo2077/avo/commit/4eb85c6df707fb0457319276f8f18c4262cfea7b))
+* **audio:** preserve finite ducked bed tails ([27623e1](https://github.com/joaobispo2077/avo/commit/27623e155fb675f01848a2edfaa0850bd84f84bf))
+* **cutting:** reconstruct native mixed references ([a3453e0](https://github.com/joaobispo2077/avo/commit/a3453e0b3f91f34db7e1447ba2ac7e767fff5315))
+* **review:** restrict window scans to risk windows ([116bf5b](https://github.com/joaobispo2077/avo/commit/116bf5b371ea7db89fb4dc01605031aa71ec1c66))
+
+
+### Features
+
+* **costs:** activate typed accounting lifecycle ([42a562b](https://github.com/joaobispo2077/avo/commit/42a562b33cb70a9884548bf6f366f30ba6e26b18))
+* **costs:** admit typed ledger packets ([c1ba50a](https://github.com/joaobispo2077/avo/commit/c1ba50ab01ba855e685ec40db5ebafd152d40091))
+* **costs:** collect scoped host evidence ([a8d853b](https://github.com/joaobispo2077/avo/commit/a8d853b1f3c968cf7f12fcf5c4aa01bbfcb01667))
+* **costs:** define typed evidence contracts ([f59bb70](https://github.com/joaobispo2077/avo/commit/f59bb70d2f7b9e073fda468bf83470ed148675e3))
+* **costs:** estimate offline usage and value ([0ae9005](https://github.com/joaobispo2077/avo/commit/0ae90058169836c7adab81ccf3342b409d6abc35))
+* **costs:** export portable accounting history ([6848b1e](https://github.com/joaobispo2077/avo/commit/6848b1edc087fef72a4060765c2b737ed6bc1156))
+* **costs:** expose host accounting controls ([27b78fe](https://github.com/joaobispo2077/avo/commit/27b78fe7abce38ef1e8cc4e6af49622bc7f95ef2))
+* **costs:** model host participation graphs ([4bb64e6](https://github.com/joaobispo2077/avo/commit/4bb64e6dccf5e64f1abffd9506b3a1fd904d94c1))
+* **costs:** normalize owned response evidence ([9fb033b](https://github.com/joaobispo2077/avo/commit/9fb033b62334952b801cafae734222f0d2d2e6e5))
+* **costs:** project coverage and closure reports ([3c0fe76](https://github.com/joaobispo2077/avo/commit/3c0fe76fb28a07f97b903815568bfe183763a2bd))
+* **costs:** reconcile evidence and allocations ([b685fbe](https://github.com/joaobispo2077/avo/commit/b685fbe96c9841d88664bd7640b39e7af7845106))
+
+
+### Performance Improvements
+
+* **cutting:** reuse validated analysis per batch ([06a61f7](https://github.com/joaobispo2077/avo/commit/06a61f7a87bf32a213e251e0376498cd042513ef))
+* **cutting:** skip context for retained pauses ([ae177e5](https://github.com/joaobispo2077/avo/commit/ae177e5f94ebb58ec193f817cb76697e53ac3928))
+
 ## [1.19.1](https://github.com/joaobispo2077/avo/compare/v1.19.0...v1.19.1) (2026-10-31)
 
 
