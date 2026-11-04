@@ -9,6 +9,7 @@ from typing import Any
 
 from .contracts import file_fingerprint, validate_document
 from .workspace import TimelineWorkspace
+from .store import serialized_timeline
 
 
 class TrackError(ValueError):
@@ -332,6 +333,7 @@ class TracksService:
         }
         return basis, revision
 
+    @serialized_timeline(lambda self: self.workspace.timeline_dir)
     def author(
         self, snapshot: dict[str, Any], *, actor: str, reason: str
     ) -> dict[str, Any]:

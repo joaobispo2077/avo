@@ -10,6 +10,7 @@ from .contracts import file_fingerprint
 from .diff import stable_id_diff
 from .lineage import LineageError, validate_cmap_snapshot
 from .workspace import TimelineWorkspace
+from .store import serialized_timeline
 
 
 class CMapService:
@@ -72,6 +73,7 @@ class CMapService:
             actor_intent="preserve approved editorial meaning",
         )
 
+    @serialized_timeline(lambda self: self.workspace.timeline_dir)
     def author(
         self,
         snapshot: dict[str, Any],

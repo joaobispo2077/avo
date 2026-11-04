@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import Enum
+from .store import serialized_timeline
 
 
 class PipelineState(str, Enum):
@@ -214,6 +215,7 @@ class PipelineRunStore:
                     "motion execution choice requires a request identity"
                 )
 
+    @serialized_timeline(lambda self: self.path.parent)
     def initialize(
         self,
         *,
@@ -264,6 +266,7 @@ class PipelineRunStore:
         self._validate(document)
         return document
 
+    @serialized_timeline(lambda self: self.path.parent)
     def bind_motion_selection(self, selection, *, request_id=None, new_request=False):
         """Pin authoring intent for one request without changing editorial state."""
         from copy import deepcopy
@@ -299,6 +302,7 @@ class PipelineRunStore:
         updated["updatedAt"] = self.clock()
         return self._write(updated, expected_updated_at=current["updatedAt"])
 
+    @serialized_timeline(lambda self: self.path.parent)
     def _write(self, document, *, expected_updated_at=None):
         from .store import atomic_write_json
 
@@ -325,6 +329,7 @@ class PipelineRunStore:
             "reason": reason,
         }
 
+    @serialized_timeline(lambda self: self.path.parent)
     def advance(
         self,
         target,
@@ -352,6 +357,7 @@ class PipelineRunStore:
             updated["activeRefs"] = active_refs
         return self._write(updated, expected_updated_at=expected_updated_at)
 
+    @serialized_timeline(lambda self: self.path.parent)
     def enter_side_state(
         self, state, *, actor, reason, blockers=None, expected_updated_at=None
     ):
@@ -377,6 +383,7 @@ class PipelineRunStore:
         updated["updatedAt"] = history["occurredAt"]
         return self._write(updated, expected_updated_at=expected_updated_at)
 
+    @serialized_timeline(lambda self: self.path.parent)
     def adopt_delivery(
         self,
         adoption,
@@ -432,6 +439,7 @@ class PipelineRunStore:
         }
         return self._write(updated, expected_updated_at=expected_updated_at)
 
+    @serialized_timeline(lambda self: self.path.parent)
     def archive_human_final_delivery(
         self, disposition, retention_policy, *, actor, reason, expected_updated_at=None
     ):
@@ -471,6 +479,7 @@ class PipelineRunStore:
         updated.setdefault("extensions", {})["humanFinalArchive"] = identity
         return self._write(updated, expected_updated_at=expected_updated_at)
 
+    @serialized_timeline(lambda self: self.path.parent)
     def resume(self, *, actor, reason, recovery_event, expected_updated_at=None):
         from copy import deepcopy
 
@@ -494,6 +503,7 @@ class PipelineRunStore:
         updated.setdefault("extensions", {})["lastRecovery"] = recovery_event
         return self._write(updated, expected_updated_at=expected_updated_at)
 
+    @serialized_timeline(lambda self: self.path.parent)
     def bind_cutting_context(self, references, *, expected_updated_at=None):
         """Bind evidence without changing state or granting editorial approval."""
         from copy import deepcopy
@@ -521,6 +531,7 @@ class PipelineRunStore:
         updated["updatedAt"] = self.clock()
         return self._write(updated, expected_updated_at=expected_updated_at)
 
+    @serialized_timeline(lambda self: self.path.parent)
     def bind_iteration_context(
         self,
         *,
@@ -557,6 +568,7 @@ class PipelineRunStore:
         updated["updatedAt"] = self.clock()
         return self._write(updated, expected_updated_at=expected_updated_at)
 
+    @serialized_timeline(lambda self: self.path.parent)
     def activate_candidate_snapshot(
         self,
         reference,

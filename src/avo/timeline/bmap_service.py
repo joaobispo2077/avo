@@ -14,6 +14,7 @@ from .lifecycle import PipelineRunStore, PipelineState, TransitionFacts
 from .lineage import LineageError, validate_bmap_basis
 from .mapping import cmap_output_duration
 from .workspace import TimelineWorkspace
+from .store import serialized_timeline
 
 _STABLE_ID = re.compile(r"^[a-z][a-z0-9-]{2,63}$")
 
@@ -135,6 +136,7 @@ class BMapService:
             actor_intent="preserve beat intent on approved cut output",
         )
 
+    @serialized_timeline(lambda self: self.workspace.timeline_dir)
     def author(
         self, snapshot: dict[str, Any], *, actor: str, reason: str
     ) -> dict[str, Any]:

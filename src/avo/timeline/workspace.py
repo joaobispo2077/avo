@@ -12,7 +12,12 @@ from typing import Any
 from avo.paths import repo_root
 
 from .contracts import file_fingerprint, validate_document
-from .store import ArtifactStore, atomic_write_json
+from .store import (
+    ArtifactStore,
+    atomic_write_json,
+    require_reconciled,
+    serialized_timeline,
+)
 
 ARTIFACTS = {
     "cmap": "raw-source",
@@ -252,6 +257,7 @@ class TimelineWorkspace:
     def store(self, artifact_type: str) -> ArtifactStore:
         return ArtifactStore(self.artifact_path(artifact_type))
 
+    @serialized_timeline(lambda self: self.timeline_dir)
     def initialize(self, *, provider: str | None = None) -> dict[str, Any]:
         provider = provider or str(self.project.get("provider") or "").strip()
         if not provider:
@@ -451,6 +457,7 @@ class TimelineWorkspace:
             "staleDependencies": sorted(stale),
         }
 
+    @serialized_timeline(lambda self: self.timeline_dir)
     def invalidate_descendants(
         self,
         changed_artifact_type: str,
@@ -477,6 +484,7 @@ class TimelineWorkspace:
         )
 
     def require_active(self, artifact_type: str) -> dict[str, Any]:
+        require_reconciled(self.timeline_dir)
         index = self.store(artifact_type).load_index()
         if index["headRevisionId"] is None:
             raise WorkspaceError(f"{artifact_type} has no active revision")
