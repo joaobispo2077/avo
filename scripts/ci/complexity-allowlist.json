@@ -837,13 +837,6 @@
       "reason": "Reporting/inventory/validation aggregation with many optional fields"
     },
     {
-      "path": "src/avo/project_inventory.py",
-      "name": "_resolve_reconstruction_metadata",
-      "complexity": 13,
-      "rank": "C",
-      "reason": "Reporting/inventory/validation aggregation with many optional fields"
-    },
-    {
       "path": "src/avo/shorts.py",
       "name": "_qc",
       "complexity": 13,
@@ -905,13 +898,6 @@
       "complexity": 13,
       "rank": "C",
       "reason": "EDL semantic rule matrix with many optional fields; split deferred"
-    },
-    {
-      "path": "src/avo/adapters/media/ffprobe.py",
-      "name": "_describe",
-      "complexity": 12,
-      "rank": "C",
-      "reason": "Adapter orchestration with many format/capability branches"
     },
     {
       "path": "src/avo/adapters/media/still_extract.py",
