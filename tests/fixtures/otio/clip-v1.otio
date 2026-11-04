@@ -1,0 +1,27 @@
+{
+  "OTIO_SCHEMA": "Timeline.1",
+  "name": "Synthetic contiguous edit",
+  "global_start_time": {"OTIO_SCHEMA": "RationalTime.1", "value": 86400, "rate": 24},
+  "tracks": {
+    "OTIO_SCHEMA": "Stack.1",
+    "children": [{
+      "OTIO_SCHEMA": "Track.1", "name": "V1", "kind": "Video",
+      "children": [{
+        "OTIO_SCHEMA": "Clip.1", "name": "Synthetic take",
+        "source_range": {
+          "OTIO_SCHEMA": "TimeRange.1",
+          "start_time": {"OTIO_SCHEMA": "RationalTime.1", "value": 240, "rate": 24},
+          "duration": {"OTIO_SCHEMA": "RationalTime.1", "value": 48, "rate": 24}
+        },
+        "media_reference": {
+          "OTIO_SCHEMA": "ExternalReference.1", "target_url": "file:///originals/take.mov",
+          "available_range": {
+            "OTIO_SCHEMA": "TimeRange.1",
+            "start_time": {"OTIO_SCHEMA": "RationalTime.1", "value": 240, "rate": 24},
+            "duration": {"OTIO_SCHEMA": "RationalTime.1", "value": 2400, "rate": 24}
+          }
+        }, "effects": [], "markers": [], "metadata": {}
+      }]
+    }]
+  }
+}

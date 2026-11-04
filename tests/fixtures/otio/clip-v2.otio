@@ -1,0 +1,16 @@
+{
+  "OTIO_SCHEMA": "Timeline.1",
+  "name": "Repeated Clip.2 references",
+  "tracks": {"OTIO_SCHEMA": "Stack.1", "children": [{
+    "OTIO_SCHEMA": "Track.1", "kind": "Video", "children": [
+      {"OTIO_SCHEMA": "Clip.2", "name": "First", "active_media_reference_key": "camera",
+       "media_references": {
+         "camera": {"OTIO_SCHEMA": "ExternalReference.1", "target_url": "file:///originals/take.mov"},
+         "inactive": {"OTIO_SCHEMA": "ExternalReference.1", "target_url": "file:///originals/inactive.mov"}
+       }, "source_range": {"OTIO_SCHEMA": "TimeRange.1", "start_time": {"OTIO_SCHEMA": "RationalTime.1", "value": 0, "rate": 29.97002997002997}, "duration": {"OTIO_SCHEMA": "RationalTime.1", "value": 30, "rate": 29.97002997002997}}},
+      {"OTIO_SCHEMA": "Clip.2", "name": "Second", "active_media_reference_key": "camera",
+       "media_references": {"camera": {"OTIO_SCHEMA": "ExternalReference.1", "target_url": "file:///originals/take.mov"}},
+       "source_range": {"OTIO_SCHEMA": "TimeRange.1", "start_time": {"OTIO_SCHEMA": "RationalTime.1", "value": 60, "rate": 29.97002997002997}, "duration": {"OTIO_SCHEMA": "RationalTime.1", "value": 30, "rate": 29.97002997002997}}}
+    ]
+  }]}
+}

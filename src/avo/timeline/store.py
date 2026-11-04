@@ -12,9 +12,12 @@ import json
 import os
 import re
 from collections.abc import Callable
+from contextlib import contextmanager
 from copy import deepcopy
 from datetime import UTC, datetime
+from functools import wraps
 from pathlib import Path
+from threading import local
 from typing import Any
 from uuid import uuid4
 
@@ -25,6 +28,119 @@ _SHA256 = re.compile(r"^[a-f0-9]{64}$")
 
 class StoreError(RuntimeError):
     """Raised when a canonical write would violate immutable history."""
+
+
+_WRITERS = local()
+_WRITER_HANDLES = set()
+
+
+def _close_forked_writers():
+    # Close inherited descriptors without unlocking the parent's shared flock.
+    for stream in list(_WRITER_HANDLES):
+        stream.close()
+    _WRITER_HANDLES.clear()
+    _WRITERS.held = set()
+
+
+if hasattr(os, "register_at_fork"):
+    os.register_at_fork(after_in_child=_close_forked_writers)
+
+
+def _release_writer(stream, owner_pid):
+    _WRITER_HANDLES.discard(stream)
+    if os.getpid() != owner_pid:
+        return
+    if os.name == "nt":
+        import msvcrt
+
+        stream.seek(0)
+        msvcrt.locking(stream.fileno(), msvcrt.LK_UNLCK, 1)
+    else:
+        import fcntl
+
+        fcntl.flock(stream.fileno(), fcntl.LOCK_UN)
+
+
+@contextmanager
+def _kernel_writer(path):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a+b") as stream:
+        owner_pid = os.getpid()
+        try:
+            if os.name == "nt":
+                import msvcrt
+
+                if stream.seek(0, 2) == 0:
+                    stream.write(b"\0")
+                    stream.flush()
+                stream.seek(0)
+                msvcrt.locking(stream.fileno(), msvcrt.LK_NBLCK, 1)
+            else:
+                import fcntl
+
+                fcntl.flock(stream.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError as exc:
+            raise StoreError(
+                "timeline has another writer; retry after it finishes"
+            ) from exc
+        _WRITER_HANDLES.add(stream)
+        try:
+            yield
+        finally:
+            _release_writer(stream, owner_pid)
+
+
+def require_reconciled(directory):
+    marker = Path(directory) / "import-activation.pending.json"
+    if marker.exists() or marker.is_symlink():
+        raise StoreError(
+            "OTIO_RECOVERY_REQUIRED: reconcile the pending timeline import before editing or rendering"
+        )
+
+
+@contextmanager
+def timeline_writer(directory, *, recovery=False):
+    """Serialize a complete canonical mutation, reentrant in the owning thread.
+
+    The persistent kernel lock is released on process death; its file is never
+    removed. Other threads/processes get a conflict rather than a stale write.
+    """
+    key = (os.getpid(), str(Path(directory).resolve()))
+    held = getattr(_WRITERS, "held", set())
+    if key in held:
+        yield
+        return
+    with _kernel_writer(Path(key[1]) / ".mutation.lock"):
+        if not recovery:
+            require_reconciled(Path(key[1]))
+        _WRITERS.held = held
+        held.add(key)
+        try:
+            yield
+        finally:
+            held.remove(key)
+
+
+def serialized_timeline(root):
+    """Hold one timeline writer around a method's whole read/compare/write."""
+
+    def decorate(method):
+        @wraps(method)
+        def serialized(self, *args, **kwargs):
+            with timeline_writer(root(self)):
+                return method(self, *args, **kwargs)
+
+        return serialized
+
+    return decorate
+
+
+def _check_expected_head(expected, actual):
+    target = None if expected == "empty" else expected
+    if expected is not None and actual != target:
+        raise StoreError(
+            f"compare-and-swap failed: expected head {expected}, actual {actual}"
+        )
 
 
 def now_iso() -> str:
@@ -180,6 +296,7 @@ class ArtifactStore:
     def _relative(self, path: Path) -> str:
         return path.relative_to(self.timeline_dir).as_posix()
 
+    @serialized_timeline(lambda self: self.timeline_dir)
     def initialize(
         self,
         *,
@@ -374,6 +491,7 @@ class ArtifactStore:
                 return candidate
             sequence += 1
 
+    @serialized_timeline(lambda self: self.timeline_dir)
     def append_revision(
         self,
         *,
@@ -394,10 +512,7 @@ class ArtifactStore:
             raise StoreError("revision reason is required")
         index = self.load_index()
         actual_head_hash = self._head_hash(index)
-        if expected_head_hash is not None and actual_head_hash != expected_head_hash:
-            raise StoreError(
-                f"compare-and-swap failed: expected head {expected_head_hash}, actual {actual_head_hash}"
-            )
+        _check_expected_head(expected_head_hash, actual_head_hash)
         existing = {item["revisionId"] for item in index["revisionRefs"]}
         revision_id = revision_id or self._next_revision_id(
             str(index["artifactType"]), existing
@@ -449,10 +564,21 @@ class ArtifactStore:
         try:
             atomic_write_json(self.path, updated)
         except Exception:
-            if not revision_existed:
+            if not revision_existed and not self._revision_is_referenced(revision_id):
                 revision_path.unlink(missing_ok=True)
             raise
         return self._compat_revision(body)
+
+    def _revision_is_referenced(self, revision_id):
+        # A replacement can commit before reporting a write error. Retain the
+        # immutable body whenever selection is committed or cannot be inspected.
+        try:
+            return any(
+                reference["revisionId"] == revision_id
+                for reference in self.load_index()["revisionRefs"]
+            )
+        except (OSError, ValueError, RuntimeError):
+            return True
 
     def revision(self, revision_id: str) -> dict[str, Any]:
         return self._compat_revision(
@@ -480,6 +606,7 @@ class ArtifactStore:
         updated["updatedAt"] = event["occurredAt"]
         return updated
 
+    @serialized_timeline(lambda self: self.timeline_dir)
     def record_decision(
         self,
         *,
@@ -583,6 +710,7 @@ class ArtifactStore:
                 return event
         return None
 
+    @serialized_timeline(lambda self: self.timeline_dir)
     def set_active_state(
         self, state: str, *, reason: str, actor: str = "avo-lineage"
     ) -> dict[str, Any]:

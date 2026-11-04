@@ -12,7 +12,12 @@ from typing import Any
 from avo.paths import repo_root
 
 from .contracts import file_fingerprint, validate_document
-from .store import ArtifactStore, atomic_write_json
+from .store import (
+    ArtifactStore,
+    atomic_write_json,
+    require_reconciled,
+    serialized_timeline,
+)
 
 ARTIFACTS = {
     "cmap": "raw-source",
@@ -139,6 +144,155 @@ def resolve_project_raw_dir(
     raise _missing_raw_dir_error(candidate, attempted, parent_fallback)
 
 
+_IMPORT_EVIDENCE_NAMES = (
+    "session",
+    "export",
+    "activation",
+    "validation",
+    "proposal",
+    "activationResult",
+)
+_IMPORT_REVIEW_ACTION = (
+    "Build the canonical cut proof, then obtain current transcript, Watch, "
+    "listening and creator review"
+)
+
+
+def _valid_pending_import(value):
+    return set(value) == {"importId", "operationId"} and all(
+        isinstance(item, str) and re.fullmatch(r"[a-f0-9]{64}", item)
+        for item in value.values()
+    )
+
+
+def _pending_import_status(marker):
+    if not marker.exists() and not marker.is_symlink():
+        return None
+    result = {"path": str(marker), "status": "invalid"}
+    try:
+        if marker.is_symlink() or marker.stat().st_size > 4096:
+            return result
+        from .otio_import import parse_export_bytes
+
+        with marker.open("rb") as stream:
+            data = stream.read(4097)
+        if len(data) > 4096:
+            return result
+        _, value, _ = parse_export_bytes(data)
+        if not _valid_pending_import(value):
+            return result
+    except (OSError, ValueError, TypeError):
+        return result
+    return {**result, **value, "status": "pending"}
+
+
+def _import_evidence_status(workspace, revision):
+    from .contracts import fingerprint_stage
+    from .import_evidence import verify_import_origin
+
+    paths = verify_import_origin(workspace, revision)
+    packet = paths[0].parent
+    # Hash the displayed refs around another verification, so the reported
+    # byte identities belong to the exact chain that was actually checked.
+    with fingerprint_stage(verify_on_exit=True):
+        refs = {}
+        for name, path in zip(_IMPORT_EVIDENCE_NAMES, paths, strict=True):
+            actual = file_fingerprint(path)
+            refs[name] = {
+                "path": path.relative_to(packet).as_posix(),
+                "sha256": actual["sha256"],
+                "sizeBytes": actual["sizeBytes"],
+            }
+        if verify_import_origin(workspace, revision) != paths:
+            raise ValueError("Activated evidence paths changed during status")
+    origin = revision["snapshot"]["originRef"]
+    return {
+        "source": {
+            "sha256": origin["exportSha256"],
+            "sizeBytes": refs["export"]["sizeBytes"],
+            "timelinePointer": origin["timelinePointer"],
+        },
+        "packet": {
+            "importId": origin["importId"],
+            "path": str(packet),
+            "refs": refs,
+        },
+        "compatibilityState": "verified-activation",
+    }
+
+
+def _import_status_blocker(code, message):
+    return {
+        "code": code,
+        "message": message,
+        "blocking": True,
+        "remediation": "Restore the exact retained import evidence or reconcile its activation before continuing.",
+    }
+
+
+def _import_status_result(workspace, revision, pending):
+    snapshot = revision["snapshot"] if revision else {}
+    imported = bool(
+        {"originRef", "sourceAssemblyPolicy", "importOutput"}.intersection(snapshot)
+    )
+    if not imported and pending is None:
+        return None
+    result = {
+        "status": "active-draft" if imported else "recovery-required",
+        "originRef": snapshot.get("originRef"),
+        "provider": workspace.project.get("provider"),
+        "videoId": workspace.video_id,
+        "capabilityLevel": (
+            "placed-experimental"
+            if snapshot.get("layoutMode") == "placed"
+            else "contiguous-experimental"
+        )
+        if imported
+        else None,
+        "compatibilityState": "not-checked",
+        "recoveryRequired": pending is not None,
+        "pendingActivation": pending,
+        "pendingFinishing": [],
+        "blockers": [],
+        "reviewState": "normal-current-candidate-gates-required",
+        "nextAction": _IMPORT_REVIEW_ACTION,
+    }
+    if imported:
+        result["currentCanonical"] = {
+            "revisionId": revision["revisionId"],
+            "contentHash": revision["contentHash"],
+        }
+        _check_import_status(workspace, revision, result)
+    if pending is not None:
+        result["status"] = "recovery-required"
+        result["blockers"].append(
+            _import_status_blocker(
+                "OTIO_RECOVERY_REQUIRED", "An import activation requires reconciliation"
+            )
+        )
+        result["nextAction"] = (
+            "Reconcile the exact pending import activation before editing or rendering"
+        )
+    return result
+
+
+def _check_import_status(workspace, revision, result):
+    try:
+        result.update(_import_evidence_status(workspace, revision))
+    except (KeyError, TypeError, ValueError, OSError, RuntimeError):
+        result["status"] = "blocked"
+        result["compatibilityState"] = "blocked"
+        result["blockers"].append(
+            _import_status_blocker(
+                "OTIO_SOURCE_CHANGED",
+                "Immutable activated import evidence could not be verified",
+            )
+        )
+        result["nextAction"] = (
+            "Restore and verify the exact activated import packet before continuing"
+        )
+
+
 class TimelineWorkspace:
     def __init__(
         self,
@@ -252,6 +406,7 @@ class TimelineWorkspace:
     def store(self, artifact_type: str) -> ArtifactStore:
         return ArtifactStore(self.artifact_path(artifact_type))
 
+    @serialized_timeline(lambda self: self.timeline_dir)
     def initialize(self, *, provider: str | None = None) -> dict[str, Any]:
         provider = provider or str(self.project.get("provider") or "").strip()
         if not provider:
@@ -338,6 +493,9 @@ class TimelineWorkspace:
             "provider": str(self.project.get("provider") or ""),
             "artifacts": artifacts,
         }
+        imported = self.timeline_import_status()
+        if imported is not None:
+            result["timelineImport"] = imported
         if self.pipeline_run_path.is_file():
             from .lifecycle import PipelineRunStore
 
@@ -350,6 +508,19 @@ class TimelineWorkspace:
                 "updatedAt": run["updatedAt"],
             }
         return result
+
+    def timeline_import_status(self):
+        """Report only canonical selection and its exact retained activation."""
+        pending = _pending_import_status(
+            self.timeline_dir / "import-activation.pending.json"
+        )
+        revision = None
+        if self.artifact_path("cmap").is_file():
+            store = self.store("cmap")
+            index = store.load_index()
+            if index["headRevisionId"]:
+                revision = store.revision(index["headRevisionId"])
+        return _import_status_result(self, revision, pending)
 
     def active_dependency_snapshot(self) -> dict[str, str]:
         result: dict[str, str] = {}
@@ -451,6 +622,7 @@ class TimelineWorkspace:
             "staleDependencies": sorted(stale),
         }
 
+    @serialized_timeline(lambda self: self.timeline_dir)
     def invalidate_descendants(
         self,
         changed_artifact_type: str,
@@ -459,6 +631,7 @@ class TimelineWorkspace:
         after_hash: str | None,
         reason: str,
         actor: str,
+        idempotent: bool = False,
     ) -> dict[str, Any]:
         from .lineage import persist_invalidation
 
@@ -474,9 +647,11 @@ class TimelineWorkspace:
             after_hash=after_hash,
             reason=reason,
             actor=actor,
+            idempotent=idempotent,
         )
 
     def require_active(self, artifact_type: str) -> dict[str, Any]:
+        require_reconciled(self.timeline_dir)
         index = self.store(artifact_type).load_index()
         if index["headRevisionId"] is None:
             raise WorkspaceError(f"{artifact_type} has no active revision")
@@ -491,3 +666,44 @@ class TimelineWorkspace:
         from avo.editlog import after_canonical_write
 
         return after_canonical_write(self.raw_dir)
+
+
+def resolve_timeline_workspace(raw_dir, *, project_path=None, canonical_cmap_path=None):
+    """Resolve one declared project for retention without scanning or initializing."""
+    raw = Path(raw_dir).resolve()
+    known = (
+        Path(canonical_cmap_path).resolve() if canonical_cmap_path is not None else None
+    )
+    selected = (
+        Path(project_path)
+        if project_path is not None
+        else _retained_project_path(raw, known)
+    )
+    if selected is None:
+        return None
+    workspace = TimelineWorkspace.from_project(selected)
+    timeline = workspace.timeline_dir.resolve()
+    if workspace.raw_dir.resolve() != raw or not timeline.is_relative_to(raw / "edit"):
+        raise WorkspaceError(
+            "Retained canonical target differs from the declared project/edit directory"
+        )
+    if known is not None and workspace.artifact_path("cmap").resolve() != known:
+        raise WorkspaceError(
+            "Retained canonical CMap path differs from the declared project"
+        )
+    return workspace
+
+
+def _retained_project_path(raw, known):
+    if known is not None:
+        run_path = known.parent / "pipeline-run.json"
+        if run_path.is_file():
+            from .otio_import import parse_export_bytes
+
+            with run_path.open("rb") as stream:
+                data = stream.read(64 * 1024 * 1024 + 1)
+            _, run, _ = parse_export_bytes(data)
+            validate_document(run, "avo.pipeline-run.schema.json")
+            return Path(run["projectPath"])
+    conventional = raw / "avo.project.json"
+    return conventional if conventional.is_file() else None

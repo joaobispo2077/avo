@@ -65,6 +65,13 @@ def test_muted_layer_is_traced_but_not_compiled():
     assert compiled["trace"][0]["enabled"] is False
 
 
+def test_legacy_audio_projection_cannot_drop_additional_regions():
+    item = layer("repeated", "music", 1, 0, 1000)
+    item["regions"].append({"regionId": "again", "startTicks": 2000, "endTicks": 3000})
+    with pytest.raises(AudioGraphError, match="regions"):
+        compile_audio_layers([item])
+
+
 def test_ducking_padding_is_bounded_at_absolute_sample_end():
     compiled = compile_audio_layers(
         [

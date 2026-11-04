@@ -64,6 +64,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     configure_direction(sub)
 
+    from avo.timeline_import_cli import configure as configure_timeline_import
+
+    configure_timeline_import(sub)
+
     _trim_parser(sub)
 
     pipeline = sub.add_parser("pipeline")
@@ -391,6 +395,12 @@ def _add_pipeline_entry_args(parser, operation):
         parser.add_argument("--direction")
         parser.add_argument("--brief-context", type=Path)
         parser.add_argument("--direction-reference", type=Path, action="append")
+        parser.add_argument("--timeline-import", type=Path)
+        parser.add_argument("--import-mappings", type=Path)
+        parser.add_argument("--import-declarations", type=Path)
+        parser.add_argument("--import-media-root", type=Path, action="append")
+        parser.add_argument("--actor", default="avo.pipeline")
+        parser.add_argument("--reason", default="Stage imported timeline for review")
 
 
 def _add_cleanup_subparsers(cleanup: argparse.ArgumentParser) -> None:
@@ -481,6 +491,56 @@ def _pipeline_cost_context(workspace, result, descriptor):
     result["costContext"]["collection"] = collect_context(store, result["costContext"])
 
 
+def _pipeline_import_requested(args):
+    from avo.timeline.otio_import import ImportError
+
+    configured = any(
+        (args.import_mappings, args.import_declarations, args.import_media_root)
+    )
+    if not args.timeline_import:
+        if configured:
+            raise ImportError(
+                "OTIO_INPUT_INVALID", "Import options require --timeline-import"
+            )
+        return False
+    if any(
+        (
+            args.motion_engine,
+            args.new_request,
+            args.direction,
+            args.brief_context,
+            args.direction_reference,
+            args.cost_context,
+        )
+    ):
+        raise ImportError(
+            "OTIO_INPUT_INVALID",
+            "Stage the timeline separately from new creative authoring, engine selection or cost setup",
+        )
+    return True
+
+
+def _pipeline_import(pipeline, args):
+    from avo.timeline_import_cli import _options_document, _report_json, create_service
+
+    result = pipeline.prepare_timeline_import(
+        create_service(args),
+        args.timeline_import,
+        media_roots=args.import_media_root,
+        mappings=_options_document(args.import_mappings),
+        declarations=_options_document(args.import_declarations),
+        actor=args.actor,
+        reason=args.reason,
+    )
+    print(_report_json(result))
+    return (
+        3
+        if result["status"]
+        in {"blocked", "awaiting-sync", "recovery-required", "stale"}
+        else 0
+    )
+
+
 def _pipeline(args: argparse.Namespace) -> int:
     from avo.timeline.command_registry import registry_document
     from avo.timeline.pipeline import TimelinePipeline
@@ -488,6 +548,8 @@ def _pipeline(args: argparse.Namespace) -> int:
     workspace = TimelineWorkspace.from_project(
         args.project, video_id=args.video_id or None
     )
+    if args.pipeline_command == "run" and _pipeline_import_requested(args):
+        return _pipeline_import(TimelinePipeline(workspace), args)
     pipeline = TimelinePipeline(
         workspace, motion_materializer=create_motion_materializer()
     )
@@ -2012,8 +2074,12 @@ def _cleanup(args: argparse.Namespace) -> int:
         return 0
 
     if args.cleanup_command == "verify":
-        errors = verify_preserved_complete(raw_dir, args.master_basename)
-        preserved = resolve_preserved_set(raw_dir, args.master_basename)
+        errors = verify_preserved_complete(
+            raw_dir, args.master_basename, project_path=workspace.project_path
+        )
+        preserved = resolve_preserved_set(
+            raw_dir, args.master_basename, project_path=workspace.project_path
+        )
         _emit(
             compact_cleanup_result(
                 status="pass" if not errors else "blocked",
@@ -2029,6 +2095,7 @@ def _cleanup(args: argparse.Namespace) -> int:
         outcome = run_cleanup(
             raw_dir,
             args.master_basename,
+            project_path=workspace.project_path,
             dry_run=args.cleanup_command == "dry-run",
             session_id=session_id,
             purge_session=False,
@@ -2456,6 +2523,10 @@ def _trim(args: argparse.Namespace) -> int:
 
 
 def _run_cli(args: argparse.Namespace) -> int:
+    if args.command == "timeline-import":
+        from avo.timeline_import_cli import run as timeline_import_run
+
+        return timeline_import_run(args)
     if args.command == "organize":
         from avo.library_cli import run as library_run
 

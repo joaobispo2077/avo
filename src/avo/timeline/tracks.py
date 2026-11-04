@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from .contracts import file_fingerprint, validate_document
+from .store import serialized_timeline
 from .workspace import TimelineWorkspace
 
 
@@ -55,6 +56,10 @@ def _validated_video_role(layer: dict[str, Any]) -> str:
 def _compile_video_layer(
     layer: dict[str, Any],
 ) -> tuple[str, dict[str, Any], dict[str, Any]]:
+    if len(layer.get("regions") or []) > 1:
+        raise VideoTrackError(
+            "Legacy video projection cannot represent multiple regions; use the canonical placed proof graph"
+        )
     role = _validated_video_role(layer)
     region = (layer.get("regions") or [{}])[0]
     start = _seconds(int(region.get("startTicks") or 0), region.get("timebase"))
@@ -332,6 +337,7 @@ class TracksService:
         }
         return basis, revision
 
+    @serialized_timeline(lambda self: self.workspace.timeline_dir)
     def author(
         self, snapshot: dict[str, Any], *, actor: str, reason: str
     ) -> dict[str, Any]:

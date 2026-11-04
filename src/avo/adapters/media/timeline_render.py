@@ -173,6 +173,9 @@ class TimelineRenderAdapter:
             "lineagePolicy": deepcopy(proof_plan["lineagePolicy"]),
             "window": deepcopy(window),
         }
+        for key in ("sourceAssemblyPolicy", "importOriginRef", "checkpoint"):
+            if key in proof_plan:
+                execution[key] = deepcopy(proof_plan[key])
         graph_hash = content_hash(
             {
                 key: execution[key]

@@ -7,6 +7,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from .store import serialized_timeline
+
 
 class AnimationError(ValueError):
     pass
@@ -229,6 +231,7 @@ class AnimationService:
             "tracks": tracks["contentHash"],
         }
 
+    @serialized_timeline(lambda self: self.workspace.timeline_dir)
     def author(
         self, strategy: dict[str, Any], *, actor: str, reason: str
     ) -> dict[str, Any]:

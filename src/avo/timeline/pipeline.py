@@ -286,11 +286,72 @@ def _require_adoption_gates(workspace, manifest, snapshot, review, materializati
         raise ValueError("delivery adoption candidate lifecycle is stale")
 
 
+def _timeline_import_target(workspace):
+    return (
+        workspace.project_path.resolve(),
+        workspace.raw_dir.resolve(),
+        workspace.timeline_dir.resolve(),
+        workspace.video_id,
+        workspace.project.get("provider"),
+    )
+
+
+_IMPORT_NEXT_ACTIONS = {
+    "blocked": "Resolve compatibility and media findings, then validate this import again",
+    "awaiting-sync": "Complete genuine Sync/N/A approval, then validate this import again",
+    "ready-to-activate": "Review this exact validation, then explicitly activate the draft",
+}
+
+
 class TimelinePipeline:
     def __init__(self, workspace: TimelineWorkspace, *, motion_materializer=None):
         self.workspace = workspace
         self.motion_materializer = motion_materializer
         self.run_store = PipelineRunStore(workspace.pipeline_run_path)
+
+    def prepare_timeline_import(
+        self,
+        service,
+        input_path,
+        *,
+        timeline=None,
+        media_roots=None,
+        mappings=None,
+        declarations=None,
+        actor,
+        reason,
+    ):
+        """Stage and validate a handoff without selecting or initializing an edit."""
+        from .otio_import import ImportError as TimelineImportError
+
+        expected = _timeline_import_target(self.workspace)
+        if (
+            _timeline_import_target(service.workspace) != expected
+            or service.provider != self.workspace.project.get("provider")
+            or service.root.resolve()
+            != (self.workspace.timeline_dir / "imports").resolve()
+        ):
+            raise TimelineImportError(
+                "OTIO_TARGET_CONFLICT",
+                "Import service and pipeline must select the exact same project target",
+            )
+        prepared = service.prepare(
+            input_path,
+            timeline=timeline,
+            media_roots=media_roots,
+            mappings=mappings,
+            declarations=declarations,
+            actor=actor,
+            reason=reason,
+        )
+        result = {
+            **service.validate(prepared["importId"]),
+            "pipelineAction": "timeline-import",
+        }
+        result["nextAction"] = result.get("nextAction") or _IMPORT_NEXT_ACTIONS.get(
+            result["status"], "Review the staged import status before continuing"
+        )
+        return result
 
     def materialize_motion(self, instance_id: str, *, output: Path) -> dict[str, Any]:
         if self.motion_materializer is None:
