@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -20,9 +21,177 @@ _HISTORICAL_OUTPUT_DIRECTORIES = {
     "masters": "master",
     "delivery": "delivery",
 }
+_MATERIALIZATION_KINDS = {"cut-proof", "assembly", "proof-plan"}
+MAX_HISTORICAL_RECORD_BYTES = 64 * 1024 * 1024
+MAX_HISTORICAL_TOTAL_BYTES = 256 * 1024 * 1024
+MAX_HISTORICAL_RECORDS = 10_000
 
 
-def inventory_historical_output_fingerprints(raw_dir: Path) -> list[dict[str, Any]]:
+def _record_pairs(pairs):
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError("duplicate record key")
+        result[key] = value
+    return result
+
+
+def _record_constant(value):
+    raise ValueError(f"nonfinite record value: {value}")
+
+
+def _historical_record_paths(timeline_dir):
+    root = Path(timeline_dir).resolve()
+    materializations = root / "materializations"
+    if not materializations.resolve().is_relative_to(root):
+        raise ValueError("historical materialization directory escapes canonical root")
+    paths = []
+    for kind in sorted(_MATERIALIZATION_KINDS):
+        directory = materializations / kind
+        if not directory.resolve().is_relative_to(root):
+            raise ValueError(
+                "historical materialization directory escapes canonical root"
+            )
+        for path in directory.glob("*.json"):
+            if path.name == "reuse-cache.json":
+                continue
+            if not path.resolve().is_relative_to(root):
+                raise ValueError(
+                    f"historical materialization record escapes canonical root: {path}"
+                )
+            if len(paths) >= MAX_HISTORICAL_RECORDS:
+                raise ValueError(
+                    "historical materialization record count exceeds limit"
+                )
+            paths.append(path)
+    return sorted(paths)
+
+
+def _proof_plan_record_shape(record):
+    required = {
+        "schemaVersion",
+        "kind",
+        "checkpoint",
+        "materializationId",
+        "proofPlanId",
+        "proofPlanHash",
+        "preflightHash",
+        "microproofGateHash",
+        "canonicalInputLock",
+        "renderProfile",
+        "output",
+        "producer",
+        "createdAt",
+        "materializationHash",
+    }
+    if set(record) != required or record["schemaVersion"] != "1.0.0":
+        raise ValueError("unsupported native proof materialization shape/version")
+    if record["checkpoint"] not in {
+        "cut-proof",
+        "motion-proof",
+        "pre-master",
+        "deliver",
+    }:
+        raise ValueError("invalid native proof checkpoint")
+    _native_record_provenance(record)
+    validate_document(
+        record["output"], "avo.materialization.schema.json#/$defs/fingerprint"
+    )
+
+
+def _record_hashes(hashes):
+    if any(
+        not isinstance(value, str) or not re.fullmatch(r"[a-f0-9]{64}", value)
+        for value in hashes
+    ):
+        raise ValueError("invalid native proof provenance fingerprint")
+
+
+def _native_record_provenance(record):
+    hashes = [
+        record[key] for key in ("proofPlanHash", "preflightHash", "microproofGateHash")
+    ]
+    lock = record["canonicalInputLock"]
+    if (
+        not isinstance(lock, dict)
+        or not lock
+        or not isinstance(record["producer"], dict)
+    ):
+        raise ValueError("invalid native proof provenance")
+    hashes.extend(lock.values())
+    _record_hashes(hashes)
+    if any(
+        not isinstance(record[key], str) or not record[key]
+        for key in ("proofPlanId", "renderProfile", "createdAt")
+    ):
+        raise ValueError("invalid native proof identity")
+
+
+def _historical_record_output(path, record):
+    if not isinstance(record, dict):
+        raise ValueError("materialization record must be an object")
+    if not {"kind", "materializationId", "materializationHash", "output"} & set(record):
+        return None
+    if record.get("kind") != path.parent.name:
+        raise ValueError("materialization kind differs from its canonical directory")
+    output = _historical_output_identity(record.get("output"))
+    typed_record = {**record, "output": output}
+    if record["kind"] == "proof-plan":
+        _proof_plan_record_shape(typed_record)
+    else:
+        validate_document(typed_record, "avo.materialization.schema.json")
+    body = {key: value for key, value in record.items() if key != "materializationHash"}
+    if record.get("materializationHash") != content_hash(body):
+        raise ValueError("immutable materialization hash mismatch")
+    return {
+        **output,
+        "role": "proof",
+        "path": output["locator"],
+        "recordPath": str(path),
+    }
+
+
+def _historical_output_identity(value):
+    if not isinstance(value, dict):
+        raise ValueError("materialization output must be a fingerprint")
+    output = dict(value)
+    if "path" in output:
+        alias = output.pop("path")
+        if "locator" in output and output["locator"] != alias:
+            raise ValueError("materialization output path and locator disagree")
+        output.setdefault("locator", alias)
+    validate_document(output, "avo.materialization.schema.json#/$defs/fingerprint")
+    return output
+
+
+def _historical_materializations(timeline_dir):
+    outputs, total = [], 0
+    for path in _historical_record_paths(timeline_dir):
+        try:
+            with path.open("rb") as handle:
+                data = handle.read(MAX_HISTORICAL_RECORD_BYTES + 1)
+            total += len(data)
+            if (
+                len(data) > MAX_HISTORICAL_RECORD_BYTES
+                or total > MAX_HISTORICAL_TOTAL_BYTES
+            ):
+                raise ValueError("record byte limit exceeded")
+            record = json.loads(
+                data, object_pairs_hook=_record_pairs, parse_constant=_record_constant
+            )
+            output = _historical_record_output(path, record)
+        except (OSError, ValueError, TypeError, RecursionError) as exc:
+            raise ValueError(
+                f"cannot inspect historical materialization {path}: {exc}"
+            ) from exc
+        if output is not None:
+            outputs.append(output)
+    return outputs
+
+
+def inventory_historical_output_fingerprints(
+    raw_dir: Path, *, timeline_dir: Path | None = None
+) -> list[dict[str, Any]]:
     """Fingerprint retained historical outputs for copy/rename quarantine."""
     edit_dir = Path(raw_dir).resolve() / "edit"
     records: dict[str, dict[str, Any]] = {}
@@ -38,6 +207,8 @@ def inventory_historical_output_fingerprints(raw_dir: Path) -> list[dict[str, An
                 fingerprint["sha256"],
                 {**fingerprint, "role": role, "path": str(path)},
             )
+    for record in _historical_materializations(timeline_dir or edit_dir / "timeline"):
+        records.setdefault(record["sha256"], record)
     return [records[key] for key in sorted(records)]
 
 

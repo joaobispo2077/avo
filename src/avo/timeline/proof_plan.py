@@ -73,6 +73,7 @@ class ProofPlanCompiler:
         snapshot = revision["snapshot"]
         if snapshot.get("sourceAssemblyPolicy") != "preserve-import":
             return {}
+        self._verify_import_sources(revision)
         self._require_import_output(request["output"], snapshot["importOutput"])
         if request.get("checkpoint") == "cut-proof":
             self._require_preserved_source_graph(request)
@@ -81,6 +82,26 @@ class ProofPlanCompiler:
             "importOriginRef": deepcopy(snapshot["originRef"]),
             "importOutput": deepcopy(snapshot["importOutput"]),
         }
+
+    def _verify_import_sources(self, revision):
+        from .import_evidence import verify_import_origin
+        from .media_admission import require_no_forbidden_outputs
+        from .migration import inventory_historical_output_fingerprints
+
+        try:
+            verify_import_origin(self.workspace, revision)
+            require_no_forbidden_outputs(
+                revision["snapshot"]["sources"],
+                known_outputs=inventory_historical_output_fingerprints(
+                    self.workspace.raw_dir, timeline_dir=self.workspace.timeline_dir
+                ),
+            )
+        except ValueError as exc:
+            raise ProofPlanError(
+                "PROOF_IMPORT_EVIDENCE_INVALID",
+                str(exc),
+                "Restore the exact activated import evidence and fingerprinted originals; revalidate unresolved imports",
+            ) from exc
 
     @staticmethod
     def _require_import_output(output, canonical):
