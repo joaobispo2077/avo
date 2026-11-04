@@ -272,6 +272,10 @@ def compile_audio_layers(
     first_input_index: int = 1,
 ) -> dict[str, Any]:
     """Compile dialogue, music beds, SFX, and ambience with ducking and fades."""
+    if any(len(layer.get("regions") or []) > 1 for layer in layers):
+        raise AudioGraphError(
+            "Legacy audio projection cannot represent multiple regions; use the canonical placed proof graph"
+        )
     ordered = sorted(
         layers, key=lambda item: (item.get("order", 0), item.get("layerId", ""))
     )

@@ -122,6 +122,7 @@ class CapabilityRegistry:
 
 
 _PROOF_BUILTINS = {
+    "source-layout": "ffmpeg.source-layout",
     "trim": "ffmpeg.trim",
     "generated-clip": "ffmpeg.generated-clip",
     "concatenate": "ffmpeg.concat",
@@ -143,6 +144,15 @@ _PROOF_BUILTINS = {
 }
 
 _PROOF_CODE_PATHS = (
+    Path(__file__).parent / "adapters" / "media" / "video_clock.py",
+    Path(__file__).parent / "timeline" / "import_evidence.py",
+    Path(__file__).parent / "timeline" / "migration.py",
+    Path(__file__).parent / "adapters" / "media" / "proof_placed.py",
+    Path(__file__).parent / "timeline" / "initial_cut_placed.py",
+    Path(__file__).parent / "timeline" / "import_layout.py",
+    Path(__file__).parent / "adapters" / "media" / "still_probe.py",
+    Path(__file__).parent / "adapters" / "media" / "local_source.py",
+    Path(__file__).parent / "adapters" / "media" / "ffprobe.py",
     Path(__file__).parent / "adapters" / "media" / "proof_executor.py",
     Path(__file__).parent / "adapters" / "media" / "proof_generated.py",
     Path(__file__).parent / "adapters" / "media" / "proof_audio_bridge.py",
