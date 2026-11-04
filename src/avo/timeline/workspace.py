@@ -466,6 +466,7 @@ class TimelineWorkspace:
         after_hash: str | None,
         reason: str,
         actor: str,
+        idempotent: bool = False,
     ) -> dict[str, Any]:
         from .lineage import persist_invalidation
 
@@ -481,6 +482,7 @@ class TimelineWorkspace:
             after_hash=after_hash,
             reason=reason,
             actor=actor,
+            idempotent=idempotent,
         )
 
     def require_active(self, artifact_type: str) -> dict[str, Any]:

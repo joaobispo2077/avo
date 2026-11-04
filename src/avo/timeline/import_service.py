@@ -22,6 +22,7 @@ from .contracts import (
     canonical_json_bytes,
     content_hash,
     file_fingerprint,
+    fingerprint_stage,
     validate_document,
 )
 from .otio_import import (
@@ -1708,8 +1709,686 @@ class TimelineImportService:
             self._save(session)
             return self._validation_result(session, proposal, receipt)
 
+    def _activation_receipt(self, session, validation_hash):
+        receipt = self._versioned_document(
+            session["importId"], "validations", validation_hash, "validation"
+        )
+        if receipt["importId"] != session["importId"] or not receipt["ready"]:
+            raise ImportError(
+                "OTIO_TARGET_CONFLICT", "Exact ready validation receipt is required"
+            )
+        proposal = self._versioned_document(
+            session["importId"],
+            "proposals",
+            receipt["locks"]["proposalHash"],
+            "proposal",
+        )
+        if (
+            proposal["importId"] != session["importId"]
+            or content_hash(proposal) != receipt["locks"]["proposalHash"]
+        ):
+            raise ImportError(
+                "OTIO_SOURCE_CHANGED",
+                "Staged proposal differs from the exact accepted validation",
+            )
+        _require_source_only_proposal(proposal)
+        return receipt, proposal
+
+    def _versioned_document(self, import_id, category, digest, schema):
+        if not isinstance(digest, str) or not re.fullmatch(r"[a-f0-9]{64}", digest):
+            raise ImportError(
+                "OTIO_INPUT_INVALID", "An exact immutable evidence hash is required"
+            )
+        try:
+            value = _document(self.packet_path(import_id, f"{category}/{digest}.json"))
+            validate_document(value, _SCHEMA + "#/$defs/" + schema)
+        except (OSError, ValueError) as exc:
+            raise ImportError(
+                "OTIO_SOURCE_CHANGED",
+                "Required immutable import evidence is missing or invalid",
+            ) from exc
+        if content_hash(value) != digest:
+            raise ImportError(
+                "OTIO_SOURCE_CHANGED", "Immutable import evidence hash differs"
+            )
+        return value
+
+    def _activation_intent(
+        self, session, validation_hash, expected_head, actor, reason
+    ):
+        operation_id = content_hash(
+            {
+                "importId": session["importId"],
+                "validationHash": validation_hash,
+                "expectedHeadHash": expected_head,
+            }
+        )
+        path = self.packet_path(session["importId"], f"activation/{operation_id}.json")
+        if path.is_file():
+            intent = _document(path)
+            validate_document(intent, _SCHEMA + "#/$defs/activation")
+            expected = {
+                "operationId": operation_id,
+                "importId": session["importId"],
+                "validationHash": validation_hash,
+                "expectedHeadHash": expected_head,
+                "revisionId": "cmap-import-" + operation_id[:24],
+                "phase": "prepared",
+            }
+            if any(intent.get(key) != value for key, value in expected.items()):
+                raise ImportError(
+                    "OTIO_SOURCE_CHANGED",
+                    "Activation intent does not match its derived operation",
+                )
+            self._verify_previous_intent(intent)
+            return intent
+        if self.head_hash() != expected_head:
+            raise ImportError(
+                "OTIO_TARGET_CONFLICT",
+                "The selected CMap head changed; inspect and validate the current edit",
+            )
+        previous = None
+        if expected_head != "empty":
+            store = self.workspace.store("cmap")
+            previous = store.revision(store.load_index()["headRevisionId"])
+        intent = {
+            "schemaVersion": "1.0.0",
+            "operationId": operation_id,
+            "importId": session["importId"],
+            "phase": "prepared",
+            "expectedHeadHash": expected_head,
+            "validationHash": validation_hash,
+            "actor": actor,
+            "reason": reason,
+            "createdAt": now_iso(),
+            "revisionId": "cmap-import-" + operation_id[:24],
+            "previousRevisionId": previous["revisionId"] if previous else None,
+            "previousSnapshot": previous["snapshot"] if previous else None,
+        }
+        validate_document(intent, _SCHEMA + "#/$defs/activation")
+        write_immutable_json(path, intent)
+        return intent
+
+    def _verify_previous_intent(self, intent):
+        previous_id = intent["previousRevisionId"]
+        if intent["expectedHeadHash"] == "empty":
+            valid = previous_id is None and intent["previousSnapshot"] is None
+        elif previous_id is None or intent["previousSnapshot"] is None:
+            valid = False
+        else:
+            previous = self.workspace.store("cmap").revision(previous_id)
+            valid = (
+                previous["contentHash"] == intent["expectedHeadHash"]
+                and previous["snapshot"] == intent["previousSnapshot"]
+            )
+        if not valid:
+            raise ImportError(
+                "OTIO_SOURCE_CHANGED",
+                "Activation prior-state evidence differs from the exact expected canonical head",
+            )
+
+    def _selected_snapshot(self, session, proposal, intent):
+        snapshot = deepcopy(proposal["snapshot"])
+        snapshot["sourceAssemblyPolicy"] = "preserve-import"
+        snapshot["importOutput"] = deepcopy(proposal["output"])
+        snapshot["originRef"] = {
+            "importId": session["importId"],
+            "exportSha256": session["source"]["sha256"],
+            "timelinePointer": session["source"]["timelinePointer"],
+            "proposalSha256": self._ref(
+                session["importId"],
+                self.packet_path(
+                    session["importId"], f"proposals/{content_hash(proposal)}.json"
+                ),
+            )["sha256"],
+            "capabilityVersion": "placed-1.0.0"
+            if snapshot.get("layoutMode") == "placed"
+            else "contiguous-1.0.0",
+            "activationId": intent["operationId"],
+        }
+        return snapshot
+
+    def _activation_revision(self, intent):
+        store = self.workspace.store("cmap")
+        if not store.path.is_file():
+            return None
+        refs = store.load_index()["revisionRefs"]
+        if any(row["revisionId"] == intent["revisionId"] for row in refs):
+            return store.revision(intent["revisionId"])
+        return None
+
+    def _check_committed_selection(self, session, intent, proposal, revision):
+        actual = deepcopy(revision["snapshot"])
+        actual.pop("syncRef", None)
+        if actual != self._selected_snapshot(session, proposal, intent):
+            raise ImportError(
+                "OTIO_RECOVERY_REQUIRED",
+                "Activation does not match its committed canonical revision",
+            )
+        self._verify_previous_intent(intent)
+        if revision["parentRevisionId"] != intent["previousRevisionId"]:
+            raise ImportError(
+                "OTIO_SOURCE_CHANGED",
+                "Activation parent differs from the recorded prior head",
+            )
+
+    def _historical_activation(self, session, intent, proposal, revision):
+        from .import_evidence import verify_import_origin
+
+        self._check_committed_selection(session, intent, proposal, revision)
+        verify_import_origin(self.workspace, revision)
+        store = self.workspace.store("cmap")
+        current = store.revision(store.load_index()["headRevisionId"])
+        origin = current["snapshot"].get("originRef") or {}
+        return self._result(
+            "activate",
+            session,
+            status="active-draft"
+            if origin.get("activationId") == intent["operationId"]
+            else "superseded",
+            revision=current,
+            activation={
+                **intent,
+                "phase": "reconciled",
+                "revisionHash": revision["contentHash"],
+            },
+            idempotent=True,
+        )
+
+    def _reconcile_activation(self, session, intent, proposal):
+        store = self.workspace.store("cmap")
+        revision = store.revision(store.load_index()["headRevisionId"])
+        if revision["revisionId"] != intent["revisionId"]:
+            raise ImportError(
+                "OTIO_RECOVERY_REQUIRED",
+                "Pending activation is not the current canonical head",
+            )
+        self._check_committed_selection(session, intent, proposal, revision)
+        self._reconcile_selected_draft(intent, revision)
+        completed = {
+            **intent,
+            "phase": "reconciled",
+            "revisionHash": revision["contentHash"],
+        }
+        session["refs"]["activation"] = self._record(
+            session["importId"], "activation-results", completed
+        )
+        session["state"] = "active-draft"
+        self._save(session)
+        self.workspace.notify_editlog()
+        self._close_activation(session, intent, proposal, revision)
+        self._pending_path().unlink(missing_ok=True)
+        return self._result(
+            "activate", session, activation=completed, revision=revision
+        )
+
+    def _close_activation(self, session, intent, proposal, revision):
+        from .import_evidence import verify_import_origin
+
+        receipt, _ = self._activation_receipt(session, intent["validationHash"])
+        self._check_context()
+        self._verify_committed_basis(proposal, receipt)
+        verify_import_origin(self.workspace, revision)
+        self._check_pending(intent)
+
+    def _reconcile_selected_draft(self, intent, revision):
+        from .lifecycle import PipelineRunStore
+
+        if intent["expectedHeadHash"] != "empty":
+            self.workspace.invalidate_descendants(
+                "cmap",
+                before_hash=intent["expectedHeadHash"],
+                after_hash=revision["contentHash"],
+                reason="CMap revision changed",
+                actor=intent["actor"],
+                idempotent=True,
+            )
+        sync = self.workspace.store("sync-map")
+        sync_revision = sync.revision(sync.load_index()["headRevisionId"])
+        refs = {
+            "rawInventory": {"sources": deepcopy(revision["snapshot"]["sources"])},
+            "syncRevisionId": sync_revision["revisionId"],
+            "syncRevisionHash": sync_revision["contentHash"],
+            "cmapRevisionId": revision["revisionId"],
+            "cmapRevisionHash": revision["contentHash"],
+        }
+        PipelineRunStore(self.workspace.pipeline_run_path).reconcile_import_draft(
+            activation_id=intent["operationId"],
+            cmap_revision_id=revision["revisionId"],
+            cmap_revision_hash=revision["contentHash"],
+            active_refs=refs,
+            actor=intent["actor"],
+            reason="Select validated imported draft",
+        )
+
     def _pending_path(self):
         return self.workspace.timeline_dir / "import-activation.pending.json"
+
+    def _check_pending(self, intent):
+        path = self._pending_path()
+        if path.exists() or path.is_symlink():
+            try:
+                if (
+                    path.is_symlink()
+                    or not path.is_file()
+                    or path.stat().st_size > 4096
+                ):
+                    raise ValueError("Unverified recovery marker")
+                pending = _document(path)
+            except (OSError, ValueError) as exc:
+                raise ImportError(
+                    "OTIO_RECOVERY_REQUIRED",
+                    "Pending import marker is unreadable or invalid; restore the exact recovery record before selecting an edit",
+                ) from exc
+            if pending != {
+                "importId": intent["importId"],
+                "operationId": intent["operationId"],
+            }:
+                raise ImportError(
+                    "OTIO_RECOVERY_REQUIRED",
+                    "Another import activation requires reconciliation",
+                )
+
+    def activate(self, import_id, *, validation_hash, expected_head, actor, reason):
+        actor, reason = str(actor).strip(), str(reason).strip()
+        if not actor or not reason:
+            raise ImportError(
+                "OTIO_INPUT_INVALID", "Activation actor and reason are required"
+            )
+        with timeline_writer(self.workspace.timeline_dir, recovery=True):
+            self._check_context()
+            session = self.load(import_id)
+            receipt, proposal = self._activation_receipt(session, validation_hash)
+            if receipt["locks"]["expectedHeadHash"] != expected_head:
+                raise ImportError(
+                    "OTIO_TARGET_CONFLICT",
+                    "Activation requires the exact displayed target head",
+                )
+            try:
+                intent = self._activation_intent(
+                    session, validation_hash, expected_head, actor, reason
+                )
+            except OSError as exc:
+                raise ImportError(
+                    "OTIO_RECOVERY_REQUIRED",
+                    "Activation intent was interrupted before selection; retry the exact operation",
+                ) from exc
+            self._check_pending(intent)
+            committed = self._activation_revision(intent)
+            if committed is not None:
+                self._verify_committed_basis(proposal, receipt)
+                if self._pending_path().exists():
+                    return self._reconcile_activation(session, intent, proposal)
+                return self._historical_activation(session, intent, proposal, committed)
+            return self._activate_uncommitted(session, receipt, proposal, intent)
+
+    def _activate_uncommitted(self, session, receipt, proposal, intent):
+        if self.head_hash() != intent["expectedHeadHash"]:
+            raise ImportError(
+                "OTIO_TARGET_CONFLICT",
+                "CMap changed after validation; inspect and validate the current edit",
+            )
+        current_proposal, current = self._validation(session)
+        self._check_context()
+        if current != receipt or current_proposal != proposal:
+            raise ImportError(
+                "OTIO_SOURCE_CHANGED",
+                "Source, Sync, proposal or target changed; validate again",
+            )
+        return self._commit_activation(session, receipt, proposal, intent)
+
+    def _clear_uncommitted_pending(self, intent):
+        try:
+            if self._activation_revision(intent) is not None:
+                return
+            marker = self._pending_path()
+            if marker.is_symlink():
+                return
+            expected = {
+                "importId": intent["importId"],
+                "operationId": intent["operationId"],
+            }
+            if marker.is_file() and _document(marker) == expected:
+                marker.unlink()
+        except (OSError, ValueError, RuntimeError):
+            # An uncertain selection remains guarded until exact recovery.
+            return
+
+    def _commit_activation(self, session, receipt, proposal, intent):
+        from .cmap_service import CMapService
+
+        try:
+            atomic_write_json(
+                self._pending_path(),
+                {"importId": session["importId"], "operationId": intent["operationId"]},
+            )
+            self._check_context()
+            CMapService(self.workspace).author(
+                self._selected_snapshot(session, proposal, intent),
+                actor=intent["actor"],
+                reason=intent["reason"],
+                expected_head_hash=intent["expectedHeadHash"],
+                revision_id=intent["revisionId"],
+                created_at=intent["createdAt"],
+            )
+            self._verify_committed_basis(proposal, receipt)
+            return self._reconcile_activation(session, intent, proposal)
+        except Exception as exc:
+            self._clear_uncommitted_pending(intent)
+            raise ImportError(
+                "OTIO_RECOVERY_REQUIRED",
+                "Import selection was interrupted; retry this exact operation. A committed revision remains guarded until originals and bookkeeping are coherent",
+                scope=intent["revisionId"],
+            ) from exc
+
+    def _verify_committed_sources(self, proposal):
+        with fingerprint_stage(verify_on_exit=True):
+            self._verify_original_bytes(proposal)
+
+    def _verify_original_bytes(self, proposal):
+        fingerprints = {}
+        for source in proposal["snapshot"]["sources"]:
+            path = Path(source["locator"])
+            actual = file_fingerprint(path)
+            if actual["sha256"] != source["fingerprint"]["sha256"]:
+                raise ImportError(
+                    "OTIO_SOURCE_CHANGED",
+                    "Committed import original bytes changed",
+                    scope=source["sourceId"],
+                )
+            fingerprints[path] = actual
+        self._reject_derived_originals(fingerprints, "original-media")
+
+    def _verify_committed_basis(self, proposal, receipt):
+        if (
+            self._pending_path().exists()
+            and receipt["locks"]["context"] != self.context_lock
+        ):
+            raise ImportError(
+                "OTIO_SOURCE_CHANGED",
+                "Pending activation context changed; restore the exact declared target before recovery",
+            )
+        self._verify_committed_sources(proposal)
+        if self._sync_lock(proposal) != receipt["locks"]["sync"]:
+            raise ImportError(
+                "OTIO_SOURCE_CHANGED",
+                "Committed import Sync basis changed; revalidate the current edit",
+            )
+
+    def _return_target(self, activation_id):
+        from .import_evidence import verify_import_origin
+
+        if not isinstance(activation_id, str) or not re.fullmatch(
+            r"[a-f0-9]{64}", activation_id
+        ):
+            raise ImportError(
+                "OTIO_INPUT_INVALID", "Return requires an exact activation ID"
+            )
+        store = self.workspace.store("cmap")
+        current = store.load_index()["headRevisionId"]
+        seen = set()
+        while current and current not in seen:
+            seen.add(current)
+            revision = store.revision(current)
+            origin = revision["snapshot"].get("originRef") or {}
+            if origin.get("activationId") == activation_id:
+                verify_import_origin(self.workspace, revision)
+                return self._recorded_return_target(origin)
+            current = revision["parentRevisionId"]
+        raise ImportError(
+            "OTIO_TARGET_CONFLICT",
+            "The activation is not in the current canonical history",
+        )
+
+    def _recorded_return_target(self, origin):
+        session = self.load(origin["importId"])
+        path = self.packet_path(
+            session["importId"], f"activation/{origin['activationId']}.json"
+        )
+        activation = _document(path)
+        validate_document(activation, _SCHEMA + "#/$defs/activation")
+        if activation["previousRevisionId"] is None:
+            raise ImportError(
+                "OTIO_TARGET_CONFLICT",
+                "This activation has no prior editable content; return never deletes the canonical head",
+            )
+        target = self.workspace.store("cmap").revision(activation["previousRevisionId"])
+        if (
+            target["snapshot"] != activation["previousSnapshot"]
+            or target["contentHash"] != activation["expectedHeadHash"]
+        ):
+            raise ImportError(
+                "OTIO_SOURCE_CHANGED",
+                "Recorded prior selection differs from canonical history",
+            )
+        return session, target
+
+    def _return_basis(self, target, intent=None):
+        from .import_evidence import verify_import_origin
+
+        verify_import_origin(self.workspace, target)
+        proposal = {"snapshot": target["snapshot"]}
+        self._verify_committed_sources(proposal)
+        sync = self._sync_lock(proposal)
+        if sync is None:
+            raise ImportError(
+                "OTIO_SYNC_REQUIRED",
+                "Return requires current approved Sync/N/A for the prior originals",
+            )
+        if intent is not None and sync != intent["sync"]:
+            raise ImportError(
+                "OTIO_SOURCE_CHANGED",
+                "The return operation's current Sync basis changed",
+            )
+        return sync
+
+    def _return_intent(
+        self, session, target, activation_id, expected_head, actor, reason
+    ):
+        operation = content_hash(
+            {
+                "kind": "return",
+                "activationId": activation_id,
+                "expectedHeadHash": expected_head,
+            }
+        )
+        path = self.packet_path(session["importId"], f"returns/{operation}.json")
+        expected = {
+            "schemaVersion": "1.0.0",
+            "kind": "return",
+            "phase": "prepared",
+            "operationId": operation,
+            "activationId": activation_id,
+            "importId": session["importId"],
+            "expectedHeadHash": expected_head,
+            "targetRevisionId": target["revisionId"],
+            "targetRevisionHash": target["contentHash"],
+            "revisionId": "cmap-return-" + operation[:24],
+        }
+        if path.is_file():
+            intent = _document(path)
+            validate_document(intent, _SCHEMA + "#/$defs/returnIntent")
+            if any(intent[key] != value for key, value in expected.items()):
+                raise ImportError(
+                    "OTIO_SOURCE_CHANGED",
+                    "Return intent differs from the requested canonical selection",
+                )
+        else:
+            if self.head_hash() != expected_head:
+                raise ImportError(
+                    "OTIO_TARGET_CONFLICT",
+                    "Return requires the exact current CMap head",
+                )
+            intent = {
+                **expected,
+                "actor": actor,
+                "reason": reason,
+                "createdAt": now_iso(),
+                "sync": self._return_basis(target),
+            }
+            validate_document(intent, _SCHEMA + "#/$defs/returnIntent")
+            write_immutable_json(path, intent)
+        return intent, path
+
+    def _verify_return_revision(self, target, intent, revision):
+        actual, expected = deepcopy(revision["snapshot"]), deepcopy(target["snapshot"])
+        sync = actual.pop("syncRef", {})
+        expected.pop("syncRef", None)
+        parent = self.workspace.store("cmap").revision(revision["parentRevisionId"])
+        if (
+            actual != expected
+            or sync.get("contentSha256") != intent["sync"]["revisionHash"]
+            or parent["contentHash"] != intent["expectedHeadHash"]
+        ):
+            raise ImportError(
+                "OTIO_RECOVERY_REQUIRED",
+                "Committed return differs from its prior content and current Sync",
+            )
+
+    def _reconcile_return(self, session, target, intent, revision):
+        self._verify_return_revision(target, intent, revision)
+        if self.head_hash() != revision["contentHash"]:
+            raise ImportError(
+                "OTIO_RECOVERY_REQUIRED",
+                "Pending return is not the current canonical selection",
+            )
+        self._reconcile_selected_draft(intent, revision)
+        completed = {
+            **intent,
+            "phase": "reconciled",
+            "revisionHash": revision["contentHash"],
+        }
+        session["refs"]["return"] = self._record(
+            session["importId"], "return-results", completed
+        )
+        session["state"] = "superseded"
+        self._save(session)
+        self.workspace.notify_editlog()
+        self._close_return(target, intent, revision)
+        self._pending_path().unlink(missing_ok=True)
+        return self._result(
+            "rollback",
+            session,
+            status="active-draft",
+            revision=revision,
+            activation=completed,
+        )
+
+    def _close_return(self, target, intent, revision):
+        from .import_evidence import verify_import_origin
+        from .import_retention import retained_return_paths
+
+        self._check_context()
+        self._return_basis(target, intent)
+        verify_import_origin(self.workspace, revision)
+        retained_return_paths(self.workspace, revision)
+        self._check_pending(intent)
+
+    def _historical_return(self, session, target, intent, revision):
+        self._verify_return_revision(target, intent, revision)
+        completed = {
+            **intent,
+            "phase": "reconciled",
+            "revisionHash": revision["contentHash"],
+        }
+        result = self._versioned_document(
+            session["importId"],
+            "return-results",
+            content_hash(completed),
+            "returnIntent",
+        )
+        if result != completed:
+            raise ImportError(
+                "OTIO_SOURCE_CHANGED", "Return reconciliation evidence differs"
+            )
+        store = self.workspace.store("cmap")
+        current = store.revision(store.load_index()["headRevisionId"])
+        return self._result(
+            "rollback",
+            session,
+            status="active-draft"
+            if current["snapshot"].get("originRef")
+            == target["snapshot"].get("originRef")
+            else "superseded",
+            revision=current,
+            activation=completed,
+            idempotent=True,
+        )
+
+    def _commit_return(self, session, target, intent, path):
+        from .cmap_service import CMapService
+
+        reference = self._ref(session["importId"], path)
+        evidence = [
+            {
+                "evidenceId": "return-" + intent["operationId"],
+                "kind": "timeline-import-return",
+                "path": path.relative_to(self.workspace.timeline_dir).as_posix(),
+                "sha256": reference["sha256"],
+            }
+        ]
+        try:
+            atomic_write_json(
+                self._pending_path(),
+                {"importId": session["importId"], "operationId": intent["operationId"]},
+            )
+            self._check_context()
+            revision = CMapService(self.workspace).author(
+                target["snapshot"],
+                actor=intent["actor"],
+                reason=intent["reason"],
+                expected_head_hash=intent["expectedHeadHash"],
+                revision_id=intent["revisionId"],
+                created_at=intent["createdAt"],
+                evidence=evidence,
+            )
+            self._return_basis(target, intent)
+            return self._reconcile_return(session, target, intent, revision)
+        except Exception as exc:
+            self._clear_uncommitted_pending(intent)
+            raise ImportError(
+                "OTIO_RECOVERY_REQUIRED",
+                "Return was interrupted; retry the exact activation ID and expected head to reconcile",
+                scope=intent["revisionId"],
+            ) from exc
+
+    def rollback(self, activation_id, *, expected_head, actor, reason):
+        actor, reason = str(actor).strip(), str(reason).strip()
+        if not actor or not reason:
+            raise ImportError(
+                "OTIO_INPUT_INVALID", "Return actor and reason are required"
+            )
+        if not isinstance(expected_head, str) or not re.fullmatch(
+            r"[a-f0-9]{64}", expected_head
+        ):
+            raise ImportError(
+                "OTIO_INPUT_INVALID",
+                "Return requires the exact nonempty CMap head hash",
+            )
+        with timeline_writer(self.workspace.timeline_dir, recovery=True):
+            self._check_context()
+            session, target = self._return_target(activation_id)
+            try:
+                intent, path = self._return_intent(
+                    session, target, activation_id, expected_head, actor, reason
+                )
+            except OSError as exc:
+                raise ImportError(
+                    "OTIO_RECOVERY_REQUIRED",
+                    "Return intent was interrupted before selection; retry the same activation ID and expected head",
+                ) from exc
+            self._check_pending(intent)
+            self._return_basis(target, intent)
+            committed = self._activation_revision(intent)
+            if committed is not None:
+                if self._pending_path().exists():
+                    return self._reconcile_return(session, target, intent, committed)
+                return self._historical_return(session, target, intent, committed)
+            if self.head_hash() != expected_head:
+                raise ImportError(
+                    "OTIO_TARGET_CONFLICT", "CMap changed before return selection"
+                )
+            return self._commit_return(session, target, intent, path)
 
     def _status_selection(self):
         store = self.workspace.store("cmap")

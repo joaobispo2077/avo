@@ -307,6 +307,7 @@ def persist_invalidation(
     after_hash: str | None,
     reason: str,
     actor: str = "avo-lineage",
+    idempotent: bool = False,
 ) -> dict[str, Any]:
     """Persist derived stale state for all currently stored descendants."""
     descendants = stale_descendants(
@@ -321,6 +322,8 @@ def persist_invalidation(
             continue
         index = store.load_index()
         if index["headRevisionId"] is None:
+            continue
+        if idempotent and index["activeState"] == "stale":
             continue
         updated = store.set_active_state(
             "stale",
