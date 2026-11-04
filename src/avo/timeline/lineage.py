@@ -5,7 +5,7 @@ from __future__ import annotations
 from copy import deepcopy
 from typing import Any
 
-from .contracts import content_hash
+from .contracts import ContractError, content_hash, validate_document
 from .store import ArtifactStore
 
 
@@ -98,6 +98,26 @@ def validate_audiovisual_lineage(graph: dict[str, Any]) -> dict[str, Any]:
     return deepcopy(graph)
 
 
+def _validate_import_policy(snapshot):
+    if not {"originRef", "sourceAssemblyPolicy", "importOutput"}.intersection(snapshot):
+        return
+    try:
+        validate_document(
+            snapshot.get("originRef"),
+            "avo.timeline-common.schema.json#/$defs/importOriginRef",
+        )
+        validate_document(
+            snapshot.get("sourceAssemblyPolicy"),
+            "avo.timeline-common.schema.json#/$defs/sourceAssemblyPolicy",
+        )
+        validate_document(
+            snapshot.get("importOutput"),
+            "avo.timeline-common.schema.json#/$defs/importOutput",
+        )
+    except ContractError as exc:
+        raise LineageError(f"invalid canonical import origin/policy: {exc}") from exc
+
+
 def _require_raw_source(source):
     if source.get("kind") != "raw":
         raise LineageError("CMap editorial truth must use brute/raw material")
@@ -121,7 +141,18 @@ def _cmap_source_ids(snapshot):
 
 
 def validate_cmap_snapshot(snapshot: dict[str, Any]) -> None:
+    _validate_import_policy(snapshot)
     source_ids = _cmap_source_ids(snapshot)
+    if snapshot.get("layoutMode") == "placed":
+        from .import_layout import LayoutError, validate_layout
+
+        try:
+            validate_layout(snapshot)
+        except LayoutError as exc:
+            raise LineageError(str(exc)) from exc
+        return
+    if "layout" in snapshot or "layoutMode" in snapshot:
+        raise LineageError("Unsupported or mixed CMap layout representation")
     segment_ids: set[str] = set()
     segments = snapshot.get("segments") or []
     if not segments:

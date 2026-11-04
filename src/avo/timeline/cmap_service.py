@@ -9,8 +9,69 @@ from typing import Any
 from .contracts import file_fingerprint
 from .diff import stable_id_diff
 from .lineage import LineageError, validate_cmap_snapshot
-from .workspace import TimelineWorkspace
 from .store import serialized_timeline
+from .workspace import TimelineWorkspace
+
+
+def _placed_diff_state(snapshot):
+    snapshot = snapshot or {}
+    layout = snapshot.get("layout") or {}
+    settings = {
+        key: snapshot[key]
+        for key in ("layoutMode", "sourceAssemblyPolicy", "importOutput", "originRef")
+        if key in snapshot
+    }
+    settings.update(
+        {
+            f"layout.{key}": layout[key]
+            for key in ("programClock", "duration", "displayOrigin", "background")
+            if key in layout
+        }
+    )
+    return {
+        "sources": snapshot.get("sources", []),
+        "segments": snapshot.get("segments", []),
+        **{
+            f"layout.{key}": layout.get(key, [])
+            for key in ("placements", "tracks", "gaps")
+        },
+        "settings": [
+            {"settingId": key, "value": value} for key, value in settings.items()
+        ],
+    }
+
+
+def _placed_diff(parent, child, reason):
+    before, after = _placed_diff_state(parent), _placed_diff_state(child)
+    changes = []
+    for collection, id_key in (
+        ("sources", "sourceId"),
+        ("segments", "segmentId"),
+        ("layout.placements", "placementId"),
+        ("layout.tracks", "trackId"),
+        ("layout.gaps", "gapId"),
+        ("settings", "settingId"),
+    ):
+        changes.extend(
+            stable_id_diff(
+                before,
+                after,
+                reason,
+                collection=collection,
+                id_key=id_key,
+                actor_intent="preserve approved editorial meaning",
+            )
+        )
+    changes.sort(
+        key=lambda change: (
+            change["target"]["collection"],
+            change["target"]["stableId"],
+            change["op"],
+        )
+    )
+    for ordinal, change in enumerate(changes, 1):
+        change["opId"] = f"diff-{ordinal:04d}"
+    return changes
 
 
 class CMapService:
@@ -64,6 +125,8 @@ class CMapService:
     def _diff(
         parent: dict[str, Any] | None, child: dict[str, Any], reason: str
     ) -> list[dict[str, Any]]:
+        if "layout" in child or "layout" in (parent or {}):
+            return _placed_diff(parent, child, reason)
         return stable_id_diff(
             parent,
             child,
@@ -81,6 +144,9 @@ class CMapService:
         actor: str,
         reason: str,
         expected_head_hash: str | None = None,
+        revision_id: str | None = None,
+        created_at: str | None = None,
+        evidence: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         snapshot = deepcopy(snapshot)
         validate_cmap_snapshot(snapshot)
@@ -94,7 +160,8 @@ class CMapService:
             current = self.store.revision(index["headRevisionId"])
             parent = current["snapshot"]
             before = current["contentHash"]
-        if expected_head_hash is not None and expected_head_hash != before:
+        expected = None if expected_head_hash == "empty" else expected_head_hash
+        if expected_head_hash is not None and expected != before:
             raise LineageError("stale cutting proposal: CMap head changed")
         diff = self._diff(parent, snapshot, reason)
         revision = self.store.append_revision(
@@ -103,7 +170,10 @@ class CMapService:
             reason=reason,
             diff=diff,
             dependencies=[basis],
-            expected_head_hash=before,
+            expected_head_hash=before or "empty",
+            revision_id=revision_id,
+            created_at=created_at,
+            evidence=evidence,
         )
         if before and before != revision["contentHash"]:
             self.workspace.invalidate_descendants(
