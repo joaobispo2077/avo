@@ -98,7 +98,15 @@ def validate_audiovisual_lineage(graph: dict[str, Any]) -> dict[str, Any]:
     return deepcopy(graph)
 
 
-def validate_cmap_snapshot(snapshot: dict[str, Any]) -> None:
+def _require_raw_source(source):
+    if source.get("kind") != "raw":
+        raise LineageError("CMap editorial truth must use brute/raw material")
+    fingerprint = source.get("fingerprint") or {}
+    if len(str(fingerprint.get("sha256") or "")) != 64:
+        raise LineageError("CMap raw source requires SHA-256 fingerprint")
+
+
+def _cmap_source_ids(snapshot):
     sources = snapshot.get("sources") or []
     if not sources:
         raise LineageError("CMap requires fingerprinted raw sources")
@@ -108,11 +116,12 @@ def validate_cmap_snapshot(snapshot: dict[str, Any]) -> None:
         if not source_id or source_id in source_ids:
             raise LineageError("CMap source IDs must be stable and unique")
         source_ids.add(source_id)
-        if source.get("kind") != "raw":
-            raise LineageError("CMap editorial truth must use brute/raw material")
-        fingerprint = source.get("fingerprint") or {}
-        if len(str(fingerprint.get("sha256") or "")) != 64:
-            raise LineageError("CMap raw source requires SHA-256 fingerprint")
+        _require_raw_source(source)
+    return source_ids
+
+
+def validate_cmap_snapshot(snapshot: dict[str, Any]) -> None:
+    source_ids = _cmap_source_ids(snapshot)
     segment_ids: set[str] = set()
     segments = snapshot.get("segments") or []
     if not segments:
