@@ -1,5 +1,7 @@
 # /avo.pipeline Command
 
+For a Resolve timeline import, follow the [import branch](../../agent-skills/avo-pipeline/references/pipeline.md#continue-a-resolve-timeline) before ordinary new-edit or motion setup. Use the existing provider project; preserve the imported canonical cut and its normal review gates.
+
 **Timeline integration:** Owns
 
 ## Workflow guidance
