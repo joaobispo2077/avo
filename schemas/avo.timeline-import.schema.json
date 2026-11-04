@@ -1,0 +1,674 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://avo.local/schemas/avo.timeline-import.schema.json",
+  "title": "Staged timeline import evidence, not canonical editing authority",
+  "$ref": "#/$defs/session",
+  "$defs": {
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "text": {
+      "type": "string",
+      "minLength": 1
+    },
+    "expectedHead": {
+      "oneOf": [
+        {
+          "const": "empty"
+        },
+        {
+          "$ref": "#/$defs/sha256"
+        }
+      ]
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sha256",
+        "sizeBytes",
+        "timelinePointer"
+      ],
+      "properties": {
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "sizeBytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "timelinePointer": {
+          "type": "string",
+          "maxLength": 2048
+        }
+      }
+    },
+    "fileRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "sha256",
+        "sizeBytes"
+      ],
+      "properties": {
+        "path": {
+          "$ref": "#/$defs/text"
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "sizeBytes": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "sourceMapping": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "status"
+      ],
+      "properties": {
+        "path": {
+          "$ref": "#/$defs/text"
+        },
+        "status": {
+          "enum": [
+            "unresolved",
+            "ambiguous",
+            "verified",
+            "incompatible",
+            "changed",
+            "prohibited"
+          ]
+        },
+        "identityConfirmed": {
+          "type": "boolean"
+        },
+        "sourceId": {
+          "$ref": "#/$defs/text"
+        },
+        "matchBasis": {
+          "type": "string"
+        },
+        "fingerprint": {
+          "$ref": "#/$defs/fileRef"
+        },
+        "videoStreamIndex": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "mediaKind": {
+          "enum": [
+            "video",
+            "still",
+            "audio"
+          ]
+        },
+        "gainDb": {
+          "type": "number",
+          "minimum": -60,
+          "maximum": 24
+        },
+        "muted": {
+          "type": "boolean"
+        },
+        "audioSelection": {
+          "type": "object"
+        },
+        "properties": {
+          "type": "object"
+        }
+      }
+    },
+    "options": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "mediaRoots",
+        "mappings",
+        "declarations"
+      ],
+      "properties": {
+        "mediaRoots": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/text"
+          },
+          "uniqueItems": true
+        },
+        "mappings": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/sourceMapping"
+          }
+        },
+        "declarations": {
+          "type": "object"
+        },
+        "supersedesImportId": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "finding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "code",
+        "scope",
+        "message",
+        "blocking",
+        "evidenceOrigin",
+        "remediation"
+      ],
+      "properties": {
+        "code": {
+          "$ref": "#/$defs/text"
+        },
+        "scope": {
+          "type": "string",
+          "maxLength": 2048
+        },
+        "message": {
+          "$ref": "#/$defs/text"
+        },
+        "blocking": {
+          "type": "boolean"
+        },
+        "evidenceOrigin": {
+          "enum": [
+            "export",
+            "probe",
+            "editor-declaration",
+            "capability-check",
+            "unverified"
+          ]
+        },
+        "remediation": {
+          "$ref": "#/$defs/text"
+        },
+        "resolutionRef": {
+          "$ref": "#/$defs/fileRef"
+        }
+      }
+    },
+    "snapshot": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "source",
+        "inventory"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": "1.0.0"
+        },
+        "source": {
+          "$ref": "#/$defs/source"
+        },
+        "inventory": {
+          "type": "object"
+        }
+      }
+    },
+    "session": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "normalizerVersion",
+        "importId",
+        "provider",
+        "videoId",
+        "state",
+        "source",
+        "options",
+        "refs",
+        "expectedHeadHash",
+        "actor",
+        "reason",
+        "createdAt"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": "1.0.0"
+        },
+        "normalizerVersion": {
+          "$ref": "#/$defs/text"
+        },
+        "importId": {
+          "$ref": "#/$defs/sha256"
+        },
+        "provider": {
+          "type": "string",
+          "pattern": "^[a-z0-9][a-z0-9-]*$"
+        },
+        "videoId": {
+          "$ref": "#/$defs/text"
+        },
+        "state": {
+          "enum": [
+            "prepared",
+            "unresolved",
+            "validated",
+            "awaiting-sync",
+            "ready-to-activate",
+            "activating",
+            "active-draft",
+            "recovery-required",
+            "stale",
+            "cancelled",
+            "superseded"
+          ]
+        },
+        "source": {
+          "$ref": "#/$defs/source"
+        },
+        "options": {
+          "$ref": "#/$defs/options"
+        },
+        "refs": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/fileRef"
+          }
+        },
+        "expectedHeadHash": {
+          "$ref": "#/$defs/expectedHead"
+        },
+        "actor": {
+          "$ref": "#/$defs/text"
+        },
+        "reason": {
+          "$ref": "#/$defs/text"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "supersedesImportId": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "proposal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "importId",
+        "snapshot",
+        "output",
+        "findings",
+        "provisionalFinishing"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": "1.0.0"
+        },
+        "importId": {
+          "$ref": "#/$defs/sha256"
+        },
+        "snapshot": {
+          "type": "object"
+        },
+        "output": {
+          "type": "object"
+        },
+        "elements": {
+          "type": "array",
+          "maxItems": 2048,
+          "items": {
+            "$ref": "#/$defs/normalizedElement"
+          }
+        },
+        "activeEditDiff": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "findings": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/finding"
+          }
+        },
+        "provisionalFinishing": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        }
+      }
+    },
+    "normalizedElement": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "elementId",
+        "pointer",
+        "schema",
+        "name",
+        "disposition",
+        "evidenceOrigin"
+      ],
+      "properties": {
+        "elementId": {
+          "type": "string",
+          "pattern": "^element-[a-f0-9]{64}$"
+        },
+        "pointer": {
+          "type": "string",
+          "maxLength": 2048
+        },
+        "schema": {
+          "type": "string",
+          "maxLength": 128
+        },
+        "name": {
+          "type": "string",
+          "maxLength": 240
+        },
+        "disposition": {
+          "enum": [
+            "reconstructed",
+            "reference-metadata",
+            "unresolved",
+            "unsupported"
+          ]
+        },
+        "evidenceOrigin": {
+          "enum": [
+            "export",
+            "probe",
+            "editor-declaration",
+            "capability-check",
+            "unverified"
+          ]
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "referenceMetadata": {
+          "$ref": "#/$defs/referenceMetadata"
+        }
+      }
+    },
+    "validation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "importId",
+        "state",
+        "locks",
+        "findings",
+        "ready"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": "1.0.0"
+        },
+        "importId": {
+          "$ref": "#/$defs/sha256"
+        },
+        "state": {
+          "enum": [
+            "blocked",
+            "awaiting-sync",
+            "ready-to-activate",
+            "stale"
+          ]
+        },
+        "mediaMappings": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object"
+          }
+        },
+        "locks": {
+          "type": "object"
+        },
+        "findings": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/finding"
+          }
+        },
+        "ready": {
+          "type": "boolean"
+        }
+      }
+    },
+    "activation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "operationId",
+        "importId",
+        "phase",
+        "expectedHeadHash",
+        "validationHash",
+        "actor",
+        "reason",
+        "createdAt"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": "1.0.0"
+        },
+        "operationId": {
+          "$ref": "#/$defs/sha256"
+        },
+        "importId": {
+          "$ref": "#/$defs/sha256"
+        },
+        "phase": {
+          "enum": [
+            "prepared",
+            "head-committed",
+            "reconciled",
+            "aborted",
+            "recovery-required"
+          ]
+        },
+        "expectedHeadHash": {
+          "$ref": "#/$defs/expectedHead"
+        },
+        "validationHash": {
+          "$ref": "#/$defs/sha256"
+        },
+        "actor": {
+          "$ref": "#/$defs/text"
+        },
+        "reason": {
+          "$ref": "#/$defs/text"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "revisionId": {
+          "$ref": "#/$defs/text"
+        },
+        "revisionHash": {
+          "$ref": "#/$defs/sha256"
+        },
+        "previousRevisionId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "previousSnapshot": {
+          "type": [
+            "object",
+            "null"
+          ]
+        }
+      }
+    },
+    "returnIntent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schemaVersion",
+        "kind",
+        "phase",
+        "operationId",
+        "activationId",
+        "importId",
+        "expectedHeadHash",
+        "targetRevisionHash",
+        "targetRevisionId",
+        "revisionId",
+        "actor",
+        "reason",
+        "createdAt",
+        "sync"
+      ],
+      "properties": {
+        "schemaVersion": {
+          "const": "1.0.0"
+        },
+        "kind": {
+          "const": "return"
+        },
+        "phase": {
+          "enum": [
+            "prepared",
+            "reconciled"
+          ]
+        },
+        "operationId": {
+          "$ref": "#/$defs/sha256"
+        },
+        "activationId": {
+          "$ref": "#/$defs/sha256"
+        },
+        "importId": {
+          "$ref": "#/$defs/sha256"
+        },
+        "expectedHeadHash": {
+          "$ref": "#/$defs/sha256"
+        },
+        "targetRevisionHash": {
+          "$ref": "#/$defs/sha256"
+        },
+        "revisionHash": {
+          "$ref": "#/$defs/sha256"
+        },
+        "targetRevisionId": {
+          "$ref": "#/$defs/text"
+        },
+        "revisionId": {
+          "$ref": "#/$defs/text"
+        },
+        "actor": {
+          "$ref": "#/$defs/text"
+        },
+        "reason": {
+          "$ref": "#/$defs/text"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "sync": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "revisionHash",
+            "decisionHash"
+          ],
+          "properties": {
+            "revisionHash": {
+              "$ref": "#/$defs/sha256"
+            },
+            "decisionHash": {
+              "$ref": "#/$defs/sha256"
+            }
+          }
+        }
+      }
+    },
+    "referenceMetadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ownerPointer"
+      ],
+      "properties": {
+        "ownerPointer": {
+          "type": "string",
+          "maxLength": 2048
+        },
+        "markedRange": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "start",
+            "duration"
+          ],
+          "properties": {
+            "start": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "value",
+                "rate"
+              ],
+              "properties": {
+                "value": {
+                  "type": "string",
+                  "maxLength": 128
+                },
+                "rate": {
+                  "type": "string",
+                  "maxLength": 128
+                }
+              }
+            },
+            "duration": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "value",
+                "rate"
+              ],
+              "properties": {
+                "value": {
+                  "type": "string",
+                  "maxLength": 128
+                },
+                "rate": {
+                  "type": "string",
+                  "maxLength": 128
+                }
+              }
+            }
+          }
+        },
+        "notes": {
+          "type": "array",
+          "maxItems": 4,
+          "items": {
+            "type": "string",
+            "maxLength": 4096
+          }
+        },
+        "notesTruncated": {
+          "type": "boolean"
+        }
+      }
+    }
+  }
+}

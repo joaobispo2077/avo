@@ -211,25 +211,7 @@
     "inputEvidenceRefs": {
       "type": "array",
       "items": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "evidenceId",
-          "sha256"
-        ],
-        "properties": {
-          "evidenceId": {
-            "type": "string",
-            "minLength": 1
-          },
-          "sha256": {
-            "type": "string",
-            "pattern": "^[a-f0-9]{64}$"
-          },
-          "kind": {
-            "type": "string"
-          }
-        }
+        "$ref": "https://github.com/joaobispo2077/avo/schemas/avo.timeline-common.schema.json#/$defs/evidenceRef"
       }
     },
     "contentSha256": {

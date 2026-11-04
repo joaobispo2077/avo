@@ -470,14 +470,88 @@
         }
       }
     },
+    "layoutEvidence": {"enum": ["export", "probe", "editor-declaration", "capability-check", "unverified"]},
+    "programTime": {"allOf": [{"$ref": "#/$defs/timeValue"}, {"properties": {"domain": {"const": "cmap-output"}}, "not": {"required": ["sourceId"]}}]},
+    "layoutTrack": {
+      "type": "object", "additionalProperties": false,
+      "required": ["trackId", "kind", "order", "enabled", "muted", "evidenceOrigin"],
+      "properties": {
+        "trackId": {"type": "string", "minLength": 1},
+        "kind": {"enum": ["video", "audio"]},
+        "order": {"type": "integer", "minimum": 0},
+        "enabled": {"type": "boolean"}, "muted": {"type": "boolean"},
+        "name": {"type": "string"}, "evidenceOrigin": {"$ref": "#/$defs/layoutEvidence"}
+      }
+    },
+    "layoutAudioSelection": {
+      "type": "object", "additionalProperties": false,
+      "required": ["streamIndex", "channels", "sourceLayout", "outputLayout", "sourceSampleRate"],
+      "properties": {
+        "streamIndex": {"type": "integer", "minimum": 0},
+        "channels": {"type": "array", "minItems": 1, "maxItems": 2, "items": {"type": "integer", "minimum": 0}},
+        "sourceLayout": {"type": "string", "minLength": 1},
+        "outputLayout": {"enum": ["stereo", "dual-mono"]},
+        "sourceSampleRate": {"type": "integer", "minimum": 1}
+      }
+    },
+    "layoutPlacement": {
+      "type": "object", "additionalProperties": false,
+      "required": ["placementId", "elementId", "trackId", "sourceId", "mediaKind", "in", "out", "start", "end", "enabled", "routing", "evidenceOrigin"],
+      "properties": {
+        "placementId": {"type": "string", "minLength": 1}, "elementId": {"type": "string", "minLength": 1},
+        "trackId": {"type": "string", "minLength": 1}, "sourceId": {"type": "string", "minLength": 1},
+        "mediaKind": {"enum": ["video", "still", "audio"]},
+        "in": {"$ref": "#/$defs/timeValue"}, "out": {"$ref": "#/$defs/timeValue"},
+        "start": {"$ref": "#/$defs/programTime"}, "end": {"$ref": "#/$defs/programTime"},
+        "enabled": {"type": "boolean"}, "muted": {"type": "boolean"},
+        "gainDb": {"type": "number", "minimum": -60, "maximum": 24},
+        "routing": {
+          "type": "object", "additionalProperties": false,
+          "properties": {"videoStreamIndex": {"type": "integer", "minimum": 0}, "audioSelection": {"$ref": "#/$defs/layoutAudioSelection"}}
+        },
+        "evidenceOrigin": {"$ref": "#/$defs/layoutEvidence"}
+      },
+      "allOf": [
+        {"if": {"properties": {"mediaKind": {"const": "audio"}}}, "then": {"properties": {"routing": {"required": ["audioSelection"], "not": {"required": ["videoStreamIndex"]}}}}, "else": {"properties": {"routing": {"required": ["videoStreamIndex"], "not": {"required": ["audioSelection"]}}, "gainDb": {"const": 0}, "muted": {"const": false}}}}
+      ]
+    },
+    "layoutGap": {
+      "type": "object", "additionalProperties": false,
+      "required": ["gapId", "trackId", "start", "end", "evidenceOrigin"],
+      "properties": {
+        "gapId": {"type": "string", "minLength": 1}, "trackId": {"type": "string", "minLength": 1},
+        "start": {"$ref": "#/$defs/programTime"}, "end": {"$ref": "#/$defs/programTime"},
+        "evidenceOrigin": {"$ref": "#/$defs/layoutEvidence"}
+      }
+    },
+    "placedLayout": {
+      "type": "object", "additionalProperties": false,
+      "required": ["programClock", "duration", "displayOrigin", "background", "tracks", "placements", "gaps"],
+      "properties": {
+        "programClock": {"type": "object", "additionalProperties": false, "required": ["frameRate", "timebase", "audioSampleRate"], "properties": {"frameRate": {"$ref": "#/$defs/timebase"}, "timebase": {"$ref": "#/$defs/timebase"}, "audioSampleRate": {"type": "integer", "minimum": 1}}},
+        "duration": {"$ref": "#/$defs/programTime"}, "displayOrigin": {"type": ["object", "null"]}, "background": {"const": "black"},
+        "tracks": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/layoutTrack"}},
+        "placements": {"type": "array", "items": {"$ref": "#/$defs/layoutPlacement"}},
+        "gaps": {"type": "array", "items": {"$ref": "#/$defs/layoutGap"}}
+      }
+    },
     "cmapSnapshot": {
       "type": "object",
       "additionalProperties": false,
+      "dependentRequired": {"originRef": ["sourceAssemblyPolicy", "importOutput"], "sourceAssemblyPolicy": ["originRef", "importOutput"], "importOutput": ["originRef", "sourceAssemblyPolicy"]},
       "required": [
-        "sources",
-        "segments"
+        "sources"
+      ],
+      "oneOf": [
+        {"required": ["segments"], "not": {"anyOf": [{"required": ["layoutMode"]}, {"required": ["layout"]}]}},
+        {"required": ["layoutMode", "layout", "originRef", "sourceAssemblyPolicy", "importOutput"], "not": {"required": ["segments"]}}
       ],
       "properties": {
+        "layoutMode": {"const": "placed"},
+        "layout": {"$ref": "#/$defs/placedLayout"},
+        "originRef": {"$ref": "avo.timeline-common.schema.json#/$defs/importOriginRef"},
+        "sourceAssemblyPolicy": {"$ref": "avo.timeline-common.schema.json#/$defs/sourceAssemblyPolicy"},
+        "importOutput": {"$ref": "avo.timeline-common.schema.json#/$defs/importOutput"},
         "sources": {
           "type": "array",
           "minItems": 1,
@@ -499,7 +573,7 @@
           }
         },
         "syncRef": {
-          "$ref": "#/$defs/dependencyRef"
+          "oneOf": [{"$ref": "#/$defs/dependencyRef"}, {"allOf": [{"$ref": "https://avo.local/avo.timeline-revision.schema.json#/properties/basis/items"}, {"properties": {"artifactType": {"const": "sync-map"}}}]}]
         },
         "cuttingRef": {"$ref": "avo.cutting.schema.json#/$defs/artifactRef"},
         "protectionRef": {"$ref": "avo.cutting.schema.json#/$defs/artifactRef"},
