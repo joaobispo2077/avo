@@ -40,7 +40,7 @@ if (-not $Version) {
 
 Write-Host "building avo $Version ($Platform) with PyInstaller onedir"
 
-& $Python -m pip install -e ".[mcp,code-drawn]" "pyinstaller>=6,<7"
+& $Python -m pip install -e ".[mcp,code-drawn,resolve-import]" "pyinstaller>=6,<7"
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 & $Python -m PyInstaller `
