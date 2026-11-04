@@ -105,6 +105,30 @@ Weak hardware that cannot hold even this floor may later use optional
 that path never blocks local skills, CLI, or `avo.mcp`. Help prioritize it via
 [Sponsor](#sponsor).
 
+### Recommended local setup (optional)
+
+For a stronger base experience beyond the minimum requirements, we recommend:
+
+| Task | Model / tool | Execution |
+| --- | --- | --- |
+| Watch visual review | **Qwen3.5-4B**, **GGUF Q4_K_S**, with its matching vision projector | Local GPU through LM Studio |
+| Transcription | **Whisper large-v3**, using **faster-whisper** | GPU/FP16 for the initial transcript; explicitly configure CPU/int8 while Watch uses the GPU |
+| Word alignment | **WhisperX 3.8.6** with **`jonatasgrosman/wav2vec2-large-xlsr-53-english`** | Local CUDA GPU in the separate alignment environment |
+
+Use the [matching Qwen weights and projector](https://huggingface.co/unsloth/Qwen3.5-4B-GGUF/tree/main)
+with [LM Studio's local vision API](https://lmstudio.ai/docs/developer/openai-compat).
+[faster-whisper](https://github.com/SYSTRAN/faster-whisper) supports the listed
+GPU/FP16 and CPU/int8 configurations. Provision the
+[WhisperX 3.8.6 runtime](https://github.com/m-bain/whisperX/releases/tag/v3.8.6)
+and local alignment snapshots through the [alignment runtime guide](docs/cutting-alignment-runtime.md).
+
+Match alignment to the spoken language: the
+[English checkpoint](https://huggingface.co/jonatasgrosman/wav2vec2-large-xlsr-53-english)
+above is English-only; Portuguese audio needs the
+[Portuguese checkpoint](https://huggingface.co/jonatasgrosman/wav2vec2-large-xlsr-53-portuguese).
+Schedule GPU jobs to fit available memory and configure device choices explicitly.
+This recommended setup is optional and does not change AVO's installed defaults.
+
 ---
 
 ## How it works

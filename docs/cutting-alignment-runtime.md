@@ -24,8 +24,9 @@ py -3.11 -m venv <chosen-runtime-directory>
 
 Keep the runtime outside AVO's core `.venv`. The dependencies include PyTorch,
 torchaudio and packages required by WhisperX distribution metadata even though
-AVO does not invoke its diarization or transcription pipelines. Inference must
-select CPU explicitly; package presence does not authorize GPU usage.
+AVO does not invoke its diarization or transcription pipelines. Inference defaults to CPU. Select `device="cuda"` explicitly on the alignment
+adapter when using a CUDA-capable isolated runtime; the worker checks CUDA
+availability. Package presence alone does not select a device.
 
 ## Explicit local models and resources
 
@@ -91,9 +92,9 @@ the generated-signal tests in the core suite.
 
 ## Worker contract
 
-The alignment adapter must use a bounded CPU worker with local PCM input and
+The alignment adapter uses a bounded worker with an explicit CPU or CUDA device, local PCM input and
 versioned output, one request at a time. Use absolute model directories with
-`load_align_model(..., device="cpu", model_cache_only=True)`, then
+`load_align_model(..., device=<selected device>, model_cache_only=True)`, then
 `align(..., interpolate_method="ignore", return_char_alignments=True)`.
 Enforce offline model/cache flags, local NLTK paths and a network-disabled worker.
 Preflight the runtime, local artifacts and resource hashes before analysis.
@@ -110,7 +111,7 @@ invalidate affected evidence. Failed decoding or alignment is never silence.
 ## Validation before declaring availability
 
 Check offline startup, missing-model/Punkt rejection, selected-stream PCM routing,
-PT-BR/English character alignment, unsupported digits/names, CPU resource use,
+PT-BR/English character alignment, unsupported digits/names, selected-device resource use,
 timeout handling and model identity. Record measured values; absent measurements
 remain null. Actual acoustic and rendered boundary checks remain mandatory even
 when character alignment succeeds.
