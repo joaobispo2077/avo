@@ -76,6 +76,24 @@ def validate_raw_sync_basis(picture: dict[str, Any], audio: dict[str, Any]) -> N
         raise SyncError("sync/resync must derive directly from raw picture and audio")
 
 
+def _build_snapshot(picture, audio, transform, samples, tolerance_ticks):
+    maximum = validate_residuals([r for _, _, r in samples], tolerance_ticks)
+    clean = lambda value: {k: v for k, v in value.items() if k != "kind"}
+    return {
+        "picture": clean(picture),
+        "audio": clean(audio),
+        "referenceClock": "picture",
+        "signConvention": "positive-audio-delay",
+        "transform": transform,
+        "calibrationSamples": [
+            {"pictureTicks": p, "audioTicks": a, "residualTicks": r}
+            for p, a, r in samples
+        ],
+        "toleranceTicks": tolerance_ticks,
+        "fullProgramValidation": {"status": "pass", "maxResidualTicks": maximum},
+    }
+
+
 def build_constant_offset_snapshot(
     *,
     picture: dict[str, Any],
@@ -86,26 +104,17 @@ def build_constant_offset_snapshot(
     tolerance_ticks: int,
 ) -> dict[str, Any]:
     validate_raw_sync_basis(picture, audio)
-    residuals = [p - (a + offset_ticks) for p, a in samples]
-    maximum = validate_residuals(residuals, tolerance_ticks)
-    clean = lambda value: {k: v for k, v in value.items() if k != "kind"}
-    return {
-        "picture": clean(picture),
-        "audio": clean(audio),
-        "referenceClock": "picture",
-        "signConvention": "positive-audio-delay",
-        "transform": {
+    return _build_snapshot(
+        picture,
+        audio,
+        {
             "kind": "constant-offset",
             "offsetTicks": offset_ticks,
             "timebase": timebase,
         },
-        "calibrationSamples": [
-            {"pictureTicks": p, "audioTicks": a, "residualTicks": r}
-            for (p, a), r in zip(samples, residuals)
-        ],
-        "toleranceTicks": tolerance_ticks,
-        "fullProgramValidation": {"status": "pass", "maxResidualTicks": maximum},
-    }
+        [(p, a, p - (a + offset_ticks)) for p, a in samples],
+        tolerance_ticks,
+    )
 
 
 def validate_sync_snapshot(snapshot: dict[str, Any]) -> None:
@@ -147,27 +156,18 @@ def build_linear_snapshot(
     validate_raw_sync_basis(picture, audio)
     if int(rate_ratio.get("num", 0)) <= 0 or int(rate_ratio.get("den", 0)) <= 0:
         raise SyncError("linear drift rate ratio must be positive")
-    residuals = [residual for _, _, residual in samples]
-    maximum = validate_residuals(residuals, tolerance_ticks)
-    clean = lambda value: {k: v for k, v in value.items() if k != "kind"}
-    return {
-        "picture": clean(picture),
-        "audio": clean(audio),
-        "referenceClock": "picture",
-        "signConvention": "positive-audio-delay",
-        "transform": {
+    return _build_snapshot(
+        picture,
+        audio,
+        {
             "kind": "linear-drift",
             "offsetTicks": offset_ticks,
             "rateRatio": rate_ratio,
             "timebase": timebase,
         },
-        "calibrationSamples": [
-            {"pictureTicks": p, "audioTicks": a, "residualTicks": r}
-            for p, a, r in samples
-        ],
-        "toleranceTicks": tolerance_ticks,
-        "fullProgramValidation": {"status": "pass", "maxResidualTicks": maximum},
-    }
+        samples,
+        tolerance_ticks,
+    )
 
 
 def build_piecewise_snapshot(
@@ -185,26 +185,17 @@ def build_piecewise_snapshot(
         for a, b in itertools.pairwise(control_points)
     ):
         raise SyncError("piecewise control points must strictly increase")
-    residuals = [residual for _, _, residual in samples]
-    maximum = validate_residuals(residuals, tolerance_ticks)
-    clean = lambda value: {k: v for k, v in value.items() if k != "kind"}
-    return {
-        "picture": clean(picture),
-        "audio": clean(audio),
-        "referenceClock": "picture",
-        "signConvention": "positive-audio-delay",
-        "transform": {
+    return _build_snapshot(
+        picture,
+        audio,
+        {
             "kind": "piecewise",
             "controlPoints": control_points,
             "timebase": timebase,
         },
-        "calibrationSamples": [
-            {"pictureTicks": p, "audioTicks": a, "residualTicks": r}
-            for p, a, r in samples
-        ],
-        "toleranceTicks": tolerance_ticks,
-        "fullProgramValidation": {"status": "pass", "maxResidualTicks": maximum},
-    }
+        samples,
+        tolerance_ticks,
+    )
 
 
 def build_not_applicable_snapshot(

@@ -790,6 +790,38 @@ def measure_loudness(
     return measure_loudness_profile(video_path, profile)
 
 
+def _normalize_audio_copy(
+    input_path: Path, output_path: Path, audio_filter: str, audio_bitrate: str
+) -> None:
+    cmd = [
+        "ffmpeg",
+        "-y",
+        "-hide_banner",
+        "-nostats",
+        "-i",
+        str(input_path),
+        "-c:v",
+        "copy",
+        "-af",
+        audio_filter,
+        "-c:a",
+        "aac",
+        "-b:a",
+        audio_bitrate,
+        "-ar",
+        "48000",
+        "-shortest",
+        "-movflags",
+        "+faststart",
+        str(output_path),
+    ]
+    run_ffmpeg_progress(
+        cmd,
+        f"loudnorm {output_path.name}",
+        expected_duration=media_duration(input_path),
+    )
+
+
 def apply_loudnorm_two_pass(
     input_path: Path,
     output_path: Path,
@@ -816,34 +848,8 @@ def apply_loudnorm_two_pass(
             f"loudnorm=I={profile.integrated_lufs}:TP={profile.true_peak_dbtp}:LRA={profile.lra_lu},"
             f"{limiter}"
         )
-        cmd = [
-            "ffmpeg",
-            "-y",
-            "-hide_banner",
-            "-nostats",
-            "-i",
-            str(input_path),
-            "-c:v",
-            "copy",
-            "-af",
-            filter_str,
-            "-c:a",
-            "aac",
-            "-b:a",
-            audio_bitrate,
-            "-ar",
-            "48000",
-            "-shortest",
-            "-movflags",
-            "+faststart",
-            str(output_path),
-        ]
         print(f"  loudnorm (1-pass preview) -> {output_path.name}")
-        run_ffmpeg_progress(
-            cmd,
-            f"loudnorm {output_path.name}",
-            expected_duration=media_duration(input_path),
-        )
+        _normalize_audio_copy(input_path, output_path, filter_str, audio_bitrate)
         return True
 
     # Full two-pass
@@ -874,34 +880,8 @@ def apply_loudnorm_two_pass(
         f":linear=true"
     )
     filter_str = f"{loudnorm_filter},{limiter}"
-    cmd = [
-        "ffmpeg",
-        "-y",
-        "-hide_banner",
-        "-nostats",
-        "-i",
-        str(input_path),
-        "-c:v",
-        "copy",
-        "-af",
-        filter_str,
-        "-c:a",
-        "aac",
-        "-b:a",
-        audio_bitrate,
-        "-ar",
-        "48000",
-        "-shortest",
-        "-movflags",
-        "+faststart",
-        str(output_path),
-    ]
     print(f"  loudnorm pass 2: normalizing -> {output_path.name}")
-    run_ffmpeg_progress(
-        cmd,
-        f"loudnorm {output_path.name}",
-        expected_duration=media_duration(input_path),
-    )
+    _normalize_audio_copy(input_path, output_path, filter_str, audio_bitrate)
     return True
 
 
