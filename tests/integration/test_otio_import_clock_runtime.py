@@ -77,6 +77,9 @@ def test_native_clock_admission_and_preflight(
         assert stream["frameRate"] == stream["averageFrameRate"] == "24/1"
         assert stream["durationSeconds"] > 13 / 24
     count = 13 if extra_frame else 12
+    if irregular:
+        # Leave headroom so Matroska extent rounding cannot mask the bad packet clock.
+        count -= 1
     blocked = irregular or extra_frame
     export = tmp_path / "handoff.otio"
     data = json.loads(FIXTURE.read_text())
@@ -121,7 +124,9 @@ def test_native_clock_admission_and_preflight(
     ]
     assert not service.workspace.artifact_path("cmap").exists()
     if blocked:
-        assert any(row["code"] == "OTIO_RATE_UNVERIFIED" for row in result["findings"])
+        assert any(
+            row["code"] == "OTIO_RATE_UNVERIFIED" for row in result["findings"]
+        ), result["findings"]
     else:
         source = result["proposal"]["snapshot"]["sources"][0]
         assert source["streamMetadata"]["videoClock"]["packetCount"] == 12
