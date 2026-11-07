@@ -97,6 +97,7 @@ def build_cutting_service(workspace, *, invocation=None):
     preview = CuttingPreviewAdapter(workspace)
     watch_policy = resolve_context_watch_policy(context)
     watch_request = {
+        "artifact_dir": str(workspace.raw_dir / "edit/review/source-context"),
         "policy": watch_policy.payload(),
         "model_pin": workspace.project.get("models", {}).get("understand", {}),
     }

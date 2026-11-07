@@ -229,6 +229,11 @@ class CuttingService:
                 "canonical CMap is required before cutting analysis"
             )
         revision = cmap.revision(index["headRevisionId"])
+        snapshot = revision["snapshot"]
+        if snapshot.get("layoutMode") == "placed" or "layout" in snapshot:
+            raise CuttingServiceError(
+                "automated cutting does not support placed CMap layouts"
+            )
         CMapService(self.workspace)._verify_raw(revision["snapshot"])
         return revision
 

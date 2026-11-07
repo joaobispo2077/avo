@@ -6,6 +6,9 @@
   "required": ["schemaVersion", "proofPlanId", "iterationId", "canonicalInputLock", "regressionContract", "renderProfile", "output", "capabilityResolution", "implementationRefs", "videoGraph", "audioGraph", "events", "validationPlan", "visionReviewPlanRef", "lineagePolicy", "producer", "proofPlanHash"],
   "properties": {
     "schemaVersion": { "const": "1.0.0" },
+    "sourceAssemblyPolicy": {"$ref": "https://github.com/joaobispo2077/avo/schemas/avo.timeline-common.schema.json#/$defs/sourceAssemblyPolicy"},
+    "importOriginRef": {"$ref": "https://github.com/joaobispo2077/avo/schemas/avo.timeline-common.schema.json#/$defs/importOriginRef"},
+    "importOutput": {"$ref": "https://github.com/joaobispo2077/avo/schemas/avo.timeline-common.schema.json#/$defs/importOutput"},
     "previewOnly": { "type": "boolean" },
     "checkpoint": { "enum": ["cut-proof", "motion-proof", "pre-master", "deliver"] },
     "proofPlanId": { "$ref": "#/$defs/stableId" }, "iterationId": { "$ref": "#/$defs/stableId" },

@@ -81,6 +81,42 @@ Brief paths (when checked out): `specs/backlog/<slug>.md`
 
 ---
 
+## Editing craft and motion planning (research proposals)
+
+Extracted from the 2026-11-04
+[fluxo-de-edicao comparison](fluxo-de-edicao-comparison.md). These items are
+**proposed, not implemented or scheduled**. Audio/video Tracks, BMap cue timing,
+Animation strategy and storyboard templates already exist; the proposals reuse
+them. Listed order is a prioritization recommendation, not a delivery promise.
+
+Full scope is specified together in the local working feature
+`specs/017-editing-craft-parity/spec.md`, including track/asset review, supported
+editor feedback and bounded recovery of speech omitted by transcription. Its
+`gap-coverage.md` maps reference practices to requirements and existing
+capability boundaries. Working specs remain local under the repository's
+existing ignore policy; they are not published feature documentation.
+
+Planned defaults: motion maps and linked lightweight storyboards are built in
+for applicable motion planning/review. Camera movement, face anchoring, sound
+matching, reference analysis, spoken notes/recovery and editor handoff remain
+selected options. Default presentation does not start optional tools or alter
+an existing edit.
+
+| ID | Proposal | Smallest useful outcome | Existing alignment |
+| -- | -------- | ----------------------- | ------------------ |
+| BL-020 | [Motion map and storyboard review](../specs/backlog/motion-planning-review.md) | Joined, revision-bound motion plan, storyboard cards and stable-ID feedback | BMap + Tracks + Animation; complements BL-011 |
+| BL-021 | [Optional talking-head camera](../specs/backlog/talking-head-camera.md) | Reviewable zoom in/out, push/pull and overlay-aware reframing | Extend beyond current Shorts punches; optional BL-017 keyframe export |
+| BL-022 | [Measured motion references](../specs/backlog/reference-motion-analysis.md) | Bounded camera/element timing measurements with uncertainty | Existing Direction/Briefstart and beat-edit reference analysis |
+| BL-023 | [Local SFX library matching](../specs/backlog/sfx-library-matching.md) | Licensed acoustic metadata, event-based recommendations and perceptual alignment | Existing event clock/mixer/media resolution; coordinate with BL-010 |
+| BL-024 | [Spoken editing notes](../specs/backlog/spoken-edit-notes.md) | Configured note extraction and reviewed source-anchored proposals | Existing transcription, cutting and review services |
+
+Also refine existing [BL-011 composition planning](../specs/backlog/composition-command.md)
+and [BL-017 NLE exports](../specs/backlog/nle-exports.md) with the comparison's
+planning and editor-interchange lessons. Keep camera movement and SFX optional;
+do not adopt automatic zooms or continuous drift as universal defaults.
+
+---
+
 ## Possible technical debt (not scheduled)
 
 Optional follow-ups from `/ponytail-review` on BL-019 after `5ba4e38`. They are **possible** debt, not blockers, not a product row, and not a promise to shrink. Resolve only when already editing the same files. Estimated ceiling if all land: about **−103 lines**.

@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 from .contracts import content_hash
-from .store import atomic_write_json
+from .store import atomic_write_json, serialized_timeline
 from .sync import (
     SyncError,
     build_constant_offset_snapshot,
@@ -24,6 +24,7 @@ class SyncService:
             workspace.initialize()
         self.store = workspace.store("sync-map")
 
+    @serialized_timeline(lambda self: self.workspace.timeline_dir)
     def _append(
         self, snapshot: dict[str, Any], *, actor: str, reason: str
     ) -> dict[str, Any]:
@@ -210,6 +211,7 @@ class SyncService:
         atomic_write_json(target, body)
         return body
 
+    @serialized_timeline(lambda self: self.workspace.timeline_dir)
     def decide(
         self,
         *,

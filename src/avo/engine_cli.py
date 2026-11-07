@@ -40,6 +40,7 @@ _MODULES: dict[str, str] = {
     "update": "avo.update",
     "run_job": "avo.adapters.run_job",
     "library-worker": "avo.library.batch",
+    "otio-worker": "avo.adapters.media.otio_reader",
 }
 
 

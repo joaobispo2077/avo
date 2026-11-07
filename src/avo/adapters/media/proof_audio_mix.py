@@ -18,6 +18,8 @@ from avo.adapters.media.audio_tracks import (
 from avo.timeline.contracts import file_fingerprint, validate_document
 from avo.timeline.event_clock import sample_rate_boundary
 
+from .local_source import local_source_arguments
+
 
 def _bounds(value):
     return value["startSample"], value["endSampleExclusive"]
@@ -302,6 +304,7 @@ def _stage_source(node, source, path):
             "ffmpeg",
             "-v",
             "info",
+            *local_source_arguments(source[0]),
             "-i",
             str(source[0]),
             "-map",

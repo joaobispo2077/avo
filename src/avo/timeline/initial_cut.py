@@ -115,8 +115,26 @@ def _clock_boundary(value, precise):
 
 def _precise_clock_mode(workspace, snapshot):
     return bool(
-        snapshot.get("cuttingRef") or getattr(workspace, "cutting_preview", False)
+        snapshot.get("cuttingRef")
+        or snapshot.get("sourceAssemblyPolicy") == "preserve-import"
+        or getattr(workspace, "cutting_preview", False)
     )
+
+
+def _source_audio_treatment(
+    snapshot, metadata, selection, channel_map, sample_range, sample_rate
+):
+    if snapshot.get("sourceAssemblyPolicy") == "preserve-import":
+        return {"fadeInSamples": 0, "fadeOutSamples": 0}
+    fade = min(
+        round(sample_rate * Fraction(3, 100)),
+        (sample_range["endSampleExclusive"] - sample_range["startSample"]) // 2,
+    )
+    return {
+        **_dialogue_noise_parameters(metadata, selection, channel_map),
+        "fadeInSamples": fade,
+        "fadeOutSamples": fade,
+    }
 
 
 def _protected_windows(
@@ -151,8 +169,9 @@ def _protected_windows(
     return windows
 
 
-def initial_cut_proof_request(
+def _sequential_cut_proof_request(
     workspace: Any,
+    snapshot: dict[str, Any],
     *,
     iteration_id: str,
     output: Path,
@@ -163,9 +182,6 @@ def initial_cut_proof_request(
     sample_rate_probe: Callable[[dict, Path], int] | None = None,
 ) -> dict[str, Any]:
     """Preserve source routing and declare every join as a review obligation."""
-    index = workspace.require_active("cmap")
-    revision = workspace.store("cmap").revision(index["headRevisionId"])
-    snapshot = revision["snapshot"]
     precise = _precise_clock_mode(workspace, snapshot)
     sources = {source["sourceId"]: source for source in snapshot["sources"]}
     fps = Fraction(frame_rate["num"], frame_rate["den"])
@@ -247,24 +263,23 @@ def initial_cut_proof_request(
                 },
             }
         )
-        # Keep the 30 ms envelope where it fits. Short valid fragments need
-        # bounded, non-overlapping ramps rather than impossible 30 ms fades.
-        fade_samples = min(
-            round(sample_rate * Fraction(3, 100)),
-            (sample_range["endSampleExclusive"] - sample_range["startSample"]) // 2,
-        )
         audio_ops.append(
             {
                 "operationId": f"trim-audio-{ordinal:04d}",
                 "kind": "trim",
                 "range": sample_range,
                 "parameters": {
-                    **_dialogue_noise_parameters(metadata, selection, channel_map),
+                    **_source_audio_treatment(
+                        snapshot,
+                        metadata,
+                        selection,
+                        channel_map,
+                        sample_range,
+                        sample_rate,
+                    ),
                     "nodeId": node_id,
                     "sourceId": source_id,
                     "source": {**media, "streamIndex": selection["streamIndex"]},
-                    "fadeInSamples": fade_samples,
-                    "fadeOutSamples": fade_samples,
                 },
             }
         )
@@ -340,6 +355,39 @@ def initial_cut_proof_request(
     }
     _bind_current_cutting(workspace, snapshot, frame_rate, result)
     return result
+
+
+def initial_cut_proof_request(
+    workspace: Any,
+    *,
+    iteration_id: str,
+    output: Path,
+    frame_rate: dict[str, int],
+    width: int = 640,
+    height: int = 360,
+    sample_rate: int = 48000,
+    sample_rate_probe: Callable[[dict, Path], int] | None = None,
+) -> dict[str, Any]:
+    """Preserve the current canonical source assembly on its recorded clocks."""
+    from .initial_cut_placed import placed_cut_proof_request
+
+    index = workspace.require_active("cmap")
+    revision = workspace.store("cmap").revision(index["headRevisionId"])
+    snapshot = revision["snapshot"]
+    builder = {"placed": placed_cut_proof_request}.get(
+        snapshot.get("layoutMode"), _sequential_cut_proof_request
+    )
+    return builder(
+        workspace,
+        snapshot,
+        iteration_id=iteration_id,
+        output=output,
+        frame_rate=frame_rate,
+        width=width,
+        height=height,
+        sample_rate=sample_rate,
+        sample_rate_probe=sample_rate_probe,
+    )
 
 
 def _bind_current_cutting(workspace, snapshot, frame_rate, result):

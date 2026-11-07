@@ -12,7 +12,8 @@ from .contracts import file_fingerprint
 from .diff import stable_id_diff
 from .lifecycle import PipelineRunStore, PipelineState, TransitionFacts
 from .lineage import LineageError, validate_bmap_basis
-from .mapping import cmap_output_duration
+from .mapping import cmap_output_duration, cmap_output_timebase
+from .store import serialized_timeline
 from .workspace import TimelineWorkspace
 
 _STABLE_ID = re.compile(r"^[a-z][a-z0-9-]{2,63}$")
@@ -83,7 +84,7 @@ class BMapService:
             )
         cues = snapshot.get("cues") or []
         ids: set[str] = set()
-        output_base = cmap_revision["snapshot"]["segments"][0]["in"]["timebase"]
+        output_base = cmap_output_timebase(cmap_revision["snapshot"])
         duration = cmap_output_duration(cmap_revision["snapshot"])
         allowed = {
             "insert",
@@ -135,6 +136,7 @@ class BMapService:
             actor_intent="preserve beat intent on approved cut output",
         )
 
+    @serialized_timeline(lambda self: self.workspace.timeline_dir)
     def author(
         self, snapshot: dict[str, Any], *, actor: str, reason: str
     ) -> dict[str, Any]:

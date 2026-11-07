@@ -15,12 +15,35 @@ def _time(value: dict[str, Any]) -> Fraction:
     return Fraction(int(value["ticks"]) * int(base["num"]), int(base["den"]))
 
 
+def cmap_output_timebase(snapshot: dict[str, Any]) -> dict[str, int]:
+    """Return the program clock without borrowing mutable snapshot evidence."""
+    if snapshot.get("layoutMode") == "placed":
+        base = snapshot["layout"]["programClock"]["timebase"]
+    else:
+        segments = snapshot.get("segments") or []
+        if not segments:
+            raise MappingError("CMap has no segments")
+        base = segments[0]["in"]["timebase"]
+    return {"num": int(base["num"]), "den": int(base["den"])}
+
+
 def _output_base(snapshot: dict[str, Any]) -> Fraction:
-    segments = snapshot.get("segments") or []
-    if not segments:
-        raise MappingError("CMap has no segments")
-    base = segments[0]["in"]["timebase"]
+    base = cmap_output_timebase(snapshot)
     return Fraction(int(base["num"]), int(base["den"]))
+
+
+def _check_raw_clock(items, source_id, raw_timebase):
+    if raw_timebase is not None:
+        return
+    clocks = {
+        Fraction(item["in"]["timebase"]["num"], item["in"]["timebase"]["den"])
+        for item in items
+        if item["sourceId"] == source_id
+    }
+    if len(clocks) > 1:
+        raise MappingError(
+            "ambiguous raw source clock; supply raw_timebase or select a placement"
+        )
 
 
 def _to_output_ticks(seconds: Fraction, base: Fraction) -> int:
@@ -34,6 +57,8 @@ def _to_output_ticks(seconds: Fraction, base: Fraction) -> int:
 
 def cmap_output_duration(snapshot: dict[str, Any]) -> int:
     base = _output_base(snapshot)
+    if snapshot.get("layoutMode") == "placed":
+        return _to_output_ticks(_time(snapshot["layout"]["duration"]), base)
     duration = sum(
         (_time(item["out"]) - _time(item["in"]) for item in snapshot["segments"]),
         Fraction(),
@@ -47,8 +72,15 @@ def cmap_raw_to_output(
     raw_ticks: int,
     *,
     raw_timebase: dict[str, int] | None = None,
+    placement_id: str | None = None,
+    track_id: str | None = None,
 ) -> int | None:
+    if snapshot.get("layoutMode") == "placed":
+        return _placed_raw_to_output(
+            snapshot, source_id, raw_ticks, raw_timebase, placement_id, track_id
+        )
     base = _output_base(snapshot)
+    _check_raw_clock(snapshot.get("segments") or [], source_id, raw_timebase)
     offset = Fraction()
     for segment in snapshot.get("segments") or []:
         start = _time(segment["in"])
@@ -65,8 +97,14 @@ def cmap_raw_to_output(
 
 
 def cmap_output_to_raw(
-    snapshot: dict[str, Any], output_ticks: int
+    snapshot: dict[str, Any],
+    output_ticks: int,
+    *,
+    placement_id: str | None = None,
+    track_id: str | None = None,
 ) -> tuple[str, int] | None:
+    if snapshot.get("layoutMode") == "placed":
+        return _placed_output_to_raw(snapshot, output_ticks, placement_id, track_id)
     base = _output_base(snapshot)
     point = output_ticks * base
     offset = Fraction()
@@ -91,6 +129,58 @@ def cmap_output_to_raw(
             return str(segment["sourceId"]), ticks.numerator
         offset = boundary
     return None
+
+
+def _one_mapping(values):
+    if len(values) > 1:
+        raise MappingError("ambiguous placed mapping; select a placement or track")
+    return values[0] if values else None
+
+
+def _placed_raw_to_output(
+    snapshot, source_id, raw_ticks, raw_timebase, placement_id, track_id
+):
+    from .import_layout import active_placements
+
+    selected = list(
+        active_placements(snapshot, placement_id=placement_id, track_id=track_id)
+    )
+    _check_raw_clock(selected, source_id, raw_timebase)
+    values = []
+    for item in selected:
+        if item["sourceId"] != source_id:
+            continue
+        clock = raw_timebase or item["in"]["timebase"]
+        point = Fraction(raw_ticks * clock["num"], clock["den"])
+        first, last = _time(item["in"]), _time(item["out"])
+        if first <= point < last:
+            offset = Fraction(0) if item["mediaKind"] == "still" else point - first
+            values.append(
+                _to_output_ticks(_time(item["start"]) + offset, _output_base(snapshot))
+            )
+    return _one_mapping(values)
+
+
+def _placed_output_to_raw(snapshot, output_ticks, placement_id, track_id):
+    from .import_layout import active_placements
+
+    point = output_ticks * _output_base(snapshot)
+    values = []
+    for item in active_placements(
+        snapshot, placement_id=placement_id, track_id=track_id
+    ):
+        start, end = _time(item["start"]), _time(item["end"])
+        if start <= point < end:
+            offset = Fraction(0) if item["mediaKind"] == "still" else point - start
+            source = _time(item["in"]) + offset
+            clock = item["in"]["timebase"]
+            ticks = source / Fraction(clock["num"], clock["den"])
+            if ticks.denominator != 1:
+                raise MappingError(
+                    "placed point is not integral in the selected source clock"
+                )
+            values.append((item["sourceId"], ticks.numerator))
+    return _one_mapping(values)
 
 
 def legacy_output_duration(ranges: list[Any]) -> float:

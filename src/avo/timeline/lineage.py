@@ -5,7 +5,7 @@ from __future__ import annotations
 from copy import deepcopy
 from typing import Any
 
-from .contracts import content_hash
+from .contracts import ContractError, content_hash, validate_document
 from .store import ArtifactStore
 
 
@@ -98,7 +98,35 @@ def validate_audiovisual_lineage(graph: dict[str, Any]) -> dict[str, Any]:
     return deepcopy(graph)
 
 
-def validate_cmap_snapshot(snapshot: dict[str, Any]) -> None:
+def _validate_import_policy(snapshot):
+    if not {"originRef", "sourceAssemblyPolicy", "importOutput"}.intersection(snapshot):
+        return
+    try:
+        validate_document(
+            snapshot.get("originRef"),
+            "avo.timeline-common.schema.json#/$defs/importOriginRef",
+        )
+        validate_document(
+            snapshot.get("sourceAssemblyPolicy"),
+            "avo.timeline-common.schema.json#/$defs/sourceAssemblyPolicy",
+        )
+        validate_document(
+            snapshot.get("importOutput"),
+            "avo.timeline-common.schema.json#/$defs/importOutput",
+        )
+    except ContractError as exc:
+        raise LineageError(f"invalid canonical import origin/policy: {exc}") from exc
+
+
+def _require_raw_source(source):
+    if source.get("kind") != "raw":
+        raise LineageError("CMap editorial truth must use brute/raw material")
+    fingerprint = source.get("fingerprint") or {}
+    if len(str(fingerprint.get("sha256") or "")) != 64:
+        raise LineageError("CMap raw source requires SHA-256 fingerprint")
+
+
+def _cmap_source_ids(snapshot):
     sources = snapshot.get("sources") or []
     if not sources:
         raise LineageError("CMap requires fingerprinted raw sources")
@@ -108,11 +136,23 @@ def validate_cmap_snapshot(snapshot: dict[str, Any]) -> None:
         if not source_id or source_id in source_ids:
             raise LineageError("CMap source IDs must be stable and unique")
         source_ids.add(source_id)
-        if source.get("kind") != "raw":
-            raise LineageError("CMap editorial truth must use brute/raw material")
-        fingerprint = source.get("fingerprint") or {}
-        if len(str(fingerprint.get("sha256") or "")) != 64:
-            raise LineageError("CMap raw source requires SHA-256 fingerprint")
+        _require_raw_source(source)
+    return source_ids
+
+
+def validate_cmap_snapshot(snapshot: dict[str, Any]) -> None:
+    _validate_import_policy(snapshot)
+    source_ids = _cmap_source_ids(snapshot)
+    if snapshot.get("layoutMode") == "placed":
+        from .import_layout import LayoutError, validate_layout
+
+        try:
+            validate_layout(snapshot)
+        except LayoutError as exc:
+            raise LineageError(str(exc)) from exc
+        return
+    if "layout" in snapshot or "layoutMode" in snapshot:
+        raise LineageError("Unsupported or mixed CMap layout representation")
     segment_ids: set[str] = set()
     segments = snapshot.get("segments") or []
     if not segments:
@@ -267,6 +307,7 @@ def persist_invalidation(
     after_hash: str | None,
     reason: str,
     actor: str = "avo-lineage",
+    idempotent: bool = False,
 ) -> dict[str, Any]:
     """Persist derived stale state for all currently stored descendants."""
     descendants = stale_descendants(
@@ -281,6 +322,8 @@ def persist_invalidation(
             continue
         index = store.load_index()
         if index["headRevisionId"] is None:
+            continue
+        if idempotent and index["activeState"] == "stale":
             continue
         updated = store.set_active_state(
             "stale",

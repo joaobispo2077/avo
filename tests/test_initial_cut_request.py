@@ -83,6 +83,23 @@ def test_initial_request_preserves_per_source_audio_and_answer_window(tmp_path):
     ]
 
 
+def test_import_policy_preserves_audio_without_automatic_fades(tmp_path):
+    project, snapshot = workspace(tmp_path)
+    snapshot["sourceAssemblyPolicy"] = "preserve-import"
+    request = initial_cut_proof_request(
+        project,
+        iteration_id="iteration-0001",
+        output=tmp_path / "import.mkv",
+        frame_rate={"num": 60, "den": 1},
+    )
+    trims = [op for op in request["audioGraph"]["operations"] if op["kind"] == "trim"]
+    assert all(
+        op["parameters"]["fadeInSamples"] == op["parameters"]["fadeOutSamples"] == 0
+        for op in trims
+    )
+    assert all("dialogueNoiseReductionPolicy" not in op["parameters"] for op in trims)
+
+
 @pytest.mark.parametrize("start,end", [(3000, 9000), (1000, 6500), (1000, 1000)])
 def test_initial_request_rejects_cut_protected_answer_or_empty_interval(
     tmp_path, start, end

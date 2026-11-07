@@ -16,6 +16,80 @@ mandatory domain/application/infrastructure directory template.
 architecture and its evolution. Every architectural evolution must update this
 root document with its responsibility, dependencies, compatibility and checks.
 
+## Resolve export inspection
+
+`avo.timeline.otio_import` performs bounded structural inventory of standalone
+OTIO JSON without importing native OTIO packages, accessing referenced media or
+mutating a timeline. `avo.timeline_import_cli` exposes the core CLI command;
+it is not a new `/avo.*` surface and therefore does not add a separate slash
+command registry owner. Canonical provider/pipeline ownership remains unchanged.
+Reports explicitly leave semantic, source, sync and render readiness unchecked.
+Clip schema versions and active media references are preserved as diagnostic
+facts. Unknown schemas and export omissions do not acquire render authority.
+Tests: `tests/test_otio_import.py` and `tests/test_timeline_import_cli.py`.
+This diagnostic boundary remains independent of canonical reconstruction and
+the optional reader. It cannot select an edit or import historical approval.
+
+`avo.timeline.import_service` stages exact export bytes and version-bound
+evidence in external `edit/timeline/imports/<importId>/`. CLI injects the pinned,
+isolated OTIO core reader and existing FFprobe inventory port. Native placements
+are checked against exact raw clocks; unknown treatment and unsupported layout
+block the whole experimental contiguous import. Source identity, explicit
+routing, current approved source-bound Sync/N/A, expected head and current
+project/provider configuration are locked before one CMap draft is selected.
+The canonical CMap's strict `originRef` is the sole import-selection authority;
+packet state is recoverable bookkeeping. No finishing head or approval is
+inherited. Existing slash command ownership remains unchanged.
+
+Timeline store mutations, source-authoring services and lifecycle mutations use
+one reentrant kernel writer per timeline. Explicit `empty` head expectations are
+distinct from legacy omitted expectations. Persistent lock files survive cleanup;
+POSIX fork handling closes inherited descriptors without unlocking the parent.
+Activation journals deterministic revision identity and blocks ordinary mutation
+and rendering until interrupted selection has reconciled. Current Windows tests
+cover separate-process collisions and before/after-commit retries; POSIX-specific
+fork qualification is skipped on Windows.
+
+The optional `preserve-import` source policy is bound into canonical revision and
+ProofPlan identity. Source-only cut graphs must match the canonical reconstruction
+at compile and preflight. The native executor preserves explicit channels and
+sample trims without implicit fades/restoration. Audio is decoded from its origin
+to avoid container timestamp-seek rounding; a later fingerprint-bound seek index
+may improve long-source throughput. Ordinary snapshots retain their prior audio
+policy. Synthetic native tests compare every decoded picture frame and PCM
+sample, including a scoped trim/restart. Real Resolve exports, human reviews,
+and packaged runtimes remain separate qualification work.
+
+Placed imports use a mutually exclusive `layoutMode=placed` CMap instead of
+segments. `import_layout` validates half-open source/program clocks, explicit
+program duration, ordered tracks, occurrence identities, gaps and audio routing.
+Mapping requires a placement/track selector when a single result is ambiguous.
+Legacy snapshots and their endpoint behavior remain compatible; legacy EDL and
+automated cutting consumers reject placed content instead of flattening it.
+CMap diffs account for sources, placements, tracks, gaps and output settings.
+The CMap Sync reference accepts the existing canonical revision-basis form as
+well as the legacy dependency form; this fixes their previously mismatched wire
+representations without discarding either existing shape.
+
+`initial_cut_placed` compiles one genuine `source-layout` picture operation and
+independent sample-addressed source audio. The native `proof_placed` adapter
+admits original media through shared fingerprint/stream checks, builds finite
+source trims, composites over explicit black, and uses the existing continuous
+PCM mixer without a sequential-dialogue lead. The final encode stays shared.
+Still verification is injected into import orchestration from the CLI and is
+repeated by native execution; supported images are single-frame and literal,
+never expanded as sequences. Known non-square pixels and unsupported timing or
+treatment block this capability. The optional native reader remains isolated.
+
+Microproof and full proof use the same graph. Both preflight/render paths close
+a fresh fingerprint-verification batch before publishing evidence, including
+retained inactive originals. Ephemeral same-plan media owns a separate fingerprint
+stage and cannot become a dependency of a later proof. Native implementation
+digests include the placed compiler, clock/layout validation, renderer and still
+admission helper. New interpreter identity 2.0.0 prevents silent reinterpretation
+of older staged packets. Native tests cover exact picture/PCM, layer gaps,
+static alpha, independent audio, scoped occurrence edits, restart and mutation.
+
 ## Responsibilities and dependency direction
 
 | Responsibility | Owner | Boundary |
@@ -711,3 +785,116 @@ discard retained samples at a video-frame edge. This changes container timing
 precision only; source ranges, fades, PCM mixing and QC coverage checks remain
 unchanged. Actual-codec tests verify exact audio duration for short 60 fps proofs
 and matching microproofs, including boundaries between milliseconds.
+
+
+### Resolve handoff provenance and ongoing selection
+
+The OTIO boundary remains a bounded raw inspector plus an injected, pinned native
+core reader and media probes. The timeline package owns semantic qualification,
+proposal/receipt locks, exact clocks, source mappings and element dispositions.
+CLI/native worker code stays in adapters/entrypoints; domain code imports no
+OTIO runtime, FFmpeg adapter, CLI or MCP implementation. Imported strings and
+reference notes never become instructions or approval.
+
+Actual moving-picture admission verifies the complete presentation timestamp
+grid against original bytes, independent of nominal/average rate headers. Native
+rendering rechecks the same clock and bounds every selected range by its verified
+presented-frame count. Self-contained demuxers and file-only protocols
+exclude nested playlists/external media; still input uses a literal single-image
+route. Unsupported rates, packet correspondence, layouts or treatments block.
+No fallback flattened program is admitted. The proof implementation digest
+includes the placed compiler/executor, media policy, timestamp and ancestry
+verification dependencies.
+
+Import activation selects exactly one CMap revision under the shared kernel
+writer and exact-head comparison. The immutable validation binds the displayed
+current-edit diff. Intent records the exact prior revision/snapshot; postcommit
+recovery replays descendant invalidation and explicitly reconciles the draft
+lifecycle without reusing candidate/review authority. Return writes a new CMap
+revision from recorded prior content with current original-byte/Sync checks; its
+inputEvidenceRefs carry an optional relative path and file-byte hash for the
+typed return journal. The immutable revision contract reuses the shared evidence
+reference schema. Historical exact retries do not select over later edits.
+
+The canonical ancestor and exact activation→receipt→proposal→export→result chain
+validate import origin; mutable session refs are bookkeeping. Proposal filenames
+use semantic hashes while origin proposalSha256 uses file bytes. Legacy
+normalizer1 canonical imports may omit root locks but still require the complete
+contained identity/ancestor chain; new receipts bind canonical/import roots.
+Before releasing recovery, source, context, Sync and retained evidence are
+freshly checked. Uncertain recovery markers stay guarded. Actor/reason text follows canonical store normalization, including recovery of
+earlier padded journals without rewriting immutable evidence. Index-write failure
+cleanup retains an immutable body if selection committed or cannot be inspected.
+
+Reconstruction follows all historical import origins, repair predecessors and
+canonical return refs through bounded exact evidence closure. It never blanket
+retains imports. Cleanup resolves the declared project (including alternate
+manifest/custom timeline paths), verifies the current bundle and holds the same
+writer through deletion. Persistent kernel locks are never deletion candidates.
+External originals are verified externalSources references; bundle.files remain
+local. Legacy source locators retain the top-level/fingerprint fallback and
+rawDir-relative interpretation used by existing canonical reconstruction. Retained materialization output fingerprints quarantine renamed or deleted
+proof/master media without treating original dependency hashes as outputs.
+
+The optional native reader is included by explicit resolve-import build extras,
+with OpenTimelineIO metadata/licenses/native extensions and schema resources. A
+private engine worker dispatch preserves plugin-disabled isolated execution in
+frozen builds. The local Windows x64 reader smoke passes public inspection and
+prepare/validate with intentionally missing originals; other frozen platforms,
+real Resolve exports, long-source throughput and creator review remain separate
+qualification. Existing ordinary canonical layouts/default audio/engine and
+source-only import preservation remain distinct, with compatibility regressions.
+
+## Planned editing craft parity (feature 017, not implemented)
+
+The local working design is `specs/017-editing-craft-parity/plan.md`; numbered
+working specs remain ignored by existing repository policy. This section records
+the proposed evolution and does not claim delivered capabilities.
+
+Motion map and linked lightweight storyboard become built-in, engine-independent
+projections at applicable motion planning/review. They join the selected brief,
+untimed proposals and exact available CMap/BMap/Tracks/Animation/Sync heads,
+including absence/static/unresolved state. Status remains metadata-only and
+cannot initialize canonical records, run models or render. Explicit authoring
+and review publish immutable derived views; no second timeline is introduced.
+
+Camera movement, face anchoring, sound matching, reference analysis, spoken
+notes/recovery and editor handoff are selected options resolved through existing
+settings scopes and frozen requests. Preferences seed future work and cannot
+reinterpret an active or approved edit. Existing canonical ownership, command
+permissions, creator gates and source-only proof ancestry remain authoritative.
+
+BMap owns camera cue timing; a strict versioned Animation extension holds only
+relative behavior; Tracks identifies the original-source contribution. A new
+proof v2 camera capability/implementation must be added to compiler, preflight,
+executor and fidelity/lineage checks together. It transforms source picture
+before independent overlays/captions. Legacy strategy/proof v1 remains supported;
+old consumers fail closed on advanced behavior rather than silently ignoring it.
+Because generic revision snapshots currently accept arbitrary objects, advanced
+publication also needs an atomic Animation index-v2 reader-capability guard.
+New readers support legacy/new indexes and validate advanced snapshots; old
+index validators reject v2 before compiling. Default views never upgrade indexes.
+
+Optional bounded CV/semantic adapters produce frozen source/model-bound evidence.
+Direction stays document-only; renderer seeking starts no detector. A focused
+read-only SFX catalogue reuses waveform/event-clock facts, keeps perceptual-marker
+review separate from measurement cache, and never invokes footage move workflows.
+Selected sound still becomes BMap/Tracks state through its current owners.
+
+Editor handoff uses a bounded supported XML adapter with exact target-version
+qualification and source/occurrence accounting; existing OTIO reader plugin
+isolation remains intact. Returned edits are base/current/returned proposals,
+with unsupported finishing preserved and conflicts reviewed before normal
+activation. Export generation alone is not interoperability evidence.
+
+Dependency direction remains CLI/MCP -> services/pure rules -> injected
+media/model/format ports, with adapters registered at the boundary. No new
+application framework, central state file, event bus, vector database or
+repository-wide architecture refactor is planned. Reconstruction/inventory
+must retain bounded selected authorial/source/rights/analysis/handoff/recovery
+evidence and regenerate disposable views/indexes.
+
+Implementation validation requires default/no-option and legacy compatibility,
+pure frame/clock/merge rules, real encoded source-fidelity/audio checks,
+native/MCP/package parity, existing full software-quality gates and actual
+creator/target-editor acceptance. These remain future delivery gates.

@@ -72,6 +72,81 @@
     }
   },
   "$defs": {
+    "importOriginRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "importId",
+        "exportSha256",
+        "timelinePointer",
+        "proposalSha256",
+        "capabilityVersion",
+        "activationId"
+      ],
+      "properties": {
+        "importId": {
+          "$ref": "#/$defs/sha256"
+        },
+        "exportSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "timelinePointer": {
+          "type": "string",
+          "maxLength": 2048
+        },
+        "proposalSha256": {
+          "$ref": "#/$defs/sha256"
+        },
+        "capabilityVersion": {
+          "type": "string",
+          "minLength": 1
+        },
+        "activationId": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "sourceAssemblyPolicy": {
+      "const": "preserve-import"
+    },
+    "importOutput": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "width",
+        "height",
+        "frameRate",
+        "audioSampleRate",
+        "channelLayout",
+        "displayOrigin"
+      ],
+      "properties": {
+        "width": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "height": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "frameRate": {
+          "$ref": "#/$defs/timebase"
+        },
+        "audioSampleRate": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "channelLayout": {
+          "const": "stereo"
+        },
+        "displayOrigin": {
+          "type": [
+            "object",
+            "null"
+          ]
+        }
+      }
+    },
     "sha256": {
       "type": "string",
       "pattern": "^[a-f0-9]{64}$"
@@ -276,6 +351,10 @@
         },
         "kind": {
           "type": "string"
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1
         }
       }
     },
