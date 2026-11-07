@@ -432,8 +432,7 @@ def overlay_filters(assets, fps, wstart, wend, *, conformance):
         )
         filters.append(
             f"[{current}][alpha{index}]overlay=x={p['x']}:y={p['y']}:format=rgb:"
-            f"alpha=straight:eof_action=pass:repeatlast=0:"
-            f"enable='gte(n,{offset})*lt(n,{offset + right - left})'[picture{index}]"
+            f"alpha=straight:eof_action=pass:repeatlast=0[picture{index}]"
         )
         current = f"picture{index}"
     filters.append(f"[{current}]format={'bgra' if conformance else 'yuv420p'}[v]")

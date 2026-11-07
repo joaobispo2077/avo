@@ -84,6 +84,15 @@ class QualityMatrixTests(unittest.TestCase):
         # Gate 2 may still use unlocked editable install without extras.
         self.assertIn("pip install -e .", ci)
 
+    def test_ci_test_lanes_install_native_resolve_reader(self) -> None:
+        ci = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+        for job in ("repo-unit-tests", "repo-integration-tests", "software-quality"):
+            with self.subTest(job=job):
+                body = re.split(
+                    r"\n  [\w-]+:", ci.split(f"  {job}:\n", 1)[1], maxsplit=1
+                )[0]
+                self.assertRegex(body, r"uv sync --frozen[^\n]*--extra resolve-import")
+
     def test_release_uses_semantic_release_pipeline(self) -> None:
         release = (ROOT / ".github/workflows/release.yml").read_text(encoding="utf-8")
         config = (ROOT / "release.config.mjs").read_text(encoding="utf-8")

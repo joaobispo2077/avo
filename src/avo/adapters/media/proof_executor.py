@@ -932,7 +932,11 @@ def _render_media(
     if output.exists():
         raise RuntimeError(f"Refusing to replace existing proof: {output}")
     output.parent.mkdir(parents=True, exist_ok=True)
-    with tempfile.TemporaryDirectory(prefix="proof-plan-", dir=output.parent) as folder:
+    # Private segments disappear here and cannot belong to an enclosing exit guard.
+    with (
+        fingerprint_stage(),
+        tempfile.TemporaryDirectory(prefix="proof-plan-", dir=output.parent) as folder,
+    ):
         directory = Path(folder)
         pieces = []
         for segment in segments:

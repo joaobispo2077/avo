@@ -294,12 +294,13 @@ def _compose_picture(staged, output, total, spec, fps, window):
     current = "base"
     for ordinal, (item, path) in enumerate(staged, 1):
         region = item["outputRange"]
-        start, end = region["startFrame"], region["endFrameExclusive"]
+        start = region["startFrame"]
         arguments.extend(["-i", str(path)])
+        # Shifted PTS and finite input bound the layer; enable drops frames on FFmpeg 6.
         filters.extend(
             [
                 f"[{ordinal}:v]settb=expr={base},setpts=N+{start},format=rgba[layer{ordinal}]",
-                f"[{current}][layer{ordinal}]overlay=0:0:format=rgb:eof_action=pass:repeatlast=0:enable='gte(n,{start})*lt(n,{end})'[picture{ordinal}]",
+                f"[{current}][layer{ordinal}]overlay=0:0:format=rgb:eof_action=pass:repeatlast=0[picture{ordinal}]",
             ]
         )
         current = f"picture{ordinal}"
