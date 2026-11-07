@@ -50,6 +50,10 @@ well as FFmpeg 7. Private proof segments use a local fingerprint stage so delete
 scratch files do not enter the enclosing canonical dependency guard; original
 and generated inputs are still revalidated before publication.
 
+Unit tests and coverage use two pytest workers with work stealing, matching the
+integration lane. This keeps native-reader coverage within the existing job time
+limits without changing test scope, coverage requirements, or quality thresholds.
+
 Gate 1 also validates all GitHub Actions workflows with actionlint 1.7.12,
 including expression context availability. ShellCheck and Pyflakes are disabled
 in this check; the existing quality gates own source linting. Run the same check
