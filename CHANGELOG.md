@@ -1,3 +1,29 @@
+# [1.21.0](https://github.com/joaobispo2077/avo/compare/v1.20.0...v1.21.0) (2026-11-08)
+
+
+### Bug Fixes
+
+* **ci:** parallelize native unit coverage ([7edfbb6](https://github.com/joaobispo2077/avo/commit/7edfbb6582585a0a70c68b55b6aca10f3a58bff9))
+* **render:** reject prior-proof source ancestry ([2b66317](https://github.com/joaobispo2077/avo/commit/2b663171789c252b32e9a6edaf1fafbe7916954c))
+* **ci:** restore import and proof checks ([ac74630](https://github.com/joaobispo2077/avo/commit/ac74630bdf85afb9987e23fdba78c1913f1f7361))
+* **cleanup:** retain exact import evidence ([169d53d](https://github.com/joaobispo2077/avo/commit/169d53db6935015401fdac6f638f3578040c9792))
+* **watch:** retain source context observations ([0cbd428](https://github.com/joaobispo2077/avo/commit/0cbd428b3b9f414ed0151ac92abd6fe012759ca9))
+* **timeline:** serialize canonical mutations ([8e99970](https://github.com/joaobispo2077/avo/commit/8e9997010285d0f80509258fc9337574efdc5911))
+
+
+### Features
+
+* **timeline:** define import layout contracts ([5f0fdfe](https://github.com/joaobispo2077/avo/commit/5f0fdfe73e6ba0eaaa06ba63c7f536001278b574))
+* **timeline:** edit placed source layouts ([25a395b](https://github.com/joaobispo2077/avo/commit/25a395b56d85a7503cc675930d6eb8d1fdc6d0d2))
+* **pipeline:** expose provider import handoff ([7f5f82f](https://github.com/joaobispo2077/avo/commit/7f5f82fcf576a304dc2980a5fe8c8137b48233f3))
+* **import:** find explicit relink candidates ([b73301c](https://github.com/joaobispo2077/avo/commit/b73301c5c713c0b186343a2185cd0f85d6ad21bc))
+* **otio:** inspect and normalize exports ([6eef304](https://github.com/joaobispo2077/avo/commit/6eef3043b671e3be1c26dd27a0d44a99664b02cf))
+* **otio:** isolate the native reader ([734f72a](https://github.com/joaobispo2077/avo/commit/734f72a1df7b370540de5415fa30efa5f28129de))
+* **render:** rebuild placed source timelines ([e9c7fe7](https://github.com/joaobispo2077/avo/commit/e9c7fe7fff864298ac183614540c66bac9b60323))
+* **import:** recover exact draft selections ([35b0da4](https://github.com/joaobispo2077/avo/commit/35b0da444d9b2dc2b238c39c03bc9d0fcc74b982))
+* **import:** stage and validate handoffs ([80d0221](https://github.com/joaobispo2077/avo/commit/80d0221ba82461d9d5a4228adaffa8071eefad02))
+* **media:** verify local original clocks ([a90889c](https://github.com/joaobispo2077/avo/commit/a90889c47ea2198e3e1dafdacf8516538757c419))
+
 # [1.20.0](https://github.com/joaobispo2077/avo/compare/v1.19.1...v1.20.0) (2026-11-04)
 
 
