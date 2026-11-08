@@ -15,6 +15,7 @@ import numpy as np
 from PIL import Image, ImageDraw
 
 from avo import audio_restoration
+from avo.audio_preview import extract_preview_audio
 from avo.timeline_view import compute_envelope, find_silences, load_font, words_in_range
 
 SUGGEST_THRESHOLD = 0.55
@@ -278,27 +279,7 @@ def preview_segment(
     duration = end - start
     before = out_dir / f"preview_{start:.1f}-{end:.1f}_before.wav"
     after = out_dir / f"preview_{start:.1f}-{end:.1f}_after_{strength_pct}pct.wav"
-    subprocess.run(
-        [
-            "ffmpeg",
-            "-y",
-            "-ss",
-            f"{start:.3f}",
-            "-i",
-            str(media),
-            "-t",
-            f"{duration:.3f}",
-            "-vn",
-            "-ac",
-            "2",
-            "-ar",
-            "48000",
-            str(before),
-        ],
-        check=True,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
+    extract_preview_audio(media, start, duration, before)
     filt = audio_restoration.build_repair_filter(strength_pct)
     subprocess.run(
         [
@@ -388,25 +369,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.measure_loudness:
         from avo import loudness_profiles
 
-        edl: dict = {}
-        if args.edl and args.edl.exists():
-            edl = json.loads(args.edl.read_text(encoding="utf-8"))
-        project: dict = {}
-        provider: dict = {}
-        if args.project and args.project.exists():
-            project = loudness_profiles.load_project_json(args.project)
-            slug = str(project.get("provider") or "").strip()
-            if slug:
-                from avo.init_project import load_provider
-
-                try:
-                    provider = load_provider(slug)
-                except FileNotFoundError:
-                    provider = {}
-        elif args.edl:
-            project, provider = loudness_profiles.load_context_for_edit_dir(
-                args.edl.parent
-            )
+        edl, project, provider = loudness_profiles.load_context_for_inputs(
+            args.edl, args.project
+        )
 
         try:
             profile = loudness_profiles.resolve_loudness_profile(

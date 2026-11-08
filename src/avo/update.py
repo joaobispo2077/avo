@@ -293,43 +293,32 @@ def run_update(
     messages: list[str] = []
     local_version = avo_state.package_version()
     providers_before = list_provider_workspaces(root)
+    unchanged = UpdateReport(
+        local_version=local_version,
+        remote_version=None,
+        providers_before=providers_before,
+        providers_after=providers_before,
+        git=None,
+        pulled=False,
+        synced_skills=False,
+        synced_toolchain=False,
+        dry_run=dry_run,
+        check_only=check_only,
+        messages=messages,
+    )
 
     if not is_git_repo(root):
         messages.append(
             "AVO is not a git clone — /avo.update needs a clone install; "
             "Tier 1 installs should re-run the README installer"
         )
-        return UpdateReport(
-            local_version=local_version,
-            remote_version=None,
-            providers_before=providers_before,
-            providers_after=providers_before,
-            git=None,
-            pulled=False,
-            synced_skills=False,
-            synced_toolchain=False,
-            dry_run=dry_run,
-            check_only=check_only,
-            messages=messages,
-        )
+        return unchanged
 
     if tracked_tree_dirty(root):
         messages.append(
             "working tree has local changes — commit or stash tracked files, then rerun"
         )
-        return UpdateReport(
-            local_version=local_version,
-            remote_version=None,
-            providers_before=providers_before,
-            providers_after=providers_before,
-            git=None,
-            pulled=False,
-            synced_skills=False,
-            synced_toolchain=False,
-            dry_run=dry_run,
-            check_only=check_only,
-            messages=messages,
-        )
+        return unchanged
 
     git_info: GitStatus | None = None
     if force_fetch or not check_only:
@@ -339,19 +328,7 @@ def run_update(
         else:
             if not git_fetch(root):
                 messages.append("git fetch failed (offline?) — try again later")
-                return UpdateReport(
-                    local_version=local_version,
-                    remote_version=None,
-                    providers_before=providers_before,
-                    providers_after=providers_before,
-                    git=None,
-                    pulled=False,
-                    synced_skills=False,
-                    synced_toolchain=False,
-                    dry_run=dry_run,
-                    check_only=check_only,
-                    messages=messages,
-                )
+                return unchanged
             git_info = git_upstream_status(root)
             if git_info is not None:
                 git_info = GitStatus(
@@ -411,7 +388,7 @@ def run_update(
             avo_state.update_state(lastUpdateCheck=avo_state.now_iso())
         return report
 
-    if pulled and not skip_sync:
+    if not skip_sync and (pulled or (git_info and git_info.behind == 0 and yes)):
         lang = stored_transcription_language()
         ok, detail = run_install_skills(root, dry_run=dry_run, runner=runner)
         messages.append(detail)
@@ -422,21 +399,10 @@ def run_update(
             )
             messages.append(detail2)
             synced_toolchain = ok2
-        elif not dry_run:
+        elif not dry_run and pulled:
             messages.append("skipped toolchain refresh because skills refresh failed")
     elif pulled and skip_sync:
         messages.append("skipped post-update sync (--skip-sync)")
-    elif git_info and git_info.behind == 0 and not skip_sync and yes:
-        lang = stored_transcription_language()
-        ok, detail = run_install_skills(root, dry_run=dry_run, runner=runner)
-        messages.append(detail)
-        synced_skills = ok
-        if ok:
-            ok2, detail2 = run_toolchain_setup(
-                root, lang=lang, dry_run=dry_run, runner=runner
-            )
-            messages.append(detail2)
-            synced_toolchain = ok2
 
     providers_after = list_provider_workspaces(root)
     preserve_errors = verify_providers_preserved(providers_before, providers_after)

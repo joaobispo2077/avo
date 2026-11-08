@@ -536,13 +536,6 @@
       "reason": "Feature 006 validation/orchestration branch matrix; recorded for explicit decomposition follow-up"
     },
     {
-      "path": "src/avo/audio_qc.py",
-      "name": "main",
-      "complexity": 17,
-      "rank": "C",
-      "reason": "CLI/entrypoint branching; extract helpers in follow-up burn-down"
-    },
-    {
       "path": "src/avo/mcp/mrtr.py",
       "name": "extract_mrtr_fields",
       "complexity": 17,
