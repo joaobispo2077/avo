@@ -40,7 +40,7 @@ print(match.group(1))
 
 echo "building avo ${VERSION} (${PLATFORM}) with PyInstaller onedir"
 
-"$PYTHON" -m pip install -e ".[mcp,code-drawn]" "pyinstaller>=6,<7"
+"$PYTHON" -m pip install -e ".[mcp,code-drawn,resolve-import]" "pyinstaller>=6,<7"
 
 "$PYTHON" -m PyInstaller \
   --noconfirm \

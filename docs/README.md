@@ -63,6 +63,8 @@ Write for the **correct audience by file** — not by mixing tones in one file.
   motion framework, and its CLI loop.
 - [`remotion-decision-guide.md`](remotion-decision-guide.md) — when to choose
   Remotion instead of HyperFrames.
+- [`fluxo-de-edicao-comparison.md`](fluxo-de-edicao-comparison.md) — evidence-backed
+  comparison, existing motion/track capabilities and proposed BL-020–024 additions.
 
 ## Delivery specifications
 

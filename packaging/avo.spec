@@ -23,6 +23,7 @@ Browsers, ffmpeg, HyperFrames, watch-skill, CUDA and model weights stay external
 
 from __future__ import annotations
 
+import os
 import sys
 from importlib.metadata import PackageNotFoundError, distribution
 from importlib.resources import files
@@ -112,6 +113,7 @@ def _drop(entry) -> bool:
 datas: list = [
     (str(REPO_ROOT / "config"), "config"),
     (str(REPO_ROOT / "schemas"), "schemas"),
+    (str(REPO_ROOT / "providers" / "avo.provider.schema.json"), "providers"),
 ]
 binaries: list = []
 hiddenimports: list = [
@@ -138,6 +140,27 @@ _collect("avo")
 _collect("ctranslate2")
 _collect("faster_whisper")
 _collect("playwright")
+
+from avo.adapters.media.otio_reader import worker_environment
+
+try:
+    reader_distribution = distribution("opentimelineio")
+except PackageNotFoundError as error:
+    raise SystemExit("Build with the pinned resolve-import extra for native timeline import.") from error
+if reader_distribution.version != "0.18.1":
+    raise SystemExit("Frozen timeline import requires opentimelineio==0.18.1.")
+original_environment = dict(os.environ)
+clean_environment = worker_environment()
+try:
+    os.environ.clear()
+    os.environ.update(clean_environment)
+    _collect("opentimelineio")
+finally:
+    os.environ.clear()
+    os.environ.update(original_environment)
+hiddenimports.extend(["opentimelineio._otio", "opentimelineio._opentime"])
+# Distribution metadata includes the upstream LICENSE and NOTICE files.
+datas += copy_metadata("opentimelineio")
 # Skip full MCP package walk: mcp.cli needs typer (optional CLI extra).
 # avo mcp only imports mcp.server.MCPServer.
 datas += collect_data_files("mcp")

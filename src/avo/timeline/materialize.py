@@ -149,6 +149,13 @@ def materialize_synced_raw(
     )
 
 
+def _verify_imported_cut(workspace, revision):
+    if revision["snapshot"].get("sourceAssemblyPolicy") == "preserve-import":
+        from .proof_plan import ProofPlanCompiler
+
+        ProofPlanCompiler(workspace)._verify_import_sources(revision)
+
+
 def materialize_cut_proof(
     *,
     workspace: Any,
@@ -170,6 +177,8 @@ def materialize_cut_proof(
         raise ValueError("CMap cut proof requires exact Sync/N/A basis")
     if store.load_index()["headRevisionId"] != cmap_revision_id:
         raise ValueError("cut proof must render the current CMap head")
+
+    _verify_imported_cut(workspace, revision)
 
     edl_path, projection = write_cmap_projection(
         workspace,
@@ -528,7 +537,9 @@ def _preflight_assembly_media(
     configured = admission or {}
     known_outputs = [
         *(
-            inventory_historical_output_fingerprints(workspace.raw_dir)
+            inventory_historical_output_fingerprints(
+                workspace.raw_dir, timeline_dir=getattr(workspace, "timeline_dir", None)
+            )
             if getattr(workspace, "raw_dir", None) is not None
             else []
         ),
@@ -1232,19 +1243,22 @@ def materialize_proof_plan(
         )
     port = _configured_proof_port(render_port, workspace, plan)
     readiness = _proof_readiness(port, plan)
-    preflight = compiler.require_preflight(
-        plan,
-        media_inputs=media_inputs,
-        tool_readiness=readiness,
-    )
-    gate = _load_microproof_gate(microproof_gate)
-    _require_current_microproof_gate(
-        plan,
-        gate,
-        preflight_hash=preflight["reportHash"],
-    )
-    output = Path(plan["output"]["path"])
-    rendered = _proof_render(port, plan, output, window=None)
+    from .proof_validation_stage import proof_validation_batch
+
+    with proof_validation_batch():
+        preflight = compiler.require_preflight(
+            plan,
+            media_inputs=media_inputs,
+            tool_readiness=readiness,
+        )
+        gate = _load_microproof_gate(microproof_gate)
+        _require_current_microproof_gate(
+            plan,
+            gate,
+            preflight_hash=preflight["reportHash"],
+        )
+        output = Path(plan["output"]["path"])
+        rendered = _proof_render(port, plan, output, window=None)
     record = {
         "schemaVersion": "1.0.0",
         "kind": "proof-plan",

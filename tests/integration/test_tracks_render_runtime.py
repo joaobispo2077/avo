@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import shutil
 import subprocess
+from copy import deepcopy
 from pathlib import Path
 
 import pytest
@@ -17,6 +18,7 @@ from avo.timeline.bmap_service import BMapService
 from avo.timeline.cmap_service import CMapService
 from avo.timeline.contracts import file_fingerprint
 from avo.timeline.materialize import materialize_assembly, materialize_cut_proof
+from avo.timeline.media_admission import MediaAdmissionError
 from avo.timeline.projection import write_assembly_projection
 from avo.timeline.review_runner import ReviewRunner
 from avo.timeline.sync_service import SyncService
@@ -154,7 +156,7 @@ def test_encoded_multilayer_tracks_render_and_trace(tmp_path: Path) -> None:
             "layerId": "dialogue",
             "order": 0,
             "role": "dialogue",
-            "source": source(Path(cut["output"]["locator"])),
+            "source": source(source_a),
             "regions": [region("region-dialogue", 0, 2000, "cue-dialogue")],
             "channels": [0, 1],
             "gainDb": 0,
@@ -213,7 +215,7 @@ def test_encoded_multilayer_tracks_render_and_trace(tmp_path: Path) -> None:
             0,
             2000,
             "cue-dialogue",
-            Path(cut["output"]["locator"]),
+            source_a,
         ),
         ("clip", "clip", 10, 200, 600, "cue-clip", source_b),
         ("image", "image", 20, 600, 900, "cue-image", source_a),
@@ -300,3 +302,23 @@ def test_encoded_multilayer_tracks_render_and_trace(tmp_path: Path) -> None:
         assembly["pictureLineageHash"]
         == assembly["pictureLineage"]["pictureLineageHash"]
     )
+
+    forbidden = deepcopy(tracks["snapshot"])
+    prior_proof = source(Path(cut["output"]["locator"]))
+    forbidden["audioTracks"]["layers"][0]["source"] = prior_proof
+    forbidden["videoTracks"]["layers"][0]["source"] = prior_proof
+    TracksService(workspace).author(
+        forbidden, actor="fixture", reason="Exercise forbidden proof ancestry"
+    )
+    refused = raw_dir / "edit" / "refused-assembly.mp4"
+    with pytest.raises(MediaAdmissionError) as error:
+        materialize_assembly(
+            workspace=workspace,
+            output_path=refused,
+            render_contract=policy["renderContract"],
+            delivery_fidelity_policy=policy,
+            render_profile="preview",
+        )
+    assert error.value.code == "PROOF_FORBIDDEN_ANCESTOR"
+    assert error.value.finding["locator"] == str(Path(cut["output"]["locator"]))
+    assert not refused.exists()

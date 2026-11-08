@@ -97,7 +97,7 @@ jobs:
           enable-cache: true
 
       - name: Sync Python deps (frozen)
-        run: uv sync --frozen --extra dev
+        run: uv sync --frozen --extra dev --extra resolve-import
 
       - name: Expose venv on PATH
         run: echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
@@ -117,7 +117,7 @@ jobs:
 
       - name: Run unit tests
         env:
-          PYTEST_ADDOPTS: --junitxml=reports/quality/unit-tests.xml
+          PYTEST_ADDOPTS: --junitxml=reports/quality/unit-tests.xml -n 2 --dist=worksteal
         run: python scripts/ci/run_quality_gate.py --gate unit-tests --artifact reports/quality/unit-tests.xml -- bash scripts/ci/run-unit-tests.sh
 
       - name: Upload unit execution evidence
@@ -165,7 +165,7 @@ jobs:
           enable-cache: true
 
       - name: Sync Python deps (frozen)
-        run: uv sync --frozen --extra dev --extra mcp --extra code-drawn
+        run: uv sync --frozen --extra dev --extra mcp --extra code-drawn --extra resolve-import
 
       - name: Expose venv on PATH
         run: echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
@@ -239,7 +239,7 @@ jobs:
           enable-cache: true
 
       - name: Sync Python deps (frozen)
-        run: uv sync --frozen --extra dev --extra mcp
+        run: uv sync --frozen --extra dev --extra mcp --extra resolve-import
 
       - name: Expose venv on PATH
         run: echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
@@ -269,6 +269,8 @@ jobs:
 
       - name: Software quality — coverage
         id: q-coverage
+        env:
+          PYTEST_ADDOPTS: -n 2 --dist=worksteal
         run: python scripts/ci/run_quality_gate.py --gate coverage --artifact reports/quality/coverage.json -- bash scripts/ci/run-coverage.sh
 
       - name: Software quality — complexity

@@ -30,24 +30,9 @@ def main(argv: list[str] | None = None) -> int:
         print(f"error: master not found: {args.master}", file=sys.stderr)
         return 1
 
-    edl: dict = {}
-    if args.edl and args.edl.exists():
-        edl = json.loads(args.edl.read_text(encoding="utf-8"))
-
-    project: dict = {}
-    provider: dict = {}
-    if args.project and args.project.exists():
-        project = loudness_profiles.load_project_json(args.project)
-        provider_slug = str(project.get("provider") or "").strip()
-        if provider_slug:
-            from avo.init_project import load_provider
-
-            try:
-                provider = load_provider(provider_slug)
-            except FileNotFoundError:
-                provider = {}
-    elif args.edl:
-        project, provider = loudness_profiles.load_context_for_edit_dir(args.edl.parent)
+    edl, project, provider = loudness_profiles.load_context_for_inputs(
+        args.edl, args.project
+    )
 
     try:
         profile = loudness_profiles.resolve_loudness_profile(
