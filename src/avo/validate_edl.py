@@ -93,6 +93,15 @@ def _check_item_windows(
             )
 
 
+def _overlay_asset_fields(overlays: list[dict], effects: list[dict]) -> list[tuple]:
+    """Keep asset labels identical across every supported EDL version."""
+    return [
+        (f"{name}[{index}].file", item.get("file"))
+        for name, items in (("overlays", overlays), ("sound_effects", effects))
+        for index, item in enumerate(items)
+    ]
+
+
 def _check_assets(asset_fields: list[tuple[str, Any]], edit_dir: Path) -> list[str]:
     errors: list[str] = []
     for field, value in asset_fields:
@@ -214,14 +223,7 @@ def _bluray_ps5_semantic_errors(
         asset_fields.append(
             ("caption_policy.caption_path", caption_policy.get("caption_path"))
         )
-    asset_fields.extend(
-        (f"overlays[{index}].file", item.get("file"))
-        for index, item in enumerate(overlays)
-    )
-    asset_fields.extend(
-        (f"sound_effects[{index}].file", item.get("file"))
-        for index, item in enumerate(effects)
-    )
+    asset_fields.extend(_overlay_asset_fields(overlays, effects))
     errors.extend(_check_assets(asset_fields, edit_dir))
     return errors
 
@@ -395,14 +397,7 @@ def _comparison_semantic_errors(
             (edl.get("ad_segment") or {}).get("approved_asset"),
         ),
     ]
-    asset_fields.extend(
-        (f"overlays[{index}].file", item.get("file"))
-        for index, item in enumerate(overlays)
-    )
-    asset_fields.extend(
-        (f"sound_effects[{index}].file", item.get("file"))
-        for index, item in enumerate(effects)
-    )
+    asset_fields.extend(_overlay_asset_fields(overlays, effects))
     errors.extend(_check_assets(asset_fields, edit_dir))
     return errors
 
@@ -482,14 +477,7 @@ def _semantic_errors(edl: dict, edit_dir: Path) -> list[str]:
             (edl.get("caption_burn_in") or {}).get("file"),
         ),
     ]
-    asset_fields.extend(
-        (f"overlays[{index}].file", item.get("file"))
-        for index, item in enumerate(overlays)
-    )
-    asset_fields.extend(
-        (f"sound_effects[{index}].file", item.get("file"))
-        for index, item in enumerate(effects)
-    )
+    asset_fields.extend(_overlay_asset_fields(overlays, effects))
     errors.extend(_check_assets(asset_fields, edit_dir))
 
     audio = edl.get("audio") or {}

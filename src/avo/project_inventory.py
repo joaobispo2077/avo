@@ -7,11 +7,13 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import shutil
 import stat
 import subprocess
 import sys
 from collections.abc import Sequence
+from contextlib import nullcontext
 from dataclasses import dataclass, field, replace
 from pathlib import Path, PureWindowsPath
 from typing import Any
@@ -372,13 +374,31 @@ def _resolve_final_transcripts(raw_dir: Path, master_basename: str) -> list[Path
     return sorted(paths)
 
 
-def _resolve_reconstruction_metadata(raw_dir: Path) -> list[Path]:
-    bundle_path = raw_dir / "edit" / "timeline" / "reconstruction-bundle.json"
+def _timeline_workspace(raw_dir, project_path=None):
+    from avo.timeline.workspace import resolve_timeline_workspace
+
+    edit = raw_dir / "edit"
+    if project_path is None and not edit.exists() and not edit.is_symlink():
+        return None
+    return resolve_timeline_workspace(raw_dir, project_path=project_path)
+
+
+def _timeline_directory(raw_dir, project_path=None):
+    workspace = _timeline_workspace(raw_dir, project_path)
+    return workspace.timeline_dir if workspace else raw_dir / "edit" / "timeline"
+
+
+def _resolve_reconstruction_metadata(raw_dir: Path, *, project_path=None) -> list[Path]:
+    workspace = _timeline_workspace(raw_dir, project_path)
+    timeline = workspace.timeline_dir if workspace else raw_dir / "edit" / "timeline"
+    bundle_path = timeline / "reconstruction-bundle.json"
     if bundle_path.is_file():
         try:
             from avo.timeline.reconstruction import verify_reconstruction_bundle
 
-            bundle = verify_reconstruction_bundle(raw_dir, bundle_path)
+            bundle = verify_reconstruction_bundle(
+                raw_dir, bundle_path, project_path=project_path
+            )
             return sorted(
                 {
                     bundle_path,
@@ -387,17 +407,32 @@ def _resolve_reconstruction_metadata(raw_dir: Path) -> list[Path]:
             )
         except Exception:
             return [bundle_path]
-    roots = (raw_dir / "edit" / "timeline", raw_dir / "edit" / "review")
+    return _fallback_reconstruction_metadata(raw_dir, timeline, workspace)
+
+
+def _fallback_timeline_files(root, imports):
+    if not root.is_dir():
+        return []
+    return [
+        path
+        for path in root.rglob("*")
+        if path.is_file()
+        and not path.is_symlink()
+        and not path.is_relative_to(imports)
+        and path.suffix.lower() in {".json", ".md"}
+    ]
+
+
+def _fallback_reconstruction_metadata(raw_dir, timeline, workspace):
+    imports = timeline / "imports"
+    roots = (
+        timeline,
+        workspace.review_dir if workspace else raw_dir / "edit" / "review",
+    )
     paths: list[Path] = []
     for root in roots:
-        if root.is_dir():
-            paths.extend(
-                path
-                for path in root.rglob("*")
-                if path.is_file()
-                and not path.is_symlink()
-                and path.suffix.lower() in {".json", ".md"}
-            )
+        paths.extend(_fallback_timeline_files(root, imports))
+    paths.extend(_retained_import_metadata(workspace, timeline))
     # Living footage-root audits (not reconstruction-bundle graph members).
     # Listed as preserved metadata when no verified bundle is present so a
     # later edit/-only cleanup cannot treat them as skippable leftovers.
@@ -415,16 +450,40 @@ def _resolve_reconstruction_metadata(raw_dir: Path) -> list[Path]:
     return sorted(set(paths))
 
 
+def _import_storage_present(timeline):
+    return any(
+        path.exists() or path.is_symlink()
+        for path in (timeline / "imports", timeline / "import-activation.pending.json")
+    )
+
+
+def _retained_import_metadata(workspace, timeline):
+    if not _import_storage_present(timeline):
+        return []
+    if workspace is None:
+        raise PreservedSetViolation("Import retention requires its declared project")
+    from avo.timeline.import_retention import retained_import_paths
+
+    return retained_import_paths(workspace)
+
+
 def resolve_preserved_set(
     raw_dir: Path,
     master_basename: str,
     *,
     initial_transcript: Path | None = None,
+    project_path: Path | None = None,
 ) -> PreservedSetResult:
     raw_dir = raw_dir.resolve()
-    reconstruction = list(_resolve_reconstruction_metadata(raw_dir))
+    reconstruction = list(
+        _resolve_reconstruction_metadata(raw_dir, project_path=project_path)
+    )
     return _preserved_from_metadata(
-        raw_dir, master_basename, reconstruction, initial_transcript=initial_transcript
+        raw_dir,
+        master_basename,
+        reconstruction,
+        initial_transcript=initial_transcript,
+        project_path=project_path,
     )
 
 
@@ -434,11 +493,12 @@ def _preserved_from_metadata(
     reconstruction: list[Path],
     *,
     initial_transcript: Path | None = None,
+    project_path: Path | None = None,
 ) -> PreservedSetResult:
     from avo.shorts_delivery import preserved_shorts_paths
 
     reconstruction.extend(preserved_shorts_paths(raw_dir))
-    reconstruction.extend(_retained_paths(raw_dir))
+    reconstruction.extend(_retained_paths(raw_dir, project_path=project_path))
     return PreservedSetResult(
         raw_sources=_resolve_raw_sources(raw_dir),
         initial_transcript=_resolve_initial_transcript(
@@ -475,8 +535,13 @@ def _files_under(path: Path) -> list[Path]:
     )
 
 
-def _project_retention(raw_dir: Path) -> list[str]:
-    project = load_project(raw_dir) if (raw_dir / "avo.project.json").is_file() else {}
+def _project_retention(raw_dir: Path, *, project_path=None) -> list[str]:
+    if project_path is None:
+        project = (
+            load_project(raw_dir) if (raw_dir / "avo.project.json").is_file() else {}
+        )
+    else:
+        project = _timeline_workspace(raw_dir, project_path).project
     values = (project.get("cleanup") or {}).get("preservePaths", [])
     if not isinstance(values, list) or any(
         not isinstance(value, str) for value in values
@@ -497,10 +562,10 @@ def _library_retention(raw_dir: Path) -> list[Path]:
         raise PreservedSetViolation(str(exc)) from exc
 
 
-def _retained_paths(raw_dir: Path) -> list[Path]:
+def _retained_paths(raw_dir: Path, *, project_path=None) -> list[Path]:
     paths = [
         path
-        for value in _project_retention(raw_dir)
+        for value in _project_retention(raw_dir, project_path=project_path)
         for path in _files_under(_preserve_root(raw_dir, value))
     ]
     paths.extend(_library_retention(raw_dir))
@@ -537,35 +602,53 @@ def verify_preserved_complete(
     master_basename: str,
     *,
     initial_transcript: Path | None = None,
+    project_path: Path | None = None,
 ) -> list[str]:
     raw_dir = raw_dir.resolve()
     if not raw_dir.is_dir():
         return [f"rawDir does not exist: {raw_dir}"]
 
     preserved = resolve_preserved_set(
-        raw_dir, master_basename, initial_transcript=initial_transcript
+        raw_dir,
+        master_basename,
+        initial_transcript=initial_transcript,
+        project_path=project_path,
     )
-    errors = _preserved_artifact_errors(raw_dir, master_basename, preserved)
+    errors = []
+    external_sources = []
 
-    timeline = raw_dir / "edit" / "timeline"
-    canonical = [timeline / f"{name}.json" for name in CANONICAL_INDEX_NAMES]
-    if all(path.is_file() for path in canonical):
+    timeline = _timeline_directory(raw_dir, project_path)
+    if _canonical_cleanup_required(timeline):
         try:
             from avo.timeline.reconstruction import verify_reconstruction_bundle
 
-            verify_reconstruction_bundle(raw_dir)
+            bundle = verify_reconstruction_bundle(
+                raw_dir,
+                timeline / "reconstruction-bundle.json",
+                project_path=project_path,
+            )
+            external_sources = bundle.get("externalSources", [])
         except Exception as error:
             errors.append(f"invalid or missing reconstruction bundle: {error}")
 
-    return errors
+    return [
+        *_preserved_artifact_errors(
+            raw_dir, master_basename, preserved, external_sources=external_sources
+        ),
+        *errors,
+    ]
 
 
 def _preserved_artifact_errors(
-    raw_dir: Path, master_basename: str, preserved: PreservedSetResult
+    raw_dir: Path,
+    master_basename: str,
+    preserved: PreservedSetResult,
+    *,
+    external_sources=None,
 ) -> list[str]:
     errors: list[str] = []
 
-    if not preserved.raw_sources:
+    if not any((preserved.raw_sources, external_sources)):
         errors.append("missing raw source file(s)")
 
     if preserved.initial_transcript is None:
@@ -601,21 +684,30 @@ def _preserved_artifact_errors(
 
 
 def _preservation_inventory(
-    raw_dir: Path, master_basename: str, *, pre_json_path: Path | None = None
+    raw_dir: Path,
+    master_basename: str,
+    *,
+    pre_json_path: Path | None = None,
+    project_path: Path | None = None,
 ) -> tuple[InventoryReport, dict[str, Any]]:
     """Verify exact reconstruction bytes once, then inventory the retained scope."""
     from avo.shorts_delivery import preserved_shorts_paths
     from avo.timeline.contracts import file_fingerprint
     from avo.timeline.reconstruction import verify_reconstruction_bundle
 
-    _require_integral_retention(raw_dir)
+    _require_integral_retention(raw_dir, project_path=project_path)
+    workspace = _timeline_workspace(raw_dir, project_path)
     try:
-        bundle = verify_reconstruction_bundle(raw_dir)
+        bundle_path = (
+            _timeline_directory(raw_dir, project_path) / "reconstruction-bundle.json"
+        )
+        bundle = verify_reconstruction_bundle(
+            raw_dir, bundle_path, project_path=project_path
+        )
     except (OSError, ValueError, RuntimeError) as error:
         raise PreservedSetViolation(
             f"preservation reconstruction verification failed: {error}"
         ) from error
-    bundle_path = raw_dir / "edit" / "timeline" / "reconstruction-bundle.json"
     preserved = PreservedSetResult(
         raw_sources=_resolve_raw_sources(raw_dir),
         initial_transcript=_resolve_initial_transcript(raw_dir, master_basename),
@@ -626,11 +718,16 @@ def _preservation_inventory(
                 bundle_path,
                 *(raw_dir / item["path"] for item in bundle["files"]),
                 *preserved_shorts_paths(raw_dir),
-                *_retained_paths(raw_dir),
+                *_retained_paths(raw_dir, project_path=project_path),
             }
         ),
     )
-    errors = _preserved_artifact_errors(raw_dir, master_basename, preserved)
+    errors = _preserved_artifact_errors(
+        raw_dir,
+        master_basename,
+        preserved,
+        external_sources=bundle.get("externalSources", []),
+    )
     masters = {path.resolve() for path in preserved.final_master}
     if masters != {(raw_dir / bundle["master"]["path"]).resolve()}:
         errors.append("preservation master does not match exact reconstruction master")
@@ -643,7 +740,7 @@ def _preservation_inventory(
         )
     report = _preservation_report(raw_dir, master_basename, preserved, pre_json_path)
     identity = {
-        "project": file_fingerprint(raw_dir / "avo.project.json"),
+        "project": file_fingerprint(workspace.project_path),
         "master": bundle["master"],
         "reconstructionBundle": {
             **file_fingerprint(bundle_path),
@@ -654,21 +751,22 @@ def _preservation_inventory(
     return report, identity
 
 
-def _require_integral_retention(raw_dir: Path) -> None:
-    from avo.timeline.workspace import resolve_project_raw_dir
+def _require_integral_retention(raw_dir: Path, *, project_path=None) -> None:
+    workspace = _timeline_workspace(raw_dir, project_path)
+    if workspace is None:
+        raise PreservedSetViolation("Preservation requires its declared project")
 
     edit = raw_dir / "edit"
     if edit.is_symlink() or any(path.is_symlink() for path in edit.rglob("*")):
         raise PreservedSetViolation("preservation closure rejects links in edit/")
-    roots = [_preserve_root(raw_dir, value) for value in _project_retention(raw_dir)]
+    roots = [
+        _preserve_root(raw_dir, value)
+        for value in _project_retention(raw_dir, project_path=workspace.project_path)
+    ]
     if edit not in roots:
         raise PreservedSetViolation(
             "preservation closure requires cleanup.preservePaths to retain all of edit/"
         )
-    project_path = raw_dir / "avo.project.json"
-    declared = load_project(raw_dir).get("rawDir", str(raw_dir))
-    if resolve_project_raw_dir(project_path, declared) != raw_dir:
-        raise PreservedSetViolation("preservation project points to another rawDir")
 
 
 def _preservation_report(
@@ -723,7 +821,11 @@ def _preservation_file_metadata(
 
 
 def record_preservation_closure(
-    raw_dir: Path, master_basename: str, *, pre_json_path: Path | None = None
+    raw_dir: Path,
+    master_basename: str,
+    *,
+    pre_json_path: Path | None = None,
+    project_path: Path | None = None,
 ) -> tuple[InventoryReport, dict[str, Any]]:
     """Record verified retention without deleting, copying, or purging anything.
 
@@ -738,10 +840,13 @@ def record_preservation_closure(
     raw_dir = Path(raw_dir).resolve()
     if path.exists():
         return verify_preservation_closure(
-            raw_dir, master_basename, pre_json_path=pre_json_path
+            raw_dir,
+            master_basename,
+            pre_json_path=pre_json_path,
+            project_path=project_path,
         )
     report, identity = _preservation_inventory(
-        raw_dir, master_basename, pre_json_path=pre_json_path
+        raw_dir, master_basename, pre_json_path=pre_json_path, project_path=project_path
     )
     receipt = {
         "schemaVersion": 1,
@@ -770,7 +875,11 @@ def record_preservation_closure(
 
 
 def verify_preservation_closure(
-    raw_dir: Path, master_basename: str, *, pre_json_path: Path | None = None
+    raw_dir: Path,
+    master_basename: str,
+    *,
+    pre_json_path: Path | None = None,
+    project_path: Path | None = None,
 ) -> tuple[InventoryReport, dict[str, Any]]:
     """Reject stale/tampered evidence using native exact-byte verification."""
     from avo.timeline.contracts import content_hash
@@ -807,7 +916,7 @@ def verify_preservation_closure(
             "preservation receipt changed or belongs to another master/project"
         )
     report, identity = _preservation_inventory(
-        raw_dir, master_basename, pre_json_path=pre_json_path
+        raw_dir, master_basename, pre_json_path=pre_json_path, project_path=project_path
     )
     if any(receipt.get(key) != value for key, value in identity.items()):
         raise PreservedSetViolation("preservation receipt is stale")
@@ -863,6 +972,11 @@ def _normalized_path_set(paths: list[Path]) -> set[str]:
     return {str(path.resolve()) for path in paths}
 
 
+def _cleanup_preserved(path, preserved_set):
+    # Kernel coordination must retain its inode, without becoming byte evidence.
+    return path.name == ".mutation.lock" or str(path.resolve()) in preserved_set
+
+
 def scan_delete_candidates(
     raw_dir: Path, preserved: PreservedSetResult
 ) -> tuple[list[Path], int]:
@@ -892,8 +1006,7 @@ def scan_delete_candidates(
 
                 CostStore(raw_dir).path(str(path.relative_to(edit_dir / "costs")))
                 continue
-            resolved = str(path.resolve())
-            if resolved in preserved_set:
+            if _cleanup_preserved(path, preserved_set):
                 continue
             if path.is_file() and not path.is_symlink():
                 candidates.append(path)
@@ -920,7 +1033,7 @@ def assert_no_preserved_in_delete_list(
     preserved_set = _normalized_path_set(preserved.all_paths)
     for path in delete_list:
         resolved = str(path.resolve())
-        if resolved in preserved_set:
+        if path.name == ".mutation.lock" or resolved in preserved_set:
             rel = path.as_posix()
             raise PreservedSetViolation(
                 f"Cleanup refused: delete list includes preserved file: {rel}"
@@ -954,13 +1067,20 @@ def build_inventory_report(
     *,
     pre_json_path: Path | None = None,
     initial_transcript: Path | None = None,
+    project_path: Path | None = None,
 ) -> InventoryReport:
     raw_dir = raw_dir.resolve()
     preserved = resolve_preserved_set(
-        raw_dir, master_basename, initial_transcript=initial_transcript
+        raw_dir,
+        master_basename,
+        initial_transcript=initial_transcript,
+        project_path=project_path,
     )
     verify_errors = verify_preserved_complete(
-        raw_dir, master_basename, initial_transcript=initial_transcript
+        raw_dir,
+        master_basename,
+        initial_transcript=initial_transcript,
+        project_path=project_path,
     )
     delete_candidates, leftover = scan_delete_candidates(raw_dir, preserved)
 
@@ -991,9 +1111,143 @@ def build_inventory_report(
     )
 
 
-def _canonical_indexes_complete(raw_dir: Path) -> bool:
-    timeline = Path(raw_dir) / "edit" / "timeline"
+def _canonical_indexes_complete(raw_dir: Path, project_path=None) -> bool:
+    timeline = _timeline_directory(Path(raw_dir), project_path)
     return all((timeline / f"{name}.json").is_file() for name in CANONICAL_INDEX_NAMES)
+
+
+def _cleanup_document(path):
+    from avo.timeline.import_service import _document
+
+    return _document(path)
+
+
+def _real_canonical_index(path):
+    if not path.exists() and not path.is_symlink():
+        return False
+    if path.is_symlink() or not path.is_file():
+        return True
+    try:
+        document = _cleanup_document(path)
+    except (OSError, ValueError, RuntimeError):
+        return True
+    return bool(
+        {"artifactType", "headRevisionId", "revisionRefs"}.intersection(document)
+    )
+
+
+def _canonical_cleanup_required(timeline):
+    bundle = timeline / "reconstruction-bundle.json"
+    if bundle.exists() or bundle.is_symlink():
+        return True
+    indexes = [timeline / f"{name}.json" for name in CANONICAL_INDEX_NAMES]
+    return all(path.is_file() for path in indexes) or any(
+        _real_canonical_index(path) for path in indexes
+    )
+
+
+def _import_packet_document(packet):
+    if (
+        not re.fullmatch(r"[a-f0-9]{64}", packet.name)
+        or packet.is_symlink()
+        or not packet.is_dir()
+    ):
+        return None
+    index = packet / "index.json"
+    if index.is_symlink() or not index.is_file():
+        return None
+    from avo.timeline.contracts import validate_document
+
+    try:
+        document = _cleanup_document(index)
+        validate_document(document, "avo.timeline-import.schema.json#/$defs/session")
+        return document
+    except (OSError, ValueError, RuntimeError):
+        return None
+
+
+def _unselected_import_packet(packet):
+    document = _import_packet_document(packet)
+    if document is None:
+        return False
+    unselected = {
+        "prepared",
+        "unresolved",
+        "validated",
+        "awaiting-sync",
+        "ready-to-activate",
+        "stale",
+        "cancelled",
+    }
+    if document["importId"] != packet.name or document["state"] not in unselected:
+        return False
+    if {"activation", "return"}.intersection(document["refs"]):
+        return False
+    return not any(
+        path.exists() or path.is_symlink()
+        for path in (
+            packet / "activation",
+            packet / "activation-results",
+            packet / "returns",
+            packet / "return-results",
+        )
+    )
+
+
+def _require_unselected_import_storage(timeline):
+    imports = timeline / "imports"
+    if not imports.exists() and not imports.is_symlink():
+        return
+    if imports.is_symlink() or not imports.is_dir():
+        raise PreservedSetViolation(
+            "Cannot qualify import history without canonical state"
+        )
+    for ordinal, packet in enumerate(imports.iterdir()):
+        if ordinal >= 10000 or not _unselected_import_packet(packet):
+            raise PreservedSetViolation(
+                "Cannot discard uncertain selected import history; restore its canonical indexes and bundle"
+            )
+
+
+def _refuse_unknown_canonical_target(raw_dir):
+    edit = raw_dir / "edit"
+    names = {f"{name}.json" for name in CANONICAL_INDEX_NAMES}
+    for ordinal, path in enumerate(edit.rglob("*")):
+        if (
+            ordinal >= 100000
+            or path.is_symlink()
+            or not path.resolve().is_relative_to(raw_dir)
+        ):
+            raise PreservedSetViolation(
+                "Pass the explicit project before qualifying cleanup metadata"
+            )
+        if path.name in {"imports", "reconstruction-bundle.json"}:
+            raise PreservedSetViolation(
+                "Canonical import cleanup requires its explicit project declaration"
+            )
+        if path.name in names and _real_canonical_index(path):
+            raise PreservedSetViolation(
+                "Canonical cleanup requires its explicit project declaration"
+            )
+
+
+def _refuse_unknown_canonical_candidates(raw_dir, delete_list):
+    reserved = {f"{name}.json" for name in CANONICAL_INDEX_NAMES}
+    reserved.update(
+        {
+            "reconstruction-bundle.json",
+            "import-activation.pending.json",
+            "pipeline-run.json",
+        }
+    )
+    for path in delete_list:
+        if (
+            path.name in reserved
+            or "imports" in path.relative_to(raw_dir / "edit").parts
+        ):
+            raise PreservedSetViolation(
+                "Canonical metadata arrived without a resolved cleanup project; refuse deletion"
+            )
 
 
 def _legacy_source_files(raw_dir: Path) -> list[Path]:
@@ -1035,7 +1289,9 @@ def _legacy_destinations(raw_dir: Path, source: Path) -> list[Path]:
     return dests
 
 
-def promote_legacy_reconstruction(raw_dir: Path, *, apply: bool) -> list[Path]:
+def promote_legacy_reconstruction(
+    raw_dir: Path, *, apply: bool, project_path=None
+) -> list[Path]:
     """Copy legacy EDL/log files from ``edit/`` into reconstruction locations.
 
     ``apply=False`` (dry-run) writes nothing. Skip when all five canonical
@@ -1044,7 +1300,7 @@ def promote_legacy_reconstruction(raw_dir: Path, *, apply: bool) -> list[Path]:
     can treat them as preserved for listing.
     """
     raw_dir = Path(raw_dir)
-    if _canonical_indexes_complete(raw_dir):
+    if _canonical_indexes_complete(raw_dir, project_path):
         return []
     sources = _legacy_source_files(raw_dir)
     dests: list[Path] = []
@@ -1122,25 +1378,38 @@ def _maybe_purge_session(session_id: str | None, *, purge_session: bool) -> None
 
 
 def _cleanup_preserved_set(
-    raw_dir: Path, master_basename: str, initial_transcript: Path | None
+    raw_dir: Path,
+    master_basename: str,
+    initial_transcript: Path | None,
+    *,
+    project_path=None,
 ) -> PreservedSetResult:
     """Verify once here; never consume an externally cached reconstruction pass."""
     if not raw_dir.is_dir():
         raise SystemExit(f"rawDir does not exist: {raw_dir}")
-    timeline = raw_dir / "edit" / "timeline"
-    if not all((timeline / f"{name}.json").is_file() for name in CANONICAL_INDEX_NAMES):
+    timeline = _timeline_directory(raw_dir, project_path)
+    if not _canonical_cleanup_required(timeline):
+        _require_unselected_import_storage(timeline)
         errors = verify_preserved_complete(
-            raw_dir, master_basename, initial_transcript=initial_transcript
+            raw_dir,
+            master_basename,
+            initial_transcript=initial_transcript,
+            project_path=project_path,
         )
         if errors:
             raise SystemExit("\n".join(errors))
         return resolve_preserved_set(
-            raw_dir, master_basename, initial_transcript=initial_transcript
+            raw_dir,
+            master_basename,
+            initial_transcript=initial_transcript,
+            project_path=project_path,
         )
     from avo.timeline.reconstruction import verify_reconstruction_bundle
 
     try:
-        bundle = verify_reconstruction_bundle(raw_dir)
+        bundle = verify_reconstruction_bundle(
+            raw_dir, timeline / "reconstruction-bundle.json", project_path=project_path
+        )
     except Exception as error:
         raise SystemExit(
             f"invalid or missing reconstruction bundle: {error}"
@@ -1153,8 +1422,14 @@ def _cleanup_preserved_set(
             *(raw_dir / entry["path"] for entry in bundle["files"]),
         ],
         initial_transcript=initial_transcript,
+        project_path=project_path,
     )
-    errors = _preserved_artifact_errors(raw_dir, master_basename, preserved)
+    errors = _preserved_artifact_errors(
+        raw_dir,
+        master_basename,
+        preserved,
+        external_sources=bundle.get("externalSources", []),
+    )
     if errors:
         raise SystemExit("\n".join(errors))
     return preserved
@@ -1169,13 +1444,58 @@ def run_cleanup(
     rimraf_runner: Any | None = None,
     session_id: str | None = None,
     purge_session: bool = True,
+    project_path: Path | None = None,
 ) -> CleanupRunResult:
     raw_dir = Path(raw_dir).resolve()
-    preserved = _cleanup_preserved_set(raw_dir, master_basename, initial_transcript)
+    workspace = _timeline_workspace(raw_dir, project_path)
+    if workspace is None:
+        _refuse_unknown_canonical_target(raw_dir)
+    timeline = workspace.timeline_dir if workspace else raw_dir / "edit" / "timeline"
+    has_imports = _import_storage_present(timeline)
+    from avo.timeline.store import timeline_writer
 
-    dests = promote_legacy_reconstruction(raw_dir, apply=not dry_run)
+    guard = (
+        timeline_writer(timeline)
+        if _canonical_cleanup_required(timeline) or has_imports
+        else nullcontext()
+    )
+    with guard:
+        return _run_guarded_cleanup(
+            raw_dir,
+            master_basename,
+            dry_run=dry_run,
+            initial_transcript=initial_transcript,
+            rimraf_runner=rimraf_runner,
+            session_id=session_id,
+            purge_session=purge_session,
+            project_path=project_path,
+            known_target=workspace is not None,
+        )
+
+
+def _run_guarded_cleanup(
+    raw_dir,
+    master_basename,
+    *,
+    dry_run,
+    initial_transcript,
+    rimraf_runner,
+    session_id,
+    purge_session,
+    project_path,
+    known_target,
+):
+    preserved = _cleanup_preserved_set(
+        raw_dir, master_basename, initial_transcript, project_path=project_path
+    )
+
+    dests = promote_legacy_reconstruction(
+        raw_dir, apply=not dry_run, project_path=project_path
+    )
     preserved = _merge_legacy_dests(preserved, dests)
     delete_list, leftover = scan_delete_candidates(raw_dir, preserved)
+    if not known_target:
+        _refuse_unknown_canonical_candidates(raw_dir, delete_list)
     assert_no_preserved_in_delete_list(preserved, delete_list)
 
     result = CleanupRunResult(
@@ -1252,6 +1572,7 @@ def execute_cleanup(
     initial_transcript: Path | None = None,
     rimraf_runner: Any | None = None,
     session_id: str | None = None,
+    project_path: Path | None = None,
 ) -> list[Path]:
     return run_cleanup(
         raw_dir,
@@ -1261,6 +1582,7 @@ def execute_cleanup(
         rimraf_runner=rimraf_runner,
         session_id=session_id,
         purge_session=True,
+        project_path=project_path,
     ).paths
 
 

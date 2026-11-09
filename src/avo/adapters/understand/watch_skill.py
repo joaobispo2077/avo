@@ -1280,12 +1280,19 @@ def _native_findings(
     return findings
 
 
-def _native_pass_instruction(pass_id: str) -> str:
+def _native_pass_instruction(pass_id: str, *, source_context: bool = False) -> str:
+    observations = (
+        "Return the explicitly requested source-context observations as informational "
+        "findings, including on pass. Use severity info and requiresHuman false for "
+        "a supported context observation; preserve unknown whenever uncertain. "
+        if source_context
+        else "Return findings only for material problems or genuine uncertainty; "
+        "when status is pass, findings must be an empty list. "
+    )
     return (
         f"\nThis pass is {pass_id}. "
-        "Return findings only for material problems or genuine uncertainty; "
-        "when status is pass, findings must be an empty list. "
-        "For fail or needs-human-judgment, return at most 3 concise findings. "
+        + observations
+        + "For fail or needs-human-judgment, return at most 3 concise findings. "
         "Use fail only for a confirmed problem. If any finding requires human "
         "judgment or describes uncertainty, status must be needs-human-judgment, "
         "not fail. "
@@ -1414,7 +1421,10 @@ def _native_review(review: _ReviewRequest, model_pin: dict[str, Any]) -> dict[st
         "capability": snapshot["identityHash"],
         "prompt": hashlib.sha256(review.prompt.encode("utf-8")).hexdigest(),
         "nativePassInstruction": hashlib.sha256(
-            _native_pass_instruction("<pass-id>").encode("utf-8")
+            _native_pass_instruction(
+                "<pass-id>",
+                source_context=review.context.get("sourceContextObservation") is True,
+            ).encode("utf-8")
         ).hexdigest(),
         "transcript": (
             hashlib.sha256(Path(review.transcript_ref).read_bytes()).hexdigest()
@@ -1462,7 +1472,11 @@ def _native_review(review: _ReviewRequest, model_pin: dict[str, Any]) -> dict[st
             {
                 "type": "text",
                 "text": review.prompt
-                + _native_pass_instruction(str(review_pass["passId"])),
+                + _native_pass_instruction(
+                    str(review_pass["passId"]),
+                    source_context=review.context.get("sourceContextObservation")
+                    is True,
+                ),
             }
         ]
         refs: list[dict[str, Any]] = []

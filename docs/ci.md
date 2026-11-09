@@ -42,6 +42,18 @@ Order in `.github/workflows/ci.yml` is enforced via job `needs:`.
 Unit and integration lanes run in parallel after Gate 1. Software quality does
 not run `tests/integration`; coverage is the unit suite only.
 
+Unit, integration, and software-quality jobs install the pinned `resolve-import`
+extra so native Resolve import tests execute in every test lane. Placed picture
+layers use their shifted timestamps and finite input extents instead of redundant
+overlay enable expressions, preserving every frame on Ubuntu's FFmpeg 6.1.1 as
+well as FFmpeg 7. Private proof segments use a local fingerprint stage so deleted
+scratch files do not enter the enclosing canonical dependency guard; original
+and generated inputs are still revalidated before publication.
+
+Unit tests and coverage use two pytest workers with work stealing, matching the
+integration lane. This keeps native-reader coverage within the existing job time
+limits without changing test scope, coverage requirements, or quality thresholds.
+
 Gate 1 also validates all GitHub Actions workflows with actionlint 1.7.12,
 including expression context availability. ShellCheck and Pyflakes are disabled
 in this check; the existing quality gates own source linting. Run the same check

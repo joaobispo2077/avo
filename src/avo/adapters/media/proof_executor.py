@@ -28,6 +28,9 @@ from avo.timeline.proof_validation_stage import (
     proof_pixel_observations,
 )
 
+from .ffprobe import INVENTORY_ENTRIES
+from .local_source import local_source_arguments
+
 PROOF_AUDIO_BITRATE = "192k"
 
 
@@ -123,6 +126,7 @@ def _source(
     cache: dict[str, dict],
     *,
     audio_node: dict | None = None,
+    literal_still: bool = False,
 ) -> tuple[Path, int]:
     source, path, expected = _source_identity(parameters, lock)
     key = str(path.resolve())
@@ -138,15 +142,18 @@ def _source(
                     "ffprobe",
                     "-v",
                     "error",
-                    "-show_streams",
-                    "-show_format",
+                    *local_source_arguments(path, literal_still=literal_still),
+                    "-show_entries",
+                    INVENTORY_ENTRIES,
                     "-of",
                     "json",
+                    "-i",
                     str(path),
                 ],
                 capture_output=True,
                 text=True,
                 check=True,
+                timeout=60,
             ).stdout
         )
         cache[key] = {
@@ -157,6 +164,36 @@ def _source(
     if cache[key]["sha256"] != expected:
         raise RuntimeError(f"ProofPlan source bytes changed: {path}")
     return _selected_stream(source, path, cache[key]["streams"], audio_node)
+
+
+def _clock_header_integer(value):
+    return None if value in (None, "N/A", "") else int(value)
+
+
+def _verify_picture_clock(path, stream, cache, fps):
+    from .video_clock import verify_video_clock
+
+    source = cache[str(path.resolve())]
+    clocks = source.setdefault("videoClocks", {})
+    key = (stream, fps)
+    if key not in clocks:
+        metadata = next(item for item in source["streams"] if item["index"] == stream)
+        try:
+            evidence = verify_video_clock(
+                path,
+                stream,
+                fps,
+                time_base=metadata.get("time_base"),
+                expected_sha256=source["sha256"],
+                expected_frames=_clock_header_integer(metadata.get("nb_frames")),
+                start_ticks=_clock_header_integer(metadata.get("start_pts")),
+            )
+        except (ValueError, OSError, subprocess.SubprocessError) as exc:
+            raise RuntimeError(
+                f"Original picture clock is unverified: {path}:{stream}: {exc}"
+            ) from exc
+        clocks[key] = evidence
+    return clocks[key]
 
 
 def _validate_audio_node(node, rate):
@@ -479,6 +516,10 @@ def _picture_source(operation, generated, execution, cache, fps):
     raw_start, raw_end = _bounds(source_range, "startTicks", "endTicks")
     source_start = _seconds(raw_start, source_range["timebase"])
     source_duration = _seconds(raw_end - raw_start, source_range["timebase"])
+    if execution.get("sourceAssemblyPolicy") == "preserve-import":
+        evidence = _verify_picture_clock(*picture, cache, fps)
+        if (source_start + source_duration) * fps > evidence["packetCount"]:
+            raise RuntimeError("Trim exceeds verified available picture frames")
     if abs(source_duration - Fraction(end - start, 1) / fps) > 1 / fps:
         raise RuntimeError("Source/video duration differs by more than one frame")
     tail = _video_tail(
@@ -681,7 +722,32 @@ def _noise_policy_records(graph):
     ]
 
 
-def _render_piece(segment, left, right, spec, fps, rate, piece):
+def _source_audio_read(node, path, stream, preserve):
+    start = node["sourceRange"]["startSample"]
+    end = node["sourceRange"]["endSampleExclusive"]
+    if preserve:
+        # ponytail: decode imported audio from origin for exact samples; use a
+        # fingerprint-bound seek index if long-source throughput needs it.
+        return (
+            [*local_source_arguments(path), "-i", str(path)],
+            f"[1:{stream}]atrim=start_sample={start}:end_sample={end},asetpts=PTS-STARTPTS",
+        )
+    return [
+        *local_source_arguments(path),
+        "-ss",
+        str(start / node["sourceSampleRate"]),
+        "-i",
+        str(path),
+    ], f"[1:{stream}]atrim=end_sample={end - start},asetpts=PTS-STARTPTS"
+
+
+def _piece_stop(left, right, fps, preserve):
+    return [] if preserve else ["-t", str(float(Fraction(right - left, 1) / fps))]
+
+
+def _render_piece(
+    segment, left, right, spec, fps, rate, piece, *, preserve_audio=False
+):
     (
         start,
         _end,
@@ -696,12 +762,12 @@ def _render_piece(segment, left, right, spec, fps, rate, piece):
         noise_policy,
     ) = segment
     path, stream = picture
-    duration = Fraction(right - left, 1) / fps
     arguments = [
         "ffmpeg",
         "-v",
         "error",
         "-nostdin",
+        *local_source_arguments(path),
         "-ss",
         str(float(source_start)),
         "-i",
@@ -714,15 +780,15 @@ def _render_piece(segment, left, right, spec, fps, rate, piece):
     length = target_end - target_start
     if audio:
         apath, astream = audio
-        astart = node["sourceRange"]["startSample"]
         full_length = (
             node["outputRange"]["endSampleExclusive"]
             - node["outputRange"]["startSample"]
         )
         offset = target_start - node["outputRange"]["startSample"]
-        arguments += ["-ss", str(astart / node["sourceSampleRate"]), "-i", str(apath)]
-        raw_length = node["sourceRange"]["endSampleExclusive"] - astart
-        afilter = f"[1:{astream}]atrim=end_sample={raw_length},asetpts=PTS-STARTPTS"
+        source_arguments, afilter = _source_audio_read(
+            node, apath, astream, preserve_audio
+        )
+        arguments += source_arguments
         if node["sourceSampleRate"] != rate:
             afilter += f",aresample={rate}"
         afilter += _dialogue_noise_filter(noise_policy, node)
@@ -751,8 +817,7 @@ def _render_piece(segment, left, right, spec, fps, rate, piece):
             "pcm_s32le",
             "-ar",
             str(rate),
-            "-t",
-            str(float(duration)),
+            *_piece_stop(left, right, fps, preserve_audio),
             str(piece),
         ]
     )
@@ -862,11 +927,16 @@ def _render_media(
     overlays,
     verify_inputs,
     audio_mix=None,
+    preserve_audio=False,
 ):
     if output.exists():
         raise RuntimeError(f"Refusing to replace existing proof: {output}")
     output.parent.mkdir(parents=True, exist_ok=True)
-    with tempfile.TemporaryDirectory(prefix="proof-plan-", dir=output.parent) as folder:
+    # Private segments disappear here and cannot belong to an enclosing exit guard.
+    with (
+        fingerprint_stage(),
+        tempfile.TemporaryDirectory(prefix="proof-plan-", dir=output.parent) as folder,
+    ):
         directory = Path(folder)
         pieces = []
         for segment in segments:
@@ -879,7 +949,16 @@ def _render_media(
             if left >= right:
                 continue
             piece = directory / f"{len(pieces):06d}.mkv"
-            _render_piece(segment, left, right, spec, fps, rate, piece)
+            _render_piece(
+                segment,
+                left,
+                right,
+                spec,
+                fps,
+                rate,
+                piece,
+                preserve_audio=preserve_audio,
+            )
             pieces.append(piece)
         listing = directory / "concat.txt"
         listing.write_text(
@@ -951,16 +1030,57 @@ def execute_ffmpeg_proof(
         )
 
 
+def _import_audio_kinds(execution):
+    if any(
+        op["kind"] == "source-layout" for op in execution["videoGraph"]["operations"]
+    ):
+        return {"trim", "resample", "gain", "mix", "encode"}
+    return {"trim", "resample", "encode"}
+
+
+def _require_import_audio(execution):
+    if (
+        execution.get("sourceAssemblyPolicy") != "preserve-import"
+        or execution.get("checkpoint") != "cut-proof"
+    ):
+        return
+    for operation in execution["audioGraph"]["operations"]:
+        parameters = operation.get("parameters", {})
+        if operation["kind"] not in _import_audio_kinds(execution) or any(
+            parameters.get(key)
+            for key in (
+                "fadeInSamples",
+                "fadeOutSamples",
+                "dialogueNoiseReductionPolicy",
+                "dialogueTreatmentPolicy",
+            )
+        ):
+            raise RuntimeError(
+                "Imported source-only audio treatment contradicts canonical preservation"
+            )
+
+
+def _require_output_container(spec, output):
+    if spec.get("conformance") is True and output.suffix != ".mkv":
+        raise RuntimeError("Lossless conformance output requires .mkv")
+
+
 def _execute_ffmpeg_proof(
     execution: dict[str, Any], output: Path, *, generated_asset_validator=None
 ) -> dict[str, Any]:
     """Render the frozen graph; code-drawn reuse requires injected freshness checks."""
     from . import proof_generated
 
+    _require_import_audio(execution)
     output = Path(output)
     spec, fps, rate = _output_settings(execution)
-    if spec.get("conformance") is True and output.suffix != ".mkv":
-        raise RuntimeError("Lossless conformance output requires .mkv")
+    _require_output_container(spec, output)
+    if any(
+        op["kind"] == "source-layout" for op in execution["videoGraph"]["operations"]
+    ):
+        from .proof_placed import execute_placed_proof
+
+        return execute_placed_proof(execution, output, spec, fps, rate)
     from .proof_audio_bridge import prepare_mix
 
     source_cache = {}
@@ -992,6 +1112,7 @@ def _execute_ffmpeg_proof(
         overlays,
         lambda: _revalidate_inputs(execution, generated, generated_asset_validator),
         audio_mix,
+        preserve_audio=execution.get("sourceAssemblyPolicy") == "preserve-import",
     )
     return {
         "status": "pass",

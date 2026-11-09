@@ -10,6 +10,23 @@ SH = (ROOT / "scripts" / "ci" / "build-engine.sh").read_text(encoding="utf-8")
 PS1 = (ROOT / "scripts" / "ci" / "build-engine.ps1").read_text(encoding="utf-8")
 
 
+def test_frozen_otio_reader_has_native_private_dispatch_and_bundled_resources():
+    from avo.engine_cli import _MODULES, PUBLIC_VERBS
+
+    assert _MODULES["otio-worker"] == "avo.adapters.media.otio_reader"
+    assert "otio-worker" not in PUBLIC_VERBS
+    assert ("_collect", "opentimelineio") in _packaging_calls()
+    assert ("copy_metadata", "opentimelineio") in _packaging_calls()
+    assert '"opentimelineio._otio"' in SPEC
+    assert '"opentimelineio._opentime"' in SPEC
+    assert '"avo.provider.schema.json"' in SPEC
+
+
+def test_frozen_builds_include_the_pinned_semantic_reader_extra():
+    assert ".[mcp,code-drawn,resolve-import]" in SH
+    assert ".[mcp,code-drawn,resolve-import]" in PS1
+
+
 def test_spec_is_onedir_not_onefile() -> None:
     assert "exclude_binaries=True" in SPEC
     assert "COLLECT(" in SPEC

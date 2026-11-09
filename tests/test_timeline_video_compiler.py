@@ -57,3 +57,10 @@ def test_unsupported_composite_and_missing_avoidance_block():
     no_face["faceAvoidance"] = False
     with pytest.raises(VideoTrackError):
         compile_video_layers([no_face])
+
+
+def test_legacy_video_projection_cannot_drop_additional_regions():
+    item = layer("repeated", "image", 1, 1)
+    item["regions"].append({"regionId": "again", "startTicks": 600, "endTicks": 800})
+    with pytest.raises(VideoTrackError, match="regions"):
+        compile_video_layers([item])

@@ -9,6 +9,7 @@ from pathlib import Path
 import numpy as np
 
 from avo import audio_analysis, audio_restoration
+from avo.audio_preview import extract_preview_audio
 
 ENGINE_DEFAULT_BOOST_PCT = 0
 MAX_BOOST_PCT = 100
@@ -312,27 +313,7 @@ def preview_gain_segment(
     after = out_dir / f"gain_preview_{start:.1f}-{end:.1f}_after_{boost_pct}pct.wav"
     import subprocess
 
-    subprocess.run(
-        [
-            "ffmpeg",
-            "-y",
-            "-ss",
-            f"{start:.3f}",
-            "-i",
-            str(media),
-            "-t",
-            f"{duration:.3f}",
-            "-vn",
-            "-ac",
-            "2",
-            "-ar",
-            "48000",
-            str(before),
-        ],
-        check=True,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
+    extract_preview_audio(media, start, duration, before)
     filt = volume_filter(boost_pct, approved=True)
     subprocess.run(
         ["ffmpeg", "-y", "-i", str(before), "-af", filt, str(after)],

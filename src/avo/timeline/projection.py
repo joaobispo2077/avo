@@ -148,6 +148,11 @@ def _apply_tracks(
     ]
 
 
+def _require_legacy_snapshot(snapshot):
+    if snapshot.get("layoutMode") == "placed" or "layout" in snapshot:
+        raise ProjectionError("placed CMap layouts cannot be projected to legacy EDL")
+
+
 def project_cmap_to_edl(
     cmap: dict[str, Any],
     *,
@@ -157,6 +162,7 @@ def project_cmap_to_edl(
 ) -> dict[str, Any]:
     revision = _revision(cmap, revision_id)
     snapshot = revision["snapshot"]
+    _require_legacy_snapshot(snapshot)
     sources = {
         str(source["sourceId"]): str(source.get("locator") or source["sourceId"])
         for source in snapshot.get("sources") or []

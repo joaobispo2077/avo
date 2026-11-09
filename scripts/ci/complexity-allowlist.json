@@ -536,13 +536,6 @@
       "reason": "Feature 006 validation/orchestration branch matrix; recorded for explicit decomposition follow-up"
     },
     {
-      "path": "src/avo/audio_qc.py",
-      "name": "main",
-      "complexity": 17,
-      "rank": "C",
-      "reason": "CLI/entrypoint branching; extract helpers in follow-up burn-down"
-    },
-    {
       "path": "src/avo/mcp/mrtr.py",
       "name": "extract_mrtr_fields",
       "complexity": 17,
@@ -837,13 +830,6 @@
       "reason": "Reporting/inventory/validation aggregation with many optional fields"
     },
     {
-      "path": "src/avo/project_inventory.py",
-      "name": "_resolve_reconstruction_metadata",
-      "complexity": 13,
-      "rank": "C",
-      "reason": "Reporting/inventory/validation aggregation with many optional fields"
-    },
-    {
       "path": "src/avo/shorts.py",
       "name": "_qc",
       "complexity": 13,
@@ -905,13 +891,6 @@
       "complexity": 13,
       "rank": "C",
       "reason": "EDL semantic rule matrix with many optional fields; split deferred"
-    },
-    {
-      "path": "src/avo/adapters/media/ffprobe.py",
-      "name": "_describe",
-      "complexity": 12,
-      "rank": "C",
-      "reason": "Adapter orchestration with many format/capability branches"
     },
     {
       "path": "src/avo/adapters/media/still_extract.py",

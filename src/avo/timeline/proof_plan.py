@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from copy import deepcopy
+from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
@@ -62,6 +63,110 @@ class ProofPlanCompiler:
         self.workspace = workspace
         self.registry = registry or default_proof_capability_registry()
         self.directory = Path(workspace.timeline_dir) / "proof-plans"
+
+    def _import_assembly(self, request):
+        store = self.workspace.store("cmap")
+        index = store.load_index()
+        if not index["headRevisionId"]:
+            return {}
+        revision = store.revision(index["headRevisionId"])
+        snapshot = revision["snapshot"]
+        if snapshot.get("sourceAssemblyPolicy") != "preserve-import":
+            return {}
+        self._verify_import_sources(revision)
+        self._require_import_output(request["output"], snapshot["importOutput"])
+        if request.get("checkpoint") == "cut-proof":
+            self._require_preserved_source_graph(request)
+        return {
+            "sourceAssemblyPolicy": "preserve-import",
+            "importOriginRef": deepcopy(snapshot["originRef"]),
+            "importOutput": deepcopy(snapshot["importOutput"]),
+        }
+
+    def _verify_import_sources(self, revision):
+        from .import_evidence import verify_import_origin
+        from .media_admission import require_no_forbidden_outputs
+        from .migration import inventory_historical_output_fingerprints
+
+        try:
+            verify_import_origin(self.workspace, revision)
+            require_no_forbidden_outputs(
+                revision["snapshot"]["sources"],
+                known_outputs=inventory_historical_output_fingerprints(
+                    self.workspace.raw_dir, timeline_dir=self.workspace.timeline_dir
+                ),
+            )
+        except ValueError as exc:
+            raise ProofPlanError(
+                "PROOF_IMPORT_EVIDENCE_INVALID",
+                str(exc),
+                "Restore the exact activated import evidence and fingerprinted originals; revalidate unresolved imports",
+            ) from exc
+
+    @staticmethod
+    def _require_import_output(output, canonical):
+        clocks = (
+            Fraction(output["frameRate"]["num"], output["frameRate"]["den"])
+            == Fraction(canonical["frameRate"]["num"], canonical["frameRate"]["den"]),
+            output["audioSampleRate"] == canonical["audioSampleRate"],
+            output["channelLayout"] == canonical["channelLayout"],
+            output["width"] * canonical["height"]
+            == output["height"] * canonical["width"],
+        )
+        if not all(clocks):
+            raise ProofPlanError(
+                "PROOF_IMPORT_OUTPUT_CHANGED",
+                "Proof output changes canonical imported clocks, routing or canvas aspect ratio",
+                "Use the imported output settings; author an explicit canonical change before changing them",
+            )
+
+    def _require_preserved_source_graph(self, request):
+        from .initial_cut import initial_cut_proof_request
+
+        output = request["output"]
+        expected = initial_cut_proof_request(
+            self.workspace,
+            iteration_id=request["iterationId"],
+            output=Path(output["path"]),
+            frame_rate=output["frameRate"],
+            width=output["width"],
+            height=output["height"],
+            sample_rate=output["audioSampleRate"],
+        )
+        requested = deepcopy(request)
+        for operation in requested["videoGraph"]["operations"]:
+            operation.pop("implementationId", None)
+        if any(
+            requested[key] != expected[key]
+            for key in ("videoGraph", "audioGraph", "events")
+        ):
+            raise ProofPlanError(
+                "PROOF_IMPORT_ASSEMBLY_CHANGED",
+                "Cut-proof graph changes the canonical imported source assembly",
+                "Author an explicit canonical edit before compiling a changed source reconstruction",
+            )
+
+    def _import_preflight(self, plan):
+        try:
+            expected = self._import_assembly(plan)
+            if any(plan.get(key) != value for key, value in expected.items()):
+                raise ProofPlanError(
+                    "PROOF_IMPORT_ASSEMBLY_CHANGED",
+                    "Proof policy/origin does not match the canonical import",
+                    "Compile a new proof plan from the current canonical cut",
+                )
+        except ProofPlanError as exc:
+            return [exc.to_dict()]
+        except (StoreError, KeyError, ValueError, RuntimeError):
+            # Canonical preflight reports missing/invalid authority separately.
+            return [
+                self._blocker(
+                    "PROOF_IMPORT_ASSEMBLY_CHANGED",
+                    "Cannot verify canonical import preservation",
+                    "Restore current canonical authority and compile again",
+                )
+            ]
+        return []
 
     @staticmethod
     def _empty_index(index: dict[str, Any]) -> bool:
@@ -367,6 +472,7 @@ class ProofPlanCompiler:
             "proofPlanHash": "",
         }
         body.update(_preview_declaration(request))
+        body.update(self._import_assembly(request))
         identity_seed = deepcopy(body)
         identity_seed.pop("proofPlanHash", None)
         identity_seed.pop("proofPlanId", None)
@@ -557,6 +663,7 @@ class ProofPlanCompiler:
                 )
             )
         blockers.extend(self._canonical_preflight(plan))
+        blockers.extend(self._import_preflight(plan))
         blockers.extend(self._generated_preflight(plan, tool_readiness))
         lock = plan.get("canonicalInputLock") or {}
         resolved_paths: dict[str, Path] = {}

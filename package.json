@@ -1,6 +1,6 @@
 {
   "name": "avo",
-  "version": "1.20.0",
+  "version": "1.21.0",
   "description": "Edit less, create more — local-first AI video orchestrator. Talk to your agent, drop in footage, mass-produce YouTube-ready videos per channel.",
   "private": true,
   "type": "module",
@@ -82,7 +82,7 @@
     "ip-address": "10.5.0",
     "js-yaml": "4.3.2",
     "nanoid": "3.3.18",
-    "undici": "7.30.0",
+    "undici": "7.30.1",
     "@semantic-release/npm": "file:scripts/ci/semantic-release-npm-stub"
   },
   "bin": {

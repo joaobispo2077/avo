@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum
 
+from .store import serialized_timeline
+
 
 class PipelineState(str, Enum):
     INTAKE = "intake"
@@ -186,6 +188,90 @@ def _known_motion_request(document, request_id):
     )
 
 
+def _require_import_hashes(values):
+    import re
+
+    if any(
+        not isinstance(value, str) or not re.fullmatch(r"[a-f0-9]{64}", value)
+        for value in values
+    ):
+        raise LifecycleError("import draft selection requires exact sha256 identities")
+
+
+def _require_import_text(values):
+    if any(not isinstance(value, str) or not value.strip() for value in values):
+        raise LifecycleError(
+            "import draft selection requires revision identities, actor and reason"
+        )
+
+
+def _require_import_inventory(inventory):
+    if not isinstance(inventory, dict):
+        raise LifecycleError("import draft requires current source inventory")
+    sources = inventory.get("sources")
+    if not isinstance(sources, list) or not sources:
+        raise LifecycleError("import draft requires current source inventory")
+    if any(
+        not isinstance(source, dict)
+        or not isinstance(source.get("sourceId"), str)
+        or not source["sourceId"].strip()
+        for source in sources
+    ):
+        raise LifecycleError("import source inventory requires source identities")
+
+
+def _require_import_refs(active_refs, revision_id, revision_hash):
+    required = {
+        "rawInventory",
+        "syncRevisionId",
+        "syncRevisionHash",
+        "cmapRevisionId",
+        "cmapRevisionHash",
+    }
+    if not isinstance(active_refs, dict) or set(active_refs) != required:
+        raise LifecycleError(
+            "import draft refs must contain only current source, Sync and CMap refs"
+        )
+    if (active_refs["cmapRevisionId"], active_refs["cmapRevisionHash"]) != (
+        revision_id,
+        revision_hash,
+    ):
+        raise LifecycleError(
+            "import draft refs do not match the committed CMap identity"
+        )
+    _require_import_hashes((active_refs["syncRevisionHash"],))
+    _require_import_text((active_refs["syncRevisionId"],))
+    _require_import_inventory(active_refs["rawInventory"])
+
+
+def _import_draft_selections(document):
+    extensions = document.get("extensions") or {}
+    history = extensions.get("importDraftSelectionHistory", [])
+    if not isinstance(history, list) or any(
+        not isinstance(item, dict) for item in history
+    ):
+        raise LifecycleError("import draft selection history is invalid")
+    latest = extensions.get("importDraftSelection")
+    if latest is not None:
+        if not isinstance(latest, dict):
+            raise LifecycleError("import draft selection identity is invalid")
+        history = [*history, latest]
+    return history
+
+
+def _known_import_draft_selection(document, identity):
+    matches = [
+        item
+        for item in _import_draft_selections(document)
+        if item.get("activationId") == identity["activationId"]
+    ]
+    if any(item != identity for item in matches):
+        raise LifecycleError(
+            "import draft selection identity conflicts with its recorded activation"
+        )
+    return bool(matches)
+
+
 class PipelineRunStore:
     """Persist the lifecycle state and explicit recovery history."""
 
@@ -214,6 +300,7 @@ class PipelineRunStore:
                     "motion execution choice requires a request identity"
                 )
 
+    @serialized_timeline(lambda self: self.path.parent)
     def initialize(
         self,
         *,
@@ -264,6 +351,7 @@ class PipelineRunStore:
         self._validate(document)
         return document
 
+    @serialized_timeline(lambda self: self.path.parent)
     def bind_motion_selection(self, selection, *, request_id=None, new_request=False):
         """Pin authoring intent for one request without changing editorial state."""
         from copy import deepcopy
@@ -299,6 +387,7 @@ class PipelineRunStore:
         updated["updatedAt"] = self.clock()
         return self._write(updated, expected_updated_at=current["updatedAt"])
 
+    @serialized_timeline(lambda self: self.path.parent)
     def _write(self, document, *, expected_updated_at=None):
         from .store import atomic_write_json
 
@@ -325,6 +414,7 @@ class PipelineRunStore:
             "reason": reason,
         }
 
+    @serialized_timeline(lambda self: self.path.parent)
     def advance(
         self,
         target,
@@ -352,6 +442,7 @@ class PipelineRunStore:
             updated["activeRefs"] = active_refs
         return self._write(updated, expected_updated_at=expected_updated_at)
 
+    @serialized_timeline(lambda self: self.path.parent)
     def enter_side_state(
         self, state, *, actor, reason, blockers=None, expected_updated_at=None
     ):
@@ -377,6 +468,7 @@ class PipelineRunStore:
         updated["updatedAt"] = history["occurredAt"]
         return self._write(updated, expected_updated_at=expected_updated_at)
 
+    @serialized_timeline(lambda self: self.path.parent)
     def adopt_delivery(
         self,
         adoption,
@@ -432,6 +524,7 @@ class PipelineRunStore:
         }
         return self._write(updated, expected_updated_at=expected_updated_at)
 
+    @serialized_timeline(lambda self: self.path.parent)
     def archive_human_final_delivery(
         self, disposition, retention_policy, *, actor, reason, expected_updated_at=None
     ):
@@ -471,6 +564,7 @@ class PipelineRunStore:
         updated.setdefault("extensions", {})["humanFinalArchive"] = identity
         return self._write(updated, expected_updated_at=expected_updated_at)
 
+    @serialized_timeline(lambda self: self.path.parent)
     def resume(self, *, actor, reason, recovery_event, expected_updated_at=None):
         from copy import deepcopy
 
@@ -494,6 +588,64 @@ class PipelineRunStore:
         updated.setdefault("extensions", {})["lastRecovery"] = recovery_event
         return self._write(updated, expected_updated_at=expected_updated_at)
 
+    @serialized_timeline(lambda self: self.path.parent)
+    def reconcile_import_draft(
+        self,
+        *,
+        activation_id,
+        cmap_revision_id,
+        cmap_revision_hash,
+        active_refs,
+        actor,
+        reason,
+    ):
+        """Reconcile an explicitly committed import, never resurrect prior approvals.
+
+        The caller verifies the canonical commit and current Sync. An exact retry
+        is a no-op even after later review progress or another import selection.
+        """
+        from copy import deepcopy
+
+        from .contracts import content_hash
+
+        _require_import_hashes((activation_id, cmap_revision_hash))
+        _require_import_text((cmap_revision_id, actor, reason))
+        _require_import_refs(active_refs, cmap_revision_id, cmap_revision_hash)
+        identity = {
+            "activationId": activation_id,
+            "cmapRevisionId": cmap_revision_id,
+            "cmapRevisionHash": cmap_revision_hash,
+            "activeRefsHash": content_hash(active_refs),
+        }
+        current = self.load()
+        if _known_import_draft_selection(current, identity):
+            return current
+        updated = deepcopy(current)
+        history = self._history(
+            current,
+            actor=actor,
+            reason=reason,
+            to_main=PipelineState.CMAP_DRAFT.value,
+            to_side=None,
+        )
+        updated.update(
+            mainState=PipelineState.CMAP_DRAFT.value,
+            sideState=None,
+            blockers=[],
+            activeRefs=deepcopy(active_refs),
+            updatedAt=history["occurredAt"],
+        )
+        updated["transitionHistory"].append(history)
+        extensions = updated.setdefault("extensions", {})
+        previous = extensions.get("importDraftSelection")
+        if previous is not None:
+            extensions.setdefault("importDraftSelectionHistory", []).append(
+                deepcopy(previous)
+            )
+        extensions["importDraftSelection"] = identity
+        return self._write(updated, expected_updated_at=current["updatedAt"])
+
+    @serialized_timeline(lambda self: self.path.parent)
     def bind_cutting_context(self, references, *, expected_updated_at=None):
         """Bind evidence without changing state or granting editorial approval."""
         from copy import deepcopy
@@ -521,6 +673,7 @@ class PipelineRunStore:
         updated["updatedAt"] = self.clock()
         return self._write(updated, expected_updated_at=expected_updated_at)
 
+    @serialized_timeline(lambda self: self.path.parent)
     def bind_iteration_context(
         self,
         *,
@@ -557,6 +710,7 @@ class PipelineRunStore:
         updated["updatedAt"] = self.clock()
         return self._write(updated, expected_updated_at=expected_updated_at)
 
+    @serialized_timeline(lambda self: self.path.parent)
     def activate_candidate_snapshot(
         self,
         reference,

@@ -499,7 +499,28 @@ def load_project_json(path: Path) -> dict[str, Any]:
 
 def load_context_for_edit_dir(edit_dir: Path) -> tuple[dict[str, Any], dict[str, Any]]:
     """Load avo.project.json and provider manifest from an edit/ directory."""
-    project_path = edit_dir.parent / "avo.project.json"
+    return load_context_for_project(edit_dir.parent / "avo.project.json")
+
+
+def load_context_for_inputs(
+    edl_path: Path | None, project_path: Path | None
+) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any]]:
+    """Load CLI loudness inputs, preferring an explicit existing project."""
+    edl = {}
+    if edl_path and edl_path.exists():
+        edl = json.loads(edl_path.read_text(encoding="utf-8"))
+    project, provider = {}, {}
+    if project_path and project_path.exists():
+        project, provider = load_context_for_project(project_path)
+    elif edl_path:
+        project, provider = load_context_for_edit_dir(edl_path.parent)
+    return edl, project, provider
+
+
+def load_context_for_project(
+    project_path: Path,
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Load an explicit project file and its optional provider manifest."""
     project = load_project_json(project_path)
     provider: dict[str, Any] = {}
     provider_slug = str(project.get("provider") or "").strip()

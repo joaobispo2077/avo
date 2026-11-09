@@ -124,6 +124,15 @@ done
 echo "smoke: avo runtime --help"
 "$LAUNCHER" runtime --help >/dev/null
 
+echo "smoke: native OTIO reader, public staging, plugin isolation and licenses"
+OTIO_ENGINE="$LAUNCHER"
+OTIO_WORK="$SMOKE_WORK/otio"
+if command -v cygpath >/dev/null 2>&1; then
+  OTIO_ENGINE="$(cygpath -w "$OTIO_ENGINE")"
+  OTIO_WORK="$(cygpath -w "$OTIO_WORK")"
+fi
+"$PYTHON" "$ROOT/scripts/ci/smoke_otio_engine.py" --engine "$OTIO_ENGINE" --work "$OTIO_WORK"
+
 # Exercise the actual onedir resource/schema lookup with no provider/media.
 echo "smoke: versioned artistic directions (metadata only)"
 CATALOG_JSON="$UNPACK/direction-catalog.json"

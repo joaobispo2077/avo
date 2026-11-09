@@ -364,7 +364,7 @@ def _retain_code_drawn_files(raw_dir: Path, required: dict) -> None:
 
 
 def _required_files(
-    raw_dir: Path, canonical: list[dict[str, Any]]
+    raw_dir: Path, canonical: list[dict[str, Any]], *, workspace=None
 ) -> dict[Path, str | None]:
     """Current local media plus authoring/delivery evidence, not disposable caches."""
     from avo.library.retention import library_paths
@@ -384,7 +384,109 @@ def _required_files(
                 )
             required[path] = expected
     _retain_code_drawn_files(raw_dir, required)
+    required.update(
+        dict.fromkeys(_import_evidence_paths(raw_dir, canonical, workspace))
+    )
     return required
+
+
+def _canonical_workspace(raw_dir, canonical, workspace=None, project_path=None):
+    from .workspace import resolve_timeline_workspace
+
+    if workspace is not None:
+        return workspace
+    cmap = next((row for row in canonical if row.get("role") == "cmap-index"), None)
+    if cmap is None:
+        return None
+    return resolve_timeline_workspace(
+        raw_dir,
+        project_path=project_path,
+        canonical_cmap_path=_bundled_path(raw_dir, cmap["path"]),
+    )
+
+
+def _has_import_history(store):
+    for reference in store.load_index()["revisionRefs"]:
+        revision = store.revision(reference["revisionId"])
+        if revision["snapshot"].get("originRef") or any(
+            row.get("kind") == "timeline-import-return"
+            for row in revision.get("inputEvidenceRefs", [])
+        ):
+            return True
+    return False
+
+
+def _import_evidence_paths(raw_dir, canonical, workspace):
+    from .import_retention import retained_import_paths
+
+    workspace = _canonical_workspace(raw_dir, canonical, workspace)
+    if workspace is None:
+        for row in canonical:
+            if row.get("role") == "cmap-index" and _has_import_history(
+                ArtifactStore(_bundled_path(raw_dir, row["path"]))
+            ):
+                raise ReconstructionError(
+                    "Imported canonical history requires its declared project for evidence retention"
+                )
+        return []
+    marker = workspace.timeline_dir / "import-activation.pending.json"
+    if not _has_import_history(workspace.store("cmap")) and not (
+        marker.exists() or marker.is_symlink()
+    ):
+        return []
+    try:
+        return retained_import_paths(workspace)
+    except (OSError, ValueError, RuntimeError) as exc:
+        raise ReconstructionError(
+            f"Cannot retain canonical import evidence: {exc}"
+        ) from exc
+
+
+def _external_original_refs(workspace):
+    from .contracts import fingerprint_stage
+
+    if workspace is None:
+        return []
+    store = workspace.store("cmap")
+    head = store.load_index()["headRevisionId"]
+    sources = store.revision(head)["snapshot"].get("sources", []) if head else []
+    try:
+        with fingerprint_stage(verify_on_exit=True):
+            refs = [
+                _external_original(workspace.raw_dir.resolve(), source)
+                for source in sources
+            ]
+        return sorted(
+            (row for row in refs if row),
+            key=lambda row: (row["sourceId"], row["locator"]),
+        )
+    except (OSError, ValueError) as exc:
+        raise ReconstructionError(
+            f"External original is missing or changed: {exc}"
+        ) from exc
+
+
+def _external_original(raw_dir, source):
+    locator = source.get("locator") or source["fingerprint"].get("locator")
+    if not locator:
+        raise ReconstructionError(
+            "Canonical original requires its fingerprinted locator"
+        )
+    path = Path(locator)
+    path = (path if path.is_absolute() else raw_dir / path).resolve()
+    if path.is_relative_to(raw_dir):
+        return None
+    actual = file_fingerprint(path)
+    if any(
+        actual[key] != source["fingerprint"][key] for key in ("sha256", "sizeBytes")
+    ):
+        raise ReconstructionError(f"External original fingerprint changed: {path}")
+    return {
+        "sourceId": source["sourceId"],
+        "locator": str(path),
+        "sha256": actual["sha256"],
+        "sizeBytes": actual["sizeBytes"],
+    }
 
 
 def _bundled_path(raw_dir: Path, relative: str) -> Path:
@@ -395,10 +497,12 @@ def _bundled_path(raw_dir: Path, relative: str) -> Path:
 
 
 def _required_entries(
-    raw_dir: Path, canonical: list[dict[str, Any]]
+    raw_dir: Path, canonical: list[dict[str, Any]], *, workspace=None
 ) -> list[dict[str, Any]]:
     entries = []
-    for path, expected in _required_files(raw_dir, canonical).items():
+    for path, expected in _required_files(
+        raw_dir, canonical, workspace=workspace
+    ).items():
         entry = _entry(raw_dir, path, "reconstruction-input")
         if expected is not None and entry["sha256"] != expected:
             raise ReconstructionError(f"canonical media fingerprint changed: {path}")
@@ -406,10 +510,13 @@ def _required_entries(
     return entries
 
 
-def _verify_coverage(raw_dir: Path, bundle: dict[str, Any]) -> None:
+def _verify_coverage(raw_dir: Path, bundle: dict[str, Any], *, project_path=None):
+    workspace = _canonical_workspace(
+        raw_dir, bundle["canonicalArtifacts"], project_path=project_path
+    )
     files = {entry["path"]: entry for entry in bundle["files"]}
     for path, expected in _required_files(
-        raw_dir, bundle["canonicalArtifacts"]
+        raw_dir, bundle["canonicalArtifacts"], workspace=workspace
     ).items():
         relative = path.relative_to(raw_dir).as_posix()
         entry = files.get(relative)
@@ -417,6 +524,10 @@ def _verify_coverage(raw_dir: Path, bundle: dict[str, Any]) -> None:
             raise ReconstructionError(
                 f"reconstruction coverage missing or stale: {relative}"
             )
+    if _external_original_refs(workspace) != bundle.get("externalSources", []):
+        raise ReconstructionError(
+            "External original reference coverage is missing or stale"
+        )
 
 
 def _raw_sources(raw_dir: Path) -> list[Path]:
@@ -712,15 +823,15 @@ def build_reconstruction_bundle(
     graph_paths = {entry["path"] for entry in graph_files}
     graph_files.extend(
         entry
-        for entry in _required_entries(raw_dir, canonical)
+        for entry in _required_entries(raw_dir, canonical, workspace=workspace)
         if entry["path"] not in graph_paths
     )
 
     raw_entries = [
         _entry(raw_dir, path, "raw-source") for path in _raw_sources(raw_dir)
     ]
-    if not raw_entries:
-        raise ReconstructionError("raw source inventory is empty")
+    external = _external_original_refs(workspace)
+    _require_original_inventory(raw_entries, external)
     master_entry = _entry(raw_dir, master, "final-master")
     transcript_entry = _entry(raw_dir, transcript, "final-transcript")
     files_by_path = {
@@ -734,6 +845,7 @@ def build_reconstruction_bundle(
         "master": master_entry,
         "finalTranscript": transcript_entry,
         "rawSources": raw_entries,
+        **({"externalSources": external} if external else {}),
         "canonicalArtifacts": canonical,
         "reviewEvidence": review_entries,
         **state_groups,
@@ -744,6 +856,11 @@ def build_reconstruction_bundle(
     path = workspace.timeline_dir / "reconstruction-bundle.json"
     atomic_write_json(path, body)
     return body
+
+
+def _require_original_inventory(local, external):
+    if not local and not external:
+        raise ReconstructionError("raw source inventory is empty")
 
 
 def _verify_bundle_files(raw_dir: Path, bundle: dict[str, Any]) -> dict[str, Any]:
@@ -769,12 +886,20 @@ def _verify_bundle_files(raw_dir: Path, bundle: dict[str, Any]) -> dict[str, Any
 
 
 def verify_reconstruction_bundle(
-    raw_dir: Path, bundle_path: Path | None = None
+    raw_dir: Path, bundle_path: Path | None = None, *, project_path=None
 ) -> dict[str, Any]:
     raw_dir = Path(raw_dir).resolve()
-    bundle_path = Path(
-        bundle_path or raw_dir / "edit" / "timeline" / "reconstruction-bundle.json"
-    )
+    if bundle_path is None:
+        from .workspace import resolve_timeline_workspace
+
+        workspace = resolve_timeline_workspace(raw_dir, project_path=project_path)
+        directory = (
+            workspace.timeline_dir
+            if workspace is not None
+            else raw_dir / "edit/timeline"
+        )
+        bundle_path = directory / "reconstruction-bundle.json"
+    bundle_path = Path(bundle_path)
     try:
         bundle = json.loads(bundle_path.read_text(encoding="utf-8"))
     except (OSError, ValueError) as error:
@@ -789,7 +914,7 @@ def verify_reconstruction_bundle(
     if expected != actual:
         raise ReconstructionError("reconstruction bundle hash mismatch")
     verified_master = _verify_bundle_files(raw_dir, bundle)
-    _verify_coverage(raw_dir, bundle)
+    _verify_coverage(raw_dir, bundle, project_path=project_path)
     transcript = json.loads(
         (raw_dir / bundle["finalTranscript"]["path"]).read_text(encoding="utf-8")
     )
