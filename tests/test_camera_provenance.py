@@ -318,3 +318,79 @@ def test_microproof_results_retain_the_actual_camera_producer(
         object(), {"validationPlan": {}}, windows, tmp_path, ".mkv"
     )
     assert result[0]["cameraProvenance"] == observed
+
+
+def test_same_version_shim_target_replacement_changes_runtime_identity(
+    tools, tmp_path, monkeypatch
+):
+    paths, _ = tools
+    launcher = paths["ffmpeg"]
+    launcher.write_bytes(b"MZ" + "shimgen-help".encode("utf-16le"))
+    decoder = tmp_path / "installed-ffmpeg.exe"
+    decoder.write_bytes(b"MZ original actual decoder")
+
+    def inspect(arguments, **kwargs):
+        if arguments[1:] == ["--shimgen-help"]:
+            return SimpleNamespace(
+                stdout=f"Chocolatey's ShimGenerator (shimgen)\n Target: '{decoder}'\n",
+                stderr="",
+                returncode=-1,
+            )
+        name = next(name for name, path in paths.items() if str(path) == arguments[0])
+        return SimpleNamespace(
+            stdout=f"{name} version 7.1.1 same-build\n", stderr="", returncode=0
+        )
+
+    monkeypatch.setattr(provenance.subprocess, "run", inspect)
+    first = provenance.camera_runtime_identity()
+    from avo.timeline.contracts import file_fingerprint
+
+    assert first["runtime"]["ffmpeg"]["sha256"] == file_fingerprint(decoder)["sha256"]
+    assert (
+        first["runtime"]["ffmpeg"]["launcherChain"][0]["sha256"]
+        == file_fingerprint(launcher)["sha256"]
+    )
+    decoder.write_bytes(b"MZ changed actual decoder with unchanged reported version")
+    second = provenance.camera_runtime_identity()
+    assert (
+        first["runtime"]["ffmpeg"]["versionSha256"]
+        == second["runtime"]["ffmpeg"]["versionSha256"]
+    )
+    assert first["environmentHash"] != second["environmentHash"]
+
+
+@pytest.mark.parametrize("problem", ["missing", "relative", "cycle", "ambiguous"])
+def test_invalid_shim_chains_fail_before_encoding(
+    tools, tmp_path, monkeypatch, problem
+):
+    paths, _ = tools
+    paths["ffmpeg"].write_bytes(b"MZ" + "shimgen-help".encode("utf-16le"))
+    target = tmp_path / "missing.exe"
+    if problem == "relative":
+        target = "relative.exe"
+    elif problem == "cycle":
+        target = paths["ffmpeg"]
+    metadata = f"Chocolatey's ShimGenerator (shimgen)\n Target: '{target}'\n"
+    if problem == "ambiguous":
+        metadata += f" Target: '{paths['ffprobe']}'\n"
+
+    def inspect(arguments, **kwargs):
+        name = next(name for name, path in paths.items() if str(path) == arguments[0])
+        return SimpleNamespace(
+            stdout=metadata
+            if arguments[1:] == ["--shimgen-help"]
+            else f"{name} version 7.1.1 same-build\n",
+            stderr="",
+            returncode=-1,
+        )
+
+    monkeypatch.setattr(provenance.subprocess, "run", inspect)
+    monkeypatch.setattr(
+        proof_executor,
+        "_execute_ffmpeg_proof",
+        lambda *args, **kwargs: pytest.fail("Encoded unbound shim target"),
+    )
+    destination = tmp_path / "uncreated" / "proof.mkv"
+    with pytest.raises((RuntimeError, OSError), match="shim|target|runtime|file"):
+        proof_executor.execute_ffmpeg_proof(graph(), destination)
+    assert not destination.parent.exists()
