@@ -19,6 +19,9 @@ its source SHA-256, occurrence, layer, geometry, original interval, entry state,
 path hash and selected-options hash. The native boundary verifies source bytes,
 stream geometry and the constant-rate picture clock before creating output.
 Retimed, padded, fractional-frame and out-of-range camera inputs are rejected.
+Placed camera decoding retains the shared closed local-container and protocol
+policy through staging. A source changed into a playlist after admission is
+rejected before it can redirect the decoder to an unadmitted media file.
 
 The baseline uses display coordinates after sample-aspect-ratio correction and
 right-angle rotation. The sampler removes the obsolete display matrix after
