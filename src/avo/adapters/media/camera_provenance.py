@@ -42,6 +42,17 @@ def _runtime_tool(name):
     }
 
 
+def camera_runtime_identity():
+    """Inspect selected installed tools without inventing a timed camera graph."""
+    observed = {
+        "implementationSha256": _implementation_digest(
+            "camera-transform-v1", "ffmpeg.camera-transform"
+        ),
+        "runtime": {name: _runtime_tool(name) for name in ("ffmpeg", "ffprobe")},
+    }
+    return {**observed, "environmentHash": content_hash(observed)}
+
+
 def camera_render_provenance(execution):
     """Bind complete graph/options/source/profile identities to actual tools.
 
@@ -68,15 +79,6 @@ def camera_render_provenance(execution):
         "contractVersion": "1.0.0",
         "recipeHash": content_hash(recipe),
         "window": deepcopy(execution.get("window")),
-        "implementationSha256": _implementation_digest(
-            "camera-transform-v1", "ffmpeg.camera-transform"
-        ),
-        "runtime": {name: _runtime_tool(name) for name in ("ffmpeg", "ffprobe")},
+        **camera_runtime_identity(),
     }
-    observed["environmentHash"] = content_hash(
-        {
-            "implementationSha256": observed["implementationSha256"],
-            "runtime": observed["runtime"],
-        }
-    )
     return {**observed, "provenanceHash": content_hash(observed)}
