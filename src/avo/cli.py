@@ -51,6 +51,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     configure_library(sub)
 
+    from avo.sfx_cli import configure as configure_sfx
+
+    configure_sfx(sub)
+
     from avo.costs_cli import configure as configure_costs
     from avo.costs_cli import cost_context_argument
 
@@ -1288,6 +1292,9 @@ def _animation(args: argparse.Namespace) -> int:
         "options-reset",
         "plan-show",
         "plan-publish",
+        "plan-propose",
+        "plan-select",
+        "plan-apply",
     }:
         from avo.motion_plan_cli import run_craft_command
 
@@ -2542,6 +2549,10 @@ def _trim(args: argparse.Namespace) -> int:
 
 
 def _run_cli(args: argparse.Namespace) -> int:
+    if args.command == "sfx":
+        from avo.sfx_cli import run as sfx_run
+
+        return sfx_run(args)
     if args.command == "timeline-import":
         from avo.timeline_import_cli import run as timeline_import_run
 

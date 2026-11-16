@@ -6,6 +6,8 @@ import json
 import sys
 from pathlib import Path
 
+AUTHORING_OPERATIONS = ("plan-propose", "plan-select", "plan-apply")
+
 
 def add_options_parsers(subparsers) -> None:
     from avo.editing_craft_requests import OPTIONS_OPERATIONS
@@ -20,17 +22,72 @@ def add_options_parsers(subparsers) -> None:
 
 
 def add_plan_parsers(subparsers) -> None:
-    for operation in ("plan-show", "plan-publish"):
+    for operation in ("plan-show", "plan-publish", *AUTHORING_OPERATIONS):
         parser = subparsers.add_parser(operation)
         parser.add_argument("--project", type=Path, required=True)
         parser.add_argument("--video-id", default="")
         parser.add_argument("--json", action="store_true", dest="as_json")
+        if operation in AUTHORING_OPERATIONS:
+            parser.add_argument("--request", type=Path, required=True)
+        if operation == "plan-apply":
+            parser.add_argument("--request-sha256")
+        if operation == "plan-show":
+            parser.add_argument("--proposal-hash")
 
 
 def run_craft_command(args) -> int:
+    if args.animation_command in AUTHORING_OPERATIONS:
+        return run_authoring_command(args)
     if args.animation_command in {"plan-show", "plan-publish"}:
         return run_plan_command(args)
     return run_options_command(args)
+
+
+def run_authoring_command(args) -> int:
+    from avo.editing_craft_requests import CraftRequestError, read_craft_request
+    from avo.timeline.contracts import ContractError
+    from avo.timeline.motion_authoring import (
+        MotionAuthoringError,
+        MotionAuthoringService,
+    )
+    from avo.timeline.workspace import TimelineWorkspace
+
+    try:
+        if not args.project.is_absolute():
+            raise ValueError("Project manifest path must be absolute.")
+        request = read_craft_request(
+            args.request, expected_sha256=getattr(args, "request_sha256", None)
+        )
+        workspace = TimelineWorkspace.from_project(
+            args.project, video_id=args.video_id or None
+        )
+        service = MotionAuthoringService(workspace)
+        operation = {
+            "plan-propose": service.propose,
+            "plan-select": service.select,
+            "plan-apply": service.apply,
+        }[args.animation_command]
+        result = operation(request)
+    except (
+        CraftRequestError,
+        MotionAuthoringError,
+        ContractError,
+        ValueError,
+        OSError,
+    ) as error:
+        value = (
+            error.to_dict()
+            if hasattr(error, "to_dict")
+            else {
+                "code": "MOTION_AUTHORING_INVALID",
+                "message": str(error),
+                "blocking": True,
+            }
+        )
+        print(json.dumps(value, ensure_ascii=False), file=sys.stderr)
+        return 2
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+    return 0
 
 
 def run_plan_command(args) -> int:
@@ -51,7 +108,9 @@ def run_plan_command(args) -> int:
             result = pipeline.publish_motion_plan()
             value = {**result, "effect": "derived-write"}
         else:
-            snapshot = pipeline.motion_plan()
+            snapshot = pipeline.motion_plan(
+                proposal_hash=getattr(args, "proposal_hash", None)
+            )
             value = {
                 "snapshot": snapshot,
                 "report": MotionReviewService(workspace).report_status(snapshot),

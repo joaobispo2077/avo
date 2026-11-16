@@ -17,6 +17,7 @@ __all__ = [
     "CapabilityRegistryError",
     "adapter_for_routing_suffix",
     "build_cutting_service",
+    "build_sfx_catalog",
     "default_proof_capability_registry",
 ]
 
@@ -53,6 +54,24 @@ JOB_REGISTRIES: dict[str, dict[str, str]] = {
     "memory": MEMORY_ADAPTERS,
     "plan": PLAN_ADAPTERS,
 }
+
+
+def build_sfx_catalog(workspace, *, roots, analyze=False, semantic=False, root=None):
+    """Compose only the explicitly selected sound-analysis or matching boundary."""
+    from avo.sfx_catalog import SfxCatalogService
+
+    analyzer = backend = None
+    if analyze:
+        from avo.adapters.media.sfx_analysis import SfxAnalyzer
+
+        analyzer = SfxAnalyzer()
+    if semantic:
+        from avo.sfx_semantic import build_semantic_backend
+
+        backend = build_semantic_backend(workspace, roots, root=root)
+    return SfxCatalogService(
+        workspace, roots=roots, analyzer=analyzer, semantic=backend
+    )
 
 
 def adapter_for_routing_suffix(job: str, suffix: str) -> type[JobAdapter]:
