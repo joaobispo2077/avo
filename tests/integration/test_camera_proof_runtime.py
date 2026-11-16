@@ -366,14 +366,18 @@ def test_unverified_source_or_executable_parameters_are_rejected_before_render(
         )
 
 
-def native_execution(tmp_path, monkeypatch, *, fps=Fraction(24)):
+def native_execution(tmp_path, monkeypatch, *, fps=Fraction(24), bit_depth=16):
     from avo.adapters.media import proof_executor
     from avo.capabilities import (
         CapabilityImplementation,
         default_proof_capability_registry,
     )
 
-    source = labeled_video(tmp_path / "raw-picture.mkv", bit_depth=16, fps=fps)
+    source = labeled_video(
+        tmp_path / ("raw-picture.mov" if bit_depth == 8 else "raw-picture.mkv"),
+        bit_depth=bit_depth,
+        fps=fps,
+    )
     sample_count = round(Fraction(24 * 48000, 1) / fps)
     dialogue = channel_impulses(tmp_path / "dialogue.wav", sample_count=sample_count)
     camera = operation(source)
@@ -751,10 +755,12 @@ def test_fixed_caption_and_credit_layers_preserve_camera_precision_and_window_ph
         np.testing.assert_array_equal(pixels(window, 160, 90), actual[first:last])
 
 
-def placed_execution(tmp_path, monkeypatch):
+def placed_execution(tmp_path, monkeypatch, *, fps=Fraction(24), bit_depth=16):
     from avo.capabilities import default_proof_capability_registry
 
-    execution, source, dialogue, camera = native_execution(tmp_path, monkeypatch)
+    execution, source, dialogue, camera = native_execution(
+        tmp_path, monkeypatch, fps=fps, bit_depth=bit_depth
+    )
     original = execution["videoGraph"]["operations"][0]
     implementation = default_proof_capability_registry().resolve("source-layout")
     execution["implementationRefs"].append(implementation.proof_reference())
