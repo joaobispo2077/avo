@@ -939,7 +939,9 @@ def execute_placed_proof(
         "producer": {"name": "avo.ffmpeg-proof-plan", "version": "1"},
         "media": media,
         "sourceVideoTailPolicies": [],
-        "sourceDialogueNoisePolicies": native._noise_policy_records(execution["audioGraph"]),
+        "sourceDialogueNoisePolicies": native._noise_policy_records(
+            execution["audioGraph"]
+        ),
         "sourceDialogueTreatmentPolicies": [],
         "generatedOperations": [
             proof_generated.operation_metadata(asset["operation"])
