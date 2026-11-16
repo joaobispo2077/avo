@@ -183,6 +183,58 @@ def test_gain_fades_and_window_keep_exact_sample_count(tmp_path):
     assert data[1800, 0] == pytest.approx(3000 / 32768 * 10 ** (-6 / 20), abs=1e-5)
 
 
+def test_peak_protection_is_clip_local_and_preserves_microproof_state(tmp_path):
+    values = np.full((4800, 2), 1000)
+    values[1000:1300] = 30000
+    voice = pcm(tmp_path / "voice.wav", values)
+    music = pcm(tmp_path / "music.wav", np.full((4800, 2), 100))
+    operation = {
+        "operationId": "gain-voice",
+        "kind": "gain",
+        "range": region(0, 4800),
+        "parameters": {"nodeId": "voice", "gainDb": 10, "peakCeilingDbfs": -6},
+    }
+    g = graph([node("voice", "source", 0, 4800)], {"voice": voice}, [operation])
+    render_proof_audio_mix(g, tmp_path / "voice-limit.wav", source_resolver=resolve)
+    limited = read(tmp_path / "voice-limit.wav")
+    assert len(limited) == 4800
+    assert limited.max() <= 10 ** (-6 / 20) + 0.001
+    assert limited[500, 0] == pytest.approx(1000 / 32768 * 10 ** (10 / 20), abs=1e-5)
+    render_proof_audio_mix(
+        g, tmp_path / "micro-limit.wav", source_resolver=resolve, window=(1200, 3000)
+    )
+    np.testing.assert_array_equal(
+        read(tmp_path / "micro-limit.wav"), limited[1200:3000]
+    )
+    mixed = graph(
+        [node("voice", "source", 0, 4800), node("music", "music", 0, 4800)],
+        {"voice": voice, "music": music},
+        [operation],
+    )
+    render_proof_audio_mix(mixed, tmp_path / "mixed-limit.wav", source_resolver=resolve)
+    np.testing.assert_allclose(
+        read(tmp_path / "mixed-limit.wav") - limited, 100 / 32768, atol=1e-6
+    )
+
+
+@pytest.mark.parametrize("ceiling", [True, None, -13, 0, "-4.5", float("nan")])
+def test_native_gain_rejects_unbounded_peak_protection(ceiling):
+    from avo.adapters.media.audio_tracks import AudioGraphError
+    from avo.adapters.media.proof_audio_mix import _effects
+
+    operation = {
+        "operationId": "gain-voice",
+        "kind": "gain",
+        "range": region(0, 4800),
+        "parameters": {"nodeId": "voice", "gainDb": 10, "peakCeilingDbfs": ceiling},
+    }
+    g = graph(
+        [node("voice", "source", 0, 4800)], {"voice": Path("raw.wav")}, [operation]
+    )
+    with pytest.raises(AudioGraphError):
+        _effects(g, set())
+
+
 def test_rejects_unknown_ancestry_before_output(tmp_path):
     n = node("voice", "source", 0, 4800)
     g = graph([n], {"voice": tmp_path / "unknown.wav"})
