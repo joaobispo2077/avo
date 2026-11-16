@@ -129,6 +129,67 @@ def test_default_retention_does_not_initialize_or_discover_unselected_drafts(tmp
     assert set(tmp_path.rglob("*")) == before
 
 
+def test_legacy_unclaimed_metadata_stays_preserved_without_becoming_canonical(tmp_path):
+    from avo.timeline.motion_retention import retained_motion_paths
+    from avo.timeline.store import StoreError
+
+    project = tmp_path / "avo.project.json"
+    project.write_text(
+        json.dumps(
+            {"provider": "example", "videoId": "legacy", "rawDir": str(tmp_path)}
+        ),
+        encoding="utf-8",
+    )
+    workspace = TimelineWorkspace.from_project(project)
+    path = workspace.timeline_dir / "cmap.json"
+    path.parent.mkdir(parents=True)
+    path.write_text("{}", encoding="utf-8")
+    before = {item: item.read_bytes() for item in tmp_path.rglob("*") if item.is_file()}
+    assert path in retained_motion_paths(workspace)
+    assert {item: item.read_bytes() for item in before} == before
+    with pytest.raises(StoreError):
+        workspace.store("cmap").load_index()
+
+
+def test_a_claimed_head_cannot_use_the_legacy_metadata_exception(tmp_path):
+    from avo.timeline.motion_retention import (
+        MotionRetentionError,
+        retained_motion_paths,
+    )
+
+    workspace, _, _, _ = selected_workspace(tmp_path)
+    path = workspace.timeline_dir / "cmap.json"
+    atomic_write_json(path, {"headRevisionId": "cmap-r001"})
+    with pytest.raises(MotionRetentionError):
+        retained_motion_paths(workspace)
+
+
+def test_canonical_motion_evidence_remains_required_without_a_run_record(tmp_path):
+    from avo.timeline.motion_retention import (
+        MotionRetentionError,
+        retained_motion_paths,
+    )
+
+    workspace, proposed, _, _ = selected_workspace(tmp_path)
+    reference = proposed["proposalRef"]
+    workspace.store("bmap").append_revision(
+        snapshot={"fixture": "retained canonical reference"},
+        actor="fixture",
+        reason="Recorded motion authority",
+        evidence=[
+            {
+                "evidenceId": "motion-proposal:" + reference["sha256"],
+                "kind": "motion-proposal",
+                **reference,
+            }
+        ],
+    )
+    workspace.pipeline_run_path.unlink()
+    (workspace.raw_dir / reference["path"]).unlink()
+    with pytest.raises(MotionRetentionError):
+        retained_motion_paths(workspace)
+
+
 def test_cleanup_fallback_uses_verified_selected_closure(tmp_path):
     from avo.project_inventory import _fallback_reconstruction_metadata
     from avo.timeline.motion_retention import retained_motion_paths
