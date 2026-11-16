@@ -51,8 +51,17 @@ scratch files do not enter the enclosing canonical dependency guard; original
 and generated inputs are still revalidated before publication.
 
 Unit tests and coverage use two pytest workers with work stealing, matching the
-integration lane. This keeps native-reader coverage within the existing job time
-limits without changing test scope, coverage requirements, or quality thresholds.
+integration lane. The unit job has a bounded 30-minute budget, including setup,
+evidence upload, and post-test smokes, and reports its 20 slowest tests.
+At head [`f55c298`](https://github.com/joaobispo2077/avo/commit/f55c298147ef1aef2949a6ceb9362334808734df),
+[CI run 43810109775](https://github.com/joaobispo2077/avo/actions/runs/43810109775)
+cancelled the unit lane at its former 20-minute limit while it was still making
+progress at 95%. The same run's successful coverage lane selected the identical
+6,163 tests with two work-stealing workers: 6,156 passed and seven skipped in
+24 minutes 47.53 seconds. Thirty minutes covers that measured population plus
+four minutes for other unit-job steps without increasing worker contention.
+Test scope, coverage requirements, mandatory readiness, evidence, and quality
+thresholds remain unchanged.
 
 Gate 1 also validates all GitHub Actions workflows with actionlint 1.7.12,
 including expression context availability. ShellCheck and Pyflakes are disabled
