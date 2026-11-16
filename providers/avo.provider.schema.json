@@ -186,6 +186,7 @@
       "additionalProperties": true,
       "properties": {
         "motion": {"$ref": "https://avo.local/avo.motion.schema.json#/$defs/config"},
+        "editingCraft": {"$ref": "https://avo.local/avo.editing-craft.schema.json#/$defs/config"},
         "watch": {
           "type": "object",
           "additionalProperties": false,

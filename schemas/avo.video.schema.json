@@ -43,6 +43,7 @@
       "description": "Optional bootstrap hints copied to avo.project.json on init when fields are absent.",
       "additionalProperties": false,
       "properties": {
+        "editingCraft": {"$ref": "https://avo.local/avo.editing-craft.schema.json#/$defs/config"},
         "transcription": {
           "type": "object",
           "additionalProperties": false,
