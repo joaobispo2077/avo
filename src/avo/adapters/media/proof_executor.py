@@ -333,6 +333,20 @@ def _video_tail(
     }
 
 
+def _require_output_pixel_format(spec, conformance):
+    if "pixelFormat" not in spec:
+        return
+    supported = (
+        {"gbrp16le", "yuv420p", "yuv420p10le", "yuv444p10le"}
+        if conformance
+        else {"yuv420p"}
+    )
+    if spec["pixelFormat"] not in supported:
+        raise RuntimeError(
+            "ProofPlan pixel format is not qualified for selected output codec"
+        )
+
+
 def _output_settings(execution: dict) -> tuple:
     spec = execution["output"]
     fps = Fraction(spec["frameRate"]["num"], spec["frameRate"]["den"])
@@ -352,6 +366,7 @@ def _output_settings(execution: dict) -> tuple:
         valid = codecs[0] in {"libx264", "h264_nvenc"} and codecs[1] == "aac"
     if not valid:
         raise RuntimeError("Unsupported ProofPlan output codec")
+    _require_output_pixel_format(spec, conformance)
     if not execution["audioGraph"]["singleFinalEncode"]:
         raise RuntimeError("ProofPlan requires one final audio encode")
     return spec, fps, rate
