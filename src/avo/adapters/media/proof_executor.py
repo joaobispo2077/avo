@@ -549,14 +549,83 @@ def _base_parameters(operation, refs, registry):
         )
 
 
-def _segments(execution, node_by_range, audio_trims, fps, rate, nodes, generated):
+def _camera_groups(execution, registry):
+    if not any(
+        op["kind"] == "camera-transform" for op in execution["videoGraph"]["operations"]
+    ):
+        return {}
+    from .camera import camera_groups
+
+    return camera_groups(execution, registry)
+
+
+def _camera_piece_key(segment):
+    return segment[0], segment[1], segment[2], segment[3]
+
+
+def _bind_camera_picture(
+    operations, operation, picture, source_start, execution, cache, fps, bindings
+):
+    if not operations:
+        return
+    if bindings is None:
+        raise RuntimeError("camera execution requires its source staging context")
+    from .camera import bind_camera_source
+
+    path, stream = picture
+    observed = cache[str(path.resolve())]
+    metadata = next(item for item in observed["streams"] if item["index"] == stream)
+    clock = _verify_picture_clock(path, stream, cache, fps)
+    region = operation["outputRange"]
+    _require_camera_source_extent(operation, source_start, fps, clock)
+    binding = bind_camera_source(
+        operations,
+        metadata=metadata,
+        output=execution["output"],
+        source_sha256=observed["sha256"],
+        first_frame=region["startFrame"],
+        end_frame=region["endFrameExclusive"],
+    )
+    bindings[
+        (region["startFrame"], region["endFrameExclusive"], picture, source_start)
+    ] = binding
+
+
+def _require_camera_source_extent(operation, source_start, fps, clock):
+    region = operation["outputRange"]
+    source = operation["parameters"]["sourceRange"]
+    duration = _seconds(source["endTicks"] - source["startTicks"], source["timebase"])
+    frames = duration * fps
+    expected = region["endFrameExclusive"] - region["startFrame"]
+    if (
+        frames != expected
+        or (source_start * fps).denominator != 1
+        or (source_start + duration) * fps > clock["packetCount"]
+    ):
+        raise RuntimeError(
+            "Camera requires exact original frames without retiming or padding"
+        )
+
+
+def _segments(
+    execution,
+    node_by_range,
+    audio_trims,
+    fps,
+    rate,
+    nodes,
+    generated,
+    *,
+    camera_bindings=None,
+):
     operations = [
         item
         for item in execution["videoGraph"]["operations"]
-        if item["kind"] != "overlay-video"
+        if item["kind"] not in {"overlay-video", "camera-transform"}
     ]
     registry = default_proof_capability_registry()
     refs = {item["implementationId"]: item for item in execution["implementationRefs"]}
+    camera = _camera_groups(execution, registry)
     audio_ranges = _audio_frame_ranges(node_by_range, fps, rate)
     cursor, segments, cache, used_audio = 0, [], {}, set()
     for operation in operations:
@@ -571,6 +640,16 @@ def _segments(execution, node_by_range, audio_trims, fps, rate, nodes, generated
         cursor = end
         picture, source_start, source_duration, tail = _picture_source(
             operation, generated, execution, cache, fps
+        )
+        _bind_camera_picture(
+            camera.get(operation["operationId"]),
+            operation,
+            picture,
+            source_start,
+            execution,
+            cache,
+            fps,
+            camera_bindings,
         )
         for astart, aend, node in audio_ranges:
             if max(astart, start) >= min(aend, end):
@@ -752,36 +831,60 @@ def _piece_stop(left, right, fps, preserve):
     return [] if preserve else ["-t", str(float(Fraction(right - left, 1) / fps))]
 
 
+def _piece_video_filter(segment, left, right, spec, fps, camera):
+    start, _, picture, _, source_duration, *rest = segment
+    tail = rest[-2]
+    pad_seconds = tail["padSeconds"] if tail else float(1 / fps)
+    prefix = f"[0:{picture[1]}]trim=duration={float(source_duration)},setpts=PTS-STARTPTS,fps={fps.numerator}/{fps.denominator},tpad=stop_mode=clone:stop_duration={pad_seconds},trim=start_frame={left - start}:end_frame={right - start},setpts=PTS-STARTPTS,"
+    if camera:
+        from .camera import camera_filter
+
+        chain = camera_filter(
+            camera["operations"],
+            metadata=camera["metadata"],
+            output=spec,
+            source_sha256=camera["sourceSha256"],
+            first_frame=left,
+            end_frame=right,
+        )
+    else:
+        pixel_format = spec.get("pixelFormat") or (
+            "bgra" if spec.get("conformance") is True else "yuv420p"
+        )
+        chain = f"scale={spec['width']}:{spec['height']}:force_original_aspect_ratio=decrease,pad={spec['width']}:{spec['height']}:(ow-iw)/2:(oh-ih)/2,setsar=1,format={pixel_format}"
+    return prefix + chain + "[v]"
+
+
 def _render_piece(
-    segment, left, right, spec, fps, rate, piece, *, preserve_audio=False
+    segment, left, right, spec, fps, rate, piece, *, preserve_audio=False, camera=None
 ):
     (
-        start,
+        _start,
         _end,
         picture,
         source_start,
-        source_duration,
+        _source_duration,
         node,
         audio,
         fades,
         treatment_policy,
-        tail,
+        _tail,
         noise_policy,
     ) = segment
-    path, stream = picture
+    path, _stream = picture
     arguments = [
         "ffmpeg",
         "-v",
         "error",
         "-nostdin",
         *local_source_arguments(path),
+        *(["-noautorotate"] if camera else []),
         "-ss",
         str(float(source_start)),
         "-i",
         str(path),
     ]
-    pad_seconds = tail["padSeconds"] if tail else float(1 / fps)
-    vfilter = f"[0:{stream}]trim=duration={float(source_duration)},setpts=PTS-STARTPTS,fps={fps.numerator}/{fps.denominator},tpad=stop_mode=clone:stop_duration={pad_seconds},trim=start_frame={left - start}:end_frame={right - start},setpts=PTS-STARTPTS,scale={spec['width']}:{spec['height']}:force_original_aspect_ratio=decrease,pad={spec['width']}:{spec['height']}:(ow-iw)/2:(oh-ih)/2,setsar=1,format={'bgra' if spec.get('conformance') is True else 'yuv420p'}[v]"
+    vfilter = _piece_video_filter(segment, left, right, spec, fps, camera)
     target_start = round(Fraction(left, 1) / fps * rate)
     target_end = round(Fraction(right, 1) / fps * rate)
     length = target_end - target_start
@@ -844,7 +947,12 @@ def _encode_arguments(spec, fps, count):
         str(count),
     ]
     if spec.get("conformance") is True:
-        return arguments + ["-pix_fmt", "bgra", "-f", "matroska"]
+        return arguments + [
+            "-pix_fmt",
+            spec.get("pixelFormat", "bgra"),
+            "-f",
+            "matroska",
+        ]
     if spec["videoCodec"] == "h264_nvenc":
         arguments += [
             "-preset",
@@ -889,10 +997,23 @@ def _final_arguments(
     from . import proof_generated
 
     extra, filters, metadata = proof_generated.overlay_filters(
-        overlays, fps, wstart, wend, conformance=spec.get("conformance") is True
+        overlays,
+        fps,
+        wstart,
+        wend,
+        conformance=spec.get("conformance") is True,
+        **(
+            {
+                "pixel_format": spec["pixelFormat"],
+                "canvas": (spec["width"], spec["height"]),
+            }
+            if "pixelFormat" in spec
+            else {}
+        ),
     )
     timebase = f"{fps.denominator}/{fps.numerator}"
-    video = f"[0:v:0]settb=expr={timebase},setpts=N,format=rgba[picture]"
+    working_format = "gbrp16le" if "pixelFormat" in spec else "rgba"
+    video = f"[0:v:0]settb=expr={timebase},setpts=N,format={working_format}[picture]"
     audio_index = 1 + len(extra) // 2 if mixed_audio is not None else 0
     audio = f"[{audio_index}:a:0]asetpts=N/SR/TB[a]"
     encode_arguments = _encode_arguments(spec, fps, wend - wstart)
@@ -978,6 +1099,7 @@ def _render_media(
     verify_inputs,
     audio_mix=None,
     preserve_audio=False,
+    camera_bindings=None,
 ):
     if output.exists():
         raise RuntimeError(f"Refusing to replace existing proof: {output}")
@@ -1009,6 +1131,11 @@ def _render_media(
                 rate,
                 piece,
                 preserve_audio=preserve_audio,
+                **(
+                    {"camera": camera_bindings[_camera_piece_key(segment)]}
+                    if camera_bindings and _camera_piece_key(segment) in camera_bindings
+                    else {}
+                ),
             )
             pieces.append(piece)
         listing = directory / "concat.txt"
@@ -1119,6 +1246,14 @@ def _require_output_container(spec, output):
         raise RuntimeError("Lossless conformance output requires .mkv")
 
 
+def _camera_binding_arguments(execution):
+    if any(
+        op["kind"] == "camera-transform" for op in execution["videoGraph"]["operations"]
+    ):
+        return {"camera_bindings": {}}
+    return {}
+
+
 def _execute_ffmpeg_proof(
     execution: dict[str, Any], output: Path, *, generated_asset_validator=None
 ) -> dict[str, Any]:
@@ -1157,8 +1292,16 @@ def _execute_ffmpeg_proof(
     audio_trims, encodes = _audio_operations(lead_execution["audioGraph"])
     generated = _generated_inputs(execution, spec, fps, generated_asset_validator)
     _validate_events(execution, generated)
+    camera_kwargs = _camera_binding_arguments(execution)
     cursor, segments = _segments(
-        execution, node_by_range, audio_trims, fps, rate, nodes, generated
+        execution,
+        node_by_range,
+        audio_trims,
+        fps,
+        rate,
+        nodes,
+        generated,
+        **camera_kwargs,
     )
     wstart, wend = _proof_window(execution, cursor, encodes, fps, rate)
     overlays = _proof_overlays(generated, cursor)
@@ -1174,6 +1317,7 @@ def _execute_ffmpeg_proof(
         lambda: _revalidate_inputs(execution, generated, generated_asset_validator),
         audio_mix,
         preserve_audio=execution.get("sourceAssemblyPolicy") == "preserve-import",
+        **camera_kwargs,
     )
     return {
         "status": "pass",

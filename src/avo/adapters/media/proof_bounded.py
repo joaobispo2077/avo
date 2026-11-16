@@ -17,6 +17,7 @@ from pathlib import Path
 from avo.timeline.contracts import file_fingerprint, fingerprint_stage
 from avo.timeline.proof_validation_stage import in_proof_validation_batch
 
+from .proof_precision import picture_bytes, picture_format
 from .proof_stream import ManagedProcess, StorageBudget, copy_frames, pump_file
 
 MAX_CHUNK_FRAMES = 60
@@ -46,13 +47,17 @@ class _PictureCursor:
         transform = placed._scaled_transform(item, spec)
         self.width = transform["width"] if transform else spec["width"]
         self.height = transform["height"] if transform else spec["height"]
-        self.bytes_per_frame = self.width * self.height * 4
+        self.bytes_per_frame = (
+            self.width * self.height * picture_bytes(spec, layer=True)
+        )
         try:
             if item["mediaKind"] == "title":
                 from .proof_title import title_command
 
                 self.width, self.height = spec["width"], spec["height"]
-                self.bytes_per_frame = self.width * self.height * 4
+                self.bytes_per_frame = (
+                    self.width * self.height * picture_bytes(spec, layer=True)
+                )
                 arguments, cwd = self.stack.enter_context(
                     title_command(
                         source,
@@ -75,7 +80,7 @@ class _PictureCursor:
                         "-c:v",
                         "rawvideo",
                         "-pix_fmt",
-                        "bgra",
+                        picture_format(spec, layer=True),
                         "-f",
                         "rawvideo",
                         "pipe:1",
@@ -116,14 +121,15 @@ class _PictureCursor:
 def _picture_cost(sources, spec):
     from . import proof_placed as placed
 
-    cost = spec["width"] * spec["height"] * 4
+    cost = spec["width"] * spec["height"] * picture_bytes(spec)
+    layer_bytes = picture_bytes(spec, layer=True)
     for source in sources:
         item = source["item"]
         transform = placed._scaled_transform(item, spec)
         if transform and item["mediaKind"] != "title":
-            cost += transform["width"] * transform["height"] * 4
+            cost += transform["width"] * transform["height"] * layer_bytes
         else:
-            cost += spec["width"] * spec["height"] * 4
+            cost += spec["width"] * spec["height"] * layer_bytes
     return cost
 
 
@@ -231,7 +237,7 @@ def _stream_picture(
             "-f",
             "rawvideo",
             "-pixel_format",
-            "bgra",
+            picture_format(spec),
             "-video_size",
             f"{spec['width']}x{spec['height']}",
             "-framerate",
@@ -298,7 +304,9 @@ def _stream_picture(
                 peak_scratch = max(peak_scratch, scratch)
                 monitor()
                 written = pump_file(picture, encoder.stdin)
-                if written != count * spec["width"] * spec["height"] * 4:
+                if written != count * spec["width"] * spec["height"] * picture_bytes(
+                    spec
+                ):
                     raise RuntimeError("Final encoder input frame count differs")
                 for path in directory.iterdir():
                     path.unlink()

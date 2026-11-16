@@ -151,9 +151,12 @@ class TimelineRenderAdapter:
         window: dict[str, int] | None,
     ) -> dict[str, Any]:
         """Pass the immutable operation/event graph to one registered executor."""
-        from avo.timeline.contracts import document_hash_excluding, validate_document
+        from avo.timeline.contracts import (
+            document_hash_excluding,
+            validate_proof_plan_document,
+        )
 
-        validate_document(proof_plan, "avo.proof-plan.schema.json")
+        validate_proof_plan_document(proof_plan)
         if proof_plan.get("proofPlanHash") != document_hash_excluding(
             proof_plan, "proofPlanHash"
         ):
@@ -173,6 +176,11 @@ class TimelineRenderAdapter:
             "lineagePolicy": deepcopy(proof_plan["lineagePolicy"]),
             "window": deepcopy(window),
         }
+        if proof_plan["schemaVersion"] == "2.0.0":
+            execution["schemaVersion"] = proof_plan["schemaVersion"]
+            execution["requiredReaderCapabilities"] = deepcopy(
+                proof_plan["requiredReaderCapabilities"]
+            )
         for key in ("sourceAssemblyPolicy", "importOriginRef", "checkpoint"):
             if key in proof_plan:
                 execution[key] = deepcopy(proof_plan[key])
