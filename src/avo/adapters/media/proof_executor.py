@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import subprocess
 import tempfile
+from contextvars import copy_context
 from fractions import Fraction
 from pathlib import Path
 from typing import Any
@@ -981,7 +982,8 @@ def _render_media(
     if output.exists():
         raise RuntimeError(f"Refusing to replace existing proof: {output}")
     output.parent.mkdir(parents=True, exist_ok=True)
-    # Private segments disappear here and cannot belong to an enclosing exit guard.
+    # Originals retain the enclosing byte guard; disposable segments stay private.
+    verification_context = copy_context()
     with (
         fingerprint_stage(),
         tempfile.TemporaryDirectory(prefix="proof-plan-", dir=output.parent) as folder,
@@ -1030,7 +1032,10 @@ def _render_media(
         media, metadata = _render_final(
             listing, candidate, overlays, spec, fps, wstart, wend, mixed_audio
         )
-        verify_inputs()
+        if in_proof_validation_batch():
+            verification_context.run(verify_inputs)
+        else:
+            verify_inputs()
         candidate.replace(output)
     return media, metadata
 
