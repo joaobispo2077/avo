@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import math
+from copy import deepcopy
 from fractions import Fraction
 from functools import lru_cache
 from itertools import pairwise
@@ -339,3 +340,196 @@ def validate_camera_schedule(moves, *, geometry):
         prepared = _prepared(move["behavior"], move["frameRange"], geometry, None)
         for frame in range(prepared[2], prepared[3]):
             _evaluate(prepared, frame)
+
+
+CAMERA_TREATMENTS = frozenset(
+    {
+        "push",
+        "pull",
+        "punch-settle",
+        "cut-to-close",
+        "speed-contrast",
+        "overlay-return",
+        "section-alternate",
+        "section-drift",
+    }
+)
+
+
+def _recipe_options(options, preset):
+    from avo.editing_craft import validate_editing_craft_selection
+
+    selected = validate_editing_craft_selection(options)
+    camera = selected["effective"]["camera"]
+    if not camera["enabled"]:
+        raise CameraError("camera recipes require explicitly selected enabled options")
+    if camera["faceAnchor"] != "off":
+        raise CameraError(
+            "selected face anchoring requires its frozen subject trajectory"
+        )
+    required = {
+        "section-alternate": {"alternate", "alternate-and-push"},
+        "section-drift": {"push", "alternate-and-push"},
+    }
+    if preset in required and camera["baseTreatment"] not in required[preset]:
+        raise CameraError(
+            "section recipe requires its explicitly selected base treatment"
+        )
+    return selected
+
+
+def _recipe_state(value):
+    if not isinstance(value, dict) or set(value) - {"scale", "center", "crop", "phase"}:
+        raise CameraError("camera recipe requires a declared framing state")
+    _schema(value["center"], "#/$defs/center")
+    scale, x, y = _state(value)
+    if scale <= 0:
+        raise CameraError("camera recipe state requires a positive scale")
+    return {
+        "scale": _finite_output(scale),
+        "center": {"x": _finite_output(x), "y": _finite_output(y)},
+    }
+
+
+def _recipe_target(preset, entry, scale, center):
+    restore = preset in {"pull", "overlay-return"}
+    alternate_wide = preset == "section-alternate" and entry["scale"] > 1
+    if restore or alternate_wide:
+        default = 1
+    elif preset == "section-drift":
+        default = entry["scale"] * 1.03
+    else:
+        default = 1.12
+    if alternate_wide:
+        scale = 1
+    baseline_center = restore or preset in {"section-alternate", "cut-to-close"}
+    target = _recipe_state(
+        {
+            "scale": default if scale is None else scale,
+            "center": center
+            if center is not None
+            else ({"x": 0.5, "y": 0.5} if baseline_center else entry["center"]),
+        }
+    )
+    _recipe_direction(preset, entry, target)
+    return target
+
+
+def _recipe_direction(preset, entry, target):
+    if (
+        preset in {"push", "punch-settle", "speed-contrast", "section-drift"}
+        and target["scale"] <= entry["scale"]
+    ):
+        raise CameraError("push target must exceed the actual predecessor scale")
+    if preset == "pull" and target["scale"] > entry["scale"]:
+        raise CameraError("pull target cannot increase the actual predecessor scale")
+    if preset == "overlay-return" and target != {
+        "scale": 1,
+        "center": {"x": 0.5, "y": 0.5},
+    }:
+        raise CameraError("overlay-return must finish at the declared baseline")
+
+
+def _recipe_node(phase, state, curve="hold"):
+    return {"phase": phase, **deepcopy(state), "curve": curve}
+
+
+def _recipe_nodes(preset, entry, target):
+    if preset in {"cut-to-close", "section-alternate"}:
+        return [_recipe_node(0, target), _recipe_node(1, target)], "source-cut"
+    if preset == "punch-settle":
+        settled = {
+            **target,
+            "scale": entry["scale"] + (target["scale"] - entry["scale"]) * 0.75,
+        }
+        return [
+            _recipe_node(0, entry, "exponential-out"),
+            _recipe_node(0.25, target, "quadratic-out"),
+            _recipe_node(0.5, settled),
+            _recipe_node(1, settled),
+        ], "continuous"
+    if preset == "speed-contrast":
+        pause = {
+            **target,
+            "scale": entry["scale"] + (target["scale"] - entry["scale"]) * 0.6,
+        }
+        return [
+            _recipe_node(0, entry, "exponential-out"),
+            _recipe_node(0.2, pause),
+            _recipe_node(0.65, pause, "quadratic-in-out"),
+            _recipe_node(1, target),
+        ], "continuous"
+    if preset == "overlay-return":
+        return [
+            _recipe_node(0, entry, "quadratic-in-out"),
+            _recipe_node(0.75, target),
+            _recipe_node(1, target),
+        ], "continuous"
+    curve = "linear" if preset == "section-drift" else "quadratic-in-out"
+    return [_recipe_node(0, entry, curve), _recipe_node(1, target)], "continuous"
+
+
+def _validate_recipe_geometry(wrapper):
+    validate_document(wrapper, "avo.animation.schema.json#/$defs/editingCraft")
+    nodes, regions = _behavior(_encoded(wrapper["camera"]))
+    size, baseline, margins = _geometry(_encoded(wrapper["sourceGeometry"]))
+    for _, state, _ in nodes:
+        crop = _crop(state, baseline)
+        _check_crop(crop, size, margins)
+        _check_regions(crop, size, regions)
+
+
+def make_camera_treatment(
+    preset,
+    *,
+    target_layer_id,
+    source_id,
+    source_sha256,
+    geometry,
+    options,
+    predecessor=None,
+    target_scale=None,
+    target_center=None,
+    safe_regions=(),
+):
+    """Build selected untimed intent; canonical compilation still validates every frame.
+
+    Source-cut entries remain requests until matched to an actual visible cut.
+    No detector, source probe, render, preference write or timing publication runs.
+    """
+    if not isinstance(preset, str) or preset not in CAMERA_TREATMENTS:
+        raise CameraError("unknown selected camera recipe")
+    try:
+        selected = _recipe_options(options, preset)
+        entry = _recipe_state(
+            predecessor
+            if predecessor is not None
+            else {"scale": 1, "center": {"x": 0.5, "y": 0.5}}
+        )
+        target = _recipe_target(preset, entry, target_scale, target_center)
+        nodes, policy = _recipe_nodes(preset, entry, target)
+        behavior = {
+            "contractVersion": "1.0.0",
+            "targetLayerId": target_layer_id,
+            "sourceId": source_id,
+            "nodes": nodes,
+        }
+        if not isinstance(safe_regions, (list, tuple)) or len(safe_regions) > 64:
+            raise CameraError(
+                "camera safe regions require a bounded explicit collection"
+            )
+        if safe_regions:
+            behavior["safeRegions"] = deepcopy(list(safe_regions))
+        wrapper = {
+            "camera": behavior,
+            "sourceGeometry": deepcopy(geometry),
+            "sourceSha256": source_sha256,
+            "options": deepcopy(selected),
+            "entryPolicy": policy,
+        }
+        _validate_recipe_geometry(wrapper)
+        return wrapper
+    except (ValueError, TypeError, KeyError, OverflowError, ZeroDivisionError) as error:
+        if isinstance(error, CameraError):
+            raise
+        raise CameraError(f"invalid selected camera recipe: {error}") from error
