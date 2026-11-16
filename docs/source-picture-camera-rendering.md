@@ -125,6 +125,14 @@ for a selected camera graph; ordinary proof readiness does not inspect camera
 tools. Tool paths are excluded from the record, so reconstruction cannot mistake
 separately installed executables for media to bundle.
 
+When a selected Windows command is an installed Chocolatey ShimGen launcher, the
+observer uses its read-only `--shimgen-help` target metadata and fingerprints both
+the launcher chain and the final decoder/probe executable. Missing, ambiguous,
+relative, cyclic or excessively deep targets fail before encoding. Replacing the
+decoder changes the environment even if its reported version and launcher stay
+unchanged. This does not install or distribute tools. The target inspection follows
+the [official ShimGen implementation](https://github.com/chocolatey/shimgen/blob/master/shim/ShimProgram.cs).
+
 Preflight includes the observed camera environment hash. Microproof gates bind
 that preflight hash, so replacing a tool requires fresh microproof validation.
 Gate and window records retain the observed environment and camera producer
