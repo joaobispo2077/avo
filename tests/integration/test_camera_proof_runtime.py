@@ -119,7 +119,7 @@ def operation(
 
 
 def render(path, destination, selected, *, first=0, last=24, width=160, height=90):
-    from avo.adapters.media.camera import camera_filter
+    from avo.adapters.media.camera import camera_filter, camera_input_arguments
 
     metadata = probe(path)
     specification = {"width": width, "height": height, "pixelFormat": "gbrp16le"}
@@ -139,7 +139,7 @@ def render(path, destination, selected, *, first=0, last=24, width=160, height=9
             "error",
             "-nostdin",
             "-n",
-            "-noautorotate",
+            *camera_input_arguments(0),
             "-i",
             str(path),
             "-map",
@@ -267,7 +267,10 @@ def test_single_frame_camera_hold_keeps_its_selected_state(tmp_path):
 
 def test_baseline_uses_measured_sar_and_rotation_without_changing_orientation_twice(
     tmp_path,
+    monkeypatch,
 ):
+    from avo.adapters.media.proof_executor import execute_ffmpeg_proof
+
     source = labeled_video(tmp_path / "original.mp4", sar=Fraction(2), rotation=90)
     selected = operation(source, sar=Fraction(2), rotation=90, scale=1)
     actual = render(source, tmp_path / "display.mkv", selected, width=90, height=320)
@@ -305,6 +308,27 @@ def test_baseline_uses_measured_sar_and_rotation_without_changing_orientation_tw
         item.get("rotation", 0) % 360 == 0
         for item in observed.get("side_data_list", [])
     )
+    execution, _, _, _ = native_execution(tmp_path, monkeypatch)
+    execution["output"].update(width=90, height=320)
+    camera = operation(source, sar=Fraction(2), rotation=90, scale=1)
+    execution["videoGraph"]["operations"][1] = camera
+    execution["videoGraph"]["operations"][0]["parameters"]["source"].update(
+        locator=str(source), sha256=camera["parameters"]["sourceSha256"]
+    )
+    execution["canonicalInputLock"]["source:camera-main"] = camera["parameters"][
+        "sourceSha256"
+    ]
+    native = tmp_path / "native-display.mkv"
+    execute_ffmpeg_proof(execution, native)
+    np.testing.assert_array_equal(pixels(native, 90, 320), actual)
+    assert all(
+        item.get("rotation", 0) % 360 == 0
+        for item in probe(native).get("side_data_list", [])
+    )
+    execution["window"] = {"startFrame": 9, "endFrameExclusive": 17}
+    window = tmp_path / "native-display-window.mkv"
+    execute_ffmpeg_proof(execution, window)
+    np.testing.assert_array_equal(pixels(window, 90, 320), actual[9:17])
 
 
 @pytest.mark.parametrize(
