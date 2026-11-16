@@ -16,6 +16,7 @@ from .contracts import (
     document_hash_excluding,
     file_fingerprint,
     validate_document,
+    validate_proof_plan_document,
 )
 from .iterations import IterationLedgerService
 from .store import StoreError, write_immutable_json
@@ -27,6 +28,15 @@ def _preview_declaration(request):
         for key in ("previewOnly", "importApproximation")
         if key in request
     }
+
+
+def _proof_contract_header(camera_operations):
+    if camera_operations:
+        return {
+            "schemaVersion": "2.0.0",
+            "requiredReaderCapabilities": ["camera-transform-v1"],
+        }
+    return {"schemaVersion": "1.0.0"}
 
 
 def _require_hyperframes_geometry(binding, parameters, output):
@@ -307,6 +317,89 @@ class ProofPlanCompiler:
             lock[f"source:{source_id}"] = str(sha256)
         return lock
 
+    def _camera_operations(self, request, checkpoint, lock):
+        if checkpoint == "cut-proof":
+            return []
+        from .contracts import required_animation_readers
+
+        if any(
+            operation.get("kind") == "camera-transform"
+            for operation in request.get("videoGraph", {}).get("operations", [])
+        ):
+            raise ProofPlanError(
+                "PROOF_CAMERA_AUTHORITY",
+                "Camera operations must derive from the canonical selected strategy.",
+                "Revise the selected camera component instead of injecting execution operations.",
+            )
+        store = self.workspace.store("animation")
+        index = store.load_index()
+        if index["headRevisionId"] is None:
+            return []
+        snapshot = store.revision(index["headRevisionId"])["snapshot"]
+        if not required_animation_readers(snapshot):
+            return []
+        if (
+            self.registry.resolve(
+                "camera-transform-v1", implementation_id="impl-camera-transform"
+            )
+            is None
+        ):
+            raise ProofPlanError(
+                "PROOF_CAMERA_UNAVAILABLE",
+                "Selected camera intent requires the qualified camera proof implementation.",
+                "Keep the camera intent pending until source-picture execution is qualified; do not render a v1 no-op.",
+            )
+        self._camera_basis(snapshot, lock)
+        operations = self._compile_camera_operations(snapshot, request)
+        for operation in operations:
+            parameters = operation["parameters"]
+            if (
+                lock.get("source:" + parameters["sourceId"])
+                != parameters["sourceSha256"]
+            ):
+                raise ProofPlanError(
+                    "PROOF_CAMERA_SOURCE_CHANGED",
+                    "Camera source fingerprint differs from the exact proof source lock.",
+                    "Restore the selected original or revise the camera against its new source.",
+                )
+        return operations
+
+    @staticmethod
+    def _camera_basis(snapshot, lock):
+        for name in ("cmap", "bmap", "tracks"):
+            if snapshot.get("dependencies", {}).get(name) != lock[name]:
+                raise ProofPlanError(
+                    "PROOF_CAMERA_BASIS_CHANGED",
+                    "Camera intent has a stale canonical " + name + " basis.",
+                    "Rebase and review the selected camera intent before compiling.",
+                )
+
+    def _compile_camera_operations(self, snapshot, request):
+        from .camera_plan import compile_camera_operations
+
+        def current(name):
+            store = self.workspace.store(name)
+            return store.revision(store.load_index()["headRevisionId"])["snapshot"]
+
+        try:
+            validate_document(
+                request["output"], "avo.proof-plan.v2.schema.json#/$defs/output"
+            )
+            return compile_camera_operations(
+                snapshot,
+                bmap=current("bmap"),
+                tracks=current("tracks"),
+                video_graph=request.get("videoGraph", {}),
+                output=request["output"],
+                selection=None,
+            )
+        except ValueError as error:
+            raise ProofPlanError(
+                "PROOF_CAMERA_INVALID",
+                str(error),
+                "Resolve the selected camera's frozen options, source geometry, cue and continuity.",
+            ) from error
+
     def _require_recorded_motion_implementation(self, implementation):
         if not implementation.adapter_id.startswith("hyperframes"):
             return
@@ -550,13 +643,17 @@ class ProofPlanCompiler:
         lock = self._canonical_lock(
             dict(request.get("sourceFingerprints") or {}), checkpoint=checkpoint
         )
+        camera_operations = self._camera_operations(request, checkpoint, lock)
+        request.setdefault("videoGraph", {}).setdefault("operations", []).extend(
+            camera_operations
+        )
         audio_graph = self._source_mix_graph(request)
         video_graph, resolution, implementation_refs = self._resolve_video_graph(
             dict(request.get("videoGraph") or {})
         )
         lock.update(self._generated_lock(video_graph, request["output"]))
         body: dict[str, Any] = {
-            "schemaVersion": "1.0.0",
+            **_proof_contract_header(camera_operations),
             "proofPlanId": "proof-plan-pending",
             "iterationId": iteration_id,
             "checkpoint": checkpoint,
@@ -605,7 +702,7 @@ class ProofPlanCompiler:
         body["proofPlanId"] = f"proof-plan-{content_hash(identity_seed)[:12]}"
         body["proofPlanHash"] = document_hash_excluding(body, "proofPlanHash")
         try:
-            validate_document(body, "avo.proof-plan.schema.json")
+            validate_proof_plan_document(body)
         except ContractError as exc:
             raise ProofPlanError(
                 "PROOF_PLAN_INVALID",
@@ -649,7 +746,7 @@ class ProofPlanCompiler:
                 entity_ref=str(value.get("proofPlanId") or ""),
             )
         try:
-            validate_document(value, "avo.proof-plan.schema.json")
+            validate_proof_plan_document(value)
         except ContractError as exc:
             raise ProofPlanError(
                 "PROOF_PLAN_INVALID",

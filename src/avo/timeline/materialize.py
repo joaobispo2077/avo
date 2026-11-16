@@ -992,7 +992,7 @@ def _proof_plan_value(workspace: Any, proof_plan: dict[str, Any] | str | Path):
     compiler = ProofPlanCompiler(workspace)
     if isinstance(proof_plan, dict):
         value = proof_plan
-        from .contracts import document_hash_excluding, validate_document
+        from .contracts import document_hash_excluding
 
         if value.get("proofPlanHash") != document_hash_excluding(
             value, "proofPlanHash"
@@ -1002,7 +1002,9 @@ def _proof_plan_value(workspace: Any, proof_plan: dict[str, Any] | str | Path):
                 "proof plan changed after compilation",
                 "restore the immutable plan or compile a new one",
             )
-        validate_document(value, "avo.proof-plan.schema.json")
+        from .contracts import validate_proof_plan_document
+
+        validate_proof_plan_document(value)
         return compiler, value
     return compiler, compiler.load(proof_plan)
 
