@@ -939,13 +939,15 @@ real Resolve exports, long-source throughput and creator review remain separate
 qualification. Existing ordinary canonical layouts/default audio/engine and
 source-only import preservation remain distinct, with compatibility regressions.
 
-## Planned editing craft parity (feature 017, not implemented)
+## Editing craft parity (feature 017, implementation in progress)
 
 The local working design is `specs/017-editing-craft-parity/plan.md`; numbered
-working specs remain ignored by existing repository policy. This section records
-the proposed evolution and does not claim delivered capabilities.
+working specs remain ignored by existing repository policy. Scoped preferences,
+typed request freezing and the default motion-review projection are implemented.
+Camera, analysis, sound matching, preparation and editor interchange below remain
+planned until their own execution and acceptance evidence is complete.
 
-Motion map and linked lightweight storyboard become built-in, engine-independent
+Motion map and linked lightweight storyboard are built-in, engine-independent
 projections at applicable motion planning/review. They join the selected brief,
 untimed proposals and exact available CMap/BMap/Tracks/Animation/Sync heads,
 including absence/static/unresolved state. Status remains metadata-only and
@@ -992,6 +994,28 @@ Implementation validation requires default/no-option and legacy compatibility,
 pure frame/clock/merge rules, real encoded source-fidelity/audio checks,
 native/MCP/package parity, existing full software-quality gates and actual
 creator/target-editor acceptance. These remain future delivery gates.
+
+The implemented preference boundary is `editing_craft.py`, reusing the existing
+scoped settings merge and motion preference path/schema/CAS guards. Every supplied
+scope is validated before merging; video defaults retain distinct provenance.
+Typed run selections in `PipelineRunStore` preserve exact choices, direction and
+available-head references without changing canonical state or transferring review.
+
+`timeline/motion_review.py` reads available canonical snapshots and selected
+context, including explicit absence. It does not construct the initializing BMap
+or iteration-ledger services. Pipeline status, briefing and motion context expose
+the same deterministic map/card view; published-report freshness is separate from
+snapshot identity. Explicit publication writes immutable JSON/Markdown/HTML/CSS
+under the external project's review tree, verifies matching bytes and containment,
+and retains a historical report when heads race. Native motion authoring publishes
+the derived review after a successful canonical write; presentation failure stays
+visible and does not roll back the edit.
+
+Focused tests verify partial/static views, exact identities, no default execution
+or filesystem writes, request freezing, native/MCP parity, report tampering and
+publication failure. These checks do not establish human suitability, target-editor
+fidelity, optional model readiness or a finished master. See
+[`docs/editing-craft.md`](docs/editing-craft.md) for the current interface.
 
 ### Explicit frame repetition in imported source placements
 
