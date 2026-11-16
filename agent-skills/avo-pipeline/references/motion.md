@@ -31,6 +31,36 @@ For selected HyperFrames, load [`hyperframes`](../../../.claude/skills/hyperfram
 
 Default Level 2–3 for explainers; Level 1 for read-heavy segments.
 
+## Built-in motion map and linked storyboard
+
+At planning, authoring and review boundaries, present `motionPlan` from native
+`pipeline status` (or `animation plan-show`) with every item's stable friendly
+label, purpose, section, current timing/readiness and linked storyboard card.
+Show partial and static plans too; no enable flag, model or render is required.
+Use the local JSON/Markdown/HTML links from `animation plan-publish` when the
+creator needs the complete view. Inspection never publishes implicitly.
+Distinguish concepts, sketches and unverified images from actually inspected
+rendered evidence; a generated card is not evidence that motion was executed.
+
+Before an approved cut, use `animation plan-propose --request <absolute JSON>`
+for untimed concepts tied to the selected brief and exact available heads. Include
+section purpose, dominant focus, density and lifecycle; static/no-sound choices
+are valid. Offer clear alternatives without a universal zoom or SFX template.
+Record exact selected/rejected IDs using `plan-select`. Revise a concept with its
+predecessor hash, keeping unchanged IDs/labels and explaining before/after changes.
+These choices do not approve a proof or authorize unrelated edits.
+
+After the exact CMap/cut output is approved, `plan-apply` takes the selected
+proposal/decision and explicit BMap/Tracks/Animation authoring. Native owners
+validate the complete affected set before publication. If interrupted, retry the
+same request/operation ID to recover the exact receipt; do not delete the pending
+marker, regenerate IDs or overwrite canonical files. Report actual committed
+heads and any unavailable current presentation before asking for creator review.
+
+Inspect craft preferences with `animation options-show`; forward the frozen
+active request through revisions/resume. New camera, face-anchor, semantic SFX
+and other treatment preferences alone do not establish executable readiness.
+
 ## Common intents → commands
 
 | User asks for | Command / skill |

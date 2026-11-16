@@ -68,6 +68,19 @@ See [`sound-create.md`](sound-create.md) for designed SFX (NS2-style cinematic b
 
 ## Canonical track integration
 
+For optional SFX discovery, first use the saved local catalogue through
+`sfx show/search`. [Media discovery](media.md#local-sound-discovery) defines bounded
+scan/annotation requests, generation conflicts, rights, favorites and audition
+ranges. Descriptor search is metadata-only; `search-semantic` explicitly executes
+separately provisioned local models. Missing semantic readiness does not silently
+switch modes. A matching preference or result never starts playback, remixes the
+film, adds an effect or grants BMap/Tracks approval. Silence/no-match is valid.
+
+Review a sound's useful range and actual perceptual anchor by listening. Cached
+waveform peaks alone cannot establish that review. Preserve dialogue priority,
+original channel intent and current cut/source identity when a later selected
+sound is authored through the existing normal owners and proof pipeline.
+
 Inspect audioTracks before render: dialogue priority and channel mapping, music/SFX purpose, source fingerprint, regions, gains, fades, ducking, mute, loudness intent, and BMap cue links. Audio changes invalidate candidate-bound audio and composite evidence.
 
 ## Selected artistic guidance

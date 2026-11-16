@@ -51,3 +51,7 @@ Package existing talking-head clip with **designed graphic cards** via `talking-
 ## Shared timeline gateway
 
 Runs the base pipeline with format-specific diagnosis and policy. It creates its own timeline context for derivatives and cannot bypass lineage, invalidation, Watch, transcript, or approval gates.
+
+Forward explicit craft choices into the isolated child request and always show
+that child's built-in motion map and linked storyboard. Parent ownership stays
+unchanged; concept selection is separate from proof approval.

@@ -38,6 +38,15 @@ Keep approved cuts/audio and canonical cue/placement ownership. Existing HyperFr
 
 ## Workflow phases
 
+Create an isolated child timeline with its exact parent reference before writes.
+Forward explicit craft options and source identity to the child's normal motion
+owner; this Profile cannot change the parent or grant itself canonical ownership.
+Always show the child's built-in motion map and linked storyboard, including
+static/provisional cards. Use [motion concept planning](motion.md#built-in-motion-map-and-linked-storyboard)
+to propose/select treatments before approved-cut timed authoring. Camera movement,
+alternation, face anchoring and SFX remain separate explicit choices whose actual
+execution readiness must be checked. An option declaration is not an applied zoom.
+
 | Phase | Action | Reference |
 | ----- | ------ | --------- |
 | 0 | Confirm overlay vs captions intent | this table |

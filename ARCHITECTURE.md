@@ -944,8 +944,12 @@ source-only import preservation remain distinct, with compatibility regressions.
 The local working design is `specs/017-editing-craft-parity/plan.md`; numbered
 working specs remain ignored by existing repository policy. Scoped preferences,
 typed request freezing and the default motion-review projection are implemented.
-Camera, analysis, sound matching, preparation and editor interchange below remain
-planned until their own execution and acceptance evidence is complete.
+Untimed proposal/selection and recoverable canonical application use the existing
+timeline owners. The sound catalogue and descriptor search are local source-read
+and saved-metadata operations respectively; semantic execution has an explicit
+isolated optional boundary. Camera, visual analysis, sound placement, preparation
+and editor interchange below remain planned until their own execution and
+acceptance evidence is complete.
 
 Motion map and linked lightweight storyboard are built-in, engine-independent
 projections at applicable motion planning/review. They join the selected brief,
@@ -953,6 +957,34 @@ untimed proposals and exact available CMap/BMap/Tracks/Animation/Sync heads,
 including absence/static/unresolved state. Status remains metadata-only and
 cannot initialize canonical records, run models or render. Explicit authoring
 and review publish immutable derived views; no second timeline is introduced.
+
+`MotionAuthoringService` freezes selected direction/options in existing run
+extensions, stores immutable concept/decision documents and projects them into
+the same default map. It prevalidates full prospective BMap/Tracks/Animation
+revisions under the timeline writer, then publishes through each owner with exact
+prepared identities. A narrowly scoped pending-application guard blocks unrelated
+canonical work until the same operation recovers. Receipts record staged,
+committing, committed or recovery-needed state; they do not transfer approval.
+
+`SfxCatalogService` retains immutable project-local generations and separates
+source-bound measurement facts from manual curation, rights and reviewed markers.
+It reuses shared safe-path/library guards without invoking media organization.
+Warm descriptor searches perform no source enumeration, decode or model work.
+An explicit semantic operation injects a ranker and paired local CLAP worker;
+manifest/model/preprocessing/runtime identities must agree before cosine scores
+are accepted. The optional worker uses offline local files and bounded validated
+vectors; ordinary model defaults and proof capability registration stay unchanged.
+No model package or weights are an AVO core prerequisite. Real provisioned-model
+acceptance remains unperformed until the artifacts/runtime are available.
+
+Advanced camera strategy validation reserves a closed relative-behavior extension
+and publishes the revision reference with an index-v2 capability fence in one
+atomic replacement. Generic snapshot writers and metadata-only readers enforce
+the same guard; existing v1 snapshots do not cause an upgrade on inspection.
+The pure camera planner derives frames from BMap and binds moves to exact source
+occurrences, geometry, source bytes and frozen options. Camera proof compilation
+uses a strict v2 operation contract and requires a qualified native implementation;
+legacy proof contracts are unchanged. Encoded execution is not yet qualified.
 
 Camera movement, face anchoring, sound matching, reference analysis, spoken
 notes/recovery and editor handoff are selected options resolved through existing
