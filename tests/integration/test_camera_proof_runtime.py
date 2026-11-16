@@ -539,8 +539,16 @@ def test_normal_native_proof_applies_camera_and_preserves_independent_audio(
         pieces.append(pixels(args[6], 160, 90))
 
     monkeypatch.setattr(proof_executor, "_render_piece", observe_piece)
+    from avo.adapters.media.timeline_render import TimelineRenderAdapter
+
+    readiness = TimelineRenderAdapter().proof_tool_readiness(execution)
     full_path = tmp_path / "native.mkv"
     result = execute_ffmpeg_proof(execution, full_path)
+    provenance = result["producer"]["camera"]
+    assert provenance["runtime"]["ffmpeg"]["version"].startswith("ffmpeg version ")
+    assert len(provenance["runtime"]["ffprobe"]["sha256"]) == 64
+    assert provenance["window"] is None
+    assert provenance["environmentHash"] == readiness["cameraEnvironmentHash"]
     np.testing.assert_array_equal(pieces[0], expected)
     np.testing.assert_array_equal(pixels(full_path, 160, 90), expected)
     np.testing.assert_array_equal(audio_samples(full_path), audio_samples(dialogue))
