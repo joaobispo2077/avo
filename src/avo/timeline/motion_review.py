@@ -14,9 +14,19 @@ from .contracts import content_hash, document_hash_excluding, validate_document
 from .store import atomic_write_json
 from .workspace import ARTIFACTS
 
-GENERATOR = {"id": "avo.motion-review", "version": "1.0.0"}
+GENERATOR = {"id": "avo.motion-review", "version": "1.1.0"}
 MAX_ITEMS = 500
 LIFECYCLE = ("preEntry", "entrance", "hold", "payoff", "exit")
+CONCEPT_TEXT_FIELDS = {
+    "dominantFocus": ("Dominant focus", 4096),
+    "supportingMotion": ("Supporting motion", 4096),
+    "ambientMotion": ("Ambient motion", 4096),
+    "readingIntent": ("Reading intent", 4000),
+    "depthIntent": ("Depth intent", 4000),
+    "continuityIntent": ("Continuity intent", 4000),
+    "cameraIntent": ("Camera intent", 4096),
+    "soundIntent": ("Sound intent", 4096),
+}
 MAX_DOCUMENT_BYTES = 4 * 1024 * 1024
 MAX_METADATA_BYTES = 8 * 1024 * 1024
 CONTEXT_LIMITS = {
@@ -140,11 +150,10 @@ def _selected_revision(store, index, reference, root, budget):
             snapshot.get("cues") or [],
             "avo.motion-review.schema.json#/$defs/canonicalCues",
         )
-    if (
-        index["artifactType"] == "animation"
-        and snapshot.get("strategyContractVersion") is not None
-    ):
-        validate_document(snapshot, "avo.animation.schema.json")
+    if index["artifactType"] == "animation":
+        from .contracts import require_animation_reader
+
+        require_animation_reader(index, snapshot)
     return snapshot
 
 
@@ -259,11 +268,12 @@ def _card(item, data, heads):
         "itemId": item["itemId"],
         "label": item["label"],
         "concept": item["concept"],
+        **{key: item[key] for key in ("density", *CONCEPT_TEXT_FIELDS)},
         "layers": deepcopy(
             data.get("layers")
             or {"background": None, "middle": None, "foreground": None}
         ),
-        "layout": deepcopy(data.get("layout")),
+        "layout": deepcopy(item["layout"]),
         "lifecycle": lifecycle,
         "camera": _camera_states(data),
         "sound": deepcopy(data.get("sound", data.get("audio"))),
@@ -274,7 +284,7 @@ def _card(item, data, heads):
     }
 
 
-def _item(data, *, timed, stale, heads):
+def _item(data, *, timed, stale, heads, gaps):
     identifier = str(data.get("itemId") or data.get("cueId") or "")
     if not identifier:
         raise MotionReviewError(
@@ -305,12 +315,39 @@ def _item(data, *, timed, stale, heads):
         "cueId": data.get("cueId"),
         "componentRef": data.get("componentRef"),
         "targetLayerId": data.get("targetLayerId"),
+        **_concept_metadata(data, gaps),
     }
     item["parts"] = deepcopy(data.get("_parts", []))
     item["identityConflicts"] = deepcopy(data.get("_identityConflicts", []))
     if len(item["parts"]) > 1:
         item["timingState"] = "split"
     return item, _card(item, data, heads)
+
+
+def _concept_metadata(data, gaps):
+    identifier = str(data.get("itemId") or data.get("cueId") or "unknown")
+    result = _concept_text_metadata(data, gaps, identifier)
+    density, layout = data.get("density"), data.get("layout")
+    if density is not None and not (type(density) is int and 0 <= density <= 5):
+        gaps.append(f"concept:{identifier}:density:invalid")
+        density = None
+    if layout is not None and not isinstance(layout, dict):
+        gaps.append(f"concept:{identifier}:layout:invalid")
+        layout = None
+    return {**result, "density": density, "layout": deepcopy(layout)}
+
+
+def _concept_text_metadata(data, gaps, identifier):
+    result = {}
+    for key, (_, limit) in CONCEPT_TEXT_FIELDS.items():
+        value = data.get(key)
+        if value is not None and not (
+            isinstance(value, str) and value.strip() and len(value) <= limit
+        ):
+            gaps.append(f"concept:{identifier}:{key}:invalid")
+            value = None
+        result[key] = value
+    return result
 
 
 def _lanes(snapshot):
@@ -424,10 +461,21 @@ def _context(context, gaps):
     }
     result["proposal"] = result["proposal"] or {}
     result["pendingRevisions"] = _pending(context, gaps)
+    result["advisories"] = _advisories(context, gaps)
     result["applicability"] = _applicability(context, gaps)
     result["coverageUnavailable"] = unavailable
     result["proposalDefinitionCount"] = proposal_count
     return result
+
+
+def _advisories(context, gaps):
+    value = context.get("advisories", [])
+    try:
+        validate_document(value, "avo.motion-review.schema.json#/$defs/advisories")
+    except (ValueError, TypeError, RecursionError):
+        gaps.append("context:advisories:invalid")
+        return []
+    return deepcopy(value)
 
 
 def _proposals(proposal, gaps):
@@ -487,7 +535,7 @@ def _project_items(proposal, snapshots, heads, gaps):
     }
     _enrich_components(selected, snapshots.get("animation") or {})
     pairs = [
-        _item(data, timed=len(data["_parts"]) == 1, stale=stale, heads=heads)
+        _item(data, timed=len(data["_parts"]) == 1, stale=stale, heads=heads, gaps=gaps)
         for data in selected.values()
     ]
     counts = {
@@ -656,6 +704,7 @@ class MotionReviewService:
             "readiness": _projection_readiness(items, snapshots, stale, context, gaps),
             "direction": context["direction"],
             "options": context["options"],
+            "advisories": deepcopy(context["advisories"]),
             "items": items,
             "storyboardCards": cards,
             "lanes": _lanes(snapshots.get("tracks") or {}),
@@ -788,6 +837,10 @@ def render_text(snapshot):
                 f"Treatment: {item['treatment']}; timing: {_text(item['timing'], 'provisional')}",
                 f"Anchor: {_text(item['anchor'])}",
                 f"Concept: {card['concept']}",
+                *(
+                    f"{label}: {_text(value)}"
+                    for label, value in _concept_descriptions(item).items()
+                ),
                 f"Layers: {_text(card['layers'])}",
                 f"Layout: {_text(card['layout'])}",
                 f"Lifecycle: {_text(card['lifecycle'])}",
@@ -807,12 +860,35 @@ def render_text(snapshot):
             json.dumps(snapshot["lanes"], indent=2, sort_keys=True),
             "Pending revisions",
             json.dumps(snapshot["pendingRevisions"], indent=2, sort_keys=True),
+            "Recorded planning advisories",
+            *(_text(advisory) for advisory in snapshot["advisories"]),
             "Gaps",
             *(_text(gap) for gap in snapshot["gaps"]),
             f"Shown: {snapshot['coverage']['shown']} / {snapshot['coverage']['total']}",
         ]
     )
     return "\n".join(lines) + "\n"
+
+
+def _concept_descriptions(item):
+    result = {"Density": item["density"]} if item["density"] is not None else {}
+    result.update(
+        {
+            label: item[key]
+            for key, (label, _) in CONCEPT_TEXT_FIELDS.items()
+            if item[key] is not None
+        }
+    )
+    return result
+
+
+def _map_concept_summary(item):
+    fields = _concept_descriptions(item)
+    return " | ".join(
+        f"{label}: {_text(fields[label])}"
+        for label in ("Density", "Dominant focus", "Camera intent", "Sound intent")
+        if label in fields
+    )
 
 
 def render_html(snapshot):
@@ -827,12 +903,14 @@ def render_html(snapshot):
         map_rows.append(
             f'<li><a href="#{anchor}">{escape(item["label"])}</a> '
             f"{escape(item['sectionId'])} | {escape(item['treatment'])} | "
-            f"{escape(item['disposition'])} | {escape(_text(item['timing'], 'provisional'))}</li>"
+            f"{escape(item['disposition'])} | {escape(_text(item['timing'], 'provisional'))} "
+            f"{escape(_map_concept_summary(item))}</li>"
         )
         fields = {
             "Canonical parts (exact BMap ranges)": item["parts"],
             "Non-authoritative proposal identity conflicts": item["identityConflicts"],
             "Purpose": item["purpose"],
+            **_concept_descriptions(item),
             "Anchor": item["anchor"],
             "Layers": card["layers"],
             "Layout": card["layout"],
@@ -855,7 +933,23 @@ def render_html(snapshot):
         title=escape(f"Motion plan: {snapshot['videoId']}"),
         map_rows="".join(map_rows),
         cards="".join(cards),
+        advisories=_render_advisories(snapshot["advisories"]),
         content=escape(render_text(snapshot)),
+    )
+
+
+def _render_advisories(advisories):
+    if not advisories:
+        return ""
+    notes = "".join(
+        f"<li>{escape(advisory['message'])} "
+        f"(items: {escape(', '.join(advisory['itemIds']))})</li>"
+        for advisory in advisories
+    )
+    return (
+        '<aside aria-label="Recorded planning advisories"><h2>Planning advisories</h2><ul>'
+        + notes
+        + "</ul></aside>"
     )
 
 
