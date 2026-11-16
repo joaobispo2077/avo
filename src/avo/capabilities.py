@@ -8,6 +8,22 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, ClassVar
 
+from avo.embedding_manifest import validate_joint_space
+
+
+def optional_embedding_capability(encoder):
+    """Inspect an explicitly supplied encoder without adding a proof implementation."""
+    try:
+        identity = validate_joint_space(encoder.preflight())
+    except (ValueError, OSError) as exc:
+        return {"status": "unavailable", "reason": str(exc)}
+    return {
+        "status": "ready",
+        "jointSpace": identity,
+        "validation": "manifest-and-runtime-verified",
+        "modelLoaded": False,
+    }
+
 
 class CapabilityRegistryError(RuntimeError):
     """Raised when a proof capability cannot be registered or resolved safely."""
