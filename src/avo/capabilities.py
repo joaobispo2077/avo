@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import re
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, ClassVar
@@ -160,6 +161,10 @@ _PROOF_BUILTINS = {
 }
 
 _PROOF_CODE_PATHS = (
+    Path(__file__).parent / "adapters" / "media" / "camera.py",
+    Path(__file__).parent / "adapters" / "media" / "proof_precision.py",
+    Path(__file__).parent / "timeline" / "camera.py",
+    Path(__file__).parent / "timeline" / "camera_plan.py",
     Path(__file__).parent / "loudness_profiles.py",
     Path(__file__).parent / "adapters" / "media" / "proof_title.py",
     Path(__file__).parent / "adapters" / "media" / "audio_clock.py",
@@ -199,6 +204,12 @@ def _implementation_digest(capability: str, adapter_id: str) -> str:
         f"avo-proof-capability-v1:{capability}:{adapter_id}".encode()
     )
     if adapter_id.startswith("ffmpeg."):
+        if getattr(sys, "frozen", False):
+            # Onedir builds embed module code in the actual program; individual
+            # Python sources are not installed alongside the executable.
+            with Path(sys.executable).open("rb") as program:
+                digest.update(hashlib.file_digest(program, "sha256").digest())
+            return digest.hexdigest()
         for path in _PROOF_CODE_PATHS:
             data = path.read_bytes()
             digest.update(path.name.encode())
