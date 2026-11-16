@@ -68,6 +68,31 @@ The existing placed admission boundary also requires square source pixels; the
 contiguous sampler separately exercises SAR and rotation. No profile is advertised
 ready from contract validation alone.
 
+## Selected camera concepts
+
+Untimed motion proposals can include a typed `cameraRecipe`: push, pull,
+punch-settle, cut-to-close, speed-contrast, overlay-return, section-alternate or
+section-drift. Each recipe names the original source fingerprint, source layer
+and measured display geometry. It expands into a relative path and records the
+explicitly enabled camera options. Section alternation and drift additionally
+require their selected base treatment. Face anchoring requires a separately
+frozen trajectory and is not substituted by these unanchored recipes.
+
+The actual predecessor framing is the entry state for continuous moves. A
+cut-to-close or alternating hold requests a source cut; canonical compilation
+must verify that cut before accepting its discontinuous entry. Overlay-return
+restores baseline framing and holds it during the final quarter. Recipe creation
+does not invent cue timing, probe media or publish canonical revisions. The
+existing frame-addressable compiler checks every timed frame, source occurrence,
+property owner and protected region after BMap timing is supplied.
+
+Stable concept IDs support individual revisions. An unchanged recipe retains its
+recorded path and options when future preferences change. A changed recipe is
+regenerated from the new explicit selection, while other concepts remain intact.
+Animation publication must carry the exact selected treatment; replacing its
+path, options or component fails before canonical publication. The dedicated
+camera application commands and complete provenance registration remain pending.
+
 ## Validation boundary
 
 Actual encoded fixtures cover 16-bit identity and low-bit detail, independent

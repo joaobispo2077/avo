@@ -993,6 +993,13 @@ legacy proof contracts are unchanged. Encoded execution remains a qualification
 candidate until the native capability, provenance and authoring controls are
 registered together.
 
+Selected untimed camera recipes expand inside `MotionAuthoringService` into
+strict relative paths with frozen options, source identity and display geometry.
+The pure recipe factory performs no source access or canonical writes. Stable
+concept IDs retain unchanged paths across revisions; publication rejects a path,
+option or component that differs from the selected concept. BMap and the existing
+camera compiler remain the only timing and source-occurrence authorities.
+
 The native camera sampler accepts sealed numeric paths over freshly verified
 original-source occurrences. Its frame expressions retain the complete cue
 interval during partial renders and run before independent captions or graphics.
