@@ -419,7 +419,7 @@ class TimelinePipeline:
             motion_plan = self.motion_plan()
         return {**shown, "stageContexts": contexts, "motionPlan": motion_plan}
 
-    def motion_plan(self) -> dict[str, Any]:
+    def motion_plan(self, *, proposal_hash: str | None = None) -> dict[str, Any]:
         """Project current motion metadata without initializing an editorial record."""
         from avo.direction.brief import BriefService
         from avo.editing_craft import EditingCraftError, inspect_editing_craft
@@ -445,6 +445,18 @@ class TimelinePipeline:
                 context["gaps"] = [
                     {"kind": "options-unavailable", "detail": str(error)}
                 ]
+        if proposal_hash or (run.get("extensions") or {}).get(
+            "motionProposalSelection"
+        ):
+            from .motion_authoring import MotionAuthoringError, MotionAuthoringService
+
+            service = MotionAuthoringService(self.workspace)
+            try:
+                context.update(service.review_context(service.show(proposal_hash)))
+            except MotionAuthoringError as error:
+                context.setdefault("gaps", []).append(
+                    {"kind": "motion-proposal-unavailable", "detail": str(error)}
+                )
         return MotionReviewService(self.workspace).project(context)
 
     def publish_motion_plan(self) -> dict[str, Any]:

@@ -197,6 +197,15 @@
       "type": "object",
       "additionalProperties": true,
       "properties": {
+        "motionProposalSelection": {
+          "$ref": "avo.motion-proposal.schema.json#/$defs/selectionRef"
+        },
+        "motionProposalSelectionHistory": {
+          "type": "array",
+          "items": {
+            "$ref": "avo.motion-proposal.schema.json#/$defs/selectionRef"
+          }
+        },
         "editingCraftRequestHistory": {
           "type": "array",
           "items": {
