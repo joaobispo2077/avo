@@ -13,6 +13,7 @@ from library_fixtures import install_provider, transcript_payload
 
 @pytest.fixture
 def library(tmp_path, monkeypatch):
+    monkeypatch.setattr(Runtime, "calls", 0)
     install_provider(tmp_path / "install")
     monkeypatch.setenv("AVO_ROOT", str(tmp_path / "install"))
     root = tmp_path / "footage"

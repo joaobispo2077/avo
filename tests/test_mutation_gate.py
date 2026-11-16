@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import shutil
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -171,20 +173,30 @@ class MutationGateTests(unittest.TestCase):
         assert spec and spec.loader
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)
-        original = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
-        try:
-            mod.apply_profile("light")
-            patched = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
-            self.assertIn("src/avo/mcp/bridge.py", patched)
-            self.assertNotIn(
-                "src/avo/validate_edl.py",
-                patched.split("[tool.mutmut]", 1)[1].split("also_copy", 1)[0],
-            )
-            self.assertIn("tests/test_mcp_bridge.py", patched)
-        finally:
-            mod.restore()
-        restored = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
-        self.assertEqual(original, restored)
+        with tempfile.TemporaryDirectory(prefix="avo-mutation-profile-") as temporary:
+            mod.ROOT = Path(temporary)
+            mod.PYPROJECT = mod.ROOT / "pyproject.toml"
+            mod.BACKUP = mod.ROOT / ".pyproject.toml.mutmut.bak"
+            mod.CONFIG_PATH = mod.ROOT / "scripts/ci/mutation-config.json"
+            mod.CONFIG_PATH.parent.mkdir(parents=True)
+            shutil.copyfile(ROOT / "pyproject.toml", mod.PYPROJECT)
+            shutil.copyfile(ROOT / "scripts/ci/mutation-config.json", mod.CONFIG_PATH)
+            original_bytes = mod.PYPROJECT.read_bytes()
+            original = mod.PYPROJECT.read_text(encoding="utf-8")
+            try:
+                mod.apply_profile("light")
+                patched = mod.PYPROJECT.read_text(encoding="utf-8")
+                self.assertIn("src/avo/mcp/bridge.py", patched)
+                self.assertNotIn(
+                    "src/avo/validate_edl.py",
+                    patched.split("[tool.mutmut]", 1)[1].split("also_copy", 1)[0],
+                )
+                self.assertIn("tests/test_mcp_bridge.py", patched)
+            finally:
+                mod.restore()
+            restored = mod.PYPROJECT.read_text(encoding="utf-8")
+            self.assertEqual(original, restored)
+            self.assertEqual(original_bytes, mod.PYPROJECT.read_bytes())
 
 
 if __name__ == "__main__":
