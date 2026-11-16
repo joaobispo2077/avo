@@ -33,6 +33,7 @@ def _fake_service(workspace, result):
         provider=workspace.project["provider"],
         root=(workspace.timeline_dir / "imports").resolve(),
         prepare=Mock(return_value={"importId": "a" * 64}),
+        prepare_automatic=Mock(return_value={"importId": "a" * 64}),
         validate=Mock(return_value=result),
         activate=Mock(side_effect=AssertionError("Never auto-activate an import")),
     )
@@ -154,6 +155,8 @@ def test_pipeline_import_adds_action_without_changing_readiness(import_project, 
     assert result["readiness"] == readiness
     assert result["nextAction"]
     assert result["pipelineAction"] == "timeline-import"
+    service.prepare_automatic.assert_called_once()
+    service.prepare.assert_not_called()
     service.activate.assert_not_called()
 
 
@@ -208,13 +211,17 @@ def test_pipeline_status_resume_and_ordinary_initialize_keep_imported_draft(
     assert service.workspace.store("bmap").load_index()["headRevisionId"] is None
 
 
-def test_pipeline_real_staging_never_infers_missing_import_settings(import_project):
+def test_pipeline_explicit_staging_never_infers_missing_import_settings(import_project):
     project, provider, _ = import_project
     service = TimelineImportService(
         project, provider_root=provider, reader=read_otio, probe=_probe
     )
     result = TimelinePipeline(service.workspace).prepare_timeline_import(
-        service, FIXTURE, actor="fixture-editor", reason="Inspect without assumptions"
+        service,
+        FIXTURE,
+        declarations={},
+        actor="fixture-editor",
+        reason="Inspect without assumptions",
     )
     assert result["status"] == "blocked"
     assert result["readiness"]["activationAllowed"] is False

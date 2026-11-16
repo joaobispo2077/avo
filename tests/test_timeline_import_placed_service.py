@@ -21,6 +21,175 @@ placed_project = pytest.fixture(name="import_project")(
 )
 
 
+@pytest.mark.parametrize("mode", [None, "declared-treatments"])
+def test_picture_treatments_require_distinct_admission_mode(
+    import_project, tmp_path, mode
+):
+    project, provider, original = import_project
+    service = TimelineImportService(
+        project, provider_root=provider, reader=read_otio, probe=_probe
+    )
+    export = tmp_path / "treatments.otio"
+    first = _prepare(service, export, original)
+    options = deepcopy(first["session"]["options"])
+    mapping = options["mappings"]["/tracks/children/0/children/1/media_reference"]
+    mapping["pictureTransform"] = {
+        "canvasWidth": 640,
+        "canvasHeight": 360,
+        "x": 10,
+        "y": 20,
+        "width": 320,
+        "height": 180,
+    }
+    mapping["pictureFade"] = {"inFrames": 0, "outFrames": 6}
+    if mode:
+        options["declarations"].update(reconstructionMode=mode, sourceOnly=False)
+    prepared = service.prepare(
+        export,
+        mappings=options["mappings"],
+        declarations=options["declarations"],
+        actor="fixture",
+        reason="Explicit treatments",
+    )
+    result = service.validate(prepared["importId"])
+    if mode is None:
+        assert result["status"] == "blocked"
+        return
+    assert result["status"] == "awaiting-sync", result.get("findings")
+    item = result["proposal"]["snapshot"]["layout"]["placements"][0]
+    assert item["pictureTransform"] == mapping["pictureTransform"]
+    assert item["pictureFade"] == mapping["pictureFade"]
+    _approve_fixture_sync(service, result["proposal"])
+    ready = service.validate(prepared["importId"])
+    selected = service.activate(
+        prepared["importId"],
+        validation_hash=ready["validationHash"],
+        expected_head="empty",
+        actor="fixture",
+        reason="Synthetic treated activation",
+    )
+    assert (
+        selected["revision"]["snapshot"]["originRef"]["capabilityVersion"]
+        == "placed-treatments-1.0.0"
+    )
+    from avo.timeline.import_evidence import verify_import_origin
+
+    assert verify_import_origin(service.workspace, selected["revision"])
+
+
+@pytest.mark.parametrize("declared", [False, True])
+def test_repetition_admission_is_explicit_and_keeps_native_clock(
+    import_project, tmp_path, declared
+):
+    project, provider, original = import_project
+    service = TimelineImportService(
+        project, provider_root=provider, reader=read_otio, probe=_probe
+    )
+    export = tmp_path / "sampling.otio"
+    first = _prepare(service, export, original)
+    options = deepcopy(first["session"]["options"])
+    options["declarations"]["output"]["frameRate"] = {"num": 48, "den": 1}
+    reference = "/tracks/children/0/children/1/media_reference"
+    if declared:
+        options["mappings"][reference]["pictureSampling"] = "repeat-2x"
+    prepared = service.prepare(
+        export,
+        mappings=options["mappings"],
+        declarations=options["declarations"],
+        actor="fixture",
+        reason="Explicit sampling admission",
+    )
+    result = service.validate(prepared["importId"])
+    if not declared:
+        assert result["status"] == "blocked"
+        return
+    assert result["status"] == "awaiting-sync", result.get("findings")
+    snapshot = result["proposal"]["snapshot"]
+    item = snapshot["layout"]["placements"][0]
+    assert item["pictureSampling"] == "repeat-2x"
+    from avo.timeline.mapping import cmap_output_to_raw
+
+    start = item["start"]["ticks"]
+    assert cmap_output_to_raw(
+        snapshot, start + 1, placement_id=item["placementId"]
+    ) == (item["sourceId"], 0)
+    source = next(s for s in snapshot["sources"] if s["sourceId"] == item["sourceId"])
+    assert source["streamMetadata"]["videoClock"]["frameRate"] == {"num": 24, "den": 1}
+    _approve_fixture_sync(service, result["proposal"])
+    ready = service.validate(prepared["importId"])
+    selected = service.activate(
+        prepared["importId"],
+        validation_hash=ready["validationHash"],
+        expected_head="empty",
+        actor="fixture",
+        reason="Synthetic sampling activation",
+    )
+    assert (
+        selected["revision"]["snapshot"]["originRef"]["capabilityVersion"]
+        == "placed-sampling-1.0.0"
+    )
+    from avo.timeline.import_evidence import verify_import_origin
+
+    assert verify_import_origin(service.workspace, selected["revision"])
+
+
+@pytest.mark.parametrize("declared", [None, 5504, 5505])
+def test_audio_tail_requires_exact_declared_decoded_sample_gap(
+    import_project, tmp_path, declared
+):
+    project, provider, original = import_project
+
+    def probe(paths):
+        result = _probe(paths)
+        result["sources"][0]["streams"]["audio"][0]["durationSeconds"] = 90496 / 48000
+        result["sources"][0]["streams"]["audio"][0]["durationTicks"] = 90496
+        return result
+
+    def count(path, stream, *, expected_sha256):
+        return {
+            "status": "verified",
+            "sourceSha256": expected_sha256,
+            "streamIndex": stream,
+            "sampleCount": 90496,
+            "method": "fixture-decoded-samples",
+        }
+
+    service = TimelineImportService(
+        project,
+        provider_root=provider,
+        reader=read_otio,
+        probe=probe,
+        audio_clock_probe=count,
+    )
+    export = tmp_path / "audio-tail.otio"
+    first = _prepare(service, export, original)
+    options = deepcopy(first["session"]["options"])
+    if declared is not None:
+        options["mappings"]["/tracks/children/1/children/0/media_reference"][
+            "audioTailSilenceSamples"
+        ] = declared
+    prepared = service.prepare(
+        export,
+        mappings=options["mappings"],
+        declarations=options["declarations"],
+        actor="fixture",
+        reason="Explicit audio endpoint",
+    )
+    result = service.validate(prepared["importId"])
+    if declared != 5504:
+        assert result["status"] == "blocked"
+        return
+    assert result["status"] == "awaiting-sync", result.get("findings")
+    item = result["proposal"]["snapshot"]["layout"]["placements"][1]
+    assert item["audioTailSilenceSamples"] == 5504
+    assert (
+        item["out"]["ticks"]
+        * item["out"]["timebase"]["num"]
+        / item["out"]["timebase"]["den"]
+        == 90496 / 48000
+    )
+
+
 def _prepare(service, path, original):
     raw = json.loads(FIXTURE.read_text())
     track = raw["tracks"]["children"][0]
