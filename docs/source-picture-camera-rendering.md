@@ -26,6 +26,13 @@ applying physical orientation. A window evaluates the original path interval,
 including across exact source cuts; it never restarts the move at its first frame.
 Crop bounds and protected regions are checked for every evaluated frame.
 
+After source geometry is verified, native camera inputs disable autorotation and
+consume the selected stream's copied orientation with a zero
+[`display_rotation` override](https://github.com/FFmpeg/FFmpeg/blob/n6.1.1/doc/ffmpeg.texi#L841-L851).
+The frozen original rotation still drives the physical transform. This prevents
+older runtimes from retaining container rotation after the frame-side marker was
+removed. Normal proofs and unselected source streams keep their existing path.
+
 The sampler supplies one private replicated row and column, keeps coordinates
 bound to the original dimensions, then removes that extension before output
 scaling. This preserves boundary samples across runtime versions: FFmpeg 6.1's
