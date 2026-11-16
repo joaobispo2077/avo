@@ -28,6 +28,10 @@ right-angle rotation. The sampler removes the obsolete display matrix after
 applying physical orientation. A window evaluates the original path interval,
 including across exact source cuts; it never restarts the move at its first frame.
 Crop bounds and protected regions are checked for every evaluated frame.
+The selected baseline crop must have the output's display aspect ratio. A mismatch
+fails before output creation; the renderer does not silently stretch the picture
+or invent a different crop. Vertical framing therefore needs an explicit matching
+baseline crop. Unselected footage keeps its existing framing route.
 
 After source geometry is verified, native camera inputs disable autorotation and
 consume the selected stream's copied orientation with a zero
