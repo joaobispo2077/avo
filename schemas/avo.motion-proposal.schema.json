@@ -26,6 +26,33 @@
       "type": "string",
       "pattern": "^[a-f0-9]{64}$"
     },
+    "cameraRecipe": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["preset", "targetLayerId", "sourceId", "sourceSha256", "sourceGeometry"],
+      "properties": {
+        "preset": {"enum": ["push", "pull", "punch-settle", "cut-to-close", "speed-contrast", "overlay-return", "section-alternate", "section-drift"]},
+        "targetLayerId": {"$ref": "https://avo.local/schemas/avo.camera-behavior.schema.json#/$defs/id"},
+        "sourceId": {"$ref": "https://avo.local/schemas/avo.camera-behavior.schema.json#/$defs/id"},
+        "sourceSha256": {"$ref": "#/$defs/sha256"},
+        "sourceGeometry": {"$ref": "https://avo.local/schemas/avo.camera-behavior.schema.json#/$defs/geometry"},
+        "predecessor": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["scale", "center"],
+          "properties": {
+            "scale": {"type": "number", "exclusiveMinimum": 0},
+            "center": {"$ref": "https://avo.local/schemas/avo.camera-behavior.schema.json#/$defs/center"}
+          }
+        },
+        "targetScale": {"type": "number", "exclusiveMinimum": 0},
+        "targetCenter": {"$ref": "https://avo.local/schemas/avo.camera-behavior.schema.json#/$defs/center"},
+        "safeRegions": {
+          "type": "array", "maxItems": 64,
+          "items": {"$ref": "https://avo.local/schemas/avo.camera-behavior.schema.json#/$defs/safeRegion"}
+        }
+      }
+    },
     "asset": {
       "type": "object",
       "additionalProperties": false,
@@ -108,6 +135,7 @@
     "item": {
       "type": "object",
       "additionalProperties": false,
+      "dependentRequired": {"cameraTreatment": ["cameraRecipe"]},
       "properties": {
         "itemId": {
           "type": "string",
@@ -231,6 +259,8 @@
           "maxLength": 4096,
           "pattern": "\\S"
         },
+        "cameraRecipe": {"$ref": "#/$defs/cameraRecipe"},
+        "cameraTreatment": {"$ref": "https://avo.local/avo.animation.schema.json#/$defs/editingCraft"},
         "soundIntent": {
           "type": "string",
           "minLength": 1,

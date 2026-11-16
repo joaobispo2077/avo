@@ -110,6 +110,91 @@ def _changes(previous, items):
     ]
 
 
+def _recipe_treatment(recipe, selection):
+    from .camera import CameraError, make_camera_treatment
+
+    try:
+        return make_camera_treatment(
+            recipe["preset"],
+            target_layer_id=recipe["targetLayerId"],
+            source_id=recipe["sourceId"],
+            source_sha256=recipe["sourceSha256"],
+            geometry=recipe["sourceGeometry"],
+            options=selection,
+            predecessor=recipe.get("predecessor"),
+            target_scale=recipe.get("targetScale"),
+            target_center=recipe.get("targetCenter"),
+            safe_regions=recipe.get("safeRegions", []),
+        )
+    except CameraError as error:
+        raise MotionAuthoringError("MOTION_CAMERA_INVALID", str(error)) from error
+
+
+def _camera_concept(item, previous, selection):
+    recipe = item["cameraRecipe"]
+    if (
+        item["treatment"] == "static"
+        or len(item.get("componentIds", [])) != 1
+        or recipe["targetLayerId"] not in item.get("layerIds", [])
+    ):
+        raise MotionAuthoringError(
+            "MOTION_CAMERA_SCOPE",
+            "Camera recipe requires one selected component and its declared source layer",
+        )
+    known, supplied = previous.get("cameraTreatment"), item.get("cameraTreatment")
+    if (
+        known is not None
+        and recipe == previous.get("cameraRecipe")
+        and supplied in (None, known)
+    ):
+        return deepcopy(known)
+    generated = _recipe_treatment(recipe, selection)
+    if supplied is not None and supplied != known and supplied != generated:
+        raise MotionAuthoringError(
+            "MOTION_CAMERA_INVALID",
+            "Generated camera treatment differs from its selected recipe",
+        )
+    return generated
+
+
+def _camera_concepts(items, previous, selection):
+    if not any("cameraRecipe" in item for item in items):
+        return items
+    known = {item["itemId"]: item for item in previous}
+    for item in items:
+        if "cameraRecipe" in item:
+            item["cameraTreatment"] = _camera_concept(
+                item, known.get(item["itemId"], {}), selection
+            )
+    # Generated treatment/options expansion must remain readable before a run
+    # choice is frozen or any immutable proposal is published.
+    _validate({"items": items}, "proposalInput")
+    return items
+
+
+def _camera_authoring(items, authoring):
+    if "animation" not in authoring:
+        return
+    components = authoring["animation"].get("components", [])
+    for item in items:
+        if "cameraTreatment" not in item:
+            continue
+        matches = [
+            component
+            for component in components
+            if component["componentId"] in item["componentIds"]
+        ]
+        if (
+            len(matches) != 1
+            or (matches[0].get("extensions") or {}).get("editingCraft")
+            != item["cameraTreatment"]
+        ):
+            raise MotionAuthoringError(
+                "MOTION_CAMERA_SELECTION",
+                "Timed authoring must retain the exact selected camera treatment and options",
+            )
+
+
 def _scope_ids(items):
     return {
         "bmap": {item.get("cueId", item["itemId"]) for item in items},
@@ -389,7 +474,19 @@ class MotionAuthoringService:
         )
         return run["executionChoices"]["editingCraft"]
 
-    def _items(self, proposal):
+    def _proposal_selection(self, request):
+        store = PipelineRunStore(self.workspace.pipeline_run_path)
+        if (
+            store.path.exists()
+            and not request.get("newRequest")
+            and request.get("requestId") is None
+        ):
+            previous = (store.load().get("executionChoices") or {}).get("editingCraft")
+            if previous:
+                return previous["selection"]
+        return request["selection"]
+
+    def _items(self, proposal, *, selection):
         items = deepcopy(proposal["items"])
         _check_item_identities(items, [], {})
         previous, retired = [], {}
@@ -405,6 +502,7 @@ class MotionAuthoringService:
             }
         )
         _check_item_identities(items, previous, retired)
+        items = _camera_concepts(items, previous, selection)
         return items, retired, _changes(previous, items)
 
     def _proposal_result(self, digest):
@@ -448,7 +546,9 @@ class MotionAuthoringService:
             if known:
                 return self._with_review(self._proposal_result(known["sha256"]))
             self._check_heads(request["expectedBasis"])
-            items, retired, changes = self._items(request["proposal"])
+            items, retired, changes = self._items(
+                request["proposal"], selection=self._proposal_selection(request)
+            )
             frozen = self._freeze(request)
             proposal = {
                 "contractVersion": "1.0.0",
@@ -668,6 +768,7 @@ class MotionAuthoringService:
         items = [
             item for item in shown["proposal"]["items"] if item["itemId"] in selected
         ]
+        _camera_authoring(items, authoring)
         allowed = _scope_ids(items)
         for name, snapshot in authoring.items():
             index = self.workspace.store(name).load_index()
