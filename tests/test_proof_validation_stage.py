@@ -154,8 +154,15 @@ def test_sequential_render_keeps_deleted_segments_out_of_batch_guard(
 
     source = tmp_path / "original.bin"
     source.write_bytes(b"original")
-    output = tmp_path / "proof.mkv"
     staged = []
+    original_open, reads = Path.open, []
+
+    def opened(path, mode="r", *args, **kwargs):
+        if path == source and mode == "rb":
+            reads.append(path)
+        return original_open(path, mode, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "open", opened)
 
     def piece(_segment, _left, _right, _spec, _fps, _rate, path, **_kwargs):
         path.write_bytes(b"private segment")
@@ -176,18 +183,22 @@ def test_sequential_render_keeps_deleted_segments_out_of_batch_guard(
     node = {"outputRange": {"startSample": 0, "endSampleExclusive": 48000}}
     with proof_validation_batch():
         original = contracts.file_fingerprint(source)
-        proof_executor._render_media(
-            output,
-            [(0, 1, None, None, None, node)],
-            {"conformance": True},
-            Fraction(1),
-            48000,
-            0,
-            1,
-            [],
-            verify,
-        )
+        for index in range(2):
+            output = tmp_path / f"proof-{index}.mkv"
+            proof_executor._render_media(
+                output,
+                [(0, 1, None, None, None, node)],
+                {"conformance": True},
+                Fraction(1),
+                48000,
+                0,
+                1,
+                [],
+                verify,
+            )
+        assert len(reads) == 1
         assert all(not path.exists() for path in staged)
+    assert len(reads) == 2
     assert output.read_bytes() == b"candidate"
 
 
