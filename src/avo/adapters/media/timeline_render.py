@@ -86,6 +86,7 @@ class TimelineRenderAdapter:
             proof_executor = execute_ffmpeg_proof
         self.proof_executor = proof_executor
         self.generated_asset_validator = generated_asset_validator
+        self.camera_environment = None
 
     def for_proof_plan(self, workspace, proof_plan):
         """Compose fresh source/runtime checks at the existing adapter seam."""
@@ -106,7 +107,8 @@ class TimelineRenderAdapter:
 
         return CuttingPreviewAdapter(workspace, render_port=port)
 
-    def proof_tool_readiness(self, proof_plan: dict[str, Any]) -> dict[str, bool]:
+    def proof_tool_readiness(self, proof_plan: dict[str, Any]) -> dict[str, Any]:
+        self.camera_environment = None
         adapters = {
             str(item.get("adapterId") or "").casefold()
             for item in proof_plan.get("implementationRefs") or []
@@ -121,6 +123,21 @@ class TimelineRenderAdapter:
             "proof-plan-executor": self.proof_executor is not None,
         }
         readiness.update(self._generated_readiness(proof_plan))
+        if any(
+            operation.get("kind") == "camera-transform"
+            for operation in proof_plan.get("videoGraph", {}).get("operations", [])
+        ):
+            try:
+                from .camera_provenance import camera_render_provenance
+
+                self.camera_environment = camera_render_provenance(proof_plan)[
+                    "environmentHash"
+                ]
+            except (OSError, ValueError, RuntimeError, subprocess.SubprocessError):
+                readiness["camera-runtime"] = False
+            else:
+                readiness["camera-runtime"] = True
+                readiness["cameraEnvironmentHash"] = self.camera_environment
         return readiness
 
     def _generated_readiness(self, proof_plan):
@@ -205,12 +222,23 @@ class TimelineRenderAdapter:
             )
         if not isinstance(result, dict):
             raise RuntimeError("ProofPlan executor returned an invalid result")
+        self._require_camera_environment(result)
         return {
             **result,
             "graphHash": graph_hash,
             "proofPlanHash": proof_plan["proofPlanHash"],
             "window": deepcopy(window),
         }
+
+    def _require_camera_environment(self, result):
+        if (
+            self.camera_environment is not None
+            and ((result.get("producer") or {}).get("camera") or {}).get(
+                "environmentHash"
+            )
+            != self.camera_environment
+        ):
+            raise RuntimeError("Camera rendering environment differs from preflight")
 
     def render(self, projection: Path, output: Path, **request: Any) -> dict[str, Any]:
         from avo.adapters.media.audio_tracks import compile_continuous_audio_graph

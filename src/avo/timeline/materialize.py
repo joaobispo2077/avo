@@ -1167,6 +1167,8 @@ def render_proof_microproofs(
         "gateHash": "",
     }
     _record_cutting_coverage(plan, gate)
+    if "cameraEnvironmentHash" in preflight:
+        gate["cameraEnvironmentHash"] = preflight["cameraEnvironmentHash"]
     gate["gateHash"] = content_hash(
         {key: value for key, value in gate.items() if key != "gateHash"}
     )
@@ -1193,6 +1195,9 @@ def _render_required_microproofs(port, plan, windows, directory, suffix):
                 "output": rendered["output"],
                 "graphHash": str(rendered.get("graphHash") or ""),
             }
+            camera = (rendered.get("producer") or {}).get("camera")
+            if camera is not None:
+                result["cameraProvenance"] = deepcopy(camera)
             _attach_cutting_verification(port, plan, result, frame_range)
         except Exception as exc:
             result = {

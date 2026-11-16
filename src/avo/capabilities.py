@@ -162,6 +162,7 @@ _PROOF_BUILTINS = {
 
 _PROOF_CODE_PATHS = (
     Path(__file__).parent / "adapters" / "media" / "camera.py",
+    Path(__file__).parent / "adapters" / "media" / "camera_provenance.py",
     Path(__file__).parent / "adapters" / "media" / "proof_precision.py",
     Path(__file__).parent / "timeline" / "camera.py",
     Path(__file__).parent / "timeline" / "camera_plan.py",

@@ -1226,10 +1226,23 @@ def execute_ffmpeg_proof(
     *,
     generated_asset_validator=None,
 ) -> dict[str, Any]:
+    from .camera_provenance import camera_render_provenance
+
+    camera = camera_render_provenance(execution)
     with fingerprint_stage(reuse_current=in_proof_validation_batch()):
-        return _execute_ffmpeg_proof(
+        rendered = _execute_ffmpeg_proof(
             execution, output, generated_asset_validator=generated_asset_validator
         )
+    if camera is not None:
+        if camera != camera_render_provenance(execution):
+            raise RuntimeError(
+                "Camera runtime, implementation or recipe changed during render"
+            )
+        rendered = {
+            **rendered,
+            "producer": {**(rendered.get("producer") or {}), "camera": camera},
+        }
+    return rendered
 
 
 def _import_audio_kinds(execution):

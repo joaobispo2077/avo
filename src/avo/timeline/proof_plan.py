@@ -872,7 +872,7 @@ class ProofPlanCompiler:
         plan: dict[str, Any],
         *,
         media_inputs: dict[str, Any],
-        tool_readiness: dict[str, bool],
+        tool_readiness: dict[str, Any],
     ) -> dict[str, Any]:
         """Return deterministic blockers before any microproof or full render."""
         blockers: list[dict[str, Any]] = []
@@ -1044,15 +1044,39 @@ class ProofPlanCompiler:
                 "inheritedApprovals": False,
             },
         }
+        self._bind_camera_environment(report, plan, tool_readiness)
         report["reportHash"] = content_hash(report)
         return report
+
+    def _bind_camera_environment(self, report, plan, tool_readiness):
+        if any(
+            operation.get("kind") == "camera-transform"
+            for operation in plan.get("videoGraph", {}).get("operations", [])
+        ):
+            environment = tool_readiness.get("cameraEnvironmentHash")
+            if (
+                tool_readiness.get("camera-runtime") is not True
+                or not isinstance(environment, str)
+                or len(environment) != 64
+                or any(character not in "0123456789abcdef" for character in environment)
+            ):
+                report["blockers"].append(
+                    self._blocker(
+                        "PROOF_CAMERA_RUNTIME_UNBOUND",
+                        "Selected camera runtime lacks an observed rendering environment",
+                        "Use the native camera renderer to inspect installed tools before preflight",
+                    )
+                )
+                report["status"] = "blocked"
+            else:
+                report["cameraEnvironmentHash"] = environment
 
     def require_preflight(
         self,
         plan: dict[str, Any],
         *,
         media_inputs: dict[str, Any],
-        tool_readiness: dict[str, bool],
+        tool_readiness: dict[str, Any],
     ) -> dict[str, Any]:
         report = self.preflight(
             plan,
