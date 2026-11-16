@@ -18,7 +18,7 @@ MAX_OBJECTS = 100_000
 MAX_REPORT_ITEMS = 2048
 MAX_REPORT_BYTES = 16 * 1024 * 1024
 MAX_POINTER_LENGTH = 2048
-NORMALIZER_VERSION = "2.0.0"
+NORMALIZER_VERSION = "2.7.0"
 _KNOWN = {
     "Timeline.1",
     "Stack.1",
@@ -179,13 +179,22 @@ def _eligible_node(node, allowed):
         )
 
 
-def _active_external(raw, scope):
+def _active_reference(raw, scope):
     active = raw.get("media_reference")
     if raw.get("OTIO_SCHEMA") == "Clip.2":
         active = (raw.get("media_references") or {}).get(
             raw.get("active_media_reference_key")
         )
-    if not active or active.get("OTIO_SCHEMA") != "ExternalReference.1":
+    if not active:
+        raise ImportError(
+            "OTIO_SCHEMA_UNSUPPORTED", "An active reference is required", scope=scope
+        )
+    return active
+
+
+def _active_external(raw, scope):
+    active = _active_reference(raw, scope)
+    if active.get("OTIO_SCHEMA") != "ExternalReference.1":
         raise ImportError(
             "OTIO_SCHEMA_UNSUPPORTED",
             "An active external original-media reference is required",
@@ -283,19 +292,14 @@ def _single_picture_track(selected, facts, pointer):
 
 
 def _declared_media_origins(selected, pointer, declarations):
+    titles = _declared_title_refs(selected, pointer, declarations)
     origins = declarations.get("mediaOrigins", {})
     scope = "/declarations/mediaOrigins"
     if not isinstance(origins, dict):
         raise ImportError(
             "OTIO_INPUT_INVALID", "Media origins must be a scoped object", scope=scope
         )
-    references = {
-        location: node
-        for location, node, content, active in _walk(selected, pointer)
-        if content
-        and active is True
-        and node.get("OTIO_SCHEMA") == "ExternalReference.1"
-    }
+    references = _origin_references(selected, pointer, titles)
     for reference, value in origins.items():
         if reference not in references:
             raise ImportError(
@@ -313,6 +317,62 @@ def _declared_media_origins(selected, pointer, declarations):
                 "Declared media origin contradicts exported origin",
                 scope=scope + reference,
             )
+
+
+def _check_title_pointers(titles):
+    if (
+        not isinstance(titles, list)
+        or len(titles) > MAX_REPORT_ITEMS
+        or any(not isinstance(p, str) or len(p) > MAX_POINTER_LENGTH for p in titles)
+    ):
+        raise ImportError(
+            "OTIO_INPUT_INVALID",
+            "Generated title references must be a bounded pointer list",
+        )
+    if len(titles) != len(set(titles)):
+        raise ImportError(
+            "OTIO_INPUT_INVALID", "Generated title references must be unique"
+        )
+
+
+def _origin_references(selected, pointer, titles):
+    return {
+        p: node
+        for p, node, content, active in _walk(selected, pointer)
+        if content
+        and active is True
+        and (node.get("OTIO_SCHEMA") == "ExternalReference.1" or p in titles)
+    }
+
+
+def _declared_title_refs(selected, pointer, declarations):
+    titles = declarations.get("generatedTitles", [])
+    references = declarations.get("generatedReferences", [])
+    _check_title_pointers(titles)
+    _check_title_pointers(references)
+    titles = titles + references
+    _check_title_pointers(titles)
+    if titles and declarations.get("reconstructionMode") not in {
+        "declared-treatments",
+        "export-driven",
+    }:
+        raise ImportError(
+            "OTIO_TREATMENT_UNSUPPORTED",
+            "Generated titles require declared-treatments mode",
+        )
+    active = {
+        p
+        for p, node, content, chosen in _walk(selected, pointer)
+        if content
+        and chosen is True
+        and node.get("OTIO_SCHEMA") in {"MissingReference.1", "GeneratorReference.1"}
+    }
+    if set(titles) - active:
+        raise ImportError(
+            "OTIO_INPUT_INVALID",
+            "Generated title declaration does not select a missing/generated active reference",
+        )
+    return set(titles)
 
 
 def normalize_contiguous(data, native, pointer, declarations):
@@ -351,13 +411,15 @@ def normalize_contiguous(data, native, pointer, declarations):
     }
 
 
-def _placed_eligible(node, allowed):
+def _placed_eligible(node, allowed, inactive_owners=frozenset()):
     scope = node["pointer"]
     if node.get("schema") not in allowed:
         raise ImportError(
             "OTIO_SCHEMA_UNSUPPORTED", "Unsupported placed content", scope=scope
         )
-    if node.get("parentTrim") or node.get("effectsCount"):
+    if node.get("parentTrim") or (
+        node.get("effectsCount") and scope not in inactive_owners
+    ):
         raise ImportError(
             "OTIO_TREATMENT_UNSUPPORTED",
             "Parent trims and effects require separate support",
@@ -369,10 +431,20 @@ def _placed_eligible(node, allowed):
         )
 
 
-def _placed_clip(raw, fact, elapsed, declarations):
+def _generated_clip(title, generator):
+    return title or generator
+
+
+def _placed_clip(raw, fact, elapsed, declarations, inactive_owners):
     scope = fact["pointer"]
-    _placed_eligible(fact, {"Clip.1", "Clip.2"})
-    active = _active_external(raw, scope)
+    _placed_eligible(fact, {"Clip.1", "Clip.2"}, inactive_owners)
+    title = fact["referencePointer"] in declarations.get("generatedTitles", [])
+    generator = fact["referencePointer"] in declarations.get("generatedReferences", [])
+    active = (
+        _active_reference(raw, scope)
+        if _generated_clip(title, generator)
+        else _active_external(raw, scope)
+    )
     available = _range(active.get("available_range"))
     source = _range(raw.get("source_range")) or available
     origins = declarations.get("mediaOrigins", {})
@@ -407,6 +479,8 @@ def _placed_clip(raw, fact, elapsed, declarations):
         else None,
         "programStart": elapsed,
         "enabled": raw.get("enabled", True),
+        "generatedTitle": title,
+        "generatedReference": generator,
     }
 
 
@@ -427,8 +501,8 @@ def _placed_native_range(fact, start, duration, declarations):
         )
 
 
-def _placed_track(raw, fact, declarations, order):
-    _placed_eligible(fact, {"Track.1"})
+def _placed_track(raw, fact, declarations, order, inactive_owners):
+    _placed_eligible(fact, {"Track.1"}, inactive_owners)
     if fact.get("kind") not in {"Video", "Audio"}:
         raise ImportError(
             "OTIO_SCHEMA_UNSUPPORTED", "Unknown track kind", scope=fact["pointer"]
@@ -445,7 +519,7 @@ def _placed_track(raw, fact, declarations, order):
     }
     clips, gaps, elapsed = [], [], Fraction(0)
     for child, child_fact in zip(raw["children"], fact["children"], strict=True):
-        _placed_eligible(child_fact, {"Clip.1", "Clip.2", "Gap.1"})
+        _placed_eligible(child_fact, {"Clip.1", "Clip.2", "Gap.1"}, inactive_owners)
         if child_fact["schema"] == "Gap.1":
             duration = _seconds(
                 (_range(child.get("source_range")) or {}).get("duration"),
@@ -462,8 +536,25 @@ def _placed_track(raw, fact, declarations, order):
                 }
             )
         else:
-            clip = _placed_clip(child, child_fact, elapsed, declarations)
-            clip.update(trackId=track["trackId"], mediaKind=kind)
+            clip = _placed_clip(
+                child, child_fact, elapsed, declarations, inactive_owners
+            )
+            if (
+                clip["generatedTitle"] or clip["generatedReference"]
+            ) and kind != "video":
+                raise ImportError(
+                    "OTIO_TREATMENT_UNSUPPORTED",
+                    "Generated titles require picture tracks",
+                    scope=clip["pointer"],
+                )
+            clip.update(
+                trackId=track["trackId"],
+                mediaKind="title"
+                if clip["generatedTitle"]
+                else "generator"
+                if clip["generatedReference"]
+                else kind,
+            )
             clips.append(clip)
             duration = clip["duration"]
         elapsed += duration
@@ -475,15 +566,29 @@ def normalize_placed(data, native, pointer, declarations):
     _, raw, _ = parse_export_bytes(data)
     _, selected = _select(raw, pointer)
     _declared_media_origins(selected, pointer, declarations)
+    from .resolve_effects import collect_inactive
+    from .resolve_export import collect_export_effects
+
+    inactive, owners = (
+        collect_inactive(selected, pointer)
+        if declarations.get("reconstructionMode") == "declared-treatments"
+        else ([], set())
+    )
+    retained = []
+    if declarations.get("reconstructionMode") == "export-driven":
+        retained, owners = collect_export_effects(selected, pointer)
     _, counts, _, _, findings = _inventory(selected, pointer)
-    if findings or any(
-        counts[key]
-        for key in (
-            "Transition",
-            "Effect",
-            "TimeEffect",
-            "LinearTimeWarp",
-            "FreezeFrame",
+    if (
+        findings
+        or counts["Effect"] != len(retained or inactive)
+        or any(
+            counts[key]
+            for key in (
+                "Transition",
+                "TimeEffect",
+                "LinearTimeWarp",
+                "FreezeFrame",
+            )
         )
     ):
         raise ImportError(
@@ -492,14 +597,14 @@ def normalize_placed(data, native, pointer, declarations):
             scope=pointer,
         )
     facts = _native_selection(native, pointer)
-    _placed_eligible(facts, {"Timeline.1"})
+    _placed_eligible(facts, {"Timeline.1"}, owners)
     stack = selected["tracks"]
     tracks, clips, gaps, ends = [], [], [], []
     for order, (track, fact) in enumerate(
         zip(stack["children"], facts["tracks"], strict=True)
     ):
         normalized, children, spaces, end = _placed_track(
-            track, fact, declarations, order
+            track, fact, declarations, order, owners
         )
         tracks.append(normalized)
         clips.extend(children)
@@ -515,6 +620,8 @@ def normalize_placed(data, native, pointer, declarations):
         "tracks": tracks,
         "clips": clips,
         "gaps": gaps,
+        "inactiveEffects": inactive,
+        "resolveEffects": retained,
         "duration": max(ends),
         "globalStart": _time(selected.get("global_start_time")),
     }

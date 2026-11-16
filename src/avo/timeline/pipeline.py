@@ -335,12 +335,20 @@ class TimelinePipeline:
                 "OTIO_TARGET_CONFLICT",
                 "Import service and pipeline must select the exact same project target",
             )
-        prepared = service.prepare(
+        prepare = (
+            service.prepare_automatic
+            if mappings is None and declarations is None
+            else service.prepare
+        )
+        prepared = prepare(
             input_path,
             timeline=timeline,
             media_roots=media_roots,
-            mappings=mappings,
-            declarations=declarations,
+            **(
+                {"mappings": mappings, "declarations": declarations}
+                if prepare == service.prepare
+                else {}
+            ),
             actor=actor,
             reason=reason,
         )

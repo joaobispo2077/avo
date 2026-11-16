@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from fractions import Fraction
+from math import floor
 from typing import Any
 
 
@@ -162,7 +163,7 @@ def _placed_raw_to_output(
 
 
 def _placed_output_to_raw(snapshot, output_ticks, placement_id, track_id):
-    from .import_layout import active_placements
+    from .import_layout import active_placements, picture_source_rate
 
     point = output_ticks * _output_base(snapshot)
     values = []
@@ -172,7 +173,12 @@ def _placed_output_to_raw(snapshot, output_ticks, placement_id, track_id):
         start, end = _time(item["start"]), _time(item["end"])
         if start <= point < end:
             offset = Fraction(0) if item["mediaKind"] == "still" else point - start
+            if "pictureSampling" in item:
+                rate = picture_source_rate(item, 1 / _output_base(snapshot))
+                offset = floor(offset * rate) / rate
             source = _time(item["in"]) + offset
+            if item["mediaKind"] != "still" and source >= _time(item["out"]):
+                continue
             clock = item["in"]["timebase"]
             ticks = source / Fraction(clock["num"], clock["den"])
             if ticks.denominator != 1:

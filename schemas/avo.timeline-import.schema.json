@@ -102,13 +102,25 @@
           "type": "integer",
           "minimum": 0
         },
+        "pictureSampling": {"const": "repeat-2x"},
+        "pictureEndGapFrames": {"type": "integer", "minimum": 1, "maximum": 3},
+        "audioTailSilenceSamples": {"type": "integer", "minimum": 1},
+        "pictureTransform": {"$ref": "https://github.com/joaobispo2077/avo/schemas/avo.cmap.schema.json#/$defs/placedPictureTransform"},
+        "pictureFade": {"$ref": "https://github.com/joaobispo2077/avo/schemas/avo.cmap.schema.json#/$defs/placedPictureFade"},
+        "title": {"$ref": "https://github.com/joaobispo2077/avo/schemas/avo.cmap.schema.json#/$defs/placedTitle"},
+        "font": {
+          "type": "object", "additionalProperties": false, "required": ["path", "fingerprint"],
+          "properties": {"path": {"$ref": "#/$defs/text"}, "fingerprint": {"$ref": "https://github.com/joaobispo2077/avo/schemas/avo.cmap.schema.json#/$defs/fingerprint"}}
+        },
         "mediaKind": {
           "enum": [
             "video",
             "still",
-            "audio"
+            "audio",
+            "title", "generator"
           ]
         },
+        "generator": {"type": "object"},
         "gainDb": {
           "type": "number",
           "minimum": -60,
@@ -340,6 +352,8 @@
             "$ref": "#/$defs/finding"
           }
         },
+        "importWarnings": {"type": "array", "maxItems": 2048, "items": {"$ref": "#/$defs/finding"}},
+        "importNotes": {"type": "array", "maxItems": 128, "items": {"type": "string", "maxLength": 2048}},
         "provisionalFinishing": {
           "type": "array",
           "items": {

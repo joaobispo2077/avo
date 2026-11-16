@@ -189,18 +189,30 @@ def _historical_materializations(timeline_dir):
     return outputs
 
 
+def _historical_output_paths(root):
+    for path in sorted(item for item in root.rglob("*") if item.is_file()):
+        if path.suffix.lower() not in {".json", ".md", ".txt"}:
+            yield path
+
+
 def inventory_historical_output_fingerprints(
-    raw_dir: Path, *, timeline_dir: Path | None = None
+    raw_dir: Path,
+    *,
+    timeline_dir: Path | None = None,
+    candidate_sizes: frozenset[int] | None = None,
 ) -> list[dict[str, Any]]:
-    """Fingerprint retained historical outputs for copy/rename quarantine."""
+    """Quarantine outputs, optionally excluding proven different-sized candidates."""
     edit_dir = Path(raw_dir).resolve() / "edit"
     records: dict[str, dict[str, Any]] = {}
     for directory, role in _HISTORICAL_OUTPUT_DIRECTORIES.items():
         root = edit_dir / directory
         if not root.is_dir():
             continue
-        for path in sorted(item for item in root.rglob("*") if item.is_file()):
-            if path.suffix.lower() in {".json", ".md", ".txt"}:
+        for path in _historical_output_paths(root):
+            if (
+                candidate_sizes is not None
+                and path.stat().st_size not in candidate_sizes
+            ):
                 continue
             fingerprint = file_fingerprint(path)
             records.setdefault(

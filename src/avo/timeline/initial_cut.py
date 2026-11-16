@@ -367,6 +367,7 @@ def initial_cut_proof_request(
     height: int = 360,
     sample_rate: int = 48000,
     sample_rate_probe: Callable[[dict, Path], int] | None = None,
+    import_approximation: dict | None = None,
 ) -> dict[str, Any]:
     """Preserve the current canonical source assembly on its recorded clocks."""
     from .initial_cut_placed import placed_cut_proof_request
@@ -387,6 +388,11 @@ def initial_cut_proof_request(
         height=height,
         sample_rate=sample_rate,
         sample_rate_probe=sample_rate_probe,
+        **(
+            {"import_approximation": import_approximation}
+            if import_approximation is not None
+            else {}
+        ),
     )
 
 
