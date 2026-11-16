@@ -36,6 +36,10 @@ the byte budget includes eight bytes per 16-bit alpha layer pixel and six bytes
 per composed RGB pixel. Partial placed proofs rebuild their private stages from
 original sources rather than reusing an unqualified camera-stage cache.
 
+An explicit delivery pixel format currently requires `yuv420p`. Higher-precision
+formats require the selected FFV1/PCM conformance route; unsupported delivery
+codec/pixel pairs fail before rendering instead of negotiating a lower depth.
+
 Opaque RGB/alpha insertion and alpha removal copy planes. A regular RGB-to-RGBA
 conversion was observed changing 16-bit values even at identical size and depth;
 the exact-pixel tests caught that conversion before activation.
