@@ -966,6 +966,11 @@ prepared identities. A narrowly scoped pending-application guard blocks unrelate
 canonical work until the same operation recovers. Receipts record staged,
 committing, committed or recovery-needed state; they do not transfer approval.
 
+Motion retention preserves legacy metadata that claims no head or revisions as
+opaque fingerprinted bytes. Claimed heads/revisions and their motion evidence
+remain strictly validated. This compatibility boundary grants no canonical read,
+render or approval authority to a legacy metadata stub.
+
 `SfxCatalogService` retains immutable project-local generations and separates
 source-bound measurement facts from manual curation, rights and reviewed markers.
 It reuses shared safe-path/library guards without invoking media organization.
