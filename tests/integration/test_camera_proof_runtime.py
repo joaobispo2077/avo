@@ -175,6 +175,22 @@ def test_identity_camera_preserves_real_sixteen_bit_picture_and_original_bytes(
     assert probe(tmp_path / "identity.mkv")["pix_fmt"] == "gbrp16le"
 
 
+def test_boundary_zoom_preserves_the_final_original_pixel_without_a_dark_border(
+    tmp_path,
+):
+    source = labeled_video(tmp_path / "original.mkv", bit_depth=16)
+    selected = operation(source)
+    parameters = selected["parameters"]
+    parameters["behavior"]["nodes"][-1]["center"] = {"x": 0.6, "y": 0.6}
+    parameters["pathHash"] = content_hash(
+        {key: parameters[key] for key in ("behavior", "geometry")}
+    )
+    full = render(source, tmp_path / "boundary.mkv", selected)
+    np.testing.assert_array_equal(full[-1, -1, -1], pixels(source, 160, 90)[-1, -1, -1])
+    window = render(source, tmp_path / "last-frame.mkv", selected, first=23, last=24)
+    np.testing.assert_array_equal(window, full[23:24])
+
+
 @pytest.mark.parametrize(
     "curve",
     [
