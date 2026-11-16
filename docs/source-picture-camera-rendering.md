@@ -115,8 +115,33 @@ encoder tap verifies the delivery filter output exactly; ordinary H.264/AAC runs
 verify format, square-pixel geometry, color tags and decoded frame count. Separate
 lossy encodes are not treated as pixel-identical references for a source sampler.
 
-Before activation, implementation fingerprints and render recipes must include
-the native camera kernel, precision composition, runtime tools, frozen options
-and sources. Selected camera controls and map/card states must use the existing
-recoverable canonical owners. These remaining tasks do not enable camera moves
-or face anchoring by default.
+## Observed execution identity
+
+The native producer records the complete graph/source/options/output recipe hash,
+the actual camera implementation digest, installed FFmpeg/FFprobe byte hashes,
+bounded version identities and the rendered window. It checks those observations
+again after rendering and rejects a changed environment or recipe. This runs only
+for a selected camera graph; ordinary proof readiness does not inspect camera
+tools. Tool paths are excluded from the record, so reconstruction cannot mistake
+separately installed executables for media to bundle.
+
+Preflight includes the observed camera environment hash. Microproof gates bind
+that preflight hash, so replacing a tool requires fresh microproof validation.
+Gate and window records retain the observed environment and camera producer
+metadata for inspection. Current native qualification covers the FFmpeg/FFprobe
+6.1 and 7.1 release families; other releases and nightly builds fail before
+encoding until they receive their own qualification.
+The native adapter also rejects execution whose environment differs from its
+readiness observation. Existing materialization producer and proof-plan hashes
+retain these identities without a second source or timing ledger. Camera stages
+remain ineligible for cache reuse; tool version output does not fingerprint every
+external system library.
+
+Checkout implementations include the native camera sampler, precision compositor,
+pure evaluator and occurrence compiler in their source fingerprints. Packaged
+builds fingerprint the actual program containing their module code instead of
+requiring unpackaged Python source files beside it.
+
+Selected camera controls and map/card states must still use the existing
+recoverable canonical owners before capability activation. These remaining tasks
+do not enable camera moves or face anchoring by default.

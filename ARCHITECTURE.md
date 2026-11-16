@@ -1015,6 +1015,15 @@ Unsupported timing, source geometry and fidelity combinations fail preflight. Ru
 remaining activation requirements are documented in
 [`docs/source-picture-camera-rendering.md`](docs/source-picture-camera-rendering.md).
 
+Selected native camera execution records actual tool bytes/version identities,
+implementation code and the complete recipe in the existing producer record.
+The adapter binds its observed environment to preflight and verifies execution
+against it; the environment changes the microproof gate's preflight hash. Existing
+materialization and reconstruction owners retain these records without another
+source ledger. Packaged native implementations bind program bytes containing the
+embedded code, while checkout fingerprints include camera and precision modules.
+No runtime probe is added to ordinary metadata-only motion views.
+
 Camera movement, face anchoring, sound matching, reference analysis, spoken
 notes/recovery and editor handoff are selected options resolved through existing
 settings scopes and frozen requests. Preferences seed future work and cannot
