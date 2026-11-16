@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from . import proof_generated
+from .local_source import local_source_arguments
 
 
 def picture_format(spec, *, layer=False):
@@ -109,6 +110,7 @@ def camera_picture_arguments(source, spec, fps, *, start_frame, stop_frame):
         "-v",
         "error",
         "-nostdin",
+        *local_source_arguments(source["path"]),
         *camera_input_arguments(source["stream"]),
         "-i",
         str(source["path"]),
