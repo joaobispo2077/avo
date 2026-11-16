@@ -1,0 +1,66 @@
+{
+  "schemaVersion": "1.0.0",
+  "purpose": "Bounded synthetic test inputs, not production or acceptance evidence",
+  "generatorLicense": "MIT",
+  "generatorLicenseEvidence": "LICENSE",
+  "limits": {
+    "maximumFramesPerVideo": 120,
+    "maximumDimension": 320,
+    "maximumSamplesPerAudio": 144000,
+    "maximumVideoSources": 6,
+    "maximumSfxSources": 6
+  },
+  "video": {
+    "labeled.mkv": {},
+    "fractional.mkv": {"fps": "30000/1001", "frame_count": 30},
+    "rotated.mp4": {"rotation": 90},
+    "anamorphic.mkv": {"sar": "4/3"},
+    "high-bit-depth.mkv": {"bit_depth": 16},
+    "alpha.mkv": {"alpha": true}
+  },
+  "audio": {
+    "channel-impulses.wav": {
+      "sampleRate": 48000,
+      "sampleCount": 48000,
+      "leftImpulseSample": 12000,
+      "rightImpulseSample": 24000
+    }
+  },
+  "sfx": {
+    "short-whoosh.wav": {
+      "synthesis": {"kind": "whoosh", "sample_count": 12000},
+      "rightsFixtureState": "licensed"
+    },
+    "long-whoosh.wav": {
+      "synthesis": {"kind": "whoosh", "sample_count": 48000},
+      "rightsFixtureState": "licensed"
+    },
+    "impact.wav": {
+      "synthesis": {"kind": "impact"},
+      "rightsFixtureState": "licensed"
+    },
+    "multiple-attacks.wav": {
+      "synthesis": {"kind": "double-attack"},
+      "rightsFixtureState": "licensed"
+    },
+    "silence.wav": {
+      "synthesis": {"kind": "silence"},
+      "rightsFixtureState": "licensed"
+    },
+    "rights-unknown.wav": {
+      "synthesis": {"kind": "impact"},
+      "rightsFixtureState": "unknown"
+    }
+  },
+  "occurrences": {
+    "source": "labeled.mkv",
+    "count": 2,
+    "sourceRangeFrames": [0, 12],
+    "gapFrames": 3,
+    "note": "Distinct occurrence IDs refer to the same actual source digest"
+  },
+  "acceptance": {
+    "status": "unperformed",
+    "note": "Fixture synthesis provides no creator, listening, editor-target, rights-review or master approval"
+  }
+}
