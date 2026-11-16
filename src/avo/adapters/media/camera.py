@@ -423,6 +423,16 @@ def camera_filter(
             operations, source_sha256, metadata
         )
         _fidelity(metadata, output)
+        baseline = geometry["baselineCrop"]
+        if not math.isclose(
+            baseline["width"] / baseline["height"],
+            output["width"] / output["height"],
+            rel_tol=1e-9,
+            abs_tol=1e-12,
+        ):
+            raise CameraRenderError(
+                "camera baseline crop must match the selected output aspect ratio"
+            )
         _validate_window(operations, first_frame, end_frame)
         expression = _resample_expression(operations, geometry, first_frame)
         if len(expression) > 2 * 1024 * 1024:
