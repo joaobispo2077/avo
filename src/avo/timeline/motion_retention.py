@@ -255,16 +255,26 @@ class _Retention:
             "staged operation changed application identity",
         )
 
+    def canonical_index(self, store, name):
+        if not store.path.exists() and not store.path.is_symlink():
+            return None
+        index, _ = self.read(store.path)
+        if not index.get("revisionRefs") and index.get("headRevisionId") is None:
+            # Preserve unclaimed legacy metadata as bytes, without adopting it
+            # as a canonical index or granting any rendering/approval authority.
+            return None
+        store._validate_index(index)
+        _require(
+            index["artifactType"] == name, "canonical index changes artifact owner"
+        )
+        return index
+
     def canonical(self):
         for name in ("cmap", "bmap", "tracks", "animation", "sync-map"):
             store = self.workspace.store(name)
-            if not store.path.exists() and not store.path.is_symlink():
+            index = self.canonical_index(store, name)
+            if index is None:
                 continue
-            index, _ = self.read(store.path)
-            store._validate_index(index)
-            _require(
-                index["artifactType"] == name, "canonical index changes artifact owner"
-            )
             for reference in index["revisionRefs"]:
                 revision, _ = self.read(store.timeline_dir / reference["path"])
                 store._validate_revision(revision)
