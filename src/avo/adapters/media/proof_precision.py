@@ -79,7 +79,6 @@ def admit_camera_placements(execution, admitted, cache, spec, fps):
             first_frame=extent["startFrame"],
             end_frame=extent["endFrameExclusive"],
         )
-        source["camera"]["output"] = output
 
 
 def camera_picture_arguments(source, spec, fps, *, start_frame, stop_frame):

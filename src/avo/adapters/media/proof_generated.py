@@ -419,10 +419,19 @@ def _placement(placement, spec):
 def overlay_filters(
     assets, fps, wstart, wend, *, conformance, pixel_format=None, canvas=None
 ):
-    if pixel_format is not None:
-        return _precision_overlay_filters(
-            assets, fps, wstart, wend, pixel_format, canvas
+    output = (
+        (
+            f"scale=iw:ih:flags=bilinear,format={pixel_format}"
+            if pixel_format is not None
+            else "format=bgra"
         )
+        if conformance
+        else "scale=in_range=full:out_range=limited:out_color_matrix=bt709,"
+        "format=yuv420p,setparams=range=tv:color_primaries=bt709:"
+        "color_trc=bt709:colorspace=bt709"
+    )
+    if pixel_format is not None:
+        return _precision_overlay_filters(assets, fps, wstart, wend, output, canvas)
     arguments, filters, metadata = [], [], []
     current = "picture"
     timebase = f"{fps.denominator}/{fps.numerator}"
@@ -456,18 +465,11 @@ def overlay_filters(
             f"alpha=straight:eof_action=pass:repeatlast=0[picture{index}]"
         )
         current = f"picture{index}"
-    output = (
-        "format=bgra"
-        if conformance
-        else "scale=in_range=full:out_range=limited:out_color_matrix=bt709,"
-        "format=yuv420p,setparams=range=tv:color_primaries=bt709:"
-        "color_trc=bt709:colorspace=bt709"
-    )
     filters.append(f"[{current}]{output}[v]")
     return arguments, filters, metadata
 
 
-def _precision_overlay_filters(assets, fps, wstart, wend, pixel_format, canvas):
+def _precision_overlay_filters(assets, fps, wstart, wend, output_filter, canvas):
     arguments, filters, metadata = [], [], []
     current = "picture"
     for asset in sorted(assets, key=_overlay_order):
@@ -496,7 +498,7 @@ def _precision_overlay_filters(assets, fps, wstart, wend, pixel_format, canvas):
             f"[{current}][color{index}][mask{index}]maskedmerge=planes=7[{output}]"
         )
         current = output
-    filters.append(f"[{current}]scale=iw:ih:flags=bilinear,format={pixel_format}[v]")
+    filters.append(f"[{current}]{output_filter}[v]")
     return arguments, filters, metadata
 
 

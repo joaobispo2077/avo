@@ -167,6 +167,7 @@ def bind_camera_source(
         "operations": deepcopy(operations),
         "metadata": deepcopy(metadata),
         "sourceSha256": source_sha256,
+        "output": {**output, "pixelFormat": "gbrp16le"},
     }
 
 

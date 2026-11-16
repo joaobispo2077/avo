@@ -857,7 +857,7 @@ def _piece_video_filter(segment, left, right, spec, fps, camera):
         chain = camera_filter(
             camera["operations"],
             metadata=camera["metadata"],
-            output=spec,
+            output=camera["output"],
             source_sha256=camera["sourceSha256"],
             first_frame=left,
             end_frame=right,
@@ -1033,7 +1033,8 @@ def _final_arguments(
     )
     timebase = f"{fps.denominator}/{fps.numerator}"
     working_format = "gbrp16le" if "pixelFormat" in spec else "rgba"
-    video = f"[0:v:0]settb=expr={timebase},setpts=N,format={working_format}[picture]"
+    display = ",setsar=1" if "pixelFormat" in spec else ""
+    video = f"[0:v:0]settb=expr={timebase},setpts=N,format={working_format}{display}[picture]"
     audio_index = 1 + len(extra) // 2 if mixed_audio is not None else 0
     audio = f"[{audio_index}:a:0]asetpts=N/SR/TB[a]"
     encode_arguments = _encode_arguments(spec, fps, wend - wstart)
