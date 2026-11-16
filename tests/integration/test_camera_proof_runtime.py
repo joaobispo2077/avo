@@ -568,7 +568,8 @@ def test_normal_native_proof_applies_camera_and_preserves_independent_audio(
 
 
 @pytest.mark.parametrize(
-    "profile", ["retimed", "past-eof", "fractional-frame", "reduced-depth"]
+    "profile",
+    ["retimed", "past-eof", "fractional-frame", "reduced-depth", "baseline-aspect"],
 )
 def test_camera_rejects_unqualified_profiles_before_creating_outputs(
     tmp_path, monkeypatch, profile
@@ -583,6 +584,8 @@ def test_camera_rejects_unqualified_profiles_before_creating_outputs(
         source_range.update(startTicks=1, endTicks=25)
     elif profile == "fractional-frame":
         source_range.update(startTicks=1, endTicks=49, timebase={"num": 1, "den": 48})
+    elif profile == "baseline-aspect":
+        execution["output"]["height"] = 160
     else:
         execution["output"]["pixelFormat"] = "yuv420p"
     destination = tmp_path / "uncreated" / "proof.mkv"
