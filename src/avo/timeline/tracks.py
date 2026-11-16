@@ -337,11 +337,28 @@ class TracksService:
         }
         return basis, revision
 
-    @serialized_timeline(lambda self: self.workspace.timeline_dir)
-    def author(
-        self, snapshot: dict[str, Any], *, actor: str, reason: str
+    def prepare_authoring(
+        self,
+        snapshot: dict[str, Any],
+        *,
+        actor: str,
+        reason: str,
+        parents=None,
+        revision_id=None,
+        created_at=None,
+        evidence=None,
     ) -> dict[str, Any]:
-        basis, bmap_revision = self._basis()
+        if parents and "bmap" in parents:
+            bmap_revision = parents["bmap"]
+            basis = {
+                "artifactType": "bmap",
+                "artifactId": bmap_revision["artifactId"],
+                "revisionId": bmap_revision["revisionId"],
+                "sha256": bmap_revision["contentSha256"],
+                "state": "valid",
+            }
+        else:
+            basis, bmap_revision = self._basis()
         value = deepcopy(snapshot)
         value["basis"] = basis
         value["cmapBasis"] = deepcopy(bmap_revision["snapshot"]["basis"])
@@ -367,7 +384,7 @@ class TracksService:
         expected = None
         if index["headRevisionId"]:
             expected = self.store.revision(index["headRevisionId"])["contentHash"]
-        revision = self.store.append_revision(
+        return self.store.prepare_revision(
             snapshot=value,
             actor=actor,
             reason=reason,
@@ -380,6 +397,30 @@ class TracksService:
                 }
             ],
             expected_head_hash=expected,
+            revision_id=revision_id,
+            created_at=created_at,
+            evidence=evidence,
+        )
+
+    @serialized_timeline(lambda self: self.workspace.timeline_dir)
+    def author(self, snapshot, *, actor, reason, prepared=None):
+        expected = self.store.head_hash()
+        stamps = (
+            {}
+            if prepared is None
+            else {
+                "revision_id": prepared["revisionId"],
+                "created_at": prepared["createdAt"],
+                "evidence": prepared["inputEvidenceRefs"],
+            }
+        )
+        actual = self.prepare_authoring(snapshot, actor=actor, reason=reason, **stamps)
+        if prepared is not None and actual != prepared:
+            raise TrackError(
+                "Prepared Tracks differ from current basis, sources or target"
+            )
+        revision = self.store.append_prepared_revision(
+            actual, expected_head_hash=expected or "empty"
         )
         if expected and expected != revision["contentHash"]:
             self.workspace.invalidate_descendants(
