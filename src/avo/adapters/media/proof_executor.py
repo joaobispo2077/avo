@@ -170,12 +170,12 @@ def _clock_header_integer(value):
     return None if value in (None, "N/A", "") else int(value)
 
 
-def _verify_picture_clock(path, stream, cache, fps):
+def _verify_picture_clock(path, stream, cache, fps, *, end_gap_frames=0):
     from .video_clock import verify_video_clock
 
     source = cache[str(path.resolve())]
     clocks = source.setdefault("videoClocks", {})
-    key = (stream, fps)
+    key = (stream, fps, end_gap_frames)
     if key not in clocks:
         metadata = next(item for item in source["streams"] if item["index"] == stream)
         try:
@@ -187,7 +187,12 @@ def _verify_picture_clock(path, stream, cache, fps):
                 expected_sha256=source["sha256"],
                 expected_frames=_clock_header_integer(metadata.get("nb_frames")),
                 start_ticks=_clock_header_integer(metadata.get("start_pts")),
+                allow_end_gap=bool(end_gap_frames),
             )
+            if evidence.get("endGapFrames", 0) != end_gap_frames:
+                raise ValueError(
+                    "Original video end gap differs from its canonical declaration"
+                )
         except (ValueError, OSError, subprocess.SubprocessError) as exc:
             raise RuntimeError(
                 f"Original picture clock is unverified: {path}:{stream}: {exc}"
@@ -406,7 +411,8 @@ def _validate_resampling(graph: dict, nodes: list[dict], rate: int) -> None:
     required = {
         n["nodeId"]
         for n in nodes
-        if n["kind"] == "source" and n["sourceSampleRate"] != rate
+        if n["kind"] in {"source", "music", "sfx", "ambience"}
+        and n["sourceSampleRate"] != rate
     }
     if set(operations) != required:
         raise RuntimeError("Missing or unused explicit resample operation")
@@ -838,8 +844,35 @@ def _encode_arguments(spec, fps, count):
     ]
     if spec.get("conformance") is True:
         return arguments + ["-pix_fmt", "bgra", "-f", "matroska"]
+    if spec["videoCodec"] == "h264_nvenc":
+        arguments += [
+            "-preset",
+            "p5",
+            "-tune",
+            "hq",
+            "-rc",
+            "vbr",
+            "-cq",
+            "19",
+            "-b:v",
+            "12M",
+            "-maxrate",
+            "18M",
+            "-bufsize",
+            "36M",
+            "-profile:v",
+            "high",
+        ]
     # MP4's default millisecond movie clock can truncate an AAC tail at a frame edge.
     return arguments + [
+        "-color_range",
+        "tv",
+        "-colorspace",
+        "bt709",
+        "-color_primaries",
+        "bt709",
+        "-color_trc",
+        "bt709",
         "-b:a",
         PROOF_AUDIO_BITRATE,
         "-movie_timescale",
@@ -849,8 +882,8 @@ def _encode_arguments(spec, fps, count):
     ]
 
 
-def _render_final(
-    listing, candidate, overlays, spec, fps, wstart, wend, mixed_audio=None
+def _final_arguments(
+    picture_arguments, candidate, overlays, spec, fps, wstart, wend, mixed_audio=None
 ):
     from . import proof_generated
 
@@ -859,7 +892,7 @@ def _render_final(
     )
     timebase = f"{fps.denominator}/{fps.numerator}"
     video = f"[0:v:0]settb=expr={timebase},setpts=N,format=rgba[picture]"
-    audio_index = 1 + len(overlays) if mixed_audio is not None else 0
+    audio_index = 1 + len(extra) // 2 if mixed_audio is not None else 0
     audio = f"[{audio_index}:a:0]asetpts=N/SR/TB[a]"
     encode_arguments = _encode_arguments(spec, fps, wend - wstart)
     # A frame-count output stop can discard a final PCM packet, including when
@@ -868,18 +901,13 @@ def _render_final(
     del encode_arguments[stop : stop + 2]
     filters.append(f"[v]trim=end_frame={wend - wstart}[bounded-picture]")
     video_map = "[bounded-picture]"
-    _run(
+    return (
         [
             "ffmpeg",
             "-v",
             "error",
             "-nostdin",
-            "-f",
-            "concat",
-            "-safe",
-            "1",
-            "-i",
-            str(listing),
+            *picture_arguments,
             *extra,
             *(["-i", str(mixed_audio)] if mixed_audio is not None else []),
             "-filter_complex",
@@ -890,8 +918,12 @@ def _render_final(
             "[a]",
             *encode_arguments,
             str(candidate),
-        ]
+        ],
+        metadata,
     )
+
+
+def _check_encoded(candidate, fps, count):
     media = json.loads(
         subprocess.run(
             [
@@ -910,10 +942,27 @@ def _render_final(
         ).stdout
     )
     stream = next(item for item in media["streams"] if item["codec_type"] == "video")
-    count = int(stream.get("nb_read_frames") or stream.get("nb_frames") or 0)
-    if count != wend - wstart or Fraction(stream["r_frame_rate"]) != fps:
+    actual = int(stream.get("nb_read_frames") or stream.get("nb_frames") or 0)
+    if actual != count or Fraction(stream["r_frame_rate"]) != fps:
         raise RuntimeError("Encoded proof violates its exact frame contract")
-    return media, metadata
+    return media
+
+
+def _render_final(
+    listing, candidate, overlays, spec, fps, wstart, wend, mixed_audio=None
+):
+    arguments, metadata = _final_arguments(
+        ["-f", "concat", "-safe", "1", "-i", str(listing)],
+        candidate,
+        overlays,
+        spec,
+        fps,
+        wstart,
+        wend,
+        mixed_audio,
+    )
+    _run(arguments)
+    return _check_encoded(candidate, fps, wend - wstart), metadata
 
 
 def _render_media(
@@ -1080,7 +1129,14 @@ def _execute_ffmpeg_proof(
     ):
         from .proof_placed import execute_placed_proof
 
-        return execute_placed_proof(execution, output, spec, fps, rate)
+        return execute_placed_proof(
+            execution,
+            output,
+            spec,
+            fps,
+            rate,
+            generated_asset_validator=generated_asset_validator,
+        )
     from .proof_audio_bridge import prepare_mix
 
     source_cache = {}
