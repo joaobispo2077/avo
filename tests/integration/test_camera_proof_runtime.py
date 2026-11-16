@@ -881,3 +881,40 @@ def test_placed_foreground_retains_original_rgb_detail_and_independent_source_al
     window = tmp_path / "source-layer-window.mkv"
     execute_ffmpeg_proof(execution, window)
     np.testing.assert_array_equal(pixels(window, 160, 90), actual[9:17])
+
+
+def test_placed_camera_keeps_the_closed_original_input_policy_after_admission(
+    tmp_path, monkeypatch
+):
+    from avo.adapters.media.proof_placed import (
+        _admit_picture,
+        _admit_precision_picture,
+        _stage_picture,
+    )
+
+    execution, original, _, _ = placed_execution(tmp_path, monkeypatch)
+    cache = {}
+    admitted = _admit_picture(
+        execution,
+        execution["videoGraph"]["operations"][0]["parameters"]["placements"],
+        24,
+        Fraction(24),
+        cache,
+    )
+    _admit_precision_picture(
+        execution, admitted, cache, execution["output"], Fraction(24)
+    )
+    before = original.read_bytes()
+    (tmp_path / "unadmitted.mkv").write_bytes(before)
+    try:
+        # Fault injection after successful admission: a replacement container
+        # must not redirect the decoder to an unconsumed child media file.
+        original.write_text(
+            "ffconcat version 1.0\nfile 'unadmitted.mkv'\n", encoding="utf-8"
+        )
+        output = tmp_path / "must-not-exist.mkv"
+        with pytest.raises(RuntimeError, match="whitelist"):
+            _stage_picture(admitted[0], output, execution["output"], Fraction(24))
+        assert not output.exists()
+    finally:
+        original.write_bytes(before)
