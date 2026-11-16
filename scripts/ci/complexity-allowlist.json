@@ -669,13 +669,6 @@
       "reason": "Feature 006 validation/orchestration branch matrix; recorded for explicit decomposition follow-up"
     },
     {
-      "path": "src/avo/adapters/motion/hyperframes.py",
-      "name": "render_timeline_instance",
-      "complexity": 15,
-      "rank": "C",
-      "reason": "Adapter orchestration with many format/capability branches"
-    },
-    {
       "path": "src/avo/adapters/transcribe/candidate.py",
       "name": "analyze",
       "complexity": 15,
