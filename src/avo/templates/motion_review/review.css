@@ -1,0 +1,15 @@
+:root { color-scheme: light dark; font: 16px/1.6 system-ui, sans-serif; }
+body { margin: 0; background: #16191f; color: #f4f6fa; }
+main { max-width: 76rem; margin: auto; padding: 2rem; }
+h1 { line-height: 1.2; }
+p { max-width: 65ch; color: #d5dce8; }
+a { color: #9dc9ff; }
+nav li { margin: 0.75rem 0; overflow-wrap: anywhere; }
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr)); gap: 1rem; }
+article { background: #202631; border: 1px solid #62728a; border-radius: 0.5rem; padding: 1rem; overflow-wrap: anywhere; }
+article:target { outline: 3px solid #9dc9ff; outline-offset: 3px; }
+dt { font-weight: bold; }
+dd { margin: 0 0 0.75rem; white-space: pre-wrap; }
+.motion-plan { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; border: 1px solid #62728a; border-radius: 0.5rem; padding: 1.5rem; background: #202631; }
+@media (max-width: 40rem) { main { padding: 1rem; } .motion-plan { padding: 0.75rem; } }
+@media print { body, .motion-plan { background: white; color: black; } }
