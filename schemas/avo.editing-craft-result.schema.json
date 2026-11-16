@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://avo.local/avo.editing-craft-result.schema.json",
+  "title": "Editing craft preference result",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contractVersion", "operation", "selection", "documents", "builtIn", "status", "operationId", "effect", "inputBasis", "coverage", "warnings", "blockers", "allowedNextActions"],
+  "properties": {
+    "contractVersion": {"const": "1.0.0"},
+    "operation": {"enum": ["options-show", "options-set", "options-reset"]},
+    "selection": {"$ref": "https://avo.local/avo.editing-craft.schema.json#/$defs/selection"},
+    "documents": {
+      "type": "object", "additionalProperties": false, "required": ["global", "provider", "project"],
+      "properties": {
+        "global": {"$ref": "#/$defs/document"},
+        "provider": {"$ref": "#/$defs/document"},
+        "project": {"$ref": "#/$defs/document"}
+      }
+    },
+    "builtIn": {
+      "type": "object", "additionalProperties": false, "required": ["motionMap", "storyboard"],
+      "properties": {"motionMap": {"const": true}, "storyboard": {"const": true}}
+    },
+    "status": {"enum": ["inspected", "updated"]},
+    "operationId": {"type": ["string", "null"]},
+    "effect": {"enum": ["metadata-read", "preference-write"]},
+    "inputBasis": {"type": "object", "maxProperties": 0},
+    "coverage": {
+      "type": "object", "additionalProperties": false, "required": ["kind", "complete"],
+      "properties": {"kind": {"const": "preferences"}, "complete": {"const": true}}
+    },
+    "warnings": {"type": "array", "maxItems": 0},
+    "blockers": {"type": "array", "maxItems": 0},
+    "allowedNextActions": {"type": "array", "uniqueItems": true, "maxItems": 3, "items": {"enum": ["options-show", "options-set", "options-reset"]}},
+    "scope": {"enum": ["global", "provider", "project"]},
+    "before": {"$ref": "#/$defs/identity"},
+    "after": {"$ref": "#/$defs/identity"},
+    "actor": {"type": "string"},
+    "reason": {"type": "string"},
+    "requestHash": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  },
+  "$defs": {
+    "identity": {"type": "string", "pattern": "^(absent|[0-9a-f]{64})$"},
+    "document": {
+      "type": "object", "additionalProperties": false, "required": ["path", "sha256"],
+      "properties": {"path": {"type": ["string", "null"]}, "sha256": {"$ref": "#/$defs/identity"}}
+    },
+    "error": {
+      "type": "object", "additionalProperties": false, "required": ["code", "message", "field", "remediation", "blocking"],
+      "properties": {
+        "code": {"type": "string", "minLength": 1}, "message": {"type": "string"},
+        "field": {"type": "string"}, "remediation": {"type": "string"}, "blocking": {"const": true}
+      }
+    }
+  }
+}

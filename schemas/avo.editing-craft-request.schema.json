@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://avo.local/avo.editing-craft-request.schema.json",
+  "title": "Editing craft preference request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["contractVersion", "operation", "operationId", "actor", "reason", "expectedBasis", "selection", "expectedDocument"],
+  "properties": {
+    "contractVersion": {"const": "1.0.0"},
+    "operation": {"enum": ["options-set", "options-reset"]},
+    "operationId": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"},
+    "actor": {"type": "string", "minLength": 1, "maxLength": 128, "pattern": "\\S"},
+    "reason": {"type": "string", "minLength": 1, "maxLength": 4096, "pattern": "\\S"},
+    "expectedBasis": {"type": "object", "maxProperties": 0},
+    "selection": {
+      "type": "object", "additionalProperties": false, "required": ["scope"],
+      "properties": {"scope": {"enum": ["global", "provider", "project"]}}
+    },
+    "expectedDocument": {"type": "string", "pattern": "^(absent|[0-9a-f]{64})$"},
+    "patch": {"$ref": "https://avo.local/avo.editing-craft.schema.json#/$defs/config"}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"operation": {"const": "options-set"}}},
+      "then": {"required": ["patch"]},
+      "else": {"not": {"required": ["patch"]}}
+    }
+  ]
+}

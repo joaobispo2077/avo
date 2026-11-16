@@ -878,6 +878,11 @@ def _add_motion_preferences(subparsers) -> None:
             if operation == "engine-set":
                 item.add_argument("--engine", choices=ENGINE_IDS, required=True)
 
+    from avo.motion_plan_cli import add_options_parsers, add_plan_parsers
+
+    add_options_parsers(subparsers)
+    add_plan_parsers(subparsers)
+
 
 def _add_code_drawn_commands(subparsers) -> None:
     runtime = subparsers.add_parser("runtime-install")
@@ -1266,6 +1271,9 @@ def _author_animation(args: argparse.Namespace) -> dict:
         actor=args.actor,
         reason=args.reason,
     )
+    from avo.motion_plan_cli import publish_after_authoring
+
+    result["motionPlanReport"] = publish_after_authoring(workspace)
     return result
 
 
@@ -1274,12 +1282,23 @@ def _is_code_drawn_command(operation):
 
 
 def _animation(args: argparse.Namespace) -> int:
-    if args.animation_command == "code-drawn-review":
-        return _code_drawn_review(args)
+    if args.animation_command in {
+        "options-show",
+        "options-set",
+        "options-reset",
+        "plan-show",
+        "plan-publish",
+    }:
+        from avo.motion_plan_cli import run_craft_command
+
+        return run_craft_command(args)
     if args.animation_command.startswith("engine-"):
         return _motion_preferences(args)
     if _is_code_drawn_command(args.animation_command):
-        return _code_drawn(args)
+        handler = {"code-drawn-review": _code_drawn_review}.get(
+            args.animation_command, _code_drawn
+        )
+        return handler(args)
     from avo.timeline.animation import AnimationService
     from avo.timeline.provider_animation import ProviderAnimationService
 
