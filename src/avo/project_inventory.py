@@ -410,7 +410,7 @@ def _resolve_reconstruction_metadata(raw_dir: Path, *, project_path=None) -> lis
     return _fallback_reconstruction_metadata(raw_dir, timeline, workspace)
 
 
-def _fallback_timeline_files(root, imports):
+def _fallback_timeline_files(root, imports, *, motion_cache=None):
     if not root.is_dir():
         return []
     return [
@@ -419,6 +419,7 @@ def _fallback_timeline_files(root, imports):
         if path.is_file()
         and not path.is_symlink()
         and not path.is_relative_to(imports)
+        and (motion_cache is None or not path.is_relative_to(motion_cache))
         and path.suffix.lower() in {".json", ".md"}
     ]
 
@@ -431,8 +432,18 @@ def _fallback_reconstruction_metadata(raw_dir, timeline, workspace):
     )
     paths: list[Path] = []
     for root in roots:
-        paths.extend(_fallback_timeline_files(root, imports))
+        cache = root / "motion-plan" if root != timeline else None
+        paths.extend(_fallback_timeline_files(root, imports, motion_cache=cache))
     paths.extend(_retained_import_metadata(workspace, timeline))
+    if workspace is not None:
+        from avo.timeline.motion_retention import retained_motion_paths
+
+        paths.extend(retained_motion_paths(workspace))
+    elif any(
+        (raw_dir / "edit/motion" / name).exists()
+        for name in ("proposals", "decisions", "receipts", "applications")
+    ):
+        raise PreservedSetViolation("Motion retention requires its declared project")
     # Living footage-root audits (not reconstruction-bundle graph members).
     # Listed as preserved metadata when no verified bundle is present so a
     # later edit/-only cleanup cannot treat them as skippable leftovers.

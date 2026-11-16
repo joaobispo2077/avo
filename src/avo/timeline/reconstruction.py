@@ -103,11 +103,31 @@ def _authoring_files(raw_dir: Path):
                 path.is_file()
                 and path.suffix.lower() in suffixes
                 and "node_modules" not in path.parts
+                and not _disposable_motion_path(raw_dir, path)
             ):
                 yield path.resolve()
     for path in (raw_dir / "avo.project.json", raw_dir / "edit" / "edl.json"):
         if path.is_file():
             yield path.resolve()
+
+
+def _disposable_motion_path(raw_dir: Path, path: Path) -> bool:
+    relative = path.relative_to(raw_dir / "edit")
+    if relative.parts[:2] == ("review", "motion-plan"):
+        return True
+    return (
+        len(relative.parts) > 1
+        and relative.parts[0] == "motion"
+        and relative.parts[1]
+        in {
+            "proposals",
+            "decisions",
+            "requests",
+            "receipts",
+            "operations",
+            "applications",
+        }
+    )
 
 
 def _human_final_inputs(raw_dir: Path) -> dict[Path, str]:
@@ -369,9 +389,12 @@ def _required_files(
     """Current local media plus authoring/delivery evidence, not disposable caches."""
     from avo.library.retention import library_paths
 
+    workspace = _canonical_workspace(raw_dir, canonical, workspace)
     required: dict[Path, str | None] = dict.fromkeys(_authoring_files(raw_dir))
     required.update(dict.fromkeys(library_paths(raw_dir)))
     required.update(_human_final_inputs(raw_dir))
+    if workspace is not None:
+        required.update(_motion_evidence_files(workspace))
     for artifact in canonical:
         for ref in _head_media_refs(raw_dir, artifact):
             path = _local_media_path(raw_dir, ref)
@@ -388,6 +411,17 @@ def _required_files(
         dict.fromkeys(_import_evidence_paths(raw_dir, canonical, workspace))
     )
     return required
+
+
+def _motion_evidence_files(workspace):
+    from .motion_retention import retained_motion_files
+
+    try:
+        return retained_motion_files(workspace)
+    except (OSError, ValueError, RuntimeError) as error:
+        raise ReconstructionError(
+            f"Cannot retain motion authoring evidence: {error}"
+        ) from error
 
 
 def _canonical_workspace(raw_dir, canonical, workspace=None, project_path=None):
