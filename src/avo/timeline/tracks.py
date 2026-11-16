@@ -349,6 +349,19 @@ class TracksService:
             cue["cueId"]: cue for cue in bmap_revision["snapshot"].get("cues") or []
         }
         value = resolve_tracks(value, set(cue_map), cues=cue_map)
+        if "sourceMixAdjustments" in value["audioTracks"]:
+            from .source_mix import validate_source_mix_adjustments
+
+            cmap_index = self.workspace.require_active("cmap")
+            cmap = self.workspace.store("cmap").revision(cmap_index["headRevisionId"])[
+                "snapshot"
+            ]
+            try:
+                validate_source_mix_adjustments(
+                    cmap, value["audioTracks"]["sourceMixAdjustments"]
+                )
+            except ValueError as error:
+                raise TrackError(str(error)) from error
         _validate_generated_track_sources(value, Path(self.workspace.raw_dir))
         index = self.store.load_index()
         expected = None
@@ -388,6 +401,15 @@ class TracksService:
             "revisionHash": revision["contentHash"],
             "basis": snapshot["basis"],
             "audioLayers": snapshot["audioTracks"]["layers"],
+            **(
+                {
+                    "sourceMixAdjustments": deepcopy(
+                        snapshot["audioTracks"]["sourceMixAdjustments"]
+                    )
+                }
+                if "sourceMixAdjustments" in snapshot["audioTracks"]
+                else {}
+            ),
             "videoLayers": snapshot["videoTracks"]["layers"],
             "audioFindings": inspect_audio_hierarchy(snapshot["audioTracks"]["layers"]),
             "visualFindings": inspect_visual_hierarchy(

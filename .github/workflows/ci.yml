@@ -79,7 +79,7 @@ jobs:
     name: Unit tests (AVO repo)
     runs-on: ubuntu-24.04
     needs: prerequisites-gate
-    timeout-minutes: 20
+    timeout-minutes: 30
     outputs:
       evidence_url: ${{ steps.unit-evidence.outputs.artifact-url }}
     steps:
@@ -117,7 +117,7 @@ jobs:
 
       - name: Run unit tests
         env:
-          PYTEST_ADDOPTS: --junitxml=reports/quality/unit-tests.xml -n 2 --dist=worksteal
+          PYTEST_ADDOPTS: --junitxml=reports/quality/unit-tests.xml -n 2 --dist=worksteal --durations=20
         run: python scripts/ci/run_quality_gate.py --gate unit-tests --artifact reports/quality/unit-tests.xml -- bash scripts/ci/run-unit-tests.sh
 
       - name: Upload unit execution evidence

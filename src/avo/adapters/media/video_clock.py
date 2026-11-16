@@ -111,7 +111,7 @@ def _kill(process):
         pass
 
 
-def _scan(arguments):
+def _scan(arguments, *, read_output=None):
     try:
         process = subprocess.Popen(
             arguments,
@@ -132,7 +132,7 @@ def _scan(arguments):
     timer.daemon = True
     timer.start()
     try:
-        packets = _read_packets(process.stdout)
+        packets = (read_output or _read_packets)(process.stdout)
         code = process.wait()
         if timed_out.is_set():
             raise VideoClockError(
@@ -190,8 +190,25 @@ def _verify_grid(points, fps, base):
             )
 
 
-def _timing_hash(packets, base, fps):
-    digest = hashlib.sha256(f"{_METHOD}:{base}:{fps}\n".encode("ascii"))
+def _presentation_extent(points, fps, base, allow_end_gap):
+    try:
+        _verify_grid(points, fps, base)
+        return {}
+    except VideoClockError:
+        if not allow_end_gap or len(points) < 3:
+            raise
+    _verify_grid(points[:-1], fps, base)
+    step = 1 / (fps * base)
+    last_ordinal = round(Fraction(points[-1] - points[0]) / step)
+    gap = last_ordinal - len(points) + 1
+    error = abs(Fraction(points[-1] - points[0]) - last_ordinal * step)
+    if not 1 <= gap <= 3 or (error and (step.denominator == 1 or error >= 1)):
+        raise VideoClockError("Video end gap is outside the bounded exact-grid subset")
+    return {"endGapFrames": gap, "presentationFrameCount": last_ordinal + 1}
+
+
+def _timing_hash(packets, base, fps, method=_METHOD):
+    digest = hashlib.sha256(f"{method}:{base}:{fps}\n".encode("ascii"))
     for pts, discard in sorted(packets):
         digest.update(f"{pts},{int(discard)}\n".encode("ascii"))
     return digest.hexdigest()
@@ -206,6 +223,7 @@ def _evidence(
     expected_frames,
     start_ticks,
     input_arguments,
+    allow_end_gap=False,
 ):
     packets = _scan(
         [
@@ -225,17 +243,19 @@ def _evidence(
         ]
     )
     points = _presentation_points(packets, expected_frames, start_ticks)
-    _verify_grid(points, fps, base)
+    extent = _presentation_extent(points, fps, base, allow_end_gap)
+    method = "packet-pts-end-gap-v1" if extent else _METHOD
     return {
         "status": "verified",
         "sourceSha256": expected_sha256,
         "streamIndex": stream_index,
         "frameRate": {"num": fps.numerator, "den": fps.denominator},
-        "method": _METHOD,
+        "method": method,
+        **extent,
         "packetCount": len(points),
         "timeBase": {"num": base.numerator, "den": base.denominator},
         "originTicks": points[0],
-        "timingSha256": _timing_hash(packets, base, fps),
+        "timingSha256": _timing_hash(packets, base, fps, method),
     }
 
 
@@ -249,9 +269,12 @@ def verify_video_clock(
     expected_frames=None,
     start_ticks=None,
     cache=None,
+    allow_end_gap=False,
 ):
     """Verify all packet PTS; a cache hit still verifies the current original bytes."""
     input_arguments = local_source_arguments(path)
+    if type(allow_end_gap) is not bool:
+        raise VideoClockError("Video end-gap policy must be explicitly boolean")
     fps, base = _parameters(
         stream_index,
         frame_rate,
@@ -261,7 +284,15 @@ def verify_video_clock(
         start_ticks,
     )
     path = Path(path)
-    key = (expected_sha256, stream_index, fps, base, expected_frames, start_ticks)
+    key = (
+        expected_sha256,
+        stream_index,
+        fps,
+        base,
+        expected_frames,
+        start_ticks,
+        allow_end_gap,
+    )
     try:
         with fingerprint_stage(verify_on_exit=True):
             actual = file_fingerprint(path)
@@ -281,6 +312,7 @@ def verify_video_clock(
                     expected_frames,
                     start_ticks,
                     input_arguments,
+                    allow_end_gap,
                 )
     except (ContractError, OSError) as exc:
         raise VideoClockError(

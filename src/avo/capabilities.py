@@ -144,12 +144,19 @@ _PROOF_BUILTINS = {
 }
 
 _PROOF_CODE_PATHS = (
+    Path(__file__).parent / "loudness_profiles.py",
+    Path(__file__).parent / "adapters" / "media" / "proof_title.py",
+    Path(__file__).parent / "adapters" / "media" / "audio_clock.py",
     Path(__file__).parent / "adapters" / "media" / "video_clock.py",
     Path(__file__).parent / "timeline" / "import_evidence.py",
     Path(__file__).parent / "timeline" / "migration.py",
     Path(__file__).parent / "adapters" / "media" / "proof_placed.py",
+    Path(__file__).parent / "adapters" / "media" / "proof_bounded.py",
+    Path(__file__).parent / "adapters" / "media" / "proof_stream.py",
     Path(__file__).parent / "timeline" / "initial_cut_placed.py",
     Path(__file__).parent / "timeline" / "import_layout.py",
+    Path(__file__).parent / "timeline" / "resolve_effects.py",
+    Path(__file__).parent / "timeline" / "resolve_export.py",
     Path(__file__).parent / "adapters" / "media" / "still_probe.py",
     Path(__file__).parent / "adapters" / "media" / "local_source.py",
     Path(__file__).parent / "adapters" / "media" / "ffprobe.py",

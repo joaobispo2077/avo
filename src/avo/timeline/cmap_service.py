@@ -24,7 +24,16 @@ def _placed_diff_state(snapshot):
     settings.update(
         {
             f"layout.{key}": layout[key]
-            for key in ("programClock", "duration", "displayOrigin", "background")
+            for key in (
+                "programClock",
+                "duration",
+                "displayOrigin",
+                "background",
+                "inactiveEffects",
+                "resolveEffects",
+                "importMode",
+                "privacyMasks",
+            )
             if key in layout
         }
     )

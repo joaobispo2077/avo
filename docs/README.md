@@ -74,3 +74,5 @@ Write for the **correct audience by file** — not by mixing tones in one file.
   loudness, true-peak, and delivery specs.
 - [`animation-delivery-specifications.md`](animation-delivery-specifications.md)
   — animation render and delivery specs.
+
+See [Editing craft preferences and motion review](editing-craft.md) for the current native interfaces and implementation scope.

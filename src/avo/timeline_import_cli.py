@@ -67,6 +67,7 @@ def _inspect(args):
 def create_service(args):
     from avo.adapters.media.ffprobe import FfprobeMediaAdapter
     from avo.adapters.media.otio_reader import read_otio
+    from avo.adapters.media.resolve_sidecar import read_resolve_sidecar
     from avo.adapters.media.still_probe import verify_literal_still
     from avo.timeline.import_service import TimelineImportService
 
@@ -76,6 +77,7 @@ def create_service(args):
         reader=read_otio,
         probe=FfprobeMediaAdapter().inventory,
         still_probe=verify_literal_still,
+        metadata_reader=read_resolve_sidecar,
     )
 
 
@@ -108,6 +110,14 @@ def dispatch(args, service):
             reason=args.reason,
         )
     if args.import_command == "prepare":
+        if not any((args.mappings, args.declarations, args.supersedes_import_id)):
+            return service.prepare_automatic(
+                args.input,
+                timeline=args.timeline,
+                media_roots=args.media_root,
+                actor=args.actor,
+                reason=args.reason,
+            )
         return service.prepare(
             args.input,
             timeline=args.timeline,
@@ -241,6 +251,8 @@ def _compact_report(result):
                 "active",
                 "nextAction",
                 "findings",
+                "warnings",
+                "notes",
                 "findingCounts",
                 "name",
                 "schemas",

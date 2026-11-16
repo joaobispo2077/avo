@@ -348,10 +348,14 @@ def resolve_loudness_profile(
     )
 
 
-def limiter_filter_for(true_peak_dbtp: float) -> str:
+def limiter_filter_for(
+    true_peak_dbtp: float, *, latency_compensated: bool = False
+) -> str:
     """Map true-peak ceiling to alimiter linear limit (approximate)."""
     limit = 10 ** (true_peak_dbtp / 20.0)
-    return LIMITER_FILTER_TEMPLATE.format(limit=limit)
+    return LIMITER_FILTER_TEMPLATE.format(limit=limit) + (
+        ":latency=true" if latency_compensated else ""
+    )
 
 
 def loudnorm_measure_filter(profile: ResolvedLoudnessProfile) -> str:

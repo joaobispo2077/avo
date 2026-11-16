@@ -110,16 +110,27 @@ def _remember_fingerprint(observations, key, result, path):
     observations[key] = dict(result)
 
 
+def _schema_location(name: str, root: Path | None = None) -> tuple[Path, str]:
+    # An existing literal filename wins over interpreting its hashes as fragments.
+    offsets = [len(name), *(index for index, value in enumerate(name) if value == "#")]
+    for offset in offsets:
+        filename, fragment = name[:offset], name[offset + 1 :]
+        path = (Path(root) / filename) if root else schema_path(filename)
+        if path.is_file():
+            return path, fragment
+    filename, _, fragment = name.partition("#")
+    return (Path(root) / filename) if root else schema_path(filename), fragment
+
+
 def _schema_and_fragment(
     name: str, root: Path | None = None
 ) -> tuple[dict[str, Any], str]:
-    filename, separator, fragment = name.partition("#")
-    path = (Path(root) / filename) if root else schema_path(filename)
+    path, fragment = _schema_location(name, root)
     try:
         schema = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError) as exc:
         raise ContractError(f"cannot load schema {path}: {exc}") from exc
-    return schema, fragment if separator else ""
+    return schema, fragment
 
 
 def _schema_registry(root: Path):
@@ -184,9 +195,7 @@ def validate_document(
     root: Path | None = None,
 ) -> Any:
     schema = load_schema(schema_name, root)
-    schema_root = (
-        Path(root) if root else schema_path(schema_name.partition("#")[0]).parent
-    )
+    schema_root = Path(root) if root else _schema_location(schema_name)[0].parent
     try:
         validator_cls = _checked_validator(canonical_json_bytes(schema))
         errors = sorted(

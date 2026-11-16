@@ -70,6 +70,30 @@ def _verify(path, *, base="1/24", fps=Fraction(24), **kwargs):
     )
 
 
+def test_explicit_end_gap_evidence_preserves_packet_count_and_presentation_extent(
+    tmp_path, monkeypatch
+):
+    path, _ = _fake(tmp_path, monkeypatch, b"0,K__\n1,___\n4,___\n")
+    with pytest.raises(video_clock.VideoClockError):
+        _verify(path)
+    result = _verify(path, allow_end_gap=True)
+    assert result["method"] == "packet-pts-end-gap-v1"
+    assert result["packetCount"] == 3
+    assert result["endGapFrames"] == 2
+    assert result["presentationFrameCount"] == 5
+
+
+@pytest.mark.parametrize(
+    "data", [b"0,K__\n2,___\n3,___\n5,___\n", b"0,K__\n1,___\n6,___\n"]
+)
+def test_end_gap_policy_rejects_interior_irregularities_and_excessive_holds(
+    tmp_path, monkeypatch, data
+):
+    path, _ = _fake(tmp_path, monkeypatch, data)
+    with pytest.raises(video_clock.VideoClockError):
+        _verify(path, allow_end_gap=True)
+
+
 def test_inventory_cannot_publish_stale_properties_with_new_fingerprint(
     tmp_path, monkeypatch
 ):

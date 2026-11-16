@@ -115,3 +115,64 @@ def test_unresolved_rights_is_human_judgment_finding(monkeypatch, tmp_path: Path
     rights = next(item for item in result["evidence"] if item["kind"] == "rights")
     assert rights["status"] == "fail"
     assert rights["findings"][0]["classification"] == "rights"
+
+
+def test_motion_cues_extend_visual_coverage_without_extending_speech_risks(
+    monkeypatch, tmp_path
+):
+    monkeypatch.setattr("avo.adapters.qc.registry.CutProofQcAdapter.check", base_check)
+    monkeypatch.setattr(
+        CheckpointQcRegistry,
+        "_probe",
+        staticmethod(
+            lambda _: {"streams": [{"codec_type": "video"}, {"codec_type": "audio"}]}
+        ),
+    )
+
+    class CueStore(Store):
+        def revision(self, revision_id):
+            result = super().revision(revision_id)
+            if self.kind == "bmap":
+                result["snapshot"]["cues"] = [
+                    {
+                        "cueId": "title",
+                        "start": {"ticks": 60, "timebase": {"num": 1, "den": 60}},
+                        "end": {"ticks": 90},
+                    }
+                ]
+            return result
+
+    class CueWorkspace(Workspace):
+        def store(self, kind):
+            return CueStore(kind)
+
+    candidate = tmp_path / "candidate.mp4"
+    candidate.write_bytes(b"current candidate")
+    risks = [{"start": 0.1, "end": 0.2, "reason": "source-join"}]
+    deps = {"bmap": "b" * 64, "tracks": "t" * 64, "animation": "a" * 64}
+    result = CheckpointQcRegistry().check(
+        candidate,
+        checkpoint="motion-proof",
+        workspace=CueWorkspace(tmp_path),
+        dependencies=deps,
+        risk_windows=risks,
+    )
+    assert result["requiredTranscriptionWindows"] == risks
+    assert result["requiredTranscriptionWindows"] is not risks
+    expected = [*risks, {"start": 0.85, "end": 1.65, "reason": "cue:title"}]
+    assert result["requiredWindows"] == expected
+    assert result["coverage"] == {"mode": "full", "windows": expected}
+    assert {item["kind"] for item in result["evidence"]} == {
+        "lineage",
+        "technical-qc",
+        "bmap",
+        "tracks",
+        "animation",
+        "visual-qc",
+        "audio-qc",
+        "rights",
+    }
+    rights = next(item for item in result["evidence"] if item["kind"] == "rights")
+    assert rights["status"] == "fail"
+    assert rights["findings"][0]["classification"] == "rights"
+    assert result["status"] == "fail"

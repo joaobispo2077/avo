@@ -264,6 +264,49 @@ def _core_bridge_defs() -> list[BridgeToolDef]:
         ),
         # --- animation ---
         _tool(
+            "avo_animation_plan_show",
+            "animation",
+            "plan-show",
+            "Read-only current motion map, linked storyboard and lane readiness; "
+            "never initializes canonical state, publishes reports or runs media/models.",
+        ),
+        _tool(
+            "avo_animation_plan_publish",
+            "animation",
+            "plan-publish",
+            "Writes immutable derived motion-map/storyboard review files for the "
+            "current basis; does not change canonical edits or grant approval.",
+        ),
+        _tool(
+            "avo_animation_options_show",
+            "animation",
+            "options-show",
+            "Read-only inspection of scoped craft preferences and built-in review "
+            "defaults; no media, model, render or filesystem writes.",
+            include_project=False,
+            extra_params=motion_context,
+        ),
+        _tool(
+            "avo_animation_options_set",
+            "animation",
+            "options-set",
+            "Writes only the explicitly selected craft preference scope from a "
+            "typed request and expected document identity; no model execution "
+            "or canonical edit (CLI: avo cli animation options-set).",
+            include_project=False,
+            extra_params=(*motion_context, ParamSpec("request", str, required=True)),
+        ),
+        _tool(
+            "avo_animation_options_reset",
+            "animation",
+            "options-reset",
+            "Resets only the explicitly selected craft preference scope from a "
+            "typed request and expected document identity; preserves unrelated "
+            "settings and canonical edits (CLI: avo cli animation options-reset).",
+            include_project=False,
+            extra_params=(*motion_context, ParamSpec("request", str, required=True)),
+        ),
+        _tool(
             "avo_animation_engine_show",
             "animation",
             "engine-show",
