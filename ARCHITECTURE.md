@@ -989,7 +989,22 @@ the same guard; existing v1 snapshots do not cause an upgrade on inspection.
 The pure camera planner derives frames from BMap and binds moves to exact source
 occurrences, geometry, source bytes and frozen options. Camera proof compilation
 uses a strict v2 operation contract and requires a qualified native implementation;
-legacy proof contracts are unchanged. Encoded execution is not yet qualified.
+legacy proof contracts are unchanged. Encoded execution remains a qualification
+candidate until the native capability, provenance and authoring controls are
+registered together.
+
+The native camera sampler accepts sealed numeric paths over freshly verified
+original-source occurrences. Its frame expressions retain the complete cue
+interval during partial renders and run before independent captions or graphics.
+Contiguous and placed execution share this source-bound sampler. Explicit
+precision composition uses 16-bit RGB/alpha planes and bounded raw picture
+chunks; opaque alpha insertion/removal copies planes instead of introducing a
+libswscale RGB/RGBA matrix round trip. Legacy proofs retain their existing pixel
+path. Optional placed-stage reuse is disabled for the new precision profile
+until its complete camera recipe is qualified for caching. Unsupported timing,
+source geometry and fidelity combinations fail preflight. Runtime evidence and
+remaining activation requirements are documented in
+[`docs/source-picture-camera-rendering.md`](docs/source-picture-camera-rendering.md).
 
 Camera movement, face anchoring, sound matching, reference analysis, spoken
 notes/recovery and editor handoff are selected options resolved through existing
