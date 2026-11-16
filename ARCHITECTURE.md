@@ -81,6 +81,14 @@ repeated by native execution; supported images are single-frame and literal,
 never expanded as sequences. Known non-square pixels and unsupported timing or
 treatment block this capability. The optional native reader remains isolated.
 
+Later checkpoints may append admitted `overlay-video` operations to the unique
+imported source-layout base. The base keeps its original placements, privacy
+masks and continuous source-audio graph; added audio remains explicit mixer
+nodes. Generated overlays use the existing compositor and fresh closing guard.
+Microproofs count only emitted overlay inputs when routing the final audio,
+including windows where every overlay is inactive. Cut-proof still requires the
+exact source-only canonical reconstruction.
+
 Microproof and full proof use the same graph. Both preflight/render paths close
 a fresh fingerprint-verification batch before publishing evidence, including
 retained inactive originals. Ephemeral same-plan media owns a separate fingerprint
@@ -554,6 +562,73 @@ Canonical authority flows manifest/source snapshot → logical Animation + Track
 
 The existing FFmpeg ProofPlan path handles generated-clip and overlay-video. It freezes receipt, lock, frame range, placement and stable z-order; partial proofs retain the original local-frame phase across cuts. Original source audio keeps its canonical graph and envelope. Unsupported mixing/event envelopes fail before output. Explicit FFV1/PCM Matroska conformance uses this same graph for exact decoded pixel and sample checks; normal delivery encoding stays separately checked. Reconstruction retains the complete declared source/dependency/receipt/lock closure and can remove only regenerable output under existing cleanup authority.
 
+Canonical HyperFrames instances use source-only component registrations referenced
+by logical Tracks generators and Animation components. The binding service derives
+the exact BMap cue, canonical canvas placement, original-media closure and all five
+current map heads without pointing Tracks forward to generated output hashes.
+The outer composition owns browser/encoder observations and lossless PNG-sequence
+materialization; timeline admission consumes fresh observations and imports no
+renderer. Frozen vendor scripts are admitted only with explicit local-library
+fingerprints; authored HTML/JavaScript retains deterministic-source checks.
+Generated receipts require unchanged source/tool identities, exact silent
+FFV1/BGRA output and matching seek/encoded-frame evidence. Proof compilation
+also verifies source range, ordering and exact canonical-to-preview geometry.
+
+Qualified HyperFrames browser observations are reused only inside one native
+proof validation batch, keyed by the complete binding, receipt, output and
+canonical lock. Every use still passes native admission. Original inputs,
+tools, output and receipt bytes are enrolled in the enclosing fresh closing
+guard, including dependencies observed by nested binding checks. Another batch
+captures again; no observation cache persists across proofs.
+
+Binding resolution and placed rendering share the enclosing fingerprint stage
+only inside that native batch. Every use still resolves current canonical
+authority, source membership and receipt admission; byte observations remain
+scoped to the batch and all enrolled dependencies receive a fresh closing hash.
+Standalone binding resolution and rendering retain their independent stages.
+Private per-window PCM uses a separate fingerprint scope; its cleanup must not
+leave a deleted temporary output in the enclosing dependency guard.
+Historical preview inventory also owns a separate fingerprint scope: these
+quarantine examples are negative evidence, not contributing inputs. Renaming a
+temporary export cannot enroll its old path in the closing source guard;
+copied preview ancestry and actual input mutations remain rejected.
+
+Canonical proof media resolution maps locked audio trim IDs to current Tracks
+audio-source fingerprints using both the exact digest and resolved locator.
+Several cues can share one original asset. Conflicting IDs or origin metadata
+are rejected; unowned, relabelled or unresolved media cannot gain admission.
+Resolution remains metadata-only, with byte and recursive ancestry checks in
+the normal preflight and executor.
+
+Canonical HyperFrames PNG production and independent seek observations use the
+same native snapshot raster backend, in separate browser contexts. Production
+captures every frame in bounded batches of at most 128 before silent lossless
+encoding. Independent forward/reverse captures and every encoded RGBA frame
+remain exact comparisons. The sealed tool environment names this raster backend;
+different browser capture paths are not assumed to have identical rounding.
+Original source, lifecycle and deterministic-authoring validation plus strict
+native checks remain prerequisites.
+
+Both paths use a private copy of the frozen source closure to initialize the seek
+runtime with the declared rational render frame rate.
+This compatibility bridge is needed when the installed snapshot command defaults
+to a different frame rate and exposes no frame-rate option. It changes neither
+registered source bytes nor vendor files. Temporary copies have an independently closed
+byte-verification guard before clock injection and cleanup; the enclosing proof
+guard retains responsibility for original sources and tools. The observed environment seals the bridge policy,
+and independent forward/reverse snapshots must match the corresponding encoded
+frames exactly. Missing or mismatched evidence rejects admission.
+
+Only a multi-window native microproof gate opts into ephemeral full-placement
+video stages. Their provenance binds the full plan, canonical heads, placement,
+source, render contract, implementation and tool bytes. Exact integer-frame
+slices preserve original sampling and fade phase; ordinary short proofs, stills,
+titles and full renders retain their existing paths. Insufficient disk space
+falls back to bounded direct rendering. Batch-owned stages survive the fresh
+closing guard and are removed only after checking their original resolved root
+and rejecting escaped, linked or unexpected contents. No stage is reused across
+batches or admitted as an original or prior-proof substitute.
+
 Validation is recorded in specs/012-code-drawn-motion/validation.md: schema/legacy compatibility, seven installed agent profiles, source and extracted native capture, current-environment admission, physical alpha/phase/audio checks, and source-only rematerialization. Local execution identifies Windows AMD64 and its actual graphics renderer; configured Linux/macOS lanes are not claimed as executed locally. See [code-drawn motion](docs/code-drawn-motion.md).
 
 The provider settings validator retains its existing beside-launcher compatibility lookup. Both binary build scripts copy only `providers/avo.provider.schema.json` there before archiving; no provider identities, footage paths or global preferences are packaged. An explicit external `AVO_ROOT` remains responsible for its standard public-schema tree. Scoped writes are validated before replacement and retain unrelated settings.
@@ -567,6 +642,14 @@ ProofPlan source aliases and their aggregate raw hash. Legacy assembly
 `rawFingerprints` retain their separate compatibility path. Neither format skips
 current-input, source-byte, graph or microproof validation. Coverage includes
 native cut regression approval and rejection of altered source bytes and locks.
+
+Checkpoint QC retains every required visual/cue window while optionally exposing
+separate `requiredTranscriptionWindows` from its original cut-risk and join
+requirements. ReviewRunner uses that explicit list, including an empty list,
+only for ASR word-risk analysis and its evidence scope. Watch still receives all
+required windows and QC evidence/statuses remain intact. Older QC producers that
+omit the field keep their existing routing. A silent graphic no longer implies
+that spoken words must occur there; real speech-risk obligations remain required.
 
 Cutting's existing runtime references now allow explicit CPU/CUDA execution for
 transcription and isolated WhisperX alignment. CPU remains the compatibility
@@ -595,6 +678,8 @@ Native ProofPlan mixing keeps the existing sequential source-cut dialogue path
 and adds explicitly declared music, SFX and ambience nodes in the absolute
 48 kHz sample domain. The media adapter validates every original through the
 same fingerprint, ancestry and channel-routing boundary before rendering. Audio
+resampling requirements cover source, music, SFX and ambience leaves equally;
+missing, unused or mismatched conversion operations remain errors. Audio
 events must identify their exact declared node and onset; unsupported effects,
 missing events and clock mismatches fail closed. The mix adapter accepts only
 finite ranges, literal gain, bounded fades and declared sidechain ducking. A
@@ -602,6 +687,15 @@ lossless same-plan dialogue intermediate supplies the lead without reading an
 earlier proof. Float PCM preserves headroom until the single final audio encode.
 Independent finite picture/audio inputs reach EOF so a video frame-count stop
 cannot discard the last PCM packet of a microproof.
+
+Post-cut source gain controls live in optional Tracks
+`audioTracks.sourceMixAdjustments`, not a replacement CMap or duplicate audio
+layer. Each control binds an enabled imported placement, original fingerprint,
+stream and channel selection. The ProofPlan compiler applies its gain/ceiling
+deltas once to the existing source node; preflight checks the exact result.
+Cut proofs retain the original CMap mix. Legacy assembly rendering rejects these
+controls rather than silently ignoring them. Existing Tracks without controls
+are unchanged; schema, source-binding and compile/preflight tests cover this path.
 
 Tracks regions may declare their rational timebase. Omitted timebases retain
 legacy milliseconds. Cue containment compares exact rational seconds rather
@@ -898,3 +992,194 @@ Implementation validation requires default/no-option and legacy compatibility,
 pure frame/clock/merge rules, real encoded source-fidelity/audio checks,
 native/MCP/package parity, existing full software-quality gates and actual
 creator/target-editor acceptance. These remain future delivery gates.
+
+### Explicit frame repetition in imported source placements
+
+Placed imports can declare `pictureSampling: "repeat-2x"` on an individual
+moving-picture mapping. The declaration is retained on the canonical placement
+and compiled into the same source-layout graph for microproof and full render.
+Source clocks are verified at half the program rate; trims must still land on
+native source frames. Native execution repeats each decoded source frame twice
+without changing wall-clock duration, audio samples, or placement boundaries.
+Undeclared rate conversion, unknown sampling modes, still/audio sampling and
+unverified variable-rate sources remain blocked.
+
+Normalizer 2.1.0 binds the new admission semantics to fresh packets. Sampling
+imports record `placed-sampling-1.0.0`; previous contiguous/placed capability
+versions remain valid for their immutable canonical history. Prior packets are
+not silently reinterpreted. The existing implementation fingerprint already
+includes admission-layout rules, canonical compilation and native execution.
+This extends the existing services and media adapter; no parallel timeline,
+framework, or renderer abstraction is introduced.
+
+Validation compares every repeated decoded frame and unchanged PCM, including
+a microproof beginning on the second copy of a source frame, and a real encoded
+30-to-60 fps trim. Synthetic activation and origin verification preserve the
+new capability while historical import provenance stays supported. This is a
+sampling capability, not qualification of Resolve transforms, titles, fades,
+audio-tail policy, or a particular video's fidelity.
+## Declared Resolve treatments
+
+Placed CMaps can retain explicit picture geometry, alpha fades, native decoded
+audio-tail gaps, and bounded static titles. Authorial title and font inputs are
+separate from raw audiovisual inputs and are admitted to title placements
+(or retained generator references in export-driven drafts);
+contiguous CMaps retain their raw-only rule. The existing initial-cut compiler
+and native placed proof adapter own execution. Titles use pinned local fonts
+with inert text data; exported Fusion code is never executed.
+
+The media adapter counts native audio samples using the existing bounded clock
+scanner. Core admission compares these facts with explicit declarations before
+creating a proposal. Disabled Resolve effects remain inert reference evidence;
+unknown and enabled effects remain blocking. All original and authorial inputs
+are fingerprinted and revalidated before proof publication. Native frame/PCM
+tests and canonical admission tests qualify the supported subset; a synthetic
+pass does not qualify an individual Resolve export or grant creator approval.
+
+## Export-driven Resolve draft import
+
+Ordinary pipeline and CLI preparation now derive a placed draft from OTIO,
+original media and an optional paired DRT. `import_auto` orchestrates existing
+probe/admission ports; the bounded `resolve_sidecar` media adapter reads sequence
+settings and literal static title metadata without starting Resolve or executing
+Fusion. Dependency direction remains entry points -> timeline services/pure rules
+-> injected media ports. No second timeline owner or renderer is introduced.
+
+`resolve_export` translates complete supported static parameter sets and retains
+all other effects as inert canonical `resolveEffects`. Unsupported generators
+retain their authorial export plus payload. An original whose packet clock is
+unverified can remain in an export-driven draft with explicit unverified clock
+metadata. Structural readiness permits normal explicit draft selection after
+Sync review; render readiness independently rejects active unresolved treatments,
+generators and video clocks. Both the initial-cut request builder and proof-plan
+compiler enforce that guard. Explicit source-only and declared-treatment routes
+remain strict, and historical packets are not rewritten.
+
+Normalizer 2.6.2 and `placed-export-driven-1.0.0` bind these semantics to new
+immutable packets. Exact local reference identity, source fingerprints, prohibited
+proof ancestry, provider isolation and optimistic activation locks still apply.
+Regression coverage exercises default pipeline/CLI preparation, opaque retention,
+clock warnings, strict-route compatibility, and refusal to render unresolved
+drafts. An actual export trial is staging-only and grants no creator approval.
+
+### Imported approximation previews and bounded picture end gaps
+
+Normalizer 2.7.0 adds explicit `pictureEndGapFrames` for one to three missing
+presentation positions immediately before the final packet. The native clock
+verifier requires an otherwise exact complete grid and a grid-aligned final PTS;
+interior irregularities and larger gaps remain unsupported. Strict verification
+is unchanged unless the bounded policy is requested. Canonical admission and
+native execution verify the exact declared gap and use timestamp-based holds
+before source trimming. `placed-end-gap-1.0.0` identifies the new contract.
+
+An explicitly authorized `importApproximation` records every unresolved effect
+pointer/name and requires `previewOnly: true`. Both canonical compilation paths
+reject stale omissions and refuse to waive unverified clocks or opaque generated
+sources. The existing preview-only materialization guard prevents promotion into
+a full proof. Original effect payloads and canonical edit intent remain intact;
+the preview is a supported-treatment projection, not fidelity certification.
+
+Placed microproof execution omits pictures outside the requested window and
+stores only each picture's intersection with that window. Sampling, transforms
+and fades run on the original clip clock before extraction, preserving fade
+phase, exact repetition and qualified end-gap holds without input seeking.
+The compositor renders only the window's local clock; privacy masks still
+evaluate absolute program frames. This avoids writing, decoding and compositing
+unneeded picture prefixes. Source admission, fingerprint checks, the canonical
+graph and continuous audio mix remain unchanged. Encoded frame/PCM and
+micro/full comparisons qualify the optimization; original media is never
+rewritten.
+
+Placed CMap layouts can declare `privacyMasks`: bounded opaque black rectangles
+on the canonical canvas with exact inclusive-start/exclusive-end program frames.
+Schema and semantic admission reject duplicate IDs, fractional coordinates,
+out-of-canvas regions and out-of-program intervals. The source-layout compiler
+freezes these decisions into its graph; import graph preservation rejects
+dropped or moved masks. Native FFmpeg draws them after all picture layers and
+fades, before window extraction, rounding scaled edges outward. Masks have no
+fade or opacity option and do not change source routing, audio or timing.
+Implementation hashing invalidates older proof execution locks when this
+renderer changes. Native full/micro frame and PCM comparisons cover privacy
+through imported overlay fades.
+
+Placed audio clips may explicitly set `audioPeakCeilingDbfs` (-12 to -1 dBFS).
+The source compiler binds it to the clip's gain operation. Native validation
+rejects unbounded values and applies the existing limiter with compensated
+lookahead after gain and before window extraction. Processing therefore retains
+the full node history for identical full/micro samples; other audio nodes and
+legacy gain-only calls remain unchanged. This is an opt-in sample-peak ceiling,
+not a true-peak delivery certificate. Encoded true peak requires separate QC.
+The shared limiter formatter is included in implementation fingerprint locks.
+
+### Bounded native placed rendering
+
+Full placed proofs use a private streaming executor behind the existing render
+port. Each admitted placement has one persistent decoder with the same complete
+sampling, transform and fade filters as scoped proofs. Small raw BGRA windows
+enter the existing compositor and absolute-frame privacy masks. Generated assets
+remain continuous inputs to one final encoder, preserving their local phase.
+The canonical graph, source admission and public CLI/schema remain unchanged.
+
+The native audio graph is mixed once before picture decoding. Source PCM scratch
+is released before picture work, and the exact resulting stereo mix supplies the
+continuous encoder. A private in-process observation boundary permits a job to
+qualify that mix before expensive picture work without modifying it.
+
+Picture windows are capped at 60 frames and 6 GiB of active scratch. Admission
+reserves the larger of the temporary source PCM plus complete mix, or the
+12 GiB candidate allowance plus complete mix, with 2 GiB of free headroom in
+each phase. Native source-PCM cleanup must succeed before picture begins.
+The picture phase rechecks actual available space with its already allocated
+mix, accounting for admitted layer dimensions and current disk availability.
+Consumed job-owned windows are
+removed immediately. Child errors, short/extra decoder output, frame mismatch,
+disk exhaustion and changed source fingerprints prevent publication. Diagnostics
+remain separate from ephemeral media. Publication follows validation and scratch
+cleanup, and existing project media is retained.
+
+Generic FFmpeg integration fixtures compare every decoded RGBA frame and stereo
+PCM sample with scoped legacy rendering across layers, titles, privacy edges,
+fades, repeated frames, generated animation phase and EOF failures. Unit tests
+cover process cleanup, partial pipes, storage accounting and failed publication.
+The new executor and stream utilities participate in implementation fingerprints.
+
+HyperFrames capture copies also reset eligible composition render trees after
+native pending-seek completion, before taking a screenshot. Identical final animation
+state can otherwise retain history-dependent Chromium paint-cache rounding.
+The capture-only hook hides each top-level composition, forces layout, restores
+the exact prior inline-style attribute, and forces final layout. It preserves
+the native completion callback's arguments, receiver, result and errors. The
+authoring project and its animation values remain unchanged. Roots with browser
+animation objects or CSS animation/transition declarations retain the existing
+capture path, avoiding animation restarts when rebuilding layout. This compatibility
+policy is recorded in the generator environment for the qualified installed
+runtime; changing it invalidates previous generated assets. Independent,
+reverse-order and production captures still require exact decoded pixel equality.
+
+Normal SDR proof encoding converts the composited full-range RGB picture to
+limited-range BT.709 YUV420P and declares matching matrix, primaries, transfer
+and range metadata in H.264. Untagged HD playback can otherwise select a
+different matrix from the RGB-to-YUV conversion and shift the approved colours
+between players. This is an explicit encoding contract, not a creative grade.
+Lossless FFV1/BGRA conformance output remains unchanged. Runtime fixtures verify
+colour patches, stream metadata, frame timing and audio independently; browser
+qualification checks the same encoded frames against canonical RGB references.
+
+An explicit `h264_nvenc` ProofPlan output uses NVIDIA H.264 encoding with the
+existing continuous encoder boundary. Its quality settings are p5/HQ, VBR,
+CQ 19, 12 Mb/s target, 18 Mb/s maximum, a 36 Mb buffer and High profile.
+Source decoding, placement filters, compositing and the continuous audio graph
+retain their existing owners. CPU H.264 and lossless FFV1 arguments are unchanged.
+There is no implicit hardware selection or CPU fallback. Encoder settings are
+part of the implementation lock, so switching encoders requires fresh native
+windows and final-file review. See [GPU proof encoding](docs/gpu-proof-encoding.md).
+
+Generated-media admission requests historical-output inventory lazily, after its
+complete contributor and generated-input closure is available. A conservative
+byte-size filter avoids reading historical files that cannot equal any inspected
+input. Missing, stale or incomplete input sizes, including one-shot ancestry
+iterators, retain full inventory. Matching files are freshly hashed in an
+independent stage on every admission; retained materialization hashes remain
+unconditional. This adds no negative-evidence cache or source-identity shortcut.
+The three HyperFrames generator implementations and their existing bindings are
+unchanged. See [generated-media admission](docs/generated-media-admission.md).
