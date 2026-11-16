@@ -195,7 +195,29 @@ def test_encoded_windows_use_the_original_path_interval_in_any_seek_order(
     )
     selected = operation(source, curve=curve)
     full = render(source, tmp_path / "full.mkv", selected)
-    assert not np.array_equal(full[-1], pixels(source, 160, 90)[-1])
+    original = pixels(source, 160, 90)
+    np.testing.assert_array_equal(full[0], original[0])
+    np.testing.assert_array_equal(full[-1, 70, 0], original[-1, 65, 16])
+    parameters = selected["parameters"]
+    crop = evaluate_camera(
+        parameters["behavior"],
+        frame=11,
+        frame_range=parameters["originalFrameRange"],
+        geometry=parameters["geometry"],
+    )["crop"]
+    x, y = crop["x"], crop["y"] + 70 * crop["height"] / 90
+    ix, iy = int(x), int(y)
+    dx, dy = x - ix, y - iy
+    expected = (
+        original[11, iy, ix].astype(float) * (1 - dx) * (1 - dy)
+        + original[11, iy, ix + 1].astype(float) * dx * (1 - dy)
+        + original[11, iy + 1, ix].astype(float) * (1 - dx) * dy
+        + original[11, iy + 1, ix + 1].astype(float) * dx * dy
+    )
+    # Independently sample the original at the pure evaluator's crop position.
+    # One integer level covers interpolation rounding; window comparisons below
+    # still require exact pixels and detect a restarted or stateful native path.
+    np.testing.assert_allclose(full[11, 70, 0], expected, rtol=0, atol=1)
     for first, last in ((13, 24), (0, 3), (4, 9), (23, 24), (9, 10)):
         actual = render(
             source, tmp_path / f"window-{first}.mkv", selected, first=first, last=last
@@ -451,6 +473,142 @@ def audio_samples(path):
     return np.frombuffer(result.stdout, dtype="<f4").reshape(-1, 2)
 
 
+@pytest.mark.parametrize("fps", [Fraction(24), Fraction(30000, 1001)])
+def test_normal_native_proof_applies_camera_and_preserves_independent_audio(
+    tmp_path, monkeypatch, fps
+):
+    from avo.adapters.media.proof_executor import execute_ffmpeg_proof
+
+    execution, source, dialogue, camera = native_execution(
+        tmp_path, monkeypatch, fps=fps
+    )
+    before = deepcopy(execution)
+    original_bytes = source.read_bytes(), dialogue.read_bytes()
+    expected = render(source, tmp_path / "kernel-reference.mkv", camera)
+    from avo.adapters.media import proof_executor
+
+    pieces = []
+    original_piece = proof_executor._render_piece
+
+    def observe_piece(*args, **kwargs):
+        original_piece(*args, **kwargs)
+        pieces.append(pixels(args[6], 160, 90))
+
+    monkeypatch.setattr(proof_executor, "_render_piece", observe_piece)
+    full_path = tmp_path / "native.mkv"
+    result = execute_ffmpeg_proof(execution, full_path)
+    np.testing.assert_array_equal(pieces[0], expected)
+    np.testing.assert_array_equal(pixels(full_path, 160, 90), expected)
+    np.testing.assert_array_equal(audio_samples(full_path), audio_samples(dialogue))
+    assert result["audioEncodeCount"] == 1
+    assert probe(full_path)["pix_fmt"] == "gbrp16le"
+    execution["window"] = {"startFrame": 7, "endFrameExclusive": 18}
+    window_path = tmp_path / "native-window.mkv"
+    execute_ffmpeg_proof(execution, window_path)
+    np.testing.assert_array_equal(pixels(window_path, 160, 90), expected[7:18])
+    np.testing.assert_array_equal(
+        audio_samples(window_path),
+        audio_samples(dialogue)[round(7 * 48000 / fps) : round(18 * 48000 / fps)],
+    )
+    execution["window"] = None
+    assert execution == before
+    assert (source.read_bytes(), dialogue.read_bytes()) == original_bytes
+
+
+@pytest.mark.parametrize(
+    "profile", ["retimed", "past-eof", "fractional-frame", "reduced-depth"]
+)
+def test_camera_rejects_unqualified_profiles_before_creating_outputs(
+    tmp_path, monkeypatch, profile
+):
+    from avo.adapters.media.proof_executor import execute_ffmpeg_proof
+
+    execution, _, _, _ = native_execution(tmp_path, monkeypatch)
+    source_range = execution["videoGraph"]["operations"][0]["parameters"]["sourceRange"]
+    if profile == "retimed":
+        source_range["endTicks"] = 23
+    elif profile == "past-eof":
+        source_range.update(startTicks=1, endTicks=25)
+    elif profile == "fractional-frame":
+        source_range.update(startTicks=1, endTicks=49, timebase={"num": 1, "den": 48})
+    else:
+        execution["output"]["pixelFormat"] = "yuv420p"
+    destination = tmp_path / "uncreated" / "proof.mkv"
+    with pytest.raises((RuntimeError, ValueError)):
+        execute_ffmpeg_proof(execution, destination)
+    assert not destination.parent.exists()
+
+
+@pytest.mark.parametrize("tags", [("smpte2084", "bt2020"), ("bt709", "smpte432")])
+def test_actual_hdr_or_wide_gamut_source_tags_fail_preflight(
+    tmp_path, monkeypatch, tags
+):
+    from avo.adapters.media.proof_executor import execute_ffmpeg_proof
+
+    execution, source, _, camera = native_execution(tmp_path, monkeypatch)
+    tagged = tmp_path / "tagged-original.mkv"
+    subprocess.run(
+        [
+            "ffmpeg",
+            "-v",
+            "error",
+            "-nostdin",
+            "-n",
+            "-i",
+            str(source),
+            "-c",
+            "copy",
+            "-color_trc",
+            tags[0],
+            "-color_primaries",
+            tags[1],
+            str(tagged),
+        ],
+        capture_output=True,
+        check=True,
+    )
+    assert probe(tagged)["color_transfer"] == tags[0]
+    digest = hashlib.sha256(tagged.read_bytes()).hexdigest()
+    original = execution["videoGraph"]["operations"][0]["parameters"]["source"]
+    original.update(locator=str(tagged), sha256=digest)
+    camera["parameters"]["sourceSha256"] = digest
+    execution["canonicalInputLock"]["source:camera-main"] = digest
+    destination = tmp_path / "uncreated" / "proof.mkv"
+    with pytest.raises(ValueError, match="HDR/wide-gamut"):
+        execute_ffmpeg_proof(execution, destination)
+    assert not destination.parent.exists()
+
+
+def test_camera_phase_survives_an_exact_source_cut(tmp_path, monkeypatch):
+    from avo.adapters.media.proof_executor import execute_ffmpeg_proof
+
+    execution, source, dialogue, camera = native_execution(tmp_path, monkeypatch)
+    trim = execution["videoGraph"]["operations"][0]
+    right = deepcopy(trim)
+    trim["outputRange"]["endFrameExclusive"] = 12
+    trim["parameters"]["sourceRange"]["endTicks"] = 12
+    right["operationId"] = "trim-second"
+    right["outputRange"]["startFrame"] = 12
+    right["parameters"]["sourceRange"]["startTicks"] = 12
+    following = deepcopy(camera)
+    camera["outputRange"]["endFrameExclusive"] = 12
+    following["operationId"] = "camera-second"
+    following["outputRange"]["startFrame"] = 12
+    following["parameters"]["sourceOccurrenceId"] = "trim-second"
+    execution["videoGraph"]["operations"] = [trim, right, camera, following]
+    reference = deepcopy(following)
+    reference["outputRange"]["startFrame"] = 0
+    expected = render(source, tmp_path / "unsplit-reference.mkv", reference)
+    full = tmp_path / "split.mkv"
+    execute_ffmpeg_proof(execution, full)
+    np.testing.assert_array_equal(pixels(full, 160, 90), expected)
+    np.testing.assert_array_equal(audio_samples(full), audio_samples(dialogue))
+    execution["window"] = {"startFrame": 9, "endFrameExclusive": 16}
+    window = tmp_path / "cross-cut.mkv"
+    execute_ffmpeg_proof(execution, window)
+    np.testing.assert_array_equal(pixels(window, 160, 90), expected[9:16])
+
+
 def admitted_overlay(tmp_path):
     from avo.timeline.contracts import file_fingerprint
     from avo.timeline.generated_assets import GeneratedAssetService
@@ -507,6 +665,52 @@ def admitted_overlay(tmp_path):
     }
 
 
+def test_fixed_caption_and_credit_layers_preserve_camera_precision_and_window_phase(
+    tmp_path, monkeypatch
+):
+    from tests.integration.test_code_drawn_proof_executor import _add_generated
+
+    from avo.adapters.media.proof_executor import execute_ffmpeg_proof
+
+    execution, source, dialogue, camera = native_execution(tmp_path, monkeypatch)
+    asset = admitted_overlay(tmp_path)
+    for identity, role, first, last, x, y, order in (
+        ("credit", "overlay", 3, 20, 7, 5, 10),
+        ("caption", "caption", 6, 18, 30, 60, 20),
+    ):
+        selected = _add_generated(
+            execution,
+            asset,
+            kind="overlay-video",
+            start=first,
+            end=last,
+            local_start=0,
+            operation_id=identity,
+            role=role,
+            z_order=order,
+        )
+        selected["parameters"]["placement"].update(x=x, y=y)
+    expected = render(source, tmp_path / "camera-reference.mkv", camera)
+    full = tmp_path / "layered.mkv"
+    execute_ffmpeg_proof(execution, full)
+    actual = pixels(full, 160, 90)
+    # Camera sampling cannot touch fixed output-space graphics. Outside their
+    # rectangles the original 16-bit values must remain exact, including low bits.
+    mask = np.ones((90, 160), dtype=bool)
+    mask[5:29, 7:47] = False
+    mask[60:84, 30:70] = False
+    np.testing.assert_array_equal(actual[:, mask], expected[:, mask])
+    np.testing.assert_array_equal(actual[:3], expected[:3])
+    np.testing.assert_array_equal(actual[20:], expected[20:])
+    assert not np.array_equal(actual[10], expected[10])
+    np.testing.assert_array_equal(audio_samples(full), audio_samples(dialogue))
+    for first, last in ((13, 24), (0, 3), (4, 9)):
+        execution["window"] = {"startFrame": first, "endFrameExclusive": last}
+        window = tmp_path / f"layered-{first}.mkv"
+        execute_ffmpeg_proof(execution, window)
+        np.testing.assert_array_equal(pixels(window, 160, 90), actual[first:last])
+
+
 def placed_execution(tmp_path, monkeypatch):
     from avo.capabilities import default_proof_capability_registry
 
@@ -532,3 +736,108 @@ def placed_execution(tmp_path, monkeypatch):
         "parameters": {"background": "black", "placements": [placement]},
     }
     return execution, source, dialogue, camera
+
+
+def test_placed_camera_preserves_sixteen_bit_layers_audio_and_bounded_window_frames(
+    tmp_path, monkeypatch
+):
+    from tests.integration.test_code_drawn_proof_executor import _add_generated
+
+    from avo.adapters.media import proof_bounded
+    from avo.adapters.media.proof_executor import execute_ffmpeg_proof
+
+    monkeypatch.setattr(proof_bounded, "MAX_CHUNK_FRAMES", 7)
+    execution, source, dialogue, camera = placed_execution(tmp_path, monkeypatch)
+    asset = admitted_overlay(tmp_path)
+    caption = _add_generated(
+        execution,
+        asset,
+        kind="overlay-video",
+        start=3,
+        end=20,
+        local_start=0,
+        role="caption",
+    )
+    caption["parameters"]["placement"].update(x=7, y=5)
+    expected = render(source, tmp_path / "original-only-reference.mkv", camera)
+    full = tmp_path / "placed.mkv"
+    execute_ffmpeg_proof(execution, full)
+    actual = pixels(full, 160, 90)
+    mask = np.ones((90, 160), dtype=bool)
+    mask[5:29, 7:47] = False
+    np.testing.assert_array_equal(actual[:, mask], expected[:, mask])
+    assert not np.array_equal(actual[10], expected[10])
+    np.testing.assert_array_equal(audio_samples(full), audio_samples(dialogue))
+    for first, last in ((13, 24), (0, 3), (4, 9)):
+        execution["window"] = {"startFrame": first, "endFrameExclusive": last}
+        window = tmp_path / f"placed-{first}.mkv"
+        execute_ffmpeg_proof(execution, window)
+        np.testing.assert_array_equal(pixels(window, 160, 90), actual[first:last])
+
+
+def test_placed_foreground_retains_original_rgb_detail_and_independent_source_alpha(
+    tmp_path, monkeypatch
+):
+    from tests.integration.test_code_drawn_proof_executor import _frames
+
+    from avo.adapters.media import proof_bounded
+    from avo.adapters.media.proof_executor import execute_ffmpeg_proof
+    from avo.timeline.import_layout import picture_input_ids
+
+    monkeypatch.setattr(proof_bounded, "MAX_CHUNK_FRAMES", 7)
+    execution, source, dialogue, camera = placed_execution(tmp_path, monkeypatch)
+    layout = execution["videoGraph"]["operations"][0]
+    foreground = labeled_video(
+        tmp_path / "raw-foreground.mkv", size=(48, 32), bit_depth=16
+    )
+    alpha = labeled_video(tmp_path / "raw-alpha.mkv", size=(32, 32), alpha=True)
+    for identity, path, x, y, width, height, order in (
+        ("foreground", foreground, 110, 10, 48, 32, 1),
+        ("alpha-picture", alpha, 70, 50, 32, 32, 2),
+    ):
+        digest = hashlib.sha256(path.read_bytes()).hexdigest()
+        placement = deepcopy(layout["parameters"]["placements"][0])
+        placement.update(
+            placementId=identity,
+            trackId=identity,
+            sourceId=identity,
+            zOrder=order,
+            source={
+                "locator": str(path),
+                "sha256": digest,
+                "mediaClass": "source",
+                "streamIndex": 0,
+            },
+            pictureTransform={
+                "canvasWidth": 160,
+                "canvasHeight": 90,
+                "x": x,
+                "y": y,
+                "width": width,
+                "height": height,
+            },
+        )
+        layout["parameters"]["placements"].append(placement)
+        execution["canonicalInputLock"][f"source:{identity}"] = digest
+    layout["inputs"] = picture_input_ids(layout["parameters"]["placements"])
+    expected = render(source, tmp_path / "camera-reference.mkv", camera)
+    output = tmp_path / "source-layers.mkv"
+    execute_ffmpeg_proof(execution, output)
+    actual = pixels(output, 160, 90)
+    np.testing.assert_array_equal(actual[:, 10:42, 110:158], pixels(foreground, 48, 32))
+    rgba = _frames(alpha, width=32, height=32)
+    layer = actual[:, 50:82, 70:102]
+    transparent, opaque = rgba[..., 3] == 0, rgba[..., 3] == 255
+    np.testing.assert_array_equal(
+        layer[transparent], expected[:, 50:82, 70:102][transparent]
+    )
+    # Independent eight-bit alpha remains at its declared precision. Original
+    # sixteen-bit opaque picture outside it must retain every low bit exactly.
+    np.testing.assert_array_equal(
+        np.rint(layer[opaque] / 257).astype(np.uint8), rgba[..., :3][opaque]
+    )
+    np.testing.assert_array_equal(audio_samples(output), audio_samples(dialogue))
+    execution["window"] = {"startFrame": 9, "endFrameExclusive": 17}
+    window = tmp_path / "source-layer-window.mkv"
+    execute_ffmpeg_proof(execution, window)
+    np.testing.assert_array_equal(pixels(window, 160, 90), actual[9:17])

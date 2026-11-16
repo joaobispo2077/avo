@@ -157,6 +157,26 @@ def test_camera_v2_contract_rejects_executable_expressions(tmp_path):
         validate_document(plan, "avo.proof-plan.v2.schema.json")
 
 
+def test_native_adapter_preserves_the_camera_reader_contract(tmp_path):
+    from avo.adapters.media.timeline_render import TimelineRenderAdapter
+
+    workspace, request, selected, _ = prepared(tmp_path)
+    plan = ProofPlanCompiler(workspace, selected).compile(
+        request, regression_contract=regression_contract()
+    )
+    captured = []
+
+    def executor(execution, output):
+        captured.append(execution)
+        return {"status": "pass"}
+
+    TimelineRenderAdapter(proof_executor=executor).render_proof_plan(
+        plan, tmp_path / "unit-port-only.mp4", window=None
+    )
+    assert captured[0]["schemaVersion"] == "2.0.0"
+    assert captured[0]["requiredReaderCapabilities"] == ["camera-transform-v1"]
+
+
 @pytest.mark.parametrize(
     "document",
     [
