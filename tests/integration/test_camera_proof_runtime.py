@@ -161,6 +161,149 @@ def render(path, destination, selected, *, first=0, last=24, width=160, height=9
     return pixels(destination, width, height)
 
 
+def test_identity_camera_preserves_real_sixteen_bit_picture_and_original_bytes(
+    tmp_path,
+):
+    source = labeled_video(tmp_path / "original.mkv", bit_depth=16)
+    before = source.read_bytes()
+    actual = render(source, tmp_path / "identity.mkv", operation(source, scale=1))
+    np.testing.assert_array_equal(actual, pixels(source, 160, 90))
+    assert np.any(actual % 257 != 0), (
+        "An 8-bit staging conversion discarded source detail"
+    )
+    assert source.read_bytes() == before
+    assert probe(tmp_path / "identity.mkv")["pix_fmt"] == "gbrp16le"
+
+
+@pytest.mark.parametrize(
+    "curve",
+    [
+        "hold",
+        "linear",
+        "quadratic-in",
+        "quadratic-out",
+        "quadratic-in-out",
+        "quartic-in",
+        "exponential-out",
+    ],
+)
+def test_encoded_windows_use_the_original_path_interval_in_any_seek_order(
+    tmp_path, curve
+):
+    source = labeled_video(
+        tmp_path / "original.mkv", bit_depth=16, fps=Fraction(30000, 1001)
+    )
+    selected = operation(source, curve=curve)
+    full = render(source, tmp_path / "full.mkv", selected)
+    assert not np.array_equal(full[-1], pixels(source, 160, 90)[-1])
+    for first, last in ((13, 24), (0, 3), (4, 9), (23, 24), (9, 10)):
+        actual = render(
+            source, tmp_path / f"window-{first}.mkv", selected, first=first, last=last
+        )
+        np.testing.assert_array_equal(actual, full[first:last])
+
+
+def test_single_frame_camera_hold_keeps_its_selected_state(tmp_path):
+    source = labeled_video(tmp_path / "original.mkv", bit_depth=16)
+    selected = operation(source)
+    parameters = selected["parameters"]
+    for node in parameters["behavior"]["nodes"]:
+        node.update(scale=1.25, curve="hold")
+    selected["outputRange"] = {"startFrame": 23, "endFrameExclusive": 24}
+    parameters["originalFrameRange"] = {"firstFrame": 23, "endFrameExclusive": 24}
+    parameters["pathHash"] = content_hash(
+        {key: parameters[key] for key in ("behavior", "geometry")}
+    )
+    parameters["entryState"] = evaluate_camera(
+        parameters["behavior"],
+        frame=23,
+        frame_range=parameters["originalFrameRange"],
+        geometry=parameters["geometry"],
+    )
+    full = render(source, tmp_path / "full.mkv", selected)
+    last = render(source, tmp_path / "last.mkv", selected, first=23, last=24)
+    np.testing.assert_array_equal(last, full[23:24])
+    np.testing.assert_array_equal(full[:23], pixels(source, 160, 90)[:23])
+    assert not np.array_equal(last[0], pixels(source, 160, 90)[23])
+
+
+def test_baseline_uses_measured_sar_and_rotation_without_changing_orientation_twice(
+    tmp_path,
+):
+    source = labeled_video(tmp_path / "original.mp4", sar=Fraction(2), rotation=90)
+    selected = operation(source, sar=Fraction(2), rotation=90, scale=1)
+    actual = render(source, tmp_path / "display.mkv", selected, width=90, height=320)
+    expected = tmp_path / "expected.mkv"
+    subprocess.run(
+        [
+            "ffmpeg",
+            "-v",
+            "error",
+            "-nostdin",
+            "-n",
+            "-noautorotate",
+            "-i",
+            str(source),
+            "-an",
+            "-vf",
+            # Reference display conversion preserves precision before resizing.
+            # It intentionally contains no camera sampler or path expressions.
+            (
+                "transpose=cclock,scale=iw:ih:flags=bilinear,format=gbrp16le,"
+                "scale=90:320:flags=bilinear,setsar=1"
+            ),
+            "-c:v",
+            "ffv1",
+            str(expected),
+        ],
+        capture_output=True,
+        check=True,
+    )
+    np.testing.assert_array_equal(actual, pixels(expected, 90, 320))
+    observed = probe(tmp_path / "display.mkv")
+    assert observed["sample_aspect_ratio"] == "1:1"
+    assert int(observed.get("tags", {}).get("rotate", 0)) % 360 == 0
+    assert all(
+        item.get("rotation", 0) % 360 == 0
+        for item in observed.get("side_data_list", [])
+    )
+
+
+@pytest.mark.parametrize(
+    "change", ["geometry", "source", "expression", "path-hash", "input"]
+)
+def test_unverified_source_or_executable_parameters_are_rejected_before_render(
+    tmp_path, change
+):
+    from avo.adapters.media.camera import CameraRenderError, camera_filter
+
+    source = labeled_video(tmp_path / "original.mkv", bit_depth=16)
+    selected = operation(source)
+    altered = deepcopy(selected)
+    if change == "geometry":
+        altered["parameters"]["geometry"]["codedWidth"] += 1
+        altered["parameters"]["pathHash"] = content_hash(
+            {key: altered["parameters"][key] for key in ("behavior", "geometry")}
+        )
+    elif change == "source":
+        altered["parameters"]["sourceSha256"] = "b" * 64
+    elif change == "expression":
+        altered["parameters"]["expression"] = "untrusted filter"
+    elif change == "input":
+        altered["inputs"] = ["another-source"]
+    else:
+        altered["parameters"]["pathHash"] = "b" * 64
+    with pytest.raises(CameraRenderError):
+        camera_filter(
+            [altered],
+            metadata=probe(source),
+            output={"width": 160, "height": 90, "pixelFormat": "gbrp16le"},
+            source_sha256=hashlib.sha256(source.read_bytes()).hexdigest(),
+            first_frame=0,
+            end_frame=24,
+        )
+
+
 def native_execution(tmp_path, monkeypatch, *, fps=Fraction(24)):
     from avo.adapters.media import proof_executor
     from avo.capabilities import (
