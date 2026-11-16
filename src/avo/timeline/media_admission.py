@@ -105,13 +105,30 @@ def _verify_locator(value: dict[str, Any], *, required: bool = False) -> None:
         )
 
 
+def _known_output_map(known_outputs, contributors, assets=()):
+    if callable(known_outputs):
+        records = list(assets)
+        candidates = [*contributors, *records]
+        # Every recursively inspected input must participate in the size filter.
+        for record in records:
+            references = record.get("inputs") or []
+            if not isinstance(references, (list, tuple)):
+                candidates = None
+                break
+            candidates.extend(references)
+        known_outputs = known_outputs(candidates=candidates)
+    return {_sha256(record): record for record in known_outputs if _sha256(record)}
+
+
 def require_no_forbidden_outputs(
     contributors: Iterable[dict[str, Any]],
     *,
-    known_outputs: Iterable[dict[str, Any]] = (),
+    known_outputs: Iterable[dict[str, Any]]
+    | Callable[..., Iterable[dict[str, Any]]] = (),
 ) -> None:
     """Apply the output quarantine without requiring a complete new registry."""
-    outputs = {_sha256(record): record for record in known_outputs if _sha256(record)}
+    contributors = list(contributors)
+    outputs = _known_output_map(known_outputs, contributors)
     for contributor in contributors:
         known = outputs.get(_sha256(contributor))
         media_class = _media_class(known or contributor)
@@ -142,10 +159,12 @@ def require_media_admission(
     *,
     registered_originals: Iterable[dict[str, Any]] = (),
     generated_assets: Mapping[str, dict[str, Any]] | Iterable[dict[str, Any]] = (),
-    known_outputs: Iterable[dict[str, Any]] = (),
+    known_outputs: Iterable[dict[str, Any]]
+    | Callable[..., Iterable[dict[str, Any]]] = (),
     code_drawn_verifier: Callable[[dict[str, Any]], dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Admit only exact originals or recursively complete generated assets."""
+    contributors = list(contributors)
     originals = list(registered_originals)
     originals_by_sha = {
         _sha256(record): record for record in originals if _sha256(record)
@@ -155,7 +174,7 @@ def require_media_admission(
         for record in originals
     }
     assets = _records_by_id(generated_assets, "assetId")
-    outputs = {_sha256(record): record for record in known_outputs if _sha256(record)}
+    outputs = _known_output_map(known_outputs, contributors, assets.values())
     admitted: list[dict[str, str]] = []
     visited: set[str] = set()
 
