@@ -50,6 +50,13 @@ class CameraRenderError(ValueError):
     """Source framing cannot be rendered by this explicitly bounded profile."""
 
 
+def camera_input_arguments(stream):
+    """Camera owns physical orientation; consume the copied stream marker too."""
+    if type(stream) is not int or stream < 0:
+        raise CameraRenderError("camera input requires its verified video stream index")
+    return ["-noautorotate", f"-display_rotation:{stream}", "0"]
+
+
 def camera_groups(execution, registry):
     """Bind typed camera operations to actual original-picture occurrences."""
     selected = [

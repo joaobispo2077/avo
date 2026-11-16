@@ -887,13 +887,18 @@ def _render_piece(
         noise_policy,
     ) = segment
     path, _stream = picture
+    picture_options = []
+    if camera:
+        from .camera import camera_input_arguments
+
+        picture_options = camera_input_arguments(_stream)
     arguments = [
         "ffmpeg",
         "-v",
         "error",
         "-nostdin",
         *local_source_arguments(path),
-        *(["-noautorotate"] if camera else []),
+        *picture_options,
         "-ss",
         str(float(source_start)),
         "-i",

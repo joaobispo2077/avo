@@ -82,7 +82,7 @@ def admit_camera_placements(execution, admitted, cache, spec, fps):
 
 
 def camera_picture_arguments(source, spec, fps, *, start_frame, stop_frame):
-    from .camera import camera_filter
+    from .camera import camera_filter, camera_input_arguments
 
     region = source["item"]["outputRange"]
     first = max(region["startFrame"], start_frame)
@@ -109,7 +109,7 @@ def camera_picture_arguments(source, spec, fps, *, start_frame, stop_frame):
         "-v",
         "error",
         "-nostdin",
-        "-noautorotate",
+        *camera_input_arguments(source["stream"]),
         "-i",
         str(source["path"]),
         "-map",
