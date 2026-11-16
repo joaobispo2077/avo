@@ -26,6 +26,14 @@ applying physical orientation. A window evaluates the original path interval,
 including across exact source cuts; it never restarts the move at its first frame.
 Crop bounds and protected regions are checked for every evaluated frame.
 
+The sampler supplies one private replicated row and column, keeps coordinates
+bound to the original dimensions, then removes that extension before output
+scaling. This preserves boundary samples across runtime versions: FFmpeg 6.1's
+[bilinear lookup](https://github.com/FFmpeg/FFmpeg/blob/n6.1.1/libavfilter/vf_geq.c#L103-L114)
+clamps coordinates before interpolation. Actual legacy-kernel tests reproduce
+the earlier edge loss and verify the corrected identity, boundary and window
+pixels without relaxing exact source comparisons.
+
 ## Precision and composition
 
 The internal camera sampler uses 16-bit planar RGB. Explicit precision proofs
