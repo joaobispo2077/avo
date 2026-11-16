@@ -181,13 +181,19 @@ def _validate_code_drawn_strategy(value: dict[str, Any], root: Path) -> None:
         component_ids, instance_ids = set(), set()
         for component in value["components"]:
             component_id = component["componentId"]
-            reference = component["extensions"]["codeDrawn"]
-            instance_id = reference["instanceId"]
-            if component_id in component_ids or instance_id in instance_ids:
+            if component_id in component_ids:
                 raise AnimationError(
                     "Code-drawn component and instance IDs must be unique."
                 )
             component_ids.add(component_id)
+            reference = component["extensions"].get("codeDrawn")
+            if reference is None:
+                continue  # A typed v2 native camera does not need a generated asset.
+            instance_id = reference["instanceId"]
+            if instance_id in instance_ids:
+                raise AnimationError(
+                    "Code-drawn component and instance IDs must be unique."
+                )
             instance_ids.add(instance_id)
             validate_code_drawn_reference(reference, root=root)
     except (ContractError, MotionError) as error:
@@ -196,6 +202,9 @@ def _validate_code_drawn_strategy(value: dict[str, Any], root: Path) -> None:
 
 def _validate_strategy_engine(value: dict[str, Any], root: Path) -> None:
     from avo.motion import MotionError, validate_engine
+    from avo.timeline.contracts import required_animation_readers
+
+    required_animation_readers(value)
 
     try:
         engine = validate_engine(value.get("framework", "hyperframes"))
