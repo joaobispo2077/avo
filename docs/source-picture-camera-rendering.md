@@ -57,6 +57,11 @@ original sources rather than reusing an unqualified camera-stage cache.
 An explicit delivery pixel format currently requires `yuv420p`. Higher-precision
 formats require the selected FFV1/PCM conformance route; unsupported delivery
 codec/pixel pairs fail before rendering instead of negotiating a lower depth.
+The final output promise is checked before binding a source. Sampling and placed
+composition retain planar RGB16 even for an accepted 8-bit delivery source; one
+BT.709 limited-range conversion follows independent graphics. The final precision
+path declares square pixels after raw composition. A high-depth source is still
+rejected when the requested output would reduce its depth.
 
 Opaque RGB/alpha insertion and alpha removal copy planes. A regular RGB-to-RGBA
 conversion was observed changing 16-bit values even at identical size and depth;
@@ -102,6 +107,13 @@ than trusting declared formats. Existing placed, stage-cache and generated-asset
 regressions remain required. The specification acceptance ledger records each
 observed run and any failures; synthetic fixtures do not establish creator
 suitability or approval of a production edit.
+
+Delivery fixtures separately compare original-source sampling and the actual
+pre-encoder conversion against lossless references. They cover contiguous and
+placed footage, 24 and 30000/1001 clocks, and full and partial renders. A lossless
+encoder tap verifies the delivery filter output exactly; ordinary H.264/AAC runs
+verify format, square-pixel geometry, color tags and decoded frame count. Separate
+lossy encodes are not treated as pixel-identical references for a source sampler.
 
 Before activation, implementation fingerprints and render recipes must include
 the native camera kernel, precision composition, runtime tools, frozen options

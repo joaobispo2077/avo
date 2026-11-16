@@ -1008,8 +1008,10 @@ precision composition uses 16-bit RGB/alpha planes and bounded raw picture
 chunks; opaque alpha insertion/removal copies planes instead of introducing a
 libswscale RGB/RGBA matrix round trip. Legacy proofs retain their existing pixel
 path. Optional placed-stage reuse is disabled for the new precision profile
-until its complete camera recipe is qualified for caching. Unsupported timing,
-source geometry and fidelity combinations fail preflight. Runtime evidence and
+until its complete camera recipe is qualified for caching.
+An accepted delivery profile keeps RGB16 through source sampling and independent
+composition, then performs one final BT.709 conversion with square output pixels.
+Unsupported timing, source geometry and fidelity combinations fail preflight. Runtime evidence and
 remaining activation requirements are documented in
 [`docs/source-picture-camera-rendering.md`](docs/source-picture-camera-rendering.md).
 
