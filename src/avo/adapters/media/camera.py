@@ -390,8 +390,8 @@ def _resample_expression(operations, geometry, first):
         )
         + ";"
     )
-    x = f"(({_number(baseline['x'])}+{_number(baseline['width'])}*ld(2)-{_number(baseline['width'])}/(2*ld(1)))*W/{_number(width)}+X*{_number(baseline['width'])}/(ld(1)*{_number(width)}))"
-    y = f"(({_number(baseline['y'])}+{_number(baseline['height'])}*ld(3)-{_number(baseline['height'])}/(2*ld(1)))*H/{_number(height)}+Y*{_number(baseline['height'])}/(ld(1)*{_number(height)}))"
+    x = f"(({_number(baseline['x'])}+{_number(baseline['width'])}*ld(2)-{_number(baseline['width'])}/(2*ld(1)))*(W-1)/{_number(width)}+X*{_number(baseline['width'])}/(ld(1)*{_number(width)}))"
+    y = f"(({_number(baseline['y'])}+{_number(baseline['height'])}*ld(3)-{_number(baseline['height'])}/(2*ld(1)))*(H-1)/{_number(height)}+Y*{_number(baseline['height'])}/(ld(1)*{_number(height)}))"
     # Every expression initializes its own registers at every pixel and frame.
     # No stored value survives as a clock or as mutable camera state.
     return ":".join(
@@ -427,11 +427,16 @@ def camera_filter(
             180: "hflip,vflip,",
             270: "transpose=clock,",
         }[geometry["rotationDegrees"] % 360]
+        # Older geq bilinear readers clamp to W-2/H-2. An exact replicated
+        # edge gives them the same final real pixel and subpixel boundary as
+        # newer readers. Expressions use the original dimensions; the private
+        # extra row/column are removed before output resampling.
         return (
             orientation + "sidedata=mode=delete:type=DISPLAYMATRIX,"
-            "scale=iw:ih:flags=bilinear,format=gbrp16le,geq="
+            "scale=iw:ih:flags=bilinear,format=gbrp16le,"
+            "pad=iw+1:ih+1:0:0:color=black,fillborders=right=1:bottom=1:mode=smear,geq="
             + expression
-            + ":interpolation=bilinear,"
+            + ":interpolation=bilinear,crop=w=iw-1:h=ih-1:x=0:y=0:exact=1,"
             f"scale={output['width']}:{output['height']}:flags=bilinear,setsar=1,format={output['pixelFormat']}"
         )
     except (ValueError, TypeError, KeyError, OverflowError, RecursionError) as error:
