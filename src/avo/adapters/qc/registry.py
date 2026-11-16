@@ -312,7 +312,8 @@ class CheckpointQcRegistry:
         workspace = request.get("workspace")
         dependencies = request.get("dependencies") or {}
         evidence = list(base["evidence"])
-        required_windows = list(base.get("requiredWindows") or [])
+        transcription_windows = list(base.get("requiredWindows") or [])
+        required_windows = list(transcription_windows)
         for window in self._cue_windows(workspace):
             if window not in required_windows:
                 required_windows.append(window)
@@ -332,6 +333,9 @@ class CheckpointQcRegistry:
                 request=request,
             )
         )
-        return self._filtered_result(
-            base, checkpoint, evidence, required_windows, adoption=self.adoption
-        )
+        return {
+            **self._filtered_result(
+                base, checkpoint, evidence, required_windows, adoption=self.adoption
+            ),
+            "requiredTranscriptionWindows": transcription_windows,
+        }
