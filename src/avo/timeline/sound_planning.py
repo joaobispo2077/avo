@@ -405,7 +405,30 @@ class SoundPlanningService:
     def apply(self, request):
         from .sound_application import apply_sound_request
 
-        return apply_sound_request(self, request)
+        return self._with_review(apply_sound_request(self, request))
+
+    def _with_review(self, result):
+        from .motion_review import MotionReviewService
+        from .pipeline import TimelinePipeline
+
+        try:
+            shown = self.load(result["proposalRef"]["sha256"])
+            snapshot = TimelinePipeline(self.workspace).motion_plan(
+                sound_proposal={
+                    "proposal": shown["proposal"],
+                    "proposalRef": shown["proposalRef"],
+                }
+            )
+            result["review"] = MotionReviewService(self.workspace).publish(
+                snapshot, expected_basis=snapshot["basisHeads"]
+            )
+            result["reviewReady"] = result["review"]["status"] == "published"
+        except (OSError, ValueError, RuntimeError, KeyError, TypeError) as error:
+            result["reviewReady"] = False
+            result.setdefault("warnings", []).append(
+                f"Current sound presentation unavailable: {error}"
+            )
+        return result
 
     def propose(self, request):
         try:
@@ -413,7 +436,7 @@ class SoundPlanningService:
             with timeline_writer(self.workspace.timeline_dir):
                 known = self._known(request)
                 if known is not None:
-                    return known
+                    return self._with_review(known)
                 proposal = self._propose(request)
                 raw = (
                     json.dumps(proposal, indent=2, ensure_ascii=False, sort_keys=True)
@@ -435,7 +458,7 @@ class SoundPlanningService:
                     ),
                     record,
                 )
-                return self.load(digest)
+                return self._with_review(self.load(digest))
         except (ValueError, TypeError, KeyError, OSError) as error:
             raise SoundPlanningError(str(error)) from error
 

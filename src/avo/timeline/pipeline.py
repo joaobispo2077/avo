@@ -419,7 +419,9 @@ class TimelinePipeline:
             motion_plan = self.motion_plan()
         return {**shown, "stageContexts": contexts, "motionPlan": motion_plan}
 
-    def motion_plan(self, *, proposal_hash: str | None = None) -> dict[str, Any]:
+    def motion_plan(
+        self, *, proposal_hash: str | None = None, sound_proposal=None
+    ) -> dict[str, Any]:
         """Project current motion metadata without initializing an editorial record."""
         from avo.direction.brief import BriefService
         from avo.editing_craft import EditingCraftError, inspect_editing_craft
@@ -429,7 +431,8 @@ class TimelinePipeline:
         context = {
             "direction": BriefService(self.workspace.project_path)
             .show()
-            .get("selection")
+            .get("selection"),
+            "soundProposal": sound_proposal,
         }
         run = self.run_store.load() if self.run_store.path.is_file() else {}
         frozen = (run.get("executionChoices") or {}).get("editingCraft")

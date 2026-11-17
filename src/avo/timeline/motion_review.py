@@ -17,10 +17,15 @@ from .motion_metadata import (
     MotionReviewError,
     _check_budget,
 )
+from .motion_sound_review import (
+    add_sound_groups,
+    enrich_sound_items,
+    sound_review_context,
+)
 from .store import atomic_write_json
 from .workspace import ARTIFACTS
 
-GENERATOR = {"id": "avo.motion-review", "version": "1.2.0"}
+GENERATOR = {"id": "avo.motion-review", "version": "1.3.0"}
 MAX_ITEMS = 500
 LIFECYCLE = ("preEntry", "entrance", "hold", "payoff", "exit")
 CONCEPT_TEXT_FIELDS = {
@@ -108,6 +113,10 @@ def _selected_revision(store, index, reference, root, budget):
         from .contracts import require_animation_reader
 
         require_animation_reader(index, snapshot)
+    if index["artifactType"] == "tracks":
+        from .contracts import require_tracks_reader
+
+        require_tracks_reader(index, snapshot)
     return snapshot
 
 
@@ -440,6 +449,7 @@ def _context(context, gaps):
         key: _object(context, key, gaps) for key in ("direction", "options", "proposal")
     }
     result["proposal"] = result["proposal"] or {}
+    result["soundProposal"] = sound_review_context(context.get("soundProposal"), gaps)
     result["pendingRevisions"] = _pending(context, gaps)
     result["advisories"] = _advisories(context, gaps)
     result["applicability"] = _applicability(context, gaps)
@@ -514,8 +524,9 @@ def _component_reference(data):
     return identifiers[0] if len(identifiers) == 1 else None
 
 
-def _project_items(proposal, snapshots, heads, gaps):
+def _project_items(proposal, snapshots, heads, gaps, sound_context=None):
     groups = _combined(proposal, snapshots, gaps)
+    add_sound_groups(groups, sound_context)
     stale = _stale(snapshots, heads)
     if proposal.get("basisHeads") is not None and proposal["basisHeads"] != heads:
         stale = True
@@ -531,6 +542,7 @@ def _project_items(proposal, snapshots, heads, gaps):
         for identifier, group in ordered[:MAX_ITEMS]
     }
     _enrich_components(selected, snapshots.get("animation") or {})
+    enrich_sound_items(selected, snapshots.get("tracks") or {}, sound_context, heads)
     pairs = [
         _item(data, timed=len(data["_parts"]) == 1, stale=stale, heads=heads, gaps=gaps)
         for data in selected.values()
@@ -686,8 +698,16 @@ class MotionReviewService:
     def project(self, context=None):
         heads, snapshots, gaps = self._metadata()
         context = _context(context, gaps)
+        provided_sound = context["soundProposal"]
+        if provided_sound and (
+            provided_sound["proposal"]["videoId"] != self.workspace.video_id
+            or provided_sound["proposal"]["provider"]
+            != self.workspace.project.get("provider")
+        ):
+            gaps.append({"kind": "sound-proposal-owner-mismatch"})
+            context["soundProposal"] = None
         pairs, counts, stale = _project_items(
-            context["proposal"], snapshots, heads, gaps
+            context["proposal"], snapshots, heads, gaps, context["soundProposal"]
         )
         items, cards = [pair[0] for pair in pairs], [pair[1] for pair in pairs]
         snapshot = {
