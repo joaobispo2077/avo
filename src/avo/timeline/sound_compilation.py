@@ -67,7 +67,7 @@ def _source(choice, source):
         raise SoundPlanningError("Selected sound requires an absolute local source")
     if source["sha256"] != choice["fit"]["source"]["sourceSha256"]:
         raise SoundPlanningError("Selected sound source differs from its frozen choice")
-    return deepcopy(source)
+    return {**deepcopy(source), "ancestry": []}
 
 
 def _ducking(choice, node_id, sidechains, known):
