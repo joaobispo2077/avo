@@ -9,6 +9,7 @@ from avo.library.rules import safe_path
 from .bmap_service import BMapService
 from .cmap_service import CMapService
 from .contracts import content_hash, file_fingerprint, fingerprint_stage
+from .lineage import stale_descendants
 from .sound_choices import (
     _check_sound_roles,
     _sound_choice_advisories,
@@ -201,7 +202,22 @@ class _Application:
         return snapshots
 
     def _check_requested_heads(self, request, committed):
-        self.authoring._check_heads({**request["expectedBasis"], **(committed or {})})
+        expected = {**request["expectedBasis"], **(committed or {})}
+        current = self.authoring._heads()
+        for parent in committed or {}:
+            for name in stale_descendants(parent):
+                head, actual = expected.get(name), current.get(name)
+                if (
+                    name not in committed
+                    and head is not None
+                    and head.get("activeState") == "valid"
+                    and actual is not None
+                    and actual.get("activeState") == "stale"
+                ):
+                    # Our published parent invalidates this unchanged descendant.
+                    # Keep its identity and approval checks, and leave it stale.
+                    expected[name] = {**head, "activeState": "stale"}
+        self.authoring._check_heads(expected)
 
     def _basis(self, request, *, committed=None):
         self._check_requested_heads(request, committed)
