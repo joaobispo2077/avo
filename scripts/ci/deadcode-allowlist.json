@@ -1037,14 +1037,6 @@
     },
     {
       "path": "src/avo/timeline/tracks.py",
-      "name": "apply_event_role_defaults",
-      "kind": "function",
-      "lineno": 218,
-      "confidence": 60,
-      "reason": "Feature 006 public/dynamic contract covered by focused tests and runtime registration"
-    },
-    {
-      "path": "src/avo/timeline/tracks.py",
       "name": "audit_contributions",
       "kind": "function",
       "lineno": 332,
