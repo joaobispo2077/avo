@@ -1045,6 +1045,7 @@ def _sfx_bridge_defs() -> list[BridgeToolDef]:
         "search": "Search saved sound descriptors only. Metadata read; semantic execution cannot be selected through this tool.",
         "search-semantic": "Explicit optional local model execution for semantic sound matching. Requires provisioned paired audio/text models; unavailable never falls back to descriptors.",
         "propose": "Save bounded sound auditions against exact timeline heads and catalogue generation with explicitly enabled options. Metadata only; no scan, model provisioning, canonical application or listening approval.",
+        "apply": "Publish explicit per-event sound choices through BMap and Tracks against the exact saved proposal, heads and catalogue. Confirms the request bytes; listening acceptance stays pending. No catalogue scan or model execution.",
     }
     return [
         _tool(
@@ -1052,6 +1053,7 @@ def _sfx_bridge_defs() -> list[BridgeToolDef]:
             "sfx",
             operation,
             description,
+            destructive=operation == "apply",
             extra_params=(
                 (
                     ParamSpec("generation", str | None),
@@ -1171,12 +1173,17 @@ def _decision_gate_args(defn, bridge_args):
         ("briefstart", "decide"),
         ("animation", "plan-apply"),
         ("animation", "camera-apply"),
+        ("sfx", "apply"),
     }:
         return bridge_args
     limit = (
         MAX_REQUEST_BYTES
         if defn.cli_prefix
-        in {("animation", "plan-apply"), ("animation", "camera-apply")}
+        in {
+            ("animation", "plan-apply"),
+            ("animation", "camera-apply"),
+            ("sfx", "apply"),
+        }
         else 2 * 1024 * 1024
     )
     with Path(bridge_args["request"]).expanduser().open("rb") as stream:

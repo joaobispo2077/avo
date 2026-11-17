@@ -4,10 +4,19 @@ from __future__ import annotations
 
 import json
 import sys
+from argparse import SUPPRESS
 from dataclasses import replace
 from pathlib import Path
 
-OPERATIONS = ("show", "scan", "annotate", "search", "search-semantic", "propose")
+OPERATIONS = (
+    "show",
+    "scan",
+    "annotate",
+    "search",
+    "search-semantic",
+    "propose",
+    "apply",
+)
 
 
 def configure(subparsers):
@@ -24,6 +33,8 @@ def configure(subparsers):
             item.add_argument("--limit", type=int, default=20)
         else:
             item.add_argument("--request", type=Path, required=True)
+        if operation == "apply":
+            item.add_argument("--request-sha256", help=SUPPRESS)
 
 
 def resolve_sfx_roots(workspace, *, root=None):
@@ -62,14 +73,15 @@ def _local_library(value):
     return Path(value).expanduser()
 
 
-def _request(path, operation):
+def _request(path, operation, *, expected_sha256=None):
     from avo.editing_craft_requests import read_craft_request
     from avo.timeline.contracts import validate_document
 
-    value = read_craft_request(path)
+    value = read_craft_request(path, expected_sha256=expected_sha256)
+    definitions = {"propose": "proposeRequest", "apply": "applyRequest"}
     schema = (
-        "avo.sound-selection.schema.json#/$defs/proposeRequest"
-        if operation == "propose"
+        "avo.sound-selection.schema.json#/$defs/" + definitions[operation]
+        if operation in definitions
         else "avo.sfx-request.schema.json"
     )
     validate_document(value, schema)
@@ -105,12 +117,18 @@ def _excerpt(document, *, offset=0, limit=20):
 
 def _execute(service, args, request):
     operation = args.sfx_command
-    if operation == "propose":
+    if operation in {"propose", "apply"}:
         from avo.timeline.sound_planning import SoundPlanningService
 
-        return SoundPlanningService(service.workspace, catalogue=service).propose(
-            request
+        probe = None
+        if operation == "apply":
+            from avo.adapters.registry import build_sound_source_probe
+
+            probe = build_sound_source_probe()
+        planning = SoundPlanningService(
+            service.workspace, catalogue=service, source_probe=probe
         )
+        return getattr(planning, operation)(request)
     if operation == "show":
         return _excerpt(
             service.show(args.generation), offset=args.offset, limit=args.limit
@@ -147,6 +165,7 @@ def _execute(service, args, request):
 
 def run(args):
     from avo.adapters.registry import build_sfx_catalog
+    from avo.timeline.command_registry import CommandPermissionError
     from avo.timeline.workspace import TimelineWorkspace
 
     try:
@@ -155,7 +174,11 @@ def run(args):
         request = (
             None
             if args.sfx_command == "show"
-            else _request(args.request, args.sfx_command)
+            else _request(
+                args.request,
+                args.sfx_command,
+                expected_sha256=getattr(args, "request_sha256", None),
+            )
         )
         workspace = TimelineWorkspace.from_project(
             args.project, video_id=args.video_id or None
@@ -177,16 +200,19 @@ def run(args):
                 ),
                 "generationId": result["generationId"],
             }
-    except (ValueError, OSError) as error:
+    except (ValueError, OSError, CommandPermissionError) as error:
+        value = (
+            error.to_dict()
+            if hasattr(error, "to_dict")
+            else {
+                "code": "SFX_REQUEST_INVALID",
+                "message": str(error),
+                "blocking": True,
+                "remediation": "Inspect the selected catalogue generation, declared sound root and request.",
+            }
+        )
         print(
-            json.dumps(
-                {
-                    "code": "SFX_REQUEST_INVALID",
-                    "message": str(error),
-                    "blocking": True,
-                    "remediation": "Inspect the selected catalogue generation, declared sound root and request.",
-                }
-            ),
+            json.dumps(value),
             file=sys.stderr,
         )
         return 2
@@ -194,6 +220,7 @@ def run(args):
         "scan": "source-analysis",
         "annotate": "metadata-write",
         "propose": "metadata-write",
+        "apply": "canonical-write",
         "search-semantic": "model-execution",
     }.get(args.sfx_command, "metadata-read")
     result.update(contractVersion="1.0.0", operation=args.sfx_command, effect=effect)

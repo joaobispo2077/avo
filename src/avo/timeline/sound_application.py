@@ -8,6 +8,7 @@ from avo.library.rules import safe_path
 
 from .bmap_service import BMapService
 from .cmap_service import CMapService
+from .command_registry import authorize
 from .contracts import content_hash, file_fingerprint, fingerprint_stage
 from .lineage import stale_descendants
 from .sound_choices import (
@@ -32,10 +33,29 @@ OWNERS = {"bmap": BMapService, "tracks": TracksService}
 
 
 class SoundApplicationError(SoundPlanningError):
-    def __init__(self, message, *, receipt_ref=None, committed_heads=None):
+    def __init__(
+        self,
+        message,
+        *,
+        receipt_ref=None,
+        committed_heads=None,
+        publication_state="recovery-needed",
+    ):
         super().__init__(message)
         self.receipt_ref = receipt_ref
         self.committed_heads = committed_heads or {}
+        self.publication_state = publication_state
+
+    def to_dict(self):
+        return {
+            "code": "SFX_APPLICATION_RECOVERY_REQUIRED",
+            "message": str(self),
+            "blocking": True,
+            "remediation": "Retry the exact saved sound request to reconcile its actual publication.",
+            "receiptRef": self.receipt_ref,
+            "committedHeads": self.committed_heads,
+            "publicationState": self.publication_state,
+        }
 
 
 def _encoded(value):
@@ -732,6 +752,7 @@ class _Application:
                 + str(error),
                 receipt_ref=reference,
                 committed_heads=receipt["committedHeads"],
+                publication_state="committed",
             ) from error
 
     def _commit_owners(self, request, receipt):
@@ -758,6 +779,8 @@ class _Application:
 
     def apply(self, request):
         request = _sound_document(request, "applyRequest")
+        for name in OWNERS:
+            authorize("sound", mutation=name)
         with timeline_writer(self.workspace.timeline_dir, recovery=True):
             known = self._known(request)
             self.authoring._guard_pending(request)
