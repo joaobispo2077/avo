@@ -47,3 +47,13 @@ their actual operation requests, immutable receipt chains, prepared revisions,
 direction dependencies and pending recovery inputs through the existing bounded
 motion ledger. Unselected drafts and generated review caches are excluded.
 Source media admission and contextual listening remain distinct requirements.
+
+Selected proposals also retain their immutable catalogue generation and verify
+each chosen entry against it. Unfinished publication retains the exact current
+generation selector needed for recovery. Stale pending state retains both its
+frozen and currently selected generations without approving the changed basis.
+A committed operation waiting only for
+marker cleanup keeps its frozen generation without adopting later curation.
+Catalogue metadata uses the shared 16 MiB catalogue limit inside the existing
+64 MiB total evidence budget; motion documents keep their smaller individual
+limit. No catalogue media or embedding cache is read or retained by this ledger.

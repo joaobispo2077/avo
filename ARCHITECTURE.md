@@ -1100,8 +1100,12 @@ markers remain blocking until the actual publication is reconciled. Completed
 replay reports historical heads separately from their currentness.
 
 `timeline.sound_retention` extends the existing bounded motion evidence ledger
-with selected sound proposals, their actual operations, receipt history and
-pending recovery inputs. Canonical/history references drive retention; unrelated
+with selected sound proposals, their actual operations, receipt history, exact
+catalogue generations and pending recovery inputs. Unfinished publication keeps
+its actual current catalogue selector, including a stale basis; committed replay
+retains frozen metadata without adopting later curation. Catalogue reads share
+the data-only catalogue byte limit inside the unchanged total evidence budget.
+Canonical/history references drive retention; unrelated
 drafts and generated review caches do not. The timeline domain owns validation
 and publication; `adapters.registry` composes the optional explicit source probe
 using the existing ffprobe adapter. Metadata readers never execute it. The public
