@@ -1,0 +1,93 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://avo.local/schemas/avo.sound-selection.schema.json",
+  "title": "Derived sound candidate fitting, not canonical timing or approval",
+  "$ref": "#/$defs/candidateFit",
+  "$defs": {
+    "id": {"type": "string", "minLength": 1, "maxLength": 128, "pattern": "\\S"},
+    "sample": {"type": "integer", "minimum": 0},
+    "frameRange": {
+      "type": "object", "additionalProperties": false,
+      "required": ["startFrame", "endFrameExclusive"],
+      "properties": {"startFrame": {"$ref": "#/$defs/sample"}, "endFrameExclusive": {"$ref": "#/$defs/sample"}}
+    },
+    "sampleRange": {
+      "type": "object", "additionalProperties": false,
+      "required": ["startSample", "endSampleExclusive"],
+      "properties": {"startSample": {"$ref": "#/$defs/sample"}, "endSampleExclusive": {"$ref": "#/$defs/sample"}}
+    },
+    "opportunity": {
+      "type": "object", "additionalProperties": false,
+      "required": ["eventId", "itemId", "cueId", "kind", "purpose", "role", "visibility", "programFrame", "visibleRange"],
+      "properties": {
+        "eventId": {"$ref": "#/$defs/id"}, "itemId": {"$ref": "#/$defs/id"}, "cueId": {"$ref": "#/$defs/id"},
+        "kind": {"enum": ["click", "reveal", "camera-emphasis", "transition", "explicit"]},
+        "purpose": {"type": "string", "minLength": 1, "maxLength": 4096, "pattern": "\\S"},
+        "role": {"enum": ["main", "bass", "support", "detail", "tail"]},
+        "visibility": {"enum": ["visible", "hidden", "unknown"]},
+        "programFrame": {"$ref": "#/$defs/sample"}, "visibleRange": {"$ref": "#/$defs/frameRange"}
+      }
+    },
+    "source": {
+      "type": "object", "additionalProperties": false,
+      "required": ["entryId", "entryRevision", "sourceSha256", "measurementHash", "annotationHash"],
+      "properties": {
+        "entryId": {"$ref": "avo.sfx-catalog.schema.json#/$defs/sha"},
+        "entryRevision": {"$ref": "avo.sfx-catalog.schema.json#/$defs/sha"},
+        "sourceSha256": {"$ref": "avo.sfx-catalog.schema.json#/$defs/sha"},
+        "measurementHash": {"$ref": "avo.sfx-catalog.schema.json#/$defs/sha"},
+        "annotationHash": {"$ref": "avo.sfx-catalog.schema.json#/$defs/sha"}
+      }
+    },
+    "resolvedEvent": {
+      "type": "object", "additionalProperties": false,
+      "required": ["eventId", "role", "programFrame", "visibleRange", "transientOffset", "resolvedImpactSample", "scheduledAudioStartSample"],
+      "properties": {
+        "eventId": {"$ref": "#/$defs/id"}, "role": {"const": "sfx"},
+        "programFrame": {"$ref": "#/$defs/sample"}, "visibleRange": {"$ref": "#/$defs/frameRange"},
+        "resolvedImpactSample": {"$ref": "#/$defs/sample"}, "scheduledAudioStartSample": {"$ref": "#/$defs/sample"},
+        "transientOffset": {
+          "type": "object", "additionalProperties": false,
+          "required": ["sourceSamples", "sourceRate", "resolvedOutputSamples"],
+          "properties": {
+            "sourceSamples": {"$ref": "#/$defs/sample"}, "sourceRate": {"type": "integer", "minimum": 1},
+            "resolvedOutputSamples": {"$ref": "#/$defs/sample"}
+          }
+        }
+      }
+    },
+    "candidateFit": {
+      "type": "object", "additionalProperties": false,
+      "required": ["contractVersion", "clock", "opportunity", "status", "source", "trimRange", "event", "scheduledAudioEndSample", "issues", "acceptance", "fitHash"],
+      "properties": {
+        "clock": {
+          "type": "object", "additionalProperties": false, "required": ["frameRate", "sampleRate", "programEndFrame"],
+          "properties": {
+            "frameRate": {
+              "type": "object", "additionalProperties": false, "required": ["num", "den"],
+              "properties": {"num": {"type": "integer", "minimum": 1}, "den": {"type": "integer", "minimum": 1}}
+            },
+            "sampleRate": {"type": "integer", "minimum": 1}, "programEndFrame": {"type": "integer", "minimum": 1}
+          }
+        },
+        "contractVersion": {"const": "1.0.0"}, "opportunity": {"$ref": "#/$defs/opportunity"},
+        "status": {"enum": ["fit", "silence", "unresolved"]},
+        "source": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/source"}]},
+        "trimRange": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/sampleRange"}]},
+        "event": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/resolvedEvent"}]},
+        "scheduledAudioEndSample": {"type": ["integer", "null"], "minimum": 0},
+        "issues": {"type": "array", "maxItems": 16, "uniqueItems": true, "items": {"type": "string", "maxLength": 512}},
+        "acceptance": {"const": "pending-listening"}, "fitHash": {"$ref": "avo.sfx-catalog.schema.json#/$defs/sha"}
+      },
+      "allOf": [
+        {"if": {"properties": {"status": {"const": "fit"}}}, "then": {
+          "properties": {"source": {"type": "object"}, "trimRange": {"type": "object"}, "event": {"type": "object"}, "scheduledAudioEndSample": {"type": "integer"}, "issues": {"maxItems": 0}}
+        }, "else": {
+          "properties": {"source": {"type": "null"}, "trimRange": {"type": "null"}, "event": {"type": "null"}, "scheduledAudioEndSample": {"type": "null"}}
+        }},
+        {"if": {"properties": {"status": {"const": "unresolved"}}}, "then": {"properties": {"issues": {"minItems": 1}}}},
+        {"if": {"properties": {"status": {"const": "silence"}}}, "then": {"properties": {"issues": {"maxItems": 0}}}}
+      ]
+    }
+  }
+}
