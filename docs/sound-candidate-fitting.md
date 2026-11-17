@@ -20,6 +20,9 @@ The existing event clock converts that offset to output samples and schedules it
 against the event's program frame. Useful attack/tail samples must remain inside
 the selected trim. Insufficient pre-roll or program-tail space stays unresolved;
 the primitive does not shorten a sound or extend the picture to make it fit.
+Duration follows the native source clock's separately converted start/end
+boundaries. The audio event carries no picture-visible range; visual context stays
+on the opportunity, matching the existing native audio event owner.
 
 The strict `avo.sound-selection.schema.json` candidate-fit document binds the
 rational/output clock, program extent, source/measurement identity, current
