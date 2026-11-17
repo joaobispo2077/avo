@@ -1,0 +1,30 @@
+# Sound candidate fitting
+
+`avo.timeline.sound_planning.fit_sound_candidate` is a pure fitting primitive for
+the selected-sound workflow. It reads a bounded opportunity and a validated saved
+catalogue entry. It does not inspect current media bytes, select an effect,
+publish timing, change picture duration or approve a mix. Native proposal/apply
+orchestration and actual encoded/listening qualification remain separate work.
+
+The opportunity identifies its item/cue/event, visible frame interval, purpose
+and main/bass/support/detail/tail role. The candidate requires complete acoustic
+coverage, source-bound licensed-rights evidence and a reviewed native-sample
+marker. Unknown visibility/rights, missing sources, stale marker evidence or
+incomplete tail analysis produce unresolved results. Explicit silence is valid.
+
+For a selected native trim, the relative transient is:
+
+`original marker sample - trim start sample`
+
+The existing event clock converts that offset to output samples and schedules it
+against the event's program frame. Useful attack/tail samples must remain inside
+the selected trim. Insufficient pre-roll or program-tail space stays unresolved;
+the primitive does not shorten a sound or extend the picture to make it fit.
+
+The strict `avo.sound-selection.schema.json` candidate-fit document binds the
+rational/output clock, program extent, source/measurement identity, current
+curation/rights/marker identity and selected trim to its hash. A fit only reports
+timing feasibility. Actual application must bind current canonical heads and
+catalogue generation, revalidate selected source bytes, publish through BMap and
+Tracks, and measure/listen to the encoded result. Listening acceptance stays
+pending regardless of the calculated fit.

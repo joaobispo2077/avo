@@ -1039,6 +1039,16 @@ fixtures verify full/window source sampling, independent overlays, color/depth,
 runtime identity and unsupported-profile rejection. These checks do not replace
 Watch, listening or creator suitability review.
 
+Sound candidate fitting is a pure timeline primitive over validated catalogue
+metadata and an explicit native-sample trim. Shared catalogue identities and
+validation live in `avo.sfx_contracts`; the existing catalogue imports those same
+unchanged checks, keeping source execution outside the planner. It reuses the existing event clock,
+keeps useful attacks/tails, and returns unresolved pre-roll/tail/rights/visibility
+cases instead of changing picture or audio ranges. Its derived hash binds clock,
+source/measurement and current annotation identities. It creates no source reads,
+canonical timing, selection, gain policy or listening approval. Proposal/apply
+orchestration and encoded contextual sound qualification remain separate work.
+
 Camera movement, face anchoring, sound matching, reference analysis, spoken
 notes/recovery and editor handoff are selected options resolved through existing
 settings scopes and frozen requests. Preferences seed future work and cannot
