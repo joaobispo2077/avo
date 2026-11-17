@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import pytest
+
 from avo.adapters.media.waveform import (
     analyze_transient,
     analyze_transient_cached,
@@ -91,6 +93,47 @@ def test_multi_hit_requires_reviewed_marker_instead_of_guessing() -> None:
     )
     assert reviewed["sourceSamples"] == 200
     assert reviewed["status"] == "pass"
+
+
+@pytest.mark.parametrize("initially_reviewed", [False, True])
+@pytest.mark.parametrize("legacy_cache", [False, True])
+def test_cached_pcm_and_marker_do_not_reuse_old_review_disposition(
+    monkeypatch, initially_reviewed, legacy_cache
+):
+    from avo.adapters.media import waveform
+
+    parameters = {
+        "asset_sha256": "b" * 64,
+        "sample_rate": 48_000,
+        "window_samples": 8,
+        "hop_samples": 1,
+        "threshold": 0.05,
+        "search_range": (0, 1_000),
+        "manual_marker": 200,
+    }
+    samples, cache = _impulses(200, 700), {}
+    first = analyze_transient_cached(
+        cache, samples, **parameters, manual_marker_reviewed=initially_reviewed
+    )
+    if legacy_cache:
+        cache[first["cacheKey"]] = first.copy()
+
+    def forbidden(*args, **kwargs):
+        pytest.fail("Changing review disposition reanalyzed identical PCM")
+
+    monkeypatch.setattr(waveform, "_energy", forbidden)
+    second = analyze_transient_cached(
+        cache, samples, **parameters, manual_marker_reviewed=not initially_reviewed
+    )
+    assert second["manualMarkerReviewed"] is not initially_reviewed
+    assert second["status"] == (
+        "needs-human-judgment" if initially_reviewed else "pass"
+    )
+    assert first["manualMarkerReviewed"] is initially_reviewed
+    assert first["normalizedDerivativeHash"] == second["normalizedDerivativeHash"]
+    assert len(cache) == 1
+    assert "status" not in next(iter(cache.values()))
+    assert "manualMarkerReviewed" not in next(iter(cache.values()))
 
 
 def test_rendered_correlation_checks_tolerance_cardinality_and_masking() -> None:
