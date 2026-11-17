@@ -118,6 +118,22 @@ including resampling rounding, and preserves useful attacks and tails. A fit
 still requires current source/rights checks, canonical publication and contextual
 listening. Draft proposals are not selected reconstruction evidence.
 
+Per-event choice preparation freezes the full supplied entry, reviewed marker,
+fitted schedule, explicit channel map, gain, fades and ducking request. Its pure
+API does not validate live source bytes or catalogue membership; the publishing
+caller must bind those checks to current heads. Existing ordinary-overlay entry
+limits still apply to main/bass/support/detail/tail roles. Multiple layers need
+an exact ordered event list, and main-scene synthetic effects need an explicit
+disposition. Comparison-only references cannot supply published sound.
+
+Choice preparation checks measured channel count, the explicitly selected source
+peak ceiling, and fade space outside the useful attack/tail. It does not invent a
+gain target or change the original dialogue/music. Repeated sources and coincident
+attacks are advisories. Per-ID changes report before/after asset identities, role,
+gain and schedule; live source checks, combined peak, speech masking and actual
+contextual listening remain review obligations. This API does not yet publish
+canonical audio.
+
 Inspect audioTracks before render: dialogue priority and channel mapping, music/SFX purpose, source fingerprint, regions, gains, fades, ducking, mute, loudness intent, and BMap cue links. Audio changes invalidate candidate-bound audio and composite evidence.
 
 ## Selected artistic guidance

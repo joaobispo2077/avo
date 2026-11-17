@@ -1059,6 +1059,11 @@ points share the same request and operation replay; they do not scan source medi
 provision models, publish audio or approve listening. Proposal validation precedes
 option freezing. Unselected drafts do not enter reconstruction closure; selected
 sound publication and its typed evidence retention remain separate work.
+Pure per-event choice preparation reuses the existing overlay role and channel
+validators. It freezes entry/marker/mix identities and uses the same native event
+clock for before/after reports, while exposing repeated sources and coincident
+attacks. Explicit source peak/fade limits cannot establish combined-mix safety or
+listening acceptance; current source/catalogue/head checks stay with publication.
 
 Camera movement, face anchoring, sound matching, reference analysis, spoken
 notes/recovery and editor handoff are selected options resolved through existing
