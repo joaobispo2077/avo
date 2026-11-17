@@ -494,6 +494,7 @@ npm run validate:usability -- --ci
 | --- | --- |
 | `AVO_CI=1` | Set in workflows; reserved for future setup-script CI behavior |
 | `PY` / `PYTHON` | Override Python binary for gate scripts |
+| `ONNXRUNTIME_NODE_INSTALL_CUDA=skip` | CPU workflows that run `npm ci` skip the pinned `onnxruntime-node` installer's optional CUDA download. Bundled CPU support and other package lifecycle scripts remain enabled. This is a workflow setting; user installation preferences and package versions stay unchanged. |
 | `QUALITY_CHARTS_TOKEN` | Private uploader environment alias for the existing `GH_TOKEN` secret in `RELEASE`, not a new secret. Used only for trusted native dashboard uploads; fork PRs retain text and artifact downloads. |
 | `NODE_VERSION` | `24` in all workflows (npm/eslint/jscpd). GitHub-owned actions are Node 24 majors (`checkout@v6`, `setup-node@v6`, `setup-python@v6`, `cache@v5`, `upload-artifact@v7`). `astral-sh/setup-uv@v10.2.0` runs on Node 24 (`runs.using: node24` since v7). Workflows that already set `enable-cache: true` keep that explicit value. `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24` covers leftover third-party JS actions. |
 | Linux runner | `ubuntu-24.04` on every Linux job under `.github/workflows/` (including the engine-binary Linux matrix entry). Pinned so those jobs do not follow `ubuntu-latest` onto Ubuntu 26. Windows stays `windows-latest`. Engine macOS stays `macos-14`. |
