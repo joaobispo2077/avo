@@ -87,6 +87,37 @@ waveform peaks alone cannot establish that review. Preserve dialogue priority,
 original channel intent and current cut/source identity when a later selected
 sound is authored through the existing normal owners and proof pipeline.
 
+### Event-bound sound proposals
+
+Use `avo cli sfx propose --project <absolute avo.project.json> --video-id <id> --request <absolute request.json> --json`
+(checkout: `python -m avo.cli`). The native command and `avo_sfx_propose` accept
+the same strict `avo.sound-selection.schema.json#/$defs/proposeRequest` document.
+Supply the current `expectedBasis` heads, `expectedGeneration`, exact output
+`clock`, resolved editing-craft `selection`, and bounded `intents`. Sound matching
+must be explicitly enabled; an active request retains its original options until
+an explicit new request is selected.
+
+Each intent identifies a stable `eventId`, current motion `itemId`, purpose,
+role, declared visibility and motion character. An optional `cueId` resolves
+split items; `phase` locates an accent inside the canonical cue. Missing,
+ambiguous or removed anchors remain unresolved. Slow, hidden, static and
+background movement recommend silence. Silence is always available and no
+effect is added merely because motion exists.
+
+Proposals save immutable metadata under `edit/motion/sound/`, binding current
+heads, selected sound direction, options, library generation, queries and actual
+bounded search results. Repeating the same operation returns its saved proposal;
+reuse of an operation ID with changed inputs fails. Candidate budgets and missing
+queries are explicit. The command does not scan sources, provision or start a
+semantic model; an unavailable selected semantic mode stays unavailable. These
+proposals do not publish BMap/Tracks, start playback or grant listening approval.
+
+The fitting primitive uses the original reviewed source-sample marker minus the
+explicit trim start. Its duration follows the existing native audio boundaries,
+including resampling rounding, and preserves useful attacks and tails. A fit
+still requires current source/rights checks, canonical publication and contextual
+listening. Draft proposals are not selected reconstruction evidence.
+
 Inspect audioTracks before render: dialogue priority and channel mapping, music/SFX purpose, source fingerprint, regions, gains, fades, ducking, mute, loudness intent, and BMap cue links. Audio changes invalidate candidate-bound audio and composite evidence.
 
 ## Selected artistic guidance

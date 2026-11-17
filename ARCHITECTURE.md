@@ -1049,6 +1049,17 @@ source/measurement and current annotation identities. It creates no source reads
 canonical timing, selection, gain policy or listening approval. Proposal/apply
 orchestration and encoded contextual sound qualification remain separate work.
 
+Explicit sound proposals now reuse `MotionAuthoringService` head guards and
+`PipelineRunStore` option freezing, with strict bounded intent/proposal contracts
+and immutable metadata below `edit/motion/sound/`. The timeline service derives
+events only from current motion items and canonical cue timing, captures selected
+sound direction, and calls an injected catalogue for generation-bound candidates.
+Silence and unresolved anchors remain first-class outcomes. Native/MCP entry
+points share the same request and operation replay; they do not scan source media,
+provision models, publish audio or approve listening. Proposal validation precedes
+option freezing. Unselected drafts do not enter reconstruction closure; selected
+sound publication and its typed evidence retention remain separate work.
+
 Camera movement, face anchoring, sound matching, reference analysis, spoken
 notes/recovery and editor handoff are selected options resolved through existing
 settings scopes and frozen requests. Preferences seed future work and cannot
