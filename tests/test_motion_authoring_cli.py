@@ -137,13 +137,14 @@ def test_show_a_specific_unselected_draft_is_pure(footage_project_factory, tmp_p
     } == before
 
 
-def test_apply_confirmation_binds_the_exact_request_bytes(tmp_path):
+@pytest.mark.parametrize("operation", ["plan-apply", "camera-apply"])
+def test_apply_confirmation_binds_the_exact_request_bytes(tmp_path, operation):
     from avo.mcp.tools.cli_tools import _decision_gate_args
 
-    tool = definition("plan-apply")
+    tool = definition(operation)
     assert tool.spec.destructive is True
     path = tmp_path / "apply.json"
-    path.write_bytes(b'{"operation":"plan-apply"}')
+    path.write_text(json.dumps({"operation": operation}), encoding="utf-8")
     first = _decision_gate_args(tool, {"request": str(path)})
     assert (
         first["_decisionDocumentSha256"]
@@ -153,24 +154,29 @@ def test_apply_confirmation_binds_the_exact_request_bytes(tmp_path):
     assert _decision_gate_args(tool, {"request": str(path)}) != first
 
 
-def test_apply_confirmation_uses_the_native_request_size_limit(tmp_path):
+@pytest.mark.parametrize("operation", ["plan-apply", "camera-apply"])
+def test_apply_confirmation_uses_the_native_request_size_limit(tmp_path, operation):
     from avo.editing_craft_requests import MAX_REQUEST_BYTES
     from avo.mcp.tools.cli_tools import _decision_gate_args
 
     path = tmp_path / "apply.json"
     path.write_bytes(b" " * (MAX_REQUEST_BYTES + 1))
     with pytest.raises(ValueError, match="exceeds"):
-        _decision_gate_args(definition("plan-apply"), {"request": str(path)})
+        _decision_gate_args(definition(operation), {"request": str(path)})
 
 
-@pytest.mark.parametrize("operation", ["plan-propose", "plan-select", "plan-apply"])
+@pytest.mark.parametrize(
+    "operation",
+    ["plan-propose", "plan-select", "plan-apply", "camera-propose", "camera-apply"],
+)
 def test_authoring_tools_require_an_explicit_typed_request(operation):
     tool = definition(operation)
     assert any(param.name == "request" and param.required for param in tool.params)
 
 
+@pytest.mark.parametrize("operation", ["plan-apply", "camera-apply"])
 def test_changed_confirmation_digest_is_rejected_before_any_authoring(
-    footage_project_factory, tmp_path
+    footage_project_factory, tmp_path, operation
 ):
     workspace = footage_project_factory()
     path = tmp_path / "apply.json"
@@ -178,7 +184,7 @@ def test_changed_confirmation_digest_is_rejected_before_any_authoring(
     result = run_cli(
         [
             "animation",
-            "plan-apply",
+            operation,
             "--project",
             str(workspace.project_path),
             "--request",

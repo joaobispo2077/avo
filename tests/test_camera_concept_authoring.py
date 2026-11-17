@@ -185,3 +185,34 @@ def test_timed_authoring_cannot_replace_a_selected_camera_treatment(workspace, c
     with pytest.raises(MotionAuthoringError, match="selected camera|camera treatment"):
         service._scope(service.show(), authoring)
     assert workspace.store("animation").load_index()["headRevisionId"] is None
+
+
+def test_static_motion_selection_cannot_inject_an_enabled_camera_component(workspace):
+    from avo.timeline.camera import make_camera_treatment
+    from tests.test_motion_authoring import propose
+
+    workspace.initialize()
+    proposed, _ = propose(workspace)
+    select_concept(workspace, proposed)
+    wrapper = make_camera_treatment(
+        "push",
+        target_layer_id="base-video",
+        source_id="raw-camera",
+        source_sha256="a" * 64,
+        geometry=geometry(),
+        options=resolve_editing_craft_selection(
+            invocation={"camera": {"enabled": True}}
+        ),
+    )
+    authoring = {
+        "animation": {
+            "components": [
+                {"componentId": "chapter-pair", "extensions": {"editingCraft": wrapper}}
+            ]
+        }
+    }
+    with pytest.raises(MotionAuthoringError, match="selected camera|camera selection"):
+        MotionAuthoringService(workspace)._scope(
+            MotionAuthoringService(workspace).show(), authoring
+        )
+    assert workspace.store("animation").load_index()["headRevisionId"] is None
