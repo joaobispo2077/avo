@@ -1024,6 +1024,21 @@ source ledger. Packaged native implementations bind program bytes containing the
 embedded code, while checkout fingerprints include camera and precision modules.
 No runtime probe is added to ordinary metadata-only motion views.
 
+Explicit camera proposal/application bind the observed installed environment to
+selected recipes, exact dispositions and existing recoverable canonical owners.
+Application is confined to the selected picture components/layers, rejects
+duplicate scope identities and preserves unrelated graphics/dialogue/global
+settings. Generic plan application cannot bypass the selected camera runtime.
+Runtime inspection follows known Chocolatey launcher targets and fingerprints the
+final executable as well as launcher bytes; tools stay separately installed.
+Motion-review generator 1.2.0 derives planned/authored before/during/after states
+from the relative path and unambiguous component links, while retaining readable
+1.1.0 reports. Gate JSON joins existing reconstruction ancestry evidence; disposable
+proof clips and tool binaries are not reconstruction sources. Actual native
+fixtures verify full/window source sampling, independent overlays, color/depth,
+runtime identity and unsupported-profile rejection. These checks do not replace
+Watch, listening or creator suitability review.
+
 Camera movement, face anchoring, sound matching, reference analysis, spoken
 notes/recovery and editor handoff are selected options resolved through existing
 settings scopes and frozen requests. Preferences seed future work and cannot

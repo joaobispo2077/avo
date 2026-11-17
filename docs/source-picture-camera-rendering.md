@@ -1,14 +1,15 @@
 # Source-picture camera rendering
 
-The renderer candidate applies selected camera paths to verified original picture
+The native renderer applies selected camera paths to verified original picture
 before composing independent graphics, captions or credits. It does not change
 dialogue timing or sample data. BMap supplies timing, Animation supplies relative
 path intent, and Tracks supplies the source-layer identity. Reading or rendering
 a path starts no face detector or model.
 
-The shipped capability registry remains unavailable for camera authoring until
-the complete profile, recipe/provenance and application controls are qualified.
-The implementation is exercised through an isolated qualification candidate in
+The shipped registry declares `camera-transform-v1` with `impl-camera-transform`.
+Execution still requires explicitly selected options, the actual installed
+qualified runtime and a supported verified source/output profile. Native
+qualification exercises that shipped implementation in
 `tests/integration/test_camera_proof_runtime.py`.
 
 ## Numeric and source boundaries
@@ -154,6 +155,21 @@ pure evaluator and occurrence compiler in their source fingerprints. Packaged
 builds fingerprint the actual program containing their module code instead of
 requiring unpackaged Python source files beside it.
 
-Selected camera controls and map/card states must still use the existing
-recoverable canonical owners before capability activation. These remaining tasks
-do not enable camera moves or face anchoring by default.
+Explicit `camera-propose` records the installed environment with the frozen
+selected recipe. `plan-select` records actual dispositions; `camera-apply` uses the
+existing recoverable BMap/Tracks/Animation owners with current heads and the exact
+environment. Duplicate IDs, unselected graphics/audio/global changes and altered
+selected paths/options fail before publication. Interrupted publication rechecks
+the selected runtime; an already committed retry verifies its receipt and heads
+without probing tools again.
+
+Motion-review generator 1.2.0 exposes planned/authored camera path identities and
+before/during/after states. Existing 1.1.0 reports remain readable. Canonical links
+use explicit component references, `contentRef.componentId`, or one unambiguous
+proposal component ID. These metadata-only cards never claim native visual
+inspection or creator approval. Reconstruction retains microproof gate JSON and
+its producer/environment records, without retaining disposable proof clips or
+bundling executables.
+
+The shipped capability remains conditional on the qualified source/output profile
+and installed runtime. Camera moves and face anchoring stay disabled by default.
