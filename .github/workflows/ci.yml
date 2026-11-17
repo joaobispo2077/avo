@@ -221,7 +221,8 @@ jobs:
     permissions:
       contents: read
     # Coverage re-runs the unit suite only (tests/integration has its own job).
-    timeout-minutes: 35
+    # Run 44170109995 reached 99% coverage progress before the 35-minute timeout.
+    timeout-minutes: 50
     outputs:
       evidence_url: ${{ steps.quality-evidence.outputs.artifact-url }}
     steps:
