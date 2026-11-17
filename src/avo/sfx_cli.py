@@ -7,7 +7,7 @@ import sys
 from dataclasses import replace
 from pathlib import Path
 
-OPERATIONS = ("show", "scan", "annotate", "search", "search-semantic")
+OPERATIONS = ("show", "scan", "annotate", "search", "search-semantic", "propose")
 
 
 def configure(subparsers):
@@ -67,7 +67,12 @@ def _request(path, operation):
     from avo.timeline.contracts import validate_document
 
     value = read_craft_request(path)
-    validate_document(value, "avo.sfx-request.schema.json")
+    schema = (
+        "avo.sound-selection.schema.json#/$defs/proposeRequest"
+        if operation == "propose"
+        else "avo.sfx-request.schema.json"
+    )
+    validate_document(value, schema)
     if value["operation"] != operation:
         raise ValueError("Sound request operation does not match the selected command.")
     return value
@@ -100,6 +105,12 @@ def _excerpt(document, *, offset=0, limit=20):
 
 def _execute(service, args, request):
     operation = args.sfx_command
+    if operation == "propose":
+        from avo.timeline.sound_planning import SoundPlanningService
+
+        return SoundPlanningService(service.workspace, catalogue=service).propose(
+            request
+        )
     if operation == "show":
         return _excerpt(
             service.show(args.generation), offset=args.offset, limit=args.limit
@@ -182,6 +193,7 @@ def run(args):
     effect = {
         "scan": "source-analysis",
         "annotate": "metadata-write",
+        "propose": "metadata-write",
         "search-semantic": "model-execution",
     }.get(args.sfx_command, "metadata-read")
     result.update(contractVersion="1.0.0", operation=args.sfx_command, effect=effect)

@@ -1044,6 +1044,7 @@ def _sfx_bridge_defs() -> list[BridgeToolDef]:
         "annotate": "Record curated sound tags, rights evidence or a reviewed marker against an exact catalogue generation.",
         "search": "Search saved sound descriptors only. Metadata read; semantic execution cannot be selected through this tool.",
         "search-semantic": "Explicit optional local model execution for semantic sound matching. Requires provisioned paired audio/text models; unavailable never falls back to descriptors.",
+        "propose": "Save bounded sound auditions against exact timeline heads and catalogue generation with explicitly enabled options. Metadata only; no scan, model provisioning, canonical application or listening approval.",
     }
     return [
         _tool(
