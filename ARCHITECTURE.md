@@ -1087,8 +1087,26 @@ Invalid or resealed choices, changed source/channel/gain/clock bindings, duplica
 contributions and untyped references fail closed. The legacy audio projection
 rejects these tracks rather than ignoring their native trim. New readers support
 both legacy and selected-sound data; published advanced history retains its reader
-fence on later revisions. Canonical source/head/catalogue admission, recoverable
-sound application and selected-evidence retention remain publication work.
+fence on later revisions. The internal `timeline.sound_application` service now
+publishes explicit per-event selections through the existing BMap/Tracks owners
+under the shared timeline writer. Frozen choices bind actual local source bytes
+and an injected first-audio-stream probe. Exact owned cue/layer bindings and
+current visual contexts prevent replacement from altering unrelated content or
+borrowing ordered-layer approval. Silence removes only its selected contribution.
+Immutable requests, staged prepared revisions and linked receipts support exact
+retry after partial publication, including an interrupted initial operation log.
+Recovery rechecks heads, source/catalogue, direction and frozen options; pending
+markers remain blocking until the actual publication is reconciled. Completed
+replay reports historical heads separately from their currentness.
+
+`timeline.sound_retention` extends the existing bounded motion evidence ledger
+with selected sound proposals, their actual operations, receipt history and
+pending recovery inputs. Canonical/history references drive retention; unrelated
+drafts and generated review caches do not. The timeline domain owns validation
+and publication; `adapters.registry` composes the optional explicit source probe
+using the existing ffprobe adapter. Metadata readers never execute it. The public
+apply command and default proof-plan wiring remain separate work. See
+[`docs/sound-application.md`](docs/sound-application.md) for the boundary and checks.
 
 Camera movement, face anchoring, sound matching, reference analysis, spoken
 notes/recovery and editor handoff are selected options resolved through existing
