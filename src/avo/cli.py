@@ -1295,6 +1295,8 @@ def _animation(args: argparse.Namespace) -> int:
         "plan-propose",
         "plan-select",
         "plan-apply",
+        "camera-propose",
+        "camera-apply",
     }:
         from avo.motion_plan_cli import run_craft_command
 

@@ -265,6 +265,24 @@ def _core_bridge_defs() -> list[BridgeToolDef]:
         ),
         # --- animation ---
         _tool(
+            "avo_animation_camera_apply",
+            "animation",
+            "camera-apply",
+            _MUTATE_WARN + "Apply only selected camera treatments through canonical "
+            "owners with current heads, exact runtime and recoverable publication; "
+            "confirmation binds request bytes without approving a film.",
+            destructive=True,
+            extra_params=(ParamSpec("request", str, required=True),),
+        ),
+        _tool(
+            "avo_animation_camera_propose",
+            "animation",
+            "camera-propose",
+            "Validate explicitly selected camera recipes and installed native runtime; "
+            "write an immutable untimed proposal without applying edits or approving a film.",
+            extra_params=(ParamSpec("request", str, required=True),),
+        ),
+        _tool(
             "avo_animation_plan_propose",
             "animation",
             "plan-propose",
@@ -1151,11 +1169,13 @@ def _decision_gate_args(defn, bridge_args):
         ("direction", "decide"),
         ("briefstart", "decide"),
         ("animation", "plan-apply"),
+        ("animation", "camera-apply"),
     }:
         return bridge_args
     limit = (
         MAX_REQUEST_BYTES
-        if defn.cli_prefix == ("animation", "plan-apply")
+        if defn.cli_prefix
+        in {("animation", "plan-apply"), ("animation", "camera-apply")}
         else 2 * 1024 * 1024
     )
     with Path(bridge_args["request"]).expanduser().open("rb") as stream:

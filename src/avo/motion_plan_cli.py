@@ -6,7 +6,26 @@ import json
 import sys
 from pathlib import Path
 
-AUTHORING_OPERATIONS = ("plan-propose", "plan-select", "plan-apply")
+AUTHORING_OPERATIONS = (
+    "plan-propose",
+    "plan-select",
+    "plan-apply",
+    "camera-propose",
+    "camera-apply",
+)
+
+
+def _camera_runtime():
+    import subprocess
+
+    from avo.adapters.media.camera_provenance import camera_runtime_identity
+
+    try:
+        return camera_runtime_identity()["environmentHash"]
+    except subprocess.SubprocessError as error:
+        raise RuntimeError(
+            f"Selected camera runtime cannot be inspected: {error}"
+        ) from error
 
 
 def add_options_parsers(subparsers) -> None:
@@ -29,7 +48,7 @@ def add_plan_parsers(subparsers) -> None:
         parser.add_argument("--json", action="store_true", dest="as_json")
         if operation in AUTHORING_OPERATIONS:
             parser.add_argument("--request", type=Path, required=True)
-        if operation == "plan-apply":
+        if operation in {"plan-apply", "camera-apply"}:
             parser.add_argument("--request-sha256")
         if operation == "plan-show":
             parser.add_argument("--proposal-hash")
@@ -58,14 +77,23 @@ def run_authoring_command(args) -> int:
         request = read_craft_request(
             args.request, expected_sha256=getattr(args, "request_sha256", None)
         )
+        if request.get("operation") != args.animation_command:
+            raise ValueError("Request operation differs from the selected command")
         workspace = TimelineWorkspace.from_project(
             args.project, video_id=args.video_id or None
         )
-        service = MotionAuthoringService(workspace)
+        service = MotionAuthoringService(
+            workspace,
+            camera_runtime=_camera_runtime
+            if args.animation_command.startswith("camera-")
+            else None,
+        )
         operation = {
             "plan-propose": service.propose,
+            "camera-propose": service.propose,
             "plan-select": service.select,
             "plan-apply": service.apply,
+            "camera-apply": service.apply,
         }[args.animation_command]
         result = operation(request)
     except (
