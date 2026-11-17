@@ -21,6 +21,7 @@ from threading import Lock
 from avo.library.rules import is_link, observation, safe_path
 from avo.sfx_contracts import (
     LIBRARY_ID,
+    MAX_DOCUMENT_BYTES,
     SfxCatalogError,
     _entry_id,
     _hash,
@@ -42,7 +43,6 @@ from avo.timeline.store import (
 )
 
 SCHEMA = "avo.sfx-catalog.schema.json"
-MAX_DOCUMENT_BYTES = 16 * 1024 * 1024
 MAX_ENTRIES = 10000
 MAX_TREE_NODES = 20000
 AUDIO_EXTENSIONS = {

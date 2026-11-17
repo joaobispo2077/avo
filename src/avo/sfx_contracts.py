@@ -7,6 +7,7 @@ import re
 from avo.timeline.contracts import content_hash
 
 LIBRARY_ID = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$")
+MAX_DOCUMENT_BYTES = 16 * 1024 * 1024
 
 
 class SfxCatalogError(ValueError):
