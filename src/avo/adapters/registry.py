@@ -92,10 +92,17 @@ def adapter_for_routing_suffix(job: str, suffix: str) -> type[JobAdapter]:
 
 def build_sound_source_probe():
     """Observe the first measured audio stream only for explicit sound admission."""
+    import subprocess
+
     from .media.ffprobe import FfprobeMediaAdapter
 
     def probe(path, *, expected_sha256):
-        source = FfprobeMediaAdapter().inventory([path])["sources"][0]
+        try:
+            source = FfprobeMediaAdapter().inventory([path])["sources"][0]
+        except (OSError, subprocess.SubprocessError) as error:
+            raise ValueError(
+                f"Cannot inspect selected sound source: {error}"
+            ) from error
         if source["fingerprint"]["sha256"] != expected_sha256:
             raise ValueError("Selected sound source fingerprint changed during probe")
         streams = source["streams"]["audio"]
