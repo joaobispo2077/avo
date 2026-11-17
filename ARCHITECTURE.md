@@ -1064,6 +1064,12 @@ validators. It freezes entry/marker/mix identities and uses the same native even
 clock for before/after reports, while exposing repeated sources and coincident
 attacks. Explicit source peak/fade limits cannot establish combined-mix safety or
 listening acceptance; current source/catalogue/head checks stay with publication.
+The pure sound graph compiler translates frozen choices to existing native
+trim/gain/fade/duck nodes and timed events. It retains absolute program coordinates
+through cut windows and makes identical compilation idempotent. Existing source
+processing remains unchanged; extending a program mix requires its exact original
+node set and policy. Native execution still admits original source bytes and
+performs rendering. This qualification kernel is not a canonical sound publisher.
 
 Camera movement, face anchoring, sound matching, reference analysis, spoken
 notes/recovery and editor handoff are selected options resolved through existing

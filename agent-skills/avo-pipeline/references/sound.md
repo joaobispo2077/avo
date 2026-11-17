@@ -134,6 +134,14 @@ gain and schedule; live source checks, combined peak, speech masking and actual
 contextual listening remain review obligations. This API does not yet publish
 canonical audio.
 
+The native proof graph compiler can qualify frozen choices using the existing
+source-native audio path. It keeps the full program clock during window renders,
+emits one contribution per stable event, and rejects conflicting replay, source
+fingerprints or program mix policies. Ducking requires an explicit mapping to
+current dialogue nodes. It does not choose a dialogue replacement or process the
+original music. Canonical source/catalogue/head admission and selected evidence
+retention still belong to the forthcoming sound publication route.
+
 Inspect audioTracks before render: dialogue priority and channel mapping, music/SFX purpose, source fingerprint, regions, gains, fades, ducking, mute, loudness intent, and BMap cue links. Audio changes invalidate candidate-bound audio and composite evidence.
 
 ## Selected artistic guidance
