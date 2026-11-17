@@ -1108,8 +1108,10 @@ the data-only catalogue byte limit inside the unchanged total evidence budget.
 Canonical/history references drive retention; unrelated
 drafts and generated review caches do not. The timeline domain owns validation
 and publication; `adapters.registry` composes the optional explicit source probe
-using the existing ffprobe adapter. Metadata readers never execute it. The public
-apply command remains separate work. See
+using the existing ffprobe adapter. Metadata readers never execute it. Native and
+MCP apply share the strict saved request, canonical owner permissions and exact
+confirmation-byte binding. Recoverable errors report actual heads/receipt/state.
+See
 [`docs/sound-application.md`](docs/sound-application.md) for the boundary and checks.
 
 Typed sound application selectors preserve exact staged inputs even when staging
@@ -1136,6 +1138,14 @@ existing strict media resolver. Physical admission and listening remain separate
 Sound finalization/recovery accepts expected descendant staleness only after an
 actual published parent, while preserving unchanged revision and approval checks.
 It leaves Animation stale until its existing owner refreshes that dependency.
+
+`timeline.motion_sound_review` derives proposed and selected sound links for the
+built-in motion map and storyboard from bounded metadata. Generator 1.3 retains
+readable 1.1/1.2 reports. Selected sound adds no visual timing authority; stale
+opportunities become unresolved, and foreign or invalid context becomes a gap.
+Sound propose/apply reuse the existing report publisher without source/model
+execution. Presentation failure preserves valid canonical publication and is
+reported separately. Ordinary inspection remains read-only.
 
 Camera movement, face anchoring, sound matching, reference analysis, spoken
 notes/recovery and editor handoff are selected options resolved through existing

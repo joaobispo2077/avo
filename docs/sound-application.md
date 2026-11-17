@@ -1,10 +1,15 @@
 # Selected sound publication
 
-`SoundPlanningService.apply` is an internal publication boundary for explicit
+`SoundPlanningService.apply` is the publication boundary for explicit
 per-event selections. It owns BMap and Tracks only, through their existing
 services and timeline writer. Selecting a sound records pending listening;
 it does not approve the mix or change picture, dialogue, music, or Animation.
-The public apply command remains separate work.
+Native `sfx apply` and MCP `avo_sfx_apply` share this service and the strict
+`avo.sound-selection.schema.json#/$defs/applyRequest` contract. MCP confirmation
+binds the exact request bytes and the native reader rechecks that binding before
+project/source work. The command is a canonical write; it does not scan the
+catalogue or execute a semantic model. Sound ownership is checked against the
+existing command registry for both BMap and Tracks.
 
 A strict request names the exact proposal, expected canonical heads and library
 generation, actor, reason, choices and current visual contexts. Publication
@@ -60,6 +65,22 @@ channels, including a single selected microphone duplicated to stereo. Missing,
 wrong-channel or ambiguous stream routing fails rather than choosing another
 microphone. Proof planning performs metadata validation; physical source checks,
 native execution and contextual listening remain separate requirements.
+
+Successful propose/apply operations automatically publish the current motion map
+and linked storyboard. Opportunities link to their exact saved proposal; selected
+sound links to its event, visual cue, audio layer, source entry and application.
+The view labels proposed/authored metadata separately from listening acceptance.
+Stale proposal opportunities are unresolved rather than current auditions;
+malformed or foreign-project context is reported as a gap. Sound links never
+extend a visual cue's timing. Default inspection stays read-only and needs no
+source hashing, decoding or model. Presentation failure keeps valid publication
+and returns a warning. Reports from generator versions 1.1 and 1.2 remain readable
+alongside the current 1.3 generator.
+
+Recoverable errors include the exact receipt reference, actual committed heads
+and publication state. `recovery-needed` requires reconciliation of the saved
+request; `committed` means publication succeeded and its pending marker needs
+cleanup. Neither state grants listening or creator approval.
 
 Cleanup and reconstruction retain selected canonical/history sound proposals,
 their actual operation requests, immutable receipt chains, prepared revisions,

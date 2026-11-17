@@ -131,16 +131,16 @@ peak ceiling, and fade space outside the useful attack/tail. It does not invent 
 gain target or change the original dialogue/music. Repeated sources and coincident
 attacks are advisories. Per-ID changes report before/after asset identities, role,
 gain and schedule; live source checks, combined peak, speech masking and actual
-contextual listening remain review obligations. This API does not yet publish
-canonical audio.
+contextual listening remain review obligations. Choice preparation alone does
+not publish canonical audio.
 
 The native proof graph compiler can qualify frozen choices using the existing
 source-native audio path. It keeps the full program clock during window renders,
 emits one contribution per stable event, and rejects conflicting replay, source
 fingerprints or program mix policies. Ducking requires an explicit mapping to
 current dialogue nodes. It does not choose a dialogue replacement or process the
-original music. Canonical source/catalogue/head admission and selected evidence
-retention still belong to the forthcoming sound publication route.
+original music. The `sfx apply` route binds canonical source/catalogue/head
+admission and selected evidence retention to that native proof workflow.
 
 Selected sound track metadata now has an explicit reader contract. A published
 selection requires a version 2 Tracks index with `sound-selection-v1`; ordinary
@@ -149,6 +149,40 @@ sample region, channel map, level, owning cue and exact proposal/application
 references. Readers reject changed or duplicate contributions. Legacy audio
 projection rejects this contract because it cannot preserve the selected native
 trim. These checks do not admit media, approve a mix or authorize publication.
+
+### Selected sound publication
+
+Use `avo cli sfx apply --project <absolute avo.project.json> --video-id <id> --request <absolute request.json> --json`
+(checkout: `python -m avo.cli`). Native and `avo_sfx_apply` share the strict
+`avo.sound-selection.schema.json#/$defs/applyRequest` contract. Supply a fresh
+operation ID for changed inputs, actor/reason, the exact proposal SHA-256,
+`expectedBasis`, `expectedGeneration`, explicit per-event `choices` and visual
+`contexts`. A choice records the entry, native-sample trim and mix; explicit
+silence uses null entry/trim/mix. Ordered groups and synthetic main-scene sound
+need their exact dispositions. Sound matching must be enabled in the frozen
+request; a preference cannot authorize an edit.
+
+MCP confirmation binds the exact request bytes. Publication checks actual local
+source bytes and the measured first audio stream, current catalogue, heads,
+direction and options before the existing BMap/Tracks owners write. It preserves
+other contributions and picture/dialogue/music processing. Listening remains
+pending. Source/role/timing or ambiguous dialogue-routing failures require an
+explicit correction, not a guessed source or automatic fallback.
+
+Propose/apply return the built-in motion map and linked storyboard, including
+current event/layer/application links. Stale draft opportunities are unresolved;
+authored metadata is not rendered or listening evidence. Read-only inspection
+does not hash/decode sources. Report failure returns a warning while retaining
+valid edits. Sound-only publication currently leaves unchanged Animation stale
+until its owner reconciles the dependency; it does not silently revise animation.
+
+On interruption, retain the saved request and blocking marker. Retry that exact
+request to reconcile actual committed heads; do not invent rollback history or
+new operation IDs for a partial publication. Error JSON distinguishes
+`recovery-needed` from `committed` awaiting marker cleanup and carries the exact
+receipt and actual heads. Completed replay preserves its historical result and
+reports currentness separately. Selected/staged metadata and original sound
+requirements join normal reconstruction without copying the library.
 
 Inspect audioTracks before render: dialogue priority and channel mapping, music/SFX purpose, source fingerprint, regions, gains, fades, ducking, mute, loudness intent, and BMap cue links. Audio changes invalidate candidate-bound audio and composite evidence.
 
