@@ -190,6 +190,97 @@ def test_fit_identity_binds_program_clock_and_current_marker_review(tmp_path):
     assert first["fitHash"] != changed_review["fitHash"]
 
 
+def test_fitted_event_can_bind_the_existing_native_audio_event_owner(tmp_path):
+    from avo.adapters.media.proof_audio_bridge import validate_audio_events
+
+    entry = candidate(tmp_path)
+    trim = {"startSample": 600, "endSampleExclusive": 48000}
+    result = fit_sound_candidate(
+        opportunity(),
+        entry,
+        trim_range=trim,
+        frame_rate=Fraction(24),
+        program_end_frame=90,
+    )
+    event = {
+        **result["event"],
+        "sourceRange": trim,
+        "audio": {"nodeId": "selected-sfx"},
+    }
+    execution = {
+        "output": {"frameRate": {"num": 24, "den": 1}},
+        "audioGraph": {
+            "sampleRate": 48000,
+            "nodes": [
+                {
+                    "nodeId": "selected-sfx",
+                    "kind": "sfx",
+                    "sourceRange": trim,
+                    "sourceSampleRate": 48000,
+                    "outputRange": {
+                        "startSample": result["event"]["scheduledAudioStartSample"],
+                        "endSampleExclusive": result["scheduledAudioEndSample"],
+                    },
+                }
+            ],
+        },
+        "events": [event],
+    }
+    assert validate_audio_events(execution) == {"reveal-one"}
+    assert result["opportunity"]["visibleRange"] == opportunity()["visibleRange"]
+
+
+def test_non_aligned_native_trim_uses_the_existing_continuous_source_clock(tmp_path):
+    from avo.adapters.media.audio_tracks import compile_continuous_audio_graph
+
+    entry = candidate(tmp_path, 44100)
+    trim = {"startSample": 2200, "endSampleExclusive": 40000}
+    result = fit_sound_candidate(
+        opportunity(),
+        entry,
+        trim_range=trim,
+        frame_rate=Fraction(24),
+        program_end_frame=90,
+    )
+    start = result["event"]["scheduledAudioStartSample"]
+    node = {
+        "nodeId": "selected-sfx",
+        "kind": "source",
+        "input": {"sha256": entry["source"]["sha256"], "streamId": "audio:0"},
+        "sourceSampleRange": trim,
+        "sourceSampleRate": 44100,
+        "sourceLayout": "stereo",
+        "targetLayout": "stereo",
+        "channelMap": [0, 1],
+        "outputSampleRange": {
+            "startSample": start,
+            "endSampleExclusive": result["scheduledAudioEndSample"],
+        },
+    }
+    # The ordinary source compiler validates native endpoint conversion before
+    # assembling explicit leading silence; no parallel duration rule is allowed.
+    silence = {
+        "nodeId": "before-effect",
+        "kind": "silence",
+        "targetLayout": "stereo",
+        "channelMap": [0, 1],
+        "outputSampleRange": {"startSample": 0, "endSampleExclusive": start},
+    }
+    graph = compile_continuous_audio_graph(
+        [silence, node],
+        [
+            {
+                "kind": "encode",
+                "range": {
+                    "startSample": 0,
+                    "endSampleExclusive": result["scheduledAudioEndSample"],
+                },
+            }
+        ],
+    )
+    assert graph["nodes"][1]["sourceSampleRange"] == trim
+
+
 @pytest.mark.parametrize("problem", ["partial-analysis", "license", "rights-evidence"])
 def test_incomplete_tail_analysis_or_rights_evidence_cannot_qualify_a_fit(
     tmp_path, problem
