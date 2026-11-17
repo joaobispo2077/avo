@@ -15,11 +15,17 @@ def test_selected_sound_retains_exact_request_receipts_and_proposal(tmp_path):
     generation_path.write_bytes(generation_path.read_bytes() + b" " * (5 * 1024 * 1024))
     unrelated = service.root / "proposals" / ("b" * 64 + ".json")
     unrelated.write_text("{}", encoding="utf-8")
+    notes = service.root / "creator-notes.md"
+    notes.write_text("Keep this authoring decision", encoding="utf-8")
     paths = set(retained_motion_paths(workspace))
     assert workspace.raw_dir / shown["proposalRef"]["path"] in paths
     assert workspace.raw_dir / applied["receiptRef"]["path"] in paths
     assert workspace.raw_dir / applied["receipt"]["requestRef"]["path"] in paths
     assert unrelated not in paths
+    from avo.timeline.reconstruction import _required_files
+
+    assert unrelated not in _required_files(workspace.raw_dir, [], workspace=workspace)
+    assert notes in _required_files(workspace.raw_dir, [], workspace=workspace)
     assert (
         catalogue.directory / "generations" / (request["expectedGeneration"] + ".json")
         in paths

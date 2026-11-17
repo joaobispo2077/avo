@@ -303,6 +303,11 @@ def test_staging_interruption_before_operation_record_can_resume_exactly(
     with pytest.raises(SoundPlanningError, match="staged operation"):
         service.apply(request)
     assert workspace.store("tracks").load_index()["headRevisionId"] is None
+    from avo.timeline.motion_retention import retained_motion_paths
+
+    assert any(
+        path.parent.name == "receipts" for path in retained_motion_paths(workspace)
+    )
     monkeypatch.setattr(sound_application, "write_immutable_json", write)
     resumed = SoundPlanningService(workspace, catalogue=catalogue, source_probe=probe)
     first = resumed.apply(request)
