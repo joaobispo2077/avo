@@ -1,6 +1,9 @@
 """Selected sound request/recovery closure, sharing the bounded motion ledger."""
 
 import json
+import os
+import re
+from pathlib import Path
 from types import SimpleNamespace
 
 from avo.sfx_contracts import MAX_DOCUMENT_BYTES as MAX_CATALOGUE_BYTES
@@ -187,7 +190,16 @@ class SoundRetention:
         identity = content_hash(["apply", marker["operationId"]])
         path = self.planning._path("operations", identity)
         if not path.exists() and not path.is_symlink():
-            return False
+            selector = self.planning._path("applications", identity)
+            if not selector.exists() and not selector.is_symlink():
+                return False
+            receipt = self.application_selector(selector)
+            _require(
+                receipt["requestHash"] == marker["requestHash"],
+                "pending staged sound request changed",
+            )
+            self.current_generation()
+            return True
         operation, _ = self.retained.read(path)
         operation = _sound_document(operation, "applicationOperation")
         receipt = self.application(
@@ -196,3 +208,53 @@ class SoundRetention:
         if receipt["state"] != "committed":
             self.current_generation()
         return True
+
+    def load_applications(self):
+        from .motion_retention import MAX_FILES
+
+        root = self.planning._path("applications", "0" * 64).parent
+        if not root.exists() and not root.is_symlink():
+            return
+        with os.scandir(root) as entries:
+            for count, entry in enumerate(entries):
+                _require(
+                    count < MAX_FILES, "sound application selector budget exceeded"
+                )
+                if not entry.name.endswith(".json"):
+                    continue
+                _require(
+                    re.fullmatch(r"[a-f0-9]{64}\.json", entry.name) is not None,
+                    "invalid sound application selector name",
+                )
+                receipt = self.application_selector(Path(entry.path))
+                if receipt["state"] != "committed":
+                    self.current_generation()
+
+    def application_selector(self, path):
+        pointer, _ = self.retained.read(path)
+        receipt = self.reference(pointer, "applicationReceipt")
+        request = self.reference(receipt["requestRef"], "applyRequest")
+        identity = content_hash(["apply", request["operationId"]])
+        _require(
+            path == self.planning._path("applications", identity),
+            "sound application selector changes operation identity",
+        )
+        operation = self.planning._path("operations", identity)
+        if operation.exists() or operation.is_symlink():
+            return self.application(receipt["requestRef"])
+        self._orphaned_stage(request, receipt)
+        self.applications[identity] = receipt
+        return receipt
+
+    def _orphaned_stage(self, request, receipt):
+        _require(
+            receipt["requestHash"] == content_hash(request),
+            "staged sound request identity changed",
+        )
+        self.application_service._verify_recipe(request, receipt, receipt)
+        _require(
+            not self.retained.service._actual_committed(receipt, require_active=False),
+            "staged sound lost its published operation record",
+        )
+        self.proposal(receipt["proposalRef"])
+        self.selected_entries(request, receipt)

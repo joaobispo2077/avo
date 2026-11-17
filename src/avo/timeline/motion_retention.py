@@ -351,6 +351,7 @@ class _Retention:
     def run(self):
         self.canonical()
         self.run_record()
+        self.sound_retention.load_applications()
         self.pending()
         visited = set()
         while self.proposals:

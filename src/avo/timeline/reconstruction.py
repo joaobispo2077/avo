@@ -115,6 +115,14 @@ def _disposable_motion_path(raw_dir: Path, path: Path) -> bool:
     relative = path.relative_to(raw_dir / "edit")
     if relative.parts[:2] == ("review", "motion-plan"):
         return True
+    if relative.parts[:2] == ("motion", "sound"):
+        return len(relative.parts) > 3 and relative.parts[2] in {
+            "proposals",
+            "requests",
+            "receipts",
+            "operations",
+            "applications",
+        }
     return (
         len(relative.parts) > 1
         and relative.parts[0] == "motion"
