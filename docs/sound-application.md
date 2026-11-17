@@ -57,3 +57,20 @@ marker cleanup keeps its frozen generation without adopting later curation.
 Catalogue metadata uses the shared 16 MiB catalogue limit inside the existing
 64 MiB total evidence budget; motion documents keep their smaller individual
 limit. No catalogue media or embedding cache is read or retained by this ledger.
+
+Verified application selectors also preserve staged selections if interruption
+precedes the operation record or pending marker. Their typed request, proposal,
+catalogue and prepared receipt remain available for an exact retry. Discovery is
+limited to the owned selector directory and the existing evidence file budget.
+Generic reconstruction excludes the typed sound draft collections and then adds
+the verified closure; creator notes beside those collections remain authoring
+inputs.
+
+Selected external sound files use the existing reconstruction `externalSources`
+contract and the same source identity as native sound compilation. Current and
+still-staged selections record their exact locator, SHA-256 and byte count;
+reconstruction verifies those originals without copying or decoding the library.
+Project-local selected or still-staged sound assets join the fingerprinted bundle
+files, including assets not yet referenced by a published timeline head.
+Missing or changed selected originals block reconstruction. This file coverage
+does not grant rendering admission or listening approval.

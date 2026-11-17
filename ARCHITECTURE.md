@@ -1112,6 +1112,18 @@ using the existing ffprobe adapter. Metadata readers never execute it. The publi
 apply command and default proof-plan wiring remain separate work. See
 [`docs/sound-application.md`](docs/sound-application.md) for the boundary and checks.
 
+Typed sound application selectors preserve exact staged inputs even when staging
+is interrupted before its operation log or pending marker. Bounded discovery uses
+only the owned selector directory. Generic authoring retention excludes the typed
+sound draft collections, then adds their verified dependencies; adjacent creator
+notes remain authoring inputs. `timeline.sound_sources` registers current and
+still-staged external sound originals with reconstruction's existing
+`externalSources` contract and the native sound source identity. Existing
+fingerprinting verifies the selected files without copying or decoding a library.
+Project-local selected or staged sound assets join the fingerprinted bundle files,
+including staging before the first canonical owner write.
+The metadata/file coverage path grants no rendering or listening authority.
+
 Camera movement, face anchoring, sound matching, reference analysis, spoken
 notes/recovery and editor handoff are selected options resolved through existing
 settings scopes and frozen requests. Preferences seed future work and cannot
