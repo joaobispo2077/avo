@@ -1,5 +1,11 @@
 # /avo.sound reference
 
+Waveform caches retain reusable measurements, not manual marker review decisions.
+Identical PCM and marker positions can reuse analysis while a changed review flag
+changes the current disposition. A transient analysis pass does not approve the
+sound choice, contextual mix, rights or finished video. Catalogue marker/rights
+reviews remain separately source-bound curated records.
+
 ## Step/state mapping
 
 **Durable state:** pipeline-run.json plus the current canonical timeline revision
