@@ -165,12 +165,13 @@
     "requiredReaderCapabilities": {
       "type": "array",
       "uniqueItems": true,
-      "minItems": 2,
+      "minItems": 1,
       "maxItems": 2,
       "items": {
         "enum": [
           "animation-strategy-v2",
-          "camera-behavior-v1"
+          "camera-behavior-v1",
+          "sound-selection-v1"
         ]
       }
     }
@@ -190,9 +191,43 @@
         ],
         "properties": {
           "artifactType": {
-            "const": "animation"
+            "enum": [
+              "animation",
+              "tracks"
+            ]
           }
-        }
+        },
+        "oneOf": [
+          {
+            "properties": {
+              "artifactType": {
+                "const": "animation"
+              },
+              "requiredReaderCapabilities": {
+                "minItems": 2,
+                "maxItems": 2,
+                "items": {
+                  "enum": [
+                    "animation-strategy-v2",
+                    "camera-behavior-v1"
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "properties": {
+              "artifactType": {
+                "const": "tracks"
+              },
+              "requiredReaderCapabilities": {
+                "const": [
+                  "sound-selection-v1"
+                ]
+              }
+            }
+          }
+        ]
       },
       "else": {
         "not": {

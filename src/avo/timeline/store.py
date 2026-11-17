@@ -25,7 +25,9 @@ from .contracts import (
     ContractError,
     content_hash,
     require_animation_reader,
+    require_tracks_reader,
     required_animation_readers,
+    required_tracks_readers,
     validate_document,
 )
 
@@ -38,6 +40,14 @@ class StoreError(RuntimeError):
 
 _WRITERS = local()
 _WRITER_HANDLES = set()
+
+
+def _required_revision_readers(body):
+    if body["artifactType"] == "animation":
+        return required_animation_readers(body["snapshot"])
+    if body["artifactType"] == "tracks":
+        return required_tracks_readers(body["snapshot"])
+    return ()
 
 
 def _close_forked_writers():
@@ -415,6 +425,8 @@ class ArtifactStore:
                 raise StoreError(f"revision ref hash mismatch: {ref['revisionId']}")
             if revision["artifactType"] == "animation":
                 require_animation_reader(index, revision["snapshot"])
+            elif revision["artifactType"] == "tracks":
+                require_tracks_reader(index, revision["snapshot"])
         for ref in index["eventRefs"]:
             event = self._read_json(self.timeline_dir / ref["path"])
             self._validate_event(event)
@@ -425,8 +437,7 @@ class ArtifactStore:
     def _validate_revision(self, revision: dict[str, Any]) -> None:
         try:
             validate_document(revision, "avo.timeline-revision.schema.json")
-            if revision["artifactType"] == "animation":
-                required_animation_readers(revision["snapshot"])
+            _required_revision_readers(revision)
         except ContractError as exc:
             raise StoreError(f"invalid immutable revision: {exc}") from exc
         body = {key: value for key, value in revision.items() if key != "contentSha256"}
@@ -646,13 +657,12 @@ class ArtifactStore:
         updated["activeState"] = "valid"
         updated.pop("stateReason", None)
         updated["updatedAt"] = timestamp
-        if body["artifactType"] == "animation":
-            required = required_animation_readers(body["snapshot"])
-            if required:
-                updated["schemaVersion"] = "2.0.0"
-                updated["requiredReaderCapabilities"] = sorted(
-                    set(updated.get("requiredReaderCapabilities", [])) | set(required)
-                )
+        required = _required_revision_readers(body)
+        if required:
+            updated["schemaVersion"] = "2.0.0"
+            updated["requiredReaderCapabilities"] = sorted(
+                set(updated.get("requiredReaderCapabilities", [])) | set(required)
+            )
         self._validate_index(updated)
         write_immutable_json(revision_path, body)
         try:

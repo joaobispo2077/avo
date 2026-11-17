@@ -4,6 +4,16 @@
   "title": "Sound proposals and selected candidate fits, separate from publication and listening approval",
   "$ref": "#/$defs/candidateFit",
   "$defs": {
+    "selectedTrack": {
+      "type": "object", "additionalProperties": false,
+      "required": ["contractVersion", "choice", "cueId", "generationId", "proposalRef", "applicationRef"],
+      "properties": {
+        "contractVersion": {"const": "1.0.0"}, "choice": {"$ref": "#/$defs/frozenChoice"},
+        "cueId": {"$ref": "#/$defs/id"}, "generationId": {"$ref": "avo.sfx-catalog.schema.json#/$defs/sha"},
+        "proposalRef": {"$ref": "https://avo.local/avo.motion-proposal.schema.json#/$defs/ref"},
+        "applicationRef": {"$ref": "https://avo.local/avo.motion-proposal.schema.json#/$defs/ref"}
+      }
+    },
     "compileSource": {
       "type": "object", "additionalProperties": false,
       "required": ["locator", "sha256", "mediaClass", "streamIndex"],

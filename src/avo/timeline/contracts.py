@@ -274,6 +274,27 @@ def require_animation_reader(index: dict[str, Any], snapshot: dict[str, Any]) ->
         )
 
 
+def required_tracks_readers(snapshot: dict[str, Any]) -> tuple[str, ...]:
+    from .sound_tracks import validate_sound_tracks
+
+    try:
+        return validate_sound_tracks(snapshot)
+    except (ValueError, TypeError, KeyError, OverflowError) as error:
+        raise ContractError(str(error)) from error
+
+
+def require_tracks_reader(index: dict[str, Any], snapshot: dict[str, Any]) -> None:
+    required = set(required_tracks_readers(snapshot))
+    if required and (
+        index["artifactType"] != "tracks"
+        or index["schemaVersion"] != "2.0.0"
+        or not required.issubset(index.get("requiredReaderCapabilities", []))
+    ):
+        raise ContractError(
+            "selected sound requires its versioned index reader capabilities"
+        )
+
+
 def dependency_lock_hash(dependencies: dict[str, str]) -> str:
     """Hash a sorted exact dependency map after strict SHA-256 validation."""
     import re
