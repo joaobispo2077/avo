@@ -164,8 +164,9 @@ def derive_sound_opportunities(snapshot, intents, *, frame_rate, program_end_fra
 class SoundPlanningService:
     """Explicit proposal writes; construction never scans, renders or approves."""
 
-    def __init__(self, workspace, *, catalogue):
+    def __init__(self, workspace, *, catalogue, source_probe=None):
         self.workspace, self.catalogue = workspace, catalogue
+        self.source_probe = source_probe
         self.authoring = MotionAuthoringService(workspace)
         self.root = workspace.raw_dir / "edit/motion/sound"
         if not self.root.resolve().is_relative_to(workspace.raw_dir.resolve()):
@@ -196,12 +197,37 @@ class SoundPlanningService:
             or value["provider"] != self.workspace.project["provider"]
         ):
             raise SoundPlanningError("Sound proposal belongs to another project")
+        self._verify_proposal_operation(value, self.authoring._ref(path, raw))
         return {
             "operation": "propose",
             "status": "proposed",
             "proposal": value,
             "proposalRef": self.authoring._ref(path, raw),
         }
+
+    def _verify_proposal_operation(self, proposal, reference):
+        path = self._path(
+            "operations", content_hash(["propose", proposal["operationId"]])
+        )
+        record, _ = self.authoring._read(path)
+        record = _sound_document(record, "operationRecord")
+        request = _sound_document(record["request"], "proposeRequest")
+        bindings = {
+            "operationId": "operationId",
+            "requestHash": None,
+            "basisHeads": "expectedBasis",
+            "generationId": "expectedGeneration",
+            "clock": "clock",
+        }
+        expected_hash = content_hash(request)
+        if record["proposalRef"] != reference or record["requestHash"] != expected_hash:
+            raise SoundPlanningError("Sound proposal operation/reference changed")
+        for key, request_key in bindings.items():
+            expected = expected_hash if request_key is None else request[request_key]
+            if proposal[key] != expected:
+                raise SoundPlanningError(
+                    "Sound proposal differs from its actual operation request"
+                )
 
     def _known(self, request):
         path = self._path(
@@ -375,6 +401,11 @@ class SoundPlanningService:
         ):
             raise SoundPlanningError("Frozen sound request changed during publication")
         return proposal
+
+    def apply(self, request):
+        from .sound_application import apply_sound_request
+
+        return apply_sound_request(self, request)
 
     def propose(self, request):
         try:

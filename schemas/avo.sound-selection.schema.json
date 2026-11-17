@@ -4,6 +4,54 @@
   "title": "Sound proposals and selected candidate fits, separate from publication and listening approval",
   "$ref": "#/$defs/candidateFit",
   "$defs": {
+    "applyRequest": {
+      "type": "object", "additionalProperties": false,
+      "required": ["contractVersion", "operation", "operationId", "actor", "reason", "proposalHash", "expectedBasis", "expectedGeneration", "choices", "contexts"],
+      "properties": {
+        "contractVersion": {"const": "1.0.0"}, "operation": {"const": "apply"},
+        "operationId": {"$ref": "#/$defs/proposeRequest/properties/operationId"},
+        "actor": {"$ref": "#/$defs/proposeRequest/properties/actor"}, "reason": {"$ref": "#/$defs/proposeRequest/properties/reason"},
+        "proposalHash": {"$ref": "avo.sfx-catalog.schema.json#/$defs/sha"},
+        "expectedBasis": {"$ref": "#/$defs/proposeRequest/properties/expectedBasis"},
+        "expectedGeneration": {"$ref": "#/$defs/proposeRequest/properties/expectedGeneration"},
+        "choices": {"allOf": [{"$ref": "#/$defs/choiceInputs"}, {"minItems": 1}]},
+        "contexts": {"$ref": "#/$defs/soundContexts"}
+      }
+    },
+    "applicationReceipt": {
+      "type": "object", "additionalProperties": false,
+      "required": ["contractVersion", "operationId", "requestHash", "requestRef", "proposalRef", "expectedBasis", "actor", "reason", "state", "prepared", "committedHeads", "choices", "changes", "sourceRefs", "advisories", "previousReceiptRef", "lastError"],
+      "properties": {
+        "contractVersion": {"const": "1.0.0"},
+        "operationId": {"$ref": "#/$defs/proposeRequest/properties/operationId"},
+        "requestHash": {"$ref": "avo.sfx-catalog.schema.json#/$defs/sha"},
+        "requestRef": {"$ref": "#/$defs/selectedTrack/properties/applicationRef"},
+        "proposalRef": {"$ref": "#/$defs/selectedTrack/properties/proposalRef"},
+        "expectedBasis": {"$ref": "#/$defs/proposeRequest/properties/expectedBasis"},
+        "actor": {"$ref": "#/$defs/proposeRequest/properties/actor"}, "reason": {"$ref": "#/$defs/proposeRequest/properties/reason"},
+        "state": {"enum": ["staged", "committing", "committed", "recovery-needed"]},
+        "prepared": {"type": "object", "additionalProperties": false, "required": ["bmap", "tracks"], "properties": {
+          "bmap": {"$ref": "https://avo.local/avo.timeline-revision.schema.json"},
+          "tracks": {"$ref": "https://avo.local/avo.timeline-revision.schema.json"}
+        }},
+        "committedHeads": {"type": "object", "additionalProperties": {"$ref": "https://avo.local/avo.motion-proposal.schema.json#/$defs/headRef"}, "propertyNames": {"enum": ["bmap", "tracks"]}},
+        "choices": {"$ref": "#/$defs/frozenChoices"},
+        "changes": {"type": "array", "maxItems": 500, "items": {"type": "object", "maxProperties": 8}},
+        "sourceRefs": {"type": "object", "maxProperties": 500, "additionalProperties": {"$ref": "#/$defs/compileSource"}},
+        "advisories": {"type": "array", "maxItems": 1000, "items": {"type": "object", "maxProperties": 8}},
+        "previousReceiptRef": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/selectedTrack/properties/applicationRef"}]},
+        "lastError": {"type": ["string", "null"], "maxLength": 2048}
+      }
+    },
+    "applicationOperation": {
+      "type": "object", "additionalProperties": false,
+      "required": ["requestHash", "requestRef", "initialReceiptRef"],
+      "properties": {
+        "requestHash": {"$ref": "avo.sfx-catalog.schema.json#/$defs/sha"},
+        "requestRef": {"$ref": "#/$defs/selectedTrack/properties/applicationRef"},
+        "initialReceiptRef": {"$ref": "#/$defs/selectedTrack/properties/applicationRef"}
+      }
+    },
     "selectedContext": {
       "type": "object", "additionalProperties": false,
       "required": ["cueId", "role", "syntheticEffectApproved", "orderedLayeringApproved"],
