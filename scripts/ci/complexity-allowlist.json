@@ -851,7 +851,7 @@
       "reason": "Feature 006 validation/orchestration branch matrix; recorded for explicit decomposition follow-up"
     },
     {
-      "path": "src/avo/timeline/tracks.py",
+      "path": "src/avo/timeline/track_rules.py",
       "name": "normalize_audio_track_layer",
       "complexity": 13,
       "rank": "C",
@@ -963,7 +963,7 @@
       "reason": "Feature 006 validation/orchestration branch matrix; recorded for explicit decomposition follow-up"
     },
     {
-      "path": "src/avo/timeline/tracks.py",
+      "path": "src/avo/timeline/track_rules.py",
       "name": "apply_event_role_defaults",
       "complexity": 12,
       "rank": "C",
