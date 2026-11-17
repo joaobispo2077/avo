@@ -1074,6 +1074,21 @@ Source-native fitting lives in the data-only `timeline.sound_fitting` module so
 canonical readers can reuse the same validation without importing authoring or
 persistence. `sound_planning` retains its existing fitting/error imports for
 compatibility; the moved fitting bodies and their failure semantics are unchanged.
+JSON budgets, track channel/overlay rules and frozen sound choice validation live
+in the data-only `motion_metadata`, `track_rules` and `sound_choices` modules.
+Existing review, Tracks and sound-planning imports remain available. Canonical
+readers reuse these rules without importing authoring, rendering or models.
+
+Selected sound Tracks carry a strict source/choice/cue/request binding and require
+the `sound-selection-v1` reader capability. Generic publication atomically updates
+the Tracks index to version 2 with its revision reference; unchanged legacy reads
+retain version 1. Animation version 2 keeps its separate camera capabilities.
+Invalid or resealed choices, changed source/channel/gain/clock bindings, duplicate
+contributions and untyped references fail closed. The legacy audio projection
+rejects these tracks rather than ignoring their native trim. New readers support
+both legacy and selected-sound data; published advanced history retains its reader
+fence on later revisions. Canonical source/head/catalogue admission, recoverable
+sound application and selected-evidence retention remain publication work.
 
 Camera movement, face anchoring, sound matching, reference analysis, spoken
 notes/recovery and editor handoff are selected options resolved through existing

@@ -142,6 +142,14 @@ current dialogue nodes. It does not choose a dialogue replacement or process the
 original music. Canonical source/catalogue/head admission and selected evidence
 retention still belong to the forthcoming sound publication route.
 
+Selected sound track metadata now has an explicit reader contract. A published
+selection requires a version 2 Tracks index with `sound-selection-v1`; ordinary
+legacy reads keep version 1. The record binds the frozen source/choice, native
+sample region, channel map, level, owning cue and exact proposal/application
+references. Readers reject changed or duplicate contributions. Legacy audio
+projection rejects this contract because it cannot preserve the selected native
+trim. These checks do not admit media, approve a mix or authorize publication.
+
 Inspect audioTracks before render: dialogue priority and channel mapping, music/SFX purpose, source fingerprint, regions, gains, fades, ducking, mute, loudness intent, and BMap cue links. Audio changes invalidate candidate-bound audio and composite evidence.
 
 ## Selected artistic guidance
