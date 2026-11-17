@@ -368,10 +368,7 @@ def test_unverified_source_or_executable_parameters_are_rejected_before_render(
 
 def native_execution(tmp_path, monkeypatch, *, fps=Fraction(24), bit_depth=16):
     from avo.adapters.media import proof_executor
-    from avo.capabilities import (
-        CapabilityImplementation,
-        default_proof_capability_registry,
-    )
+    from avo.capabilities import default_proof_capability_registry
 
     source = labeled_video(
         tmp_path / ("raw-picture.mov" if bit_depth == 8 else "raw-picture.mkv"),
@@ -382,18 +379,8 @@ def native_execution(tmp_path, monkeypatch, *, fps=Fraction(24), bit_depth=16):
     dialogue = channel_impulses(tmp_path / "dialogue.wav", sample_count=sample_count)
     camera = operation(source)
     candidate = default_proof_capability_registry()
-    # Qualification candidate only; the shipped registry stays unavailable until
-    # the complete native composition/profile tests qualify its execution.
-    candidate.register(
-        CapabilityImplementation(
-            implementation_id="impl-camera-transform",
-            capability="camera-transform-v1",
-            kind="built-in",
-            adapter_id="ffmpeg.camera-transform",
-            version="1.0.0",
-            sha256="c" * 64,
-        )
-    )
+    # Exercise the shipped implementation rather than declaring readiness here.
+    assert candidate.resolve("camera-transform-v1") is not None
     monkeypatch.setattr(
         proof_executor, "default_proof_capability_registry", lambda: candidate
     )
