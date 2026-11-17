@@ -1070,6 +1070,10 @@ through cut windows and makes identical compilation idempotent. Existing source
 processing remains unchanged; extending a program mix requires its exact original
 node set and policy. Native execution still admits original source bytes and
 performs rendering. This qualification kernel is not a canonical sound publisher.
+Source-native fitting lives in the data-only `timeline.sound_fitting` module so
+canonical readers can reuse the same validation without importing authoring or
+persistence. `sound_planning` retains its existing fitting/error imports for
+compatibility; the moved fitting bodies and their failure semantics are unchanged.
 
 Camera movement, face anchoring, sound matching, reference analysis, spoken
 notes/recovery and editor handoff are selected options resolved through existing
