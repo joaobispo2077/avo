@@ -14,7 +14,7 @@ from .contracts import content_hash, document_hash_excluding, validate_document
 from .store import atomic_write_json
 from .workspace import ARTIFACTS
 
-GENERATOR = {"id": "avo.motion-review", "version": "1.1.0"}
+GENERATOR = {"id": "avo.motion-review", "version": "1.2.0"}
 MAX_ITEMS = 500
 LIFECYCLE = ("preEntry", "entrance", "hold", "payoff", "exit")
 CONCEPT_TEXT_FIELDS = {
@@ -275,7 +275,7 @@ def _card(item, data, heads):
         ),
         "layout": deepcopy(item["layout"]),
         "lifecycle": lifecycle,
-        "camera": _camera_states(data),
+        "camera": _camera_states(item),
         "sound": deepcopy(data.get("sound", data.get("audio"))),
         "assets": item["assets"],
         "evidence": _evidence(data, heads),
@@ -305,7 +305,7 @@ def _item(data, *, timed, stale, heads, gaps):
         else None,
         "timingState": "timed" if timed else "provisional",
         "anchor": _anchor(data, timed),
-        "camera": deepcopy(data.get("camera")),
+        "camera": _typed_camera_preview(data, gaps),
         "sound": deepcopy(data.get("sound", data.get("audio"))),
         "assets": assets,
         "assetReadiness": readiness,
@@ -396,6 +396,32 @@ def _camera_states(data):
     if not isinstance(camera, dict):
         camera = {"during": camera}
     return {key: deepcopy(camera.get(key)) for key in ("before", "during", "after")}
+
+
+def _typed_camera_preview(data, gaps):
+    wrapper = data.get("_authoredCamera") or data.get("cameraTreatment")
+    if wrapper is None:
+        return deepcopy(data.get("camera"))
+    try:
+        validate_document(wrapper, "avo.animation.schema.json#/$defs/editingCraft")
+    except ValueError:
+        gaps.append(f"camera:{data.get('itemId', 'unknown')}:invalid")
+        return None
+    camera = wrapper["camera"]
+    return {
+        "state": "authored" if "_authoredCamera" in data else "planned",
+        "sourceId": camera.get("sourceId"),
+        "sourceSha256": wrapper.get("sourceSha256"),
+        "targetLayerId": camera["targetLayerId"],
+        "sourceGeometry": deepcopy(wrapper.get("sourceGeometry")),
+        "pathHash": content_hash(
+            {"behavior": camera, "geometry": wrapper.get("sourceGeometry")}
+        ),
+        "optionsHash": content_hash(wrapper.get("options")),
+        "before": deepcopy(camera["nodes"][0]),
+        "during": {"nodes": deepcopy(camera["nodes"])},
+        "after": deepcopy(camera["nodes"][-1]),
+    }
 
 
 def _disposition(data, stale):
@@ -510,11 +536,28 @@ def _enrich_components(combined, animation):
         for component in animation.get("components", [])
     }
     for data in combined.values():
-        component = components.get(data.get("componentRef")) or {}
+        data.pop("_authoredCamera", None)
+        reference = _component_reference(data)
+        component = components.get(reference) or {}
+        if component:
+            data["componentRef"] = reference
+        wrapper = (component.get("extensions") or {}).get("editingCraft") or {}
+        if "camera" in wrapper:
+            data["_authoredCamera"] = deepcopy(wrapper)
         if component.get("lifecycle"):
             data.setdefault("lifecycle", deepcopy(component["lifecycle"]))
         if component.get("audioRelationship"):
             data.setdefault("sound", deepcopy(component["audioRelationship"]))
+
+
+def _component_reference(data):
+    explicit = data.get("componentRef") or (data.get("contentRef") or {}).get(
+        "componentId"
+    )
+    if explicit:
+        return explicit
+    identifiers = data.get("componentIds") or []
+    return identifiers[0] if len(identifiers) == 1 else None
 
 
 def _project_items(proposal, snapshots, heads, gaps):
