@@ -63,6 +63,15 @@ four minutes for other unit-job steps without increasing worker contention.
 Test scope, coverage requirements, mandatory readiness, evidence, and quality
 thresholds remain unchanged.
 
+The Software quality job has a bounded 50-minute budget for setup, instrumented
+unit coverage, the remaining gates and evidence upload.
+[Run 44170109995](https://github.com/joaobispo2077/avo/actions/runs/44170109995)
+at head `6502736` hit its former 35-minute limit with coverage still advancing at
+99%. GitHub's job annotation confirms the timeout; the separate unit, integration
+and mutation lanes passed. Coverage itself ran for 33 minutes 17 seconds before
+cancellation, after roughly two minutes of setup. The larger job budget leaves
+room to finish that measured workload and run the other quality gates.
+
 Gate 1 also validates all GitHub Actions workflows with actionlint 1.7.12,
 including expression context availability. ShellCheck and Pyflakes are disabled
 in this check; the existing quality gates own source linting. Run the same check
