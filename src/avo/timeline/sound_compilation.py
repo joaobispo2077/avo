@@ -6,7 +6,8 @@ from pathlib import Path
 
 from .contracts import content_hash, validate_document
 from .event_clock import frame_to_sample
-from .sound_planning import SCHEMA, SoundPlanningError, _previous_sound_choices
+from .sound_choices import _previous_sound_choices
+from .sound_fitting import SCHEMA, SoundPlanningError
 
 
 def _append_exact(collection, key, additions):
