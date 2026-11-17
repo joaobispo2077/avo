@@ -4,7 +4,7 @@
 per-event selections. It owns BMap and Tracks only, through their existing
 services and timeline writer. Selecting a sound records pending listening;
 it does not approve the mix or change picture, dialogue, music, or Animation.
-Public command and default proof-plan integration remain separate work.
+The public apply command remains separate work.
 
 A strict request names the exact proposal, expected canonical heads and library
 generation, actor, reason, choices and current visual contexts. Publication
@@ -41,6 +41,25 @@ verified staged receipt before publication.
 
 Completed replay is historical evidence, not a new source scan or approval.
 Results include actual committed heads, current heads and `headsCurrent`.
+An operation's actual published parents may make unchanged descendants stale.
+Finalization and exact recovery accept that expected state change while checking
+the original revision, fingerprint and approval identity. They leave the
+descendants stale and never publish or approve a replacement Animation plan.
+
+Normal proof compilation derives active selected sound from current Tracks and
+its actual committed publication, verifies the exact BMap binding and current
+visual timing/role, and adds the contribution once. Changed or omitted sound,
+unpublished admission and overlapping copies of the same sound fail validation.
+Original dialogue/music processing remains intact. Native source descriptors
+declare original ancestry explicitly; existing media-input checks still verify
+the source. Cut proofs keep the source-only audio pass. Explicitly muted choices
+do not require their unused library source to preview.
+
+Optional ducking follows a current unmuted dialogue layer's source and selected
+channels, including a single selected microphone duplicated to stereo. Missing,
+wrong-channel or ambiguous stream routing fails rather than choosing another
+microphone. Proof planning performs metadata validation; physical source checks,
+native execution and contextual listening remain separate requirements.
 
 Cleanup and reconstruction retain selected canonical/history sound proposals,
 their actual operation requests, immutable receipt chains, prepared revisions,

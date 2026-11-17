@@ -1046,8 +1046,8 @@ unchanged checks, keeping source execution outside the planner. It reuses the ex
 keeps useful attacks/tails, and returns unresolved pre-roll/tail/rights/visibility
 cases instead of changing picture or audio ranges. Its derived hash binds clock,
 source/measurement and current annotation identities. It creates no source reads,
-canonical timing, selection, gain policy or listening approval. Proposal/apply
-orchestration and encoded contextual sound qualification remain separate work.
+canonical timing, selection, gain policy or listening approval. Publication and
+encoded contextual qualification belong to their existing owners.
 
 Explicit sound proposals now reuse `MotionAuthoringService` head guards and
 `PipelineRunStore` option freezing, with strict bounded intent/proposal contracts
@@ -1057,8 +1057,8 @@ sound direction, and calls an injected catalogue for generation-bound candidates
 Silence and unresolved anchors remain first-class outcomes. Native/MCP entry
 points share the same request and operation replay; they do not scan source media,
 provision models, publish audio or approve listening. Proposal validation precedes
-option freezing. Unselected drafts do not enter reconstruction closure; selected
-sound publication and its typed evidence retention remain separate work.
+option freezing. Unselected drafts do not enter reconstruction closure; canonical
+publication and typed evidence retention use their dedicated owners below.
 Pure per-event choice preparation reuses the existing overlay role and channel
 validators. It freezes entry/marker/mix identities and uses the same native event
 clock for before/after reports, while exposing repeated sources and coincident
@@ -1109,7 +1109,7 @@ Canonical/history references drive retention; unrelated
 drafts and generated review caches do not. The timeline domain owns validation
 and publication; `adapters.registry` composes the optional explicit source probe
 using the existing ffprobe adapter. Metadata readers never execute it. The public
-apply command and default proof-plan wiring remain separate work. See
+apply command remains separate work. See
 [`docs/sound-application.md`](docs/sound-application.md) for the boundary and checks.
 
 Typed sound application selectors preserve exact staged inputs even when staging
@@ -1123,6 +1123,19 @@ fingerprinting verifies the selected files without copying or decoding a library
 Project-local selected or staged sound assets join the fingerprinted bundle files,
 including staging before the first canonical owner write.
 The metadata/file coverage path grants no rendering or listening authority.
+
+`timeline.sound_proof` joins current selected Tracks, exact committed publication
+recipes and current visual anchors into ordinary proof compilation. It reuses the
+pure native graph compiler and adds no decoder, model or media-adapter dependency.
+Preflight recomputes the contribution and rejects omissions, altered events/mix,
+unpublished recipes and overlapping copies of a selected source. Cut proofs keep
+their source-only pass. Optional ducking binds current unmuted dialogue to actual
+source/stream/channel routing, including a selected microphone duplicated to
+stereo. Native source descriptors declare original ancestry explicitly for the
+existing strict media resolver. Physical admission and listening remain separate.
+Sound finalization/recovery accepts expected descendant staleness only after an
+actual published parent, while preserving unchanged revision and approval checks.
+It leaves Animation stale until its existing owner refreshes that dependency.
 
 Camera movement, face anchoring, sound matching, reference analysis, spoken
 notes/recovery and editor handoff are selected options resolved through existing
