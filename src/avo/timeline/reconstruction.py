@@ -403,6 +403,7 @@ def _required_files(
     required.update(_human_final_inputs(raw_dir))
     if workspace is not None:
         required.update(_motion_evidence_files(workspace))
+        _retain_sound_files(raw_dir, required, workspace)
     for artifact in canonical:
         for ref in _head_media_refs(raw_dir, artifact):
             path = _local_media_path(raw_dir, ref)
@@ -419,6 +420,19 @@ def _required_files(
         dict.fromkeys(_import_evidence_paths(raw_dir, canonical, workspace))
     )
     return required
+
+
+def _retain_sound_files(raw_dir, required, workspace):
+    from .sound_sources import reconstruction_sound_sources
+
+    for source in reconstruction_sound_sources(workspace):
+        path = _local_media_path(raw_dir, {"locator": source["locator"]})
+        if path is None:
+            continue
+        expected = source["fingerprint"]["sha256"]
+        if required.get(path) not in (None, expected):
+            raise ReconstructionError(f"conflicting selected sound fingerprint: {path}")
+        required[path] = expected
 
 
 def _motion_evidence_files(workspace):
@@ -486,6 +500,7 @@ def _import_evidence_paths(raw_dir, canonical, workspace):
 
 def _external_original_refs(workspace):
     from .contracts import fingerprint_stage
+    from .sound_sources import reconstruction_sound_sources
 
     if workspace is None:
         return []
@@ -493,6 +508,7 @@ def _external_original_refs(workspace):
     head = store.load_index()["headRevisionId"]
     sources = store.revision(head)["snapshot"].get("sources", []) if head else []
     try:
+        sources = sources + reconstruction_sound_sources(workspace)
         with fingerprint_stage(verify_on_exit=True):
             refs = [
                 _external_original(workspace.raw_dir.resolve(), source)
