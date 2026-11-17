@@ -279,6 +279,27 @@ class ProofPlanCompiler:
             ]
         return []
 
+    def _sound_execution(self, execution, *, require_applied=False):
+        from .sound_proof import compile_canonical_sound
+
+        try:
+            return compile_canonical_sound(
+                self.workspace, execution, require_applied=require_applied
+            )
+        except (ValueError, RuntimeError, OSError, KeyError, TypeError) as error:
+            raise ProofPlanError(
+                "PROOF_SOUND_INVALID",
+                str(error),
+                "Restore or reselect the exact canonical sound publication, visual anchor and dialogue routing",
+            ) from error
+
+    def _sound_preflight(self, plan):
+        try:
+            self._sound_execution(plan, require_applied=True)
+        except ProofPlanError as error:
+            return [error.to_dict()]
+        return []
+
     @staticmethod
     def _empty_index(index: dict[str, Any]) -> bool:
         return (
@@ -648,6 +669,19 @@ class ProofPlanCompiler:
             camera_operations
         )
         audio_graph = self._source_mix_graph(request)
+        selected_audio = self._sound_execution(
+            {
+                "checkpoint": checkpoint,
+                "output": request["output"],
+                "audioGraph": audio_graph,
+                "events": deepcopy(request.get("events") or []),
+                "canonicalInputLock": lock,
+            }
+        )
+        audio_graph, lock = (
+            selected_audio["audioGraph"],
+            selected_audio["canonicalInputLock"],
+        )
         video_graph, resolution, implementation_refs = self._resolve_video_graph(
             dict(request.get("videoGraph") or {})
         )
@@ -667,7 +701,7 @@ class ProofPlanCompiler:
             ),
             "videoGraph": video_graph,
             "audioGraph": audio_graph,
-            "events": deepcopy(request.get("events") or []),
+            "events": selected_audio["events"],
             "validationPlan": deepcopy(request["validationPlan"]),
             "visionReviewPlanRef": deepcopy(request.get("visionReviewPlanRef")),
             "lineagePolicy": deepcopy(
@@ -888,6 +922,7 @@ class ProofPlanCompiler:
         blockers.extend(self._canonical_preflight(plan))
         blockers.extend(self._import_preflight(plan))
         blockers.extend(self._source_mix_preflight(plan))
+        blockers.extend(self._sound_preflight(plan))
         blockers.extend(self._generated_preflight(plan, tool_readiness))
         lock = plan.get("canonicalInputLock") or {}
         resolved_paths: dict[str, Path] = {}
