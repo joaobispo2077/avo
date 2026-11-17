@@ -110,7 +110,7 @@ class _Retention:
     def proposal(self, reference):
         value = self.reference(reference, "proposal")
         validate_editing_craft_selection(value["options"])
-        self.operation("plan-propose", value, reference)
+        self.operation(value.get("operation", "plan-propose"), value, reference)
         if value["directionRef"]:
             self.direction(value["directionRef"])
         if value["predecessor"]:
@@ -242,12 +242,14 @@ class _Retention:
         self.apply_operation(receipt)
 
     def apply_operation(self, receipt):
-        identity = content_hash(["plan-apply", receipt["operationId"]])
+        request = self.reference(receipt["requestRef"], "applyRequest")
+        operation = request["operation"]
+        identity = content_hash([operation, receipt["operationId"]])
         path = self.raw / "edit/motion/operations" / (identity + ".json")
         if not path.exists() and not path.is_symlink():
             return  # Staging can be interrupted before its operation log is written.
         record, _ = self.read(path, "operationIntent")
-        self.operation("plan-apply", receipt, record["resultRef"])
+        self.operation(operation, receipt, record["resultRef"])
         staged = self.receipt(record["resultRef"])
         _require(
             staged["operationId"] == receipt["operationId"]
