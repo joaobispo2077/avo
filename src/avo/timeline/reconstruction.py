@@ -709,11 +709,13 @@ def _json_entries(raw_dir: Path, root: Path, role: str) -> list[dict[str, Any]]:
 def _lightweight_ancestry_entries(
     workspace: Any, raw_dir: Path
 ) -> list[dict[str, Any]]:
-    return _json_entries(
-        raw_dir,
-        workspace.timeline_dir / "materializations",
-        "ancestry-evidence",
-    )
+    return [
+        entry
+        for directory in ("materializations", "microproofs")
+        for entry in _json_entries(
+            raw_dir, workspace.timeline_dir / directory, "ancestry-evidence"
+        )
+    ]
 
 
 def _iteration_state_groups(
