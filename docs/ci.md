@@ -160,8 +160,14 @@ the `Software quality` job inside workflow **CI**.
 The integration lane runs the complete `tests/integration` population with two
 pytest worker processes and `--dist=worksteal`. The worker count is fixed to avoid
 unbounded browser/encoder concurrency. The existing runner, one combined JUnit
-report, execution receipt, and failure propagation remain in place. The job keeps
-its 20-minute timeout, including browser and dependency setup. The locked
+report, execution receipt, and failure propagation remain in place. The job has
+a bounded 30-minute timeout, including browser and dependency setup. At
+[`b981f30`](https://github.com/joaobispo2077/avo/commit/b981f30f8fef3f3a880dab6786993fa0d16f8123),
+[run 44131653746](https://github.com/joaobispo2077/avo/actions/runs/44131653746/job/134211262261)
+selected 424 integration cases and reached 84% with no reported failure before
+the former 20-minute job limit cancelled it. The additional budget lets this
+growing encoded/browser population finish without increasing worker contention,
+reducing coverage, or changing readiness requirements. The locked
 `pytest-xdist` dependency belongs only to the development extra. See the
 [pytest-xdist scheduling documentation](https://pytest-xdist.readthedocs.io/en/stable/distribution.html).
 
