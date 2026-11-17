@@ -1,9 +1,76 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://avo.local/schemas/avo.sound-selection.schema.json",
-  "title": "Derived sound candidate fitting, not canonical timing or approval",
+  "title": "Sound proposals and selected candidate fits, separate from publication and listening approval",
   "$ref": "#/$defs/candidateFit",
   "$defs": {
+    "soundMix": {
+      "type": "object", "additionalProperties": false,
+      "required": ["sourceLayout", "targetLayout", "channelMap", "gainDb", "peakCeilingDbfs", "fadeInSamples", "fadeOutSamples", "ducking"],
+      "properties": {
+        "sourceLayout": {"enum": ["mono", "stereo"]}, "targetLayout": {"enum": ["mono", "stereo"]},
+        "channelMap": {"type": "array", "minItems": 1, "maxItems": 2, "items": {"type": "integer", "minimum": 0, "maximum": 1}},
+        "gainDb": {"type": "number", "minimum": -120, "maximum": 60},
+        "peakCeilingDbfs": {"type": "number", "minimum": -120, "maximum": 0},
+        "fadeInSamples": {"$ref": "#/$defs/sample"}, "fadeOutSamples": {"$ref": "#/$defs/sample"},
+        "ducking": {"oneOf": [{"type": "null"}, {
+          "type": "object", "additionalProperties": false,
+          "required": ["sidechainLayerId", "amountDb", "attackMs", "releaseMs"],
+          "properties": {
+            "sidechainLayerId": {"$ref": "#/$defs/id"},
+            "amountDb": {"type": "number", "exclusiveMinimum": 0},
+            "attackMs": {"type": "number", "exclusiveMinimum": 0},
+            "releaseMs": {"type": "number", "exclusiveMinimum": 0}
+          }
+        }]}
+      }
+    },
+    "choiceInput": {
+      "type": "object", "additionalProperties": false,
+      "required": ["eventId", "entryId", "trimRange", "mix"],
+      "properties": {
+        "eventId": {"$ref": "#/$defs/id"},
+        "entryId": {"$ref": "avo.sfx-catalog.schema.json#/$defs/nullableSha"},
+        "trimRange": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/sampleRange"}]},
+        "mix": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/soundMix"}]}
+      },
+      "allOf": [{"if": {"properties": {"entryId": {"type": "null"}}},
+        "then": {"properties": {"trimRange": {"type": "null"}, "mix": {"type": "null"}}},
+        "else": {"properties": {"trimRange": {"type": "object"}, "mix": {"type": "object"}}}
+      }]
+    },
+    "choiceInputs": {"type": "array", "maxItems": 500, "items": {"$ref": "#/$defs/choiceInput"}},
+    "choiceOpportunities": {"type": "array", "maxItems": 500, "items": {"$ref": "#/$defs/opportunity"}},
+    "choiceEntries": {"type": "array", "maxItems": 1000, "items": {"$ref": "avo.sfx-catalog.schema.json#/$defs/entry"}},
+    "soundContext": {
+      "type": "object", "additionalProperties": false,
+      "required": ["cueId", "role", "orderedEventIds", "syntheticEffectApproved"],
+      "properties": {
+        "cueId": {"$ref": "#/$defs/id"},
+        "role": {"enum": ["main-scene", "overlay-image", "overlay-video", "authored-graphic", "comparison-only"]},
+        "orderedEventIds": {"type": "array", "maxItems": 500, "uniqueItems": true, "items": {"$ref": "#/$defs/id"}},
+        "syntheticEffectApproved": {"type": "boolean"}
+      }
+    },
+    "soundContexts": {"type": "array", "maxItems": 500, "items": {"$ref": "#/$defs/soundContext"}},
+    "frozenChoice": {
+      "type": "object", "additionalProperties": false,
+      "required": ["eventId", "itemId", "fit", "mix", "sourceEntry", "acceptance", "choiceHash"],
+      "properties": {
+        "eventId": {"$ref": "#/$defs/id"}, "itemId": {"$ref": "#/$defs/id"},
+        "fit": {"$ref": "#/$defs/candidateFit"},
+        "mix": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/soundMix"}]},
+        "sourceEntry": {"oneOf": [{"type": "null"}, {"$ref": "avo.sfx-catalog.schema.json#/$defs/entry"}]},
+        "acceptance": {"const": "pending-listening"},
+        "choiceHash": {"$ref": "avo.sfx-catalog.schema.json#/$defs/sha"}
+      },
+      "allOf": [{
+        "if": {"properties": {"fit": {"properties": {"status": {"const": "silence"}}}}},
+        "then": {"properties": {"mix": {"type": "null"}, "sourceEntry": {"type": "null"}}},
+        "else": {"properties": {"mix": {"type": "object"}, "sourceEntry": {"type": "object"}}}
+      }]
+    },
+    "frozenChoices": {"type": "array", "maxItems": 500, "items": {"$ref": "#/$defs/frozenChoice"}},
     "id": {"type": "string", "minLength": 1, "maxLength": 128, "pattern": "\\S"},
     "sample": {"type": "integer", "minimum": 0},
     "frameRange": {
