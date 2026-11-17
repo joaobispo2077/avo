@@ -176,6 +176,7 @@ def _camera_authoring(items, authoring):
     if "animation" not in authoring:
         return
     components = authoring["animation"].get("components", [])
+    _require_camera_selection(items, components)
     for item in items:
         if "cameraTreatment" not in item:
             continue
@@ -192,6 +193,22 @@ def _camera_authoring(items, authoring):
             raise MotionAuthoringError(
                 "MOTION_CAMERA_SELECTION",
                 "Timed authoring must retain the exact selected camera treatment and options",
+            )
+
+
+def _require_camera_selection(items, components):
+    selected = _scope_ids(items)["animation"]
+    camera = _scope_ids([item for item in items if "cameraTreatment" in item])[
+        "animation"
+    ]
+    for component in components:
+        if component["componentId"] not in selected:
+            continue
+        wrapper = (component.get("extensions") or {}).get("editingCraft") or {}
+        if "camera" in wrapper and component["componentId"] not in camera:
+            raise MotionAuthoringError(
+                "MOTION_CAMERA_SELECTION_REQUIRED",
+                "A selected camera recipe is required before adding source-picture motion",
             )
 
 
@@ -217,6 +234,14 @@ def _scope_metadata(name, snapshot):
         "videoTracks",
     }
     result = {key: value for key, value in snapshot.items() if key not in generated}
+    if name == "animation" and result.get("strategyContractVersion") in {
+        None,
+        "1.0.0",
+        "2.0.0",
+    }:
+        # Reader fencing is enforced by the Animation owner and its index.
+        # A contract encoding transition does not alter unchanged components.
+        result.pop("strategyContractVersion", None)
     if name == "tracks":
         for collection in ("audioTracks", "videoTracks"):
             result[collection] = {
@@ -227,9 +252,19 @@ def _scope_metadata(name, snapshot):
     return result
 
 
+def _scope_collection(name, key, items):
+    indexed = {item[key]: item for item in items or []}
+    if len(indexed) != len(items or []):
+        raise MotionAuthoringError(
+            "MOTION_SCOPE_CONFLICT",
+            f"Duplicate {name} identities cannot define a scope",
+        )
+    return indexed
+
+
 def _unchanged_collection(name, key, old, new, allowed):
-    before = {item[key]: item for item in old or []}
-    after = {item[key]: item for item in new or []}
+    before = _scope_collection(name, key, old)
+    after = _scope_collection(name, key, new)
     for identity in before.keys() | after.keys():
         if before.get(identity) != after.get(identity) and identity not in allowed:
             raise MotionAuthoringError(
@@ -242,8 +277,9 @@ def _unchanged_collection(name, key, old, new, allowed):
 class MotionAuthoringService:
     """Constructor/show are metadata-only; only explicit operations write."""
 
-    def __init__(self, workspace):
+    def __init__(self, workspace, *, camera_runtime=None):
         self.workspace = workspace
+        self.camera_runtime = camera_runtime
         self.root = workspace.raw_dir / "edit/motion"
         if not self.root.resolve().is_relative_to(workspace.raw_dir.resolve()):
             raise MotionAuthoringError(
@@ -357,6 +393,8 @@ class MotionAuthoringService:
 
     def _verify_result_operation(self, value, reference, definition):
         operation = "plan-propose" if definition == "proposal" else "plan-select"
+        if definition == "proposal":
+            operation = value.get("operation", operation)
         known = self._operation_record(operation, value["operationId"])
         if (
             known is None
@@ -378,7 +416,9 @@ class MotionAuthoringService:
                 "Operation identity already records different inputs",
             )
         definition = (
-            "proposal" if request["operation"] == "plan-propose" else "decision"
+            "proposal"
+            if request["operation"] in {"plan-propose", "camera-propose"}
+            else "decision"
         )
         collection = "proposals" if definition == "proposal" else "decisions"
         result, _ = self._load(collection, known["resultRef"]["sha256"], definition)
@@ -514,7 +554,7 @@ class MotionAuthoringService:
             ]
         return {
             "contractVersion": "1.0.0",
-            "operation": "plan-propose",
+            "operation": proposal.get("operation", "plan-propose"),
             "status": "proposed",
             "proposal": proposal,
             "proposalRef": reference,
@@ -549,8 +589,10 @@ class MotionAuthoringService:
             items, retired, changes = self._items(
                 request["proposal"], selection=self._proposal_selection(request)
             )
+            camera = self._camera_proposal_environment(request, items)
             frozen = self._freeze(request)
             proposal = {
+                **camera,
                 "contractVersion": "1.0.0",
                 "operationId": request["operationId"],
                 "requestHash": content_hash(request),
@@ -570,6 +612,55 @@ class MotionAuthoringService:
             return self._with_review(
                 {**self._proposal_result(reference["sha256"]), "changes": changes}
             )
+
+    def _camera_runtime_hash(self):
+        from avo.capabilities import default_proof_capability_registry
+
+        implementation = default_proof_capability_registry().resolve(
+            "camera-transform-v1", implementation_id="impl-camera-transform"
+        )
+        if (
+            implementation is None
+            or implementation.adapter_id != "ffmpeg.camera-transform"
+        ):
+            raise MotionAuthoringError(
+                "MOTION_CAMERA_UNAVAILABLE",
+                "Qualified native camera implementation is unavailable",
+            )
+        if not callable(self.camera_runtime):
+            raise MotionAuthoringError(
+                "MOTION_CAMERA_UNAVAILABLE",
+                "Explicit camera runtime inspection is required",
+            )
+        try:
+            observed = self.camera_runtime()
+            if not isinstance(observed, str) or not re.fullmatch(
+                "[a-f0-9]{64}", observed
+            ):
+                raise ValueError(
+                    "Camera runtime requires an observed environment SHA-256"
+                )
+        except (OSError, ValueError, RuntimeError) as error:
+            raise MotionAuthoringError(
+                "MOTION_CAMERA_UNAVAILABLE", str(error)
+            ) from error
+        return observed
+
+    def _camera_proposal_environment(self, request, items):
+        if request["operation"] != "camera-propose":
+            return {}
+        options = self._proposal_selection(request)["effective"]["camera"]
+        if not options["enabled"] or not any(
+            "cameraTreatment" in item for item in items
+        ):
+            raise MotionAuthoringError(
+                "MOTION_CAMERA_SELECTION_REQUIRED",
+                "Select enabled camera options and a typed camera recipe",
+            )
+        return {
+            "operation": "camera-propose",
+            "cameraEnvironmentHash": self._camera_runtime_hash(),
+        }
 
     def _dispositions(self, proposal, requested):
         ids = {item["itemId"] for item in proposal["items"]}
@@ -743,6 +834,7 @@ class MotionAuthoringService:
                 "MOTION_OPERATION_CONFLICT",
                 "Receipt does not bind the actual application request",
             )
+        self._camera_receipt_environment(request, receipt)
         expected = self._application_evidence(
             receipt["proposalRef"], receipt["decisionRef"], reference
         )
@@ -820,7 +912,8 @@ class MotionAuthoringService:
                 "MOTION_DEPENDENCY_REQUIRED",
                 "Changed BMap requires current prepared Tracks before Animation",
             )
-        self._scope(shown, request["authoring"])
+        scoped, camera = self._camera_application(request, shown)
+        self._scope(scoped, request["authoring"])
         request_ref = self._put("requests", request, "applyRequest")
         evidence = self._application_evidence(
             shown["proposalRef"], shown["decisionRef"], request_ref
@@ -838,6 +931,7 @@ class MotionAuthoringService:
                 **kwargs,
             )
         return {
+            **camera,
             "contractVersion": "1.0.0",
             "operationId": request["operationId"],
             "requestHash": content_hash(request),
@@ -851,6 +945,55 @@ class MotionAuthoringService:
             "actor": request["actor"],
             "reason": request["reason"],
         }
+
+    def _camera_application(self, request, shown):
+        if request["operation"] != "camera-apply":
+            if self._selected_camera_items(shown):
+                raise MotionAuthoringError(
+                    "MOTION_CAMERA_OPERATION_REQUIRED",
+                    "Selected camera treatments require camera-propose and camera-apply",
+                )
+            return shown, {}
+        if "animation" not in request["authoring"]:
+            raise MotionAuthoringError(
+                "MOTION_CAMERA_SELECTION_REQUIRED",
+                "Camera application requires its selected Animation components",
+            )
+        scoped = self._camera_scope(shown)
+        environment = self._camera_runtime_hash()
+        if environment != shown["proposal"].get("cameraEnvironmentHash"):
+            raise MotionAuthoringError(
+                "MOTION_CAMERA_STALE_RUNTIME",
+                "Camera proposal requires its exact observed runtime; validate a new proposal",
+            )
+        return scoped, {"cameraEnvironmentHash": environment}
+
+    @staticmethod
+    def _selected_camera_items(shown):
+        selected = {
+            item["itemId"]
+            for item in shown["decision"]["dispositions"]
+            if item["status"] == "selected"
+        }
+        return [
+            deepcopy(item)
+            for item in shown["proposal"]["items"]
+            if item["itemId"] in selected and "cameraTreatment" in item
+        ]
+
+    @staticmethod
+    def _camera_scope(shown):
+        items = MotionAuthoringService._selected_camera_items(shown)
+        if not items:
+            raise MotionAuthoringError(
+                "MOTION_CAMERA_SELECTION_REQUIRED",
+                "Select an actual typed camera proposal before application",
+            )
+        for item in items:
+            item["layerIds"] = [item["cameraTreatment"]["camera"]["targetLayerId"]]
+        scoped = deepcopy(shown)
+        scoped["proposal"]["items"] = items
+        return scoped
 
     @property
     def _pending(self):
@@ -926,6 +1069,7 @@ class MotionAuthoringService:
             self._save_receipt(request, receipt)
 
     def _verify_recovery_inputs(self, request, receipt):
+        self._camera_recovery(request, receipt)
         _, cmap, _ = BMapService(self.workspace).current_basis()
         CMapService(self.workspace)._verify_raw(cmap["snapshot"])
         for name, owner in OWNERS.items():
@@ -949,6 +1093,32 @@ class MotionAuthoringService:
                     "Prepared publication source/basis changed during recovery",
                 )
 
+    def _camera_receipt_environment(self, request, receipt):
+        if request["operation"] != "camera-apply":
+            return None
+        proposal, _ = self._load(
+            "proposals", receipt["proposalRef"]["sha256"], "proposal"
+        )
+        expected = proposal.get("cameraEnvironmentHash")
+        if expected is None or receipt.get("cameraEnvironmentHash") != expected:
+            raise MotionAuthoringError(
+                "MOTION_RECOVERY_REQUIRED",
+                "Camera receipt differs from its selected proposal environment",
+            )
+        return expected
+
+    def _camera_recovery(self, request, receipt):
+        expected = self._camera_receipt_environment(request, receipt)
+        if (
+            expected is not None
+            and receipt["state"] != "committed"
+            and self._camera_runtime_hash() != expected
+        ):
+            raise MotionAuthoringError(
+                "MOTION_RECOVERY_REQUIRED",
+                "Camera runtime changed during interrupted publication",
+            )
+
     def _finish(self, request, receipt, shown):
         receipt["state"] = "committed"
         reference = self._save_receipt(request, receipt)
@@ -961,7 +1131,7 @@ class MotionAuthoringService:
         return self._with_review(
             {
                 **shown,
-                "operation": "plan-apply",
+                "operation": request["operation"],
                 "status": "committed",
                 "receipt": receipt,
                 "receiptRef": reference,
@@ -991,7 +1161,7 @@ class MotionAuthoringService:
             return self._with_review(
                 {
                     **shown,
-                    "operation": "plan-apply",
+                    "operation": request["operation"],
                     "status": "committed",
                     "receipt": known[0],
                     "receiptRef": known[1],
