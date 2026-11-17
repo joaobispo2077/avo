@@ -1,5 +1,8 @@
 """Pure source-bound candidate fits; canonical owners still publish all timing."""
 
+import hashlib
+import json
+import re
 from copy import deepcopy
 from fractions import Fraction
 
@@ -12,6 +15,9 @@ from .event_clock import (
     resolve_timed_event,
     sample_rate_boundary,
 )
+from .motion_authoring import MotionAuthoringService
+from .motion_review import METADATA_LIMITS, _check_budget
+from .store import timeline_writer, write_immutable_json
 
 SCHEMA = "avo.sound-selection.schema.json"
 
@@ -189,4 +195,407 @@ def fit_sound_candidate(
         raise SoundPlanningError(str(error)) from error
 
 
-__all__ = ["SoundPlanningError", "fit_sound_candidate"]
+def _cue_frame(value, fps):
+    base = value["timebase"]
+    frame = Fraction(value["ticks"] * base["num"], base["den"]) * fps
+    return sample_rate_boundary(
+        frame.numerator, source_rate=frame.denominator, target_rate=1
+    )
+
+
+def _sound_part(item, intent):
+    parts = item["parts"]
+    if intent.get("cueId"):
+        parts = [part for part in parts if part["cueId"] == intent["cueId"]]
+    return parts[0] if len(parts) == 1 else None
+
+
+def _sound_opportunity(item, part, intent, fps):
+    first = _cue_frame(part["timing"]["start"], fps)
+    end = _cue_frame(part["timing"]["end"], fps)
+    phase = Fraction(str(intent.get("phase", 0))) * max(0, end - first - 1)
+    impact = first + sample_rate_boundary(
+        phase.numerator, source_rate=phase.denominator, target_rate=1
+    )
+    return {
+        "eventId": intent["eventId"],
+        "itemId": item["itemId"],
+        "cueId": part["cueId"],
+        "kind": intent["kind"],
+        "purpose": intent["purpose"],
+        "role": intent["role"],
+        "visibility": intent["visibility"],
+        "programFrame": impact,
+        "visibleRange": {"startFrame": first, "endFrameExclusive": end},
+        "material": intent.get("material"),
+        "strength": intent.get("strength", "unknown"),
+    }
+
+
+def _sound_origin(item, part):
+    cue = part["cue"]
+    return {
+        "cueId": part["cueId"],
+        "componentRef": cue.get("componentRef")
+        or (cue.get("contentRef") or {}).get("componentId")
+        or item.get("componentRef"),
+        "anchor": deepcopy(item["anchor"]),
+        "camera": deepcopy(item.get("camera")),
+    }
+
+
+def _sound_recommendation(intent):
+    if (
+        intent.get("choice") == "silence"
+        or intent["visibility"] != "visible"
+        or intent["motionCharacter"] != "accent"
+    ):
+        return "silence"
+    return "audition"
+
+
+def _derive_sound_record(item, intent, fps, program_end_frame):
+    record = {
+        "eventId": intent["eventId"],
+        "itemId": intent["itemId"],
+        "intent": deepcopy(intent),
+        "opportunity": None,
+        "origin": None,
+        "recommendation": "unresolved",
+        "query": intent.get("query"),
+        "silenceAllowed": True,
+        "issues": [],
+    }
+    if item is None:
+        record["issues"] = ["item-unavailable"]
+        return record
+    if (
+        item["disposition"] == "stale"
+        or item["rebaseState"] in {"removed", "ambiguous", "unsupported"}
+        or item["identityConflicts"]
+    ):
+        record["issues"] = ["stale-or-ambiguous-origin"]
+        return record
+    part = _sound_part(item, intent)
+    if part is None:
+        record["issues"] = [
+            "ambiguous-cue" if item["parts"] else "canonical-timing-required"
+        ]
+        return record
+    opportunity = _sound_opportunity(item, part, intent, fps)
+    try:
+        _clock(opportunity, fps, program_end_frame, 48000)
+    except (ValueError, TypeError, KeyError) as error:
+        record["issues"] = ["outside-program-or-empty-cue: " + str(error)[:300]]
+        return record
+    record.update(
+        opportunity=opportunity,
+        origin=_sound_origin(item, part),
+        recommendation=_sound_recommendation(intent),
+    )
+    return record
+
+
+def derive_sound_opportunities(snapshot, intents, *, frame_rate, program_end_frame):
+    """Derive only requested sound events from current metadata, with silence valid.
+
+    Visibility, material and strength remain declared editorial intent. This does
+    not inspect media, infer word timing, search a library or publish an effect.
+    """
+    try:
+        validate_document(snapshot, "avo.motion-review.schema.json")
+        validate_document(intents, SCHEMA + "#/$defs/intents")
+        if not isinstance(frame_rate, Fraction):
+            raise SoundPlanningError(
+                "Opportunity derivation requires a positive rational program clock"
+            )
+        validate_document(
+            {
+                "frameRate": {
+                    "num": frame_rate.numerator,
+                    "den": frame_rate.denominator,
+                },
+                "sampleRate": 48000,
+                "programEndFrame": program_end_frame,
+            },
+            SCHEMA + "#/$defs/candidateFit/properties/clock",
+        )
+        ids = [intent["eventId"] for intent in intents]
+        if len(set(ids)) != len(ids):
+            raise SoundPlanningError("Sound event IDs must be unique")
+        items = {item["itemId"]: item for item in snapshot["items"]}
+        records = [
+            _derive_sound_record(
+                items.get(intent["itemId"]), intent, frame_rate, program_end_frame
+            )
+            for intent in intents
+        ]
+        for record in records:
+            validate_document(record, SCHEMA + "#/$defs/opportunityRecord")
+        return records
+    except (ValueError, TypeError, KeyError, OverflowError) as error:
+        raise SoundPlanningError(str(error)) from error
+
+
+def _sound_document(value, definition):
+    _check_budget(value, METADATA_LIMITS)
+    validate_document(value, SCHEMA + "#/$defs/" + definition)
+    if len(json.dumps(value, allow_nan=False).encode("utf-8")) > 4 * 1024 * 1024:
+        raise SoundPlanningError("Sound proposal exceeds the 4 MiB metadata budget")
+    return deepcopy(value)
+
+
+class SoundPlanningService:
+    """Explicit proposal writes; construction never scans, renders or approves."""
+
+    def __init__(self, workspace, *, catalogue):
+        self.workspace, self.catalogue = workspace, catalogue
+        self.authoring = MotionAuthoringService(workspace)
+        self.root = workspace.raw_dir / "edit/motion/sound"
+        if not self.root.resolve().is_relative_to(workspace.raw_dir.resolve()):
+            raise SoundPlanningError("Sound proposal path escapes the project")
+        if catalogue.workspace.raw_dir.resolve() != workspace.raw_dir.resolve():
+            raise SoundPlanningError("Sound catalogue belongs to another project")
+
+    def _path(self, collection, identity):
+        path = self.root / collection / (identity + ".json")
+        if not path.resolve().is_relative_to(self.workspace.raw_dir.resolve()):
+            raise SoundPlanningError("Sound metadata escapes project containment")
+        return path
+
+    def load(self, digest):
+        if not isinstance(digest, str) or not re.fullmatch("[a-f0-9]{64}", digest):
+            raise SoundPlanningError("Exact sound proposal SHA-256 required")
+        path = self._path("proposals", digest)
+        value, raw = self.authoring._read(path)
+        _sound_document(value, "proposal")
+        if (
+            hashlib.sha256(raw).hexdigest() != digest
+            or content_hash({k: v for k, v in value.items() if k != "proposalHash"})
+            != value["proposalHash"]
+        ):
+            raise SoundPlanningError("Immutable sound proposal changed")
+        if (
+            value["videoId"] != self.workspace.video_id
+            or value["provider"] != self.workspace.project["provider"]
+        ):
+            raise SoundPlanningError("Sound proposal belongs to another project")
+        return {
+            "operation": "propose",
+            "status": "proposed",
+            "proposal": value,
+            "proposalRef": self.authoring._ref(path, raw),
+        }
+
+    def _known(self, request):
+        path = self._path(
+            "operations", content_hash(["propose", request["operationId"]])
+        )
+        if not path.exists():
+            return None
+        record, _ = self.authoring._read(path)
+        _sound_document(record, "operationRecord")
+        if (
+            record["requestHash"] != content_hash(request)
+            or record["request"] != request
+        ):
+            raise SoundPlanningError(
+                "Sound operation identity records different inputs"
+            )
+        result = self.load(record["proposalRef"]["sha256"])
+        if (
+            result["proposalRef"] != record["proposalRef"]
+            or result["proposal"]["requestHash"] != record["requestHash"]
+        ):
+            raise SoundPlanningError("Sound proposal differs from its actual request")
+        return result
+
+    def _program_clock(self, clock):
+        from .bmap_service import BMapService
+        from .mapping import cmap_output_duration, cmap_output_timebase
+
+        if self.workspace.authority != "canonical":
+            raise SoundPlanningError("Sound proposals require a canonical approved cut")
+        _, cmap, _ = BMapService(self.workspace).current_basis()
+        base = cmap_output_timebase(cmap["snapshot"])
+        fps = Fraction(clock["frameRate"]["num"], clock["frameRate"]["den"])
+        extent = (
+            Fraction(cmap_output_duration(cmap["snapshot"]) * base["num"], base["den"])
+            * fps
+        )
+        if extent != clock["programEndFrame"]:
+            raise SoundPlanningError(
+                "Sound clock differs from the approved program extent"
+            )
+        return fps
+
+    def _match(self, records, generation, mode, budget, filters):
+        used = 0
+        for record in records:
+            record["search"] = None
+            if record["recommendation"] != "audition":
+                continue
+            if not record["query"]:
+                record["issues"].append("query-required")
+            elif used >= budget:
+                record["issues"].append("candidate-budget-exhausted")
+            else:
+                record["search"] = self.catalogue.search(
+                    record["query"],
+                    filters=filters,
+                    limit=min(20, budget - used),
+                    generation=generation,
+                    mode=mode,
+                )
+                used += len(record["search"]["results"])
+        return used
+
+    def _direction(self, request):
+        from avo.direction.brief import BriefService
+
+        current = self.authoring._direction_ref()
+        frozen = ((self.authoring._run() or {}).get("executionChoices") or {}).get(
+            "editingCraft"
+        )
+        if (
+            frozen
+            and not request.get("newRequest")
+            and request.get("requestId") is None
+            and frozen["directionRef"] != current
+        ):
+            raise SoundPlanningError(
+                "Frozen direction changed; select an explicit new request"
+            )
+        context = (
+            None
+            if current is None
+            else BriefService(self.workspace.project_path).stage_context(
+                "sound", record=False
+            )["context"]
+        )
+        if self.authoring._direction_ref() != current:
+            raise SoundPlanningError("Direction changed while proposing sound")
+        return current, context
+
+    def _draft_request_id(self, request):
+        previous = ((self.authoring._run() or {}).get("executionChoices") or {}).get(
+            "editingCraft"
+        )
+        if (
+            previous
+            and not request.get("newRequest")
+            and request.get("requestId") is None
+        ):
+            return previous["requestId"]
+        return (
+            request.get("requestId")
+            or "craft-" + content_hash(request["operationId"])[:24]
+        )
+
+    def _propose(self, request):
+        from .pipeline import TimelinePipeline
+
+        snapshot = TimelinePipeline(self.workspace).motion_plan()
+        self.authoring._check_heads(request["expectedBasis"])
+        selection = self.authoring._proposal_selection(request)
+        matching = selection["effective"]["soundMatching"]
+        if not matching["enabled"]:
+            raise SoundPlanningError(
+                "Sound matching requires explicitly selected options"
+            )
+        fps = self._program_clock(request["clock"])
+        generation = self.catalogue.show()["generationId"]
+        if request["expectedGeneration"] != generation:
+            raise SoundPlanningError("Sound catalogue generation changed")
+        direction_ref, direction = self._direction(request)
+        records = derive_sound_opportunities(
+            snapshot,
+            request["intents"],
+            frame_rate=fps,
+            program_end_frame=request["clock"]["programEndFrame"],
+        )
+        budget = request.get("maxCandidates", 100)
+        used = self._match(
+            records,
+            generation,
+            matching["mode"],
+            budget,
+            request.get("filters", {"rights": ["licensed"]}),
+        )
+        if (
+            self.catalogue.show()["generationId"] != generation
+            or self.authoring._direction_ref() != direction_ref
+        ):
+            raise SoundPlanningError(
+                "Catalogue or direction changed while proposing sound"
+            )
+        self.authoring._check_heads(request["expectedBasis"])
+        proposal = {
+            "contractVersion": "1.0.0",
+            "operationId": request["operationId"],
+            "requestHash": content_hash(request),
+            "requestId": self._draft_request_id(request),
+            "provider": self.workspace.project["provider"],
+            "videoId": self.workspace.video_id,
+            "basisHeads": request["expectedBasis"],
+            "options": selection,
+            "directionRef": direction_ref,
+            "direction": direction,
+            "clock": request["clock"],
+            "generationId": generation,
+            "opportunities": records,
+            "coverage": {
+                "intents": len(records),
+                "candidates": used,
+                "candidateBudget": budget,
+            },
+        }
+        proposal["proposalHash"] = content_hash(proposal)
+        proposal = _sound_document(proposal, "proposal")
+        frozen = self.authoring._freeze(request)
+        if (frozen["requestId"], frozen["selection"]) != (
+            proposal["requestId"],
+            proposal["options"],
+        ):
+            raise SoundPlanningError("Frozen sound request changed during publication")
+        return proposal
+
+    def propose(self, request):
+        try:
+            request = _sound_document(request, "proposeRequest")
+            with timeline_writer(self.workspace.timeline_dir):
+                known = self._known(request)
+                if known is not None:
+                    return known
+                proposal = self._propose(request)
+                raw = (
+                    json.dumps(proposal, indent=2, ensure_ascii=False, sort_keys=True)
+                    + "\n"
+                ).encode("utf-8")
+                digest = hashlib.sha256(raw).hexdigest()
+                path = self._path("proposals", digest)
+                write_immutable_json(path, proposal)
+                reference = self.authoring._ref(path, raw)
+                record = {
+                    "requestHash": content_hash(request),
+                    "request": request,
+                    "proposalRef": reference,
+                }
+                _sound_document(record, "operationRecord")
+                write_immutable_json(
+                    self._path(
+                        "operations", content_hash(["propose", request["operationId"]])
+                    ),
+                    record,
+                )
+                return self.load(digest)
+        except (ValueError, TypeError, KeyError, OSError) as error:
+            raise SoundPlanningError(str(error)) from error
+
+
+__all__ = [
+    "SoundPlanningError",
+    "SoundPlanningService",
+    "derive_sound_opportunities",
+    "fit_sound_candidate",
+]
