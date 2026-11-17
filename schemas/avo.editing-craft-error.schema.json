@@ -1,0 +1,6 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://avo.local/avo.editing-craft-error.schema.json",
+  "title": "Editing craft actionable error",
+  "$ref": "https://avo.local/avo.editing-craft-result.schema.json#/$defs/error"
+}

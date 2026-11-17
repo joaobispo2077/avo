@@ -79,6 +79,9 @@
       "properties": {
         "motion": {
           "$ref": "avo.motion.schema.json#/$defs/runSelection"
+        },
+        "editingCraft": {
+          "$ref": "avo.editing-craft-run.schema.json"
         }
       }
     },
@@ -194,6 +197,12 @@
       "type": "object",
       "additionalProperties": true,
       "properties": {
+        "editingCraftRequestHistory": {
+          "type": "array",
+          "items": {
+            "$ref": "avo.editing-craft-run.schema.json"
+          }
+        },
         "motionRequestHistory": {
           "type": "array",
           "items": {

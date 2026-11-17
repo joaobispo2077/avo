@@ -9,12 +9,22 @@ from fractions import Fraction
 from pathlib import Path
 
 from .contracts import content_hash, validate_document
+from .import_layout import import_capability_version
 from .lineage import LineageError
 from .otio_import import packet_identity, parse_export_bytes
 
 _SCHEMA = "avo.timeline-import.schema.json"
 _LIMIT = 64 * 1024 * 1024
-_CAPABILITIES = {"contiguous": "contiguous-1.0.0", "placed": "placed-1.0.0"}
+_CAPABILITIES = {
+    "placed-end-gap-1.0.0",
+    "placed-export-driven-1.0.0",
+    "contiguous-1.0.0",
+    "placed-1.0.0",
+    "placed-sampling-1.0.0",
+    "placed-audio-tail-1.0.0",
+    "placed-treatments-1.0.0",
+    "placed-title-1.0.0",
+}
 
 
 def _require(condition, detail):
@@ -163,7 +173,10 @@ def _ready_receipt(packet, intent, session):
                 "semanticValidation",
                 "mediaReady",
                 "syncReady",
-                "reconstructionReady",
+                "structureReady"
+                if session["options"]["declarations"].get("reconstructionMode")
+                == "export-driven"
+                else "reconstructionReady",
             )
         ),
         "receipt contains unresolved readiness",
@@ -200,9 +213,8 @@ def _proposal(packet, origin, receipt):
         ),
         "proposal contains unresolved elements",
     )
-    layout = proposal["snapshot"].get("layoutMode", "contiguous")
     _require(
-        _CAPABILITIES.get(layout) == origin["capabilityVersion"],
+        import_capability_version(proposal["snapshot"]) == origin["capabilityVersion"],
         "unsupported import capability or layout",
     )
     return proposal, path
@@ -315,7 +327,7 @@ def verify_import_origin(workspace, cmap_revision, output=None):
             "import policy differs",
         )
         _require(
-            origin["capabilityVersion"] in _CAPABILITIES.values(),
+            origin["capabilityVersion"] in _CAPABILITIES,
             "unsupported import capability",
         )
         root = workspace.timeline_dir.resolve() / "imports"

@@ -617,6 +617,13 @@ def materialize_assembly(
     from .store import now_iso
 
     lock, revisions = current_assembly_lock(workspace)
+    if ((revisions["tracks"].get("snapshot") or {}).get("audioTracks") or {}).get(
+        "sourceMixAdjustments", []
+    ) != []:
+        raise ValueError(
+            "Source-mix adjustments require the canonical ProofPlan renderer; "
+            "the legacy assembly renderer cannot apply them"
+        )
     _preflight_assembly_media(workspace, revisions, media_admission)
     policy_hash = _validated_policy_hash(render_contract, delivery_fidelity_policy)
     projection_path, projection = write_assembly_projection(workspace)
@@ -812,6 +819,119 @@ def _require_original_only_plan(plan: dict) -> None:
         raise ValueError("generated proof inputs require current canonical Tracks")
 
 
+def _proof_source_path(raw_dir: Path, locator: Any) -> Path:
+    path = Path(str(locator))
+    return (path if path.is_absolute() else Path(raw_dir) / path).resolve()
+
+
+def _locked_audio_trim_source(parameters, required, proof_lock, raw_dir):
+    source_id = str(parameters.get("sourceId") or "")
+    source = parameters.get("source")
+    if source_id not in required or not isinstance(source, dict):
+        return None
+    digest, locator = source.get("sha256"), source.get("locator")
+    if digest is not None and digest != proof_lock["source:" + source_id]:
+        raise ValueError(f"audio source ID differs from its proof lock: {source_id}")
+    return source_id, {
+        "sha256": digest,
+        "path": _proof_source_path(raw_dir, locator) if locator else None,
+        "mediaClass": source.get("mediaClass"),
+        "ancestry": deepcopy(source.get("ancestry")),
+    }
+
+
+def _locked_audio_trim_sources(proof_plan, required, raw_dir):
+    sources = {}
+    lock = proof_plan.get("canonicalInputLock") or {}
+    for operation in (proof_plan.get("audioGraph") or {}).get("operations") or []:
+        if operation.get("kind") != "trim":
+            continue
+        value = _locked_audio_trim_source(
+            operation.get("parameters") or {}, required, lock, raw_dir
+        )
+        if value is None:
+            continue
+        source_id, source = value
+        if source_id in sources and sources[source_id] != source:
+            raise ValueError(f"conflicting audio source ID descriptors: {source_id}")
+        sources[source_id] = source
+    return sources
+
+
+def _audio_track_origin(layer, raw_dir):
+    source = layer["source"]
+    provenance = layer.get("provenance") or {}
+    media_class = provenance.get("mediaClass", source.get("mediaClass", "source"))
+    ancestry = provenance.get("ancestry", source.get("ancestry", []))
+    if (
+        source.get("mediaClass", media_class) != media_class
+        or source.get("ancestry", ancestry) != ancestry
+    ):
+        raise ValueError("conflicting Tracks audio origin metadata")
+    if provenance.get("originalOnly") is False:
+        media_class = "unknown"
+    return {
+        "path": _proof_source_path(raw_dir, source["locator"]),
+        "mediaClass": media_class,
+        "ancestry": deepcopy(ancestry),
+    }
+
+
+def _audio_track_identity_matches(layer, descriptor, raw_dir):
+    source = layer.get("source") or {}
+    return (
+        source.get("sha256") == descriptor["sha256"]
+        and bool(source.get("locator"))
+        and _proof_source_path(raw_dir, source["locator"]) == descriptor["path"]
+    )
+
+
+def _matching_audio_track_origin(snapshot, descriptor, raw_dir):
+    origins = [
+        _audio_track_origin(layer, raw_dir)
+        for layer in (snapshot.get("audioTracks") or {}).get("layers") or []
+        if _audio_track_identity_matches(layer, descriptor, raw_dir)
+    ]
+    if origins and any(origin != origins[0] for origin in origins[1:]):
+        raise ValueError("ambiguous Tracks audio source origin metadata")
+    return origins[0] if origins else None
+
+
+def _audio_descriptor_origin(descriptor):
+    if any(value is None for value in descriptor.values()):
+        return None
+    origin = deepcopy(descriptor)
+    origin.pop("sha256")
+    return origin
+
+
+def _resolve_tracks_audio_inputs(workspace, proof_plan, snapshot, required, inputs):
+    descriptors = _locked_audio_trim_sources(proof_plan, required, workspace.raw_dir)
+    for source_id, descriptor in descriptors.items():
+        origin = _audio_descriptor_origin(descriptor)
+        if origin is None:
+            continue
+        if source_id in inputs:
+            existing = {
+                **inputs[source_id],
+                "path": Path(inputs[source_id]["path"]).resolve(),
+            }
+            if existing != origin:
+                raise ValueError(
+                    f"audio source ID conflicts with canonical input: {source_id}"
+                )
+            continue
+        candidate = _matching_audio_track_origin(
+            snapshot, descriptor, workspace.raw_dir
+        )
+        if (
+            candidate == origin
+            and origin["mediaClass"] == "source"
+            and origin["ancestry"] == []
+        ):
+            inputs[source_id] = origin
+
+
 def canonical_proof_media_inputs(
     workspace: Any, proof_plan: dict[str, Any]
 ) -> dict[str, dict[str, Any]]:
@@ -859,6 +979,7 @@ def canonical_proof_media_inputs(
                     ),
                     "ancestry": deepcopy(source.get("ancestry") or []),
                 }
+    _resolve_tracks_audio_inputs(workspace, proof_plan, snapshot, required, inputs)
     inputs.update(
         _generated_proof_inputs(workspace, proof_plan.get("canonicalInputLock") or {})
     )
@@ -1012,12 +1133,12 @@ def render_proof_microproofs(
 
     # Per-window files are internal checks. Publish a gate only after the whole
     # immutable batch has freshly rehashed every original/generated dependency.
-    with proof_validation_batch():
+    windows = select_microproof_windows(plan)
+    with proof_validation_batch(reuse_video_stages=len(windows) > 1):
         readiness = _proof_readiness(port, plan)
         preflight = compiler.require_preflight(
             plan, media_inputs=media_inputs, tool_readiness=readiness
         )
-        windows = select_microproof_windows(plan)
         directory = (
             Path(workspace.timeline_dir) / "microproofs" / str(plan["proofPlanId"])
         )

@@ -15,6 +15,7 @@ from avo.adapters.media.audio_tracks import (
     AudioGraphError,
     compile_continuous_audio_graph,
 )
+from avo.loudness_profiles import limiter_filter_for
 from avo.timeline.contracts import file_fingerprint, validate_document
 from avo.timeline.event_clock import sample_rate_boundary
 
@@ -135,6 +136,8 @@ def _validate_sidechains(params, node_id, nodes):
 def _validate_effect_values(kind, params, length):
     if kind == "gain":
         _number(params.get("gainDb"), -120, 30)
+        if "peakCeilingDbfs" in params:
+            _peak_ceiling(params["peakCeilingDbfs"])
     elif kind == "duck":
         _number(params.get("attackMs", 20), 0.01, 2000)
         _number(params.get("releaseMs", 250), 0.01, 9000)
@@ -144,6 +147,12 @@ def _validate_effect_values(kind, params, length):
             count = params.get(key, 0)
             if type(count) is not int or not 0 <= count <= length:
                 raise AudioGraphError("Fades require bounded integer sample counts")
+
+
+def _peak_ceiling(value):
+    if type(value) not in (int, float):
+        raise AudioGraphError("Peak ceiling must be a numeric value")
+    return _number(value, -12, -1)
 
 
 def _validate_effect(operation, nodes, lead_ids, allowed):
@@ -168,7 +177,7 @@ def _effects(graph, lead_ids):
     nodes = {n["nodeId"]: n for n in graph["nodes"]}
     effects = {key: {} for key in nodes}
     allowed = {
-        "gain": {"nodeId", "gainDb"},
+        "gain": {"nodeId", "gainDb", "peakCeilingDbfs"},
         "fade": {"nodeId", "fadeInSamples", "fadeOutSamples"},
         "duck": {"nodeId", "sidechainNodeIds", "amountDb", "attackMs", "releaseMs"},
     }
@@ -373,6 +382,17 @@ def _validate_lead(lead_pcm, start, first, last):
         )
 
 
+def _gain_filter(gain):
+    if not gain:
+        return ""
+    result = f",volume={_number(gain['gainDb'], -120, 30)}dB"
+    if "peakCeilingDbfs" in gain:
+        result += "," + limiter_filter_for(
+            gain["peakCeilingDbfs"], latency_compensated=True
+        )
+    return result
+
+
 def _node_chain(node_id, node, ordinal, labels, effects, first, last):
     start, end = _bounds(node["outputRange"])
     length = end - start
@@ -386,9 +406,7 @@ def _node_chain(node_id, node, ordinal, labels, effects, first, last):
             raise AudioGraphError("Proof mix requires stereo target mapping")
         chain = f"[{labels[node_id]}]atrim=start_sample={a}:end_sample={b},asetpts=PTS-STARTPTS"
         chain += f",aresample=48000,pan=stereo|c0=c{mapping[0]}|c1=c{mapping[1]}"
-        gain = effects[node_id].get("gain", {})
-        if gain:
-            chain += f",volume={_number(gain['gainDb'], -120, 30)}dB"
+        chain += _gain_filter(effects[node_id].get("gain"))
         fade = effects[node_id].get("fade", {})
         for key, direction in [("fadeInSamples", "in"), ("fadeOutSamples", "out")]:
             count = fade.get(key, 0)

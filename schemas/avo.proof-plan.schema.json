@@ -4,12 +4,25 @@
   "type": "object",
   "additionalProperties": false,
   "required": ["schemaVersion", "proofPlanId", "iterationId", "canonicalInputLock", "regressionContract", "renderProfile", "output", "capabilityResolution", "implementationRefs", "videoGraph", "audioGraph", "events", "validationPlan", "visionReviewPlanRef", "lineagePolicy", "producer", "proofPlanHash"],
+  "allOf": [{"if":{"required":["importApproximation"]},"then":{"required":["previewOnly"],"properties":{"previewOnly":{"const":true}}}}],
   "properties": {
     "schemaVersion": { "const": "1.0.0" },
     "sourceAssemblyPolicy": {"$ref": "https://github.com/joaobispo2077/avo/schemas/avo.timeline-common.schema.json#/$defs/sourceAssemblyPolicy"},
     "importOriginRef": {"$ref": "https://github.com/joaobispo2077/avo/schemas/avo.timeline-common.schema.json#/$defs/importOriginRef"},
     "importOutput": {"$ref": "https://github.com/joaobispo2077/avo/schemas/avo.timeline-common.schema.json#/$defs/importOutput"},
     "previewOnly": { "type": "boolean" },
+    "importApproximation": {
+      "type":"object","additionalProperties":false,
+      "required":["policy","authorization","omittedEffects"],
+      "properties":{
+        "policy":{"const":"supported-treatments-only-v1"},
+        "authorization":{"type":"string","minLength":1,"maxLength":1024},
+        "omittedEffects":{"type":"array","maxItems":2048,"items":{
+          "type":"object","additionalProperties":false,"required":["pointer","name"],
+          "properties":{"pointer":{"type":"string","maxLength":2048},"name":{"type":"string","maxLength":240}}
+        }}
+      }
+    },
     "checkpoint": { "enum": ["cut-proof", "motion-proof", "pre-master", "deliver"] },
     "proofPlanId": { "$ref": "#/$defs/stableId" }, "iterationId": { "$ref": "#/$defs/stableId" },
     "canonicalInputLock": { "type": "object", "minProperties": 5, "additionalProperties": { "$ref": "#/$defs/sha256" } },

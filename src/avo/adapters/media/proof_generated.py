@@ -137,9 +137,12 @@ def _record(operation, canonical_lock, validator):
 
 
 def _current_admission(record, reference, input_lock_ref, canonical_lock, validator):
-    if record["generator"]["adapterId"] == "code-drawn" and validator is None:
+    if (
+        record["generator"]["adapterId"] == "code-drawn"
+        or (record.get("parameters") or {}).get("hyperframes")
+    ) and validator is None:
         raise RuntimeError(
-            "Code-drawn generated asset requires current admission observations"
+            "Canonical generated asset requires current admission observations"
         )
     if validator is not None:
         admitted = validator(
@@ -172,7 +175,19 @@ def _input_lock(operation, record, canonical_lock):
         raise RuntimeError(f"Generated canonical inputs changed: {reference['path']}")
     if record["generator"]["adapterId"] == "code-drawn":
         _code_drawn_lock(operation, record, lock)
+    if (record.get("parameters") or {}).get("hyperframes"):
+        _hyperframes_lock(lock, canonical_lock)
     return lock
+
+
+def _hyperframes_lock(lock, canonical_lock):
+    binding = lock.get("binding") or {}
+    expected = binding.get("canonicalInputLock") or {}
+    required = {"cmap", "bmap", "tracks", "animation", "sync-map"}
+    if set(expected) != required or any(
+        canonical_lock.get(key) != expected[key] for key in required
+    ):
+        raise RuntimeError("HyperFrames requires the exact complete canonical lock")
 
 
 def _code_drawn_lock(operation, record, lock):
@@ -435,7 +450,14 @@ def overlay_filters(assets, fps, wstart, wend, *, conformance):
             f"alpha=straight:eof_action=pass:repeatlast=0[picture{index}]"
         )
         current = f"picture{index}"
-    filters.append(f"[{current}]format={'bgra' if conformance else 'yuv420p'}[v]")
+    output = (
+        "format=bgra"
+        if conformance
+        else "scale=in_range=full:out_range=limited:out_color_matrix=bt709,"
+        "format=yuv420p,setparams=range=tv:color_primaries=bt709:"
+        "color_trc=bt709:colorspace=bt709"
+    )
+    filters.append(f"[{current}]{output}[v]")
     return arguments, filters, metadata
 
 

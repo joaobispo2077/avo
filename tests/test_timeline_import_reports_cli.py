@@ -86,6 +86,14 @@ def _large_result():
         },
         "elements": elements,
         "findings": findings,
+        "warnings": [
+            {
+                "code": "OTIO_TREATMENT_UNSUPPORTED",
+                "message": "Retained effect still blocks rendering",
+                "blocking": False,
+            }
+        ],
+        "notes": ["Draft output settings were read from the paired export"],
         "proposal": {"elements": elements, "findings": findings},
         "validation": {
             "locks": {"elementAccounting": accounting},
@@ -123,6 +131,8 @@ def test_validate_cli_compacts_entire_envelope_and_retains_blocking_scopes_and_r
     compact = json.loads(output)
     assert compact["status"] == before["status"]
     assert compact["readiness"] == before["readiness"]
+    assert compact["warnings"] == before["warnings"]
+    assert compact["notes"] == before["notes"]
     assert compact["truncated"] is True
     assert (
         compact["session"]["refs"]["proposal"] == before["session"]["refs"]["proposal"]
@@ -149,9 +159,11 @@ def test_validate_cli_compacts_entire_envelope_and_retains_blocking_scopes_and_r
 
 
 def test_prepare_cli_keeps_every_unperformed_check_not_checked(
-    import_project, monkeypatch, capsys
+    import_project, monkeypatch, capsys, tmp_path
 ):
     project, provider, _ = import_project
+    declarations = tmp_path / "strict.json"
+    declarations.write_text(json.dumps({"sourceOnly": True}))
     service = TimelineImportService(project, provider_root=provider)
     monkeypatch.setattr("avo.timeline_import_cli.create_service", lambda args: service)
     assert (
@@ -163,6 +175,8 @@ def test_prepare_cli_keeps_every_unperformed_check_not_checked(
                 str(project),
                 "--input",
                 str(FIXTURE),
+                "--declarations",
+                str(declarations),
                 "--actor",
                 "editor",
                 "--reason",

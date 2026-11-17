@@ -7,6 +7,7 @@ from collections import Counter
 
 from . import otio_import
 from .contracts import canonical_json_bytes
+from .resolve_effects import inactive_clip, inactive_effect
 
 MAX_ELEMENTS = 2048
 MAX_FINDINGS = 2048
@@ -85,13 +86,35 @@ def _direct(kind, pointer, scopes):
     return kind in {"Clip", "Gap"} and pointer in scopes["children"]
 
 
-def _unsupported(schema, node, pointer, scopes, placed):
+def _retained_root(node, pointer, scopes, retained):
+    return (
+        retained
+        and pointer == scopes["rootStack"]
+        and node.get("source_range") is None
+        and node.get("enabled") is not False
+    )
+
+
+def _preserved_parent(kind, node, treated, retained):
+    preserved = (
+        retained
+        and kind in {"Clip", "Track"}
+        and not (kind == "Track" and node.get("source_range") is not None)
+    )
+    return preserved or (treated and inactive_clip(node))
+
+
+def _unsupported(schema, node, pointer, scopes, placed, treated=False, retained=False):
     if schema not in otio_import._KNOWN:
         return (
             "OTIO_SCHEMA_UNSUPPORTED",
             "The original content schema requires separate reconstruction",
         )
     if schema == "Marker.1":
+        return None
+    if retained and schema == "Effect.1":
+        return None
+    if treated and inactive_effect(node):
         return None
     kind = schema.partition(".")[0]
     if kind in _TREATMENTS:
@@ -100,16 +123,26 @@ def _unsupported(schema, node, pointer, scopes, placed):
             "This treatment is outside supported original-source reconstruction",
         )
     if kind in _COMPOSITIONS:
+        if _retained_root(node, pointer, scopes, retained):
+            return None
         return (
             "OTIO_TREATMENT_UNSUPPORTED",
             "Nested composition or root-stack treatment is unsupported",
         )
+    return _unsupported_occurrence(
+        kind, node, pointer, scopes, placed, treated, retained
+    )
+
+
+def _unsupported_occurrence(kind, node, pointer, scopes, placed, treated, retained):
     if not _direct(kind, pointer, scopes):
         return (
             "OTIO_TREATMENT_UNSUPPORTED",
             "This content is not a direct supported track occurrence",
         )
-    if _parent_treatment(node, kind):
+    if _parent_treatment(node, kind) and not _preserved_parent(
+        kind, node, treated, retained
+    ):
         return (
             "OTIO_TREATMENT_UNSUPPORTED",
             "Parent trims and effects require separate reconstruction",
@@ -172,10 +205,22 @@ def _append_detail(report, row, finding):
 
 
 def _record(report, export_hash, pointer, schema, node, scopes, context):
-    unsupported = _unsupported(schema, node, pointer, scopes, context["placed"])
+    unsupported = _unsupported(
+        schema,
+        node,
+        pointer,
+        scopes,
+        context["placed"],
+        context["treated"],
+        context["retained"],
+    )
     if unsupported is not None:
         disposition = "unsupported"
-    elif schema == "Marker.1":
+    elif (
+        schema == "Marker.1"
+        or (context["treated"] and inactive_effect(node))
+        or (context["retained"] and schema == "Effect.1")
+    ):
         disposition = "reference-metadata"
     else:
         disposition = "reconstructed" if context["ready"] else "unresolved"
@@ -233,7 +278,11 @@ def account_elements(data: bytes, pointer: str, *, checks: dict, declarations: d
     _, selected = otio_import._select(raw, pointer)
     scopes = _direct_scopes(selected, pointer)
     context = {
+        "retained": declarations.get("layoutMode") == "placed"
+        and declarations.get("reconstructionMode") == "export-driven",
         "placed": declarations.get("layoutMode") == "placed",
+        "treated": declarations.get("layoutMode") == "placed"
+        and declarations.get("reconstructionMode") == "declared-treatments",
         "ready": all(
             checks.get(key) == "passed" for key in ("semanticValidation", "mediaReady")
         ),

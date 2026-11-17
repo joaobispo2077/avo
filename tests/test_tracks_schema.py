@@ -109,6 +109,71 @@ class TracksSchemaTests(unittest.TestCase):
             validate_document(d, "avo.tracks.schema.json")
 
 
+def source_mix_adjustment():
+    return {
+        "placementId": "placement-microphone",
+        "sourceId": "source-microphone",
+        "sourceSha256": SHA,
+        "streamIndex": 2,
+        "channels": [0, 0],
+        "gainDeltaDb": 1.5,
+        "peakCeilingDeltaDb": 1.5,
+    }
+
+
+def test_source_mix_adjustments_are_optional_canonical_audio_controls():
+    document = doc()
+    snapshot = document["revisions"][0]["snapshot"]
+    snapshot["audioTracks"]["sourceMixAdjustments"] = [source_mix_adjustment()]
+    validate_document(document, "avo.tracks.schema.json")
+    validate_document(snapshot, "avo.tracks.schema.json#/$defs/tracksSnapshot")
+
+
+@pytest.mark.parametrize(
+    "field",
+    [
+        "placementId",
+        "sourceId",
+        "sourceSha256",
+        "streamIndex",
+        "channels",
+        "gainDeltaDb",
+    ],
+)
+def test_source_mix_adjustment_requires_exact_source_selection(field):
+    document = doc()
+    adjustment = source_mix_adjustment()
+    adjustment.pop(field)
+    document["revisions"][0]["snapshot"]["audioTracks"]["sourceMixAdjustments"] = [
+        adjustment
+    ]
+    with pytest.raises(ContractError):
+        validate_document(document, "avo.tracks.schema.json")
+
+
+@pytest.mark.parametrize(
+    "changes",
+    [
+        {"gainDeltaDb": True},
+        {"gainDeltaDb": 31},
+        {"peakCeilingDeltaDb": -31},
+        {"streamIndex": -1},
+        {"channels": []},
+        {"channels": [-1, 0]},
+        {"sourceSha256": "unbound"},
+        {"undeclaredOption": True},
+    ],
+)
+def test_source_mix_adjustment_rejects_unsafe_or_unknown_controls(changes):
+    document = doc()
+    adjustment = {**source_mix_adjustment(), **changes}
+    document["revisions"][0]["snapshot"]["audioTracks"]["sourceMixAdjustments"] = [
+        adjustment
+    ]
+    with pytest.raises(ContractError):
+        validate_document(document, "avo.tracks.schema.json")
+
+
 def generated_tracks_document():
     document = doc()
     layer = document["revisions"][0]["snapshot"]["videoTracks"]["layers"][0]

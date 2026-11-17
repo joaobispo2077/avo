@@ -33,7 +33,9 @@ def test_response_capture_ignores_choices_and_endpoint_credentials(tmp_path):
     assert "secret" not in stored
 
 
-def test_no_identity_is_not_guessed(tmp_path):
+def test_no_identity_is_not_guessed(tmp_path, monkeypatch):
+    # The test root may itself live beneath a real initialized footage project.
+    monkeypatch.setattr(CostStore, "identity", lambda self: None)
     result = record_response(
         tmp_path / "candidate.mp4", {"usage": {}}, "http://localhost:1234"
     )

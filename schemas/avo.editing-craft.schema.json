@@ -1,0 +1,373 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://avo.local/avo.editing-craft.schema.json",
+  "title": "AVO scoped editing craft options",
+  "description": "Typed selected treatments; motion map and linked storyboard are built-in views, not configurable enablement flags.",
+  "$ref": "#/$defs/config",
+  "$defs": {
+    "camera": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "baseTreatment": {
+          "enum": [
+            "none",
+            "alternate",
+            "push",
+            "alternate-and-push"
+          ]
+        },
+        "faceAnchor": {
+          "enum": [
+            "off",
+            "selected-subject"
+          ]
+        },
+        "onLost": {
+          "enum": [
+            "review",
+            "hold",
+            "static"
+          ]
+        }
+      }
+    },
+    "soundMatching": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "mode": {
+          "enum": [
+            "descriptor",
+            "semantic"
+          ]
+        },
+        "allowLayering": {
+          "type": "boolean"
+        }
+      }
+    },
+    "referenceAnalysis": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        }
+      }
+    },
+    "spokenNotes": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "openingPhrase": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "pattern": "\\S"
+        },
+        "closingPhrase": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "pattern": "\\S"
+        },
+        "language": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 35,
+          "pattern": "^[A-Za-z]{2,3}([-_][A-Za-z0-9]{2,8})*$"
+        }
+      }
+    },
+    "speechRecovery": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "maxAttemptsPerInterval": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 5
+        },
+        "maxIntervalSeconds": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 3600
+        },
+        "maxTotalSeconds": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 86400
+        }
+      }
+    },
+    "handoff": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "mode": {
+          "enum": [
+            "none",
+            "render",
+            "editor"
+          ]
+        },
+        "targetProfile": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "pattern": "\\S"
+        }
+      }
+    },
+    "source": {
+      "enum": [
+        "default",
+        "global",
+        "provider",
+        "video-defaults",
+        "project",
+        "invocation"
+      ]
+    },
+    "config": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "contractVersion": {
+          "const": "1.0.0"
+        },
+        "camera": {
+          "$ref": "#/$defs/camera"
+        },
+        "soundMatching": {
+          "$ref": "#/$defs/soundMatching"
+        },
+        "referenceAnalysis": {
+          "$ref": "#/$defs/referenceAnalysis"
+        },
+        "spokenNotes": {
+          "$ref": "#/$defs/spokenNotes"
+        },
+        "speechRecovery": {
+          "$ref": "#/$defs/speechRecovery"
+        },
+        "handoff": {
+          "$ref": "#/$defs/handoff"
+        },
+        "reviewPresentation": {
+          "enum": [
+            "text",
+            "visual",
+            "both"
+          ]
+        }
+      }
+    },
+    "effective": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/config"
+        }
+      ],
+      "required": [
+        "contractVersion",
+        "camera",
+        "soundMatching",
+        "referenceAnalysis",
+        "spokenNotes",
+        "speechRecovery",
+        "handoff",
+        "reviewPresentation"
+      ],
+      "properties": {
+        "camera": {
+          "required": [
+            "enabled",
+            "baseTreatment",
+            "faceAnchor",
+            "onLost"
+          ]
+        },
+        "soundMatching": {
+          "required": [
+            "enabled",
+            "mode",
+            "allowLayering"
+          ]
+        },
+        "referenceAnalysis": {
+          "required": [
+            "enabled"
+          ]
+        },
+        "spokenNotes": {
+          "allOf": [
+            {
+              "required": [
+                "enabled"
+              ]
+            },
+            {
+              "if": {
+                "properties": {
+                  "enabled": {
+                    "const": true
+                  }
+                },
+                "required": [
+                  "enabled"
+                ]
+              },
+              "then": {
+                "required": [
+                  "openingPhrase",
+                  "closingPhrase",
+                  "language"
+                ]
+              }
+            }
+          ]
+        },
+        "speechRecovery": {
+          "required": [
+            "enabled",
+            "maxAttemptsPerInterval",
+            "maxIntervalSeconds",
+            "maxTotalSeconds"
+          ]
+        },
+        "handoff": {
+          "required": [
+            "mode"
+          ]
+        }
+      }
+    },
+    "maskedChoice": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "type": "string",
+          "pattern": "^(contractVersion|reviewPresentation|(camera|soundMatching|referenceAnalysis|spokenNotes|speechRecovery|handoff)\\.[A-Za-z][A-Za-z0-9]*)$"
+        },
+        "value": {
+          "type": [
+            "boolean",
+            "number",
+            "string"
+          ]
+        },
+        "source": {
+          "$ref": "#/$defs/source"
+        },
+        "maskedBy": {
+          "$ref": "#/$defs/source"
+        }
+      },
+      "required": [
+        "path",
+        "value",
+        "source",
+        "maskedBy"
+      ]
+    },
+    "inactiveChoice": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "type": "string",
+          "pattern": "^(contractVersion|reviewPresentation|(camera|soundMatching|referenceAnalysis|spokenNotes|speechRecovery|handoff)\\.[A-Za-z][A-Za-z0-9]*)$"
+        },
+        "value": {
+          "type": [
+            "boolean",
+            "number",
+            "string"
+          ]
+        },
+        "source": {
+          "$ref": "#/$defs/source"
+        },
+        "reason": {
+          "enum": [
+            "camera-disabled",
+            "soundMatching-disabled",
+            "referenceAnalysis-disabled",
+            "spokenNotes-disabled",
+            "speechRecovery-disabled",
+            "editor-handoff-not-selected"
+          ]
+        }
+      },
+      "required": [
+        "path",
+        "value",
+        "source",
+        "reason"
+      ]
+    },
+    "selection": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "contractVersion": {
+          "const": "1.0.0"
+        },
+        "effective": {
+          "$ref": "#/$defs/effective"
+        },
+        "sources": {
+          "type": "object",
+          "maxProperties": 64,
+          "propertyNames": {
+            "pattern": "^(contractVersion|reviewPresentation|(camera|soundMatching|referenceAnalysis|spokenNotes|speechRecovery|handoff)\\.[A-Za-z][A-Za-z0-9]*)$"
+          },
+          "additionalProperties": {
+            "$ref": "#/$defs/source"
+          }
+        },
+        "selectionHash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "maskedChoices": {
+          "type": "array",
+          "maxItems": 256,
+          "items": {
+            "$ref": "#/$defs/maskedChoice"
+          }
+        },
+        "inactiveChoices": {
+          "type": "array",
+          "maxItems": 64,
+          "items": {
+            "$ref": "#/$defs/inactiveChoice"
+          }
+        }
+      },
+      "required": [
+        "contractVersion",
+        "effective",
+        "sources",
+        "selectionHash",
+        "maskedChoices",
+        "inactiveChoices"
+      ]
+    }
+  }
+}

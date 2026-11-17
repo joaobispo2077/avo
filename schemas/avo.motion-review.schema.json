@@ -1,0 +1,919 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://avo.local/avo.motion-review.schema.json",
+  "title": "Derived motion review snapshot; never timeline or approval authority",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "snapshotHash",
+    "generator",
+    "videoId",
+    "provider",
+    "basisHeads",
+    "applicability",
+    "readiness",
+    "direction",
+    "options",
+    "items",
+    "storyboardCards",
+    "lanes",
+    "gaps",
+    "pendingRevisions",
+    "coverage"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "1.0.0"
+    },
+    "snapshotHash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "generator": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "version"
+      ],
+      "properties": {
+        "id": {
+          "const": "avo.motion-review"
+        },
+        "version": {
+          "const": "1.0.0"
+        }
+      }
+    },
+    "videoId": {
+      "type": "string"
+    },
+    "provider": {
+      "type": "string"
+    },
+    "basisHeads": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "cmap",
+        "bmap",
+        "tracks",
+        "animation",
+        "sync-map"
+      ],
+      "properties": {
+        "cmap": {
+          "anyOf": [
+            {
+              "type": [
+                "object",
+                "null"
+              ],
+              "additionalProperties": false,
+              "required": [
+                "revisionId",
+                "sha256",
+                "activeState",
+                "approvedRevisionId"
+              ],
+              "properties": {
+                "revisionId": {
+                  "type": "string"
+                },
+                "sha256": {
+                  "type": "string",
+                  "pattern": "^[a-f0-9]{64}$"
+                },
+                "activeState": {
+                  "type": "string"
+                },
+                "approvedRevisionId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              }
+            },
+            {
+              "type": [
+                "object",
+                "null"
+              ],
+              "additionalProperties": false,
+              "required": [
+                "revisionId",
+                "sha256",
+                "activeState",
+                "approvedRevisionId",
+                "availability"
+              ],
+              "properties": {
+                "revisionId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "sha256": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "pattern": "^[a-f0-9]{64}$"
+                },
+                "activeState": {
+                  "type": "string"
+                },
+                "approvedRevisionId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "availability": {
+                  "const": "unavailable"
+                }
+              }
+            }
+          ]
+        },
+        "bmap": {
+          "anyOf": [
+            {
+              "type": [
+                "object",
+                "null"
+              ],
+              "additionalProperties": false,
+              "required": [
+                "revisionId",
+                "sha256",
+                "activeState",
+                "approvedRevisionId"
+              ],
+              "properties": {
+                "revisionId": {
+                  "type": "string"
+                },
+                "sha256": {
+                  "type": "string",
+                  "pattern": "^[a-f0-9]{64}$"
+                },
+                "activeState": {
+                  "type": "string"
+                },
+                "approvedRevisionId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              }
+            },
+            {
+              "type": [
+                "object",
+                "null"
+              ],
+              "additionalProperties": false,
+              "required": [
+                "revisionId",
+                "sha256",
+                "activeState",
+                "approvedRevisionId",
+                "availability"
+              ],
+              "properties": {
+                "revisionId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "sha256": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "pattern": "^[a-f0-9]{64}$"
+                },
+                "activeState": {
+                  "type": "string"
+                },
+                "approvedRevisionId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "availability": {
+                  "const": "unavailable"
+                }
+              }
+            }
+          ]
+        },
+        "tracks": {
+          "anyOf": [
+            {
+              "type": [
+                "object",
+                "null"
+              ],
+              "additionalProperties": false,
+              "required": [
+                "revisionId",
+                "sha256",
+                "activeState",
+                "approvedRevisionId"
+              ],
+              "properties": {
+                "revisionId": {
+                  "type": "string"
+                },
+                "sha256": {
+                  "type": "string",
+                  "pattern": "^[a-f0-9]{64}$"
+                },
+                "activeState": {
+                  "type": "string"
+                },
+                "approvedRevisionId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              }
+            },
+            {
+              "type": [
+                "object",
+                "null"
+              ],
+              "additionalProperties": false,
+              "required": [
+                "revisionId",
+                "sha256",
+                "activeState",
+                "approvedRevisionId",
+                "availability"
+              ],
+              "properties": {
+                "revisionId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "sha256": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "pattern": "^[a-f0-9]{64}$"
+                },
+                "activeState": {
+                  "type": "string"
+                },
+                "approvedRevisionId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "availability": {
+                  "const": "unavailable"
+                }
+              }
+            }
+          ]
+        },
+        "animation": {
+          "anyOf": [
+            {
+              "type": [
+                "object",
+                "null"
+              ],
+              "additionalProperties": false,
+              "required": [
+                "revisionId",
+                "sha256",
+                "activeState",
+                "approvedRevisionId"
+              ],
+              "properties": {
+                "revisionId": {
+                  "type": "string"
+                },
+                "sha256": {
+                  "type": "string",
+                  "pattern": "^[a-f0-9]{64}$"
+                },
+                "activeState": {
+                  "type": "string"
+                },
+                "approvedRevisionId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              }
+            },
+            {
+              "type": [
+                "object",
+                "null"
+              ],
+              "additionalProperties": false,
+              "required": [
+                "revisionId",
+                "sha256",
+                "activeState",
+                "approvedRevisionId",
+                "availability"
+              ],
+              "properties": {
+                "revisionId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "sha256": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "pattern": "^[a-f0-9]{64}$"
+                },
+                "activeState": {
+                  "type": "string"
+                },
+                "approvedRevisionId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "availability": {
+                  "const": "unavailable"
+                }
+              }
+            }
+          ]
+        },
+        "sync-map": {
+          "anyOf": [
+            {
+              "type": [
+                "object",
+                "null"
+              ],
+              "additionalProperties": false,
+              "required": [
+                "revisionId",
+                "sha256",
+                "activeState",
+                "approvedRevisionId"
+              ],
+              "properties": {
+                "revisionId": {
+                  "type": "string"
+                },
+                "sha256": {
+                  "type": "string",
+                  "pattern": "^[a-f0-9]{64}$"
+                },
+                "activeState": {
+                  "type": "string"
+                },
+                "approvedRevisionId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              }
+            },
+            {
+              "type": [
+                "object",
+                "null"
+              ],
+              "additionalProperties": false,
+              "required": [
+                "revisionId",
+                "sha256",
+                "activeState",
+                "approvedRevisionId",
+                "availability"
+              ],
+              "properties": {
+                "revisionId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "sha256": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "pattern": "^[a-f0-9]{64}$"
+                },
+                "activeState": {
+                  "type": "string"
+                },
+                "approvedRevisionId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "availability": {
+                  "const": "unavailable"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "applicability": {
+      "enum": [
+        "applicable",
+        "explicitly-skipped",
+        "unavailable-context"
+      ]
+    },
+    "readiness": {
+      "enum": [
+        "conceptual",
+        "timed-unresolved",
+        "resolved",
+        "stale",
+        "needs-judgment",
+        "unavailable"
+      ]
+    },
+    "direction": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "options": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "items": {
+      "type": "array",
+      "maxItems": 500,
+      "items": {
+        "$ref": "#/$defs/item"
+      }
+    },
+    "storyboardCards": {
+      "type": "array",
+      "maxItems": 500,
+      "items": {
+        "$ref": "#/$defs/card"
+      }
+    },
+    "lanes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "audio",
+        "video"
+      ],
+      "properties": {
+        "audio": {
+          "type": "array",
+          "items": {}
+        },
+        "video": {
+          "type": "array",
+          "items": {}
+        }
+      }
+    },
+    "gaps": {
+      "type": "array",
+      "items": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "object"
+          }
+        ]
+      }
+    },
+    "pendingRevisions": {
+      "type": "array",
+      "items": {}
+    },
+    "coverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "shown",
+        "total",
+        "canonicalPartCount",
+        "proposalDefinitionCount",
+        "complete"
+      ],
+      "properties": {
+        "shown": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 500
+        },
+        "total": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "canonicalPartCount": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "proposalDefinitionCount": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "complete": {
+          "type": "boolean"
+        }
+      }
+    }
+  },
+  "$defs": {
+    "time": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ticks",
+        "timebase",
+        "domain"
+      ],
+      "properties": {
+        "ticks": {
+          "type": "integer"
+        },
+        "timebase": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "num",
+            "den"
+          ],
+          "properties": {
+            "num": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "den": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        },
+        "domain": {
+          "const": "cmap-output"
+        }
+      }
+    },
+    "item": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "itemId",
+        "label",
+        "sectionId",
+        "concept",
+        "purpose",
+        "treatment",
+        "timing",
+        "timingState",
+        "anchor",
+        "camera",
+        "sound",
+        "assets",
+        "assetReadiness",
+        "disposition",
+        "recordedDisposition",
+        "rebaseState",
+        "cueId",
+        "componentRef",
+        "targetLayerId",
+        "parts",
+        "identityConflicts"
+      ],
+      "properties": {
+        "itemId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "sectionId": {
+          "type": "string"
+        },
+        "concept": {
+          "type": "string"
+        },
+        "purpose": {
+          "type": "string"
+        },
+        "treatment": {
+          "type": "string"
+        },
+        "timing": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "start",
+                "end"
+              ],
+              "properties": {
+                "start": {
+                  "$ref": "#/$defs/time"
+                },
+                "end": {
+                  "$ref": "#/$defs/time"
+                }
+              }
+            }
+          ]
+        },
+        "timingState": {
+          "enum": [
+            "timed",
+            "provisional",
+            "split"
+          ]
+        },
+        "anchor": {
+          "type": "object",
+          "required": [
+            "type",
+            "spokenTrigger",
+            "rawAnchors"
+          ]
+        },
+        "camera": {},
+        "sound": {},
+        "assets": {
+          "type": "array",
+          "items": {}
+        },
+        "assetReadiness": {
+          "enum": [
+            "missing",
+            "declared",
+            "not-required",
+            "unresolved"
+          ]
+        },
+        "disposition": {
+          "type": "string"
+        },
+        "recordedDisposition": {
+          "type": "string"
+        },
+        "rebaseState": {
+          "enum": [
+            "preserved",
+            "shifted",
+            "split",
+            "removed",
+            "ambiguous",
+            "unsupported"
+          ]
+        },
+        "cueId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "componentRef": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "targetLayerId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "parts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/part"
+          }
+        },
+        "identityConflicts": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        }
+      }
+    },
+    "card": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "itemId",
+        "label",
+        "concept",
+        "layers",
+        "layout",
+        "lifecycle",
+        "camera",
+        "sound",
+        "assets",
+        "evidence",
+        "unresolvedFields"
+      ],
+      "properties": {
+        "itemId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "concept": {
+          "type": "string"
+        },
+        "layers": {},
+        "layout": {
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "lifecycle": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "preEntry",
+            "entrance",
+            "hold",
+            "payoff",
+            "exit"
+          ],
+          "properties": {
+            "preEntry": {},
+            "entrance": {},
+            "hold": {},
+            "payoff": {},
+            "exit": {}
+          }
+        },
+        "camera": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "before",
+            "during",
+            "after"
+          ],
+          "properties": {
+            "before": {},
+            "during": {},
+            "after": {}
+          }
+        },
+        "sound": {},
+        "assets": {
+          "type": "array",
+          "items": {}
+        },
+        "evidence": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "status"
+          ],
+          "properties": {
+            "type": {
+              "enum": [
+                "concept",
+                "sketch",
+                "rendered-frame"
+              ]
+            },
+            "status": {
+              "const": "unverified"
+            },
+            "inspectionRef": {
+              "description": "Unverified caller-supplied reference; never native inspection, admission or approval evidence"
+            },
+            "basisStatus": {
+              "enum": [
+                "matches",
+                "stale",
+                "unavailable"
+              ]
+            }
+          }
+        },
+        "unresolvedFields": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "part": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "cueId",
+        "timing",
+        "targetLayerId",
+        "componentRef",
+        "cue"
+      ],
+      "properties": {
+        "cueId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "timing": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "start",
+            "end"
+          ],
+          "properties": {
+            "start": {
+              "$ref": "#/$defs/time"
+            },
+            "end": {
+              "$ref": "#/$defs/time"
+            }
+          }
+        },
+        "targetLayerId": {
+          "type": "string"
+        },
+        "componentRef": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "cue": {
+          "$ref": "https://github.com/joaobispo2077/avo/schemas/avo.bmap.schema.json#/$defs/cue"
+        }
+      }
+    },
+    "canonicalCues": {
+      "type": "array",
+      "items": {
+        "$ref": "https://github.com/joaobispo2077/avo/schemas/avo.bmap.schema.json#/$defs/cue"
+      }
+    }
+  }
+}

@@ -272,6 +272,53 @@ def _known_import_draft_selection(document, identity):
     return bool(matches)
 
 
+def _craft_request(
+    current, selection, *, request_id, direction_ref, basis_heads, actor, reason
+):
+    from uuid import uuid4
+
+    from avo.editing_craft import validate_editing_craft_selection
+
+    from .contracts import ContractError, validate_document
+
+    try:
+        requested = {
+            "runId": current["runId"],
+            "requestId": request_id
+            if request_id is not None
+            else f"craft-{uuid4().hex}",
+            "selection": validate_editing_craft_selection(selection),
+            "directionRef": direction_ref,
+            "basisHeads": basis_heads
+            if basis_heads is not None
+            else {
+                name: None
+                for name in ("cmap", "bmap", "tracks", "animation", "sync-map")
+            },
+            "actor": actor,
+            "reason": reason,
+        }
+        validate_document(requested, "avo.editing-craft-run.schema.json")
+    except (ContractError, ValueError, TypeError) as exc:
+        raise LifecycleError(f"invalid editing craft request: {exc}") from exc
+    return requested
+
+
+def _known_craft_request(document, request_id):
+    if request_id is None:
+        return None
+    current = (document.get("executionChoices") or {}).get("editingCraft")
+    history = (document.get("extensions") or {}).get("editingCraftRequestHistory", [])
+    return next(
+        (
+            item
+            for item in [current, *history]
+            if item is not None and item["requestId"] == request_id
+        ),
+        None,
+    )
+
+
 class PipelineRunStore:
     """Persist the lifecycle state and explicit recovery history."""
 
@@ -384,6 +431,56 @@ class PipelineRunStore:
                 "motionRequestHistory", []
             ).append(deepcopy(previous))
         updated.setdefault("executionChoices", {})["motion"] = requested
+        updated["updatedAt"] = self.clock()
+        return self._write(updated, expected_updated_at=current["updatedAt"])
+
+    @serialized_timeline(lambda self: self.path.parent)
+    def bind_editing_craft_selection(
+        self,
+        selection,
+        *,
+        actor,
+        reason,
+        request_id=None,
+        new_request=False,
+        direction_ref=None,
+        basis_heads=None,
+    ):
+        """Freeze one authoring request; future defaults never revise its choices."""
+        from copy import deepcopy
+
+        if type(new_request) is not bool:
+            raise LifecycleError("new_request must be a boolean")
+        current = self.load()
+        requested = _craft_request(
+            current,
+            selection,
+            request_id=request_id,
+            direction_ref=direction_ref,
+            basis_heads=basis_heads,
+            actor=actor,
+            reason=reason,
+        )
+        known = _known_craft_request(current, request_id)
+        if known is not None:
+            if requested != known:
+                raise LifecycleError(
+                    "editing craft request identity conflicts with its recorded selection"
+                )
+            return current
+        previous = (current.get("executionChoices") or {}).get("editingCraft")
+        if previous is not None and not new_request:
+            if request_id is not None:
+                raise LifecycleError(
+                    "a different editing craft request requires new_request=True"
+                )
+            return current
+        updated = deepcopy(current)
+        if previous is not None:
+            updated.setdefault("extensions", {}).setdefault(
+                "editingCraftRequestHistory", []
+            ).append(deepcopy(previous))
+        updated.setdefault("executionChoices", {})["editingCraft"] = deepcopy(requested)
         updated["updatedAt"] = self.clock()
         return self._write(updated, expected_updated_at=current["updatedAt"])
 
