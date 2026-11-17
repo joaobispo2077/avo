@@ -4,6 +4,15 @@
   "title": "Sound proposals and selected candidate fits, separate from publication and listening approval",
   "$ref": "#/$defs/candidateFit",
   "$defs": {
+    "compileSource": {
+      "type": "object", "additionalProperties": false,
+      "required": ["locator", "sha256", "mediaClass", "streamIndex"],
+      "properties": {
+        "locator": {"type": "string", "minLength": 1, "maxLength": 8192},
+        "sha256": {"$ref": "avo.sfx-catalog.schema.json#/$defs/sha"},
+        "mediaClass": {"const": "source"}, "streamIndex": {"type": "integer", "minimum": 0}
+      }
+    },
     "soundMix": {
       "type": "object", "additionalProperties": false,
       "required": ["sourceLayout", "targetLayout", "channelMap", "gainDb", "peakCeilingDbfs", "fadeInSamples", "fadeOutSamples", "ducking"],
