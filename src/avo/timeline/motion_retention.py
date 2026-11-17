@@ -24,6 +24,8 @@ EVIDENCE = {
     "motion-proposal": "proposal",
     "motion-decision": "decision",
     "motion-application": "applyRequest",
+    "sound-proposal": "sound-proposal",
+    "sound-application": "sound-application",
 }
 
 
@@ -38,12 +40,15 @@ def _require(condition, message):
 
 class _Retention:
     def __init__(self, workspace):
+        from .sound_retention import SoundRetention
+
         self.workspace = workspace
         self.raw = workspace.raw_dir.resolve()
         self.service = MotionAuthoringService(workspace)
         self.documents = {}
         self.total = 0
         self.proposals = []
+        self.sound_retention = SoundRetention(self)
 
     def read(self, path, definition=None):
         relative = Path(path).relative_to(self.raw).as_posix()
@@ -293,6 +298,12 @@ class _Retention:
 
     def authorial_evidence(self, evidence, definition):
         reference = {key: evidence[key] for key in ("path", "sha256")}
+        if definition == "sound-proposal":
+            self.sound_retention.proposal(reference)
+            return
+        if definition == "sound-application":
+            self.sound_retention.application(reference)
+            return
         if definition == "proposal":
             self.proposals.append(reference)
         elif definition == "decision":
@@ -334,7 +345,8 @@ class _Retention:
                 and set(marker) == {"operationId", "requestHash"},
                 "invalid pending application marker",
             )
-            self.application(marker["operationId"], marker["requestHash"])
+            if not self.sound_retention.pending(marker):
+                self.application(marker["operationId"], marker["requestHash"])
 
     def run(self):
         self.canonical()
