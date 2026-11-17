@@ -50,6 +50,11 @@ well as FFmpeg 7. Private proof segments use a local fingerprint stage so delete
 scratch files do not enter the enclosing canonical dependency guard; original
 and generated inputs are still revalidated before publication.
 
+Bounded Linux FFmpeg setup normalizes regional Ubuntu main-archive entries to
+the main HTTPS mirror before its existing apt retries. Security, ports and
+unrelated source entries remain intact. Offline setup fixtures cover Azure,
+EC2, direct main-archive and absent mirror-list inputs.
+
 Unit tests and coverage use two pytest workers with work stealing, matching the
 integration lane. The unit job has a bounded 30-minute budget, including setup,
 evidence upload, and post-test smokes, and reports its 20 slowest tests.
