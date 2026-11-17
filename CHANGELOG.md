@@ -1,3 +1,25 @@
+# [1.22.0](https://github.com/joaobispo2077/avo/compare/v1.21.0...v1.22.0) (2026-11-17)
+
+
+### Bug Fixes
+
+* **media:** bound historical-output inspection ([83600d9](https://github.com/joaobispo2077/avo/commit/83600d9a81377cc28e4364754fe849bb66bf986a))
+* **deps:** patch OpenTelemetry trace parsing ([f55c298](https://github.com/joaobispo2077/avo/commit/f55c298147ef1aef2949a6ceb9362334808734df))
+* **schema:** preserve hashes in local schema paths ([bafc1e0](https://github.com/joaobispo2077/avo/commit/bafc1e04e6991deeece7072412af4e6aa07639f2))
+* **review:** separate transcription windows ([5c84973](https://github.com/joaobispo2077/avo/commit/5c8497329e9b835b3a7c46deb6064a4a6ae43b5b))
+
+
+### Features
+
+* **motion:** admit bound HyperFrames assets ([f8947e7](https://github.com/joaobispo2077/avo/commit/f8947e71ed898833266c8b014f65ac8d6af19796))
+* **craft:** expose preferences and motion review ([acc1a97](https://github.com/joaobispo2077/avo/commit/acc1a97437704c10fa304d64bf305d72fef522d2))
+* **craft:** freeze request choices in pipeline runs ([b9b2356](https://github.com/joaobispo2077/avo/commit/b9b23568e77c4c01e8db9b8e78cf22444e10af76))
+* **motion:** project linked motion review ([41d503d](https://github.com/joaobispo2077/avo/commit/41d503d3a75d3ad7ff4c5d736b46218dcfbf2ef7))
+* **import:** reconstruct Resolve treatments ([77267c5](https://github.com/joaobispo2077/avo/commit/77267c58518c8994a18178893c5efa35f2b6337d))
+* **craft:** resolve scoped editing preferences ([d70c89a](https://github.com/joaobispo2077/avo/commit/d70c89a347a0bc16f63657e28e07afc7a81d36dd))
+* **proof:** stream bounded placed renders ([b266cfb](https://github.com/joaobispo2077/avo/commit/b266cfb9e20fb6f7c3c9c912afeea39751880a83))
+* **audio:** validate source mix adjustments ([e7697cd](https://github.com/joaobispo2077/avo/commit/e7697cd339b60854dda6467c6e7a370ba19fc4da))
+
 # [1.21.0](https://github.com/joaobispo2077/avo/compare/v1.20.0...v1.21.0) (2026-11-08)
 
 
