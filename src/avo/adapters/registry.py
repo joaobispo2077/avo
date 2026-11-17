@@ -18,6 +18,7 @@ __all__ = [
     "adapter_for_routing_suffix",
     "build_cutting_service",
     "build_sfx_catalog",
+    "build_sound_source_probe",
     "default_proof_capability_registry",
 ]
 
@@ -87,6 +88,28 @@ def adapter_for_routing_suffix(job: str, suffix: str) -> type[JobAdapter]:
             f"no adapter for job '{job}' routing suffix '{suffix}' (known: {known})"
         )
     return load_adapter_class(module_path)
+
+
+def build_sound_source_probe():
+    """Observe the first measured audio stream only for explicit sound admission."""
+    from .media.ffprobe import FfprobeMediaAdapter
+
+    def probe(path, *, expected_sha256):
+        source = FfprobeMediaAdapter().inventory([path])["sources"][0]
+        if source["fingerprint"]["sha256"] != expected_sha256:
+            raise ValueError("Selected sound source fingerprint changed during probe")
+        streams = source["streams"]["audio"]
+        if not streams:
+            raise ValueError("Selected sound source has no audio stream")
+        stream = streams[0]
+        return {
+            "sourceSha256": expected_sha256,
+            "streamIndex": stream["index"],
+            "sampleRate": stream["sampleRate"],
+            "channels": stream["channels"],
+        }
+
+    return probe
 
 
 def build_cutting_service(workspace, *, invocation=None):
