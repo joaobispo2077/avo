@@ -14,6 +14,10 @@ from .sound_fitting import SCHEMA, SoundPlanningError, fit_sound_candidate
 from .track_rules import apply_event_role_defaults, normalize_audio_track_layer
 
 
+def sound_source_id(entry_id, source_sha256):
+    return "sound-source-" + content_hash([entry_id, source_sha256])[:24]
+
+
 def _unique_sound_ids(values, key):
     result = {value[key]: value for value in values}
     if len(result) != len(values):

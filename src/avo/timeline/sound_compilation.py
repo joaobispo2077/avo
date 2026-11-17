@@ -6,7 +6,7 @@ from pathlib import Path
 
 from .contracts import content_hash, validate_document
 from .event_clock import frame_to_sample
-from .sound_choices import _previous_sound_choices
+from .sound_choices import _previous_sound_choices, sound_source_id
 from .sound_fitting import SCHEMA, SoundPlanningError
 
 
@@ -95,9 +95,7 @@ def _contribution(choice, source, sidechains, known):
     if mix["gainDb"] > 30:
         raise SoundPlanningError("Selected gain exceeds native mix support")
     node_id = "sound-" + content_hash(choice["eventId"])[:24]
-    source_id = (
-        "sound-source-" + content_hash([entry["entryId"], source["sha256"]])[:24]
-    )
+    source_id = sound_source_id(entry["entryId"], source["sha256"])
     region = {
         "startSample": fit["event"]["scheduledAudioStartSample"],
         "endSampleExclusive": fit["scheduledAudioEndSample"],
