@@ -139,6 +139,7 @@ class CapabilityRegistry:
 
 
 _PROOF_BUILTINS = {
+    "camera-transform-v1": "ffmpeg.camera-transform",
     "source-layout": "ffmpeg.source-layout",
     "trim": "ffmpeg.trim",
     "generated-clip": "ffmpeg.generated-clip",
@@ -225,7 +226,9 @@ def default_proof_capability_registry() -> CapabilityRegistry:
         digest = _implementation_digest(capability, adapter_id)
         registry.register(
             CapabilityImplementation(
-                implementation_id=f"impl-{capability}"[:64],
+                implementation_id="impl-camera-transform"
+                if capability == "camera-transform-v1"
+                else f"impl-{capability}"[:64],
                 capability=capability,
                 kind="built-in",
                 adapter_id=adapter_id,
