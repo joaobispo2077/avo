@@ -44,7 +44,7 @@
       "required": ["eventId", "role", "programFrame", "visibleRange", "transientOffset", "resolvedImpactSample", "scheduledAudioStartSample"],
       "properties": {
         "eventId": {"$ref": "#/$defs/id"}, "role": {"const": "sfx"},
-        "programFrame": {"$ref": "#/$defs/sample"}, "visibleRange": {"$ref": "#/$defs/frameRange"},
+        "programFrame": {"$ref": "#/$defs/sample"}, "visibleRange": {"type": "null"},
         "resolvedImpactSample": {"$ref": "#/$defs/sample"}, "scheduledAudioStartSample": {"$ref": "#/$defs/sample"},
         "transientOffset": {
           "type": "object", "additionalProperties": false,

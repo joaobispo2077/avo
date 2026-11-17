@@ -109,7 +109,7 @@ def _schedule(result, entry, trim, clock, program_end_sample):
         "eventId": opportunity["eventId"],
         "role": "sfx",
         "programFrame": opportunity["programFrame"],
-        "visibleRange": deepcopy(opportunity["visibleRange"]),
+        "visibleRange": None,
         "transientOffset": {
             "sourceSamples": entry["marker"]["sample"] - trim["startSample"],
             "sourceRate": facts["sampleRate"],
@@ -120,11 +120,13 @@ def _schedule(result, entry, trim, clock, program_end_sample):
     except EventClockError as error:
         result["issues"] = [str(error)]
         return
+    source_clock = {
+        "source_rate": facts["sampleRate"],
+        "target_rate": clock["sample_rate"],
+    }
     duration = sample_rate_boundary(
-        trim["endSampleExclusive"] - trim["startSample"],
-        source_rate=facts["sampleRate"],
-        target_rate=clock["sample_rate"],
-    )
+        trim["endSampleExclusive"], **source_clock
+    ) - sample_rate_boundary(trim["startSample"], **source_clock)
     finish = resolved["scheduledAudioStartSample"] + duration
     if finish > program_end_sample:
         result["issues"] = ["insufficient-program-tail-space"]
