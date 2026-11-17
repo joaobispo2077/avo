@@ -50,12 +50,12 @@ class _Retention:
         self.proposals = []
         self.sound_retention = SoundRetention(self)
 
-    def read(self, path, definition=None):
+    def read(self, path, definition=None, *, reader=None):
         relative = Path(path).relative_to(self.raw).as_posix()
         target = safe_path(self.raw, relative)
         if target not in self.documents:
             _require(len(self.documents) < MAX_FILES, "evidence file budget exceeded")
-            value, raw = self.service._read(target)
+            value, raw = (reader or self.service._read)(target)
             _require(isinstance(value, dict), "evidence must be a JSON object")
             self.total += len(raw)
             _require(self.total <= MAX_TOTAL_BYTES, "evidence byte budget exceeded")

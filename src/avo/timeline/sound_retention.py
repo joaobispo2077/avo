@@ -1,6 +1,10 @@
 """Selected sound request/recovery closure, sharing the bounded motion ledger."""
 
+import json
 from types import SimpleNamespace
+
+from avo.sfx_contracts import MAX_DOCUMENT_BYTES as MAX_CATALOGUE_BYTES
+from avo.sfx_contracts import _hash, _validate_entries
 
 from .contracts import content_hash, validate_document
 from .sound_application import _Application
@@ -19,6 +23,14 @@ def _require(condition, message):
         raise ValueError("Cannot retain selected sound evidence: " + message)
 
 
+def _catalogue_bytes(path):
+    limit = MAX_CATALOGUE_BYTES
+    with path.open("rb") as stream:
+        raw = stream.read(limit + 1)
+    _require(len(raw) <= limit, "catalogue metadata exceeds its 16 MiB byte budget")
+    return json.loads(raw), raw
+
+
 class SoundRetention:
     def __init__(self, retained):
         self.retained = retained
@@ -28,6 +40,8 @@ class SoundRetention:
         )
         self.application_service = _Application(self.planning)
         self.visited = set()
+        self.generations = {}
+        self.applications = {}
 
     def reference(self, reference, definition):
         validate_document(reference, "avo.motion-proposal.schema.json#/$defs/ref")
@@ -53,6 +67,7 @@ class SoundRetention:
         )
         identity = content_hash(["propose", value["operationId"]])
         self.retained.read(self.planning._path("operations", identity))
+        self.generation(value["generationId"])
         if value["directionRef"]:
             self.retained.direction(value["directionRef"])
 
@@ -64,9 +79,13 @@ class SoundRetention:
             "pending sound request identity changed",
         )
         identity = content_hash(["apply", request["operationId"]])
-        if identity in self.visited:
-            return
-        self.visited.add(identity)
+        if identity in self.applications:
+            saved = self.applications[identity]
+            _require(
+                saved["requestRef"] == reference and saved["requestHash"] == expected,
+                "repeated sound operation changes its request identity",
+            )
+            return saved
         operation, _ = self.retained.read(self.planning._path("operations", identity))
         operation = _sound_document(operation, "applicationOperation")
         _require(
@@ -84,6 +103,7 @@ class SoundRetention:
         )
         self.receipt_history(request, receipt, initial)
         self.proposal(receipt["proposalRef"])
+        self.selected_entries(request, receipt)
         if receipt["state"] == "committed":
             actual = self.retained.service._actual_committed(
                 receipt, require_active=False
@@ -93,6 +113,59 @@ class SoundRetention:
                 and set(actual) == {"bmap", "tracks"},
                 "committed sound history changed",
             )
+        self.applications[identity] = receipt
+        return receipt
+
+    def generation(self, identity):
+        if identity is None:
+            return None
+        if identity in self.generations:
+            return self.generations[identity]
+        path = (
+            self.workspace.raw_dir
+            / "edit/sfx-catalog/generations"
+            / (identity + ".json")
+        )
+        value, _ = self.retained.read(path, reader=_catalogue_bytes)
+        validate_document(value, "avo.sfx-catalog.schema.json")
+        _require(
+            value["generationId"] == identity
+            and _hash(value, "generationId") == identity,
+            "selected catalogue generation hash changed",
+        )
+        _validate_entries(value["entries"])
+        self.generations[identity] = value
+        return value
+
+    def selected_entries(self, request, receipt):
+        generation = self.generation(request["expectedGeneration"])
+        entries = (
+            {}
+            if generation is None
+            else {entry["entryId"]: entry for entry in generation["entries"]}
+        )
+        for choice in receipt["choices"]:
+            entry = choice["sourceEntry"]
+            if entry is not None:
+                _require(
+                    entries.get(entry["entryId"]) == entry,
+                    "selected source entry differs from its exact catalogue generation",
+                )
+
+    def current_generation(self):
+        path = self.workspace.raw_dir / "edit/sfx-catalog/current.json"
+        if not path.exists() and not path.is_symlink():
+            return
+        value, _ = self.retained.read(path)
+        _require(
+            set(value) == {"schemaVersion", "generationId"}
+            and value["schemaVersion"] == "1.0.0",
+            "invalid pending sound catalogue selector",
+        )
+        validate_document(
+            value["generationId"], "avo.sfx-catalog.schema.json#/$defs/sha"
+        )
+        self.generation(value["generationId"])
 
     def receipt_history(self, request, receipt, initial):
         seen = set()
@@ -117,5 +190,9 @@ class SoundRetention:
             return False
         operation, _ = self.retained.read(path)
         operation = _sound_document(operation, "applicationOperation")
-        self.application(operation["requestRef"], request_hash=marker["requestHash"])
+        receipt = self.application(
+            operation["requestRef"], request_hash=marker["requestHash"]
+        )
+        if receipt["state"] != "committed":
+            self.current_generation()
         return True
