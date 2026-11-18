@@ -382,8 +382,9 @@ def test_full_unit_lane_has_a_bounded_budget_for_its_measured_population():
     )[0]
     budget = int(re.search(r"^    timeout-minutes: (\d+)$", unit, re.MULTILINE)[1])
     # Run 43810109775: the same 6163-test coverage population took 24m47.53s.
-    # Reserve four minutes for setup, evidence, and post-test smokes, bounded at 30m.
-    assert 1487.53 + 4 * 60 <= budget * 60 <= 30 * 60
+    # Run 44221588534 finished the same population under coverage in 2039.71s;
+    # reserve four minutes for setup/evidence/smokes, bounded at 45 minutes.
+    assert 2039.71 + 4 * 60 <= budget * 60 <= 45 * 60
     options = re.search(r"PYTEST_ADDOPTS: (.+)", unit)[1]
     assert shlex.split(options) == [
         "--junitxml=reports/quality/unit-tests.xml",
