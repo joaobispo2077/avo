@@ -340,7 +340,7 @@ class MotionAuthoringService:
         return document
 
     def _heads(self):
-        return MotionReviewService(self.workspace).project()["basisHeads"]
+        return MotionReviewService(self.workspace)._metadata(snapshots=False)[0]
 
     def _check_heads(self, expected):
         if not _basis_matches(expected, self._heads()):
