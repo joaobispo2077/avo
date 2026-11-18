@@ -10,6 +10,11 @@ initialize canonical records. It reports missing inputs and distinguishes planne
 concepts from inspected rendered evidence. An item keeps its existing cue or
 proposal identity when display order changes.
 
+Requested motion and sound proposals also remain discoverable after a restart,
+with their original item/event IDs, pending or completed decisions, exact recovery
+state and currentness. See [requested work](craft-pending-work.md). These records
+retain decisions to make; they do not select media or approve a proof.
+
 ## Inspect and publish
 
 Use an absolute project-manifest path with these native commands:

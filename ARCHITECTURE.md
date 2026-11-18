@@ -1057,7 +1057,7 @@ sound direction, and calls an injected catalogue for generation-bound candidates
 Silence and unresolved anchors remain first-class outcomes. Native/MCP entry
 points share the same request and operation replay; they do not scan source media,
 provision models, publish audio or approve listening. Proposal validation precedes
-option freezing. Unselected drafts do not enter reconstruction closure; canonical
+option freezing. Unregistered drafts do not enter reconstruction closure; canonical
 publication and typed evidence retention use their dedicated owners below.
 Pure per-event choice preparation reuses the existing overlay role and channel
 validators. It freezes entry/marker/mix identities and uses the same native event
@@ -1105,7 +1105,7 @@ catalogue generations and pending recovery inputs. Unfinished publication keeps
 its actual current catalogue selector, including a stale basis; committed replay
 retains frozen metadata without adopting later curation. Catalogue reads share
 the data-only catalogue byte limit inside the unchanged total evidence budget.
-Canonical/history references drive retention; unrelated
+Canonical/history and explicitly requested work references drive retention; unrelated
 drafts and generated review caches do not. The timeline domain owns validation
 and publication; `adapters.registry` composes the optional explicit source probe
 using the existing ffprobe adapter. Metadata readers never execute it. Native and
@@ -1159,6 +1159,18 @@ Explicit silence can retire a previously owned contribution after its visual
 anchor disappears. Missing audio cues are permitted only for that removal;
 present bindings remain exact. Immutable parent Tracks supply historical recipe
 verification for replay, while remaining ordered sound contexts stay unchanged.
+
+`timeline.craft_work` links explicit proposal operations to at most 500 typed
+references in the existing `PipelineRunStore`, with original request/item/event
+scope and no new timing or approval authority. The built-in 1.5 review derives
+pending, partial, completed, recovery and unavailable states from exact existing
+decisions and receipts. Missing evidence keeps the recorded scope visible; changed
+heads, direction, catalogue or active request remain stale. Canonical head guards
+read canonical metadata directly instead of traversing these derived views.
+Requested pending proposals join the existing bounded reconstruction closure;
+unregistered drafts and generated reports remain disposable. Readers neither
+decode/hash source media nor execute optional models. Earlier 1.1 through 1.4
+reports remain readable. See [`docs/craft-pending-work.md`](docs/craft-pending-work.md).
 
 Camera movement, face anchoring, sound matching, reference analysis, spoken
 notes/recovery and editor handoff are selected options resolved through existing

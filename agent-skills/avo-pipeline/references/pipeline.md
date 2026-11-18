@@ -43,6 +43,13 @@ A pipeline initialization is not a completed motion proof. Use code-drawn in can
 
 **Durable state:** pipeline-run.json main/side state
 
+Default motion review also exposes requested motion/sound work from that run,
+including original item/event IDs, pending choices, completed decisions, partial
+publication and exact recovery inputs. Read `motionPlan.pendingRevisions` after a
+restart. Keep stale or unavailable work visible; do not replace its original scope
+with current defaults or claim a stage label proves publication. Reports never
+repair metadata or approve rendering/listening. See [requested work](../../../docs/craft-pending-work.md).
+
 **Workflow steps:** Validate pipeline prerequisites → Run pipeline → Verify and report the pipeline result
 
 **Approval or input gate:** Pause whenever required input or a human decision prevents the next declared step; report the exact reply or artifact needed.

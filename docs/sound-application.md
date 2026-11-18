@@ -89,7 +89,7 @@ malformed or foreign-project context is reported as a gap. Sound links never
 extend a visual cue's timing. Default inspection stays read-only and needs no
 source hashing, decoding or model. Presentation failure keeps valid publication
 and returns a warning. Reports from generator versions 1.1 through 1.3 remain
-readable alongside the current 1.4 generator.
+readable alongside the current 1.5 generator, including older 1.4 reports.
 
 An applied motion plan projects against its verified committed heads while
 preserving the immutable proposal's original planning basis. Its own publication
@@ -106,7 +106,8 @@ cleanup. Neither state grants listening or creator approval.
 Cleanup and reconstruction retain selected canonical/history sound proposals,
 their actual operation requests, immutable receipt chains, prepared revisions,
 direction dependencies and pending recovery inputs through the existing bounded
-motion ledger. Unselected drafts and generated review caches are excluded.
+motion ledger. Explicitly requested pending work also retains its verified
+proposal dependencies. Unregistered drafts and generated review caches are excluded.
 Source media admission and contextual listening remain distinct requirements.
 
 Selected proposals also retain their immutable catalogue generation and verify
