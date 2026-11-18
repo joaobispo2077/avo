@@ -18,6 +18,8 @@ from .motion_metadata import (
     MotionReviewError,
     _basis_matches,
     _check_budget,
+    cue_item_claims,
+    cue_item_identity,
 )
 from .motion_scope import unchanged_visual_items, visual_roots_match
 from .motion_sound_review import (
@@ -28,7 +30,7 @@ from .motion_sound_review import (
 from .store import atomic_write_json
 from .workspace import ARTIFACTS
 
-GENERATOR = {"id": "avo.motion-review", "version": "1.7.0"}
+GENERATOR = {"id": "avo.motion-review", "version": "1.8.0"}
 MAX_ITEMS = 500
 LIFECYCLE = ("preEntry", "entrance", "hold", "payoff", "exit")
 CONCEPT_TEXT_FIELDS = {
@@ -509,9 +511,24 @@ def _combined(proposal, snapshots, gaps):
         groups.setdefault(identifier, {"proposals": [], "cues": []})[
             "proposals"
         ].append(item)
+    claims = cue_item_claims(
+        [item for group in groups.values() for item in group["proposals"]]
+    )
     for cue in (snapshots.get("bmap") or {}).get("cues", []):
-        identifier = str((cue.get("contentRef") or {}).get("itemId") or cue["cueId"])
+        identifier, conflicts = cue_item_identity(cue, claims)
+        identifier = str(identifier)
         groups.setdefault(identifier, {"proposals": [], "cues": []})["cues"].append(cue)
+        if conflicts:
+            conflict = {
+                "cueId": cue["cueId"],
+                "canonicalItemId": identifier,
+                "claimedItemIds": conflicts,
+            }
+            for identity in {identifier, *conflicts}:
+                groups[identity].setdefault("claimConflicts", []).append(
+                    deepcopy(conflict)
+                )
+            gaps.append({"kind": "cue-item-identity-conflict", **conflict})
     return groups
 
 
@@ -658,7 +675,9 @@ def _group_data(identifier, group):
     data["_parts"] = [_canonical_part(cue) for cue in group["cues"]]
     data["_identityConflicts"] = (
         deepcopy(group["proposals"]) if len(group["proposals"]) > 1 else []
-    )
+    ) + deepcopy(group.get("claimConflicts", []))
+    if group.get("claimConflicts"):
+        data["disposition"] = "needs-judgment"
     return data
 
 
@@ -810,7 +829,32 @@ class MotionReviewService:
             )
             return []
 
-    def project(self, context=None):
+    def _validate_scope_clock(self, scope_request):
+        if scope_request is None:
+            return
+        from .craft_scope import validate_scope_request
+        from .program_clock import require_program_clock
+
+        validate_scope_request(scope_request)
+        require_program_clock(
+            self.workspace, scope_request["clock"], subject="Production"
+        )
+
+    @staticmethod
+    def _add_scope(snapshot, scope_request):
+        if scope_request is None:
+            return
+        from .craft_scope import build_scope_plan
+
+        plan = build_scope_plan(
+            snapshot["items"], scope_request, basis_heads=snapshot["basisHeads"]
+        )
+        plan["complete"] = plan["complete"] and snapshot["coverage"]["complete"]
+        plan["scopeHash"] = document_hash_excluding(plan, "scopeHash")
+        snapshot["productionScope"] = plan
+
+    def project(self, context=None, *, scope_request=None):
+        self._validate_scope_clock(scope_request)
         heads, snapshots, gaps = self._metadata()
         context = _context(context, gaps)
         work, work_gaps = project_craft_work(self.workspace, heads)
@@ -859,6 +903,7 @@ class MotionReviewService:
             "pendingRevisions": deepcopy(context["pendingRevisions"]),
             "coverage": _coverage(pairs, counts, context, gaps),
         }
+        self._add_scope(snapshot, scope_request)
         snapshot["snapshotHash"] = document_hash_excluding(snapshot, "snapshotHash")
         validate_document(snapshot, "avo.motion-review.schema.json")
         return snapshot
@@ -964,12 +1009,37 @@ class MotionReviewService:
         }
 
 
+def _scope_summary(snapshot):
+    plan = snapshot.get("productionScope")
+    if plan is None:
+        return []
+    lines = [
+        "Selected production chunks: " + ", ".join(plan["request"]["selectedChunkIds"]),
+        "No approval is granted by this view.",
+    ]
+    for group in ("production", "context"):
+        lines.extend(
+            f"{row['itemId']} | {group} | owner {row['ownerChunkId']} | needed in {', '.join(row['consumerChunkIds'])}"
+            for row in plan[group]
+        )
+    lines.extend(
+        [
+            "Unresolved item ownership: "
+            + (", ".join(plan["unresolvedItemIds"]) or "none"),
+            "Scope coverage: " + ("complete" if plan["complete"] else "partial"),
+            "",
+        ]
+    )
+    return lines
+
+
 def render_text(snapshot):
     lines = [
         f"Motion plan: {snapshot['videoId']}",
         f"Readiness: {snapshot['readiness']}",
         f"Applicability: {snapshot['applicability']}",
         "",
+        *_scope_summary(snapshot),
     ]
     for item, card in zip(snapshot["items"], snapshot["storyboardCards"], strict=True):
         lines.extend(
@@ -1076,6 +1146,15 @@ def render_html(snapshot):
         map_rows="".join(map_rows),
         cards="".join(cards),
         advisories=_render_advisories(snapshot["advisories"]),
+        scope_summary=(
+            '<section aria-label="Production scope"><h2>Production scope</h2><ul>'
+            + "".join(
+                f"<li>{escape(line)}</li>" for line in _scope_summary(snapshot) if line
+            )
+            + "</ul></section>"
+        )
+        if snapshot.get("productionScope") is not None
+        else "",
         content=escape(render_text(snapshot)),
     )
 

@@ -332,6 +332,8 @@ class _Retention:
                 self.selection(selected)
             for item in history:
                 self.selection(item)
+            for item in extensions.get("motionApplicationHistory", []):
+                self.selection(item)
             for item in extensions.get("editingCraftWork", []):
                 load_craft_proposal(self, item)
 

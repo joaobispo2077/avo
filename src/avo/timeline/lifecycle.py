@@ -340,6 +340,32 @@ def _validate_craft_work(document):
             raise LifecycleError("editing craft work changes its typed proposal path")
 
 
+def _validate_motion_application_history(document):
+    seen = set()
+    for entry in (document.get("extensions") or {}).get("motionApplicationHistory", []):
+        if _known_craft_request(document, entry["requestId"]) is None:
+            raise LifecycleError(
+                "Motion application history changes its frozen request"
+            )
+        for key, collection in (
+            ("proposalRef", "proposals"),
+            ("decisionRef", "decisions"),
+            ("receiptRef", "receipts"),
+        ):
+            reference = entry[key]
+            if (
+                reference["path"]
+                != f"edit/motion/{collection}/{reference['sha256']}.json"
+            ):
+                raise LifecycleError(
+                    "Motion application history requires exact typed references"
+                )
+        identity = entry["receiptRef"]["sha256"]
+        if identity in seen:
+            raise LifecycleError("Motion application history repeats a receipt")
+        seen.add(identity)
+
+
 class PipelineRunStore:
     """Persist the lifecycle state and explicit recovery history."""
 
@@ -368,6 +394,7 @@ class PipelineRunStore:
                     "motion execution choice requires a request identity"
                 )
         _validate_craft_work(document)
+        _validate_motion_application_history(document)
         from .craft_work_decisions import (
             WorkDecisionError,
             validate_work_decision_history,
