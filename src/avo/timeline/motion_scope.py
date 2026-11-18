@@ -1,6 +1,6 @@
 """Exact visual metadata reuse; no media cache or approval authority."""
 
-from .motion_metadata import _basis_matches
+from .motion_metadata import _basis_matches, cue_item_claims, cue_item_identity
 
 AUDIO_KINDS = {"music", "sfx", "ambience"}
 
@@ -44,14 +44,24 @@ def _visual_metadata(snapshots):
     }
 
 
+def _timed_item_ids(proposal, cues):
+    claims = cue_item_claims(proposal.get("items", []))
+    timed, ambiguous = set(), set()
+    for cue in cues:
+        identity, conflicts = cue_item_identity(cue, claims)
+        if conflicts:
+            ambiguous.update({identity, *conflicts})
+        else:
+            timed.add(identity)
+    return timed - ambiguous
+
+
 def unchanged_visual_items(proposal, original, current):
     """Retain applied direction only when the complete visual assembly is unchanged."""
     if _visual_metadata(original) != _visual_metadata(current):
         return []
     cues = _visual_cues(current["bmap"])
-    timed = {
-        (cue.get("contentRef") or {}).get("itemId") or cue["cueId"] for cue in cues
-    }
+    timed = _timed_item_ids(proposal, cues)
     return [
         item["itemId"]
         for item in proposal.get("items", [])
