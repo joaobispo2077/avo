@@ -197,6 +197,10 @@
       "type": "object",
       "additionalProperties": true,
       "properties": {
+        "editingCraftWorkDecisions": {
+          "type": "array", "maxItems": 500,
+          "items": {"$ref": "avo.editing-craft-run.schema.json#/$defs/workDecisionRecord"}
+        },
         "editingCraftWork": {
           "type": "array", "maxItems": 500,
           "items": {"$ref": "avo.editing-craft-run.schema.json#/$defs/workReference"}
