@@ -120,7 +120,9 @@ def _sound_choice_advisories(choices):
             continue
         values = {
             "repeated-source": fit["source"]["sourceSha256"],
-            "colliding-attacks": fit["event"]["resolvedImpactSample"],
+            "colliding-attacks": Fraction(
+                fit["event"]["resolvedImpactSample"], fit["clock"]["sampleRate"]
+            ),
         }
         for code, key in values.items():
             groups[code].setdefault(key, []).append(choice["eventId"])
@@ -129,7 +131,60 @@ def _sound_choice_advisories(choices):
         for code, grouped in groups.items()
         for identities in grouped.values()
         if len(identities) > 1
-    ]
+    ] + _sound_overlap_advisories(choices)
+
+
+def _sound_intervals(choices):
+    intervals = []
+    for choice in choices:
+        fit = choice["fit"]
+        if fit["status"] != "fit":
+            continue
+        rate = fit["clock"]["sampleRate"]
+        intervals.append(
+            (
+                Fraction(fit["event"]["scheduledAudioStartSample"], rate),
+                Fraction(fit["scheduledAudioEndSample"], rate),
+                choice["eventId"],
+                fit["opportunity"]["role"],
+            )
+        )
+    return sorted(intervals)
+
+
+def _sound_overlap_advisories(choices):
+    # A timing overlap needs listening; it is not a measured masking or peak claim.
+    active, reports, total = [], [], 0
+    limit = 64
+    for interval in _sound_intervals(choices):
+        first, end, identity, role = interval
+        active = [previous for previous in active if previous[1] > first]
+        total += len(active)
+        for previous in active[: max(0, limit - len(reports))]:
+            finish = min(end, previous[1])
+            reports.append(
+                {
+                    "code": "overlapping-sounds",
+                    "eventIds": [previous[2], identity],
+                    "roles": [previous[3], role],
+                    "range": {
+                        "unit": "seconds",
+                        "start": {"num": first.numerator, "den": first.denominator},
+                        "end": {"num": finish.numerator, "den": finish.denominator},
+                    },
+                    "assessment": "timing-only",
+                }
+            )
+        active.append(interval)
+    if total > len(reports):
+        reports.append(
+            {
+                "code": "overlap-report-truncated",
+                "shownPairs": len(reports),
+                "totalPairs": total,
+            }
+        )
+    return reports
 
 
 def _sound_choice_summary(choice):
