@@ -89,7 +89,7 @@ malformed or foreign-project context is reported as a gap. Sound links never
 extend a visual cue's timing. Default inspection stays read-only and needs no
 source hashing, decoding or model. Presentation failure keeps valid publication
 and returns a warning. Reports from generator versions 1.1 through 1.3 remain
-readable alongside the current 1.5 generator, including older 1.4 reports.
+readable alongside the current 1.6 generator, including older 1.4/1.5 reports.
 
 An applied motion plan projects against its verified committed heads while
 preserving the immutable proposal's original planning basis. Its own publication

@@ -50,6 +50,13 @@ restart. Keep stale or unavailable work visible; do not replace its original sco
 with current defaults or claim a stage label proves publication. Reports never
 repair metadata or approve rendering/listening. See [requested work](../../../docs/craft-pending-work.md).
 
+Use `pipeline work-decide --request <absolute JSON>` for an explicit defer,
+dismiss, reopen or supersession of unresolved requested IDs. Copy the exact work
+reference/scope and current decision head from the view. This changes scheduling
+state without changing selected concepts, applied media or approvals. Applied
+contributions keep their normal revision commands. Retry an exact decision ID
+only for identical inputs; stale decision heads require current inspection.
+
 **Workflow steps:** Validate pipeline prerequisites → Run pipeline → Verify and report the pipeline result
 
 **Approval or input gate:** Pause whenever required input or a human decision prevents the next declared step; report the exact reply or artifact needed.

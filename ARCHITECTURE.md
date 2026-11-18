@@ -1172,6 +1172,17 @@ unregistered drafts and generated reports remain disposable. Readers neither
 decode/hash source media nor execute optional models. Earlier 1.1 through 1.4
 reports remain readable. See [`docs/craft-pending-work.md`](docs/craft-pending-work.md).
 
+`timeline.craft_work` records reversible per-ID queue dispositions in the same
+run, with bounded append-only request hashes and per-work predecessor checks.
+Pure `timeline.craft_work_decisions` rules let lifecycle validation reject
+rewritten, detached or conflicting history without importing media execution.
+The 1.6 projection separates deferred/closed IDs from actual canonical completion;
+it transfers no concept, media or film approval. Native/MCP `pipeline work-decide`
+validate a bounded request before project/execution setup and reuse the existing
+report publisher. The ordinary pipeline flow remains behind its existing handler.
+Unknown scope, stale decision heads, unavailable evidence and partial publication
+block decisions. Applied contributions require their canonical revision owners.
+
 Camera movement, face anchoring, sound matching, reference analysis, spoken
 notes/recovery and editor handoff are selected options resolved through existing
 settings scopes and frozen requests. Preferences seed future work and cannot

@@ -25,8 +25,35 @@ or repairs immutable files. Retry an interrupted publication with its exact save
 request; an unresolved or stale proposal needs a deliberate new proposal or
 decision through its existing owner.
 
-Creating another proposal preserves older pending choices. Automatic supersession
-and a dedicated dismissal command are not delivered by this increment.
+Creating another proposal preserves older pending choices. Explicit queue
+decisions can defer, dismiss, reopen or supersede selected unresolved IDs:
+
+```text
+avo cli pipeline work-decide --project <absolute avo.project.json> --video-id <id> --request <absolute decision.json> --json
+```
+
+MCP `avo_pipeline_work_decide` shares the same service. The strict request uses
+`avo.editing-craft-run.schema.json#/$defs/workDecisionRequest`. Copy the exact
+`kind`, `operationId`, `requestId`, `proposalRef` and `scope` from the work record
+into `work`; provide a fresh decision `operationId`, actor/reason, selected `ids`,
+and `status`: `pending`, `deferred`, `dismissed` or `superseded`.
+`expectedDecisionHash` equals the record's `decisionHead`, initially null.
+Supersession also supplies an exact registered `replacement` of the same kind.
+
+These decisions manage the production queue. They preserve chosen concepts,
+applied media and approvals. Already fulfilled IDs require their normal canonical
+revision controls. Deferred IDs remain visible; closed IDs are distinct from
+actual completed contributions. A mixed request exposes its remaining scope.
+Reopening puts unresolved IDs back in the queue and does not refresh stale inputs.
+Unavailable evidence or partial publication must be restored/reconciled first.
+
+At most 500 decision records retain exact request hashes, predecessor decisions,
+actor, reason and time in the existing run. Conflicting operation IDs or stale
+decision heads fail before mutation. Replaying an older exact decision reports
+its historical result without replacing a newer decision. Requests use the shared
+1 MiB bounded reader, including duplicate-key and optional exact-byte checks
+before project access. The command avoids execution setup and publishes the
+updated review; presentation failure preserves the saved decision.
 
 The run retains at most 500 typed work references. Existing bounded motion/sound
 evidence readers validate their exact operations, project ownership, original
@@ -37,5 +64,5 @@ admitted by retaining a request.
 
 Canonical head guards inspect canonical metadata directly. They do not regenerate
 the derived work view, scan application history or acquire a source/model
-capability. Report regeneration remains read-only. Generator 1.5 keeps older
-1.1 through 1.4 reports readable.
+capability. Report regeneration remains read-only. Generator 1.6 keeps older
+1.1 through 1.5 reports readable.
