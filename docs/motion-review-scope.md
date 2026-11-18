@@ -39,4 +39,25 @@ or transferred. Missing or damaged retained metadata leaves items stale and adds
 an explicit gap. Changing part of the visual assembly currently disables this
 reuse for the whole assembly; finer intersecting-item reuse remains separate work.
 
-Generator 1.7 keeps reports from 1.1 through 1.6 readable.
+## Report freshness
+
+A saved map is current only while its canonical heads and bounded review inputs
+still match. Generator 1.9 records the requested work, selected direction and
+review context separately from the canonical picture/audio basis. Sound work
+also binds the current validated catalogue generation, even when its existing
+work was already stale for another reason. Refreshing this report does not
+change canonical revisions, a valid compiled proof, or any approval.
+
+Native reports remember which proposal was explicitly requested. Currentness
+reconstructs that context from the project and retained metadata without media
+scans, source-byte hashing, model execution or report publication. An active
+request retains its frozen options; changed preferences affect future requests.
+An unfrozen default view becomes historical when its effective options change.
+Explicit preview context remains frozen, while current requested work and
+direction are rechecked. Damaged or unavailable current inputs leave the saved
+report readable as historical, with a warning.
+
+Reports from generators 1.1 through 1.8 remain readable. They lack the new
+freshness guarantee and are reported as historical. Regenerate a view to obtain
+its current basis. Historical status does not invalidate unchanged selected
+source media or transfer rendered, listening or creator acceptance.

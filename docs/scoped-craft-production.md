@@ -122,3 +122,15 @@ Preferences apply to future requests. Changing a project preference does not
 retarget a frozen partial request or enable another treatment for it. Inspection
 reads recorded metadata without changing canonical revisions or decisions.
 Source integrity is rechecked by the existing authoring/render boundaries.
+
+Saved reports also bind their requested work, selected direction and effective
+review context. An unbound default view follows current preferences; an active
+request retains its frozen options. Sound context follows validated catalogue
+metadata without scanning its sources. A changed or unverifiable review input
+marks the saved report historical and leaves its readable files available.
+
+Changing the selected chunks or refreshing a report does not revise the
+canonical timeline or invalidate an otherwise identical compiled proof.
+Picture/audio admission still requires its complete exact current dependencies.
+Generator 1.9 keeps older reports readable as historical views because they lack
+the complete current-context identity; it does not grant them current approval.

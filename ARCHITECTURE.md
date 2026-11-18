@@ -1220,6 +1220,17 @@ current schema files and validates its input document. Changed, missing or
 malformed references therefore invalidate parsed reuse without trusting file
 timestamps, caching validation results or refreshing media/review approvals.
 
+Motion-review generator 1.9 binds bounded requested-work and context identities
+separately from canonical picture/audio heads. Native reports record their
+explicit proposal origin and reconstruct current inputs through the same
+read-only pipeline context reader, reopening project preferences while retaining
+active frozen choices. Relevant sound context binds validated catalogue
+metadata. Missing or changed inputs retain historical report files without
+source analysis, canonical mutation or approval transfer. Older generators stay
+readable as historical views. Scope/report regeneration preserves an identical
+canonical ProofPlan; changed full proof dependencies still require normal
+reconstruction and owner review.
+
 Camera movement, face anchoring, sound matching, reference analysis, spoken
 notes/recovery and editor handoff are selected options resolved through existing
 settings scopes and frozen requests. Preferences seed future work and cannot
