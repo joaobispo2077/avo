@@ -1215,7 +1215,7 @@ class MotionAuthoringService:
                 "Selected proposal reference differs from contained metadata",
             )
         decision, decision_ref = self._selected_decision(selector, digest)
-        expected, applied = self._receipt_basis(result, selector)
+        expected, applied, committed = self._receipt_basis(result, selector)
         stale = (
             not _basis_matches(expected, self._heads())
             or result["proposal"]["directionRef"] != self._direction_ref()
@@ -1227,6 +1227,7 @@ class MotionAuthoringService:
             "decisionRef": decision_ref,
             "selectionRef": deepcopy(selector),
             "applied": applied,
+            "committedHeads": committed,
             "warnings": ["Selected proposal basis changed"] if stale else [],
         }
 
@@ -1248,7 +1249,7 @@ class MotionAuthoringService:
     def _receipt_basis(self, result, selector):
         expected = deepcopy(result["proposal"]["basisHeads"])
         if not selector.get("receiptRef"):
-            return expected, False
+            return expected, False, {}
         receipt, reference = self._load(
             "receipts", selector["receiptRef"]["sha256"], "receipt"
         )
@@ -1263,7 +1264,7 @@ class MotionAuthoringService:
             )
         self._verify_committed_receipt(receipt)
         expected.update(receipt["committedHeads"])
-        return expected, receipt["state"] == "committed"
+        return expected, receipt["state"] == "committed", receipt["committedHeads"]
 
     def _verify_committed_receipt(self, receipt):
         request, _ = self._load(
@@ -1315,6 +1316,8 @@ class MotionAuthoringService:
             )
         return {
             "proposal": proposal,
+            "appliedHeads": deepcopy(shown.get("committedHeads") or {}),
+            "proposalStale": shown.get("status") == "stale",
             "options": proposal.get("options", {}),
             "advisories": MotionAuthoringService._advisories(proposal.get("items", [])),
             "direction": deepcopy(

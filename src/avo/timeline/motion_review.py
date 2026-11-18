@@ -15,6 +15,7 @@ from .motion_metadata import (
     MAX_DOCUMENT_BYTES,
     METADATA_LIMITS,
     MotionReviewError,
+    _basis_matches,
     _check_budget,
 )
 from .motion_sound_review import (
@@ -25,7 +26,7 @@ from .motion_sound_review import (
 from .store import atomic_write_json
 from .workspace import ARTIFACTS
 
-GENERATOR = {"id": "avo.motion-review", "version": "1.3.0"}
+GENERATOR = {"id": "avo.motion-review", "version": "1.4.0"}
 MAX_ITEMS = 500
 LIFECYCLE = ("preEntry", "entrance", "hold", "payoff", "exit")
 CONCEPT_TEXT_FIELDS = {
@@ -449,6 +450,8 @@ def _context(context, gaps):
         key: _object(context, key, gaps) for key in ("direction", "options", "proposal")
     }
     result["proposal"] = result["proposal"] or {}
+    result["appliedHeads"] = _applied_heads(context, gaps)
+    result["proposalStale"] = context.get("proposalStale", False) is not False
     result["soundProposal"] = sound_review_context(context.get("soundProposal"), gaps)
     result["pendingRevisions"] = _pending(context, gaps)
     result["advisories"] = _advisories(context, gaps)
@@ -456,6 +459,21 @@ def _context(context, gaps):
     result["coverageUnavailable"] = unavailable
     result["proposalDefinitionCount"] = proposal_count
     return result
+
+
+def _applied_heads(context, gaps):
+    value = context.get("appliedHeads", {})
+    try:
+        validate_document(
+            value,
+            "avo.motion-proposal.schema.json#/$defs/receipt/properties/committedHeads",
+        )
+        if set(value) - {"bmap", "tracks", "animation"}:
+            raise ValueError("Applied motion names a different canonical owner")
+    except (ValueError, TypeError, RecursionError):
+        gaps.append("context:appliedHeads:invalid")
+        return {}
+    return deepcopy(value)
 
 
 def _advisories(context, gaps):
@@ -524,12 +542,36 @@ def _component_reference(data):
     return identifiers[0] if len(identifiers) == 1 else None
 
 
-def _project_items(proposal, snapshots, heads, gaps, sound_context=None):
+def _proposal_basis_stale(proposal, heads, applied_heads, selected_stale):
+    if selected_stale:
+        return True
+    expected = proposal.get("basisHeads")
+    if expected is None:
+        return False
+    try:
+        validate_document(
+            expected, "avo.motion-review.schema.json#/properties/basisHeads"
+        )
+    except (ValueError, TypeError, RecursionError):
+        return True
+    return not _basis_matches({**expected, **(applied_heads or {})}, heads)
+
+
+def _project_items(
+    proposal,
+    snapshots,
+    heads,
+    gaps,
+    sound_context=None,
+    *,
+    applied_heads=None,
+    proposal_stale=False,
+):
     groups = _combined(proposal, snapshots, gaps)
     add_sound_groups(groups, sound_context)
-    stale = _stale(snapshots, heads)
-    if proposal.get("basisHeads") is not None and proposal["basisHeads"] != heads:
-        stale = True
+    stale = _stale(snapshots, heads) or _proposal_basis_stale(
+        proposal, heads, applied_heads, proposal_stale
+    )
     sections = {
         name: index
         for index, name in enumerate(
@@ -707,7 +749,13 @@ class MotionReviewService:
             gaps.append({"kind": "sound-proposal-owner-mismatch"})
             context["soundProposal"] = None
         pairs, counts, stale = _project_items(
-            context["proposal"], snapshots, heads, gaps, context["soundProposal"]
+            context["proposal"],
+            snapshots,
+            heads,
+            gaps,
+            context["soundProposal"],
+            applied_heads=context["appliedHeads"],
+            proposal_stale=context["proposalStale"],
         )
         items, cards = [pair[0] for pair in pairs], [pair[1] for pair in pairs]
         snapshot = {
