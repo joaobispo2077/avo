@@ -1183,6 +1183,15 @@ report publisher. The ordinary pipeline flow remains behind its existing handler
 Unknown scope, stale decision heads, unavailable evidence and partial publication
 block decisions. Applied contributions require their canonical revision owners.
 
+`timeline.motion_scope` provides pure exact visual comparisons after audio-only
+revisions. Motion review verifies retained canonical metadata with the existing
+contained, bounded, schema/hash/reader checks; recorded source/sync identities,
+selected direction and the exact Animation revision remain required. Applied
+timed visual items can retain direction while the full proposal, composite and
+Animation remain stale. No media caching or evidence/approval transfer is added.
+Changed visual assembly currently blocks this reuse for the whole assembly.
+See [`docs/motion-review-scope.md`](docs/motion-review-scope.md).
+
 Camera movement, face anchoring, sound matching, reference analysis, spoken
 notes/recovery and editor handoff are selected options resolved through existing
 settings scopes and frozen requests. Preferences seed future work and cannot

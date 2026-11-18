@@ -89,7 +89,7 @@ malformed or foreign-project context is reported as a gap. Sound links never
 extend a visual cue's timing. Default inspection stays read-only and needs no
 source hashing, decoding or model. Presentation failure keeps valid publication
 and returns a warning. Reports from generator versions 1.1 through 1.3 remain
-readable alongside the current 1.6 generator, including older 1.4/1.5 reports.
+readable alongside the current 1.7 generator, including older 1.4/1.5/1.6 reports.
 
 An applied motion plan projects against its verified committed heads while
 preserving the immutable proposal's original planning basis. Its own publication
@@ -97,6 +97,12 @@ therefore remains current for subsequent sound suggestions. Changed canonical
 revisions, stale dependencies or changed selected direction still require review;
 neither a regenerated map nor an application receipt supplies rendered or
 listening acceptance.
+
+After an audio-only revision, exact unchanged visual direction remains available
+for another sound proposal. Retained canonical metadata, current recorded source
+and sync identities, picture tracks, cues, Animation and direction must qualify.
+The complete proposal/report and canonical Animation can still be stale; no
+rendered or listening approval transfers. See [motion review scope](motion-review-scope.md).
 
 Recoverable errors include the exact receipt reference, actual committed heads
 and publication state. `recovery-needed` requires reconciliation of the saved
