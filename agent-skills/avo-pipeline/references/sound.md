@@ -142,6 +142,14 @@ gain and schedule; live source checks, combined peak, speech masking and actual
 contextual listening remain review obligations. Choice preparation alone does
 not publish canonical audio.
 
+`overlapping-sounds` additionally identifies scheduled overlapping pairs, their
+roles and exact rational intervals in seconds. The report includes pre-roll and
+selected tails, preserves each native output sample rate and excludes touching
+ranges/silence/unresolved fits. It shows at most 64 pairs plus explicit truncation
+counts. `assessment: "timing-only"` is not measured masking or clipping; do not
+auto-change levels or claim mix acceptance from it. Per-ID application includes
+the retained selected siblings in this report.
+
 The native proof graph compiler can qualify frozen choices using the existing
 source-native audio path. It keeps the full program clock during window renders,
 emits one contribution per stable event, and rejects conflicting replay, source

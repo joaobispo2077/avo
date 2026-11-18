@@ -40,6 +40,20 @@ remain intact. Multi-effect groups require the exact ordered event list.
 Adding a second effect cannot borrow approval from a preserved ordinary single
 effect: changing that effect's context requires explicit reselection.
 
+Selection reports compare every retained fitted sound's scheduled audio range,
+including its pre-roll and complete selected tail. `overlapping-sounds` names
+both event IDs and their selected main/bass/support/detail/tail roles, with an
+exact rational interval in seconds. Different output sample rates are converted
+to their own time bases before comparing ranges or impact collisions. Touching
+half-open ranges, silence and unresolved fits do not count as overlaps.
+
+Overlap reporting is bounded to 64 pairs with an explicit shown/total count when
+truncated. Its `timing-only` assessment is a prompt for review; it does not claim
+audible masking, clipping or unsuitable layering. Source gain, fades, routing,
+ducking and approval stay unchanged. Combined peak, dialogue masking and
+contextual listening remain required, including for a per-ID update that retains
+other selected sounds.
+
 An explicit silence choice can also retire a previously owned event whose visual
 anchor is now absent or unresolved. The receipt retains its historical timing
 only to identify the removal, without scheduling playback on the new programme.

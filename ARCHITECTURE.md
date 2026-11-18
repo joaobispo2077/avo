@@ -1110,6 +1110,13 @@ producer identity includes the sound anchor, admission, fitting and compilation
 sources; packaged engines continue to bind their executable bytes. This adds no
 timing owner, decoder, model or approval path.
 
+Sound choice advisories compare exact native-sample schedules as rational time,
+including retained siblings during per-ID publication. A bounded sweep reports
+overlapping event/role pairs and their half-open intervals with explicit report
+truncation. Equal-time impact comparisons also respect each output sample rate.
+These data-only observations leave source signal, gain/fades/ducking and frozen
+choice identities unchanged; they establish no masking measurement or approval.
+
 Selected sound Tracks carry a strict source/choice/cue/request binding and require
 the `sound-selection-v1` reader capability. Generic publication atomically updates
 the Tracks index to version 2 with its revision reference; unchanged legacy reads
