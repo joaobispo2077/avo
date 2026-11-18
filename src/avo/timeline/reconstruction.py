@@ -403,6 +403,9 @@ def _required_files(
     required.update(_human_final_inputs(raw_dir))
     if workspace is not None:
         required.update(_motion_evidence_files(workspace))
+        from .preparation_retention import retained_preparation_files
+
+        required.update(retained_preparation_files(workspace))
         _retain_sound_files(raw_dir, required, workspace)
     for artifact in canonical:
         for ref in _head_media_refs(raw_dir, artifact):

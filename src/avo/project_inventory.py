@@ -437,8 +437,10 @@ def _fallback_reconstruction_metadata(raw_dir, timeline, workspace):
     paths.extend(_retained_import_metadata(workspace, timeline))
     if workspace is not None:
         from avo.timeline.motion_retention import retained_motion_paths
+        from avo.timeline.preparation_retention import retained_preparation_files
 
         paths.extend(retained_motion_paths(workspace))
+        paths.extend(retained_preparation_files(workspace))
     elif any(
         (raw_dir / "edit/motion" / name).exists()
         for name in ("proposals", "decisions", "receipts", "applications")
