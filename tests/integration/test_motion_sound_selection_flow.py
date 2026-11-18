@@ -58,7 +58,14 @@ def test_applied_motion_keeps_its_verified_basis_for_current_sound_opportunities
         sound_request
     )
     assert candidate["proposal"]["opportunities"][0]["recommendation"] == "audition"
-    assert TimelinePipeline(workspace).motion_plan() == snapshot
+    after = TimelinePipeline(workspace).motion_plan()
+    for key in ("basisHeads", "items", "storyboardCards", "lanes"):
+        assert after[key] == snapshot[key]
+    assert after["pendingRevisions"][:-1] == snapshot["pendingRevisions"]
+    pending = after["pendingRevisions"][-1]
+    assert pending["kind"] == "sound"
+    assert pending["status"] == "awaiting-selection"
+    assert pending["proposalRef"] == candidate["proposalRef"]
     AnimationService(workspace).author(
         strategy(), actor="creator", reason="A different canonical motion revision"
     )
