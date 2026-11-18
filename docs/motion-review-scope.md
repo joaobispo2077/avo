@@ -20,6 +20,12 @@ timing, picture order, camera or other visual setting keeps the direction stale.
 Only applied items with canonical visual cues qualify; untimed and unapplied
 concepts cannot gain applied status through this comparison.
 
+A unique explicit proposal `cueId` can associate a legacy canonical cue that
+does not carry `contentRef.itemId`. Reuse uses the same identity rules as the
+map and storyboard. Explicit canonical identity remains authoritative;
+conflicting claims block every affected item, including another clean part of
+an item with a conflicting split. This does not relax visual dependency checks.
+
 The overall motion proposal and report readiness remain stale when their full
 canonical basis changes. Animation's canonical stale state is preserved, and its
 owner must reconcile it before rendering or approval. The map's unchanged visual
