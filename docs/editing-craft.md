@@ -108,8 +108,9 @@ avo cli sfx search --project <absolute avo.project.json> --request <absolute sea
 ```
 
 Scans and annotations require the expected catalogue generation and actor/reason.
-Source measurements stay separate from curated tags, favorites, variant groups,
-rights evidence and reviewed perceptual markers. A measured peak is an anchor
+Source measurements stay separate from curated descriptions, categories, tags,
+favorites, variant groups, rights evidence and reviewed perceptual markers.
+A measured peak is an anchor
 candidate, not a listening decision. Changed source bytes leave existing manual
 decisions visibly stale instead of silently carrying them forward.
 
@@ -118,11 +119,20 @@ Spectral centroid uses Hz; attack/decay use seconds; audition ranges and marker
 candidates use native source samples. Curation and favorites stay project-local;
 shared provider promotion remains pending its explicit scoped route.
 
-Descriptor search uses saved names, tags and measured filters, explains matches,
+Descriptor search uses saved names, descriptions, categories, material and tags
+alongside measured filters, explains matches,
 and returns bounded audition ranges, source/entry identities, rights and analysis
 coverage. It does not decode sources or load a model. `show` returns paginated
 excerpts and a complete local catalogue link; search cursors bind the exact query,
 filters, mode and generation. No-match is a normal result.
+
+Optional `curation.description` and `curation.category` accept up to 512 characters
+each through the existing annotation request. Set either to `null` to clear it.
+The optional search filter `{"category":"interface"}` selects that exact curated
+category in descriptor or semantic mode. Older entries without these fields
+remain searchable. Annotation creates a new catalogue generation while retaining
+the unchanged audio measurements and rights. These labels express creator intent;
+they are not acoustic measurements or permission to use an asset.
 
 `sfx search-semantic` is an explicit separate model-execution operation with its
 own MCP tool. It requires separately provisioned paired local audio/text model

@@ -57,7 +57,7 @@ immutable generation and exposes incomplete coverage/resume. It never renames,
 moves, trims or normalizes library sources and never calls footage organization.
 `show --offset <n> --limit <1..100>` returns an excerpt plus complete local link.
 
-Record tags/material/favorites/variant groups, rights evidence and reviewed markers
+Record descriptions/categories/tags/material/favorites/variant groups, rights evidence and reviewed markers
 with `sfx annotate` against the exact generation. Favorites stay project-scoped;
 provider promotion is unavailable in this increment and requires the later scoped
 promotion route. Identical audio bytes can share
@@ -65,6 +65,12 @@ measurements while separate locators retain different rights/notes. Unknown or
 stale rights remain unresolved; search inclusion is not permission to publish.
 Present result reasons, native sample audition range, source identity and coverage
 before selection. Do not treat a detected attack as a reviewed perceptual marker.
+
+Curated descriptions and categories also contribute descriptor query tokens.
+Use an exact `category` filter to narrow a selected sound family. Both optional
+annotation fields are limited to 512 characters and can be cleared with `null`.
+They remain creator labels; they do not establish measured material, rights or
+listening acceptance. Existing entries without those labels need no migration.
 
 Descriptor `sfx search` reads saved metadata only and may correctly return no-match
 or silence. Use explicit `sfx search-semantic` only for selected model execution

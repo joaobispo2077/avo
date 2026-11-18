@@ -1049,6 +1049,13 @@ source/measurement and current annotation identities. It creates no source reads
 canonical timing, selection, gain policy or listening approval. Publication and
 encoded contextual qualification belong to their existing owners.
 
+Optional catalogue descriptions and categories extend the existing strict
+curation contract. Generic annotation revision/expected-generation controls
+remain authoritative; descriptor ranking includes those labels and shared
+eligibility enforces exact category filters for descriptor and semantic modes.
+Missing fields preserve legacy entries without migration. No new index, runtime,
+source analysis, rights claim or provider promotion follows from these labels.
+
 Explicit sound proposals now reuse `MotionAuthoringService` head guards and
 `PipelineRunStore` option freezing, with strict bounded intent/proposal contracts
 and immutable metadata below `edit/motion/sound/`. The timeline service derives
