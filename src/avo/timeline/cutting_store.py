@@ -2,16 +2,18 @@
 
 from __future__ import annotations
 
+import errno
 import os
 from contextlib import contextmanager
 from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
-from .contracts import ContractError, content_hash
+from .contracts import ContractError, content_hash, validate_document
 from .cutting_contracts import (
     make_document,
     same_original_occurrence,
+    source_interval,
     validate_cutting_document,
     validate_original_binding,
 )
@@ -35,7 +37,7 @@ def _same_budget(payload, identities, bindings):
 
 
 @contextmanager
-def _exclusive_lock(path: Path):
+def _exclusive_lock(path: Path, *, blocking=True):
     """OS-owned advisory lock: process exit releases it without stale sentinels."""
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a+b") as stream:
@@ -46,11 +48,22 @@ def _exclusive_lock(path: Path):
                 stream.write(b"\0")
                 stream.flush()
             stream.seek(0)
-            msvcrt.locking(stream.fileno(), msvcrt.LK_LOCK, 1)
+            try:
+                msvcrt.locking(
+                    stream.fileno(), msvcrt.LK_LOCK if blocking else msvcrt.LK_NBLCK, 1
+                )
+            except OSError as error:
+                if not blocking and error.errno in {errno.EACCES, errno.EAGAIN}:
+                    raise BlockingIOError(
+                        "recovery interval is already running"
+                    ) from error
+                raise
         else:
             import fcntl
 
-            fcntl.flock(stream.fileno(), fcntl.LOCK_EX)
+            fcntl.flock(
+                stream.fileno(), fcntl.LOCK_EX | (0 if blocking else fcntl.LOCK_NB)
+            )
         try:
             yield
         finally:
@@ -250,3 +263,181 @@ class CuttingStore:
                 expected_head_hash=expected_head_hash,
             )
             return outcome
+
+    def recovery_request(self, operation_id):
+        for reference in self._snapshot().get("preparationRequests", []):
+            document = self.load_document(reference)
+            if document["payload"]["input"]["operationId"] == operation_id:
+                return reference, document
+        return None
+
+    def _append_preparation(self, snapshot, actor, reason):
+        self._initialize()
+        self.ledger.append_revision(
+            snapshot=snapshot,
+            actor=actor,
+            reason=reason,
+            expected_head_hash=self.head_hash(),
+        )
+
+    def register_recovery(self, document):
+        document = validate_cutting_document(document, "speech-recovery-request")
+        request = document["payload"]["input"]
+        with _exclusive_lock(self.directory / ".repair-ledger.lock"):
+            existing = self.recovery_request(request["operationId"])
+            if existing:
+                if (
+                    existing[1]["payload"]["requestHash"]
+                    != document["payload"]["requestHash"]
+                ):
+                    raise CuttingStoreError(
+                        "recovery operation ID changes request identity"
+                    )
+                return existing[0]
+            snapshot = self._snapshot()
+            reference = self.save_document(document)
+            snapshot.setdefault("preparationRequests", []).append(reference)
+            self._append_preparation(
+                snapshot, request["actor"], "register selected speech recovery"
+            )
+            return reference
+
+    def recovery_attempt(self, request_ref, interval_index):
+        for reference in self._snapshot().get("preparationAttempts", []):
+            document = self.load_document(reference)
+            payload = document["payload"]
+            if (
+                payload["requestRef"] == request_ref
+                and payload["intervalIndex"] == interval_index
+            ):
+                return reference, document
+        return None
+
+    @contextmanager
+    def recovery_interval_lock(self, request_ref, interval_index):
+        identity = content_hash([request_ref, interval_index])
+        with _exclusive_lock(
+            self.directory / "preparation-locks" / (identity + ".lock"), blocking=False
+        ):
+            yield
+
+    @staticmethod
+    def _recovery_budget_source(binding):
+        return {
+            "sha256": binding["sourceRef"]["sha256"],
+            "streamIndex": binding["routing"]["streamIndex"],
+            "channels": sorted(binding["routing"]["channels"]),
+        }
+
+    def _prior_recoveries(self, source, interval):
+        _, first, end = source_interval(interval)
+        found = []
+        for reference in self._snapshot().get("preparationAttempts", []):
+            payload = self.load_document(reference)["payload"]
+            if payload["budgetSource"] != source:
+                continue
+            _, start, last = source_interval(payload["sourceRange"])
+            if max(first, start) < min(end, last):
+                found.append(reference)
+        return found
+
+    def claim_recovery(self, request_ref, interval_index):
+        with _exclusive_lock(self.directory / ".repair-ledger.lock"):
+            if request_ref not in self._snapshot().get("preparationRequests", []):
+                raise CuttingStoreError(
+                    "recovery request has no committed registration"
+                )
+            existing = self.recovery_attempt(request_ref, interval_index)
+            if existing:
+                return existing[0], existing[1], False
+            frozen = self.load_document(request_ref)["payload"]
+            request = frozen["input"]
+            if type(interval_index) is not int or not 0 <= interval_index < len(
+                request["ranges"]
+            ):
+                raise CuttingStoreError(
+                    "recovery interval index is outside its request"
+                )
+            interval = request["ranges"][interval_index]
+            source = self._recovery_budget_source(frozen["binding"])
+            prior = self._prior_recoveries(source, interval)
+            limit = request["selection"]["effective"]["speechRecovery"][
+                "maxAttemptsPerInterval"
+            ]
+            if len(prior) >= limit:
+                raise CuttingStoreError("speech recovery attempt budget is exhausted")
+            document = make_document(
+                "speech-recovery-attempt",
+                {
+                    "requestRef": request_ref,
+                    "intervalIndex": interval_index,
+                    "sourceRange": interval,
+                    "sourceRef": frozen["binding"]["sourceRef"],
+                    "budgetSource": source,
+                    "ordinal": len(prior) + 1,
+                    "actor": request["actor"],
+                    "reservedAt": self.clock(),
+                },
+            )
+            reference = self.save_document(document)
+            snapshot = self._snapshot()
+            snapshot.setdefault("preparationAttempts", []).append(reference)
+            self._append_preparation(
+                snapshot,
+                request["actor"],
+                "claim bounded speech recovery before inference",
+            )
+            return reference, document, True
+
+    def recovery_result(self, attempt_ref):
+        import json
+
+        validate_document(attempt_ref, "avo.cutting.schema.json#/$defs/artifactRef")
+        if attempt_ref not in self._snapshot().get("preparationAttempts", []):
+            raise CuttingStoreError("recovery result lookup has no committed attempt")
+        path = (
+            self.directory / "preparation-results" / (attempt_ref["sha256"] + ".json")
+        )
+        if not path.exists():
+            return None
+        with path.open("rb") as stream:
+            data = stream.read(4 * 1024 * 1024 + 1)
+        if len(data) > 4 * 1024 * 1024:
+            raise CuttingStoreError("speech recovery result exceeds its byte budget")
+        document = validate_cutting_document(json.loads(data), "speech-recovery-result")
+        if document["payload"]["attemptRef"] != attempt_ref:
+            raise CuttingStoreError("speech recovery result changed its owning attempt")
+        reference = {
+            "locator": path.relative_to(self.directory).as_posix(),
+            "sha256": content_hash(document),
+        }
+        return reference, document
+
+    def record_recovery_result(self, document):
+        document = validate_cutting_document(document, "speech-recovery-result")
+        payload = document["payload"]
+        with _exclusive_lock(self.directory / ".repair-ledger.lock"):
+            attempt_ref = payload["attemptRef"]
+            if attempt_ref not in self._snapshot().get("preparationAttempts", []):
+                raise CuttingStoreError("recovery result has no committed attempt")
+            attempt = self.load_document(attempt_ref)["payload"]
+            if any(
+                payload[key] != attempt[key]
+                for key in ("requestRef", "intervalIndex", "sourceRange")
+            ):
+                raise CuttingStoreError("recovery result changed its reserved scope")
+            frozen = self.load_document(payload["requestRef"])["payload"]
+            if payload["originalAnalysisRef"] != frozen["input"]["analysisRef"]:
+                raise CuttingStoreError("recovery result changed its original analysis")
+            locator = "preparation-results/" + attempt_ref["sha256"] + ".json"
+            # One deterministic immutable result is durable before ledger publication.
+            write_immutable_json(self.directory / locator, document)
+            reference = {"locator": locator, "sha256": content_hash(document)}
+            snapshot = self._snapshot()
+            references = snapshot.setdefault("preparationResults", [])
+            if reference not in references:
+                references.append(reference)
+                self._append_preparation(
+                    snapshot, attempt["actor"], "retain speech recovery pending review"
+                )
+            return reference

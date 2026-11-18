@@ -15,7 +15,10 @@
         "proposal",
         "verification",
         "decision",
-        "repair-reservation"
+        "repair-reservation",
+        "speech-recovery-request",
+        "speech-recovery-attempt",
+        "speech-recovery-result"
       ]
     },
     "payload": {
@@ -32,6 +35,9 @@
     "documentHash"
   ],
   "allOf": [
+    {"if": {"properties": {"documentType": {"const": "speech-recovery-request"}}}, "then": {"properties": {"payload": {"$ref": "avo.preparation.schema.json#/$defs/recoveryRequest"}}}},
+    {"if": {"properties": {"documentType": {"const": "speech-recovery-attempt"}}}, "then": {"properties": {"payload": {"$ref": "avo.preparation.schema.json#/$defs/recoveryAttempt"}}}},
+    {"if": {"properties": {"documentType": {"const": "speech-recovery-result"}}}, "then": {"properties": {"payload": {"$ref": "avo.preparation.schema.json#/$defs/recoveryResult"}}}},
     {
       "if": {
         "properties": {
@@ -432,6 +438,7 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
+        "recoveryContext": {"$ref": "avo.preparation.schema.json#/$defs/recoveryContext"},
         "sourceRef": {
           "$ref": "#/$defs/artifactRef"
         },
