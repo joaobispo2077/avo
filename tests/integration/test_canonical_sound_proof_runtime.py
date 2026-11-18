@@ -91,7 +91,7 @@ def recorded_program(tmp_path):
     return ws
 
 
-def reviewed_sound(ws, tmp_path):
+def reviewed_sound(ws, tmp_path, *, clock=None, phase=0.5):
     library = tmp_path / "library"
     library.mkdir()
     channel_impulses(library / "impact.wav")
@@ -125,12 +125,13 @@ def reviewed_sound(ws, tmp_path):
             "selection": resolve_editing_craft_selection(
                 invocation={"soundMatching": {"enabled": True}}
             ),
-            "clock": {
+            "clock": clock
+            or {
                 "frameRate": {"num": 24, "den": 1},
                 "sampleRate": 48000,
                 "programEndFrame": 24,
             },
-            "intents": [intent()],
+            "intents": [intent(phase=phase)],
         }
     )
     return service, {
@@ -239,3 +240,62 @@ def test_published_sound_reaches_the_normal_export_once_and_follows_real_dialogu
     assert abs((quiet - base)[marker, 0]) < abs(delta[marker, 0]) * 0.9
     np.testing.assert_allclose(quiet[:12000], base[:12000], atol=3e-7)
     assert request == original_request
+
+
+def test_fractional_canonical_programme_keeps_its_native_sound_clock(tmp_path):
+    from avo.timeline.event_clock import frame_to_sample
+
+    ws = recorded_program(tmp_path)
+    rate = {"num": 30000, "den": 1001}
+    request = initial_cut_proof_request(
+        ws,
+        iteration_id="iteration-0001",
+        output=ws.raw_dir / "edit" / "fractional.mkv",
+        frame_rate=rate,
+        width=128,
+        height=72,
+    )
+    request["checkpoint"] = "motion-proof"
+    request["output"].update(
+        conformance=True, videoCodec="ffv1", audioCodec="pcm_s32le"
+    )
+    service, selected = reviewed_sound(
+        ws,
+        tmp_path,
+        clock={"frameRate": rate, "sampleRate": 48000, "programEndFrame": 30},
+        phase=0.4,
+    )
+    compiler = ProofPlanCompiler(ws, default_proof_capability_registry())
+    renderer = TimelineRenderAdapter(proof_executor=execute_ffmpeg_proof)
+    clean = compiler.compile(request, regression_contract=regression_contract())
+    baseline = tmp_path / "fractional-base.mkv"
+    renderer.render_proof_plan(clean, baseline, window=None)
+    applied = service.apply(selected)
+    AnimationService(ws).author(strategy(), actor="fixture", reason="Current metadata")
+    plan = compiler.compile(request, regression_contract=regression_contract())
+    preflight = compiler.preflight(
+        plan,
+        media_inputs=canonical_proof_media_inputs(ws, plan),
+        tool_readiness={"ffmpeg": True, "proof-plan-executor": True},
+    )
+    assert preflight["status"] == "pass", preflight["blockers"]
+    full, window = tmp_path / "fractional-full.mkv", tmp_path / "fractional-window.mkv"
+    renderer.render_proof_plan(plan, full, window=None)
+    renderer.render_proof_plan(
+        plan, window, window={"startFrame": 5, "endFrameExclusive": 19}
+    )
+    original, mixed = _pcm(baseline), _pcm(full)
+    assert len(original) == len(mixed) == 48048
+    picture = pixels(full, 128, 72)
+    assert len(picture) == 30
+    np.testing.assert_array_equal(picture, pixels(baseline, 128, 72))
+    np.testing.assert_array_equal(pixels(window, 128, 72), picture[5:19])
+    impact = applied["receipt"]["choices"][0]["fit"]["event"]["resolvedImpactSample"]
+    assert int(np.argmax(np.abs((mixed - original)[:, 0]))) == impact
+    bounds = [
+        frame_to_sample(
+            frame, frame_rate_num=30000, frame_rate_den=1001, sample_rate=48000
+        )
+        for frame in (5, 19)
+    ]
+    np.testing.assert_allclose(_pcm(window), mixed[bounds[0] : bounds[1]], atol=3e-7)
