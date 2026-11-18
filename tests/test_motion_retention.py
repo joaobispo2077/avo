@@ -27,7 +27,7 @@ def selected_workspace(tmp_path):
     return workspace, proposed, selected, value
 
 
-def test_selected_predecessors_and_operation_evidence_are_exact_but_reports_disposable(
+def test_requested_predecessors_and_operation_evidence_are_exact_but_reports_disposable(
     tmp_path,
 ):
     from avo.timeline.motion_retention import retained_motion_paths
@@ -65,12 +65,12 @@ def test_selected_predecessors_and_operation_evidence_are_exact_but_reports_disp
     unrelated["operationId"] = "unselected-other"
     unrelated["proposal"]["items"][0]["concept"] = "Other option"
     other = MotionAuthoringService(workspace).propose(unrelated)
-    assert workspace.raw_dir / other["proposalRef"]["path"] not in set(
+    assert workspace.raw_dir / other["proposalRef"]["path"] in set(
         retained_motion_paths(workspace)
     )
     required = _required_files(workspace.raw_dir, [], workspace=workspace)
     assert paths <= set(required)
-    assert workspace.raw_dir / other["proposalRef"]["path"] not in required
+    assert workspace.raw_dir / other["proposalRef"]["path"] in required
     assert not any(
         path.is_relative_to(workspace.raw_dir / "edit/review/motion-plan")
         for path in required
