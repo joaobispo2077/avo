@@ -368,6 +368,17 @@ class PipelineRunStore:
                     "motion execution choice requires a request identity"
                 )
         _validate_craft_work(document)
+        from .craft_work_decisions import (
+            WorkDecisionError,
+            validate_work_decision_history,
+        )
+
+        try:
+            validate_work_decision_history(document)
+        except WorkDecisionError as error:
+            raise LifecycleError(
+                f"invalid requested-work decision history: {error}"
+            ) from error
 
     @serialized_timeline(lambda self: self.path.parent)
     def initialize(
@@ -541,6 +552,38 @@ class PipelineRunStore:
             deepcopy(work)
         )
         updated["updatedAt"] = self.clock()
+        return self._write(updated, expected_updated_at=current["updatedAt"])
+
+    @serialized_timeline(lambda self: self.path.parent)
+    def record_editing_craft_work_decision(self, request):
+        from copy import deepcopy
+
+        from .contracts import content_hash, validate_document
+
+        validate_document(
+            request, "avo.editing-craft-run.schema.json#/$defs/workDecisionRequest"
+        )
+        current = self.load()
+        records = (current.get("extensions") or {}).get("editingCraftWorkDecisions", [])
+        for record in records:
+            if record["request"]["operationId"] == request["operationId"]:
+                if record["request"] != request:
+                    raise LifecycleError(
+                        "work decision operation records different inputs"
+                    )
+                return current
+        updated = deepcopy(current)
+        timestamp = self.clock()
+        updated.setdefault("extensions", {}).setdefault(
+            "editingCraftWorkDecisions", []
+        ).append(
+            {
+                "request": deepcopy(request),
+                "requestHash": content_hash(request),
+                "createdAt": timestamp,
+            }
+        )
+        updated["updatedAt"] = timestamp
         return self._write(updated, expected_updated_at=current["updatedAt"])
 
     @serialized_timeline(lambda self: self.path.parent)

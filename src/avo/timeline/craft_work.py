@@ -2,6 +2,13 @@
 
 from copy import deepcopy
 
+from .craft_work_decisions import (
+    WorkDecisionError,
+    decorate_work_decisions,
+    find_work_decision,
+    require_decidable_work,
+    require_registered_work,
+)
 from .lifecycle import PipelineRunStore
 from .motion_metadata import _basis_matches
 
@@ -226,12 +233,14 @@ def project_craft_work(workspace, heads):
     path = workspace.pipeline_run_path
     if not path.exists() and not path.is_symlink():
         return [], []
-    rows, gaps, work = [], [], []
+    rows, gaps, work, decisions = [], [], [], []
     try:
         retained = _Retention(workspace)
         run, _ = retained.read(path)
         PipelineRunStore(path)._validate(run)
-        work = (run.get("extensions") or {}).get("editingCraftWork", [])
+        extensions = run.get("extensions") or {}
+        decisions = extensions.get("editingCraftWorkDecisions", [])
+        work = extensions.get("editingCraftWork", [])
         if not work:
             return [], []
         direction_ref = retained.service._direction_ref()
@@ -253,4 +262,41 @@ def project_craft_work(workspace, heads):
     except (OSError, ValueError, RuntimeError, KeyError, TypeError) as error:
         rows = [_unavailable_work(item) for item in work]
         gaps.append({"kind": "craft-work-unavailable", "detail": str(error)[:500]})
-    return rows, gaps
+    return decorate_work_decisions(rows, decisions), gaps
+
+
+def decide_craft_work(workspace, request):
+    from .command_registry import authorize
+    from .contracts import validate_document
+    from .motion_review import MotionReviewService
+    from .store import timeline_writer
+
+    try:
+        validate_document(
+            request, "avo.editing-craft-run.schema.json#/$defs/workDecisionRequest"
+        )
+        authorize("pipeline")
+        with timeline_writer(workspace.timeline_dir):
+            store = PipelineRunStore(workspace.pipeline_run_path)
+            run = store.load()
+            record = find_work_decision(run, request)
+            replayed = record is not None
+            if record is None:
+                require_registered_work(run, request["work"])
+                heads = MotionReviewService(workspace)._metadata(snapshots=False)[0]
+                rows, _ = project_craft_work(workspace, heads)
+                require_decidable_work(rows, request)
+                run = store.record_editing_craft_work_decision(request)
+                record = find_work_decision(run, request)
+        return {
+            "contractVersion": "1.0.0",
+            "operation": "work-decide",
+            "operationId": request["operationId"],
+            "status": "replayed" if replayed else "recorded",
+            "effect": "request-decision-write",
+            "decision": record,
+        }
+    except (ValueError, RuntimeError, OSError, KeyError, TypeError) as error:
+        if isinstance(error, WorkDecisionError):
+            raise
+        raise WorkDecisionError(str(error)) from error
