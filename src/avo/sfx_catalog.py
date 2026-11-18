@@ -762,6 +762,8 @@ def _eligible(entry, filters):
         or entry["curation"]["favorite"] == filters["favorite"],
         not filters.get("material")
         or entry["curation"]["material"] == filters["material"],
+        not filters.get("category")
+        or entry["curation"].get("category") == filters["category"],
         set(filters.get("tags", [])).issubset(entry["curation"]["tags"]),
     ]
     return all(checks) and _feature_filters(measured, filters)
@@ -794,7 +796,13 @@ def _rank(entries, query, filters):
             continue
         curated = entry["curation"]
         descriptors = " ".join(
-            [entry["relativePath"], curated["material"] or "", *curated["tags"]]
+            [
+                entry["relativePath"],
+                curated.get("description") or "",
+                curated.get("category") or "",
+                curated["material"] or "",
+                *curated["tags"],
+            ]
         )
         matched = sorted(tokens & _words(descriptors))
         if not tokens or len(matched) / len(tokens) < 0.5:

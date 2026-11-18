@@ -29,6 +29,7 @@
     "filters": {"type": "object", "additionalProperties": false, "properties": {
       "libraryIds": {"$ref": "#/$defs/strings"}, "rights": {"type": "array", "maxItems": 4, "uniqueItems": true, "items": {"enum": ["licensed", "unknown", "restricted", "stale"]}},
       "favorite": {"type": "boolean"}, "material": {"type": "string", "minLength": 1, "maxLength": 512}, "tags": {"$ref": "#/$defs/strings"},
+      "category": {"type": "string", "minLength": 1, "maxLength": 512},
       "minDurationSeconds": {"$ref": "#/$defs/number"}, "maxDurationSeconds": {"$ref": "#/$defs/number"}, "minCentroidHz": {"$ref": "#/$defs/number"}, "maxCentroidHz": {"$ref": "#/$defs/number"}, "maxAttackSeconds": {"$ref": "#/$defs/number"}
     }},
     "result": {

@@ -395,6 +395,12 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
+        "description": {
+          "$ref": "#/$defs/nullableText"
+        },
+        "category": {
+          "$ref": "#/$defs/nullableText"
+        },
         "material": {
           "$ref": "#/$defs/nullableText"
         },
