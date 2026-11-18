@@ -313,10 +313,13 @@ class _Retention:
             self.application(request["operationId"], content_hash(request))
 
     def run_record(self):
+        from .craft_work import load_craft_proposal
+        from .lifecycle import PipelineRunStore
+
         path = self.workspace.pipeline_run_path
         if path.exists() or path.is_symlink():
             run, _ = self.read(path)
-            validate_document(run, "avo.pipeline-run.schema.json")
+            PipelineRunStore(path)._validate(run)
             extensions = run.get("extensions") or {}
             frozen = (run.get("executionChoices") or {}).get("editingCraft")
             self.frozen_requests(
@@ -329,6 +332,8 @@ class _Retention:
                 self.selection(selected)
             for item in history:
                 self.selection(item)
+            for item in extensions.get("editingCraftWork", []):
+                load_craft_proposal(self, item)
 
     def frozen_requests(self, requests):
         for frozen in requests:
