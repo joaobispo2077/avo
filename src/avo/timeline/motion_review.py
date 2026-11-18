@@ -11,6 +11,7 @@ from importlib.resources import files
 from string import Template
 
 from .contracts import content_hash, document_hash_excluding, validate_document
+from .craft_work import project_craft_work
 from .motion_metadata import (
     MAX_DOCUMENT_BYTES,
     METADATA_LIMITS,
@@ -26,7 +27,7 @@ from .motion_sound_review import (
 from .store import atomic_write_json
 from .workspace import ARTIFACTS
 
-GENERATOR = {"id": "avo.motion-review", "version": "1.4.0"}
+GENERATOR = {"id": "avo.motion-review", "version": "1.5.0"}
 MAX_ITEMS = 500
 LIFECYCLE = ("preEntry", "entrance", "hold", "payoff", "exit")
 CONCEPT_TEXT_FIELDS = {
@@ -740,6 +741,9 @@ class MotionReviewService:
     def project(self, context=None):
         heads, snapshots, gaps = self._metadata()
         context = _context(context, gaps)
+        work, work_gaps = project_craft_work(self.workspace, heads)
+        context["pendingRevisions"].extend(work)
+        gaps.extend(work_gaps)
         provided_sound = context["soundProposal"]
         if provided_sound and (
             provided_sound["proposal"]["videoId"] != self.workspace.video_id
