@@ -171,3 +171,58 @@ def test_selected_track_reader_rechecks_explicit_ordered_stack_disposition(tmp_p
         )
     with pytest.raises(ValueError, match="one entry SFX"):
         validate_sound_tracks(snapshot["tracks"])
+
+
+def test_retiring_one_event_preserves_ordered_siblings_and_their_original_context(
+    tmp_path,
+):
+    internal, entry, request, proposal, shown, ref, _, snapshot = setup(tmp_path)
+    before = deepcopy(snapshot)
+    request["choices"] = request["choices"][:1]
+    request["choices"][0].update(entryId=None, trimRange=None, mix=None)
+    request["contexts"] = []
+    proposal["opportunities"] = []
+    proposal["clock"] = {**proposal["clock"], "programEndFrame": 1}
+    prepared = internal._choices(request, proposal, {"entries": [entry]}, snapshot)
+    removed = prepared["choices"][0]
+    assert removed["fit"]["status"] == "silence"
+    assert removed["fit"]["clock"]["programEndFrame"] > 1
+    assert prepared["changes"][0]["before"]["entryId"] == entry["entryId"]
+    assert prepared["changes"][0]["after"]["entryId"] is None
+    internal._authoring(request, shown, prepared, {}, snapshot, ref, {})
+    assert snapshot["tracks"]["videoTracks"] == before["tracks"]["videoTracks"]
+    assert snapshot["tracks"]["audioTracks"]["layers"] == [
+        before["tracks"]["audioTracks"]["layers"][0],
+        before["tracks"]["audioTracks"]["layers"][2],
+    ]
+    assert snapshot["bmap"]["cues"] == before["bmap"]["cues"][1:]
+    validate_sound_bindings(snapshot["bmap"], snapshot["tracks"])
+
+
+def test_unknown_unresolved_silence_cannot_retire_another_owned_event(tmp_path):
+    internal, entry, request, proposal, _, _, _, snapshot = setup(tmp_path)
+    before = deepcopy(snapshot)
+    request["choices"] = [
+        {"eventId": "unknown", "entryId": None, "trimRange": None, "mix": None}
+    ]
+    request["contexts"] = []
+    proposal["opportunities"] = []
+    with pytest.raises(SoundPlanningError, match="current resolved opportunity"):
+        internal._choices(request, proposal, {"entries": [entry]}, snapshot)
+    assert snapshot == before
+
+
+def test_absent_audio_cue_exception_is_limited_to_the_explicit_removed_event(tmp_path):
+    _, _, request, _, _, _, _, snapshot = setup(tmp_path)
+    snapshot["bmap"]["cues"].pop(0)
+    with pytest.raises(ValueError, match="exact BMap audio cue"):
+        validate_sound_bindings(snapshot["bmap"], snapshot["tracks"])
+    validate_sound_bindings(
+        snapshot["bmap"],
+        snapshot["tracks"],
+        removing_event_ids={request["choices"][0]["eventId"]},
+    )
+    with pytest.raises(ValueError, match="exact BMap audio cue"):
+        validate_sound_bindings(
+            snapshot["bmap"], snapshot["tracks"], removing_event_ids={"second"}
+        )
