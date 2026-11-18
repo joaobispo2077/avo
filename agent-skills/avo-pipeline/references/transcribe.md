@@ -50,5 +50,13 @@ Partial observation and unreliable word timing remain visible for review.
 Unresolved source intervals protect retake rejection through the existing cutting
 policy. The report does not replace a transcript or grant cut approval. Coverage
 inspection starts no decode, ASR or alignment and does not bypass this stage's
-cache rule. Selected recovery, evidence decisions and dedicated preparation
-commands remain separate work. See [source speech coverage](../../../docs/speech-coverage.md).
+cache rule. `avo preparation coverage --project <absolute manifest> --request
+<absolute request> --json` reinspects an exact retained analysis using metadata
+only. Explicit `preparation recover` freezes selected source intervals, language
+and enabled recovery options, consumes a durable attempt before local inference
+and preserves the original/recovered alternatives for review. Defaults are one
+attempt per interval, 30 seconds per interval and 120 seconds total; oversized
+scopes are rejected without clipping. Missing alignment preserves recovered text
+without exact word anchors or safe-cut certification. Restart reuses evidence;
+interrupted attempts do not run again automatically. Evidence selection and cut
+approval remain separate gates. See [source speech coverage](../../../docs/speech-coverage.md).

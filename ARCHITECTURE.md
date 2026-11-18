@@ -1277,8 +1277,27 @@ missing facts remain unavailable rather than an empty measured result. Outward
 source-tick uncertainty feeds the existing retake protection policy without a
 second timing owner or an automatic transcript/cut decision. Explicit editorial
 and pause-verification flows retain their current boundaries. Cutting producer
-identity includes the inspector and preparation schema; ASR recovery, evidence
-selection and dedicated preparation commands remain separate work.
+identity includes the inspector and preparation schema.
+
+`timeline.preparation_recovery` freezes explicit source intervals and existing
+editing-craft recovery limits in typed cutting documents. The existing cutting
+journal serializes durable requests and source-stable attempt claims before
+inference. OS-owned per-interval locks prevent duplicate concurrent execution;
+immutable deterministic results survive interruption before journal publication.
+Exact replay reuses evidence while changed source/routing/Sync/original analysis,
+model or producer identities retain stale results without automatic retry.
+`CuttingAnalysisAdapter.recover` reuses routed native extraction, the existing
+local transcriber and optional isolated alignment. Actual source offsets and
+reduced context remain explicit; unavailable alignment preserves text without
+word-exact authority. No transcript replacement or CMap approval is granted.
+
+`preparation_cli` and the model-tool bridge expose metadata-only coverage and an
+explicit selected recovery operation. Coverage constructs no model adapter and
+does not verify source bytes. Recovery confirmation binds exact bounded request
+bytes. `timeline.preparation_retention` verifies a bounded transitive journal
+closure for reconstruction and fallback inventory, including unpublished durable
+results, without retaining extracted PCM or unreferenced drafts. Alternative
+selection and downstream cut-evidence integration remain separate work.
 
 Camera movement, face anchoring, sound matching, reference analysis, spoken
 notes/recovery and editor handoff are selected options resolved through existing

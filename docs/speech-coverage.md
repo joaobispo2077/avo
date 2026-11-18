@@ -42,5 +42,46 @@ Tests cover omitted takes, false acoustic positives, exact source/routing/Sync
 binding, partial/unmeasured ranges, unreliable timing, native-tick protection,
 immutable persistence and retake guards. Encoded synthetic fixtures use declared
 word labels and native audio verification; they do not qualify actual ASR or
-creator listening. Selected ASR recovery, evidence decisions and the dedicated
-preparation commands remain separate implementation work.
+creator listening. Evidence selection and cut approval retain separate gates.
+
+## Selected speech recovery
+
+`avo cli preparation coverage --project <absolute avo.project.json> --request
+<absolute coverage.json> --json` reads the exact retained `analysisRef` against
+current source, routing and Sync metadata. The request contains
+`contractVersion: "1.0.0"`, `operation: "coverage"` and that reference. This read
+does not hash source media, decode, inspect model readiness or initialize a
+journal. Native and MCP coverage expose the same metadata.
+
+`avo cli preparation recover` uses an explicit typed request with
+`operation: "recover"`, a unique `operationId`, `actor`, `reason`, the original
+`analysisRef`, source-native `ranges`, an explicitly enabled frozen editing-craft
+`selection` and `language`. The direct engine alias is `avo preparation`.
+Resolve the existing `speechRecovery` options before creating the request.
+Defaults allow one attempt per interval, 30 seconds per interval and 120 seconds
+total. Overlapping or oversized selected ranges are rejected before inference;
+AVO never clips them silently. Explicit larger validated limits are recorded in
+the request. Renaming an operation or changing a model does not reset a started
+interval's physical-source attempt budget.
+
+Recovery reuses the selected local transcription model, routed dialogue PCM and
+available separately configured alignment. It does not download or switch models.
+The crop reduces context to the selected interval, with previous-text conditioning
+and ASR VAD filtering disabled through the existing `transcribe_audio` behavior.
+The result records actual source offset, measured coverage, source/routing/Sync,
+model/runtime, extraction and execution identities. Recovered text remains
+reviewable when alignment is missing; it cannot certify exact word anchors or
+safe cuts. A pending result is a proposal, not an approved transcript or edit.
+
+The existing cutting journal retains immutable requests, pre-inference claims and
+original/recovered alternatives. Exact replay reuses evidence. A crashed claimed
+attempt stays interrupted until an explicit new authorized attempt is requested;
+it never starts another transcription automatically. Changed original evidence,
+source, routing, Sync, model or implementation makes the result stale. Competing
+identical operations cannot run the same interval twice.
+
+Reconstruction and fallback inventory verify the journal's bounded exact document
+closure, including a durable result whose journal publication was interrupted.
+Missing or changed dependencies block reconstruction. Temporary extracted PCM
+and unrelated documents are not added to this closure. Human selection between
+alternatives and its downstream cutting integration remain implementation work.
