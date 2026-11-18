@@ -52,6 +52,8 @@ def add_plan_parsers(subparsers) -> None:
             parser.add_argument("--request-sha256")
         if operation == "plan-show":
             parser.add_argument("--proposal-hash")
+        if operation in {"plan-show", "plan-publish"}:
+            parser.add_argument("--scope-request", type=Path)
 
 
 def run_craft_command(args) -> int:
@@ -155,6 +157,18 @@ def run_work_decision_command(args) -> int:
     return 0
 
 
+def _read_scope_request(args):
+    path = getattr(args, "scope_request", None)
+    if path is None:
+        return None
+    from avo.editing_craft_requests import read_craft_request
+    from avo.timeline.craft_scope import validate_scope_request
+
+    value = read_craft_request(path)
+    validate_scope_request(value)
+    return value
+
+
 def run_plan_command(args) -> int:
     from avo.editing_craft import EditingCraftError
     from avo.timeline.contracts import ContractError
@@ -165,16 +179,19 @@ def run_plan_command(args) -> int:
     try:
         if not args.project.is_absolute():
             raise ValueError("Project manifest path must be absolute.")
+        scope_request = _read_scope_request(args)
         workspace = TimelineWorkspace.from_project(
             args.project, video_id=args.video_id or None
         )
         pipeline = TimelinePipeline(workspace)
+        options = {} if scope_request is None else {"scope_request": scope_request}
         if args.animation_command == "plan-publish":
-            result = pipeline.publish_motion_plan()
+            result = pipeline.publish_motion_plan(**options)
             value = {**result, "effect": "derived-write"}
         else:
             snapshot = pipeline.motion_plan(
-                proposal_hash=getattr(args, "proposal_hash", None)
+                proposal_hash=getattr(args, "proposal_hash", None),
+                **options,
             )
             value = {
                 "snapshot": snapshot,

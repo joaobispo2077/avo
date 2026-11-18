@@ -322,7 +322,10 @@ def _core_bridge_defs() -> list[BridgeToolDef]:
             "plan-show",
             "Read-only current motion map, linked storyboard and lane readiness; "
             "never initializes canonical state, publishes reports or runs media/models.",
-            extra_params=(ParamSpec("proposal_hash", str | None, default=None),),
+            extra_params=(
+                ParamSpec("proposal_hash", str | None, default=None),
+                ParamSpec("scope_request", str | None, default=None),
+            ),
         ),
         _tool(
             "avo_animation_plan_publish",
@@ -330,6 +333,7 @@ def _core_bridge_defs() -> list[BridgeToolDef]:
             "plan-publish",
             "Writes immutable derived motion-map/storyboard review files for the "
             "current basis; does not change canonical edits or grant approval.",
+            extra_params=(ParamSpec("scope_request", str | None, default=None),),
         ),
         _tool(
             "avo_animation_options_show",

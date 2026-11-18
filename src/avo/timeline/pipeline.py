@@ -420,7 +420,11 @@ class TimelinePipeline:
         return {**shown, "stageContexts": contexts, "motionPlan": motion_plan}
 
     def motion_plan(
-        self, *, proposal_hash: str | None = None, sound_proposal=None
+        self,
+        *,
+        proposal_hash: str | None = None,
+        sound_proposal=None,
+        scope_request=None,
     ) -> dict[str, Any]:
         """Project current motion metadata without initializing an editorial record."""
         from avo.direction.brief import BriefService
@@ -460,13 +464,15 @@ class TimelinePipeline:
                 context.setdefault("gaps", []).append(
                     {"kind": "motion-proposal-unavailable", "detail": str(error)}
                 )
-        return MotionReviewService(self.workspace).project(context)
+        options = {} if scope_request is None else {"scope_request": scope_request}
+        return MotionReviewService(self.workspace).project(context, **options)
 
-    def publish_motion_plan(self) -> dict[str, Any]:
+    def publish_motion_plan(self, *, scope_request=None) -> dict[str, Any]:
         """Explicitly publish derived views; this never selects or approves an edit."""
         from .motion_review import MotionReviewService
 
-        snapshot = self.motion_plan()
+        options = {} if scope_request is None else {"scope_request": scope_request}
+        snapshot = self.motion_plan(**options)
         return MotionReviewService(self.workspace).publish(
             snapshot, expected_basis=snapshot["basisHeads"]
         )
