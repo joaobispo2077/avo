@@ -1214,6 +1214,12 @@ retention. Parent BMap validity and exact cut binding remain prerequisites;
 unscoped compatibility, source admission, full/window absolute evaluation and
 listening/approval boundaries are preserved. No sound state store is added.
 
+Canonical contract validation retains at most four parsed schema registries,
+keyed by the complete freshly read schema bytes. Every validation rereads the
+current schema files and validates its input document. Changed, missing or
+malformed references therefore invalidate parsed reuse without trusting file
+timestamps, caching validation results or refreshing media/review approvals.
+
 Camera movement, face anchoring, sound matching, reference analysis, spoken
 notes/recovery and editor handoff are selected options resolved through existing
 settings scopes and frozen requests. Preferences seed future work and cannot

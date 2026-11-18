@@ -81,6 +81,14 @@ the incomplete run does not establish a coverage percentage or an all-green resu
 The two workers, work-stealing schedule, selected tests, 68% floor and other
 quality gates remain unchanged.
 
+Contract validation rereads current schema bytes on every call and reuses only
+the parsed registry for identical content, with at most four entries retained.
+A local warmed 50-cue validation profile took 1.98 seconds before this change
+and 1.26 seconds afterward. This measures that validation sample, not overall
+CI runtime. Same-size edits with restored timestamps, deleted/malformed refs
+and distinct roots remain covered by contract tests; document validation and
+the coverage/readiness gates still execute normally.
+
 Gate 1 also validates all GitHub Actions workflows with actionlint 1.7.12,
 including expression context availability. ShellCheck and Pyflakes are disabled
 in this check; the existing quality gates own source linting. Run the same check
