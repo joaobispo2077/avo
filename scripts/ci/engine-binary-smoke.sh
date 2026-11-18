@@ -166,6 +166,44 @@ assert not (Path(sys.argv[2]).parent / 'edit' / 'briefstart').exists()
 print('briefstart raw/no-reference read-only smoke ok')
 " "$BRIEF_JSON" "$BRIEF_PROJECT"
 
+if [[ -f "$ROOT/schemas/avo.sfx-provider.schema.json" ]]; then
+  echo "smoke: provider sound favorites and bundled request schema (metadata only)"
+  SFX_VIEW="$UNPACK/sfx-favorites.json"
+  SFX_REQUEST="$UNPACK/sfx-favorite-request.json"
+  SFX_ERROR="$UNPACK/sfx-favorite-error.json"
+  AVO_ROOT= "$LAUNCHER" cli sfx favorites-show --project "$BRIEF_PROJECT" --json >"$SFX_VIEW"
+  "$PYTHON" - "$SFX_VIEW" "$SFX_REQUEST" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+view = json.loads(Path(sys.argv[1]).read_text(encoding='utf-8'))
+assert view['effect'] == 'metadata-read' and view['favorites'] == [], view
+assert view['provider'] == 'neutral' and view['documentSha256'] == 'absent', view
+Path(sys.argv[2]).write_text(json.dumps({
+    'contractVersion': '1.0.0', 'operation': 'favorite-promote',
+    'operationId': 'frozen-smoke', 'actor': 'fixture', 'reason': 'Verify bundled metadata guards',
+    'provider': 'neutral', 'expectedProviderDocument': '0' * 64,
+    'expectedGeneration': '0' * 64,
+    'selection': {'entryId': '0' * 64, 'entryRevision': '0' * 64}, 'fields': []
+}), encoding='utf-8')
+PY
+  if AVO_ROOT= "$LAUNCHER" cli sfx favorite-promote --project "$BRIEF_PROJECT" --request "$SFX_REQUEST" --json >"$UNPACK/sfx-unexpected.json" 2>"$SFX_ERROR"; then
+    echo "error: provider favorite promotion accepted an absent target" >&2
+    exit 1
+  fi
+  "$PYTHON" - "$SFX_ERROR" "$BRIEF_PROJECT" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+error = json.loads(Path(sys.argv[1]).read_text(encoding='utf-8'))
+assert 'Provider preferences changed' in error['message'], error
+assert not (Path(sys.argv[2]).parent / 'edit').exists()
+print('provider favorite frozen module/schema/read-only guards ok')
+PY
+fi
+
 FIXTURE="$ROOT/tests/fixtures/engine/stub.wav"
 if [[ ! -f "$FIXTURE" ]]; then
   echo "error: missing fixture $FIXTURE" >&2
