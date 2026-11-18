@@ -124,6 +124,13 @@ done
 echo "smoke: avo runtime --help"
 "$LAUNCHER" runtime --help >/dev/null
 
+if [[ -f "$ROOT/schemas/avo.preparation.schema.json" ]]; then
+  echo "smoke: source preparation commands and bundled contracts (no model)"
+  "$LAUNCHER" preparation --help >/dev/null
+  "$LAUNCHER" preparation coverage --help >/dev/null
+  "$LAUNCHER" preparation recover --help >/dev/null
+fi
+
 echo "smoke: native OTIO reader, public staging, plugin isolation and licenses"
 OTIO_ENGINE="$LAUNCHER"
 OTIO_WORK="$SMOKE_WORK/otio"
@@ -201,6 +208,37 @@ error = json.loads(Path(sys.argv[1]).read_text(encoding='utf-8'))
 assert 'Provider preferences changed' in error['message'], error
 assert not (Path(sys.argv[2]).parent / 'edit').exists()
 print('provider favorite frozen module/schema/read-only guards ok')
+PY
+fi
+
+if [[ -f "$ROOT/schemas/avo.preparation.schema.json" ]]; then
+  echo "smoke: source preparation command and bundled schema (no model execution)"
+  "$LAUNCHER" preparation --help >/dev/null
+  PREPARATION_REQUEST="$UNPACK/preparation-coverage-request.json"
+  PREPARATION_ERROR="$UNPACK/preparation-coverage-error.json"
+  "$PYTHON" - "$PREPARATION_REQUEST" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+Path(sys.argv[1]).write_text(json.dumps({
+    'contractVersion': '1.0.0', 'operation': 'coverage',
+    'analysisRef': {'locator': 'documents/source-analysis/absent.json', 'sha256': '0' * 64},
+}), encoding='utf-8')
+PY
+  if AVO_ROOT= "$LAUNCHER" preparation coverage --project "$BRIEF_PROJECT" --request "$PREPARATION_REQUEST" --json >"$UNPACK/preparation-unexpected.json" 2>"$PREPARATION_ERROR"; then
+    echo "error: preparation coverage accepted missing source evidence" >&2
+    exit 1
+  fi
+  "$PYTHON" - "$PREPARATION_ERROR" "$BRIEF_PROJECT" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+error = json.loads(Path(sys.argv[1]).read_text(encoding='utf-8'))
+assert error['status'] == 'invalid-input', error
+assert not (Path(sys.argv[2]).parent / 'edit').exists()
+print('preparation frozen module/schema/read-only guards ok')
 PY
 fi
 
