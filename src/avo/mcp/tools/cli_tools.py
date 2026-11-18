@@ -38,6 +38,7 @@ CORE_CLI_GROUPS: tuple[str, ...] = (
 
 # Remaining groups bridged in task-008.
 REMAINING_CLI_GROUPS: tuple[str, ...] = (
+    "preparation",
     "sfx",
     "costs",
     "direction",
@@ -970,6 +971,7 @@ def _all_bridge_defs() -> list[BridgeToolDef]:
         + _creative_bridge_defs()
         + _cost_bridge_defs()
         + _sfx_bridge_defs()
+        + _preparation_bridge_defs()
     )
 
 
@@ -1046,7 +1048,26 @@ def remaining_bridge_defs() -> list[BridgeToolDef]:
         + _creative_bridge_defs()
         + _cost_bridge_defs()
         + _sfx_bridge_defs()
+        + _preparation_bridge_defs()
     )
+
+
+def _preparation_bridge_defs() -> list[BridgeToolDef]:
+    descriptions = {
+        "coverage": "Inspect retained source speech-coverage facts against current source/routing/Sync metadata. No media decoding, source hashing, model execution or new journal.",
+        "recover": "Explicit bounded local retranscription of selected original-source intervals. Confirms exact request bytes and consumes durable attempts before inference. Preserves original/recovered alternatives; no cut or transcript selection approval.",
+    }
+    return [
+        _tool(
+            "avo_preparation_" + operation,
+            "preparation",
+            operation,
+            description,
+            destructive=operation == "recover",
+            extra_params=(ParamSpec("request", str, required=True),),
+        )
+        for operation, description in descriptions.items()
+    ]
 
 
 def _sfx_bridge_defs() -> list[BridgeToolDef]:
@@ -1186,6 +1207,7 @@ def _decision_gate_args(defn, bridge_args):
 
     normalize_cost_arguments(defn.cli_prefix, bridge_args)
     if defn.cli_prefix not in {
+        ("preparation", "recover"),
         ("direction", "decide"),
         ("briefstart", "decide"),
         ("animation", "plan-apply"),
@@ -1199,6 +1221,7 @@ def _decision_gate_args(defn, bridge_args):
         MAX_REQUEST_BYTES
         if defn.cli_prefix
         in {
+            ("preparation", "recover"),
             ("animation", "plan-apply"),
             ("animation", "camera-apply"),
             ("sfx", "apply"),

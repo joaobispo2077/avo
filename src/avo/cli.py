@@ -55,6 +55,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     configure_sfx(sub)
 
+    from avo.preparation_cli import configure as configure_preparation
+
+    configure_preparation(sub)
+
     from avo.costs_cli import configure as configure_costs
     from avo.costs_cli import cost_context_argument
 
@@ -2564,6 +2568,10 @@ def _trim(args: argparse.Namespace) -> int:
 
 
 def _run_cli(args: argparse.Namespace) -> int:
+    if args.command == "preparation":
+        from avo.preparation_cli import run as preparation_run
+
+        return preparation_run(args)
     if args.command == "sfx":
         from avo.sfx_cli import run as sfx_run
 

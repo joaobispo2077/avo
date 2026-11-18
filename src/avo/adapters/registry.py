@@ -17,6 +17,7 @@ __all__ = [
     "CapabilityRegistryError",
     "adapter_for_routing_suffix",
     "build_cutting_service",
+    "build_preparation_service",
     "build_sfx_catalog",
     "build_sound_source_probe",
     "default_proof_capability_registry",
@@ -120,6 +121,28 @@ def build_sound_source_probe():
         }
 
     return probe
+
+
+def build_preparation_service(workspace, *, recover=False):
+    """Read-only construction imports no speech adapter or model readiness checks."""
+    from avo.timeline.preparation_recovery import PreparationService
+
+    port = None
+    if recover:
+        from avo.adapters.media.cutting_analysis import CuttingAnalysisAdapter
+        from avo.video_context import VideoContext, resolve_context_cutting_policy
+
+        context = VideoContext(
+            provider=workspace.project["provider"],
+            video_id=workspace.video_id,
+            raw_dir=workspace.raw_dir,
+            video_key=None,
+            project=workspace.project,
+        )
+        port = CuttingAnalysisAdapter(
+            workspace, resolve_context_cutting_policy(context)
+        )
+    return PreparationService(workspace, recovery_port=port)
 
 
 def build_cutting_service(workspace, *, invocation=None):
