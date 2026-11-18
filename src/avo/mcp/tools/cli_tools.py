@@ -38,6 +38,7 @@ CORE_CLI_GROUPS: tuple[str, ...] = (
 
 # Remaining groups bridged in task-008.
 REMAINING_CLI_GROUPS: tuple[str, ...] = (
+    "sfx",
     "costs",
     "direction",
     "briefstart",
@@ -148,6 +149,14 @@ def _core_bridge_defs() -> list[BridgeToolDef]:
             "pipeline",
             "verify-commands",
             "Verify the pipeline command registry (CLI: avo pipeline verify-commands).",
+        ),
+        _tool(
+            "avo_pipeline_work_decide",
+            "pipeline",
+            "work-decide",
+            "Record an explicit reversible defer, dismiss, reopen or supersession decision for requested craft work. "
+            "Preserves original scope/history and does not change selected concepts, applied media or approvals.",
+            extra_params=(ParamSpec("request", str, required=True),),
         ),
         _tool(
             "avo_pipeline_resume",
@@ -264,11 +273,56 @@ def _core_bridge_defs() -> list[BridgeToolDef]:
         ),
         # --- animation ---
         _tool(
+            "avo_animation_camera_apply",
+            "animation",
+            "camera-apply",
+            _MUTATE_WARN + "Apply only selected camera treatments through canonical "
+            "owners with current heads, exact runtime and recoverable publication; "
+            "confirmation binds request bytes without approving a film.",
+            destructive=True,
+            extra_params=(ParamSpec("request", str, required=True),),
+        ),
+        _tool(
+            "avo_animation_camera_propose",
+            "animation",
+            "camera-propose",
+            "Validate explicitly selected camera recipes and installed native runtime; "
+            "write an immutable untimed proposal without applying edits or approving a film.",
+            extra_params=(ParamSpec("request", str, required=True),),
+        ),
+        _tool(
+            "avo_animation_plan_propose",
+            "animation",
+            "plan-propose",
+            "Writes an immutable motion concept proposal from a bounded typed request; "
+            "does not select an edit, run models or render media.",
+            extra_params=(ParamSpec("request", str, required=True),),
+        ),
+        _tool(
+            "avo_animation_plan_select",
+            "animation",
+            "plan-select",
+            "Records actual scoped concept dispositions from a typed request; "
+            "selection is distinct from canonical application and film approval.",
+            extra_params=(ParamSpec("request", str, required=True),),
+        ),
+        _tool(
+            "avo_animation_plan_apply",
+            "animation",
+            "plan-apply",
+            _MUTATE_WARN + "Apply a selected motion proposal through normal canonical "
+            "owners with expected heads and recoverable publication; confirmation "
+            "binds exact request bytes and does not approve a master.",
+            destructive=True,
+            extra_params=(ParamSpec("request", str, required=True),),
+        ),
+        _tool(
             "avo_animation_plan_show",
             "animation",
             "plan-show",
             "Read-only current motion map, linked storyboard and lane readiness; "
             "never initializes canonical state, publishes reports or runs media/models.",
+            extra_params=(ParamSpec("proposal_hash", str | None, default=None),),
         ),
         _tool(
             "avo_animation_plan_publish",
@@ -911,6 +965,7 @@ def _all_bridge_defs() -> list[BridgeToolDef]:
         + _remaining_bridge_defs()
         + _creative_bridge_defs()
         + _cost_bridge_defs()
+        + _sfx_bridge_defs()
     )
 
 
@@ -982,7 +1037,43 @@ def core_bridge_defs() -> list[BridgeToolDef]:
 
 def remaining_bridge_defs() -> list[BridgeToolDef]:
     """Return declarative defs for remaining CLI groups (task-008)."""
-    return _remaining_bridge_defs() + _creative_bridge_defs() + _cost_bridge_defs()
+    return (
+        _remaining_bridge_defs()
+        + _creative_bridge_defs()
+        + _cost_bridge_defs()
+        + _sfx_bridge_defs()
+    )
+
+
+def _sfx_bridge_defs() -> list[BridgeToolDef]:
+    descriptions = {
+        "show": "Read a bounded saved sound catalogue excerpt. Metadata only; no source scan or model.",
+        "scan": "Explicitly scan declared sound roots and measure bounded audio into project metadata. Sources stay unchanged.",
+        "annotate": "Record curated sound tags, rights evidence or a reviewed marker against an exact catalogue generation.",
+        "search": "Search saved sound descriptors only. Metadata read; semantic execution cannot be selected through this tool.",
+        "search-semantic": "Explicit optional local model execution for semantic sound matching. Requires provisioned paired audio/text models; unavailable never falls back to descriptors.",
+        "propose": "Save bounded sound auditions against exact timeline heads and catalogue generation with explicitly enabled options. Metadata only; no scan, model provisioning, canonical application or listening approval.",
+        "apply": "Publish explicit per-event sound choices through BMap and Tracks against the exact saved proposal, heads and catalogue. Confirms the request bytes; listening acceptance stays pending. No catalogue scan or model execution.",
+    }
+    return [
+        _tool(
+            "avo_sfx_" + operation.replace("-", "_"),
+            "sfx",
+            operation,
+            description,
+            destructive=operation == "apply",
+            extra_params=(
+                (
+                    ParamSpec("generation", str | None),
+                    ParamSpec("offset", int, default=0),
+                    ParamSpec("limit", int, default=20),
+                )
+                if operation == "show"
+                else (ParamSpec("request", str, required=True),)
+            ),
+        )
+        for operation, description in descriptions.items()
+    ]
 
 
 def all_bridge_defs() -> list[BridgeToolDef]:
@@ -1081,15 +1172,32 @@ def _bridge_gate_error(exc):
 
 
 def _decision_gate_args(defn, bridge_args):
+    from avo.editing_craft_requests import MAX_REQUEST_BYTES
     from avo.mcp.bridge import normalize_cost_arguments
 
     normalize_cost_arguments(defn.cli_prefix, bridge_args)
-    if defn.cli_prefix not in {("direction", "decide"), ("briefstart", "decide")}:
+    if defn.cli_prefix not in {
+        ("direction", "decide"),
+        ("briefstart", "decide"),
+        ("animation", "plan-apply"),
+        ("animation", "camera-apply"),
+        ("sfx", "apply"),
+    }:
         return bridge_args
+    limit = (
+        MAX_REQUEST_BYTES
+        if defn.cli_prefix
+        in {
+            ("animation", "plan-apply"),
+            ("animation", "camera-apply"),
+            ("sfx", "apply"),
+        }
+        else 2 * 1024 * 1024
+    )
     with Path(bridge_args["request"]).expanduser().open("rb") as stream:
-        raw = stream.read(2 * 1024 * 1024 + 1)
-    if len(raw) > 2 * 1024 * 1024:
-        raise ValueError("Decision request exceeds 2 MiB")
+        raw = stream.read(limit + 1)
+    if len(raw) > limit:
+        raise ValueError(f"Decision request exceeds {limit // (1024 * 1024)} MiB")
     return {**bridge_args, "_decisionDocumentSha256": hashlib.sha256(raw).hexdigest()}
 
 

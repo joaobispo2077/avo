@@ -16,6 +16,7 @@ from .contracts import (
     document_hash_excluding,
     file_fingerprint,
     validate_document,
+    validate_proof_plan_document,
 )
 from .iterations import IterationLedgerService
 from .store import StoreError, write_immutable_json
@@ -27,6 +28,15 @@ def _preview_declaration(request):
         for key in ("previewOnly", "importApproximation")
         if key in request
     }
+
+
+def _proof_contract_header(camera_operations):
+    if camera_operations:
+        return {
+            "schemaVersion": "2.0.0",
+            "requiredReaderCapabilities": ["camera-transform-v1"],
+        }
+    return {"schemaVersion": "1.0.0"}
 
 
 def _require_hyperframes_geometry(binding, parameters, output):
@@ -269,6 +279,27 @@ class ProofPlanCompiler:
             ]
         return []
 
+    def _sound_execution(self, execution, *, require_applied=False):
+        from .sound_proof import compile_canonical_sound
+
+        try:
+            return compile_canonical_sound(
+                self.workspace, execution, require_applied=require_applied
+            )
+        except (ValueError, RuntimeError, OSError, KeyError, TypeError) as error:
+            raise ProofPlanError(
+                "PROOF_SOUND_INVALID",
+                str(error),
+                "Restore or reselect the exact canonical sound publication, visual anchor and dialogue routing",
+            ) from error
+
+    def _sound_preflight(self, plan):
+        try:
+            self._sound_execution(plan, require_applied=True)
+        except ProofPlanError as error:
+            return [error.to_dict()]
+        return []
+
     @staticmethod
     def _empty_index(index: dict[str, Any]) -> bool:
         return (
@@ -306,6 +337,89 @@ class ProofPlanCompiler:
         for source_id, sha256 in sorted(source_fingerprints.items()):
             lock[f"source:{source_id}"] = str(sha256)
         return lock
+
+    def _camera_operations(self, request, checkpoint, lock):
+        if checkpoint == "cut-proof":
+            return []
+        from .contracts import required_animation_readers
+
+        if any(
+            operation.get("kind") == "camera-transform"
+            for operation in request.get("videoGraph", {}).get("operations", [])
+        ):
+            raise ProofPlanError(
+                "PROOF_CAMERA_AUTHORITY",
+                "Camera operations must derive from the canonical selected strategy.",
+                "Revise the selected camera component instead of injecting execution operations.",
+            )
+        store = self.workspace.store("animation")
+        index = store.load_index()
+        if index["headRevisionId"] is None:
+            return []
+        snapshot = store.revision(index["headRevisionId"])["snapshot"]
+        if not required_animation_readers(snapshot):
+            return []
+        if (
+            self.registry.resolve(
+                "camera-transform-v1", implementation_id="impl-camera-transform"
+            )
+            is None
+        ):
+            raise ProofPlanError(
+                "PROOF_CAMERA_UNAVAILABLE",
+                "Selected camera intent requires the qualified camera proof implementation.",
+                "Keep the camera intent pending until source-picture execution is qualified; do not render a v1 no-op.",
+            )
+        self._camera_basis(snapshot, lock)
+        operations = self._compile_camera_operations(snapshot, request)
+        for operation in operations:
+            parameters = operation["parameters"]
+            if (
+                lock.get("source:" + parameters["sourceId"])
+                != parameters["sourceSha256"]
+            ):
+                raise ProofPlanError(
+                    "PROOF_CAMERA_SOURCE_CHANGED",
+                    "Camera source fingerprint differs from the exact proof source lock.",
+                    "Restore the selected original or revise the camera against its new source.",
+                )
+        return operations
+
+    @staticmethod
+    def _camera_basis(snapshot, lock):
+        for name in ("cmap", "bmap", "tracks"):
+            if snapshot.get("dependencies", {}).get(name) != lock[name]:
+                raise ProofPlanError(
+                    "PROOF_CAMERA_BASIS_CHANGED",
+                    "Camera intent has a stale canonical " + name + " basis.",
+                    "Rebase and review the selected camera intent before compiling.",
+                )
+
+    def _compile_camera_operations(self, snapshot, request):
+        from .camera_plan import compile_camera_operations
+
+        def current(name):
+            store = self.workspace.store(name)
+            return store.revision(store.load_index()["headRevisionId"])["snapshot"]
+
+        try:
+            validate_document(
+                request["output"], "avo.proof-plan.v2.schema.json#/$defs/output"
+            )
+            return compile_camera_operations(
+                snapshot,
+                bmap=current("bmap"),
+                tracks=current("tracks"),
+                video_graph=request.get("videoGraph", {}),
+                output=request["output"],
+                selection=None,
+            )
+        except ValueError as error:
+            raise ProofPlanError(
+                "PROOF_CAMERA_INVALID",
+                str(error),
+                "Resolve the selected camera's frozen options, source geometry, cue and continuity.",
+            ) from error
 
     def _require_recorded_motion_implementation(self, implementation):
         if not implementation.adapter_id.startswith("hyperframes"):
@@ -550,13 +664,30 @@ class ProofPlanCompiler:
         lock = self._canonical_lock(
             dict(request.get("sourceFingerprints") or {}), checkpoint=checkpoint
         )
+        camera_operations = self._camera_operations(request, checkpoint, lock)
+        request.setdefault("videoGraph", {}).setdefault("operations", []).extend(
+            camera_operations
+        )
         audio_graph = self._source_mix_graph(request)
+        selected_audio = self._sound_execution(
+            {
+                "checkpoint": checkpoint,
+                "output": request["output"],
+                "audioGraph": audio_graph,
+                "events": deepcopy(request.get("events") or []),
+                "canonicalInputLock": lock,
+            }
+        )
+        audio_graph, lock = (
+            selected_audio["audioGraph"],
+            selected_audio["canonicalInputLock"],
+        )
         video_graph, resolution, implementation_refs = self._resolve_video_graph(
             dict(request.get("videoGraph") or {})
         )
         lock.update(self._generated_lock(video_graph, request["output"]))
         body: dict[str, Any] = {
-            "schemaVersion": "1.0.0",
+            **_proof_contract_header(camera_operations),
             "proofPlanId": "proof-plan-pending",
             "iterationId": iteration_id,
             "checkpoint": checkpoint,
@@ -570,7 +701,7 @@ class ProofPlanCompiler:
             ),
             "videoGraph": video_graph,
             "audioGraph": audio_graph,
-            "events": deepcopy(request.get("events") or []),
+            "events": selected_audio["events"],
             "validationPlan": deepcopy(request["validationPlan"]),
             "visionReviewPlanRef": deepcopy(request.get("visionReviewPlanRef")),
             "lineagePolicy": deepcopy(
@@ -605,7 +736,7 @@ class ProofPlanCompiler:
         body["proofPlanId"] = f"proof-plan-{content_hash(identity_seed)[:12]}"
         body["proofPlanHash"] = document_hash_excluding(body, "proofPlanHash")
         try:
-            validate_document(body, "avo.proof-plan.schema.json")
+            validate_proof_plan_document(body)
         except ContractError as exc:
             raise ProofPlanError(
                 "PROOF_PLAN_INVALID",
@@ -649,7 +780,7 @@ class ProofPlanCompiler:
                 entity_ref=str(value.get("proofPlanId") or ""),
             )
         try:
-            validate_document(value, "avo.proof-plan.schema.json")
+            validate_proof_plan_document(value)
         except ContractError as exc:
             raise ProofPlanError(
                 "PROOF_PLAN_INVALID",
@@ -775,7 +906,7 @@ class ProofPlanCompiler:
         plan: dict[str, Any],
         *,
         media_inputs: dict[str, Any],
-        tool_readiness: dict[str, bool],
+        tool_readiness: dict[str, Any],
     ) -> dict[str, Any]:
         """Return deterministic blockers before any microproof or full render."""
         blockers: list[dict[str, Any]] = []
@@ -791,6 +922,7 @@ class ProofPlanCompiler:
         blockers.extend(self._canonical_preflight(plan))
         blockers.extend(self._import_preflight(plan))
         blockers.extend(self._source_mix_preflight(plan))
+        blockers.extend(self._sound_preflight(plan))
         blockers.extend(self._generated_preflight(plan, tool_readiness))
         lock = plan.get("canonicalInputLock") or {}
         resolved_paths: dict[str, Path] = {}
@@ -947,15 +1079,39 @@ class ProofPlanCompiler:
                 "inheritedApprovals": False,
             },
         }
+        self._bind_camera_environment(report, plan, tool_readiness)
         report["reportHash"] = content_hash(report)
         return report
+
+    def _bind_camera_environment(self, report, plan, tool_readiness):
+        if any(
+            operation.get("kind") == "camera-transform"
+            for operation in plan.get("videoGraph", {}).get("operations", [])
+        ):
+            environment = tool_readiness.get("cameraEnvironmentHash")
+            if (
+                tool_readiness.get("camera-runtime") is not True
+                or not isinstance(environment, str)
+                or len(environment) != 64
+                or any(character not in "0123456789abcdef" for character in environment)
+            ):
+                report["blockers"].append(
+                    self._blocker(
+                        "PROOF_CAMERA_RUNTIME_UNBOUND",
+                        "Selected camera runtime lacks an observed rendering environment",
+                        "Use the native camera renderer to inspect installed tools before preflight",
+                    )
+                )
+                report["status"] = "blocked"
+            else:
+                report["cameraEnvironmentHash"] = environment
 
     def require_preflight(
         self,
         plan: dict[str, Any],
         *,
         media_inputs: dict[str, Any],
-        tool_readiness: dict[str, bool],
+        tool_readiness: dict[str, Any],
     ) -> dict[str, Any]:
         report = self.preflight(
             plan,

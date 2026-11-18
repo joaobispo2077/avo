@@ -1,0 +1,316 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://avo.local/schemas/avo.camera-behavior.schema.json",
+  "title": "Relative source-picture camera behavior v1",
+  "description": "Untimed display-space path. Center coordinates are normalized relative to the declared baseline crop, so center (0.5,0.5) at scale 1 restores that exact crop. BMap owns timing; geometry and property ownership are supplied by the compiler.",
+  "$defs": {
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "unit": {
+      "type": "number",
+      "minimum": 0,
+      "maximum": 1
+    },
+    "center": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "x",
+        "y"
+      ],
+      "properties": {
+        "x": {
+          "$ref": "#/$defs/unit"
+        },
+        "y": {
+          "$ref": "#/$defs/unit"
+        }
+      }
+    },
+    "curve": {
+      "enum": [
+        "hold",
+        "linear",
+        "quadratic-in",
+        "quadratic-out",
+        "quadratic-in-out",
+        "quartic-in",
+        "exponential-out"
+      ]
+    },
+    "node": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "phase",
+        "scale",
+        "center",
+        "curve"
+      ],
+      "properties": {
+        "phase": {
+          "$ref": "#/$defs/unit"
+        },
+        "scale": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "center": {
+          "$ref": "#/$defs/center"
+        },
+        "curve": {
+          "$ref": "#/$defs/curve"
+        }
+      }
+    },
+    "rect": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "x",
+        "y",
+        "width",
+        "height"
+      ],
+      "properties": {
+        "x": {
+          "$ref": "#/$defs/unit"
+        },
+        "y": {
+          "$ref": "#/$defs/unit"
+        },
+        "width": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 1
+        },
+        "height": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 1
+        }
+      }
+    },
+    "safeRegion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "regionId",
+        "coordinateSpace",
+        "rect",
+        "clearance"
+      ],
+      "properties": {
+        "regionId": {
+          "$ref": "#/$defs/id"
+        },
+        "coordinateSpace": {
+          "const": "display-normalized"
+        },
+        "rect": {
+          "$ref": "#/$defs/rect"
+        },
+        "clearance": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 0.49
+        }
+      }
+    },
+    "geometry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "codedWidth",
+        "codedHeight",
+        "sampleAspectRatio",
+        "rotationDegrees",
+        "baselineCrop"
+      ],
+      "properties": {
+        "codedWidth": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 32768
+        },
+        "codedHeight": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 32768
+        },
+        "sampleAspectRatio": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "num",
+            "den"
+          ],
+          "properties": {
+            "num": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000000
+            },
+            "den": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000000
+            }
+          }
+        },
+        "rotationDegrees": {
+          "type": "integer",
+          "multipleOf": 90
+        },
+        "baselineCrop": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "x",
+            "y",
+            "width",
+            "height"
+          ],
+          "properties": {
+            "x": {
+              "type": "number",
+              "minimum": 0
+            },
+            "y": {
+              "type": "number",
+              "minimum": 0
+            },
+            "width": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "height": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            }
+          }
+        },
+        "cropMargin": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "left": {
+              "type": "number",
+              "minimum": 0
+            },
+            "right": {
+              "type": "number",
+              "minimum": 0
+            },
+            "top": {
+              "type": "number",
+              "minimum": 0
+            },
+            "bottom": {
+              "type": "number",
+              "minimum": 0
+            }
+          }
+        }
+      }
+    },
+    "frameRange": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "firstFrame",
+        "endFrameExclusive"
+      ],
+      "properties": {
+        "firstFrame": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "endFrameExclusive": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "schedule": {
+      "type": "array",
+      "maxItems": 512,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "moveId",
+          "behavior",
+          "frameRange",
+          "propertyOwners"
+        ],
+        "properties": {
+          "moveId": {
+            "$ref": "#/$defs/id"
+          },
+          "behavior": {
+            "$ref": "#/$defs/behavior"
+          },
+          "frameRange": {
+            "$ref": "#/$defs/frameRange"
+          },
+          "propertyOwners": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "scale",
+              "center"
+            ],
+            "properties": {
+              "scale": {
+                "$ref": "#/$defs/id"
+              },
+              "center": {
+                "$ref": "#/$defs/id"
+              }
+            }
+          }
+        }
+      }
+    },
+    "behavior": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "contractVersion",
+        "targetLayerId",
+        "nodes"
+      ],
+      "properties": {
+        "contractVersion": {
+          "const": "1.0.0"
+        },
+        "targetLayerId": {
+          "$ref": "#/$defs/id"
+        },
+        "sourceId": {
+          "$ref": "#/$defs/id"
+        },
+        "nodes": {
+          "type": "array",
+          "minItems": 2,
+          "maxItems": 256,
+          "items": {
+            "$ref": "#/$defs/node"
+          }
+        },
+        "safeRegions": {
+          "type": "array",
+          "maxItems": 64,
+          "items": {
+            "$ref": "#/$defs/safeRegion"
+          }
+        }
+      }
+    }
+  },
+  "$ref": "#/$defs/behavior"
+}

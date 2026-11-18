@@ -1,0 +1,158 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://avo.local/avo.clap-manifest.schema.json",
+  "title": "Provisioned local CLAP runtime and joint-space manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contractVersion",
+    "modelId",
+    "revision",
+    "files",
+    "license",
+    "runtime",
+    "preprocessing",
+    "dimension"
+  ],
+  "properties": {
+    "contractVersion": {
+      "const": "1.0.0"
+    },
+    "modelId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "revision": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{40}$"
+    },
+    "files": {
+      "type": "object",
+      "minProperties": 5,
+      "maxProperties": 128,
+      "propertyNames": {
+        "type": "string",
+        "pattern": "^[A-Za-z0-9][A-Za-z0-9._/-]{0,255}$"
+      },
+      "additionalProperties": {
+        "type": "string",
+        "pattern": "^[a-f0-9]{64}$"
+      }
+    },
+    "license": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "spdxId",
+        "noticeFile"
+      ],
+      "properties": {
+        "spdxId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "noticeFile": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        }
+      }
+    },
+    "runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "pythonVersion",
+        "pythonSha256",
+        "ffmpegSha256",
+        "packages",
+        "lockFile"
+      ],
+      "properties": {
+        "pythonVersion": {
+          "type": "string",
+          "pattern": "^[0-9]+(?:\\.[0-9A-Za-z]+)+(?:[+._-][0-9A-Za-z]+)*$"
+        },
+        "pythonSha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "ffmpegSha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "packages": {
+          "type": "object",
+          "required": [
+            "torch",
+            "transformers",
+            "numpy"
+          ],
+          "minProperties": 3,
+          "maxProperties": 64,
+          "propertyNames": {
+            "pattern": "^[A-Za-z0-9_.-]{1,100}$"
+          },
+          "additionalProperties": {
+            "type": "string",
+            "pattern": "^[0-9]+(?:\\.[0-9A-Za-z]+)+(?:[+._-][0-9A-Za-z]+)*$"
+          }
+        },
+        "lockFile": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256
+        }
+      }
+    },
+    "preprocessing": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sampleRate",
+        "channels",
+        "maxSeconds",
+        "truncation",
+        "padding",
+        "textMaxLength"
+      ],
+      "properties": {
+        "sampleRate": {
+          "type": "integer",
+          "minimum": 8000,
+          "maximum": 192000
+        },
+        "channels": {
+          "const": 1
+        },
+        "maxSeconds": {
+          "type": "number",
+          "minimum": 1,
+          "maximum": 30
+        },
+        "truncation": {
+          "const": "rand_trunc"
+        },
+        "padding": {
+          "enum": [
+            "repeatpad",
+            "repeat",
+            "pad"
+          ]
+        },
+        "textMaxLength": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 512
+        }
+      }
+    },
+    "dimension": {
+      "type": "integer",
+      "minimum": 2,
+      "maximum": 4096
+    }
+  }
+}

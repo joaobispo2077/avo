@@ -4,9 +4,26 @@ from __future__ import annotations
 
 import hashlib
 import re
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, ClassVar
+
+from avo.embedding_manifest import validate_joint_space
+
+
+def optional_embedding_capability(encoder):
+    """Inspect an explicitly supplied encoder without adding a proof implementation."""
+    try:
+        identity = validate_joint_space(encoder.preflight())
+    except (ValueError, OSError) as exc:
+        return {"status": "unavailable", "reason": str(exc)}
+    return {
+        "status": "ready",
+        "jointSpace": identity,
+        "validation": "manifest-and-runtime-verified",
+        "modelLoaded": False,
+    }
 
 
 class CapabilityRegistryError(RuntimeError):
@@ -122,6 +139,7 @@ class CapabilityRegistry:
 
 
 _PROOF_BUILTINS = {
+    "camera-transform-v1": "ffmpeg.camera-transform",
     "source-layout": "ffmpeg.source-layout",
     "trim": "ffmpeg.trim",
     "generated-clip": "ffmpeg.generated-clip",
@@ -144,6 +162,11 @@ _PROOF_BUILTINS = {
 }
 
 _PROOF_CODE_PATHS = (
+    Path(__file__).parent / "adapters" / "media" / "camera.py",
+    Path(__file__).parent / "adapters" / "media" / "camera_provenance.py",
+    Path(__file__).parent / "adapters" / "media" / "proof_precision.py",
+    Path(__file__).parent / "timeline" / "camera.py",
+    Path(__file__).parent / "timeline" / "camera_plan.py",
     Path(__file__).parent / "loudness_profiles.py",
     Path(__file__).parent / "adapters" / "media" / "proof_title.py",
     Path(__file__).parent / "adapters" / "media" / "audio_clock.py",
@@ -183,6 +206,12 @@ def _implementation_digest(capability: str, adapter_id: str) -> str:
         f"avo-proof-capability-v1:{capability}:{adapter_id}".encode()
     )
     if adapter_id.startswith("ffmpeg."):
+        if getattr(sys, "frozen", False):
+            # Onedir builds embed module code in the actual program; individual
+            # Python sources are not installed alongside the executable.
+            with Path(sys.executable).open("rb") as program:
+                digest.update(hashlib.file_digest(program, "sha256").digest())
+            return digest.hexdigest()
         for path in _PROOF_CODE_PATHS:
             data = path.read_bytes()
             digest.update(path.name.encode())
@@ -197,7 +226,9 @@ def default_proof_capability_registry() -> CapabilityRegistry:
         digest = _implementation_digest(capability, adapter_id)
         registry.register(
             CapabilityImplementation(
-                implementation_id=f"impl-{capability}"[:64],
+                implementation_id="impl-camera-transform"
+                if capability == "camera-transform-v1"
+                else f"impl-{capability}"[:64],
                 capability=capability,
                 kind="built-in",
                 adapter_id=adapter_id,

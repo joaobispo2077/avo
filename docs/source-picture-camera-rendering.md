@@ -1,0 +1,175 @@
+# Source-picture camera rendering
+
+The native renderer applies selected camera paths to verified original picture
+before composing independent graphics, captions or credits. It does not change
+dialogue timing or sample data. BMap supplies timing, Animation supplies relative
+path intent, and Tracks supplies the source-layer identity. Reading or rendering
+a path starts no face detector or model.
+
+The shipped registry declares `camera-transform-v1` with `impl-camera-transform`.
+Execution still requires explicitly selected options, the actual installed
+qualified runtime and a supported verified source/output profile. Native
+qualification exercises that shipped implementation in
+`tests/integration/test_camera_proof_runtime.py`.
+
+## Numeric and source boundaries
+
+Only schema-validated finite paths and named curves become native filter
+expressions. Expressions supplied by requests are rejected. Every operation binds
+its source SHA-256, occurrence, layer, geometry, original interval, entry state,
+path hash and selected-options hash. The native boundary verifies source bytes,
+stream geometry and the constant-rate picture clock before creating output.
+Retimed, padded, fractional-frame and out-of-range camera inputs are rejected.
+Placed camera decoding retains the shared closed local-container and protocol
+policy through staging. A source changed into a playlist after admission is
+rejected before it can redirect the decoder to an unadmitted media file.
+
+The baseline uses display coordinates after sample-aspect-ratio correction and
+right-angle rotation. The sampler removes the obsolete display matrix after
+applying physical orientation. A window evaluates the original path interval,
+including across exact source cuts; it never restarts the move at its first frame.
+Crop bounds and protected regions are checked for every evaluated frame.
+The selected baseline crop must have the output's display aspect ratio. A mismatch
+fails before output creation; the renderer does not silently stretch the picture
+or invent a different crop. Vertical framing therefore needs an explicit matching
+baseline crop. Unselected footage keeps its existing framing route.
+
+After source geometry is verified, native camera inputs disable autorotation and
+consume the selected stream's copied orientation with a zero
+[`display_rotation` override](https://github.com/FFmpeg/FFmpeg/blob/n6.1.1/doc/ffmpeg.texi#L841-L851).
+The frozen original rotation still drives the physical transform. This prevents
+older runtimes from retaining container rotation after the frame-side marker was
+removed. Normal proofs and unselected source streams keep their existing path.
+
+The sampler supplies one private replicated row and column, keeps coordinates
+bound to the original dimensions, then removes that extension before output
+scaling. This preserves boundary samples across runtime versions: FFmpeg 6.1's
+[bilinear lookup](https://github.com/FFmpeg/FFmpeg/blob/n6.1.1/libavfilter/vf_geq.c#L103-L114)
+clamps coordinates before interpolation. Actual legacy-kernel tests reproduce
+the earlier edge loss and verify the corrected identity, boundary and window
+pixels without relaxing exact source comparisons.
+
+## Precision and composition
+
+The internal camera sampler uses 16-bit planar RGB. Explicit precision proofs
+compose picture and alpha planes before their requested final pixel conversion.
+Source framing never transforms independent output-space graphics. Placed full
+proofs keep the existing bounded chunk storage and one continuous final encoder;
+the byte budget includes eight bytes per 16-bit alpha layer pixel and six bytes
+per composed RGB pixel. Partial placed proofs rebuild their private stages from
+original sources rather than reusing an unqualified camera-stage cache.
+
+An explicit delivery pixel format currently requires `yuv420p`. Higher-precision
+formats require the selected FFV1/PCM conformance route; unsupported delivery
+codec/pixel pairs fail before rendering instead of negotiating a lower depth.
+The final output promise is checked before binding a source. Sampling and placed
+composition retain planar RGB16 even for an accepted 8-bit delivery source; one
+BT.709 limited-range conversion follows independent graphics. The final precision
+path declares square pixels after raw composition. A high-depth source is still
+rejected when the requested output would reduce its depth.
+
+Opaque RGB/alpha insertion and alpha removal copy planes. A regular RGB-to-RGBA
+conversion was observed changing 16-bit values even at identical size and depth;
+the exact-pixel tests caught that conversion before activation.
+
+HDR/wide-gamut input, source-alpha camera sampling, placed privacy masks, camera
+sampling/fades and reduced-depth output remain unqualified and fail preflight.
+The existing placed admission boundary also requires square source pixels; the
+contiguous sampler separately exercises SAR and rotation. No profile is advertised
+ready from contract validation alone.
+
+## Selected camera concepts
+
+Untimed motion proposals can include a typed `cameraRecipe`: push, pull,
+punch-settle, cut-to-close, speed-contrast, overlay-return, section-alternate or
+section-drift. Each recipe names the original source fingerprint, source layer
+and measured display geometry. It expands into a relative path and records the
+explicitly enabled camera options. Section alternation and drift additionally
+require their selected base treatment. Face anchoring requires a separately
+frozen trajectory and is not substituted by these unanchored recipes.
+
+The actual predecessor framing is the entry state for continuous moves. A
+cut-to-close or alternating hold requests a source cut; canonical compilation
+must verify that cut before accepting its discontinuous entry. Overlay-return
+restores baseline framing and holds it during the final quarter. Recipe creation
+does not invent cue timing, probe media or publish canonical revisions. The
+existing frame-addressable compiler checks every timed frame, source occurrence,
+property owner and protected region after BMap timing is supplied.
+
+Stable concept IDs support individual revisions. An unchanged recipe retains its
+recorded path and options when future preferences change. A changed recipe is
+regenerated from the new explicit selection, while other concepts remain intact.
+Animation publication must carry the exact selected treatment; replacing its
+path, options or component fails before canonical publication. The dedicated
+camera application commands and complete provenance registration remain pending.
+
+## Validation boundary
+
+Actual encoded fixtures cover 16-bit identity and low-bit detail, independent
+audio, full/window seeking, SAR/rotation, fixed graphic layers, cut continuity,
+and rejection before output creation. Tests compare decoded pixels and PCM rather
+than trusting declared formats. Existing placed, stage-cache and generated-asset
+regressions remain required. The specification acceptance ledger records each
+observed run and any failures; synthetic fixtures do not establish creator
+suitability or approval of a production edit.
+
+Delivery fixtures separately compare original-source sampling and the actual
+pre-encoder conversion against lossless references. They cover contiguous and
+placed footage, 24 and 30000/1001 clocks, and full and partial renders. A lossless
+encoder tap verifies the delivery filter output exactly; ordinary H.264/AAC runs
+verify format, square-pixel geometry, color tags and decoded frame count. Separate
+lossy encodes are not treated as pixel-identical references for a source sampler.
+
+## Observed execution identity
+
+The native producer records the complete graph/source/options/output recipe hash,
+the actual camera implementation digest, installed FFmpeg/FFprobe byte hashes,
+bounded version identities and the rendered window. It checks those observations
+again after rendering and rejects a changed environment or recipe. This runs only
+for a selected camera graph; ordinary proof readiness does not inspect camera
+tools. Tool paths are excluded from the record, so reconstruction cannot mistake
+separately installed executables for media to bundle.
+
+When a selected Windows command is an installed Chocolatey ShimGen launcher, the
+observer uses its read-only `--shimgen-help` target metadata and fingerprints both
+the launcher chain and the final decoder/probe executable. Missing, ambiguous,
+relative, cyclic or excessively deep targets fail before encoding. Replacing the
+decoder changes the environment even if its reported version and launcher stay
+unchanged. This does not install or distribute tools. The target inspection follows
+the [official ShimGen implementation](https://github.com/chocolatey/shimgen/blob/master/shim/ShimProgram.cs).
+
+Preflight includes the observed camera environment hash. Microproof gates bind
+that preflight hash, so replacing a tool requires fresh microproof validation.
+Gate and window records retain the observed environment and camera producer
+metadata for inspection. Current native qualification covers the FFmpeg/FFprobe
+6.1 and 7.1 release families; other releases and nightly builds fail before
+encoding until they receive their own qualification.
+The native adapter also rejects execution whose environment differs from its
+readiness observation. Existing materialization producer and proof-plan hashes
+retain these identities without a second source or timing ledger. Camera stages
+remain ineligible for cache reuse; tool version output does not fingerprint every
+external system library.
+
+Checkout implementations include the native camera sampler, precision compositor,
+pure evaluator and occurrence compiler in their source fingerprints. Packaged
+builds fingerprint the actual program containing their module code instead of
+requiring unpackaged Python source files beside it.
+
+Explicit `camera-propose` records the installed environment with the frozen
+selected recipe. `plan-select` records actual dispositions; `camera-apply` uses the
+existing recoverable BMap/Tracks/Animation owners with current heads and the exact
+environment. Duplicate IDs, unselected graphics/audio/global changes and altered
+selected paths/options fail before publication. Interrupted publication rechecks
+the selected runtime; an already committed retry verifies its receipt and heads
+without probing tools again.
+
+Motion-review generator 1.2.0 exposes planned/authored camera path identities and
+before/during/after states. Existing 1.1.0 reports remain readable. Canonical links
+use explicit component references, `contentRef.componentId`, or one unambiguous
+proposal component ID. These metadata-only cards never claim native visual
+inspection or creator approval. Reconstruction retains microproof gate JSON and
+its producer/environment records, without retaining disposable proof clips or
+bundling executables.
+
+The shipped capability remains conditional on the qualified source/output profile
+and installed runtime. Camera moves and face anchoring stay disabled by default.

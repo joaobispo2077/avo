@@ -136,9 +136,15 @@ class BMapService:
             actor_intent="preserve beat intent on approved cut output",
         )
 
-    @serialized_timeline(lambda self: self.workspace.timeline_dir)
-    def author(
-        self, snapshot: dict[str, Any], *, actor: str, reason: str
+    def prepare_authoring(
+        self,
+        snapshot: dict[str, Any],
+        *,
+        actor: str,
+        reason: str,
+        revision_id=None,
+        created_at=None,
+        evidence=None,
     ) -> dict[str, Any]:
         snapshot = deepcopy(snapshot)
         basis, cmap_revision, cut_hash = self.current_basis()
@@ -151,7 +157,7 @@ class BMapService:
             current = self.store.revision(index["headRevisionId"])
             parent = current["snapshot"]
             expected = current["contentHash"]
-        revision = self.store.append_revision(
+        return self.store.prepare_revision(
             snapshot=snapshot,
             actor=actor,
             reason=reason,
@@ -171,7 +177,32 @@ class BMapService:
                 },
             ],
             expected_head_hash=expected,
+            revision_id=revision_id,
+            created_at=created_at,
+            evidence=evidence,
         )
+
+    @serialized_timeline(lambda self: self.workspace.timeline_dir)
+    def author(self, snapshot, *, actor, reason, prepared=None):
+        expected = self.store.head_hash()
+        stamps = (
+            {}
+            if prepared is None
+            else {
+                "revision_id": prepared["revisionId"],
+                "created_at": prepared["createdAt"],
+                "evidence": prepared["inputEvidenceRefs"],
+            }
+        )
+        actual = self.prepare_authoring(snapshot, actor=actor, reason=reason, **stamps)
+        if prepared is not None and actual != prepared:
+            raise LineageError(
+                "Prepared BMap differs from current cut, inputs or target"
+            )
+        revision = self.store.append_prepared_revision(
+            actual, expected_head_hash=expected or "empty"
+        )
+        cut_hash = revision["snapshot"]["basis"]["outputSha256"]
         if expected and expected != revision["contentHash"]:
             self.workspace.invalidate_descendants(
                 "bmap",

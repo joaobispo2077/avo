@@ -522,13 +522,6 @@
       "reason": "Feature 006 validation/orchestration branch matrix; recorded for explicit decomposition follow-up"
     },
     {
-      "path": "src/avo/timeline/store.py",
-      "name": "append_revision",
-      "complexity": 18,
-      "rank": "C",
-      "reason": "Timeline state machine / review gate branching; planned decomposition"
-    },
-    {
       "path": "src/avo/timeline/vision_review.py",
       "name": "schedule_review_resources",
       "complexity": 18,
@@ -767,13 +760,6 @@
       "reason": "Reporting/inventory/validation aggregation with many optional fields"
     },
     {
-      "path": "src/avo/timeline/animation.py",
-      "name": "author",
-      "complexity": 14,
-      "rank": "C",
-      "reason": "Timeline state machine / review gate branching; planned decomposition"
-    },
-    {
       "path": "src/avo/timeline/mapping.py",
       "name": "classify_cue_rebase",
       "complexity": 14,
@@ -865,7 +851,7 @@
       "reason": "Feature 006 validation/orchestration branch matrix; recorded for explicit decomposition follow-up"
     },
     {
-      "path": "src/avo/timeline/tracks.py",
+      "path": "src/avo/timeline/track_rules.py",
       "name": "normalize_audio_track_layer",
       "complexity": 13,
       "rank": "C",
@@ -977,7 +963,7 @@
       "reason": "Feature 006 validation/orchestration branch matrix; recorded for explicit decomposition follow-up"
     },
     {
-      "path": "src/avo/timeline/tracks.py",
+      "path": "src/avo/timeline/track_rules.py",
       "name": "apply_event_role_defaults",
       "complexity": 12,
       "rank": "C",

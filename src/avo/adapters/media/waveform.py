@@ -26,7 +26,7 @@ def transient_cache_key(
     search_range: tuple[int, int],
     manual_marker: int | None,
 ) -> str:
-    """Hash the asset and every review-relevant analyzer parameter."""
+    """Hash the exact asset, analyzer and derivative-selection parameters."""
     return content_hash(
         {
             "assetSha256": asset_sha256,
@@ -94,6 +94,14 @@ def _onset_clusters(
     return clusters
 
 
+def _transient_disposition(onsets, manual_marker, reviewed):
+    if not onsets and manual_marker is None:
+        return "needs-human-judgment"
+    if (len(onsets) > 1 or manual_marker is not None) and not reviewed:
+        return "needs-human-judgment"
+    return "pass"
+
+
 def analyze_transient(
     samples: list[list[float]],
     *,
@@ -132,17 +140,7 @@ def analyze_transient(
         manual_marker if manual_marker is not None else (onsets[0] if onsets else None)
     )
     if marker is None:
-        status = "needs-human-judgment"
         marker = start
-    elif (
-        len(onsets) > 1
-        and not manual_marker_reviewed
-        or manual_marker is not None
-        and not manual_marker_reviewed
-    ):
-        status = "needs-human-judgment"
-    else:
-        status = "pass"
     if marker < start or marker >= end:
         raise WaveformError("manual transient marker is outside the search range")
     key = transient_cache_key(
@@ -159,7 +157,7 @@ def analyze_transient(
         manual_marker=manual_marker,
     )
     result = {
-        "status": status,
+        "status": _transient_disposition(onsets, manual_marker, manual_marker_reviewed),
         "assetSha256": asset_sha256,
         "cacheKey": key,
         "analyzer": {"id": analyzer_id, "version": analyzer_version},
@@ -193,7 +191,7 @@ def analyze_transient_cached(
     samples: list[list[float]],
     **parameters: Any,
 ) -> dict[str, Any]:
-    """Reuse only an exact asset-and-parameter analysis identity."""
+    """Reuse measurements; derive review disposition from the current invocation."""
     key = transient_cache_key(
         asset_sha256=parameters["asset_sha256"],
         analyzer_id=parameters.get("analyzer_id", "avo-energy"),
@@ -209,7 +207,16 @@ def analyze_transient_cached(
     )
     if key not in cache:
         cache[key] = analyze_transient(samples, **parameters)
-    return deepcopy(cache[key])
+    # Also remove approval fields from caches populated by older callers.
+    cache[key].pop("status", None)
+    cache[key].pop("manualMarkerReviewed", None)
+    result = deepcopy(cache[key])
+    reviewed = bool(parameters.get("manual_marker_reviewed", False))
+    result["manualMarkerReviewed"] = reviewed
+    result["status"] = _transient_disposition(
+        result["detectedOnsets"], parameters.get("manual_marker"), reviewed
+    )
+    return result
 
 
 def verify_rendered_transients(

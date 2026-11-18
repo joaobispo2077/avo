@@ -34,6 +34,8 @@
         "repo": { "type": "string" },
         "revision": { "type": "string" },
         "artifactPath": { "type": "string" },
+        "manifestPath": { "type": "string", "minLength": 1 },
+        "manifestSha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
         "companion": {
           "type": "object",
           "additionalProperties": false,
@@ -63,7 +65,8 @@
         "computeType": { "type": "string", "minLength": 1 },
         "offline": { "type": "boolean" },
         "allowDownload": { "type": "boolean" },
-        "pythonEnv": { "type": ["string", "null"] }
+        "pythonEnv": { "type": ["string", "null"] },
+        "ffmpegPath": { "type": "string", "minLength": 1 }
       }
     }
   },

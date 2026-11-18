@@ -34,6 +34,59 @@
     "reason": {"type": "string", "pattern": "\\S", "maxLength": 4096}
   },
   "$defs": {
+    "workDecisionRequest": {
+      "type": "object", "additionalProperties": false,
+      "required": ["contractVersion", "operation", "operationId", "actor", "reason", "work", "ids", "status", "expectedDecisionHash"],
+      "properties": {
+        "contractVersion": {"const": "1.0.0"},
+        "operation": {"const": "work-decide"},
+        "operationId": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$"},
+        "actor": {"type": "string", "pattern": "\\S", "maxLength": 512},
+        "reason": {"type": "string", "pattern": "\\S", "maxLength": 4096},
+        "work": {"$ref": "#/$defs/workReference"},
+        "ids": {"allOf": [{"$ref": "#/$defs/workIds"}], "minItems": 1},
+        "status": {"enum": ["pending", "deferred", "dismissed", "superseded"]},
+        "expectedDecisionHash": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/sha256"}]},
+        "replacement": {"$ref": "#/$defs/workReference"}
+      },
+      "allOf": [{
+        "if": {"properties": {"status": {"const": "superseded"}}},
+        "then": {"required": ["replacement"]},
+        "else": {"not": {"required": ["replacement"]}}
+      }]
+    },
+    "workDecisionRecord": {
+      "type": "object", "additionalProperties": false,
+      "required": ["request", "requestHash", "createdAt"],
+      "properties": {
+        "request": {"$ref": "#/$defs/workDecisionRequest"},
+        "requestHash": {"$ref": "#/$defs/sha256"},
+        "createdAt": {"type": "string", "minLength": 1, "maxLength": 64}
+      }
+    },
+    "workReference": {
+      "type": "object", "additionalProperties": false,
+      "required": ["kind", "operationId", "requestId", "proposalRef", "scope"],
+      "properties": {
+        "kind": {"enum": ["motion", "sound"]},
+        "operationId": {"type": "string", "pattern": "\\S", "maxLength": 128},
+        "requestId": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"},
+        "proposalRef": {"$ref": "avo.motion-proposal.schema.json#/$defs/ref"},
+        "scope": {"$ref": "#/$defs/workScope"}
+      }
+    },
+    "workScope": {
+      "type": "object", "additionalProperties": false,
+      "required": ["itemIds", "eventIds"],
+      "properties": {
+        "itemIds": {"$ref": "#/$defs/workIds"},
+        "eventIds": {"$ref": "#/$defs/workIds"}
+      }
+    },
+    "workIds": {
+      "type": "array", "maxItems": 500, "uniqueItems": true,
+      "items": {"type": "string", "pattern": "\\S", "maxLength": 128}
+    },
     "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
     "head": {
       "oneOf": [

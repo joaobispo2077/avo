@@ -11,13 +11,36 @@ from importlib.resources import files
 from string import Template
 
 from .contracts import content_hash, document_hash_excluding, validate_document
+from .craft_work import project_craft_work
+from .motion_metadata import (
+    MAX_DOCUMENT_BYTES,
+    METADATA_LIMITS,
+    MotionReviewError,
+    _basis_matches,
+    _check_budget,
+)
+from .motion_scope import unchanged_visual_items, visual_roots_match
+from .motion_sound_review import (
+    add_sound_groups,
+    enrich_sound_items,
+    sound_review_context,
+)
 from .store import atomic_write_json
 from .workspace import ARTIFACTS
 
-GENERATOR = {"id": "avo.motion-review", "version": "1.0.0"}
+GENERATOR = {"id": "avo.motion-review", "version": "1.7.0"}
 MAX_ITEMS = 500
 LIFECYCLE = ("preEntry", "entrance", "hold", "payoff", "exit")
-MAX_DOCUMENT_BYTES = 4 * 1024 * 1024
+CONCEPT_TEXT_FIELDS = {
+    "dominantFocus": ("Dominant focus", 4096),
+    "supportingMotion": ("Supporting motion", 4096),
+    "ambientMotion": ("Ambient motion", 4096),
+    "readingIntent": ("Reading intent", 4000),
+    "depthIntent": ("Depth intent", 4000),
+    "continuityIntent": ("Continuity intent", 4000),
+    "cameraIntent": ("Camera intent", 4096),
+    "soundIntent": ("Sound intent", 4096),
+}
 MAX_METADATA_BYTES = 8 * 1024 * 1024
 CONTEXT_LIMITS = {
     "nodes": 40000,
@@ -26,57 +49,6 @@ CONTEXT_LIMITS = {
     "text": 8192,
     "characters": 1024 * 1024,
 }
-METADATA_LIMITS = {
-    "nodes": 200000,
-    "depth": 32,
-    "items": 20000,
-    "text": 65536,
-    "characters": MAX_DOCUMENT_BYTES,
-}
-
-
-class MotionReviewError(ValueError):
-    pass
-
-
-def _budget_text(value, limits, statistics):
-    if not isinstance(value, str) or len(value) > limits["text"]:
-        raise MotionReviewError("Metadata text budget exceeded")
-    statistics["characters"] += len(value)
-    if statistics["characters"] > limits["characters"]:
-        raise MotionReviewError("Metadata character budget exceeded")
-
-
-def _budget_children(value, limits, statistics):
-    if isinstance(value, str):
-        _budget_text(value, limits, statistics)
-        return ()
-    if isinstance(value, dict):
-        if len(value) > limits["items"]:
-            raise MotionReviewError("Metadata object budget exceeded")
-        for key in value:
-            _budget_text(key, limits, statistics)
-        return value.values()
-    if isinstance(value, list):
-        if len(value) > limits["items"]:
-            raise MotionReviewError("Metadata array budget exceeded")
-        return value
-    if value is not None and not isinstance(value, (int, float, bool)):
-        raise MotionReviewError("Metadata must contain JSON values")
-    return ()
-
-
-def _check_budget(value, limits):
-    stack, nodes, statistics = [(value, 0)], 0, {"characters": 0}
-    while stack:
-        current, depth = stack.pop()
-        nodes += 1
-        if nodes > limits["nodes"] or depth > limits["depth"]:
-            raise MotionReviewError("Metadata node/depth budget exceeded")
-        stack.extend(
-            (child, depth + 1)
-            for child in _budget_children(current, limits, statistics)
-        )
 
 
 def _bounded_json(path, budget):
@@ -140,11 +112,14 @@ def _selected_revision(store, index, reference, root, budget):
             snapshot.get("cues") or [],
             "avo.motion-review.schema.json#/$defs/canonicalCues",
         )
-    if (
-        index["artifactType"] == "animation"
-        and snapshot.get("strategyContractVersion") is not None
-    ):
-        validate_document(snapshot, "avo.animation.schema.json")
+    if index["artifactType"] == "animation":
+        from .contracts import require_animation_reader
+
+        require_animation_reader(index, snapshot)
+    if index["artifactType"] == "tracks":
+        from .contracts import require_tracks_reader
+
+        require_tracks_reader(index, snapshot)
     return snapshot
 
 
@@ -259,13 +234,14 @@ def _card(item, data, heads):
         "itemId": item["itemId"],
         "label": item["label"],
         "concept": item["concept"],
+        **{key: item[key] for key in ("density", *CONCEPT_TEXT_FIELDS)},
         "layers": deepcopy(
             data.get("layers")
             or {"background": None, "middle": None, "foreground": None}
         ),
-        "layout": deepcopy(data.get("layout")),
+        "layout": deepcopy(item["layout"]),
         "lifecycle": lifecycle,
-        "camera": _camera_states(data),
+        "camera": _camera_states(item),
         "sound": deepcopy(data.get("sound", data.get("audio"))),
         "assets": item["assets"],
         "evidence": _evidence(data, heads),
@@ -274,7 +250,7 @@ def _card(item, data, heads):
     }
 
 
-def _item(data, *, timed, stale, heads):
+def _item(data, *, timed, stale, heads, gaps):
     identifier = str(data.get("itemId") or data.get("cueId") or "")
     if not identifier:
         raise MotionReviewError(
@@ -295,7 +271,7 @@ def _item(data, *, timed, stale, heads):
         else None,
         "timingState": "timed" if timed else "provisional",
         "anchor": _anchor(data, timed),
-        "camera": deepcopy(data.get("camera")),
+        "camera": _typed_camera_preview(data, gaps),
         "sound": deepcopy(data.get("sound", data.get("audio"))),
         "assets": assets,
         "assetReadiness": readiness,
@@ -305,12 +281,39 @@ def _item(data, *, timed, stale, heads):
         "cueId": data.get("cueId"),
         "componentRef": data.get("componentRef"),
         "targetLayerId": data.get("targetLayerId"),
+        **_concept_metadata(data, gaps),
     }
     item["parts"] = deepcopy(data.get("_parts", []))
     item["identityConflicts"] = deepcopy(data.get("_identityConflicts", []))
     if len(item["parts"]) > 1:
         item["timingState"] = "split"
     return item, _card(item, data, heads)
+
+
+def _concept_metadata(data, gaps):
+    identifier = str(data.get("itemId") or data.get("cueId") or "unknown")
+    result = _concept_text_metadata(data, gaps, identifier)
+    density, layout = data.get("density"), data.get("layout")
+    if density is not None and not (type(density) is int and 0 <= density <= 5):
+        gaps.append(f"concept:{identifier}:density:invalid")
+        density = None
+    if layout is not None and not isinstance(layout, dict):
+        gaps.append(f"concept:{identifier}:layout:invalid")
+        layout = None
+    return {**result, "density": density, "layout": deepcopy(layout)}
+
+
+def _concept_text_metadata(data, gaps, identifier):
+    result = {}
+    for key, (_, limit) in CONCEPT_TEXT_FIELDS.items():
+        value = data.get(key)
+        if value is not None and not (
+            isinstance(value, str) and value.strip() and len(value) <= limit
+        ):
+            gaps.append(f"concept:{identifier}:{key}:invalid")
+            value = None
+        result[key] = value
+    return result
 
 
 def _lanes(snapshot):
@@ -359,6 +362,32 @@ def _camera_states(data):
     if not isinstance(camera, dict):
         camera = {"during": camera}
     return {key: deepcopy(camera.get(key)) for key in ("before", "during", "after")}
+
+
+def _typed_camera_preview(data, gaps):
+    wrapper = data.get("_authoredCamera") or data.get("cameraTreatment")
+    if wrapper is None:
+        return deepcopy(data.get("camera"))
+    try:
+        validate_document(wrapper, "avo.animation.schema.json#/$defs/editingCraft")
+    except ValueError:
+        gaps.append(f"camera:{data.get('itemId', 'unknown')}:invalid")
+        return None
+    camera = wrapper["camera"]
+    return {
+        "state": "authored" if "_authoredCamera" in data else "planned",
+        "sourceId": camera.get("sourceId"),
+        "sourceSha256": wrapper.get("sourceSha256"),
+        "targetLayerId": camera["targetLayerId"],
+        "sourceGeometry": deepcopy(wrapper.get("sourceGeometry")),
+        "pathHash": content_hash(
+            {"behavior": camera, "geometry": wrapper.get("sourceGeometry")}
+        ),
+        "optionsHash": content_hash(wrapper.get("options")),
+        "before": deepcopy(camera["nodes"][0]),
+        "during": {"nodes": deepcopy(camera["nodes"])},
+        "after": deepcopy(camera["nodes"][-1]),
+    }
 
 
 def _disposition(data, stale):
@@ -423,11 +452,41 @@ def _context(context, gaps):
         key: _object(context, key, gaps) for key in ("direction", "options", "proposal")
     }
     result["proposal"] = result["proposal"] or {}
+    result["appliedHeads"] = _applied_heads(context, gaps)
+    result["proposalStale"] = context.get("proposalStale", False) is not False
+    result["directionCurrent"] = context.get("directionCurrent", False) is True
+    result["soundProposal"] = sound_review_context(context.get("soundProposal"), gaps)
     result["pendingRevisions"] = _pending(context, gaps)
+    result["advisories"] = _advisories(context, gaps)
     result["applicability"] = _applicability(context, gaps)
     result["coverageUnavailable"] = unavailable
     result["proposalDefinitionCount"] = proposal_count
     return result
+
+
+def _applied_heads(context, gaps):
+    value = context.get("appliedHeads", {})
+    try:
+        validate_document(
+            value,
+            "avo.motion-proposal.schema.json#/$defs/receipt/properties/committedHeads",
+        )
+        if set(value) - {"bmap", "tracks", "animation"}:
+            raise ValueError("Applied motion names a different canonical owner")
+    except (ValueError, TypeError, RecursionError):
+        gaps.append("context:appliedHeads:invalid")
+        return {}
+    return deepcopy(value)
+
+
+def _advisories(context, gaps):
+    value = context.get("advisories", [])
+    try:
+        validate_document(value, "avo.motion-review.schema.json#/$defs/advisories")
+    except (ValueError, TypeError, RecursionError):
+        gaps.append("context:advisories:invalid")
+        return []
+    return deepcopy(value)
 
 
 def _proposals(proposal, gaps):
@@ -462,18 +521,61 @@ def _enrich_components(combined, animation):
         for component in animation.get("components", [])
     }
     for data in combined.values():
-        component = components.get(data.get("componentRef")) or {}
+        data.pop("_authoredCamera", None)
+        reference = _component_reference(data)
+        component = components.get(reference) or {}
+        if component:
+            data["componentRef"] = reference
+        wrapper = (component.get("extensions") or {}).get("editingCraft") or {}
+        if "camera" in wrapper:
+            data["_authoredCamera"] = deepcopy(wrapper)
         if component.get("lifecycle"):
             data.setdefault("lifecycle", deepcopy(component["lifecycle"]))
         if component.get("audioRelationship"):
             data.setdefault("sound", deepcopy(component["audioRelationship"]))
 
 
-def _project_items(proposal, snapshots, heads, gaps):
+def _component_reference(data):
+    explicit = data.get("componentRef") or (data.get("contentRef") or {}).get(
+        "componentId"
+    )
+    if explicit:
+        return explicit
+    identifiers = data.get("componentIds") or []
+    return identifiers[0] if len(identifiers) == 1 else None
+
+
+def _proposal_basis_stale(proposal, heads, applied_heads, selected_stale):
+    if selected_stale:
+        return True
+    expected = proposal.get("basisHeads")
+    if expected is None:
+        return False
+    try:
+        validate_document(
+            expected, "avo.motion-review.schema.json#/properties/basisHeads"
+        )
+    except (ValueError, TypeError, RecursionError):
+        return True
+    return not _basis_matches({**expected, **(applied_heads or {})}, heads)
+
+
+def _project_items(
+    proposal,
+    snapshots,
+    heads,
+    gaps,
+    sound_context=None,
+    *,
+    applied_heads=None,
+    proposal_stale=False,
+    reusable_visual_items=(),
+):
     groups = _combined(proposal, snapshots, gaps)
-    stale = _stale(snapshots, heads)
-    if proposal.get("basisHeads") is not None and proposal["basisHeads"] != heads:
-        stale = True
+    add_sound_groups(groups, sound_context)
+    stale = _stale(snapshots, heads) or _proposal_basis_stale(
+        proposal, heads, applied_heads, proposal_stale
+    )
     sections = {
         name: index
         for index, name in enumerate(
@@ -486,9 +588,16 @@ def _project_items(proposal, snapshots, heads, gaps):
         for identifier, group in ordered[:MAX_ITEMS]
     }
     _enrich_components(selected, snapshots.get("animation") or {})
+    enrich_sound_items(selected, snapshots.get("tracks") or {}, sound_context, heads)
     pairs = [
-        _item(data, timed=len(data["_parts"]) == 1, stale=stale, heads=heads)
-        for data in selected.values()
+        _item(
+            data,
+            timed=len(data["_parts"]) == 1,
+            stale=stale and identifier not in reusable_visual_items,
+            heads=heads,
+            gaps=gaps,
+        )
+        for identifier, data in selected.items()
     ]
     counts = {
         "total": len(groups),
@@ -638,11 +747,92 @@ class MotionReviewService:
                 gaps.append(gap)
         return heads, bodies, gaps
 
+    def _retained_snapshot(self, name, expected, budget):
+        root, store = self.workspace.timeline_dir.resolve(), self.workspace.store(name)
+        index = _bounded_json(
+            _metadata_path(self.workspace.artifact_path(name), root), budget
+        )
+        store._validate_index(index)
+        if any(
+            index[key] != value
+            for key, value in {
+                "artifactType": name,
+                "videoId": self.workspace.video_id,
+                "provider": self.workspace.project.get("provider"),
+            }.items()
+        ):
+            raise MotionReviewError(
+                "Retained visual basis belongs to another workspace"
+            )
+        reference = next(
+            ref
+            for ref in index["revisionRefs"]
+            if ref["revisionId"] == expected["revisionId"]
+            and ref["contentSha256"] == expected["sha256"]
+        )
+        return _selected_revision(
+            store,
+            {**index, "headRevisionId": reference["revisionId"]},
+            reference,
+            root,
+            budget,
+        )
+
+    def _visual_reuse(self, context, heads, snapshots, gaps):
+        if not context["proposalStale"] or not context["directionCurrent"]:
+            return []
+        basis = context["proposal"].get("basisHeads")
+        if not isinstance(basis, dict):
+            return []
+        try:
+            validate_document(
+                basis, "avo.motion-review.schema.json#/properties/basisHeads"
+            )
+            expected = {**basis, **context["appliedHeads"]}
+            if not visual_roots_match(expected, heads):
+                return []
+            budget = {"remaining": MAX_METADATA_BYTES}
+            original = {
+                name: self._retained_snapshot(name, expected[name], budget)
+                for name in ("bmap", "tracks", "animation")
+            }
+            return unchanged_visual_items(context["proposal"], original, snapshots)
+        except (
+            OSError,
+            ValueError,
+            RuntimeError,
+            KeyError,
+            TypeError,
+            StopIteration,
+        ) as error:
+            gaps.append(
+                {"kind": "visual-reuse-unavailable", "detail": str(error)[:500]}
+            )
+            return []
+
     def project(self, context=None):
         heads, snapshots, gaps = self._metadata()
         context = _context(context, gaps)
+        work, work_gaps = project_craft_work(self.workspace, heads)
+        context["pendingRevisions"].extend(work)
+        gaps.extend(work_gaps)
+        provided_sound = context["soundProposal"]
+        if provided_sound and (
+            provided_sound["proposal"]["videoId"] != self.workspace.video_id
+            or provided_sound["proposal"]["provider"]
+            != self.workspace.project.get("provider")
+        ):
+            gaps.append({"kind": "sound-proposal-owner-mismatch"})
+            context["soundProposal"] = None
         pairs, counts, stale = _project_items(
-            context["proposal"], snapshots, heads, gaps
+            context["proposal"],
+            snapshots,
+            heads,
+            gaps,
+            context["soundProposal"],
+            applied_heads=context["appliedHeads"],
+            proposal_stale=context["proposalStale"],
+            reusable_visual_items=self._visual_reuse(context, heads, snapshots, gaps),
         )
         items, cards = [pair[0] for pair in pairs], [pair[1] for pair in pairs]
         snapshot = {
@@ -656,6 +846,7 @@ class MotionReviewService:
             "readiness": _projection_readiness(items, snapshots, stale, context, gaps),
             "direction": context["direction"],
             "options": context["options"],
+            "advisories": deepcopy(context["advisories"]),
             "items": items,
             "storyboardCards": cards,
             "lanes": _lanes(snapshots.get("tracks") or {}),
@@ -788,6 +979,10 @@ def render_text(snapshot):
                 f"Treatment: {item['treatment']}; timing: {_text(item['timing'], 'provisional')}",
                 f"Anchor: {_text(item['anchor'])}",
                 f"Concept: {card['concept']}",
+                *(
+                    f"{label}: {_text(value)}"
+                    for label, value in _concept_descriptions(item).items()
+                ),
                 f"Layers: {_text(card['layers'])}",
                 f"Layout: {_text(card['layout'])}",
                 f"Lifecycle: {_text(card['lifecycle'])}",
@@ -807,12 +1002,35 @@ def render_text(snapshot):
             json.dumps(snapshot["lanes"], indent=2, sort_keys=True),
             "Pending revisions",
             json.dumps(snapshot["pendingRevisions"], indent=2, sort_keys=True),
+            "Recorded planning advisories",
+            *(_text(advisory) for advisory in snapshot["advisories"]),
             "Gaps",
             *(_text(gap) for gap in snapshot["gaps"]),
             f"Shown: {snapshot['coverage']['shown']} / {snapshot['coverage']['total']}",
         ]
     )
     return "\n".join(lines) + "\n"
+
+
+def _concept_descriptions(item):
+    result = {"Density": item["density"]} if item["density"] is not None else {}
+    result.update(
+        {
+            label: item[key]
+            for key, (label, _) in CONCEPT_TEXT_FIELDS.items()
+            if item[key] is not None
+        }
+    )
+    return result
+
+
+def _map_concept_summary(item):
+    fields = _concept_descriptions(item)
+    return " | ".join(
+        f"{label}: {_text(fields[label])}"
+        for label in ("Density", "Dominant focus", "Camera intent", "Sound intent")
+        if label in fields
+    )
 
 
 def render_html(snapshot):
@@ -827,12 +1045,14 @@ def render_html(snapshot):
         map_rows.append(
             f'<li><a href="#{anchor}">{escape(item["label"])}</a> '
             f"{escape(item['sectionId'])} | {escape(item['treatment'])} | "
-            f"{escape(item['disposition'])} | {escape(_text(item['timing'], 'provisional'))}</li>"
+            f"{escape(item['disposition'])} | {escape(_text(item['timing'], 'provisional'))} "
+            f"{escape(_map_concept_summary(item))}</li>"
         )
         fields = {
             "Canonical parts (exact BMap ranges)": item["parts"],
             "Non-authoritative proposal identity conflicts": item["identityConflicts"],
             "Purpose": item["purpose"],
+            **_concept_descriptions(item),
             "Anchor": item["anchor"],
             "Layers": card["layers"],
             "Layout": card["layout"],
@@ -855,7 +1075,23 @@ def render_html(snapshot):
         title=escape(f"Motion plan: {snapshot['videoId']}"),
         map_rows="".join(map_rows),
         cards="".join(cards),
+        advisories=_render_advisories(snapshot["advisories"]),
         content=escape(render_text(snapshot)),
+    )
+
+
+def _render_advisories(advisories):
+    if not advisories:
+        return ""
+    notes = "".join(
+        f"<li>{escape(advisory['message'])} "
+        f"(items: {escape(', '.join(advisory['itemIds']))})</li>"
+        for advisory in advisories
+    )
+    return (
+        '<aside aria-label="Recorded planning advisories"><h2>Planning advisories</h2><ul>'
+        + notes
+        + "</ul></aside>"
     )
 
 

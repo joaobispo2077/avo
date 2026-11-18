@@ -4,6 +4,7 @@ import os
 import subprocess
 import tempfile
 import unittest
+from itertools import product
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -12,18 +13,23 @@ ROOT = Path(__file__).resolve().parents[1]
 @unittest.skipUnless(os.name == "posix", "Linux CI setup")
 class FfmpegSetupTests(unittest.TestCase):
     def test_install_uses_main_https_mirror_and_preserves_other_sources(self):
-        for scheme in ("http", "https", None):
-            with (
-                self.subTest(scheme=scheme),
-                tempfile.TemporaryDirectory() as directory,
-            ):
+        hosts = (
+            "azure.archive.ubuntu.com",
+            "us-east-2.ec2.archive.ubuntu.com",
+            "archive.ubuntu.com",
+        )
+        for scheme, host in [*product(("http", "https"), hosts), (None, None)]:
+            case = self.subTest(scheme=scheme, host=host)
+            with case, tempfile.TemporaryDirectory() as directory:
                 work = Path(directory)
                 mirrors = work / "apt-mirrors.txt"
-                other = "https://security.ubuntu.com/ubuntu\n"
+                other = (
+                    "https://security.ubuntu.com/ubuntu\n"
+                    "https://ports.ubuntu.com/ubuntu-ports\n"
+                    "https://example.invalid/ubuntu\n"
+                )
                 if scheme:
-                    mirrors.write_text(
-                        f"{scheme}://azure.archive.ubuntu.com/ubuntu\n" + other
-                    )
+                    mirrors.write_text(f"{scheme}://{host}/ubuntu\n" + other)
                 installed = work / "installed"
                 calls = work / "calls"
                 commands = {

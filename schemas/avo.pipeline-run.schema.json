@@ -197,6 +197,23 @@
       "type": "object",
       "additionalProperties": true,
       "properties": {
+        "editingCraftWorkDecisions": {
+          "type": "array", "maxItems": 500,
+          "items": {"$ref": "avo.editing-craft-run.schema.json#/$defs/workDecisionRecord"}
+        },
+        "editingCraftWork": {
+          "type": "array", "maxItems": 500,
+          "items": {"$ref": "avo.editing-craft-run.schema.json#/$defs/workReference"}
+        },
+        "motionProposalSelection": {
+          "$ref": "avo.motion-proposal.schema.json#/$defs/selectionRef"
+        },
+        "motionProposalSelectionHistory": {
+          "type": "array",
+          "items": {
+            "$ref": "avo.motion-proposal.schema.json#/$defs/selectionRef"
+          }
+        },
         "editingCraftRequestHistory": {
           "type": "array",
           "items": {

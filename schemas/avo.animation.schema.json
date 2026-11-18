@@ -204,6 +204,39 @@
         }
       }
     },
+    "editingCraft": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["camera"],
+      "properties": {
+        "sourceGeometry": {
+          "$ref": "https://avo.local/schemas/avo.camera-behavior.schema.json#/$defs/geometry"
+        },
+        "sourceSha256": {"$ref": "#/$defs/sha256"},
+        "entryPolicy": {"enum": ["continuous", "source-cut"]},
+        "options": {
+          "$ref": "https://avo.local/avo.editing-craft.schema.json#/$defs/selection"
+        },
+        "camera": {
+          "$ref": "https://avo.local/schemas/avo.camera-behavior.schema.json#/$defs/behavior"
+        }
+      }
+    },
+    "noAdvancedCueTiming": {
+      "allOf": [
+        {
+          "if": {"type": "object"},
+          "then": {
+            "propertyNames": {"not": {"enum": ["start", "end", "startTicks", "endTicks", "timestamp", "timestamps", "timing", "startFrame", "endFrame", "firstFrame", "endFrameExclusive", "frameRange", "outputRange", "outputFrames", "start_in_output", "end_in_output"]}},
+            "additionalProperties": {"$ref": "#/$defs/noAdvancedCueTiming"}
+          }
+        },
+        {
+          "if": {"type": "array"},
+          "then": {"items": {"$ref": "#/$defs/noAdvancedCueTiming"}}
+        }
+      ]
+    },
     "noCueTiming": {
       "allOf": [
         {
@@ -254,6 +287,9 @@
         "dependencies"
       ],
       "properties": {
+        "strategyContractVersion": {
+          "const": "2.0.0"
+        },
         "formatDiagnosis": {
           "type": "object",
           "additionalProperties": false,
@@ -368,6 +404,9 @@
                 "properties": {
                   "codeDrawn": {
                     "$ref": "#/$defs/codeDrawnInstanceRef"
+                  },
+                  "editingCraft": {
+                    "$ref": "#/$defs/editingCraft"
                   }
                 }
               }
@@ -433,6 +472,33 @@
       },
       "allOf": [
         {
+          "if": {"required": ["strategyContractVersion"]},
+          "then": {
+            "allOf": [{"$ref": "#/$defs/noAdvancedCueTiming"}],
+            "properties": {
+              "components": {
+                "contains": {
+                  "required": ["extensions"],
+                  "properties": {"extensions": {"required": ["editingCraft"]}}
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "components": {
+                "contains": {
+                  "required": ["extensions"],
+                  "properties": {"extensions": {"required": ["editingCraft"]}}
+                }
+              }
+            }
+          },
+          "then": {"required": ["strategyContractVersion"]}
+        },
+        {
           "if": {
             "properties": {
               "framework": {
@@ -462,8 +528,9 @@
                   },
                   "properties": {
                     "extensions": {
-                      "required": [
-                        "codeDrawn"
+                      "anyOf": [
+                        {"required": ["codeDrawn"]},
+                        {"required": ["editingCraft"]}
                       ]
                     }
                   }

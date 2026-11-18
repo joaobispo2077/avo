@@ -1,0 +1,1621 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://avo.local/avo.motion-proposal.schema.json",
+  "title": "Untimed motion authoring and recoverable owner publication",
+  "$defs": {
+    "ref": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      },
+      "required": [
+        "path",
+        "sha256"
+      ]
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "cameraRecipe": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["preset", "targetLayerId", "sourceId", "sourceSha256", "sourceGeometry"],
+      "properties": {
+        "preset": {"enum": ["push", "pull", "punch-settle", "cut-to-close", "speed-contrast", "overlay-return", "section-alternate", "section-drift"]},
+        "targetLayerId": {"$ref": "https://avo.local/schemas/avo.camera-behavior.schema.json#/$defs/id"},
+        "sourceId": {"$ref": "https://avo.local/schemas/avo.camera-behavior.schema.json#/$defs/id"},
+        "sourceSha256": {"$ref": "#/$defs/sha256"},
+        "sourceGeometry": {"$ref": "https://avo.local/schemas/avo.camera-behavior.schema.json#/$defs/geometry"},
+        "predecessor": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["scale", "center"],
+          "properties": {
+            "scale": {"type": "number", "exclusiveMinimum": 0},
+            "center": {"$ref": "https://avo.local/schemas/avo.camera-behavior.schema.json#/$defs/center"}
+          }
+        },
+        "targetScale": {"type": "number", "exclusiveMinimum": 0},
+        "targetCenter": {"$ref": "https://avo.local/schemas/avo.camera-behavior.schema.json#/$defs/center"},
+        "safeRegions": {
+          "type": "array", "maxItems": 64,
+          "items": {"$ref": "https://avo.local/schemas/avo.camera-behavior.schema.json#/$defs/safeRegion"}
+        }
+      }
+    },
+    "asset": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "pattern": "\\S"
+        },
+        "status": {
+          "enum": [
+            "missing",
+            "declared",
+            "unresolved",
+            "ready"
+          ]
+        },
+        "supplier": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "pattern": "\\S"
+        },
+        "subject": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "pattern": "\\S"
+        },
+        "rights": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "pattern": "\\S"
+        }
+      },
+      "required": [
+        "kind",
+        "status"
+      ]
+    },
+    "lifecycle": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "preEntry": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "pattern": "\\S"
+        },
+        "entrance": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "pattern": "\\S"
+        },
+        "hold": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "pattern": "\\S"
+        },
+        "payoff": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "pattern": "\\S"
+        },
+        "exit": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "pattern": "\\S"
+        }
+      },
+      "required": []
+    },
+    "item": {
+      "type": "object",
+      "additionalProperties": false,
+      "dependentRequired": {"cameraTreatment": ["cameraRecipe"]},
+      "properties": {
+        "itemId": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{2,63}$"
+        },
+        "label": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{2,63}$"
+        },
+        "sectionId": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{2,63}$"
+        },
+        "concept": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "pattern": "\\S"
+        },
+        "purpose": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "pattern": "\\S"
+        },
+        "treatment": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "pattern": "\\S"
+        },
+        "density": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 5
+        },
+        "dominantFocus": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "pattern": "\\S"
+        },
+        "supportingMotion": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "pattern": "\\S"
+        },
+        "ambientMotion": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "pattern": "\\S"
+        },
+        "lifecycle": {
+          "$ref": "#/$defs/lifecycle"
+        },
+        "assets": {
+          "type": "array",
+          "maxItems": 100,
+          "items": {
+            "$ref": "#/$defs/asset"
+          }
+        },
+        "cueId": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{2,63}$"
+        },
+        "layerIds": {
+          "type": "array",
+          "maxItems": 100,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]{2,63}$"
+          }
+        },
+        "componentIds": {
+          "type": "array",
+          "maxItems": 100,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]{2,63}$"
+          }
+        },
+        "anchors": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "sourceId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4096,
+              "pattern": "\\S"
+            },
+            "wordId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4096,
+              "pattern": "\\S"
+            },
+            "cutId": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4096,
+              "pattern": "\\S"
+            },
+            "description": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4096,
+              "pattern": "\\S"
+            }
+          },
+          "required": []
+        },
+        "cameraIntent": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "pattern": "\\S"
+        },
+        "cameraRecipe": {"$ref": "#/$defs/cameraRecipe"},
+        "cameraTreatment": {"$ref": "https://avo.local/avo.animation.schema.json#/$defs/editingCraft"},
+        "soundIntent": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "pattern": "\\S"
+        },
+        "readingIntent": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4000
+        },
+        "depthIntent": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4000
+        },
+        "continuityIntent": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4000
+        },
+        "layout": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "mode"
+          ],
+          "properties": {
+            "mode": {
+              "enum": [
+                "full-frame",
+                "transparent-overlay",
+                "lateral-overlay",
+                "footage-emphasis"
+              ]
+            },
+            "placement": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4000
+            },
+            "grouping": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4000
+            }
+          }
+        }
+      },
+      "required": [
+        "itemId",
+        "label",
+        "sectionId",
+        "concept",
+        "purpose",
+        "treatment"
+      ]
+    },
+    "proposalInput": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "items": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 500,
+          "items": {
+            "$ref": "#/$defs/item"
+          }
+        },
+        "predecessor": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "items"
+      ]
+    },
+    "disposition": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "itemId": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{2,63}$"
+        },
+        "status": {
+          "enum": [
+            "selected",
+            "rejected"
+          ]
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "pattern": "\\S"
+        }
+      },
+      "required": [
+        "itemId",
+        "status",
+        "reason"
+      ]
+    },
+    "proposeRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "contractVersion": {
+          "const": "1.0.0"
+        },
+        "operation": {
+          "enum": ["plan-propose", "camera-propose"]
+        },
+        "operationId": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{2,63}$"
+        },
+        "actor": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "pattern": "\\S"
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "pattern": "\\S"
+        },
+        "expectedBasis": {
+          "$ref": "https://avo.local/avo.motion-review.schema.json#/properties/basisHeads"
+        },
+        "selection": {
+          "$ref": "https://avo.local/avo.editing-craft.schema.json#/$defs/selection"
+        },
+        "proposal": {
+          "$ref": "#/$defs/proposalInput"
+        },
+        "requestId": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{2,63}$"
+        },
+        "newRequest": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "contractVersion",
+        "operation",
+        "operationId",
+        "actor",
+        "reason",
+        "expectedBasis",
+        "selection",
+        "proposal"
+      ]
+    },
+    "selectRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "contractVersion": {
+          "const": "1.0.0"
+        },
+        "operation": {
+          "const": "plan-select"
+        },
+        "operationId": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{2,63}$"
+        },
+        "actor": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "pattern": "\\S"
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "pattern": "\\S"
+        },
+        "expectedBasis": {
+          "$ref": "https://avo.local/avo.motion-review.schema.json#/properties/basisHeads"
+        },
+        "selection": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "proposalHash": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "dispositions": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 500,
+              "items": {
+                "$ref": "#/$defs/disposition"
+              }
+            }
+          },
+          "required": [
+            "proposalHash",
+            "dispositions"
+          ]
+        }
+      },
+      "required": [
+        "contractVersion",
+        "operation",
+        "operationId",
+        "actor",
+        "reason",
+        "expectedBasis",
+        "selection"
+      ]
+    },
+    "nativeSnapshot": {
+      "type": "object",
+      "maxProperties": 64
+    },
+    "applyRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "contractVersion": {
+          "const": "1.0.0"
+        },
+        "operation": {
+          "enum": ["plan-apply", "camera-apply"]
+        },
+        "operationId": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{2,63}$"
+        },
+        "actor": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "pattern": "\\S"
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "pattern": "\\S"
+        },
+        "expectedBasis": {
+          "$ref": "https://avo.local/avo.motion-review.schema.json#/properties/basisHeads"
+        },
+        "selection": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "proposalHash": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "decisionHash": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            }
+          },
+          "required": [
+            "proposalHash",
+            "decisionHash"
+          ]
+        },
+        "authoring": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "bmap": {
+              "$ref": "#/$defs/bmapPayload"
+            },
+            "tracks": {
+              "$ref": "#/$defs/tracksPayload"
+            },
+            "animation": {
+              "$ref": "#/$defs/animationPayload"
+            }
+          },
+          "required": [],
+          "minProperties": 1
+        }
+      },
+      "required": [
+        "contractVersion",
+        "operation",
+        "operationId",
+        "actor",
+        "reason",
+        "expectedBasis",
+        "selection",
+        "authoring"
+      ]
+    },
+    "selectionRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "proposalRef": {
+          "$ref": "#/$defs/ref"
+        },
+        "decisionRef": {
+          "$ref": "#/$defs/ref"
+        },
+        "requestId": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{2,63}$"
+        },
+        "receiptRef": {
+          "$ref": "#/$defs/ref"
+        }
+      },
+      "required": [
+        "proposalRef",
+        "decisionRef",
+        "requestId"
+      ]
+    },
+    "proposal": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "operation": {"enum": ["plan-propose", "camera-propose"]},
+        "cameraEnvironmentHash": {"$ref": "#/$defs/sha256"},
+        "contractVersion": {
+          "const": "1.0.0"
+        },
+        "operationId": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{2,63}$"
+        },
+        "videoId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "pattern": "\\S"
+        },
+        "provider": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{2,63}$"
+        },
+        "requestId": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{2,63}$"
+        },
+        "options": {
+          "$ref": "https://avo.local/avo.editing-craft.schema.json#/$defs/selection"
+        },
+        "basisHeads": {
+          "$ref": "https://avo.local/avo.motion-review.schema.json#/properties/basisHeads"
+        },
+        "items": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 500,
+          "items": {
+            "$ref": "#/$defs/item"
+          }
+        },
+        "predecessor": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "retiredLabels": {
+          "type": "object",
+          "maxProperties": 500,
+          "additionalProperties": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9-]{2,63}$"
+          }
+        },
+        "directionRef": {
+          "anyOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "path": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 1024
+                },
+                "sha256": {
+                  "type": "string",
+                  "pattern": "^[a-f0-9]{64}$"
+                }
+              },
+              "required": [
+                "path",
+                "sha256"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "direction": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "maxProperties": 64
+        },
+        "requestHash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      },
+      "required": [
+        "contractVersion",
+        "operationId",
+        "videoId",
+        "provider",
+        "requestId",
+        "options",
+        "basisHeads",
+        "items",
+        "predecessor",
+        "retiredLabels",
+        "directionRef",
+        "requestHash"
+      ]
+    },
+    "decision": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "contractVersion": {
+          "const": "1.0.0"
+        },
+        "operationId": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{2,63}$"
+        },
+        "videoId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "pattern": "\\S"
+        },
+        "provider": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{2,63}$"
+        },
+        "requestId": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{2,63}$"
+        },
+        "proposalHash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "dispositions": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 500,
+          "items": {
+            "$ref": "#/$defs/disposition"
+          }
+        },
+        "actor": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "pattern": "\\S"
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "pattern": "\\S"
+        },
+        "requestHash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      },
+      "required": [
+        "contractVersion",
+        "operationId",
+        "videoId",
+        "provider",
+        "requestId",
+        "proposalHash",
+        "dispositions",
+        "actor",
+        "reason",
+        "requestHash"
+      ]
+    },
+    "operationIntent": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "operation": {
+          "enum": [
+            "plan-propose",
+            "camera-propose",
+            "plan-select",
+            "plan-apply",
+            "camera-apply"
+          ]
+        },
+        "operationId": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{2,63}$"
+        },
+        "requestHash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "resultRef": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1024
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            }
+          },
+          "required": [
+            "path",
+            "sha256"
+          ]
+        },
+        "request": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/proposeRequest"
+            },
+            {
+              "$ref": "#/$defs/selectRequest"
+            },
+            {
+              "$ref": "#/$defs/applyRequest"
+            }
+          ]
+        }
+      },
+      "required": [
+        "operation",
+        "operationId",
+        "requestHash",
+        "resultRef",
+        "request"
+      ]
+    },
+    "receipt": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "cameraEnvironmentHash": {"$ref": "#/$defs/sha256"},
+        "contractVersion": {
+          "const": "1.0.0"
+        },
+        "operationId": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{2,63}$"
+        },
+        "requestHash": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "state": {
+          "enum": [
+            "staged",
+            "committing",
+            "committed",
+            "recovery-needed"
+          ]
+        },
+        "proposalRef": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1024
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            }
+          },
+          "required": [
+            "path",
+            "sha256"
+          ]
+        },
+        "decisionRef": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "path": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 1024
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            }
+          },
+          "required": [
+            "path",
+            "sha256"
+          ]
+        },
+        "expectedBasis": {
+          "$ref": "https://avo.local/avo.motion-review.schema.json#/properties/basisHeads"
+        },
+        "prepared": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "bmap": {
+              "type": "object",
+              "maxProperties": 64
+            },
+            "tracks": {
+              "type": "object",
+              "maxProperties": 64
+            },
+            "animation": {
+              "type": "object",
+              "maxProperties": 64
+            }
+          },
+          "required": [],
+          "minProperties": 1
+        },
+        "committedHeads": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/headRef"
+          }
+        },
+        "actor": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "pattern": "\\S"
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "pattern": "\\S"
+        },
+        "requestRef": {
+          "$ref": "#/$defs/ref"
+        }
+      },
+      "required": [
+        "contractVersion",
+        "operationId",
+        "requestHash",
+        "state",
+        "proposalRef",
+        "decisionRef",
+        "expectedBasis",
+        "prepared",
+        "committedHeads",
+        "actor",
+        "reason",
+        "requestRef"
+      ]
+    },
+    "headRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "revisionId",
+        "sha256"
+      ],
+      "properties": {
+        "revisionId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sha256": {
+          "$ref": "#/$defs/sha256"
+        }
+      }
+    },
+    "bmapPayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "basis": {
+          "$ref": "https://github.com/joaobispo2077/avo/schemas/avo.bmap.schema.json#/$defs/bmapBasis"
+        },
+        "cues": {
+          "type": "array",
+          "items": {
+            "$ref": "https://github.com/joaobispo2077/avo/schemas/avo.bmap.schema.json#/$defs/cue"
+          }
+        }
+      },
+      "required": [
+        "cues"
+      ]
+    },
+    "tracksPayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "basis": {
+          "$ref": "https://avo.local/avo.tracks.schema.json#/$defs/dependencyRef"
+        },
+        "audioTracks": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "layers"
+          ],
+          "properties": {
+            "layers": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "layerId",
+                  "order",
+                  "role",
+                  "source",
+                  "regions"
+                ],
+                "properties": {
+                  "layerId": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9-]{2,63}$"
+                  },
+                  "order": {
+                    "type": "integer"
+                  },
+                  "role": {
+                    "enum": [
+                      "dialogue",
+                      "music",
+                      "sfx",
+                      "ambience",
+                      "source-audio"
+                    ]
+                  },
+                  "source": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "sha256",
+                      "sizeBytes"
+                    ],
+                    "properties": {
+                      "sha256": {
+                        "$ref": "https://avo.local/avo.tracks.schema.json#/$defs/sha256"
+                      },
+                      "sizeBytes": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "locator": {
+                        "type": "string"
+                      },
+                      "generator": {
+                        "type": "string"
+                      }
+                    },
+                    "oneOf": [
+                      {
+                        "required": [
+                          "locator"
+                        ],
+                        "not": {
+                          "required": [
+                            "generator"
+                          ]
+                        }
+                      },
+                      {
+                        "required": [
+                          "generator"
+                        ],
+                        "not": {
+                          "required": [
+                            "locator"
+                          ]
+                        }
+                      }
+                    ]
+                  },
+                  "regions": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "startTicks",
+                        "endTicks",
+                        "cueIds",
+                        "regionId"
+                      ],
+                      "properties": {
+                        "timebase": {
+                          "$ref": "https://avo.local/avo.tracks.schema.json#/$defs/timebase"
+                        },
+                        "startTicks": {
+                          "type": "integer"
+                        },
+                        "endTicks": {
+                          "type": "integer"
+                        },
+                        "cueIds": {
+                          "type": "array",
+                          "minItems": 1,
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "gainDb": {
+                          "type": "number"
+                        },
+                        "fadeInTicks": {
+                          "type": "integer"
+                        },
+                        "fadeOutTicks": {
+                          "type": "integer"
+                        },
+                        "ducking": {
+                          "type": "object"
+                        },
+                        "regionId": {
+                          "type": "string",
+                          "pattern": "^[a-z][a-z0-9-]{2,63}$"
+                        }
+                      }
+                    }
+                  },
+                  "channels": {
+                    "type": "array",
+                    "items": {
+                      "type": "integer"
+                    }
+                  },
+                  "gainDb": {
+                    "type": "number"
+                  },
+                  "fades": {
+                    "type": "object"
+                  },
+                  "ducking": {
+                    "type": "object"
+                  },
+                  "mute": {
+                    "type": "boolean"
+                  },
+                  "loudnessIntent": {
+                    "type": "string"
+                  },
+                  "breathControl": {
+                    "$ref": "https://avo.local/avo.breath-control.schema.json"
+                  },
+                  "status": {
+                    "type": "string"
+                  },
+                  "provenance": {
+                    "type": "object"
+                  }
+                }
+              }
+            },
+            "sourceMixAdjustments": {
+              "type": "array",
+              "items": {
+                "$ref": "https://avo.local/avo.tracks.schema.json#/$defs/sourceMixAdjustment"
+              },
+              "description": "Post-cut gain adjustments to existing imported CMap audio placements; never additional audio sources."
+            }
+          }
+        },
+        "videoTracks": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "layers"
+          ],
+          "properties": {
+            "layers": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "layerId",
+                  "order",
+                  "role",
+                  "regions",
+                  "zOrder"
+                ],
+                "properties": {
+                  "layerId": {
+                    "type": "string",
+                    "pattern": "^[a-z][a-z0-9-]{2,63}$"
+                  },
+                  "order": {
+                    "type": "integer"
+                  },
+                  "role": {
+                    "enum": [
+                      "base",
+                      "clip",
+                      "image",
+                      "text",
+                      "card",
+                      "graphic",
+                      "caption",
+                      "grade",
+                      "end-screen",
+                      "overlay"
+                    ]
+                  },
+                  "source": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": [
+                      "sha256",
+                      "sizeBytes"
+                    ],
+                    "properties": {
+                      "sha256": {
+                        "$ref": "https://avo.local/avo.tracks.schema.json#/$defs/sha256"
+                      },
+                      "sizeBytes": {
+                        "type": "integer",
+                        "minimum": 0
+                      },
+                      "locator": {
+                        "type": "string"
+                      },
+                      "generator": {
+                        "type": "string"
+                      }
+                    },
+                    "oneOf": [
+                      {
+                        "required": [
+                          "locator"
+                        ],
+                        "not": {
+                          "required": [
+                            "generator"
+                          ]
+                        }
+                      },
+                      {
+                        "required": [
+                          "generator"
+                        ],
+                        "not": {
+                          "required": [
+                            "locator"
+                          ]
+                        }
+                      }
+                    ]
+                  },
+                  "generator": {
+                    "type": "object"
+                  },
+                  "regions": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "additionalProperties": false,
+                      "required": [
+                        "startTicks",
+                        "endTicks",
+                        "cueIds",
+                        "regionId"
+                      ],
+                      "properties": {
+                        "timebase": {
+                          "$ref": "https://avo.local/avo.tracks.schema.json#/$defs/timebase"
+                        },
+                        "startTicks": {
+                          "type": "integer"
+                        },
+                        "endTicks": {
+                          "type": "integer"
+                        },
+                        "cueIds": {
+                          "type": "array",
+                          "minItems": 1,
+                          "items": {
+                            "type": "string"
+                          }
+                        },
+                        "gainDb": {
+                          "type": "number"
+                        },
+                        "fadeInTicks": {
+                          "type": "integer"
+                        },
+                        "fadeOutTicks": {
+                          "type": "integer"
+                        },
+                        "ducking": {
+                          "type": "object"
+                        },
+                        "regionId": {
+                          "type": "string",
+                          "pattern": "^[a-z][a-z0-9-]{2,63}$"
+                        }
+                      }
+                    }
+                  },
+                  "zOrder": {
+                    "type": "integer"
+                  },
+                  "fit": {
+                    "enum": [
+                      "contain",
+                      "cover",
+                      "fill",
+                      "none"
+                    ]
+                  },
+                  "crop": {
+                    "type": "object"
+                  },
+                  "safeZones": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "faceAvoidance": {
+                    "type": "boolean"
+                  },
+                  "composite": {
+                    "type": "object"
+                  },
+                  "animationRef": {
+                    "type": "string"
+                  },
+                  "status": {
+                    "type": "string"
+                  },
+                  "provenance": {
+                    "type": "object"
+                  },
+                  "placement": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "x": {
+                        "type": "number"
+                      },
+                      "y": {
+                        "type": "number"
+                      },
+                      "width": {
+                        "type": "number",
+                        "exclusiveMinimum": 0
+                      },
+                      "height": {
+                        "type": "number",
+                        "exclusiveMinimum": 0
+                      }
+                    }
+                  },
+                  "captionAvoidance": {
+                    "type": "boolean"
+                  },
+                  "generatedSourceRef": {
+                    "$ref": "https://avo.local/avo.tracks.schema.json#/$defs/generatedSourceRef"
+                  }
+                },
+                "allOf": [
+                  {
+                    "if": {
+                      "required": [
+                        "generatedSourceRef"
+                      ]
+                    },
+                    "then": {
+                      "not": {
+                        "required": [
+                          "source"
+                        ]
+                      },
+                      "properties": {
+                        "generator": {
+                          "type": "object",
+                          "required": [
+                            "adapterId"
+                          ],
+                          "properties": {
+                            "adapterId": {
+                              "const": "code-drawn"
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        },
+        "cmapBasis": {
+          "$ref": "https://avo.local/avo.tracks.schema.json#/$defs/dependencyRef"
+        },
+        "animationBasis": {
+          "$ref": "https://avo.local/avo.tracks.schema.json#/$defs/dependencyRef"
+        }
+      },
+      "required": [
+        "audioTracks",
+        "videoTracks"
+      ]
+    },
+    "animationPayload": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "strategyContractVersion": {
+          "$ref": "https://avo.local/avo.animation.schema.json#/$defs/videoStrategy/properties/strategyContractVersion"
+        },
+        "formatDiagnosis": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "format",
+            "viewerIntent",
+            "motionDensity"
+          ],
+          "properties": {
+            "format": {
+              "type": "string",
+              "minLength": 1
+            },
+            "viewerIntent": {
+              "type": "string",
+              "minLength": 1
+            },
+            "motionDensity": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 5
+            },
+            "constraints": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "density": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 5
+        },
+        "safeZones": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "components": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "componentId",
+              "lifecycle",
+              "accessibility"
+            ],
+            "properties": {
+              "componentId": {
+                "type": "string",
+                "pattern": "^[a-z][a-z0-9-]{2,63}$"
+              },
+              "providerPatternRef": {
+                "type": "string"
+              },
+              "lifecycle": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "preEntry",
+                  "entrance",
+                  "hold",
+                  "exit"
+                ],
+                "properties": {
+                  "preEntry": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "entrance": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "hold": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "exit": {
+                    "type": "string",
+                    "minLength": 1
+                  }
+                }
+              },
+              "audioRelationship": {
+                "type": "object",
+                "additionalProperties": true
+              },
+              "accessibility": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "reducedMotion"
+                ],
+                "properties": {
+                  "reducedMotion": {
+                    "type": [
+                      "string",
+                      "boolean"
+                    ]
+                  }
+                }
+              },
+              "extensions": {
+                "type": "object",
+                "additionalProperties": true,
+                "properties": {
+                  "codeDrawn": {
+                    "$ref": "https://avo.local/avo.animation.schema.json#/$defs/codeDrawnInstanceRef"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "accessibility": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "reducedMotion",
+            "flashingSafe"
+          ],
+          "properties": {
+            "reducedMotion": {
+              "type": "boolean"
+            },
+            "flashingSafe": {
+              "type": "boolean"
+            }
+          }
+        },
+        "providerPatternRefs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "framework": {
+          "enum": [
+            "hyperframes",
+            "remotion",
+            "code-drawn"
+          ]
+        },
+        "dependencies": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "cmap",
+            "bmap",
+            "tracks"
+          ],
+          "properties": {
+            "cmap": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "bmap": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "tracks": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            }
+          }
+        },
+        "extensions": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      },
+      "required": [
+        "formatDiagnosis",
+        "density",
+        "safeZones",
+        "components",
+        "accessibility",
+        "framework"
+      ]
+    }
+  },
+  "oneOf": [
+    {
+      "$ref": "#/$defs/proposeRequest"
+    },
+    {
+      "$ref": "#/$defs/selectRequest"
+    },
+    {
+      "$ref": "#/$defs/applyRequest"
+    }
+  ]
+}
