@@ -419,18 +419,15 @@ class TimelinePipeline:
             motion_plan = self.motion_plan()
         return {**shown, "stageContexts": contexts, "motionPlan": motion_plan}
 
-    def motion_plan(
+    def _motion_context(
         self,
         *,
         proposal_hash: str | None = None,
         sound_proposal=None,
-        scope_request=None,
     ) -> dict[str, Any]:
-        """Project current motion metadata without initializing an editorial record."""
+        """Read live or frozen review inputs without publishing a report."""
         from avo.direction.brief import BriefService
         from avo.editing_craft import EditingCraftError, inspect_editing_craft
-
-        from .motion_review import MotionReviewService
 
         context = {
             "direction": BriefService(self.workspace.project_path)
@@ -464,6 +461,21 @@ class TimelinePipeline:
                 context.setdefault("gaps", []).append(
                     {"kind": "motion-proposal-unavailable", "detail": str(error)}
                 )
+        return context
+
+    def motion_plan(
+        self,
+        *,
+        proposal_hash: str | None = None,
+        sound_proposal=None,
+        scope_request=None,
+    ) -> dict[str, Any]:
+        """Project current motion metadata without initializing an editorial record."""
+        from .motion_review import MotionReviewService
+
+        context = self._motion_context(
+            proposal_hash=proposal_hash, sound_proposal=sound_proposal
+        )
         options = {} if scope_request is None else {"scope_request": scope_request}
         return MotionReviewService(self.workspace).project(context, **options)
 
