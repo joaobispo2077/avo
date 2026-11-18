@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://avo.local/avo.preparation.schema.json",
+  "title": "Source-bound preparation evidence",
+  "$ref": "#/$defs/coverage",
+  "$defs": {
+    "sha": {"$ref": "avo.cutting.schema.json#/$defs/sha256"},
+    "range": {"$ref": "avo.cutting.schema.json#/$defs/sourceRange"},
+    "ref": {"$ref": "avo.cutting.schema.json#/$defs/artifactRef"},
+    "coverageBinding": {
+      "type": "object", "additionalProperties": false,
+      "required": ["sourceRef", "sourceRange", "routing", "routingHash", "syncRef", "analysisFactsHash", "transcriptHash", "modelOptionsHash"],
+      "properties": {
+        "sourceRef": {"$ref": "#/$defs/ref"}, "sourceRange": {"$ref": "#/$defs/range"},
+        "routing": {
+          "type": "object", "additionalProperties": false, "required": ["streamIndex", "channels"],
+          "properties": {
+            "streamIndex": {"type": ["integer", "null"], "minimum": 0},
+            "channels": {"type": "array", "maxItems": 2, "uniqueItems": true, "items": {"type": "integer", "minimum": 0}}
+          }
+        },
+        "routingHash": {"$ref": "#/$defs/sha"}, "syncRef": {"$ref": "#/$defs/ref"},
+        "analysisFactsHash": {"$ref": "#/$defs/sha"}, "transcriptHash": {"$ref": "#/$defs/sha"},
+        "modelOptionsHash": {"$ref": "#/$defs/sha"}
+      }
+    },
+    "coverageObservation": {
+      "type": "object", "additionalProperties": false,
+      "required": ["observationId", "kind", "sourceRange", "speechConfirmed", "disposition"],
+      "properties": {
+        "observationId": {"type": "string", "pattern": "^speech-gap-[a-f0-9]{24}$"},
+        "kind": {"enum": ["possible-speech-without-reliable-words", "unmeasured"]},
+        "sourceRange": {"$ref": "#/$defs/range"}, "speechConfirmed": {"const": false},
+        "disposition": {"const": "unresolved"}
+      }
+    },
+    "coverage": {
+      "type": "object", "additionalProperties": false,
+      "required": ["contractVersion", "binding", "status", "observations", "protectedRanges", "issues", "authorization", "automaticRecovery", "assessment", "protectionRounding", "coverageHash"],
+      "properties": {
+        "contractVersion": {"const": "1.0.0"}, "binding": {"$ref": "#/$defs/coverageBinding"},
+        "status": {"enum": ["unavailable", "stale", "needs-review", "no-observed-gaps"]},
+        "observations": {"type": "array", "maxItems": 20000, "items": {"$ref": "#/$defs/coverageObservation"}},
+        "protectedRanges": {"type": "array", "maxItems": 20000, "items": {"$ref": "#/$defs/range"}},
+        "issues": {"type": "array", "maxItems": 100, "uniqueItems": true, "items": {"type": "string", "minLength": 1, "maxLength": 400}},
+        "authorization": {"const": "none"}, "automaticRecovery": {"const": false},
+        "assessment": {"const": "available-evidence-only"}, "protectionRounding": {"const": "outward-to-source-ticks"},
+        "coverageHash": {"$ref": "#/$defs/sha"}
+      }
+    }
+  }
+}
