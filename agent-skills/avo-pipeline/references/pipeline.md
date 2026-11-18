@@ -59,6 +59,14 @@ only for identical inputs; stale decision heads require current inspection.
 
 **Workflow steps:** Validate pipeline prerequisites → Run pipeline → Verify and report the pipeline result
 
+For selected motion sections, use `animation plan-show/plan-publish --scope-request
+<absolute JSON>` and place the same bounded partition in the explicit motion
+application request's `productionScope`. Preserve the complete programme clock
+and context graph. Produce only canonical-start-owned IDs; leave context-only
+items unchanged. Retiming across owners requires both chunks. Inspect actual
+per-ID receipts and pending work after restart. See
+[selected production](../../../docs/scoped-craft-production.md).
+
 **Approval or input gate:** Pause whenever required input or a human decision prevents the next declared step; report the exact reply or artifact needed.
 
 **Stop when:** Missing required input, a failed or stale gate, a required human decision, or verified pipeline completion

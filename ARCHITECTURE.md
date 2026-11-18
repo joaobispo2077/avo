@@ -1192,6 +1192,20 @@ Animation remain stale. No media caching or evidence/approval transfer is added.
 Changed visual assembly currently blocks this reuse for the whole assembly.
 See [`docs/motion-review-scope.md`](docs/motion-review-scope.md).
 
+`timeline.craft_scope` classifies one canonical-start owner and untrimmed
+intersecting context against a bounded complete partition. The native clock
+check is shared with sound planning; exact native rounding and placed rates are
+preserved. Optional scope views use the existing native/engine/MCP plan routes
+and generator 1.8, with no execution setup or approval authority.
+`timeline.motion_scope_application` freezes scope in existing immutable requests
+and receipts, protects unselected/shared IDs, requires previous owners for
+cross-chunk retiming, and records exact applied IDs. The existing run keeps a
+bounded typed application history, while existing retention verifies its closure.
+Legacy unscoped receipts retain their original meaning. Unique explicit cue
+references can associate legacy cues without altering canonical identity;
+conflicting claims remain unresolved. See
+[`docs/scoped-craft-production.md`](docs/scoped-craft-production.md).
+
 Camera movement, face anchoring, sound matching, reference analysis, spoken
 notes/recovery and editor handoff are selected options resolved through existing
 settings scopes and frozen requests. Preferences seed future work and cannot
