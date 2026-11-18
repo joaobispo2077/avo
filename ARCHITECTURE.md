@@ -1269,6 +1269,17 @@ readable as historical views. Scope/report regeneration preserves an identical
 canonical ProofPlan; changed full proof dependencies still require normal
 reconstruction and owner review.
 
+Preparation coverage uses the pure `timeline.preparation` inspector over existing
+source/routing/Sync-bound acoustic and aligned-word facts. Cutting persists its
+strict document inside existing immutable source-analysis records and returns
+compact review references. The inspector neither decodes nor executes models;
+missing facts remain unavailable rather than an empty measured result. Outward
+source-tick uncertainty feeds the existing retake protection policy without a
+second timing owner or an automatic transcript/cut decision. Explicit editorial
+and pause-verification flows retain their current boundaries. Cutting producer
+identity includes the inspector and preparation schema; ASR recovery, evidence
+selection and dedicated preparation commands remain separate work.
+
 Camera movement, face anchoring, sound matching, reference analysis, spoken
 notes/recovery and editor handoff are selected options resolved through existing
 settings scopes and frozen requests. Preferences seed future work and cannot

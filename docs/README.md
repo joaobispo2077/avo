@@ -80,3 +80,5 @@ See [Editing craft preferences and motion review](editing-craft.md) for the curr
 See [Provider sound favorites](sfx-provider-favorites.md) for explicit shared discovery preferences and opt-in scan behavior.
 
 See [Offline semantic SFX qualification](sfx-semantic-runtime.md) for separately provisioned models and the explicitly selected real-runtime test.
+
+See [Source speech coverage](speech-coverage.md) for bound omission evidence and protection of uncertain speech during retake proposals.

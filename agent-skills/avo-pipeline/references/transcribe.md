@@ -37,3 +37,18 @@ Do **not** re-transcribe unless source file changed or `--force`. Hard Rule #9 i
 - Motion slots
 
 Next step is usually strategy conversation or `/avo.trim`.
+
+## Available speech-completeness evidence
+
+Cutting analysis now returns compact `coverage.speech` review links and retains
+strict `speechCoverage` beside its source-analysis words and acoustic evidence.
+Inspect those bound facts before asserting a missing take or an exact spoken
+trigger. Missing source/routing/Sync, model provenance or measured coverage stays
+unavailable; acoustic activity is possible speech and may be a false positive.
+Partial observation and unreliable word timing remain visible for review.
+
+Unresolved source intervals protect retake rejection through the existing cutting
+policy. The report does not replace a transcript or grant cut approval. Coverage
+inspection starts no decode, ASR or alignment and does not bypass this stage's
+cache rule. Selected recovery, evidence decisions and dedicated preparation
+commands remain separate work. See [source speech coverage](../../../docs/speech-coverage.md).
