@@ -80,6 +80,10 @@ def build_parser() -> argparse.ArgumentParser:
         item = pipeline_sub.add_parser(name)
         _project_arg(item)
         _add_pipeline_entry_args(item, name)
+    pipeline_work = pipeline_sub.add_parser("work-decide")
+    _project_arg(pipeline_work)
+    pipeline_work.add_argument("--request", type=Path, required=True)
+    pipeline_work.add_argument("--request-sha256", help=argparse.SUPPRESS)
     pipeline_resume = pipeline_sub.add_parser("resume")
     _project_arg(pipeline_resume)
     pipeline_resume.add_argument("--actor", required=True)
@@ -546,6 +550,11 @@ def _pipeline_import(pipeline, args):
 
 
 def _pipeline(args: argparse.Namespace) -> int:
+    if args.pipeline_command == "work-decide":
+        from avo.motion_plan_cli import run_work_decision_command
+
+        return run_work_decision_command(args)
+
     return _pipeline_command(args)
 
 

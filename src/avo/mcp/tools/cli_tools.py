@@ -151,6 +151,14 @@ def _core_bridge_defs() -> list[BridgeToolDef]:
             "Verify the pipeline command registry (CLI: avo pipeline verify-commands).",
         ),
         _tool(
+            "avo_pipeline_work_decide",
+            "pipeline",
+            "work-decide",
+            "Record an explicit reversible defer, dismiss, reopen or supersession decision for requested craft work. "
+            "Preserves original scope/history and does not change selected concepts, applied media or approvals.",
+            extra_params=(ParamSpec("request", str, required=True),),
+        ),
+        _tool(
             "avo_pipeline_resume",
             "pipeline",
             "resume",

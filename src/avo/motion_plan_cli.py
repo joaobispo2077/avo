@@ -118,6 +118,43 @@ def run_authoring_command(args) -> int:
     return 0
 
 
+def run_work_decision_command(args) -> int:
+    from avo.editing_craft_requests import read_craft_request
+    from avo.timeline.contracts import validate_document
+    from avo.timeline.craft_work import decide_craft_work
+    from avo.timeline.workspace import TimelineWorkspace
+
+    try:
+        if not args.project.is_absolute():
+            raise ValueError("Project manifest path must be absolute.")
+        request = read_craft_request(
+            args.request, expected_sha256=getattr(args, "request_sha256", None)
+        )
+        validate_document(
+            request, "avo.editing-craft-run.schema.json#/$defs/workDecisionRequest"
+        )
+        workspace = TimelineWorkspace.from_project(
+            args.project, video_id=args.video_id or None
+        )
+        result = decide_craft_work(workspace, request)
+    except (ValueError, OSError, RuntimeError) as error:
+        value = (
+            error.to_dict()
+            if hasattr(error, "to_dict")
+            else {
+                "code": "CRAFT_WORK_DECISION_INVALID",
+                "message": str(error),
+                "blocking": True,
+            }
+        )
+        print(json.dumps(value, ensure_ascii=False), file=sys.stderr)
+        return 2
+    result["review"] = publish_after_authoring(workspace)
+    result["reviewReady"] = result["review"].get("status") == "published"
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+    return 0
+
+
 def run_plan_command(args) -> int:
     from avo.editing_craft import EditingCraftError
     from avo.timeline.contracts import ContractError
