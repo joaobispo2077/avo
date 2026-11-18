@@ -14,6 +14,7 @@ from .animation import AnimationService
 from .bmap_service import BMapService
 from .cmap_service import CMapService
 from .contracts import content_hash, fingerprint_stage, validate_document
+from .craft_work import remember_craft_proposal
 from .lifecycle import PipelineRunStore
 from .motion_metadata import _basis_matches
 from .motion_review import METADATA_LIMITS, MotionReviewService, _check_budget
@@ -574,7 +575,11 @@ class MotionAuthoringService:
         with timeline_writer(self.workspace.timeline_dir):
             known = self._known_operation(request)
             if known:
-                return self._with_review(self._proposal_result(known["sha256"]))
+                return self._with_review(
+                    remember_craft_proposal(
+                        self.workspace, "motion", self._proposal_result(known["sha256"])
+                    )
+                )
             self._check_heads(request["expectedBasis"])
             items, retired, changes = self._items(
                 request["proposal"], selection=self._proposal_selection(request)
@@ -600,7 +605,11 @@ class MotionAuthoringService:
             reference = self._put("proposals", proposal, "proposal")
             self._record_operation(request, reference)
             return self._with_review(
-                {**self._proposal_result(reference["sha256"]), "changes": changes}
+                remember_craft_proposal(
+                    self.workspace,
+                    "motion",
+                    {**self._proposal_result(reference["sha256"]), "changes": changes},
+                )
             )
 
     def _camera_runtime_hash(self):

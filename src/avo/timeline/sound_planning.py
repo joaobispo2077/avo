@@ -8,6 +8,7 @@ from fractions import Fraction
 
 from . import sound_choices as _sound_choices
 from .contracts import content_hash, validate_document
+from .craft_work import remember_craft_proposal
 from .event_clock import (
     sample_rate_boundary,
 )
@@ -447,7 +448,9 @@ class SoundPlanningService:
             with timeline_writer(self.workspace.timeline_dir):
                 known = self._known(request)
                 if known is not None:
-                    return self._with_review(known)
+                    return self._with_review(
+                        remember_craft_proposal(self.workspace, "sound", known)
+                    )
                 proposal = self._propose(request)
                 raw = (
                     json.dumps(proposal, indent=2, ensure_ascii=False, sort_keys=True)
@@ -469,7 +472,9 @@ class SoundPlanningService:
                     ),
                     record,
                 )
-                return self._with_review(self.load(digest))
+                return self._with_review(
+                    remember_craft_proposal(self.workspace, "sound", self.load(digest))
+                )
         except (ValueError, TypeError, KeyError, OSError) as error:
             raise SoundPlanningError(str(error)) from error
 
