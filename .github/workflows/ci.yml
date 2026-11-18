@@ -80,7 +80,8 @@ jobs:
     name: Unit tests (AVO repo)
     runs-on: ubuntu-24.04
     needs: prerequisites-gate
-    timeout-minutes: 30
+    # Run 44221588534 reached 83% before the 30-minute job timeout.
+    timeout-minutes: 45
     outputs:
       evidence_url: ${{ steps.unit-evidence.outputs.artifact-url }}
     steps:
