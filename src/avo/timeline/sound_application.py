@@ -182,12 +182,23 @@ class _Application:
             request,
             proposal,
             {"entries": list(entries.values())},
-            {"tracks": {"audioTracks": {"layers": []}}},
+            {"tracks": self._parent_tracks(request)},
         )
         if prepared["choices"] != receipt["choices"]:
             raise SoundPlanningError(
                 "Sound receipt recipe changes its explicit selected choices"
             )
+
+    def _parent_tracks(self, request):
+        head = request["expectedBasis"]["tracks"]
+        if head is None:
+            return {"audioTracks": {"layers": []}}
+        revision = self.workspace.store("tracks").revision(head["revisionId"])
+        if revision["contentHash"] != head["sha256"]:
+            raise SoundPlanningError(
+                "Sound request changes its immutable parent Tracks"
+            )
+        return revision["snapshot"]
 
     def _save(self, request, receipt):
         path = self._operation_path(request, "applications")
@@ -369,20 +380,61 @@ class _Application:
             layer["provenance"]["soundSelection"]["choice"]
             for layer in self._selected_layers(snapshots["tracks"]).values()
         ]
+        _unique_sound_ids(request["choices"], "eventId")
+        retired = self._retired_choices(request, proposal, old)
+        current = {
+            **request,
+            "choices": [c for c in request["choices"] if c["eventId"] not in retired],
+        }
         contexts = deepcopy(request["contexts"])
         changed = {c["eventId"] for c in request["choices"] if c["entryId"] is not None}
         for context in contexts:
             context["orderedEventIds"] = [
                 key for key in context["orderedEventIds"] if key in changed
             ]
-        return freeze_sound_choices(
-            self._opportunities(request, proposal),
-            request["choices"],
-            entries=self._selected_entries(request, generation),
+        prepared = freeze_sound_choices(
+            self._opportunities(current, proposal),
+            current["choices"],
+            entries=self._selected_entries(current, generation),
             contexts=contexts,
             clock=proposal["clock"],
             previous=old,
         )
+        return self._restore_choice_order(prepared, retired, request["choices"])
+
+    @staticmethod
+    def _restore_choice_order(prepared, retired, choices):
+        for field in ("choices", "changes"):
+            combined = _unique_sound_ids(
+                prepared[field] + [value[field][0] for value in retired.values()],
+                "eventId",
+            )
+            prepared[field] = [combined[c["eventId"]] for c in choices]
+        return prepared
+
+    @staticmethod
+    def _retired_choices(request, proposal, previous):
+        records = _unique_sound_ids(proposal["opportunities"], "eventId")
+        old = _unique_sound_ids(previous, "eventId")
+        retired = {}
+        for choice in request["choices"]:
+            identity = choice["eventId"]
+            if (records.get(identity) or {}).get("opportunity") is not None:
+                continue
+            if choice["entryId"] is not None or identity not in old:
+                continue
+            fit = old[identity]["fit"]
+            # Historical timing identifies the removed contribution only. It
+            # cannot schedule media or confer a current visual/mix approval.
+            retired[identity] = freeze_sound_choices(
+                [fit["opportunity"]],
+                [choice],
+                entries=[],
+                contexts=[],
+                clock=fit["clock"],
+                previous=[old[identity]],
+            )
+        return retired
 
     @staticmethod
     def _visual_role(record, cue):
@@ -527,7 +579,11 @@ class _Application:
             key=lambda layer: layer["order"],
         )
         combined = [layer["provenance"]["soundSelection"]["choice"] for layer in layers]
-        affected = {choice["fit"]["opportunity"]["cueId"] for choice in choices}
+        affected = {
+            choice["fit"]["opportunity"]["cueId"]
+            for choice in choices
+            if choice["fit"]["status"] == "fit"
+        }
         self._check_preserved_contexts(layers, affected, contexts)
         _check_sound_roles(
             [
@@ -619,7 +675,13 @@ class _Application:
     def _prepare(self, request):
         shown, generation = self._basis(request)
         snapshots = self._snapshots()
-        validate_sound_bindings(snapshots["bmap"], snapshots["tracks"])
+        validate_sound_bindings(
+            snapshots["bmap"],
+            snapshots["tracks"],
+            removing_event_ids={
+                c["eventId"] for c in request["choices"] if c["entryId"] is None
+            },
+        )
         contexts = self._visual_contexts(request, shown["proposal"], snapshots)
         choices = self._choices(request, shown["proposal"], generation, snapshots)
         sources = self._source_refs(choices["choices"], generation)

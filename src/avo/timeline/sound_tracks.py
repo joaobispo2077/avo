@@ -82,7 +82,7 @@ def _admission(layer, selection):
     )
 
 
-def validate_sound_bindings(bmap, tracks):
+def validate_sound_bindings(bmap, tracks, *, removing_event_ids=()):
     """Validate exact owned audio cues before replacing/removing selected tracks."""
     validate_sound_tracks(tracks)
     cues = {cue["cueId"]: cue for cue in bmap.get("cues", [])}
@@ -90,7 +90,10 @@ def validate_sound_bindings(bmap, tracks):
     for layer in _sound_layers(tracks):
         selection = layer["provenance"]["soundSelection"]
         choice = selection["choice"]
-        cue = cues.get(selection["cueId"], {})
+        cue = cues.get(selection["cueId"])
+        if cue is None and choice["eventId"] in removing_event_ids:
+            continue  # Explicit removal may retire an already absent owned cue.
+        cue = cue or {}
         _require(
             cue.get("kind") == "sfx"
             and cue.get("targetLayerId") == layer["layerId"]
