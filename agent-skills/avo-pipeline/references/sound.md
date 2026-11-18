@@ -104,6 +104,14 @@ ambiguous or removed anchors remain unresolved. Slow, hidden, static and
 background movement recommend silence. Silence is always available and no
 effect is added merely because motion exists.
 
+To accent a specific authored camera node, use `kind: "camera-emphasis"` and
+`cameraAnchor: {componentId, pathHash, sourceSha256, nodeIndex}` instead of
+`phase`. Copy the exact component/path/source identity from the current motion
+map; `nodeIndex` is zero-based. The actual canonical Animation and linked BMap
+cue are authoritative. Missing, changed or ambiguous camera context stays
+unresolved, including at proof admission. This does not enable camera authoring
+or sound matching by itself.
+
 Proposals save immutable metadata under `edit/motion/sound/`, binding current
 heads, selected sound direction, options, library generation, queries and actual
 bounded search results. Repeating the same operation returns its saved proposal;

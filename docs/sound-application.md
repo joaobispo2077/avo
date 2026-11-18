@@ -18,6 +18,13 @@ selected source must still match its indexed bytes, measured sample rate and
 channel count. An explicitly injected probe records the actual first audio
 stream index; metadata proposals never construct or execute that probe.
 
+For an explicit camera-node anchor, proposal and proof admission reopen the
+canonical Animation component and verify the selected source, path and node.
+The frozen opportunity retains that anchor alongside its derived frame. A later
+camera revision cannot silently retime a published sound; revise its explicit
+selection against the current camera before rendering. Source-only cut proofs
+retain their existing behavior.
+
 The service freezes the reviewed asset, rights, marker, source trim, output
 sample schedule, channel routing and mix settings. Each contribution has one
 Tracks layer and an exactly bound BMap cue, with `tracks-native` playback

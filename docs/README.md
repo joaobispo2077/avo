@@ -78,3 +78,5 @@ Write for the **correct audience by file** — not by mixing tones in one file.
 See [Editing craft preferences and motion review](editing-craft.md) for the current native interfaces and implementation scope.
 
 See [Provider sound favorites](sfx-provider-favorites.md) for explicit shared discovery preferences and opt-in scan behavior.
+
+See [Offline semantic SFX qualification](sfx-semantic-runtime.md) for separately provisioned models and the explicitly selected real-runtime test.

@@ -142,6 +142,11 @@ descriptor scores are never presented as semantic similarity. Actual provisioned
 model and human sound-suitability acceptance remains separate from automated
 contract and isolation checks.
 
+See [offline semantic SFX qualification](sfx-semantic-runtime.md) for the pinned
+artifact/runtime contract and the explicitly selected real-model test. Camera
+sound accents can optionally select an actual path node rather than entering a
+separate cue fraction; see [sound candidate fitting](sound-candidate-fitting.md).
+
 ## Compatibility and validation
 
 Existing CMap, BMap, Tracks, Animation and Sync ownership remains unchanged.

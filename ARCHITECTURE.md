@@ -979,8 +979,11 @@ An explicit semantic operation injects a ranker and paired local CLAP worker;
 manifest/model/preprocessing/runtime identities must agree before cosine scores
 are accepted. The optional worker uses offline local files and bounded validated
 vectors; ordinary model defaults and proof capability registration stay unchanged.
-No model package or weights are an AVO core prerequisite. Real provisioned-model
-acceptance remains unperformed until the artifacts/runtime are available.
+No model package or weights are an AVO core prerequisite. Explicit local runtime
+qualification uses `AVO_TEST_CLAP_PIN` without changing ordinary job defaults;
+the real worker test records joint-space/manifest identity, normalized vectors,
+exact source-bound cache reuse and changed-source rejection. Human suitability
+and listening acceptance remain separate.
 
 Advanced camera strategy validation reserves a closed relative-behavior extension
 and publishes the revision reference with an index-v2 capability fence in one
@@ -1096,6 +1099,16 @@ JSON budgets, track channel/overlay rules and frozen sound choice validation liv
 in the data-only `motion_metadata`, `track_rules` and `sound_choices` modules.
 Existing review, Tracks and sound-planning imports remain available. Canonical
 readers reuse these rules without importing authoring, rendering or models.
+
+Optional camera-node sound anchors use the data-only `timeline.sound_anchors`
+resolver. It reads the actual current Animation component through its calling
+service, verifies the linked cue/target layer and exact camera path/source, then
+derives a phase on BMap's full canonical interval. Proposed camera descriptions
+grant no execution authority. Frozen sound opportunities retain the selected
+node; native proof admission recomputes it against canonical Animation. Checkout
+producer identity includes the sound anchor, admission, fitting and compilation
+sources; packaged engines continue to bind their executable bytes. This adds no
+timing owner, decoder, model or approval path.
 
 Selected sound Tracks carry a strict source/choice/cue/request binding and require
 the `sound-selection-v1` reader capability. Generic publication atomically updates

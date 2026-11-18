@@ -12,6 +12,21 @@ coverage, source-bound licensed-rights evidence and a reviewed native-sample
 marker. Unknown visibility/rights, missing sources, stale marker evidence or
 incomplete tail analysis produce unresolved results. Explicit silence is valid.
 
+An optional `cameraAnchor` on a `camera-emphasis` intent selects a node from the
+actual canonical camera component. It carries `componentId`, `pathHash`,
+`sourceSha256` and zero-based `nodeIndex`, as exposed by the motion map. Supply
+either this anchor or the existing cue-relative `phase`. The linked cue must
+unambiguously own that component and target its picture layer. A changed source,
+path, missing node or ambiguous component stays unresolved; a claimed camera in
+an unapproved proposal cannot substitute for canonical Animation metadata.
+
+The selected node's relative phase uses the camera evaluator's full cue interval,
+including its final visible frame. The accent is rounded to the nearest output
+frame using the existing native event clock. Window previews preserve that
+absolute frame rather than restarting the camera or sound at the window edge.
+This option requests an audition; static, hidden and background motion still
+recommend silence and no sound is added automatically.
+
 For a selected native trim, the relative transient is:
 
 `original marker sample - trim start sample`
