@@ -59,8 +59,8 @@ moves, trims or normalizes library sources and never calls footage organization.
 
 Record descriptions/categories/tags/material/favorites/variant groups, rights evidence and reviewed markers
 with `sfx annotate` against the exact generation. Favorites stay project-scoped;
-provider promotion is unavailable in this increment and requires the later scoped
-promotion route. Identical audio bytes can share
+explicit `sfx favorite-promote` can share selected portable descriptors and the
+sound identity with the current provider. Identical audio bytes can share
 measurements while separate locators retain different rights/notes. Unknown or
 stale rights remain unresolved; search inclusion is not permission to publish.
 Present result reasons, native sample audition range, source identity and coverage
@@ -71,6 +71,13 @@ Use an exact `category` filter to narrow a selected sound family. Both optional
 annotation fields are limited to 512 characters and can be cleared with `null`.
 They remain creator labels; they do not establish measured material, rights or
 listening acceptance. Existing entries without those labels need no migration.
+
+Inspect shared preferences with `sfx favorites-show`; removal uses
+`sfx favorite-remove`. Mutation requests bind the exact provider document and
+confirm their bytes. A selected scan may set `useProviderFavorites: true` to seed
+new matching entries, leaving existing project choices intact. Rights, markers,
+media and approvals never follow a favorite. See the
+[provider-favorites guide](../../../docs/sfx-provider-favorites.md).
 
 Descriptor `sfx search` reads saved metadata only and may correctly return no-match
 or silence. Use explicit `sfx search-semantic` only for selected model execution

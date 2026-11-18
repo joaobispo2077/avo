@@ -1054,7 +1054,18 @@ curation contract. Generic annotation revision/expected-generation controls
 remain authoritative; descriptor ranking includes those labels and shared
 eligibility enforces exact category filters for descriptor and semantic modes.
 Missing fields preserve legacy entries without migration. No new index, runtime,
-source analysis, rights claim or provider promotion follows from these labels.
+source analysis or rights claim follows from these labels.
+
+`avo.sfx_preferences` explicitly promotes selected portable descriptors and a
+library/source-byte identity into bounded `routingOverrides.sfxFavorites` in the
+existing provider manifest. Existing preference schema/byte guards and writer
+locks preserve unrelated settings and recheck the current catalogue before
+publication. Native/MCP mutations bind exact request bytes and provider scope;
+they gain no canonical timeline authority. Selected scans alone seed new matching
+entries, freeze their preference snapshot through resume and expose origin hashes
+in catalogue/search metadata. Existing project choices and all source, rights,
+marker, measurement and approval owners remain independent. No second project
+state store, media copying or default provider lookup is added.
 
 Explicit sound proposals now reuse `MotionAuthoringService` head guards and
 `PipelineRunStore` option freezing, with strict bounded intent/proposal contracts

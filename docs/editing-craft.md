@@ -117,7 +117,8 @@ decisions visibly stale instead of silently carrying them forward.
 RMS and peak are normalized linear PCM amplitudes, not loudness measurements.
 Spectral centroid uses Hz; attack/decay use seconds; audition ranges and marker
 candidates use native source samples. Curation and favorites stay project-local;
-shared provider promotion remains pending its explicit scoped route.
+[provider favorites](sfx-provider-favorites.md) require explicit promotion and an
+opt-in scan before they seed new matching entries in another project.
 
 Descriptor search uses saved names, descriptions, categories, material and tags
 alongside measured filters, explains matches,

@@ -76,3 +76,5 @@ Write for the **correct audience by file** — not by mixing tones in one file.
   — animation render and delivery specs.
 
 See [Editing craft preferences and motion review](editing-craft.md) for the current native interfaces and implementation scope.
+
+See [Provider sound favorites](sfx-provider-favorites.md) for explicit shared discovery preferences and opt-in scan behavior.
