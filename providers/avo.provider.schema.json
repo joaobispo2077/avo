@@ -189,6 +189,7 @@
       "properties": {
         "motion": {"$ref": "https://avo.local/avo.motion.schema.json#/$defs/config"},
         "editingCraft": {"$ref": "https://avo.local/avo.editing-craft.schema.json#/$defs/config"},
+        "sfxFavorites": {"$ref": "https://avo.local/schemas/avo.sfx-provider.schema.json#/$defs/favorites"},
         "watch": {
           "type": "object",
           "additionalProperties": false,

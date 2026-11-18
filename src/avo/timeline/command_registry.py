@@ -71,7 +71,7 @@ _MATRIX = {
     ),
     "podcast-clip": ("Profile", ()),
     "pr-video": ("Profile", ()),
-    "provider": ("Owns", ("provider-animation",)),
+    "provider": ("Owns", ("provider-animation", "provider-sfx-favorites")),
     "reframe": ("Profile", ()),
     "remotion-port": ("Owns", ("animation", "tracks")),
     "retention": ("Consumes", ()),
