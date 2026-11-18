@@ -32,8 +32,16 @@ def sound_proposal(workspace, service, original, operation_id):
     )
 
 
-def applied_motion_and_sound(tmp_path):
+def applied_motion_and_sound(tmp_path, *, legacy_cue=False):
     workspace, _, audio_service, _, audio_request, original = application(tmp_path)
+    if legacy_cue:
+        from avo.timeline.bmap_service import BMapService
+
+        visual = deepcopy(workspace.store("bmap").load()["revisions"][-1]["snapshot"])
+        visual["cues"][0]["contentRef"].pop("itemId")
+        BMapService(workspace).author(
+            visual, actor="fixture", reason="Existing legacy cue identity"
+        )
     motion = MotionAuthoringService(workspace)
     concept = motion.propose(
         request(
@@ -99,6 +107,30 @@ def test_audio_only_revision_preserves_visual_direction_for_next_sound_request(
     )
     assert followup["proposal"]["opportunities"][0]["recommendation"] == "audition"
     assert workspace.store("animation").load_index() == animation
+    with pytest.raises(WorkspaceError, match="stale"):
+        workspace.require_active("animation")
+
+
+def test_legacy_cue_link_preserves_direction_after_audio_revision_and_restart(tmp_path):
+    workspace, service, _, current, _ = applied_motion_and_sound(
+        tmp_path, legacy_cue=True
+    )
+    before = {
+        name: workspace.artifact_path(name).read_bytes()
+        for name in ("cmap", "bmap", "tracks", "animation")
+    }
+    snapshot = fresh_map(workspace)
+    visual = next(item for item in snapshot["items"] if item["itemId"] == "mo04")
+    assert visual["disposition"] == "applied"
+    assert snapshot["readiness"] == "stale"
+    assert {
+        name: workspace.artifact_path(name).read_bytes() for name in before
+    } == before
+    followup = sound_proposal(
+        workspace, service, current["proposal"], "legacy-sound-followup"
+    )
+    assert followup["proposal"]["opportunities"][0]["recommendation"] == "audition"
+    assert workspace.store("animation").load_index()["activeState"] == "stale"
     with pytest.raises(WorkspaceError, match="stale"):
         workspace.require_active("animation")
 

@@ -117,6 +117,33 @@ def test_audio_changes_reuse_only_applied_timed_direction_without_mutating_input
     assert (original, current) == before
 
 
+def test_unique_explicit_cue_link_preserves_legacy_timed_direction():
+    original = visual_metadata()
+    original["bmap"]["cues"][0]["contentRef"] = {"text": "Legacy cue"}
+    current = deepcopy(original)
+    current["bmap"]["cues"].append({"cueId": "sfx-one", "kind": "sfx"})
+    selected = proposal()
+    selected["items"][0]["cueId"] = "graphic"
+    assert unchanged_visual_items(selected, original, current) == ["mo04"]
+
+
+@pytest.mark.parametrize("clean_part", [False, True])
+def test_conflicting_cue_claim_cannot_preserve_any_affected_item(clean_part):
+    original = visual_metadata()
+    selected = {
+        "items": [
+            {"itemId": "mo04", "disposition": "applied"},
+            {"itemId": "mo05", "disposition": "applied", "cueId": "graphic"},
+        ]
+    }
+    if clean_part:
+        original["bmap"]["cues"].append(
+            {**deepcopy(original["bmap"]["cues"][0]), "cueId": "clean-part"}
+        )
+        selected["items"][0]["cueId"] = "clean-part"
+    assert unchanged_visual_items(selected, original, deepcopy(original)) == []
+
+
 @pytest.mark.parametrize(
     "change",
     ["timing", "asset", "layer", "removed", "new-visual", "order", "camera", "global"],
