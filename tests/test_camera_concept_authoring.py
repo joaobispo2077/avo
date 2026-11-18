@@ -5,6 +5,7 @@ from copy import deepcopy
 import pytest
 
 from avo.editing_craft import resolve_editing_craft_selection
+from avo.timeline.lifecycle import PipelineRunStore
 from avo.timeline.motion_authoring import MotionAuthoringError, MotionAuthoringService
 from tests.test_camera_evaluator import geometry
 from tests.test_motion_authoring import item, request
@@ -144,6 +145,7 @@ def test_new_camera_concept_uses_active_request_options_until_explicitly_replace
     service = MotionAuthoringService(workspace)
     service.propose(initial)
     before = workspace.pipeline_run_path.read_bytes()
+    original_run = PipelineRunStore(workspace.pipeline_run_path).load()
     value = camera_request(workspace, "new-concept-same-request")
     value["selection"] = resolve_editing_craft_selection(
         invocation={"camera": {"enabled": True, "baseTreatment": "push"}}
@@ -152,10 +154,20 @@ def test_new_camera_concept_uses_active_request_options_until_explicitly_replace
         result = service.propose(value)
         assert result["proposal"]["items"][0]["cameraTreatment"]["options"] == selection
         assert result["proposal"]["options"] == selection
+        updated = PipelineRunStore(workspace.pipeline_run_path).load()
+        assert updated["extensions"]["editingCraftWork"].pop() == {
+            "kind": "motion",
+            "operationId": value["operationId"],
+            "requestId": result["proposal"]["requestId"],
+            "proposalRef": result["proposalRef"],
+            "scope": {"itemIds": ["mo04"], "eventIds": []},
+        }
+        updated["updatedAt"] = original_run["updatedAt"]
+        assert updated == original_run
     else:
         with pytest.raises(MotionAuthoringError, match="enabled options"):
             service.propose(value)
-    assert workspace.pipeline_run_path.read_bytes() == before
+        assert workspace.pipeline_run_path.read_bytes() == before
 
 
 @pytest.mark.parametrize("change", ["path", "options", "omitted"])
