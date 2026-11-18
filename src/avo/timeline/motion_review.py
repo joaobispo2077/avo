@@ -19,6 +19,7 @@ from .motion_metadata import (
     _basis_matches,
     _check_budget,
 )
+from .motion_scope import unchanged_visual_items, visual_roots_match
 from .motion_sound_review import (
     add_sound_groups,
     enrich_sound_items,
@@ -27,7 +28,7 @@ from .motion_sound_review import (
 from .store import atomic_write_json
 from .workspace import ARTIFACTS
 
-GENERATOR = {"id": "avo.motion-review", "version": "1.6.0"}
+GENERATOR = {"id": "avo.motion-review", "version": "1.7.0"}
 MAX_ITEMS = 500
 LIFECYCLE = ("preEntry", "entrance", "hold", "payoff", "exit")
 CONCEPT_TEXT_FIELDS = {
@@ -453,6 +454,7 @@ def _context(context, gaps):
     result["proposal"] = result["proposal"] or {}
     result["appliedHeads"] = _applied_heads(context, gaps)
     result["proposalStale"] = context.get("proposalStale", False) is not False
+    result["directionCurrent"] = context.get("directionCurrent", False) is True
     result["soundProposal"] = sound_review_context(context.get("soundProposal"), gaps)
     result["pendingRevisions"] = _pending(context, gaps)
     result["advisories"] = _advisories(context, gaps)
@@ -567,6 +569,7 @@ def _project_items(
     *,
     applied_heads=None,
     proposal_stale=False,
+    reusable_visual_items=(),
 ):
     groups = _combined(proposal, snapshots, gaps)
     add_sound_groups(groups, sound_context)
@@ -587,8 +590,14 @@ def _project_items(
     _enrich_components(selected, snapshots.get("animation") or {})
     enrich_sound_items(selected, snapshots.get("tracks") or {}, sound_context, heads)
     pairs = [
-        _item(data, timed=len(data["_parts"]) == 1, stale=stale, heads=heads, gaps=gaps)
-        for data in selected.values()
+        _item(
+            data,
+            timed=len(data["_parts"]) == 1,
+            stale=stale and identifier not in reusable_visual_items,
+            heads=heads,
+            gaps=gaps,
+        )
+        for identifier, data in selected.items()
     ]
     counts = {
         "total": len(groups),
@@ -738,6 +747,69 @@ class MotionReviewService:
                 gaps.append(gap)
         return heads, bodies, gaps
 
+    def _retained_snapshot(self, name, expected, budget):
+        root, store = self.workspace.timeline_dir.resolve(), self.workspace.store(name)
+        index = _bounded_json(
+            _metadata_path(self.workspace.artifact_path(name), root), budget
+        )
+        store._validate_index(index)
+        if any(
+            index[key] != value
+            for key, value in {
+                "artifactType": name,
+                "videoId": self.workspace.video_id,
+                "provider": self.workspace.project.get("provider"),
+            }.items()
+        ):
+            raise MotionReviewError(
+                "Retained visual basis belongs to another workspace"
+            )
+        reference = next(
+            ref
+            for ref in index["revisionRefs"]
+            if ref["revisionId"] == expected["revisionId"]
+            and ref["contentSha256"] == expected["sha256"]
+        )
+        return _selected_revision(
+            store,
+            {**index, "headRevisionId": reference["revisionId"]},
+            reference,
+            root,
+            budget,
+        )
+
+    def _visual_reuse(self, context, heads, snapshots, gaps):
+        if not context["proposalStale"] or not context["directionCurrent"]:
+            return []
+        basis = context["proposal"].get("basisHeads")
+        if not isinstance(basis, dict):
+            return []
+        try:
+            validate_document(
+                basis, "avo.motion-review.schema.json#/properties/basisHeads"
+            )
+            expected = {**basis, **context["appliedHeads"]}
+            if not visual_roots_match(expected, heads):
+                return []
+            budget = {"remaining": MAX_METADATA_BYTES}
+            original = {
+                name: self._retained_snapshot(name, expected[name], budget)
+                for name in ("bmap", "tracks", "animation")
+            }
+            return unchanged_visual_items(context["proposal"], original, snapshots)
+        except (
+            OSError,
+            ValueError,
+            RuntimeError,
+            KeyError,
+            TypeError,
+            StopIteration,
+        ) as error:
+            gaps.append(
+                {"kind": "visual-reuse-unavailable", "detail": str(error)[:500]}
+            )
+            return []
+
     def project(self, context=None):
         heads, snapshots, gaps = self._metadata()
         context = _context(context, gaps)
@@ -760,6 +832,7 @@ class MotionReviewService:
             context["soundProposal"],
             applied_heads=context["appliedHeads"],
             proposal_stale=context["proposalStale"],
+            reusable_visual_items=self._visual_reuse(context, heads, snapshots, gaps),
         )
         items, cards = [pair[0] for pair in pairs], [pair[1] for pair in pairs]
         snapshot = {

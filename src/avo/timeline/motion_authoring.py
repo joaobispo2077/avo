@@ -1225,10 +1225,8 @@ class MotionAuthoringService:
             )
         decision, decision_ref = self._selected_decision(selector, digest)
         expected, applied, committed = self._receipt_basis(result, selector)
-        stale = (
-            not _basis_matches(expected, self._heads())
-            or result["proposal"]["directionRef"] != self._direction_ref()
-        )
+        direction_current = result["proposal"]["directionRef"] == self._direction_ref()
+        stale = not _basis_matches(expected, self._heads()) or not direction_current
         return {
             **result,
             "status": "stale" if stale else "selected",
@@ -1237,6 +1235,7 @@ class MotionAuthoringService:
             "selectionRef": deepcopy(selector),
             "applied": applied,
             "committedHeads": committed,
+            "directionCurrent": direction_current,
             "warnings": ["Selected proposal basis changed"] if stale else [],
         }
 
@@ -1327,6 +1326,7 @@ class MotionAuthoringService:
             "proposal": proposal,
             "appliedHeads": deepcopy(shown.get("committedHeads") or {}),
             "proposalStale": shown.get("status") == "stale",
+            "directionCurrent": shown.get("directionCurrent", False),
             "options": proposal.get("options", {}),
             "advisories": MotionAuthoringService._advisories(proposal.get("items", [])),
             "direction": deepcopy(
