@@ -109,3 +109,16 @@ application. Existing staged receipts handle interrupted publication normally.
 
 Creator suitability, continuous visual QC, combined mix measurements, listening
 and full-programme acceptance remain separate from this ownership evidence.
+
+## Resume and currentness
+
+Restart views distinguish historical completion, outstanding IDs and the
+current input basis. Changed canonical sources, assets, camera, selected
+direction or catalogue generations keep the exact original work visible and
+mark its changed basis stale. An earlier successful publication remains in
+history; it does not approve a new input or close another item's pending work.
+
+Preferences apply to future requests. Changing a project preference does not
+retarget a frozen partial request or enable another treatment for it. Inspection
+reads recorded metadata without changing canonical revisions or decisions.
+Source integrity is rechecked by the existing authoring/render boundaries.
