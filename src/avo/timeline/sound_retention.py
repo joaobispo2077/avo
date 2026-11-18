@@ -169,6 +169,7 @@ class SoundRetention:
             value["generationId"], "avo.sfx-catalog.schema.json#/$defs/sha"
         )
         self.generation(value["generationId"])
+        return value["generationId"]
 
     def receipt_history(self, request, receipt, initial):
         seen = set()
