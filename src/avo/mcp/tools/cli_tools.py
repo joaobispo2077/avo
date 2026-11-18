@@ -1058,6 +1058,9 @@ def _sfx_bridge_defs() -> list[BridgeToolDef]:
         "search-semantic": "Explicit optional local model execution for semantic sound matching. Requires provisioned paired audio/text models; unavailable never falls back to descriptors.",
         "propose": "Save bounded sound auditions against exact timeline heads and catalogue generation with explicitly enabled options. Metadata only; no scan, model provisioning, canonical application or listening approval.",
         "apply": "Publish explicit per-event sound choices through BMap and Tracks against the exact saved proposal, heads and catalogue. Confirms the request bytes; listening acceptance stays pending. No catalogue scan or model execution.",
+        "favorites-show": "Inspect bounded provider sound favorites and their exact preference document identity. Metadata only; no library scan or model.",
+        "favorite-promote": "Explicitly share a sound identity and selected portable descriptors with the current provider against exact catalogue and preference identities. Confirms request bytes; no project media, rights, markers or approvals are transferred.",
+        "favorite-remove": "Explicitly stop sharing a selected provider sound favorite against its exact preference document. Confirms request bytes; existing project curation and sound remain unchanged.",
     }
     return [
         _tool(
@@ -1065,7 +1068,7 @@ def _sfx_bridge_defs() -> list[BridgeToolDef]:
             "sfx",
             operation,
             description,
-            destructive=operation == "apply",
+            destructive=operation in {"apply", "favorite-promote", "favorite-remove"},
             extra_params=(
                 (
                     ParamSpec("generation", str | None),
@@ -1073,6 +1076,8 @@ def _sfx_bridge_defs() -> list[BridgeToolDef]:
                     ParamSpec("limit", int, default=20),
                 )
                 if operation == "show"
+                else ()
+                if operation == "favorites-show"
                 else (ParamSpec("request", str, required=True),)
             ),
         )
@@ -1186,6 +1191,8 @@ def _decision_gate_args(defn, bridge_args):
         ("animation", "plan-apply"),
         ("animation", "camera-apply"),
         ("sfx", "apply"),
+        ("sfx", "favorite-promote"),
+        ("sfx", "favorite-remove"),
     }:
         return bridge_args
     limit = (
@@ -1195,6 +1202,8 @@ def _decision_gate_args(defn, bridge_args):
             ("animation", "plan-apply"),
             ("animation", "camera-apply"),
             ("sfx", "apply"),
+            ("sfx", "favorite-promote"),
+            ("sfx", "favorite-remove"),
         }
         else 2 * 1024 * 1024
     )
