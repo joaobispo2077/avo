@@ -3,14 +3,28 @@
 from __future__ import annotations
 
 import time
+from importlib.metadata import PackageNotFoundError, version
 from pathlib import Path
 from threading import Lock
 
-from avo.adapters.media.cutting_acoustics import CuttingAcousticsAdapter
+from avo.adapters.media.cutting_acoustics import (
+    CuttingAcousticsAdapter,
+    _alignment_segments,
+)
 from avo.adapters.understand.cutting_alignment import CuttingAlignmentAdapter
 from avo.model_sources import PreflightError, preflight, resolve_job
 from avo.timeline.ports import ToolError
 from avo.transcribe import MODEL_FILES, LocalTranscriber, source_fingerprint
+
+
+def _speech_runtime_versions():
+    observed = {}
+    for name in ("faster-whisper", "ctranslate2", "av", "onnxruntime", "numpy"):
+        try:
+            observed[name] = version(name)
+        except PackageNotFoundError:
+            observed[name] = None
+    return observed
 
 
 def _dependency_files(paths):
@@ -84,6 +98,7 @@ class CuttingAnalysisAdapter:
                 "model": resolved.id,
                 "policyHash": resolved.policy_hash,
                 "runtime": self._transcription_runtime(),
+                "versions": _speech_runtime_versions(),
                 **_dependency_files(directory / name for name in MODEL_FILES),
             }
         except (PreflightError, ToolError, OSError, RuntimeError, ValueError) as exc:
@@ -192,6 +207,87 @@ class CuttingAnalysisAdapter:
         # Serialize speech jobs; GPU speech and visual stages must also be scheduled separately.
         with self._analysis_lock:
             return self._analyze(source, **request)
+
+    def recover(self, source, **request):
+        """Revisit only the explicit crop; ASR text survives missing alignment."""
+        with self._analysis_lock:
+            language = request["language"]
+            result = CuttingAcousticsAdapter(
+                transcriber=self._transcriber(language)
+            ).analyze(source, **request)
+            alignment, issues = self._recover_alignment(result, language)
+            analysis = {
+                "sourceRef": {
+                    "locator": str(source),
+                    "sha256": request["fingerprint"]["sha256"],
+                },
+                "routing": request["selection"],
+                "syncRef": request["sync_ref"],
+                "preprocessing": {
+                    "sourceRange": request["source_range"],
+                    **result["bindings"],
+                },
+                "language": language,
+                "status": "pass" if alignment else "unknown",
+                "words": alignment["words"]
+                if alignment
+                else [
+                    {**word, "alignmentStatus": "unsupported", "eligibleEdge": False}
+                    for word in result["words"]
+                ],
+                "alignment": {
+                    "status": "pass" if alignment else "missing",
+                    "characters": alignment["chars"] if alignment else [],
+                },
+                "acousticRanges": result["waveform"]["frames"],
+                "vad": result["speechRanges"],
+                "coverage": result["coverage"],
+                "pauseCandidates": [],
+                "tools": [
+                    self._model_bindings[language],
+                    result["bindings"],
+                    alignment["bindings"] if alignment else {},
+                ],
+                "uncertainty": issues,
+                "recoveryContext": {
+                    "scope": "selected-interval-only",
+                    "previousText": False,
+                    "initialPrompt": None,
+                    "vadFilter": False,
+                    "wordTimestamps": True,
+                    "sourceStart": result["sourceStart"],
+                    "observedDuration": result["waveform"]["duration"],
+                },
+            }
+            return {"transcript": result["transcript"], "analysis": analysis}
+
+    def _recover_alignment(self, result, language):
+        if not result["words"]:
+            return None, [
+                "Recovery observed no words; possible speech remains unresolved"
+            ]
+        try:
+            aligner = self._alignment()
+            alignment = aligner.align(
+                Path(result["analysisPath"]),
+                segments=_alignment_segments(
+                    result["words"],
+                    result["sourceStart"],
+                    result["waveform"]["duration"],
+                ),
+                source_start=result["sourceStart"],
+                language=language,
+            )
+            if not alignment.get("words"):
+                raise ToolError(
+                    "recovery-alignment-empty", "Recovery alignment observed no words"
+                )
+            return alignment, ["Recovered text and timing require creator review"]
+        except (ToolError, OSError, RuntimeError, ValueError) as error:
+            return None, [
+                str(error),
+                "Recovered ASR words do not certify exact word anchors or safe cuts",
+            ]
 
     def _analyze(self, source, **request):
         language = (
