@@ -162,6 +162,17 @@ silence uses null entry/trim/mix. Ordered groups and synthetic main-scene sound
 need their exact dispositions. Sound matching must be enabled in the frozen
 request; a preference cannot authorize an edit.
 
+Explicit silence may retire an existing owned event after its visual anchor is
+removed or unresolved. Supply its stable event ID; no replacement source or
+visual context is needed for removal alone. An absent owned audio cue is allowed,
+but a reused or changed cue ID must be corrected through its owner. Remaining
+sound layers and their context approvals stay unchanged. Historical timing in the
+removal receipt identifies the old contribution and grants no new playback.
+
+Use the native programme's actual rounded frame boundary at fractional rates.
+Placed edits retain their canonical frame rate. Final-frame rounding never
+authorizes a sound cue beyond the approved CMap duration.
+
 MCP confirmation binds the exact request bytes. Publication checks actual local
 source bytes and the measured first audio stream, current catalogue, heads,
 direction and options before the existing BMap/Tracks owners write. It preserves

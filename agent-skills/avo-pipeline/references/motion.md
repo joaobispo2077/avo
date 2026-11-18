@@ -57,6 +57,12 @@ same request/operation ID to recover the exact receipt; do not delete the pendin
 marker, regenerate IDs or overwrite canonical files. Report actual committed
 heads and any unavailable current presentation before asking for creator review.
 
+After publication, the map and linked cards use the verified committed heads for
+the applied plan while retaining its original proposal basis. Its own writes do
+not make it stale. A later canonical revision, stale dependency or changed
+selected direction still does. Regenerating these metadata views grants no
+rendered evidence or creator approval.
+
 Inspect craft preferences with `animation options-show`; forward the frozen
 active request through revisions/resume. New camera, face-anchor, semantic SFX
 and other treatment preferences alone do not establish executable readiness.

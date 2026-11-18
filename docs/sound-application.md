@@ -33,6 +33,20 @@ remain intact. Multi-effect groups require the exact ordered event list.
 Adding a second effect cannot borrow approval from a preserved ordinary single
 effect: changing that effect's context requires explicit reselection.
 
+An explicit silence choice can also retire a previously owned event whose visual
+anchor is now absent or unresolved. The receipt retains its historical timing
+only to identify the removal, without scheduling playback on the new programme.
+An already absent owned audio cue is permitted only for the explicitly removed
+event; a present cue must still match the exact source, choice and application.
+Unknown events cannot claim this exception. Remaining ordered siblings keep their
+recorded contexts and approvals. Replay checks the original immutable Tracks
+parent instead of relying on a layer that has already been removed.
+
+Sequential programme clocks use the native renderer's cumulative frame rounding,
+including fractional rates and the existing precise-import policy. Placed edits
+retain their canonical frame rate and integral frame boundaries. A rounded final
+picture frame does not expand the approved CMap duration for audio cues.
+
 All source, clock, role and preparation checks precede canonical publication.
 Content-addressed requests, initial prepared revisions and linked receipts
 record staged, committing, committed or recovery-needed state. A blocking
@@ -74,8 +88,15 @@ Stale proposal opportunities are unresolved rather than current auditions;
 malformed or foreign-project context is reported as a gap. Sound links never
 extend a visual cue's timing. Default inspection stays read-only and needs no
 source hashing, decoding or model. Presentation failure keeps valid publication
-and returns a warning. Reports from generator versions 1.1 and 1.2 remain readable
-alongside the current 1.3 generator.
+and returns a warning. Reports from generator versions 1.1 through 1.3 remain
+readable alongside the current 1.4 generator.
+
+An applied motion plan projects against its verified committed heads while
+preserving the immutable proposal's original planning basis. Its own publication
+therefore remains current for subsequent sound suggestions. Changed canonical
+revisions, stale dependencies or changed selected direction still require review;
+neither a regenerated map nor an application receipt supplies rendered or
+listening acceptance.
 
 Recoverable errors include the exact receipt reference, actual committed heads
 and publication state. `recovery-needed` requires reconciliation of the saved

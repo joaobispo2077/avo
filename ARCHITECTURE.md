@@ -1147,6 +1147,19 @@ Sound propose/apply reuse the existing report publisher without source/model
 execution. Presentation failure preserves valid canonical publication and is
 reported separately. Ordinary inspection remains read-only.
 
+Motion-review generator 1.4 projects applied plans against verified publication
+heads while preserving immutable proposal bodies and their original basis.
+The shared data-only basis comparator keeps authoring and review consistent;
+current dependency state and changed direction remain stale. Older 1.1/1.2/1.3
+reports remain readable. This presentation correction transfers no proof approval.
+
+Sound programme admission reuses native sequential frame rounding and preserves
+placed picture clocks. Existing BMap duration validation still bounds audio cues.
+Explicit silence can retire a previously owned contribution after its visual
+anchor disappears. Missing audio cues are permitted only for that removal;
+present bindings remain exact. Immutable parent Tracks supply historical recipe
+verification for replay, while remaining ordered sound contexts stay unchanged.
+
 Camera movement, face anchoring, sound matching, reference analysis, spoken
 notes/recovery and editor handoff are selected options resolved through existing
 settings scopes and frozen requests. Preferences seed future work and cannot
