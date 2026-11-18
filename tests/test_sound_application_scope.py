@@ -87,7 +87,7 @@ def test_per_id_update_preserves_unselected_sound_music_and_picture(tmp_path):
     request["choices"] = request["choices"][1:]
     request["choices"][0]["mix"]["gainDb"] = -18
     prepared = internal._choices(request, proposal, {"entries": [entry]}, snapshot)
-    internal._authoring(
+    _, advisories = internal._authoring(
         request,
         shown,
         prepared,
@@ -106,6 +106,9 @@ def test_per_id_update_preserves_unselected_sound_music_and_picture(tmp_path):
         == before["tracks"]["audioTracks"]["layers"][1]
     )
     assert len(after) == 3
+    (overlap,) = [row for row in advisories if row["code"] == "overlapping-sounds"]
+    assert set(overlap["eventIds"]) == {"reveal-one", "second"}
+    assert overlap["assessment"] == "timing-only"
 
 
 def test_new_second_sound_cannot_borrow_approval_from_preserved_single_sound(tmp_path):

@@ -88,6 +88,7 @@ def test_ordered_layering_is_explicit_and_repetition_and_attacks_are_reported(tm
     assert {a["code"] for a in result["advisories"]} == {
         "repeated-source",
         "colliding-attacks",
+        "overlapping-sounds",
     }
     assert all(c["acceptance"] == "pending-listening" for c in result["choices"])
 
