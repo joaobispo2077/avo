@@ -188,6 +188,10 @@ class _Application:
             raise SoundPlanningError(
                 "Sound receipt recipe changes its explicit selected choices"
             )
+        if prepared.get("productionScope") != receipt.get("productionScope"):
+            raise SoundPlanningError(
+                "Sound receipt changes its exact production ownership"
+            )
 
     def _parent_tracks(self, request):
         head = request["expectedBasis"]["tracks"]
@@ -400,7 +404,15 @@ class _Application:
             clock=proposal["clock"],
             previous=old,
         )
-        return self._restore_choice_order(prepared, retired, request["choices"])
+        prepared = self._restore_choice_order(prepared, retired, request["choices"])
+        from .sound_scope import project_sound_scope
+
+        scope = project_sound_scope(
+            request, proposal["clock"], prepared["choices"], old
+        )
+        if scope is not None:
+            prepared["productionScope"] = scope
+        return prepared
 
     @staticmethod
     def _restore_choice_order(prepared, retired, choices):
@@ -673,8 +685,11 @@ class _Application:
         return snapshots, self._combined_roles(snapshots, prepared["choices"], contexts)
 
     def _prepare(self, request):
+        from .sound_scope import require_sound_scope_parent
+
         shown, generation = self._basis(request)
         snapshots = self._snapshots()
+        require_sound_scope_parent(request, snapshots)
         validate_sound_bindings(
             snapshots["bmap"],
             snapshots["tracks"],
@@ -733,6 +748,8 @@ class _Application:
             "previousReceiptRef": None,
             "lastError": None,
         }
+        if "productionScope" in choices:
+            receipt["productionScope"] = choices["productionScope"]
         return _sound_document(receipt, "applicationReceipt")
 
     def _result(self, receipt, reference):
