@@ -30,7 +30,7 @@ from .motion_sound_review import (
 from .store import atomic_write_json
 from .workspace import ARTIFACTS
 
-GENERATOR = {"id": "avo.motion-review", "version": "1.8.0"}
+GENERATOR = {"id": "avo.motion-review", "version": "1.9.0"}
 MAX_ITEMS = 500
 LIFECYCLE = ("preEntry", "entrance", "hold", "payoff", "exit")
 CONCEPT_TEXT_FIELDS = {
@@ -463,7 +463,22 @@ def _context(context, gaps):
     result["applicability"] = _applicability(context, gaps)
     result["coverageUnavailable"] = unavailable
     result["proposalDefinitionCount"] = proposal_count
+    result["projectionSource"] = _projection_source(context, gaps)
     return result
+
+
+def _projection_source(context, gaps):
+    value = context.get("projectionSource")
+    if value is None:
+        return None
+    try:
+        validate_document(
+            value, "avo.motion-review.schema.json#/$defs/projectionSource"
+        )
+    except (ValueError, TypeError, RecursionError):
+        gaps.append("context:projectionSource:invalid")
+        return None
+    return deepcopy(value)
 
 
 def _applied_heads(context, gaps):
@@ -853,8 +868,7 @@ class MotionReviewService:
         plan["scopeHash"] = document_hash_excluding(plan, "scopeHash")
         snapshot["productionScope"] = plan
 
-    def project(self, context=None, *, scope_request=None):
-        self._validate_scope_clock(scope_request)
+    def _capture_inputs(self, context):
         heads, snapshots, gaps = self._metadata()
         context = _context(context, gaps)
         work, work_gaps = project_craft_work(self.workspace, heads)
@@ -868,6 +882,45 @@ class MotionReviewService:
         ):
             gaps.append({"kind": "sound-proposal-owner-mismatch"})
             context["soundProposal"] = None
+        if context["projectionSource"] is not None:
+            context["projectionSource"]["soundProposalRef"] = (
+                context["soundProposal"] or {}
+            ).get("proposalRef")
+        basis = self._context_basis(context, work, work_gaps, gaps)
+        return heads, snapshots, gaps, context, basis
+
+    def _context_basis(self, context, work, work_gaps, gaps):
+        from .motion_authoring import MotionAuthoringService
+
+        direction, generation = None, None
+        complete = not context["coverageUnavailable"]
+        try:
+            direction = MotionAuthoringService(self.workspace)._direction_ref()
+            if context["soundProposal"] or any(row["kind"] == "sound" for row in work):
+                from .motion_retention import _Retention
+
+                generation = _Retention(
+                    self.workspace
+                ).sound_retention.current_generation()
+        except (OSError, ValueError, RuntimeError, KeyError, TypeError) as error:
+            complete = False
+            gaps.append(
+                {"kind": "review-basis-unavailable", "detail": str(error)[:500]}
+            )
+        return {
+            "workHash": content_hash(
+                {"work": work, "gaps": work_gaps, "soundGeneration": generation}
+            ),
+            "inputHash": content_hash(
+                {"context": context, "gaps": gaps, "directionRef": direction}
+            ),
+            "directionRef": direction,
+            "complete": complete,
+        }
+
+    def project(self, context=None, *, scope_request=None):
+        self._validate_scope_clock(scope_request)
+        heads, snapshots, gaps, context, basis = self._capture_inputs(context)
         pairs, counts, stale = _project_items(
             context["proposal"],
             snapshots,
@@ -883,6 +936,7 @@ class MotionReviewService:
             "schemaVersion": "1.0.0",
             "snapshotHash": "",
             "generator": deepcopy(GENERATOR),
+            "contextBasis": basis,
             "videoId": self.workspace.video_id,
             "provider": str(self.workspace.project.get("provider") or ""),
             "basisHeads": heads,
@@ -903,6 +957,8 @@ class MotionReviewService:
             "pendingRevisions": deepcopy(context["pendingRevisions"]),
             "coverage": _coverage(pairs, counts, context, gaps),
         }
+        if context["projectionSource"] is not None:
+            snapshot["projectionSource"] = context["projectionSource"]
         self._add_scope(snapshot, scope_request)
         snapshot["snapshotHash"] = document_hash_excluding(snapshot, "snapshotHash")
         validate_document(snapshot, "avo.motion-review.schema.json")
@@ -961,9 +1017,63 @@ class MotionReviewService:
                     )
         except (OSError, ValueError) as error:
             return {"freshness": "invalid", "refs": {}, "warnings": [str(error)]}
-        current = self._metadata(snapshots=False)[0]
-        freshness = "current" if current == snapshot["basisHeads"] else "historical"
+        try:
+            freshness = "current" if self._report_is_current(snapshot) else "historical"
+        except (OSError, ValueError, RuntimeError, KeyError, TypeError) as error:
+            return {
+                "freshness": "historical",
+                "refs": refs,
+                "warnings": [f"Current review inputs could not be verified: {error}"],
+            }
         return {"freshness": freshness, "refs": refs, "warnings": []}
+
+    def _report_is_current(self, snapshot):
+        expected = snapshot.get("contextBasis")
+        if (
+            not expected
+            or not expected["complete"]
+            or snapshot["generator"] != GENERATOR
+        ):
+            return False
+        if self._metadata(snapshots=False)[0] != snapshot["basisHeads"]:
+            return False
+        if snapshot.get("projectionSource") is not None:
+            heads, actual = self._native_context_basis(snapshot)
+            return heads == snapshot["basisHeads"] and actual == expected
+        heads, _, _, _, actual = self._capture_inputs(None)
+        return heads == snapshot["basisHeads"] and all(
+            actual[key] == expected[key]
+            for key in ("workHash", "directionRef", "complete")
+        )
+
+    def _native_context_basis(self, snapshot):
+        from .pipeline import TimelinePipeline
+        from .workspace import TimelineWorkspace
+
+        workspace = TimelineWorkspace.from_project(
+            self.workspace.project_path, video_id=self.workspace.video_id
+        )
+        origin = snapshot["projectionSource"]
+        supplied = None
+        if origin["soundProposalRef"] is not None:
+            from .motion_retention import _Retention
+
+            retained = _Retention(workspace).sound_retention
+            retained.proposal(origin["soundProposalRef"])
+            supplied = {
+                "proposal": retained.reference(origin["soundProposalRef"], "proposal"),
+                "proposalRef": origin["soundProposalRef"],
+            }
+        context = TimelinePipeline(workspace)._motion_context(
+            proposal_hash=origin["proposalHash"], sound_proposal=supplied
+        )
+        context["projectionSource"] = deepcopy(origin)
+        reader = MotionReviewService(workspace)
+        reader._validate_scope_clock(
+            (snapshot.get("productionScope") or {}).get("request")
+        )
+        heads, _, _, _, basis = reader._capture_inputs(context)
+        return heads, basis
 
     @staticmethod
     def _write_immutable(path, content):
@@ -999,7 +1109,7 @@ class MotionReviewService:
         if report["freshness"] == "historical":
             warnings = [
                 *warnings,
-                "Canonical heads changed; report retained as historical, not current review approval",
+                "Review inputs changed or could not be verified; report retained as historical, not current review approval",
             ]
         return {
             "status": "published" if report["freshness"] == "current" else "stale",

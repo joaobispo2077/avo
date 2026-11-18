@@ -476,6 +476,11 @@ class TimelinePipeline:
         context = self._motion_context(
             proposal_hash=proposal_hash, sound_proposal=sound_proposal
         )
+        context["projectionSource"] = {
+            "kind": "pipeline",
+            "proposalHash": proposal_hash,
+            "soundProposalRef": None,
+        }
         options = {} if scope_request is None else {"scope_request": scope_request}
         return MotionReviewService(self.workspace).project(context, **options)
 

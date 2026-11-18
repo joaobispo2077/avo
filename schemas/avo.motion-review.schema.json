@@ -23,7 +23,15 @@
     "coverage",
     "advisories"
   ],
+  "allOf": [
+    {
+      "if": {"properties": {"generator": {"properties": {"version": {"const": "1.9.0"}}}}},
+      "then": {"required": ["contextBasis"]}
+    }
+  ],
   "properties": {
+    "contextBasis": {"$ref": "#/$defs/contextBasis"},
+    "projectionSource": {"$ref": "#/$defs/projectionSource"},
     "productionScope": {"$ref": "avo.editing-craft-run.schema.json#/$defs/productionScopePlan"},
     "schemaVersion": {
       "const": "1.0.0"
@@ -44,7 +52,7 @@
           "const": "avo.motion-review"
         },
         "version": {
-            "enum": ["1.1.0", "1.2.0", "1.3.0", "1.4.0", "1.5.0", "1.6.0", "1.7.0", "1.8.0"]
+            "enum": ["1.1.0", "1.2.0", "1.3.0", "1.4.0", "1.5.0", "1.6.0", "1.7.0", "1.8.0", "1.9.0"]
         }
       }
     },
@@ -572,6 +580,25 @@
     }
   },
   "$defs": {
+    "contextBasis": {
+      "type": "object", "additionalProperties": false,
+      "required": ["workHash", "inputHash", "directionRef", "complete"],
+      "properties": {
+        "workHash": {"$ref": "https://avo.local/avo.motion-proposal.schema.json#/$defs/sha256"},
+        "inputHash": {"$ref": "https://avo.local/avo.motion-proposal.schema.json#/$defs/sha256"},
+        "directionRef": {"oneOf": [{"type": "null"}, {"$ref": "https://avo.local/avo.motion-proposal.schema.json#/$defs/ref"}]},
+        "complete": {"type": "boolean"}
+      }
+    },
+    "projectionSource": {
+      "type": "object", "additionalProperties": false,
+      "required": ["kind", "proposalHash", "soundProposalRef"],
+      "properties": {
+        "kind": {"const": "pipeline"},
+        "proposalHash": {"oneOf": [{"type": "null"}, {"$ref": "https://avo.local/avo.motion-proposal.schema.json#/$defs/sha256"}]},
+        "soundProposalRef": {"oneOf": [{"type": "null"}, {"$ref": "https://avo.local/avo.motion-proposal.schema.json#/$defs/ref"}]}
+      }
+    },
     "time": {
       "type": "object",
       "additionalProperties": false,
