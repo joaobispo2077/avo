@@ -1206,6 +1206,14 @@ references can associate legacy cues without altering canonical identity;
 conflicting claims remain unresolved. See
 [`docs/scoped-craft-production.md`](docs/scoped-craft-production.md).
 
+`timeline.sound_scope` applies the same bounded partition to explicit sound
+choices. Ownership uses exact scheduled sample time, with both original and
+replacement owners required across chunks. Existing immutable sound receipts
+freeze current/previous whole intervals and recompute ownership on replay and
+retention. Parent BMap validity and exact cut binding remain prerequisites;
+unscoped compatibility, source admission, full/window absolute evaluation and
+listening/approval boundaries are preserved. No sound state store is added.
+
 Camera movement, face anchoring, sound matching, reference analysis, spoken
 notes/recovery and editor handoff are selected options resolved through existing
 settings scopes and frozen requests. Preferences seed future work and cannot

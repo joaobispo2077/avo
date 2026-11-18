@@ -1,4 +1,4 @@
-# Selected motion production
+# Selected motion and sound production
 
 Plan the whole film and select which chunks to inspect or produce. A scope is a
 bounded, ordered partition of the complete programme clock, plus selected chunk
@@ -78,7 +78,34 @@ Generator 1.8 reads 1.1 through 1.7 reports. Scoped receipts and scope summaries
 use strict additive contracts; older readers that cannot interpret the added
 metadata must reject it rather than infer full completion or approval.
 
-Native `sfx apply` currently keeps its existing explicit per-event scope. Chunk
-ownership for sound requests remains a following increment. Creator suitability,
-continuous visual QC, listening and full-programme acceptance remain separate
-from this metadata and publication evidence.
+## Apply selected sound
+
+Add the same optional `productionScope` partition to the existing native
+`sfx apply` or MCP `avo_sfx_apply` request. Keep the ordinary explicit event
+choices, source admission, owner permissions and exact-byte confirmation.
+The partition must match the frozen proposal's native programme clock.
+
+A sound contribution belongs to the chunk containing its actual scheduled
+audio start. For example, a whoosh starting before a visual reveal belongs to
+that earlier chunk, even when the reveal lands in the next section. Sample
+boundaries stay exact rational frame positions; section boundaries never trim
+attacks or tails or reset their phase. The complete canonical graph remains
+the proof source, including contributions owned by other sections.
+
+A replacement requires the previous and new start chunks when they differ.
+Silencing an existing effect requires its original audio owner; a new explicit
+silence decision uses its visual anchor and schedules no audio. If a retired
+effect's programme clock no longer matches, use the existing explicit unscoped
+removal request instead of guessing a new owner. Existing per-event requests
+without a chunk scope keep their original meaning.
+
+The sound receipt freezes the partition, expected heads and one contribution
+record per selected event. Each record retains current and previous complete
+audio intervals and their selected consumers. Replaying or retaining that
+receipt recomputes ownership from the original immutable request, choices and
+parent Tracks. A changed or missing scope cannot claim another chunk's work.
+The parent BMap must be valid on the exact current cut before a new scoped
+application. Existing staged receipts handle interrupted publication normally.
+
+Creator suitability, continuous visual QC, combined mix measurements, listening
+and full-programme acceptance remain separate from this ownership evidence.

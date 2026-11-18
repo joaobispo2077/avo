@@ -67,6 +67,14 @@ items unchanged. Retiming across owners requires both chunks. Inspect actual
 per-ID receipts and pending work after restart. See
 [selected production](../../../docs/scoped-craft-production.md).
 
+For selected sound sections, add the same optional `productionScope` to the
+ordinary `sfx apply` request. Its owner follows actual audio start, including
+pre-roll, rather than visual impact. Preserve whole attacks/tails and the full
+context graph. Replacing across chunks requires both old and new owners;
+silence removes the existing audio owner's contribution. An incompatible
+retired clock requires the existing explicit unscoped removal route. Scope
+does not grant listening or full-film approval.
+
 **Approval or input gate:** Pause whenever required input or a human decision prevents the next declared step; report the exact reply or artifact needed.
 
 **Stop when:** Missing required input, a failed or stale gate, a required human decision, or verified pipeline completion
