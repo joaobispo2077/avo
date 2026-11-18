@@ -90,6 +90,32 @@ def test_empty_projection_is_read_only_with_explicit_absence(workspace, monkeypa
     validate_document(snapshot, "avo.motion-review.schema.json")
 
 
+@pytest.mark.parametrize("basis", [[], "invalid", {"bmap": {"sha256": "a" * 64}}])
+def test_invalid_proposal_basis_stays_stale_without_breaking_inspection(
+    workspace, basis
+):
+    snapshot = MotionReviewService(workspace).project(
+        {"proposal": {"basisHeads": basis, "items": [{"itemId": "mo04"}]}}
+    )
+    assert snapshot["readiness"] == "stale"
+    assert snapshot["items"][0]["disposition"] == "stale"
+
+
+def test_selected_staleness_survives_unchanged_canonical_heads(workspace):
+    service = MotionReviewService(workspace)
+    snapshot = service.project(
+        {
+            "proposal": {
+                "basisHeads": service.project()["basisHeads"],
+                "items": [{"itemId": "mo04", "disposition": "selected"}],
+            },
+            "proposalStale": True,
+        }
+    )
+    assert snapshot["readiness"] == "stale"
+    assert snapshot["items"][0]["disposition"] == "stale"
+
+
 def test_static_provisional_items_have_linked_cards_without_fake_timing(workspace):
     context = {
         "proposal": {
