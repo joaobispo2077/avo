@@ -15,6 +15,7 @@ from .bmap_service import BMapService
 from .cmap_service import CMapService
 from .contracts import content_hash, fingerprint_stage, validate_document
 from .lifecycle import PipelineRunStore
+from .motion_metadata import _basis_matches
 from .motion_review import METADATA_LIMITS, MotionReviewService, _check_budget
 from .store import (
     atomic_write_json,
@@ -60,17 +61,6 @@ def _encoded(value):
         json.dumps(value, indent=2, ensure_ascii=False, sort_keys=True, allow_nan=False)
         + "\n"
     ).encode("utf-8")
-
-
-def _basis_matches(expected, actual):
-    for name, reference in expected.items():
-        current = actual.get(name)
-        if reference is None or current is None:
-            if reference != current:
-                return False
-        elif any(current.get(key) != value for key, value in reference.items()):
-            return False
-    return True
 
 
 def _check_item_identities(items, previous, retired):

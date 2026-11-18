@@ -16,6 +16,17 @@ class MotionReviewError(ValueError):
     pass
 
 
+def _basis_matches(expected, actual):
+    for name, reference in expected.items():
+        current = actual.get(name)
+        if reference is None or current is None:
+            if reference != current:
+                return False
+        elif any(current.get(key) != value for key, value in reference.items()):
+            return False
+    return True
+
+
 def _budget_text(value, limits, statistics):
     if not isinstance(value, str) or len(value) > limits["text"]:
         raise MotionReviewError("Metadata text budget exceeded")
