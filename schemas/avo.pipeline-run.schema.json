@@ -197,6 +197,10 @@
       "type": "object",
       "additionalProperties": true,
       "properties": {
+        "motionApplicationHistory": {
+          "type": "array", "maxItems": 500,
+          "items": {"allOf": [{"$ref": "avo.motion-proposal.schema.json#/$defs/selectionRef"}], "required": ["receiptRef"]}
+        },
         "editingCraftWorkDecisions": {
           "type": "array", "maxItems": 500,
           "items": {"$ref": "avo.editing-craft-run.schema.json#/$defs/workDecisionRecord"}

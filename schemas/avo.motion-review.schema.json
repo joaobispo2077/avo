@@ -24,6 +24,7 @@
     "advisories"
   ],
   "properties": {
+    "productionScope": {"$ref": "avo.editing-craft-run.schema.json#/$defs/productionScopePlan"},
     "schemaVersion": {
       "const": "1.0.0"
     },
@@ -43,7 +44,7 @@
           "const": "avo.motion-review"
         },
         "version": {
-            "enum": ["1.1.0", "1.2.0", "1.3.0", "1.4.0", "1.5.0", "1.6.0", "1.7.0"]
+            "enum": ["1.1.0", "1.2.0", "1.3.0", "1.4.0", "1.5.0", "1.6.0", "1.7.0", "1.8.0"]
         }
       }
     },
@@ -1069,7 +1070,10 @@
     "canonicalCues": {
       "type": "array",
       "items": {
-        "$ref": "https://github.com/joaobispo2077/avo/schemas/avo.bmap.schema.json#/$defs/cue"
+        "allOf": [
+          {"$ref": "https://github.com/joaobispo2077/avo/schemas/avo.bmap.schema.json#/$defs/cue"},
+          {"properties": {"contentRef": {"properties": {"itemId": {"type": ["string", "null"], "maxLength": 128}}}}}
+        ]
       }
     },
     "advisories": {

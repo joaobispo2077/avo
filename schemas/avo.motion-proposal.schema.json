@@ -541,6 +541,7 @@
             "decisionHash"
           ]
         },
+        "productionScope": {"$ref": "avo.editing-craft-run.schema.json#/$defs/productionScope"},
         "authoring": {
           "type": "object",
           "additionalProperties": false,
@@ -840,6 +841,8 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
+        "productionScope": {"$ref": "avo.editing-craft-run.schema.json#/$defs/productionScopePlan"},
+        "appliedItemIds": {"allOf": [{"$ref": "avo.editing-craft-run.schema.json#/$defs/workIds"}], "minItems": 1},
         "cameraEnvironmentHash": {"$ref": "#/$defs/sha256"},
         "contractVersion": {
           "const": "1.0.0"

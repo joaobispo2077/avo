@@ -16,6 +16,26 @@ class MotionReviewError(ValueError):
     pass
 
 
+def cue_item_claims(items):
+    claims = {}
+    for item in items:
+        if isinstance(item.get("cueId"), str) and item["cueId"]:
+            claims.setdefault(item["cueId"], set()).add(item["itemId"])
+    return claims
+
+
+def cue_item_identity(cue, claims):
+    explicit = (cue.get("contentRef") or {}).get("itemId")
+    if explicit is not None and not isinstance(explicit, str):
+        raise MotionReviewError("Canonical item identity must be a string")
+    proposed = claims.get(cue["cueId"], set())
+    if explicit:
+        return explicit, sorted(proposed - {explicit})
+    if len(proposed) == 1:
+        return next(iter(proposed)), []
+    return cue["cueId"], sorted(proposed)
+
+
 def _basis_matches(expected, actual):
     for name, reference in expected.items():
         current = actual.get(name)
