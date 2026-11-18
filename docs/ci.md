@@ -56,7 +56,7 @@ unrelated source entries remain intact. Offline setup fixtures cover Azure,
 EC2, direct main-archive and absent mirror-list inputs.
 
 Unit tests and coverage use two pytest workers with work stealing, matching the
-integration lane. The unit job has a bounded 30-minute budget, including setup,
+integration lane. The unit job has a bounded 45-minute budget, including setup,
 evidence upload, and post-test smokes, and reports its 20 slowest tests.
 At head [`f55c298`](https://github.com/joaobispo2077/avo/commit/f55c298147ef1aef2949a6ceb9362334808734df),
 [CI run 43810109775](https://github.com/joaobispo2077/avo/actions/runs/43810109775)
@@ -64,9 +64,15 @@ cancelled the unit lane at its former 20-minute limit while it was still making
 progress at 95%. The same run's successful coverage lane selected the identical
 6,163 tests with two work-stealing workers: 6,156 passed and seven skipped in
 24 minutes 47.53 seconds. Thirty minutes covers that measured population plus
-four minutes for other unit-job steps without increasing worker contention.
-Test scope, coverage requirements, mandatory readiness, evidence, and quality
-thresholds remain unchanged.
+four minutes for other unit-job steps without increasing worker contention for
+that population. After growth to 6,806 selected tests,
+[run 44221588534](https://github.com/joaobispo2077/avo/actions/runs/44221588534)
+at `2ee1c61` reached 83% before the 30-minute unit-job timeout. The coverage lane
+finished the same population in 33 minutes 59.71 seconds: 6,794 passed, 11 skipped
+and one outdated pending-work assertion failed. The 45-minute unit budget covers
+the measured workload and setup/evidence/smokes; the assertion is corrected
+separately. Test scope, coverage requirements, mandatory readiness, evidence,
+worker count and quality thresholds remain unchanged.
 
 The Software quality job has a bounded 50-minute budget for setup, instrumented
 unit coverage, the remaining gates and evidence upload.
