@@ -197,6 +197,10 @@
       "type": "object",
       "additionalProperties": true,
       "properties": {
+        "editingCraftWork": {
+          "type": "array", "maxItems": 500,
+          "items": {"$ref": "avo.editing-craft-run.schema.json#/$defs/workReference"}
+        },
         "motionProposalSelection": {
           "$ref": "avo.motion-proposal.schema.json#/$defs/selectionRef"
         },

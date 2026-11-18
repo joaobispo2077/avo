@@ -34,6 +34,29 @@
     "reason": {"type": "string", "pattern": "\\S", "maxLength": 4096}
   },
   "$defs": {
+    "workReference": {
+      "type": "object", "additionalProperties": false,
+      "required": ["kind", "operationId", "requestId", "proposalRef", "scope"],
+      "properties": {
+        "kind": {"enum": ["motion", "sound"]},
+        "operationId": {"type": "string", "pattern": "\\S", "maxLength": 128},
+        "requestId": {"type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"},
+        "proposalRef": {"$ref": "avo.motion-proposal.schema.json#/$defs/ref"},
+        "scope": {"$ref": "#/$defs/workScope"}
+      }
+    },
+    "workScope": {
+      "type": "object", "additionalProperties": false,
+      "required": ["itemIds", "eventIds"],
+      "properties": {
+        "itemIds": {"$ref": "#/$defs/workIds"},
+        "eventIds": {"$ref": "#/$defs/workIds"}
+      }
+    },
+    "workIds": {
+      "type": "array", "maxItems": 500, "uniqueItems": true,
+      "items": {"type": "string", "pattern": "\\S", "maxLength": 128}
+    },
     "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
     "head": {
       "oneOf": [

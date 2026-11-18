@@ -319,6 +319,27 @@ def _known_craft_request(document, request_id):
     )
 
 
+def _validate_craft_work(document):
+    identities = set()
+    for work in (document.get("extensions") or {}).get("editingCraftWork", []):
+        identity = work["kind"], work["operationId"]
+        frozen = _known_craft_request(document, work["requestId"])
+        if identity in identities:
+            raise LifecycleError("editing craft work repeats an operation identity")
+        identities.add(identity)
+        if frozen is None or frozen["runId"] != document["runId"]:
+            raise LifecycleError(
+                "editing craft work requires its original frozen request"
+            )
+        namespace = "sound/" if work["kind"] == "sound" else ""
+        reference = work["proposalRef"]
+        if (
+            reference["path"]
+            != f"edit/motion/{namespace}proposals/{reference['sha256']}.json"
+        ):
+            raise LifecycleError("editing craft work changes its typed proposal path")
+
+
 class PipelineRunStore:
     """Persist the lifecycle state and explicit recovery history."""
 
@@ -346,6 +367,7 @@ class PipelineRunStore:
                 raise LifecycleError(
                     "motion execution choice requires a request identity"
                 )
+        _validate_craft_work(document)
 
     @serialized_timeline(lambda self: self.path.parent)
     def initialize(
@@ -481,6 +503,43 @@ class PipelineRunStore:
                 "editingCraftRequestHistory", []
             ).append(deepcopy(previous))
         updated.setdefault("executionChoices", {})["editingCraft"] = deepcopy(requested)
+        updated["updatedAt"] = self.clock()
+        return self._write(updated, expected_updated_at=current["updatedAt"])
+
+    @serialized_timeline(lambda self: self.path.parent)
+    def bind_editing_craft_work(self, work):
+        """Retain an exact requested proposal without selecting media or advancing state."""
+        from copy import deepcopy
+
+        from .contracts import ContractError, validate_document
+
+        try:
+            validate_document(
+                work, "avo.editing-craft-run.schema.json#/$defs/workReference"
+            )
+        except ContractError as exc:
+            raise LifecycleError(f"invalid editing craft work: {exc}") from exc
+        current = self.load()
+        entries = (current.get("extensions") or {}).get("editingCraftWork", [])
+        identity = work["kind"], work["operationId"]
+        known = next(
+            (
+                entry
+                for entry in entries
+                if (entry["kind"], entry["operationId"]) == identity
+            ),
+            None,
+        )
+        if known is not None:
+            if known != work:
+                raise LifecycleError(
+                    "editing craft operation conflicts with its saved proposal"
+                )
+            return current
+        updated = deepcopy(current)
+        updated.setdefault("extensions", {}).setdefault("editingCraftWork", []).append(
+            deepcopy(work)
+        )
         updated["updatedAt"] = self.clock()
         return self._write(updated, expected_updated_at=current["updatedAt"])
 
