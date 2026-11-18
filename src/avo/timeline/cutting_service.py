@@ -28,6 +28,7 @@ from .cutting_store import CuttingStore, CuttingStoreError
 from .cutting_take_proposals import propose_retakes
 from .lifecycle import PipelineRunStore
 from .ports import BoundaryVerificationPort
+from .preparation import coverage_protections, inspect_speech_coverage
 from .store import now_iso
 
 
@@ -296,7 +297,9 @@ class CuttingService:
                 root / "adapters/understand/watch_skill.py",
                 root / "adapters/media/timeline_render.py",
                 root / "transcribe.py",
+                directory / "preparation.py",
                 root.parent.parent / "schemas/avo.cutting.schema.json",
+                root.parent.parent / "schemas/avo.preparation.schema.json",
             ]
         )
         return {
@@ -412,12 +415,17 @@ class CuttingService:
             self.policy,
             protections=self.policy.protections + self._canonical_protections(snapshot),
         )
+        retake_policy = replace(
+            protected_policy,
+            protections=protected_policy.protections
+            + self._speech_protections(analyses),
+        )
         retakes, retake_edits = propose_retakes(
             snapshot,
             analyses,
             analysis_refs=analysis_refs,
             evidence_port=self.retake_port,
-            policy=protected_policy,
+            policy=retake_policy,
         )
         occurrences.extend(retakes)
         edits.extend(retake_edits)
@@ -465,9 +473,31 @@ class CuttingService:
                 "unobservedSources": sorted(set(unobserved)),
                 "joinCount": len(joins),
                 "scope": scope,
+                "speech": [
+                    {
+                        "sourceId": analysis["speechCoverage"]["binding"][
+                            "sourceRange"
+                        ]["sourceId"],
+                        "status": analysis["speechCoverage"]["status"],
+                        "coverageHash": analysis["speechCoverage"]["coverageHash"],
+                        "protectedRangeCount": len(
+                            analysis["speechCoverage"]["protectedRanges"]
+                        ),
+                        "analysisRef": analysis_refs[segment_id],
+                    }
+                    for segment_id, analysis in analyses.items()
+                ],
             },
             "policy": self.policy.payload(),
         }
+
+    @staticmethod
+    def _speech_protections(analyses):
+        return tuple(
+            protection
+            for analysis in analyses.values()
+            for protection in coverage_protections(analysis["speechCoverage"])
+        )
 
     def _analyze_units(self, snapshot, scope, sync_ref, request):
         sources = {source["sourceId"]: source for source in snapshot["sources"]}
@@ -484,6 +514,16 @@ class CuttingService:
                 continue
             source = sources[segment["sourceId"]]
             analysis = self._analysis(source, segment, sync_ref)
+            analysis["speechCoverage"] = inspect_speech_coverage(
+                analysis,
+                source_ref={
+                    "locator": source["locator"],
+                    "sha256": source["fingerprint"]["sha256"],
+                },
+                source_range=segment_range(segment),
+                routing=source.get("streamMetadata", {}).get("audioSelection") or {},
+                sync_ref=sync_ref,
+            )
             analysis_ref = self.store.save_document(
                 make_document("source-analysis", analysis)
             )

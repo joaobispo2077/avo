@@ -530,6 +530,9 @@
         "coverage": {
           "type": "object"
         },
+        "speechCoverage": {
+          "$ref": "avo.preparation.schema.json#/$defs/coverage"
+        },
         "uncertainty": {
           "type": "array",
           "items": {
