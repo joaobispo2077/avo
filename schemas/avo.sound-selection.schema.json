@@ -198,12 +198,24 @@
       "required": ["startSample", "endSampleExclusive"],
       "properties": {"startSample": {"$ref": "#/$defs/sample"}, "endSampleExclusive": {"$ref": "#/$defs/sample"}}
     },
+    "cameraAnchor": {
+      "type": "object", "additionalProperties": false,
+      "required": ["componentId", "pathHash", "sourceSha256", "nodeIndex"],
+      "properties": {
+        "componentId": {"$ref": "#/$defs/id"},
+        "pathHash": {"$ref": "avo.sfx-catalog.schema.json#/$defs/sha"},
+        "sourceSha256": {"$ref": "avo.sfx-catalog.schema.json#/$defs/sha"},
+        "nodeIndex": {"type": "integer", "minimum": 0, "maximum": 255}
+      }
+    },
     "opportunity": {
       "type": "object", "additionalProperties": false,
+      "allOf": [{"if": {"required": ["cameraAnchor"]}, "then": {"properties": {"kind": {"const": "camera-emphasis"}}}}],
       "required": ["eventId", "itemId", "cueId", "kind", "purpose", "role", "visibility", "programFrame", "visibleRange"],
       "properties": {
         "eventId": {"$ref": "#/$defs/id"}, "itemId": {"$ref": "#/$defs/id"}, "cueId": {"$ref": "#/$defs/id"},
         "kind": {"enum": ["click", "reveal", "camera-emphasis", "transition", "explicit"]},
+        "cameraAnchor": {"$ref": "#/$defs/cameraAnchor"},
         "purpose": {"type": "string", "minLength": 1, "maxLength": 4096, "pattern": "\\S"},
         "role": {"enum": ["main", "bass", "support", "detail", "tail"]},
         "visibility": {"enum": ["visible", "hidden", "unknown"]},
@@ -276,6 +288,7 @@
     "intent": {
       "type": "object",
       "additionalProperties": false,
+      "allOf": [{"if": {"required": ["cameraAnchor"]}, "then": {"properties": {"kind": {"const": "camera-emphasis"}}, "not": {"required": ["phase"]}}}],
       "required": [
         "eventId",
         "itemId",
@@ -318,6 +331,7 @@
           "minimum": 0,
           "maximum": 1
         },
+        "cameraAnchor": {"$ref": "#/$defs/cameraAnchor"},
         "motionCharacter": {
           "enum": [
             "accent",

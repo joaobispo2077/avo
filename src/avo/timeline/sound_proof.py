@@ -76,6 +76,14 @@ class _Selections:
         validate_sound_bindings(self.bmap, tracks)
         self.retained = _Retention(workspace)
         self.contexts = {}
+        self.animation = None
+
+    def _camera_animation(self, intent):
+        if "cameraAnchor" not in intent:
+            return None
+        if self.animation is None:
+            self.animation = _snapshot(self.workspace, "animation")
+        return self.animation
 
     def _published(self, layer):
         selected = layer["provenance"]["soundSelection"]
@@ -130,9 +138,17 @@ class _Selections:
         )
         fps = choice["fit"]["clock"]["frameRate"]
         item = {"itemId": (cue.get("contentRef") or {}).get("itemId", choice["itemId"])}
-        part = {"cueId": cue_id, "timing": {"start": cue["start"], "end": cue["end"]}}
+        part = {
+            "cueId": cue_id,
+            "timing": {"start": cue["start"], "end": cue["end"]},
+            "cue": cue,
+        }
         fresh = _sound_opportunity(
-            item, part, record["intent"], Fraction(fps["num"], fps["den"])
+            item,
+            part,
+            record["intent"],
+            Fraction(fps["num"], fps["den"]),
+            animation=self._camera_animation(record["intent"]),
         )
         _require(
             fresh == choice["fit"]["opportunity"],

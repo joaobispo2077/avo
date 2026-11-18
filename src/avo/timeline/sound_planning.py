@@ -13,6 +13,7 @@ from .event_clock import (
     sample_rate_boundary,
 )
 from .motion_authoring import MotionAuthoringService
+from .sound_anchors import sound_phase
 from .sound_choices import _sound_document, freeze_sound_choices
 from .sound_fitting import SCHEMA, SoundPlanningError, _clock, fit_sound_candidate
 from .store import timeline_writer, write_immutable_json
@@ -35,10 +36,10 @@ def _sound_part(item, intent):
     return parts[0] if len(parts) == 1 else None
 
 
-def _sound_opportunity(item, part, intent, fps):
+def _sound_opportunity(item, part, intent, fps, *, animation=None):
     first = _cue_frame(part["timing"]["start"], fps)
     end = _cue_frame(part["timing"]["end"], fps)
-    phase = Fraction(str(intent.get("phase", 0))) * max(0, end - first - 1)
+    phase = sound_phase(intent, part, animation) * max(0, end - first - 1)
     impact = first + sample_rate_boundary(
         phase.numerator, source_rate=phase.denominator, target_rate=1
     )
@@ -54,6 +55,11 @@ def _sound_opportunity(item, part, intent, fps):
         "visibleRange": {"startFrame": first, "endFrameExclusive": end},
         "material": intent.get("material"),
         "strength": intent.get("strength", "unknown"),
+        **(
+            {"cameraAnchor": deepcopy(intent["cameraAnchor"])}
+            if "cameraAnchor" in intent
+            else {}
+        ),
     }
 
 
@@ -79,7 +85,7 @@ def _sound_recommendation(intent):
     return "audition"
 
 
-def _derive_sound_record(item, intent, fps, program_end_frame):
+def _derive_sound_record(item, intent, fps, program_end_frame, animation=None):
     record = {
         "eventId": intent["eventId"],
         "itemId": intent["itemId"],
@@ -107,8 +113,8 @@ def _derive_sound_record(item, intent, fps, program_end_frame):
             "ambiguous-cue" if item["parts"] else "canonical-timing-required"
         ]
         return record
-    opportunity = _sound_opportunity(item, part, intent, fps)
     try:
+        opportunity = _sound_opportunity(item, part, intent, fps, animation=animation)
         _clock(opportunity, fps, program_end_frame, 48000)
     except (ValueError, TypeError, KeyError) as error:
         record["issues"] = ["outside-program-or-empty-cue: " + str(error)[:300]]
@@ -121,7 +127,9 @@ def _derive_sound_record(item, intent, fps, program_end_frame):
     return record
 
 
-def derive_sound_opportunities(snapshot, intents, *, frame_rate, program_end_frame):
+def derive_sound_opportunities(
+    snapshot, intents, *, frame_rate, program_end_frame, animation=None
+):
     """Derive only requested sound events from current metadata, with silence valid.
 
     Visibility, material and strength remain declared editorial intent. This does
@@ -151,7 +159,11 @@ def derive_sound_opportunities(snapshot, intents, *, frame_rate, program_end_fra
         items = {item["itemId"]: item for item in snapshot["items"]}
         records = [
             _derive_sound_record(
-                items.get(intent["itemId"]), intent, frame_rate, program_end_frame
+                items.get(intent["itemId"]),
+                intent,
+                frame_rate,
+                program_end_frame,
+                animation,
             )
             for intent in intents
         ]
@@ -324,6 +336,13 @@ class SoundPlanningService:
             or "craft-" + content_hash(request["operationId"])[:24]
         )
 
+    def _camera_animation(self, intents):
+        if not any("cameraAnchor" in intent for intent in intents):
+            return None
+        from .motion_review import MotionReviewService
+
+        return MotionReviewService(self.workspace)._metadata()[1].get("animation")
+
     def _propose(self, request):
         from .pipeline import TimelinePipeline
 
@@ -345,6 +364,7 @@ class SoundPlanningService:
             request["intents"],
             frame_rate=fps,
             program_end_frame=request["clock"]["programEndFrame"],
+            animation=self._camera_animation(request["intents"]),
         )
         budget = request.get("maxCandidates", 100)
         used = self._match(
