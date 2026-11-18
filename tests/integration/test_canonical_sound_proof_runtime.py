@@ -171,8 +171,10 @@ def reviewed_sound(ws, tmp_path, *, clock=None, phase=0.5):
     }
 
 
+@pytest.mark.parametrize("selected_scope", [False, True])
 def test_published_sound_reaches_the_normal_export_once_and_follows_real_dialogue(
     tmp_path,
+    selected_scope,
 ):
     ws = recorded_program(tmp_path)
     request = initial_cut_proof_request(
@@ -205,7 +207,22 @@ def test_published_sound_reaches_the_normal_export_once_and_follows_real_dialogu
 
     _, baseline = render(request, "baseline.mkv")
     service, selected = reviewed_sound(ws, tmp_path)
+    if selected_scope:
+        selected["productionScope"] = {
+            "clock": {"frameRate": {"num": 24, "den": 1}, "programEndFrame": 24},
+            "chunks": [
+                {"chunkId": "opening", "startFrame": 0, "endFrameExclusive": 12},
+                {"chunkId": "answer", "startFrame": 12, "endFrameExclusive": 24},
+            ],
+            "selectedChunkIds": ["opening"],
+        }
     applied = service.apply(selected)
+    if selected_scope:
+        report = applied["receipt"]["productionScope"]
+        assert len(report["contributions"]) == 1
+        assert report["contributions"][0]["ownerChunkId"] == "opening"
+        assert report["contributions"][0]["current"]["endFrame"]["num"] > 12
+        assert report["approval"] == "not-granted"
     AnimationService(ws).author(strategy(), actor="fixture", reason="Current metadata")
     plan, output = render(request, "selected.mkv")
     assert applied["acceptance"] == "pending-listening"
