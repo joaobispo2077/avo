@@ -254,34 +254,12 @@ class SoundPlanningService:
         return result
 
     def _program_clock(self, clock):
-        from .bmap_service import BMapService
-        from .initial_cut import _clock_boundary, _precise_clock_mode
-        from .mapping import cmap_output_duration, cmap_output_timebase
+        from .program_clock import ProgramClockError, require_program_clock
 
-        if self.workspace.authority != "canonical":
-            raise SoundPlanningError("Sound proposals require a canonical approved cut")
-        _, cmap, _ = BMapService(self.workspace).current_basis()
-        snapshot = cmap["snapshot"]
-        base = cmap_output_timebase(snapshot)
-        fps = Fraction(clock["frameRate"]["num"], clock["frameRate"]["den"])
-        extent = (
-            Fraction(cmap_output_duration(snapshot) * base["num"], base["den"]) * fps
-        )
-        if snapshot.get("layoutMode") == "placed":
-            canonical_rate = snapshot["layout"]["programClock"]["frameRate"]
-            if fps != Fraction(canonical_rate["num"], canonical_rate["den"]):
-                raise SoundPlanningError(
-                    "Sound clock differs from the placed picture clock"
-                )
-        else:
-            extent = _clock_boundary(
-                extent, _precise_clock_mode(self.workspace, snapshot)
-            )
-        if extent != clock["programEndFrame"]:
-            raise SoundPlanningError(
-                "Sound clock differs from the approved program extent"
-            )
-        return fps
+        try:
+            return require_program_clock(self.workspace, clock, subject="Sound")
+        except ProgramClockError as error:
+            raise SoundPlanningError(str(error)) from error
 
     def _match(self, records, generation, mode, budget, filters):
         used = 0
