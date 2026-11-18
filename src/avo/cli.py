@@ -546,6 +546,10 @@ def _pipeline_import(pipeline, args):
 
 
 def _pipeline(args: argparse.Namespace) -> int:
+    return _pipeline_command(args)
+
+
+def _pipeline_command(args: argparse.Namespace) -> int:
     from avo.timeline.command_registry import registry_document
     from avo.timeline.pipeline import TimelinePipeline
 
