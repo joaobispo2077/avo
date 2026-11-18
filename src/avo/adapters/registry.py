@@ -57,7 +57,9 @@ JOB_REGISTRIES: dict[str, dict[str, str]] = {
 }
 
 
-def build_sfx_catalog(workspace, *, roots, analyze=False, semantic=False, root=None):
+def build_sfx_catalog(
+    workspace, *, roots, analyze=False, semantic=False, root=None, favorites=None
+):
     """Compose only the explicitly selected sound-analysis or matching boundary."""
     from avo.sfx_catalog import SfxCatalogService
 
@@ -70,8 +72,9 @@ def build_sfx_catalog(workspace, *, roots, analyze=False, semantic=False, root=N
         from avo.sfx_semantic import build_semantic_backend
 
         backend = build_semantic_backend(workspace, roots, root=root)
+    preferences = {} if favorites is None else {"favorites": favorites}
     return SfxCatalogService(
-        workspace, roots=roots, analyzer=analyzer, semantic=backend
+        workspace, roots=roots, analyzer=analyzer, semantic=backend, **preferences
     )
 
 

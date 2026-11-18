@@ -20,6 +20,7 @@
       "maxSeconds": {"type": "number", "exclusiveMinimum": 0, "maximum": 3600}
     }},
     "resume": {"$ref": "avo.sfx-catalog.schema.json#/properties/resume"},
+    "useProviderFavorites": {"type": "boolean"},
     "query": {"type": "string", "minLength": 1, "maxLength": 512, "pattern": "\\S"},
     "filters": {"$ref": "avo.sfx-search.schema.json#/$defs/filters"},
     "limit": {"type": "integer", "minimum": 1, "maximum": 100},
@@ -29,7 +30,7 @@
   "allOf": [
     {"if": {"properties": {"operation": {"const": "scan"}}}, "then": {
       "required": ["actor", "reason", "expectedGeneration"],
-      "propertyNames": {"enum": ["contractVersion", "operation", "operationId", "actor", "reason", "expectedGeneration", "budget", "resume"]}
+      "propertyNames": {"enum": ["contractVersion", "operation", "operationId", "actor", "reason", "expectedGeneration", "budget", "resume", "useProviderFavorites"]}
     }},
     {"if": {"properties": {"operation": {"const": "annotate"}}}, "then": {
       "required": ["actor", "reason", "expectedGeneration", "selection", "patch"],

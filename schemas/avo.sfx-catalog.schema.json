@@ -53,6 +53,7 @@
         "reason"
       ],
       "properties": {
+        "favoritePreferencesHash": {"$ref": "#/$defs/sha"},
         "kind": {
           "enum": [
             "empty",
@@ -124,6 +125,7 @@
             "visitedIds"
           ],
           "properties": {
+            "favoritesHash": {"$ref": "#/$defs/sha"},
             "inventoryHash": {
               "$ref": "#/$defs/sha"
             },
@@ -522,6 +524,7 @@
         "conflicts"
       ],
       "properties": {
+        "curationOrigin": {"$ref": "avo.sfx-provider.schema.json#/$defs/origin"},
         "entryId": {
           "$ref": "#/$defs/sha"
         },

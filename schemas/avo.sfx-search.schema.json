@@ -40,6 +40,7 @@
         "libraryId": {"type": "string", "minLength": 1, "maxLength": 64}, "relativePath": {"type": "string", "minLength": 1, "maxLength": 4096},
         "sourceSha256": {"$ref": "avo.sfx-catalog.schema.json#/$defs/sha"}, "sourceState": {"const": "available"}, "rightsState": {"enum": ["licensed", "unknown", "restricted", "stale"]},
         "rights": {"$ref": "avo.sfx-catalog.schema.json#/$defs/rights"}, "curation": {"$ref": "avo.sfx-catalog.schema.json#/$defs/curation"},
+        "curationOrigin": {"$ref": "avo.sfx-provider.schema.json#/$defs/origin"},
         "marker": {"oneOf": [{"type": "null"}, {"$ref": "avo.sfx-catalog.schema.json#/$defs/marker"}]},
         "score": {"type": "number", "minimum": -1, "maximum": 1}, "reasons": {"type": "array", "maxItems": 512, "items": {"type": "string", "maxLength": 1024}},
         "usefulDurationSeconds": {"type": "number", "minimum": 0}, "level": {"type": "object", "additionalProperties": false, "required": ["rms", "peak"], "properties": {"rms": {"type": "number", "minimum": 0}, "peak": {"type": "number", "minimum": 0}}},

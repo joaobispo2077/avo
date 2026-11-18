@@ -270,7 +270,9 @@ def _new_entry(library, relative):
 class SfxCatalogService:
     """Project-local catalogue; constructing and reading never scan/decode sources."""
 
-    def __init__(self, workspace, *, roots, analyzer=None, semantic=None):
+    def __init__(
+        self, workspace, *, roots, analyzer=None, semantic=None, favorites=None
+    ):
         if (
             not isinstance(roots, dict)
             or len(roots) > 32
@@ -283,6 +285,13 @@ class SfxCatalogService:
         }
         self.analyzer = analyzer
         self.semantic = semantic
+        self.favorites = None
+        if favorites is not None:
+            from avo.sfx_preferences import validate_favorites
+
+            self.favorites = validate_favorites(favorites)
+            if self.favorites["provider"] != workspace.project["provider"]:
+                raise SfxCatalogError("Sound favorites belong to another provider")
         self.directory = Path(workspace.raw_dir).absolute() / "edit" / "sfx-catalog"
 
     def _path(self, relative):
@@ -433,9 +442,20 @@ class SfxCatalogService:
             "sizeBytes": before["sizeBytes"],
             "state": "available",
         }
+        self._seed_favorite(entry, old_sha)
         entry["measurement"] = deepcopy(measurement)
         entry["entryRevision"] = _revision(entry)
         return entry, before["sizeBytes"]
+
+    def _seed_favorite(self, entry, previous_sha):
+        if previous_sha is None and self.favorites is not None:
+            from avo.sfx_preferences import seed_favorite
+
+            seed_favorite(entry, self.favorites)
+
+    def _bind_favorites(self, metadata, key):
+        if self.favorites is not None:
+            metadata[key] = content_hash(self.favorites)
 
     def scan(
         self,
@@ -450,6 +470,7 @@ class SfxCatalogService:
     ):
         """Explicit bounded source work; a competing writer cannot lose manual notes."""
         operation = {"kind": "scan", **_actor(actor, reason)}
+        self._bind_favorites(operation, "favoritePreferencesHash")
         limits = _budget(budget)
         previous = self.show()
         _expected(expected_generation, previous["generationId"])
@@ -501,6 +522,7 @@ class SfxCatalogService:
                 "offset": cursor,
                 "visitedIds": sorted(visited),
             }
+            self._bind_favorites(result["resume"], "favoritesHash")
         return self._publish(result, expected_generation)
 
     def _scan_population(
@@ -553,6 +575,11 @@ class SfxCatalogService:
         if resume["inventoryHash"] != content_hash(inventory):
             raise SfxCatalogError(
                 "scan resume population/generation changed; restart explicitly"
+            )
+        expected = content_hash(self.favorites) if self.favorites is not None else None
+        if resume.get("favoritesHash") != expected:
+            raise SfxCatalogError(
+                "scan resume favorite preferences changed; restart explicitly"
             )
         return resume["offset"], set(resume["visitedIds"])
 
@@ -829,6 +856,11 @@ def _result_row(entry, score, reasons):
         "rightsState": _rights_state(entry),
         "rights": entry["rights"],
         "curation": entry["curation"],
+        **(
+            {"curationOrigin": entry["curationOrigin"]}
+            if "curationOrigin" in entry
+            else {}
+        ),
         "marker": entry["marker"],
         "score": score,
         "reasons": reasons,
