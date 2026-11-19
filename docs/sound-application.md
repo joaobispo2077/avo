@@ -75,6 +75,13 @@ exact rational interval in seconds. Different output sample rates are converted
 to their own time bases before comparing ranges or impact collisions. Touching
 half-open ranges, silence and unresolved fits do not count as overlaps.
 
+Set optional `soundMatching.repetitionWindowMs` in the selected craft options
+to flag uses of the same source bytes whose adjacent impacts are within that
+many milliseconds. AVO compares the exact impact time at each choice's output
+sample rate. The advisory lists each involved event and the selected limit,
+including retained events outside the current update. With the option omitted,
+the report lists all repeated uses of the same source as before.
+
 Overlap reporting is bounded to 64 pairs with an explicit shown/total count when
 truncated. Its `timing-only` assessment is a prompt for review; it does not claim
 audible masking, clipping or unsuitable layering. Source gain, fades, routing,

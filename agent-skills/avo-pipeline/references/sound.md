@@ -103,6 +103,11 @@ and tail, plus the scheduled output samples. Unresolved rows explain which
 timing or review condition is missing. Audition the result in context before
 selecting its trim and mix. Silence remains available.
 
+To focus repetition review on nearby reuse, select
+`soundMatching.repetitionWindowMs` in the craft options. The application report
+lists the events whose adjacent impacts reuse the same sound within that gap.
+The selected policy is frozen with the request.
+
 Each intent identifies a stable `eventId`, current motion `itemId`, purpose,
 role, declared visibility and motion character. An optional `cueId` resolves
 split items; `phase` locates an accent inside the canonical cue. Missing,
