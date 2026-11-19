@@ -49,9 +49,9 @@ def test_bom_rate_origins_tracks_and_repeated_local_source(tmp_path):
     assert video["clips"][0]["unknown"]["filter"] == 1
 
 
-def _levels(value, *, envelope="", enabled="TRUE", start=-1, effects=1):
+def _levels(value, *, envelope="", enabled="TRUE", start=-1, end=-1, effects=1):
     row = (
-        f"<filter><enabled>{enabled}</enabled><start>{start}</start><end>-1</end>"
+        f"<filter><enabled>{enabled}</enabled><start>{start}</start><end>{end}</end>"
         "<effect><name>Audio Levels</name><effectid>audiolevels</effectid>"
         "<mediatype>audio</mediatype><parameter><parameterid>level</parameterid>"
         f"<name>Level</name><value>{value}</value>{envelope}</parameter></effect></filter>"
@@ -98,6 +98,12 @@ def test_returned_level_does_not_impute_a_missing_original_gain(tmp_path):
     ]
 
 
+@pytest.mark.parametrize(("start", "end"), [(0, 240), (2, 14)])
+def test_explicit_filter_range_can_cover_entire_source_occurrence(tmp_path, start, end):
+    returned = _with_audio_levels(tmp_path, _levels("0.5", start=start, end=end))
+    assert returned["tracks"][1]["clips"][0]["gainDb"] == pytest.approx(-6.020599913)
+
+
 @pytest.mark.parametrize(
     "effect",
     [
@@ -107,6 +113,8 @@ def test_returned_level_does_not_impute_a_missing_original_gain(tmp_path):
         _levels("inf"),
         _levels("0.5", enabled="FALSE"),
         _levels("0.5", start=2),
+        _levels("0.5", start=3, end=240),
+        _levels("0.5", start=0, end=13),
         _levels("0.5", effects=2),
         _levels("0.5", envelope="<keyframe><when>0</when><value>1</value></keyframe>"),
     ],
