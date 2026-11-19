@@ -686,6 +686,7 @@ class _Application:
 
     def _prepare(self, request):
         from .sound_scope import require_sound_scope_parent
+        from .sound_word_evidence import require_word_publication
 
         shown, generation = self._basis(request)
         snapshots = self._snapshots()
@@ -698,6 +699,9 @@ class _Application:
             },
         )
         contexts = self._visual_contexts(request, shown["proposal"], snapshots)
+        word_reader = require_word_publication(
+            self.workspace, request, shown["proposal"]
+        )
         choices = self._choices(request, shown["proposal"], generation, snapshots)
         sources = self._source_refs(choices["choices"], generation)
         _, request_ref, _ = self._reference("requests", request, "applyRequest")
@@ -729,6 +733,8 @@ class _Application:
                 **kwargs,
             )
         self._basis(request)
+        if word_reader is not None:
+            word_reader.recheck()
         receipt = {
             "contractVersion": "1.0.0",
             "operationId": request["operationId"],

@@ -200,10 +200,12 @@
     },
     "sourceAnchor": {
       "type": "object", "additionalProperties": false,
-      "required": ["sourceId", "sourceSha256", "sourceTime"],
+      "required": ["sourceId", "sourceSha256"],
+      "anyOf": [{"required": ["sourceTime"]}, {"required": ["spokenEvidence"]}],
       "properties": {
         "sourceId": {"$ref": "#/$defs/id"},
         "sourceSha256": {"$ref": "avo.sfx-catalog.schema.json#/$defs/sha"},
+        "spokenEvidence": {"$ref": "#/$defs/spokenEvidence"},
         "sourceTime": {
           "type": "object", "additionalProperties": false, "required": ["ticks", "timebase"],
           "properties": {
@@ -219,6 +221,16 @@
         {"required": ["segmentId"], "not": {"anyOf": [{"required": ["placementId"]}, {"required": ["trackId"]}]}},
         {"required": ["placementId"], "not": {"required": ["segmentId"]}}
       ]
+    },
+    "spokenEvidence": {
+      "type": "object", "additionalProperties": false,
+      "required": ["analysisRef", "wordIndex"],
+      "properties": {
+        "analysisRef": {"$ref": "https://avo.local/avo.preparation.schema.json#/$defs/ref"},
+        "wordIndex": {"type": "integer", "minimum": 0, "maximum": 100000},
+        "wordHash": {"$ref": "avo.sfx-catalog.schema.json#/$defs/sha"},
+        "selectionHash": {"$ref": "avo.sfx-catalog.schema.json#/$defs/sha"}
+      }
     },
     "cameraAnchor": {
       "type": "object", "additionalProperties": false,
@@ -238,7 +250,12 @@
         "eventId": {"$ref": "#/$defs/id"}, "itemId": {"$ref": "#/$defs/id"}, "cueId": {"$ref": "#/$defs/id"},
         "kind": {"enum": ["click", "reveal", "camera-emphasis", "transition", "explicit"]},
         "cameraAnchor": {"$ref": "#/$defs/cameraAnchor"},
-        "sourceAnchor": {"$ref": "#/$defs/sourceAnchor"},
+        "sourceAnchor": {"allOf": [
+          {"$ref": "#/$defs/sourceAnchor"},
+          {"required": ["sourceTime"], "properties": {
+            "spokenEvidence": {"required": ["wordHash", "selectionHash"]}
+          }}
+        ]},
         "purpose": {"type": "string", "minLength": 1, "maxLength": 4096, "pattern": "\\S"},
         "role": {"enum": ["main", "bass", "support", "detail", "tail"]},
         "visibility": {"enum": ["visible", "hidden", "unknown"]},

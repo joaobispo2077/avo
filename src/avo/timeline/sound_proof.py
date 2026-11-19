@@ -78,6 +78,7 @@ class _Selections:
         self.contexts = {}
         self.animation = None
         self.cmap = None
+        self.words = None
 
     def _camera_animation(self, intent):
         if "cameraAnchor" not in intent:
@@ -92,6 +93,19 @@ class _Selections:
         if self.cmap is None:
             self.cmap = _snapshot(self.workspace, "cmap")
         return self.cmap
+
+    def _spoken_anchors(self, intent, fps):
+        anchor = intent.get("sourceAnchor") or {}
+        if "spokenEvidence" not in anchor:
+            return None
+        from .contracts import content_hash
+        from .sound_word_evidence import WordEvidenceReader
+
+        if self.words is None:
+            self.words = WordEvidenceReader(self.workspace)
+        return {
+            content_hash(anchor): {"anchor": self.words.anchor(anchor, frame_rate=fps)}
+        }
 
     def _published(self, layer):
         selected = layer["provenance"]["soundSelection"]
@@ -158,6 +172,9 @@ class _Selections:
             Fraction(fps["num"], fps["den"]),
             animation=self._camera_animation(record["intent"]),
             cmap=self._source_cmap(record["intent"]),
+            spoken=self._spoken_anchors(
+                record["intent"], Fraction(fps["num"], fps["den"])
+            ),
         )
         _require(
             fresh == choice["fit"]["opportunity"],
@@ -181,6 +198,8 @@ class _Selections:
             if not layer.get("mute", False)
         ]
         self._order(selections)
+        if self.words is not None:
+            self.words.recheck()
         return selections
 
     def _order(self, selections):
@@ -345,3 +364,17 @@ def compile_canonical_sound(workspace, execution, *, require_applied=False):
             "Proof changes or omits its current canonical selected sound",
         )
     return base
+
+
+def require_current_word_sound(workspace, execution):
+    """An older rendered plan cannot approve a now-stale spoken sound choice."""
+    if execution.get("checkpoint") == "cut-proof" or "tracks" not in execution.get(
+        "canonicalInputLock", {}
+    ):
+        return
+    for layer in _sound_layers(_snapshot(workspace, "tracks")):
+        selected = layer["provenance"]["soundSelection"]
+        anchor = selected["choice"]["fit"]["opportunity"].get("sourceAnchor") or {}
+        if not layer.get("mute", False) and "spokenEvidence" in anchor:
+            compile_canonical_sound(workspace, execution, require_applied=True)
+            return

@@ -13,7 +13,7 @@ from .event_clock import (
     sample_rate_boundary,
 )
 from .motion_authoring import MotionAuthoringService
-from .sound_anchors import sound_phase, source_anchor_time
+from .sound_anchors import qualified_source_anchor, sound_phase, source_anchor_time
 from .sound_choices import _sound_document, freeze_sound_choices
 from .sound_fitting import SCHEMA, SoundPlanningError, _clock, fit_sound_candidate
 from .store import timeline_writer, write_immutable_json
@@ -36,11 +36,21 @@ def _sound_part(item, intent):
     return parts[0] if len(parts) == 1 else None
 
 
-def _sound_opportunity(item, part, intent, fps, *, animation=None, cmap=None):
+def _sound_opportunity(
+    item, part, intent, fps, *, animation=None, cmap=None, spoken=None
+):
     first = _cue_frame(part["timing"]["start"], fps)
     end = _cue_frame(part["timing"]["end"], fps)
-    if "sourceAnchor" in intent:
-        impact = _cue_frame(source_anchor_time(intent["sourceAnchor"], cmap), fps)
+    anchors = {
+        key: deepcopy(intent[key])
+        for key in ("cameraAnchor", "sourceAnchor")
+        if key in intent
+    }
+    if "sourceAnchor" in anchors:
+        anchors["sourceAnchor"] = qualified_source_anchor(
+            anchors["sourceAnchor"], spoken
+        )
+        impact = _cue_frame(source_anchor_time(anchors["sourceAnchor"], cmap), fps)
     else:
         phase = sound_phase(intent, part, animation) * max(0, end - first - 1)
         impact = first + sample_rate_boundary(
@@ -58,11 +68,7 @@ def _sound_opportunity(item, part, intent, fps, *, animation=None, cmap=None):
         "visibleRange": {"startFrame": first, "endFrameExclusive": end},
         "material": intent.get("material"),
         "strength": intent.get("strength", "unknown"),
-        **{
-            key: deepcopy(intent[key])
-            for key in ("cameraAnchor", "sourceAnchor")
-            if key in intent
-        },
+        **anchors,
     }
 
 
@@ -89,7 +95,7 @@ def _sound_recommendation(intent):
 
 
 def _derive_sound_record(
-    item, intent, fps, program_end_frame, animation=None, cmap=None
+    item, intent, fps, program_end_frame, animation=None, cmap=None, spoken=None
 ):
     record = {
         "eventId": intent["eventId"],
@@ -120,7 +126,7 @@ def _derive_sound_record(
         return record
     try:
         opportunity = _sound_opportunity(
-            item, part, intent, fps, animation=animation, cmap=cmap
+            item, part, intent, fps, animation=animation, cmap=cmap, spoken=spoken
         )
         _clock(opportunity, fps, program_end_frame, 48000)
     except (ValueError, TypeError, KeyError) as error:
@@ -135,7 +141,14 @@ def _derive_sound_record(
 
 
 def derive_sound_opportunities(
-    snapshot, intents, *, frame_rate, program_end_frame, animation=None, cmap=None
+    snapshot,
+    intents,
+    *,
+    frame_rate,
+    program_end_frame,
+    animation=None,
+    cmap=None,
+    spoken=None,
 ):
     """Derive only requested sound events from current metadata, with silence valid.
 
@@ -172,6 +185,7 @@ def derive_sound_opportunities(
                 program_end_frame,
                 animation,
                 cmap,
+                spoken,
             )
             for intent in intents
         ]
@@ -358,6 +372,15 @@ class SoundPlanningService:
 
         return MotionReviewService(self.workspace)._metadata()[1].get("cmap")
 
+    def _spoken_anchors(self, intents, fps):
+        if not any(
+            "spokenEvidence" in (intent.get("sourceAnchor") or {}) for intent in intents
+        ):
+            return None
+        from .sound_word_evidence import load_word_anchors
+
+        return load_word_anchors(self.workspace, intents, fps)
+
     def _propose(self, request):
         from .pipeline import TimelinePipeline
 
@@ -381,6 +404,7 @@ class SoundPlanningService:
             program_end_frame=request["clock"]["programEndFrame"],
             animation=self._camera_animation(request["intents"]),
             cmap=self._source_cmap(request["intents"]),
+            spoken=self._spoken_anchors(request["intents"], fps),
         )
         budget = request.get("maxCandidates", 100)
         used = self._match(

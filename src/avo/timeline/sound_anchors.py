@@ -1,5 +1,6 @@
 """Resolve selected sound anchors from canonical metadata, without execution."""
 
+from copy import deepcopy
 from fractions import Fraction
 
 from .camera import _behavior, _encoded
@@ -7,6 +8,18 @@ from .contracts import content_hash, validate_document
 from .mapping import _time, cmap_output_timebase, cmap_raw_to_output
 from .motion_metadata import METADATA_LIMITS, _check_budget
 from .sound_fitting import SoundPlanningError
+
+
+def qualified_source_anchor(anchor, spoken=None):
+    if "spokenEvidence" not in anchor:
+        return deepcopy(anchor)
+    record = (spoken or {}).get(content_hash(anchor)) or {}
+    if "anchor" not in record:
+        raise SoundPlanningError(
+            "Current spoken-word evidence is unavailable: "
+            + record.get("error", "No retained word evidence was resolved")
+        )
+    return deepcopy(record["anchor"])
 
 
 def _source_record(anchor, cmap):

@@ -162,10 +162,20 @@ _PROOF_BUILTINS = {
 }
 
 _PROOF_CODE_PATHS = (
+    Path(__file__).parent / "speech_dependencies.py",
+    Path(__file__).parent / "timeline" / "preparation_words.py",
+    Path(__file__).parent / "timeline" / "sound_word_evidence.py",
+    Path(__file__).parent / "timeline" / "preparation_retention.py",
+    Path(__file__).parent / "timeline" / "preparation_selected.py",
+    Path(__file__).parent / "timeline" / "preparation_facts.py",
+    Path(__file__).parent / "timeline" / "preparation.py",
+    Path(__file__).parent / "timeline" / "preparation_recovery.py",
+    Path(__file__).parent / "timeline" / "cutting_store.py",
     Path(__file__).parent / "timeline" / "mapping.py",
     Path(__file__).parent / "timeline" / "sound_anchors.py",
     Path(__file__).parent / "timeline" / "sound_planning.py",
     Path(__file__).parent / "timeline" / "sound_proof.py",
+    Path(__file__).parent / "timeline" / "approval_service.py",
     Path(__file__).parent / "timeline" / "sound_compilation.py",
     Path(__file__).parent / "timeline" / "sound_fitting.py",
     Path(__file__).parent / "timeline" / "sound_choices.py",
