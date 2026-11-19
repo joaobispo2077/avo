@@ -85,9 +85,22 @@ def _classify(base, current, returned):
     return "conflicts"
 
 
+def _return_omission(field, base, current, returned):
+    if field == "markers":
+        return bool(base and current and not returned)
+    if field in {"sourceTrack", "outputChannel"}:
+        return current is not None and returned is None
+    return False
+
+
 def _compare_fields(result, identity, confidence, baseline, current, returned, fields):
     for field in fields:
         values = (baseline.get(field), current.get(field), returned.get(field))
+        if _return_omission(field, *values):
+            result["unresolved"].append(
+                {"id": identity, "field": field, "reason": "returned-field-unobserved"}
+            )
+            continue
         disposition = _classify(*values)
         if disposition is not None:
             result[disposition].append(
