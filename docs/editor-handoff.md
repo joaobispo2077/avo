@@ -21,6 +21,10 @@ a placed original audio clip's constant gain from -60 to +12 dB. Other
 profiles and levels outside that range report the treatment for manual review.
 For an original stereo stream routed left to left and right to right, this
 validation profile writes an explicit pan for each channel.
+It also preserves a placed timeline's display origin when the selected
+window starts at an exact frame on the interchange clock. Clip intervals
+remain relative to the selected window and keep their original source in
+and out frames. Unrepresentable display origins are listed for review.
 The format is FCP7 XMEML. See the [XMEML timing reference](https://developer.apple.com/library/archive/documentation/AppleApplications/Reference/FinalCutPro_XML/Topics/Topics.html).
 
 ## Prepare and review
