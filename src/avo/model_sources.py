@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
 import sys
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
@@ -250,7 +251,7 @@ def disclosure_for(resolved: ResolvedJob) -> dict[str, Any]:
         "reuse": _reuse_status(resolved),
     }
     _disclosure_source_fields(payload, source)
-    if resolved.job in {"audio_embed", "text_embed"}:
+    if resolved.job in {"audio_embed", "text_embed", "face_detect"}:
         payload["python"] = {
             "executable": runtime.get("pythonEnv"),
             "validation": "explicit-preflight-required",
@@ -272,6 +273,18 @@ def preflight(
     device_ok: DeviceOk | None = None,
     getenv: Getenv | None = None,
 ) -> None:
+    if resolved.job == "face_detect":
+        from avo.visual_motion_runtime import preflight_face_job
+
+        try:
+            preflight_face_job(resolved)
+        except (OSError, subprocess.SubprocessError, ValueError) as exc:
+            raise PreflightError(
+                "face_runtime_unavailable",
+                str(exc),
+                hint="Provision the pinned local YuNet model and isolated OpenCV CPU environment.",
+            ) from exc
+        return
     if resolved.job in {"audio_embed", "text_embed"}:
         from avo.embedding_manifest import EmbeddingError
         from avo.embedding_runtime import preflight_embedding_job

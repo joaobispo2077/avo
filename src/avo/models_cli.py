@@ -100,6 +100,8 @@ def _preflight_entry(job: str, root, label: str) -> dict:
     entry: dict = {"job": job, "id": resolved.id, "ok": True}
     try:
         preflight(resolved)
+        if job == "face_detect":
+            entry.update(validation="artifact-and-runtime-verified", modelLoaded=True)
         if job in {"audio_embed", "text_embed"}:
             entry.update(validation="manifest-and-runtime-verified", modelLoaded=False)
     except PreflightError as exc:
@@ -125,7 +127,7 @@ def _cmd_preflight(args, root) -> int:
                     root=root,
                     label=args.label,
                     jobs=(args.job,)
-                    if args.job in {"audio_embed", "text_embed"}
+                    if args.job in {"audio_embed", "text_embed", "face_detect"}
                     else None,
                 ),
             }
