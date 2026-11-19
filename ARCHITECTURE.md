@@ -1342,6 +1342,14 @@ evidence cannot survive an unqualified mapping change. Encoded full/window tests
 measure the selected transient while preserving source picture and the original
 CMap. This route does not infer spoken timing or grant listening approval.
 
+Current local speech dependency inspection lives in the shared
+`avo.speech_dependencies` metadata helper. The cutting adapter retains its
+existing interfaces, runtime selection and failure behavior while delegating
+dependency-byte/version checks. The helper imports no media adapter and loads
+no model; cutting and recovery producer identities bind its implementation.
+Before/after adapter and recovery tests preserve the existing behavior, including
+configured ASR with separate alignment and changed local dependency bytes.
+
 Camera movement, face anchoring, sound matching, reference analysis, spoken
 notes/recovery and editor handoff are selected options resolved through existing
 settings scopes and frozen requests. Preferences seed future work and cannot
