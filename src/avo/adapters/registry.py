@@ -138,6 +138,12 @@ def build_face_analyzer(workspace):
     return analyze
 
 
+def build_reference_analyzer():
+    from avo.adapters.understand.visual_motion import observe_reference_clip
+
+    return observe_reference_clip
+
+
 def build_preparation_service(workspace, *, recover=False):
     """Read-only construction imports no speech adapter or model readiness checks."""
     from avo.timeline.preparation_recovery import PreparationService

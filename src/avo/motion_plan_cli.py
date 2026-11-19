@@ -13,6 +13,7 @@ AUTHORING_OPERATIONS = (
     "camera-propose",
     "camera-apply",
 )
+ANALYSIS_OPERATIONS = ("face-analyze", "reference-analyze")
 
 
 def _camera_runtime():
@@ -45,15 +46,15 @@ def add_plan_parsers(subparsers) -> None:
         "plan-show",
         "plan-publish",
         *AUTHORING_OPERATIONS,
-        "face-analyze",
+        *ANALYSIS_OPERATIONS,
     ):
         parser = subparsers.add_parser(operation)
         parser.add_argument("--project", type=Path, required=True)
         parser.add_argument("--video-id", default="")
         parser.add_argument("--json", action="store_true", dest="as_json")
-        if operation in (*AUTHORING_OPERATIONS, "face-analyze"):
+        if operation in (*AUTHORING_OPERATIONS, *ANALYSIS_OPERATIONS):
             parser.add_argument("--request", type=Path, required=True)
-        if operation in {"plan-apply", "camera-apply", "face-analyze"}:
+        if operation in {"plan-apply", "camera-apply", *ANALYSIS_OPERATIONS}:
             parser.add_argument("--request-sha256")
         if operation == "plan-show":
             parser.add_argument("--proposal-hash")
@@ -62,8 +63,8 @@ def add_plan_parsers(subparsers) -> None:
 
 
 def run_craft_command(args) -> int:
-    if args.animation_command == "face-analyze":
-        return run_face_analysis_command(args)
+    if args.animation_command in ANALYSIS_OPERATIONS:
+        return run_visual_analysis_command(args)
     if args.animation_command in AUTHORING_OPERATIONS:
         return run_authoring_command(args)
     if args.animation_command in {"plan-show", "plan-publish"}:
@@ -71,12 +72,22 @@ def run_craft_command(args) -> int:
     return run_options_command(args)
 
 
-def run_face_analysis_command(args) -> int:
+def _run_visual_analysis(operation, workspace, request):
+    if operation == "face-analyze":
+        from avo.adapters.registry import build_face_analyzer
+        from avo.timeline.face_analysis import analyze_face
+
+        return analyze_face(workspace, request, build_face_analyzer(workspace))
+    from avo.adapters.registry import build_reference_analyzer
+    from avo.timeline.reference_observation import analyze_reference
+
+    return analyze_reference(workspace, request, build_reference_analyzer())
+
+
+def run_visual_analysis_command(args) -> int:
     from subprocess import SubprocessError
 
-    from avo.adapters.registry import build_face_analyzer
     from avo.editing_craft_requests import read_craft_request
-    from avo.timeline.face_analysis import analyze_face
     from avo.timeline.workspace import TimelineWorkspace
 
     try:
@@ -88,7 +99,7 @@ def run_face_analysis_command(args) -> int:
         workspace = TimelineWorkspace.from_project(
             args.project, video_id=args.video_id or None
         )
-        result = analyze_face(workspace, request, build_face_analyzer(workspace))
+        result = _run_visual_analysis(args.animation_command, workspace, request)
     except (ValueError, OSError, RuntimeError, SubprocessError) as error:
         print(
             json.dumps(
