@@ -518,6 +518,27 @@ def _promote_alpha8(chain, identity):
     )
 
 
+def _visible_overlay_bounds(placement, canvas):
+    x, y = placement["x"], placement["y"]
+    return (
+        max(0, x),
+        max(0, y),
+        min(canvas[0], x + placement["width"]),
+        min(canvas[1], y + placement["height"]),
+    )
+
+
+def _precision_canvas_filter(placement, canvas):
+    left, top, right, bottom = _visible_overlay_bounds(placement, canvas)
+    visible_width, visible_height = right - left, bottom - top
+    width, height = placement["width"], placement["height"]
+    chain = f"scale={width}:{height}:flags=bilinear,format=gbrap16le,"
+    if (visible_width, visible_height) != (width, height):
+        x, y = left - placement["x"], top - placement["y"]
+        chain += f"crop={visible_width}:{visible_height}:{x}:{y}:exact=1,"
+    return chain + f"pad={canvas[0]}:{canvas[1]}:{left}:{top}:color=black@0,"
+
+
 def _precision_overlay_planes(
     operation, index, fps, wstart, wend, left, right, canvas, *, alpha8=True
 ):
@@ -529,11 +550,10 @@ def _precision_overlay_planes(
     prefix = f"[{index}:v:0]trim=start_frame={local}:end_frame={local + count},settb=expr={timebase},setpts=N"
     if alpha8:
         prefix = _promote_alpha8(prefix + ",format=gbrap", f"promotion{index}")
+    geometry = _precision_canvas_filter(placement, canvas)
     return [
         (
-            f"{prefix},"
-            f"scale={placement['width']}:{placement['height']}:flags=bilinear,format=gbrap16le,"
-            f"pad={canvas[0]}:{canvas[1]}:{placement['x']}:{placement['y']}:color=black@0,"
+            f"{prefix},{geometry}"
             f"tpad=start={offset}:stop={wend - wstart - offset - count}:start_mode=add:stop_mode=add:color=black@0,"
             f"trim=end_frame={wend - wstart},settb=expr={timebase},setpts=N,split=2[coloralpha{index}][alpha{index}]"
         ),

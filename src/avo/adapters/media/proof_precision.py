@@ -127,9 +127,21 @@ def camera_picture_arguments(source, spec, fps, *, start_frame, stop_frame):
     ], last - first
 
 
+def _visible_stages(staged, spec, canvas):
+    from .proof_placed import _scaled_transform
+
+    for item, path in staged:
+        transform = _scaled_transform(item, spec) or {"x": 0, "y": 0, **spec}
+        left, top, right, bottom = proof_generated._visible_overlay_bounds(
+            transform, canvas
+        )
+        if left < right and top < bottom:
+            yield item, path, transform
+
+
 def compose_picture(staged, output, spec, fps, window, *, raw):
     from . import proof_executor as native
-    from .proof_placed import _check_staged_picture, _scaled_transform
+    from .proof_placed import _check_staged_picture
 
     first, last = window
     arguments = [
@@ -149,7 +161,10 @@ def compose_picture(staged, output, spec, fps, window, *, raw):
         f"[0:v]trim=end_frame={last - first},settb=expr={base},setpts=N,format=gbrp16le[base]"
     ]
     current = "base"
-    for ordinal, (item, path) in enumerate(staged, 1):
+    canvas = spec["width"], spec["height"]
+    for ordinal, (item, path, transform) in enumerate(
+        _visible_stages(staged, spec, canvas), 1
+    ):
         if isinstance(path, dict):
             arguments.extend(
                 [
@@ -167,7 +182,6 @@ def compose_picture(staged, output, spec, fps, window, *, raw):
             )
         else:
             arguments.extend(["-i", str(path)])
-        transform = _scaled_transform(item, spec) or {"x": 0, "y": 0, **spec}
         operation = {
             "outputRange": item["outputRange"],
             "parameters": {
@@ -186,7 +200,7 @@ def compose_picture(staged, output, spec, fps, window, *, raw):
                 last,
                 item["outputRange"]["startFrame"],
                 item["outputRange"]["endFrameExclusive"],
-                (spec["width"], spec["height"]),
+                canvas,
                 alpha8=False,
             )
         )
