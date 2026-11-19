@@ -109,6 +109,11 @@ request bytes. Replaying the same operation retains its immutable decision and
 runs no second recovery. Changed source/routing/Sync, model or execution inputs
 make affected recovered evidence stale, including an old choice replay.
 
+Choosing the unchanged original keeps its untimed words available for review.
+AVO does not invent word positions or mark unchanged evidence stale merely
+because it lacks alignment. Those words remain ineligible for exact anchors,
+and the corresponding source interval stays protected.
+
 The normal cutting analysis consumes a source-bound selected view and retains
 its exact original/request/result/decision references. Deferred and undecided
 intervals remain protected across restarts. Unqualified timing remains protected
