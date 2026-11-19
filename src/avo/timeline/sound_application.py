@@ -76,6 +76,41 @@ def _sound_layer_content(layer):
     return {**layer, "provenance": {**provenance, "soundSelection": selection}}
 
 
+def _sound_cue_content(cue):
+    if (cue.get("audio") or {}).get("playbackOwner") != "tracks-native":
+        return cue
+    return {
+        **cue,
+        "contentRef": {
+            key: value
+            for key, value in cue["contentRef"].items()
+            if key != "applicationRef"
+        },
+    }
+
+
+def _sound_publication_hash(snapshots):
+    bmap, tracks = snapshots["bmap"], snapshots["tracks"]
+    audio = tracks["audioTracks"]
+    return content_hash(
+        {
+            "bmap": {**bmap, "cues": [_sound_cue_content(cue) for cue in bmap["cues"]]},
+            "tracks": {
+                **tracks,
+                "audioTracks": {
+                    **audio,
+                    "layers": [
+                        _sound_layer_content(layer)
+                        if (layer.get("provenance") or {}).get("soundSelection")
+                        else layer
+                        for layer in audio["layers"]
+                    ],
+                },
+            },
+        }
+    )
+
+
 def _require_mix_admission(choices, tracks):
     dialogue = {
         layer["layerId"]
@@ -730,6 +765,38 @@ class _Application:
             repetition_window_ms=repetition_window_ms,
         )
 
+    def _retained_revisions(self, basis):
+        retained = {}
+        for name in OWNERS:
+            head = basis[name]
+            if head is None or head.get("activeState") != "valid":
+                return None
+            store = self.workspace.store(name)
+            revision = store._revision_body(store.load_index(), head["revisionId"])
+            if revision["contentSha256"] != head["sha256"]:
+                raise SoundPlanningError(
+                    "Unchanged sound basis changed during publication"
+                )
+            retained[name] = revision
+        return retained
+
+    def _prepare_revisions(self, request, snapshots, evidence, previous):
+        if previous is not None and previous == _sound_publication_hash(snapshots):
+            retained = self._retained_revisions(request["expectedBasis"])
+            if retained is not None:
+                return retained
+        revisions = {}
+        for name, owner in OWNERS.items():
+            kwargs = {} if name == "bmap" else {"parents": revisions}
+            revisions[name] = owner(self.workspace).prepare_authoring(
+                snapshots[name],
+                actor=request["actor"],
+                reason=request["reason"],
+                evidence=evidence,
+                **kwargs,
+            )
+        return revisions
+
     def _prepare(self, request):
         from .sound_scope import require_sound_scope_parent
         from .sound_word_evidence import require_word_publication
@@ -751,6 +818,9 @@ class _Application:
         choices = self._choices(request, shown["proposal"], generation, snapshots)
         _require_mix_admission(choices["choices"], snapshots["tracks"])
         sources = self._source_refs(choices["choices"], generation)
+        previous = (
+            _sound_publication_hash(snapshots) if "productionScope" in request else None
+        )
         _, request_ref, _ = self._reference("requests", request, "applyRequest")
         matching = shown["proposal"]["options"]["effective"]["soundMatching"]
         snapshots, advisories = self._authoring(
@@ -777,16 +847,7 @@ class _Application:
                 **request_ref,
             },
         ]
-        revisions = {}
-        for name, owner in OWNERS.items():
-            kwargs = {} if name == "bmap" else {"parents": revisions}
-            revisions[name] = owner(self.workspace).prepare_authoring(
-                snapshots[name],
-                actor=request["actor"],
-                reason=request["reason"],
-                evidence=evidence,
-                **kwargs,
-            )
+        revisions = self._prepare_revisions(request, snapshots, evidence, previous)
         self._basis(request)
         if word_reader is not None:
             word_reader.recheck()
