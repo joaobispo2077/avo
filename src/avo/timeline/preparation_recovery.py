@@ -69,6 +69,7 @@ def _execution_hash():
         "timeline/cutting_store.py",
         "timeline/cutting_contracts.py",
         "transcribe.py",
+        "speech_dependencies.py",
         "adapters/media/cutting_analysis.py",
         "adapters/media/cutting_acoustics.py",
         "adapters/media/cutting_audio.py",

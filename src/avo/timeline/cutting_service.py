@@ -297,6 +297,7 @@ class CuttingService:
                 root / "adapters/understand/watch_skill.py",
                 root / "adapters/media/timeline_render.py",
                 root / "transcribe.py",
+                root / "speech_dependencies.py",
                 directory / "preparation.py",
                 directory / "preparation_recovery.py",
                 directory / "preparation_choices.py",
