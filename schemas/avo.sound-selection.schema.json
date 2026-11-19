@@ -147,7 +147,8 @@
             "sidechainLayerId": {"$ref": "#/$defs/id"},
             "amountDb": {"type": "number", "exclusiveMinimum": 0},
             "attackMs": {"type": "number", "exclusiveMinimum": 0},
-            "releaseMs": {"type": "number", "exclusiveMinimum": 0}
+            "releaseMs": {"type": "number", "exclusiveMinimum": 0},
+            "minimumDialogueMarginDb": {"type": "number", "minimum": 0, "maximum": 120}
           }
         }]}
       }

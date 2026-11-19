@@ -5,6 +5,8 @@ import re
 
 from .event_clock import frame_to_sample
 
+SPEECH_BAND_HZ = (300, 4000)
+
 
 def _sample_window(plan, window, rate):
     if window is None:
@@ -39,9 +41,9 @@ def _sound_event_ranges(plan):
     }
     ranges = {}
     for event in plan.get("events", []):
-        region = effects.get((event.get("audio") or {}).get("nodeId"))
-        if region is not None:
-            ranges[event["eventId"]] = region
+        node = (event.get("audio") or {}).get("nodeId")
+        if node in effects:
+            ranges[event["eventId"]] = (node, effects[node])
     return ranges
 
 
@@ -49,7 +51,7 @@ def _events_in_window(ranges, window):
     first, last = window["startSample"], window["endSampleExclusive"]
     return sorted(
         identity
-        for identity, region in ranges.items()
+        for identity, (_, region) in ranges.items()
         if region["startSample"] < last and first < region["endSampleExclusive"]
     )
 
@@ -66,9 +68,7 @@ def _is_digest(value):
     return isinstance(value, str) and re.fullmatch(r"[0-9a-f]{64}", value) is not None
 
 
-def _observed_levels(mix):
-    measurement = mix.get("measurement")
-    keys = ("peakDbfs", "rmsDbfs")
+def _valid_levels(measurement, keys):
     if not isinstance(measurement, dict) or not all(
         key in measurement and _finite_db(measurement[key]) for key in keys
     ):
@@ -99,7 +99,7 @@ def _observed_native_mix(mix, expected, rate):
         or not _is_digest(graph)
     ):
         return None
-    levels = _observed_levels(mix)
+    levels = _valid_levels(mix.get("measurement"), ("peakDbfs", "rmsDbfs"))
     if levels is None:
         return None
     return {
@@ -108,6 +108,87 @@ def _observed_native_mix(mix, expected, rate):
         "pcmSha256": pcm,
         **levels,
     }
+
+
+def _compare_dialogue_levels(levels, margin):
+    dialogue, effect = levels["dialogueRmsDbfs"], levels["effectRmsDbfs"]
+    if dialogue is None or effect is None:
+        state = "sidechain-silent" if dialogue is None else "effect-silent"
+        return {**levels, "status": state}
+    actual = dialogue - effect
+    deficit = max(0, margin - actual)
+    return {
+        **levels,
+        "observedMarginDb": actual,
+        "suggestedAdditionalAttenuationDb": deficit,
+        "status": "below-selected-margin" if deficit else "meets-selected-margin",
+    }
+
+
+def _assess_balance(observed, margin):
+    state = observed.get("status")
+    if state == "bounded-review-required":
+        return {"status": state}
+    levels = _valid_levels(observed, ("dialogueRmsDbfs", "effectRmsDbfs"))
+    if state != "measured" or levels is None:
+        return {"status": "measurement-unavailable"}
+    return _compare_dialogue_levels(levels, margin)
+
+
+def _dialogue_receipt(event, region, window, margin, observed):
+    overlap = {
+        "startSample": max(region["startSample"], window["startSample"]),
+        "endSampleExclusive": min(
+            region["endSampleExclusive"], window["endSampleExclusive"]
+        ),
+    }
+    if (
+        observed.get("window"),
+        observed.get("minimumDialogueMarginDb"),
+        observed.get("bandHz"),
+    ) != (overlap, margin, list(SPEECH_BAND_HZ)):
+        observed = {}
+    return {
+        "eventId": event,
+        "window": overlap,
+        "minimumDialogueMarginDb": margin,
+        "bandHz": list(SPEECH_BAND_HZ),
+        **_assess_balance(observed, margin),
+    }
+
+
+def _balance_rows(rows):
+    if not isinstance(rows, list):
+        return {}
+    return {
+        row["nodeId"]: row
+        for row in rows
+        if isinstance(row, dict) and isinstance(row.get("nodeId"), str)
+    }
+
+
+def _dialogue_balance(plan, ranges, event_ids, window, mix):
+    selected = {
+        operation["parameters"]["nodeId"]: operation["parameters"][
+            "minimumDialogueMarginDb"
+        ]
+        for operation in plan["audioGraph"]["operations"]
+        if operation["kind"] == "duck"
+        and "minimumDialogueMarginDb" in operation["parameters"]
+    }
+    if not selected:
+        return []
+    observed = _balance_rows(mix.get("dialogueBalance"))
+    result = []
+    for event in event_ids:
+        node, region = ranges[event]
+        if node in selected:
+            result.append(
+                _dialogue_receipt(
+                    event, region, window, selected[node], observed.get(node, {})
+                )
+            )
+    return result
 
 
 def summarize_sound_mix(plan, rendered, window):
@@ -131,7 +212,8 @@ def summarize_sound_mix(plan, rendered, window):
         "proofPlanHash": plan["proofPlanHash"],
         "candidateSha256": rendered["output"]["sha256"],
     }
-    observed = _observed_native_mix(rendered.get("audioMix") or {}, expected, rate)
+    mix = rendered.get("audioMix") or {}
+    observed = _observed_native_mix(mix, expected, rate)
     if observed is None:
         return {
             **identity,
@@ -139,6 +221,7 @@ def summarize_sound_mix(plan, rendered, window):
             "reason": "native-mix-measurement-unavailable",
         }
     peak = observed["peakDbfs"]
+    dialogue = _dialogue_balance(plan, ranges, event_ids, expected, mix)
     return {
         **identity,
         **observed,
@@ -146,4 +229,5 @@ def summarize_sound_mix(plan, rendered, window):
         "assessment": "pre-encode-pcm-sample-peak",
         "fullScaleHeadroomDb": None if peak is None else -peak,
         "aboveFullScale": peak is not None and peak > 0,
+        **({"dialogueBalance": dialogue} if dialogue else {}),
     }

@@ -81,11 +81,14 @@ def _ducking(choice, node_id, sidechains, known):
     nodes = sidechains.get(ducking["sidechainLayerId"], [])
     if not nodes or set(nodes) - known or len(nodes) != len(set(nodes)):
         raise SoundPlanningError("Sound ducking requires exact current dialogue nodes")
-    return {
+    result = {
         "nodeId": node_id,
         "sidechainNodeIds": list(nodes),
         **{k: ducking[k] for k in ("amountDb", "attackMs", "releaseMs")},
     }
+    if "minimumDialogueMarginDb" in ducking:
+        result["minimumDialogueMarginDb"] = ducking["minimumDialogueMarginDb"]
+    return result
 
 
 def _contribution(choice, source, sidechains, known):
