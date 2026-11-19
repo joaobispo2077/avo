@@ -146,15 +146,20 @@ def project_sound_scope(request, clock, choices, previous):
         raise SoundPlanningError(str(error)) from error
 
 
-def sound_review_scope(projection):
-    """Find chunks intersecting the previous or current audible contribution."""
-    request = projection["request"]
-    intervals = [
+def _review_intervals(contributions, unchanged_ids):
+    return [
         (_fraction(interval["startFrame"]), _fraction(interval["endFrame"]))
-        for row in projection["contributions"]
+        for row in contributions
+        if row["eventId"] not in unchanged_ids
         for interval in (row["current"], row["previous"])
         if interval is not None
     ]
+
+
+def sound_review_scope(projection, *, unchanged_ids=frozenset()):
+    """Find chunks intersecting the previous or current audible contribution."""
+    request = projection["request"]
+    intervals = _review_intervals(projection["contributions"], unchanged_ids)
     affected = [
         chunk["chunkId"]
         for chunk in request["chunks"]

@@ -11,6 +11,7 @@ from .cmap_service import CMapService
 from .command_registry import authorize
 from .contracts import content_hash, file_fingerprint, fingerprint_stage
 from .lineage import stale_descendants
+from .motion_metadata import _basis_matches
 from .sound_choices import (
     _check_sound_roles,
     _sound_choice_advisories,
@@ -63,6 +64,16 @@ def _encoded(value):
     return (
         json.dumps(value, indent=2, ensure_ascii=False, sort_keys=True) + "\n"
     ).encode("utf-8")
+
+
+def _sound_layer_content(layer):
+    provenance = layer["provenance"]
+    selection = {
+        key: value
+        for key, value in provenance["soundSelection"].items()
+        if key not in {"proposalRef", "applicationRef"}
+    }
+    return {**layer, "provenance": {**provenance, "soundSelection": selection}}
 
 
 def _require_mix_admission(choices, tracks):
@@ -201,7 +212,7 @@ class _Application:
             request,
             proposal,
             {"entries": list(entries.values())},
-            {"tracks": self._parent_tracks(request)},
+            {"tracks": self._parent_tracks(request["expectedBasis"])},
         )
         if prepared["choices"] != receipt["choices"]:
             raise SoundPlanningError(
@@ -212,8 +223,8 @@ class _Application:
                 "Sound receipt changes its exact production ownership"
             )
 
-    def _parent_tracks(self, request):
-        head = request["expectedBasis"]["tracks"]
+    def _parent_tracks(self, basis):
+        head = basis["tracks"]
         if head is None:
             return {"audioTracks": {"layers": []}}
         revision = self.workspace.store("tracks").revision(head["revisionId"])
@@ -802,16 +813,28 @@ class _Application:
             receipt["productionScope"] = choices["productionScope"]
         return _sound_document(receipt, "applicationReceipt")
 
-    def _result(self, receipt, reference):
+    def _review_scope(self, receipt):
         from .sound_scope import sound_review_scope
 
+        scope = receipt.get("productionScope")
+        if scope is None:
+            return {}
+        before = self._selected_layers(self._parent_tracks(receipt["expectedBasis"]))
+        after = self._selected_layers(receipt["prepared"]["tracks"]["snapshot"])
+        unchanged = {
+            event
+            for event in before.keys() & after.keys()
+            if _sound_layer_content(before[event]) == _sound_layer_content(after[event])
+        }
+        return {"reviewScope": sound_review_scope(scope, unchanged_ids=unchanged)}
+
+    def _result(self, receipt, reference):
         actual = self.authoring._actual_committed(receipt, require_active=False)
         if actual != receipt["committedHeads"] or set(actual) != set(OWNERS):
             raise SoundPlanningError(
                 "Committed sound receipt differs from actual canonical history"
             )
         current = self.authoring._heads()
-        scope = receipt.get("productionScope")
         return {
             "operation": "apply",
             "status": "applied",
@@ -820,11 +843,11 @@ class _Application:
             "proposalRef": receipt["proposalRef"],
             "committedHeads": actual,
             "currentHeads": current,
-            "headsCurrent": all(current[name] == head for name, head in actual.items()),
+            "headsCurrent": _basis_matches(actual, current),
             "changes": receipt["changes"],
             "advisories": receipt["advisories"],
             "acceptance": "pending-listening",
-            **({"reviewScope": sound_review_scope(scope)} if scope else {}),
+            **self._review_scope(receipt),
         }
 
     def _commit(self, request, receipt):
