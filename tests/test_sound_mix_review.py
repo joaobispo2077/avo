@@ -5,7 +5,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from avo.timeline.contracts import file_fingerprint
+from avo.timeline.contracts import content_hash, file_fingerprint
 from avo.timeline.materialize import _render_required_microproofs
 from avo.timeline.sound_mix_review import summarize_sound_mix
 
@@ -51,6 +51,7 @@ def program():
             "window": {"startSample": 1600, "endSampleExclusive": 3200},
             "measurement": {"peakDbfs": 1.25, "rmsDbfs": -14.0},
             "graphHash": "d" * 64,
+            "inputGraphHash": content_hash(plan["audioGraph"]),
             "pcmCodec": "pcm_f32le",
         },
     }
@@ -78,7 +79,9 @@ def test_summary_reports_exact_peak_and_only_sounds_in_half_open_window(program)
     }
 
 
-@pytest.mark.parametrize("mismatch", ["missing", "window", "rate", "finite", "shape"])
+@pytest.mark.parametrize(
+    "mismatch", ["missing", "window", "rate", "finite", "shape", "previous-graph"]
+)
 def test_summary_discloses_missing_or_unqualified_native_measurement(program, mismatch):
     plan, rendered, window = program
     if mismatch == "missing":
@@ -89,6 +92,8 @@ def test_summary_discloses_missing_or_unqualified_native_measurement(program, mi
         rendered["audioMix"]["sampleRate"] = 44100
     elif mismatch == "shape":
         rendered["audioMix"]["measurement"] = ["peakDbfs", "rmsDbfs"]
+    elif mismatch == "previous-graph":
+        plan["audioGraph"]["nodes"][1]["gainDb"] = -9
     else:
         rendered["audioMix"]["measurement"]["peakDbfs"] = float("nan")
     receipt = summarize_sound_mix(plan, rendered, window)
@@ -142,6 +147,7 @@ def test_dialogue_balance_binds_selected_effect_margin_and_exact_overlap(
     plan["audioGraph"]["operations"].append(
         {"kind": "duck", "parameters": {"nodeId": "hit", "minimumDialogueMarginDb": 12}}
     )
+    rendered["audioMix"]["inputGraphHash"] = content_hash(plan["audioGraph"])
     observed = {
         "nodeId": "hit",
         "minimumDialogueMarginDb": 12,
