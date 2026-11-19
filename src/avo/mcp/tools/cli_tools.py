@@ -1089,6 +1089,7 @@ def _editor_handoff_bridge_defs() -> list[BridgeToolDef]:
         "status": "Read editor target profiles and optionally check one retained handoff against the current timeline.",
         "inspect-feedback": "Retain exact returned XML bytes and review source identities, unknown fields and supported interchange syntax.",
         "propose-feedback": "Compare the retained handoff, current edit and returned XML. Save proposed fields, conflicts and unresolved identities for review.",
+        "apply-feedback": "Record exact selected editor fields. Route supported source trims to normal cutting review and preserve manual finishing choices.",
         "qualify-target": "Record reviewed results from the exact editor and operating system. Production readiness requires a complete verified round trip.",
     }
     return [
