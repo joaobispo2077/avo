@@ -5,7 +5,7 @@ from copy import deepcopy
 from fractions import Fraction
 from math import ceil
 
-from .contracts import content_hash
+from .contracts import content_hash, dependency_lock_hash
 from .import_layout import seconds
 from .motion_metadata import LIFECYCLE
 
@@ -223,13 +223,32 @@ def attach_craft_report(evidence, workspace, identity, materialization, coverage
 
 
 def report_from_review(manifest):
-    watch = next((item for item in manifest["evidence"] if item["kind"] == "watch"), {})
-    report = (watch.get("reviewContext") or {}).get("craftChecks") or {}
+    from .review import evidence_is_fresh
+
+    records = [item for item in manifest["evidence"] if item["kind"] == "watch"]
+    if len(records) != 1:
+        return None
+    (watch,) = records
     candidate = manifest["candidate"]
-    if (
-        report.get("candidateIdentityHash") == candidate["identityHash"]
-        and report.get("candidateSha256") == candidate["sha256"]
+    dependencies = candidate["dependencies"]
+    lock = dependency_lock_hash(dependencies)
+    watch_contract = (
+        manifest["dependencyLockSha256"],
+        watch.get("dependencyProfile", "exact-candidate"),
+    )
+    if watch_contract != (lock, "exact-candidate") or not evidence_is_fresh(
+        watch,
+        candidate["sha256"],
+        dependencies,
+        candidate_identity_hash=candidate["identityHash"],
+        dependency_lock_sha256=lock,
     ):
+        return None
+    report = (watch.get("reviewContext") or {}).get("craftChecks") or {}
+    if (
+        report.get("candidateIdentityHash"),
+        report.get("candidateSha256"),
+    ) == (candidate["identityHash"], candidate["sha256"]):
         return report
     return None
 
