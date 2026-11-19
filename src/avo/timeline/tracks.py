@@ -261,6 +261,18 @@ def inspect_visual_hierarchy(layers: list[dict[str, Any]]) -> list[str]:
     return sorted(set(findings))
 
 
+def inspect_track_snapshot(snapshot):
+    """Summarize the selected Tracks revision without opening source media."""
+    audio = snapshot.get("audioTracks", {}).get("layers", [])
+    video = snapshot.get("videoTracks", {}).get("layers", [])
+    return {
+        "audioLayers": audio,
+        "videoLayers": video,
+        "audioFindings": inspect_audio_hierarchy(audio),
+        "visualFindings": inspect_visual_hierarchy(video),
+    }
+
+
 class TracksService:
     def __init__(self, workspace: TimelineWorkspace):
         self.workspace = workspace
@@ -383,7 +395,7 @@ class TracksService:
             "revisionId": revision["revisionId"],
             "revisionHash": revision["contentHash"],
             "basis": snapshot["basis"],
-            "audioLayers": snapshot["audioTracks"]["layers"],
+            **inspect_track_snapshot(snapshot),
             **(
                 {
                     "sourceMixAdjustments": deepcopy(
@@ -392,11 +404,6 @@ class TracksService:
                 }
                 if "sourceMixAdjustments" in snapshot["audioTracks"]
                 else {}
-            ),
-            "videoLayers": snapshot["videoTracks"]["layers"],
-            "audioFindings": inspect_audio_hierarchy(snapshot["audioTracks"]["layers"]),
-            "visualFindings": inspect_visual_hierarchy(
-                snapshot["videoTracks"]["layers"]
             ),
         }
 

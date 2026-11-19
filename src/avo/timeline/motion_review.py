@@ -28,9 +28,11 @@ from .motion_sound_review import (
     sound_review_context,
 )
 from .store import atomic_write_json
+from .track_review import project_track_review, track_review_html, track_review_text
+from .tracks import inspect_track_snapshot
 from .workspace import ARTIFACTS
 
-GENERATOR = {"id": "avo.motion-review", "version": "1.11.0"}
+GENERATOR = {"id": "avo.motion-review", "version": "1.12.0"}
 MAX_ITEMS = 500
 LIFECYCLE = ("preEntry", "entrance", "hold", "payoff", "exit")
 CONCEPT_TEXT_FIELDS = {
@@ -318,14 +320,27 @@ def _concept_text_metadata(data, gaps, identifier):
     return result
 
 
-def _lanes(snapshot):
+def _lanes(inspected):
     return {
         kind: sorted(
-            [deepcopy(layer) for layer in (snapshot.get(key) or {}).get("layers", [])],
+            deepcopy(inspected[key]),
             key=lambda layer: (layer.get("order", 0), layer.get("layerId", "")),
         )
-        for kind, key in (("audio", "audioTracks"), ("video", "videoTracks"))
+        for kind, key in (("audio", "audioLayers"), ("video", "videoLayers"))
     }
+
+
+def _track_state(snapshots, heads):
+    if "tracks" not in snapshots:
+        return "unavailable"
+    selected = snapshots["tracks"].get("basis") or {}
+    head = heads.get("tracks") or {}
+    current = (heads.get("bmap") or {}).get("sha256")
+    if head.get("activeState") != "valid" or (
+        selected.get("sha256") and selected["sha256"] != current
+    ):
+        return "stale"
+    return "declared"
 
 
 def _stale(snapshots, heads):
@@ -963,6 +978,7 @@ class MotionReviewService:
             ),
         )
         items, cards = [pair[0] for pair in pairs], [pair[1] for pair in pairs]
+        tracks = inspect_track_snapshot(snapshots.get("tracks") or {})
         snapshot = {
             "schemaVersion": "1.0.0",
             "snapshotHash": "",
@@ -978,7 +994,13 @@ class MotionReviewService:
             "advisories": deepcopy(context["advisories"]),
             "items": items,
             "storyboardCards": cards,
-            "lanes": _lanes(snapshots.get("tracks") or {}),
+            "lanes": _lanes(tracks),
+            "trackReview": project_track_review(
+                tracks,
+                snapshots.get("bmap") or {},
+                items,
+                state=_track_state(snapshots, heads),
+            ),
             "gaps": [
                 value
                 for _, value in sorted(
@@ -1174,7 +1196,13 @@ def _scope_summary(snapshot):
     return lines
 
 
-def render_text(snapshot):
+def _track_lines(snapshot, include_tracks):
+    if "trackReview" not in snapshot:
+        return ["Tracks", json.dumps(snapshot["lanes"], indent=2, sort_keys=True)]
+    return track_review_text(snapshot["trackReview"]) if include_tracks else []
+
+
+def render_text(snapshot, *, include_tracks=True):
     lines = [
         f"Motion plan: {snapshot['videoId']}",
         f"Readiness: {snapshot['readiness']}",
@@ -1209,8 +1237,7 @@ def render_text(snapshot):
         )
     lines.extend(
         [
-            "Tracks",
-            json.dumps(snapshot["lanes"], indent=2, sort_keys=True),
+            *_track_lines(snapshot, include_tracks),
             "Pending revisions",
             json.dumps(snapshot["pendingRevisions"], indent=2, sort_keys=True),
             "Recorded planning advisories",
@@ -1296,7 +1323,8 @@ def render_html(snapshot):
         )
         if snapshot.get("productionScope") is not None
         else "",
-        content=escape(render_text(snapshot)),
+        track_review=track_review_html(snapshot.get("trackReview")),
+        content=escape(render_text(snapshot, include_tracks=False)),
     )
 
 

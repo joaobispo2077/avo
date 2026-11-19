@@ -25,9 +25,10 @@
   ],
   "allOf": [
     {
-      "if": {"properties": {"generator": {"properties": {"version": {"enum": ["1.9.0", "1.10.0", "1.11.0"]}}}}},
+      "if": {"properties": {"generator": {"properties": {"version": {"enum": ["1.9.0", "1.10.0", "1.11.0", "1.12.0"]}}}}},
       "then": {"required": ["contextBasis"]}
-    }
+    },
+    {"if": {"properties": {"generator": {"properties": {"version": {"const": "1.12.0"}}}}}, "then": {"required": ["trackReview"]}}
   ],
   "properties": {
     "contextBasis": {"$ref": "#/$defs/contextBasis"},
@@ -52,7 +53,7 @@
           "const": "avo.motion-review"
         },
         "version": {
-            "enum": ["1.1.0", "1.2.0", "1.3.0", "1.4.0", "1.5.0", "1.6.0", "1.7.0", "1.8.0", "1.9.0", "1.10.0", "1.11.0"]
+            "enum": ["1.1.0", "1.2.0", "1.3.0", "1.4.0", "1.5.0", "1.6.0", "1.7.0", "1.8.0", "1.9.0", "1.10.0", "1.11.0", "1.12.0"]
         }
       }
     },
@@ -516,6 +517,21 @@
         }
       }
     },
+    "trackReview": {
+      "type": "object", "additionalProperties": false,
+      "required": ["state", "audio", "video", "findings"],
+      "properties": {
+        "state": {"enum": ["declared", "stale", "unavailable"]},
+        "audio": {"type": "array", "items": {"$ref": "#/$defs/reviewLane"}},
+        "video": {"type": "array", "items": {"$ref": "#/$defs/reviewLane"}},
+        "findings": {"type": "object", "additionalProperties": false, "required": ["audio", "video"],
+          "properties": {
+            "audio": {"type": "array", "items": {"type": "string"}},
+            "video": {"type": "array", "items": {"type": "string"}}
+          }
+        }
+      }
+    },
     "gaps": {
       "type": "array",
       "items": {
@@ -580,6 +596,37 @@
     }
   },
   "$defs": {
+    "reviewLane": {
+      "type": "object", "additionalProperties": false,
+      "required": ["laneId", "role", "order", "pictureOrder", "state", "source", "gainDb", "channels", "regions"],
+      "properties": {
+        "laneId": {"type": "string"},
+        "role": {"type": "string"},
+        "order": {"type": "integer"},
+        "pictureOrder": {"type": ["integer", "null"]},
+        "state": {"enum": ["declared", "disabled", "muted", "unresolved"]},
+        "source": {"type": ["string", "null"]},
+        "gainDb": {"type": ["number", "null"]},
+        "channels": {"type": ["array", "null"], "items": {"type": "integer"}},
+        "regions": {"type": "array", "items": {"$ref": "#/$defs/reviewLaneRegion"}}
+      }
+    },
+    "reviewLaneRegion": {
+      "type": "object", "additionalProperties": false,
+      "required": ["regionId", "startTicks", "endTicks", "timebase", "gainDb", "cueIds", "itemIds", "componentRefs", "missingCueIds"],
+      "properties": {
+        "regionId": {"type": "string"},
+        "startTicks": {"type": "integer"},
+        "endTicks": {"type": "integer"},
+        "timebase": {"type": "object", "additionalProperties": false, "required": ["num", "den"],
+          "properties": {"num": {"type": "integer", "minimum": 1}, "den": {"type": "integer", "minimum": 1}}},
+        "gainDb": {"type": ["number", "null"]},
+        "cueIds": {"type": "array", "items": {"type": "string"}},
+        "itemIds": {"type": "array", "items": {"type": "string"}},
+        "componentRefs": {"type": "array", "items": {"type": "string"}},
+        "missingCueIds": {"type": "array", "items": {"type": "string"}}
+      }
+    },
     "contextBasis": {
       "type": "object", "additionalProperties": false,
       "required": ["workHash", "inputHash", "directionRef", "complete"],
