@@ -1419,6 +1419,13 @@ round and revalidates its precise source before canonical application. The
 storyboard bases declared readiness on a matching canonical cue fingerprint.
 Library promotion and media admission keep their existing owners.
 
+Spoken-note detection inspects prepared source evidence using an explicit
+language and delimiter convention. The cutting store retains the immutable
+report and separately tracks interpretation and speech choices. Iteration
+context exposes accepted interpretations only to their owning stage and
+rechecks the original source and transcript. Speech exclusion creates a
+normal editorial cutting proposal under the current cutting policy.
+
 Camera movement, face anchoring, sound matching, reference analysis, spoken
 notes/recovery and editor handoff are selected options resolved through existing
 settings scopes and frozen requests. Preferences seed future work and cannot

@@ -67,3 +67,17 @@ Replaced words cannot inherit their original character alignment or affected
 pause certifications. Changed dependencies stale the affected recovered choice;
 restart and exact replay retain history without another attempt. See
 [source speech coverage](../../../docs/speech-coverage.md).
+
+## Optional spoken notes
+
+Enable `spokenNotes` and supply an opening phrase, closing phrase, language,
+and target conventions. `avo cli preparation notes-detect --project <absolute-project> --request <request.json> --json`
+reads a retained source analysis. It shows the wording including delimiters,
+the measured original range when available, and the proposed stage and target.
+Fuzzy, quoted, nested, unclosed, protected or unmeasured candidates require review.
+
+`preparation notes-decide` can accept, reject or defer the interpretation and
+independently keep, defer or propose excluding the speech. An accepted
+interpretation appears for review in its owning stage. With a configured cutting
+policy, a speech exclusion creates the normal editorial cutting proposal for a
+separate decision. A new explicit instruction takes precedence over a note.
