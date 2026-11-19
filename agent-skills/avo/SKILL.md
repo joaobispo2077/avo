@@ -29,6 +29,8 @@ HyperFrames remains the built-in default. Direct "no frameworks", "without a fra
 
 For code-drawn, load the portable [advanced code-drawn guide](../avo-pipeline/references/code-drawn.md) and relevant topic sections before the router below. Do not load or initialize HyperFrames as a prerequisite. The advanced label explains author-owned seeking, assets, dependencies and QC; selection itself adds no human approval gate. Keep current run selection and recorded animation separate from future defaults.
 
+ArtCraft is optional component authoring. Enter its [focused workflow](../avo-pipeline/references/artcraft.md) only for a direct current choice, a required capability gap backed by current AVO and reuse contracts, or an exact selected component that requires its recorded recipe to rebuild. An explicit knowledge question can use the bundled catalog. Ordinary execution continues through the resolved AVO route, including repair of setup or execution failures. For eligible jobs, scope all readiness checks to the selected app and operation.
+
 ## Session start
 
 1. Declare **provider** (channel/brand) and **where the footage lives** — e.g.

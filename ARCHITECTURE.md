@@ -552,6 +552,25 @@ See [agent cost continuity](docs/agent-cost-continuity.md),
 [feature-015 validation guide](specs/015-agent-cost-continuity/quickstart.md).
 
 
+## Optional ArtCraft provider authoring
+
+The ArtCraft assessment receives a closed request and the current invocation's
+intent separately. It resolves existing routes and pinned component evidence
+against the exact provider, component and required behavior. CLI and MCP share
+this assessment and the bundled capability catalog. An eligible decision
+records one app and its operations. The authoring boundary re-evaluates that
+same scope before tool access. Motion engine selection and canonical timeline
+ownership stay with the existing services.
+
+Provider job records live in a declared external workspace. The shared
+ArtCraft schema and timeline store primitives bind job and event content,
+serialize writes and compare the expected event head. An exact operation can
+recover after an interrupted index write. App observations, reusable source
+receipts and creator decisions carry distinct evidence. Legacy component
+commands reserve ArtCraft declarations for its qualified admission path.
+Packages include the AVO-owned catalog and schema. Users manage the selected
+app installation separately. The distribution smoke reads bundled metadata.
+
 ## Motion engine selection and code-drawn capture (feature 012)
 
 HyperFrames remains the default. The pure shared motion policy resolves invocation, pinned run, project/video, provider/channel and global preferences, in that order. Strict saved IDs are hyperframes, remotion, and code-drawn; Remotion retains its existing unsupported execution adapter. A new default never rewrites a recorded animation revision or creator decision. Explicit new engine/source authoring uses existing revision invalidation. Installed motion and pipeline routers resolve current no-framework intent before loading engine-specific skills.
