@@ -1434,6 +1434,11 @@ command injects media inventory and the FCP7 XML adapter into the timeline
 service. The immutable manifest retains exact occurrence clocks, audio frame
 quantization, and affected ranges whose treatments stay in AVO. Returned XML
 is saved verbatim and compared with the retained export and current timeline.
+An explicit validation request can link a full-canvas generated alpha source
+from a current immutable proof plan. The native adapter reuses the normal
+generated-media admission checks and validates the editor transport copy against
+every decoded RGBA frame. The manifest retains both media fingerprints, the
+range, the generated receipt and the proof-plan identity for relinking.
 That comparison records separate field proposals and conflicts for review.
 Selected linked original-source trims become ordinary cutting proposals with
 their existing preview and editorial approval. The route retains its exact
