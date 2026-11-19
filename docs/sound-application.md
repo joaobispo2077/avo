@@ -89,6 +89,13 @@ ducking and approval stay unchanged. Combined peak, dialogue masking and
 contextual listening remain required, including for a per-ID update that retains
 other selected sounds.
 
+Proof receipts include `soundMixReview` for windows with selected sound events.
+AVO retains the combined pre-encode PCM sample peak and RMS from the native
+mixer, linked to the exact sample window, mix graph and rendered candidate.
+Positive peaks flag signal above digital full scale. The receipt records
+unavailable measurements when the renderer cannot provide matching evidence.
+True peak, dialogue masking and contextual listening require their own checks.
+
 An explicit silence choice can also retire a previously owned event whose visual
 anchor is now absent or unresolved. The receipt retains its historical timing
 only to identify the removal, without scheduling playback on the new programme.
