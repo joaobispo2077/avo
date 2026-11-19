@@ -53,9 +53,12 @@ frames and 64 MiB of proxy data. A longer range of samples can use a larger
 frame stride. The worker checks the proxy hash before detection.
 
 The observation record binds the selected source range, exact frame timestamps,
-display geometry, detector versions, face boxes and association coverage. The
-camera evaluator will consume a reviewed trajectory derived from these
-observations.
+display geometry, detector versions, face boxes and association coverage. It
+also freezes the selected path with a three-sample median of interior center
+points. The first and last measured centers stay exact. The native stream
+origin is retained when available, and half-open uncertainty intervals identify
+the source ticks outside the measured path. These intervals remain pending
+framing review.
 
 Use `avo cli animation face-analyze --project <absolute-project>`
 `--request <request.json> --json` for an explicit analysis. The request names
@@ -63,4 +66,20 @@ the current canonical basis, original source fingerprint, exact video stream,
 source range, sampling stride and selected sampled detection. Its editing craft
 selection enables camera and selected-subject face anchoring. MCP confirms the
 exact request bytes before executing. The resulting observation is saved under
-`edit/motion/face/` for review and keeps the current camera edit in place.
+`edit/motion/face/` for review and keeps the current camera edit in place. The
+command returns the trajectory hash and uncertainty intervals with the saved
+observation reference.
+
+To use the path, attach `faceAnchor` to the selected camera recipe with the
+returned `observationRef` and `trajectoryHash`, plus `transitionFrames` from 1
+through 60. The camera option `faceAnchor: selected-subject` stays opt-in. AVO
+uses the transition to enter and release face framing within the selected recipe.
+A cut-to-close entry still needs a visible source cut. Each face-anchored cue
+uses 2–256 exact frames from one original-source occurrence on its native clock.
+
+If a cue uses uncertain frames, `onLost: review` stops proof compilation for
+judgment. Select `hold` to hold the last qualified framing or `static` to return
+to the baseline crop. Both choices require `faceAnchor.fallbackReview` with the
+actor and reason. The linked map and storyboard show the measured source range,
+uncertain intervals and fallback status. AVO checks the selected evidence when
+publishing and admitting a proof, and seeking uses the frozen camera path.

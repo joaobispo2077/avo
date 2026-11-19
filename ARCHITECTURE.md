@@ -1373,6 +1373,17 @@ boxes and native source ticks in pure code. Ambiguity, missing detections and
 sampling gaps require a new selection. Runtime readiness and observations are
 separate from camera application or proof approval.
 
+Face analysis binds the original stream, native clock origin, proxy digest,
+detector identity and selected measurements in one immutable record. Pure timeline
+code smooths its bounded trajectory and compiles it against one exact visible
+source occurrence and BMap cue. Recorded hold or static fallback choices handle
+uncertain output frames. The existing camera evaluator and native resampler consume
+the compiled path and check crop margins and protected regions on every frame.
+Proposal, application and proof admission verify the selected evidence. Historical
+face records referenced by proposals or Animation survive reconstruction. The
+linked map and storyboard read face readiness from metadata without running the
+detector. Existing non-face moves retain their recorded options and cue clock.
+
 Camera movement, face anchoring, sound matching, reference analysis, spoken
 notes/recovery and editor handoff are selected options resolved through existing
 settings scopes and frozen requests. Preferences seed future work and cannot
