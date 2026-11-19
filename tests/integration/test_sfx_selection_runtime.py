@@ -17,6 +17,7 @@ from avo.adapters.media.sfx_analysis import SfxAnalyzer
 from avo.sfx_catalog import SfxCatalogService
 from avo.timeline.contracts import file_fingerprint
 from avo.timeline.sound_compilation import append_selected_sound
+from avo.timeline.sound_mix_review import summarize_sound_mix
 from avo.timeline.sound_planning import freeze_sound_choices
 
 pytestmark = [
@@ -107,11 +108,21 @@ def test_encoded_selected_marker_tail_channels_and_windows_keep_single_playback(
     assert execution == original
     assert append_selected_sound(mixed, choices, source_refs=sources) == mixed
     output = tmp_path / "selected.mkv"
-    execute_ffmpeg_proof(mixed, output)
+    rendered = execute_ffmpeg_proof(mixed, output)
     clean, result = _pcm(baseline), _pcm(output)
     assert len(result) == len(clean) == 96096
     delta = result - clean
     fit = choices[0]["fit"]
+    if rate == 44100:
+        evidence = summarize_sound_mix(
+            {**mixed, "proofPlanHash": "f" * 64}, rendered, None
+        )
+        assert evidence["status"] == "measured"
+        assert evidence["window"] == {"startSample": 0, "endSampleExclusive": 96096}
+        assert evidence["eventIds"] == [choices[0]["eventId"]]
+        assert evidence["peakDbfs"] == pytest.approx(
+            20 * np.log10(np.max(np.abs(result))), abs=0.001
+        )
     first, last = (
         fit["event"]["scheduledAudioStartSample"],
         fit["scheduledAudioEndSample"],
@@ -127,8 +138,15 @@ def test_encoded_selected_marker_tail_channels_and_windows_keep_single_playback(
     )  # A doubled 0.5-amplitude fixture at -12 dB fails.
     mixed["window"] = {"startFrame": 25, "endFrameExclusive": 45}
     window = tmp_path / "window.mkv"
-    execute_ffmpeg_proof(mixed, window)
+    rendered_window = execute_ffmpeg_proof(mixed, window)
     np.testing.assert_allclose(_pcm(window), result[40040:72072], atol=3e-7)
+    if rate == 44100:
+        evidence = summarize_sound_mix(
+            {**mixed, "proofPlanHash": "f" * 64}, rendered_window, mixed["window"]
+        )
+        assert evidence["status"] == "measured"
+        assert evidence["window"] == {"startSample": 40040, "endSampleExclusive": 72072}
+        assert evidence["candidateSha256"] == file_fingerprint(window)["sha256"]
     if rate == 48000:
         music = _with_music(execution)
         music_base, music_effect = (
