@@ -283,9 +283,11 @@ class QualityMatrixTests(unittest.TestCase):
         quality_block = ci.split("software-quality:", 1)[1].split("usability-gate:", 1)[
             0
         ]
-        self.assertIn("Install ffmpeg", quality_block)
-        self.assertIn("ensure-ffmpeg.sh", quality_block)
-        self.assertIn("timeout-minutes: 8", quality_block)
+        self.assertRegex(
+            quality_block,
+            r"- name: Install ffmpeg\n\s+timeout-minutes: [1-9]\d*\n"
+            r"\s+run: bash scripts/ci/ensure-ffmpeg.sh",
+        )
 
         pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
         self.assertIn("[tool.coverage.report]", pyproject)

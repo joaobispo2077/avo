@@ -326,7 +326,11 @@ def test_binary_capture_lane_provisions_encoder_and_only_browser_system_dependen
     workflow = (ROOT / ".github/workflows/engine-binary.yml").read_text(
         encoding="utf-8"
     )
-    for install in ("apt-get install", "brew install ffmpeg", "choco install ffmpeg"):
+    for install in (
+        "bash scripts/ci/ensure-ffmpeg.sh",
+        "brew install ffmpeg",
+        "choco install ffmpeg",
+    ):
         assert install in workflow, install
     assert "python -m playwright install-deps chromium" in workflow
     assert "python -m playwright install --with-deps" not in workflow
