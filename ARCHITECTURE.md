@@ -1433,6 +1433,9 @@ service. The immutable manifest retains exact occurrence clocks, audio frame
 quantization, and affected ranges whose treatments stay in AVO. Returned XML
 is saved verbatim and compared with the retained export and current timeline.
 That comparison records separate field proposals and conflicts for review.
+Project-local target qualification binds operator observations and both XML
+identities to the exact app, OS, profile and implementation. Production export
+requires a qualified review reference that still verifies against its sources.
 See [editor handoff](docs/editor-handoff.md).
 
 Camera movement, face anchoring, sound matching, reference analysis, spoken

@@ -5,7 +5,7 @@ editor handoff. Use the exact selected editor profile. Ask for the intended
 range and target only when existing project context leaves them unclear.
 
 Use `avo cli timeline-export status --project FILE` to list target readiness.
-Use `prepare`, `inspect-feedback` or `propose-feedback` with `--request FILE`;
+Use `prepare`, `inspect-feedback`, `propose-feedback` or `qualify-target` with `--request FILE`;
 each file is an absolute path to a typed local request. Keep the returned
 reference and SHA-256 together. See the [editor handoff guide](../../../docs/editor-handoff.md)
 for the exact request fields.

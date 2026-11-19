@@ -2,8 +2,9 @@
 
 Enable editor handoff by explicitly selecting an editor profile in the current
 editing craft request. The normal rendered review remains the default. The
-initial Premiere Pro 25.0 and DaVinci Resolve 19.1 profiles on Windows 11 24H2
-are unqualified. Use them to prepare validation examples up to 30 seconds.
+shipped Premiere Pro 25.0 and DaVinci Resolve 19.1 profiles on Windows 11 24H2
+are unqualified, as is the Resolve Studio 21.0.0.47 profile on Windows 11 25H2.
+Use them to prepare validation examples up to 30 seconds.
 Actual target-opened and returned-file evidence is required for production
 qualification. See the [Adobe export instructions](https://helpx.adobe.com/sg/premiere/desktop/render-and-export/export-files/export-a-project-as-a-final-cut-pro-xml-file.html)
 and the [DaVinci Resolve 19.1 feature guide](https://documents.blackmagicdesign.com/SupportNotes/DaVinci_Resolve_19_1_New_Features_Guide.pdf).
@@ -36,6 +37,11 @@ absolute JSON request path for each operation that writes review evidence. The
   timeline heads. It compares the original export, the current AVO edit and the
   returned file. Independent changes become review proposals. Divergent changes
   become conflicts. Ambiguous matches and omissions remain unresolved.
+- `timeline-export qualify-target` binds a target review to the exact exported
+  and returned files and the selected app and OS versions. Record the observed
+  checks, frame drift, and reviewer decision. A production request requires the
+  exact qualified review reference. Missing routing, markers, or reviewer
+  evidence keeps the target unqualified.
 
 The proposal preserves immutable copies of all three XML inputs. Review it before
 making any changes through the normal cutting, motion or sound workflow. An
