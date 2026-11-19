@@ -96,9 +96,9 @@ def _path(workspace, name):
     return target
 
 
-def _save_sheet(workspace, sheet):
+def _save_sheet(workspace, sheet, *, area="references"):
     digest = hashlib.sha256(sheet).hexdigest()
-    name = f"edit/motion/references/sheets/{digest}.png"
+    name = f"edit/motion/{area}/sheets/{digest}.png"
     path = _path(workspace, name)
     if path.exists():
         _check_source(path, {"sha256": digest, "sizeBytes": len(sheet)})

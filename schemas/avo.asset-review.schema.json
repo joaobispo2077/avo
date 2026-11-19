@@ -1,0 +1,124 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://avo.local/avo.asset-review.schema.json",
+  "title": "Explicit project asset review round and authoring choices",
+  "$defs": {
+    "id": {"type": "string", "pattern": "^[a-z][a-z0-9-]{2,63}$"},
+    "digest": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "text": {"type": "string", "minLength": 1, "maxLength": 512, "pattern": "\\S"},
+    "right": {
+      "type": "object", "additionalProperties": false, "required": ["state"],
+      "properties": {
+        "state": {"enum": ["owned", "licensed", "permission-granted", "public-domain", "unknown", "restricted"]},
+        "evidence": {"$ref": "#/$defs/text"}
+      }
+    },
+    "source": {
+      "type": "object", "additionalProperties": false,
+      "required": ["rootId", "relativePath", "sha256", "sizeBytes"],
+      "properties": {
+        "rootId": {"$ref": "#/$defs/id"},
+        "relativePath": {"type": "string", "minLength": 1, "maxLength": 2048},
+        "sha256": {"$ref": "#/$defs/digest"},
+        "sizeBytes": {"type": "integer", "minimum": 1, "maximum": 16777216}
+      }
+    },
+    "option": {
+      "type": "object", "additionalProperties": false,
+      "required": ["optionId", "rootId", "relativePath", "sha256", "sizeBytes", "kind", "subject", "supplier", "rights"],
+      "properties": {
+        "optionId": {"$ref": "#/$defs/id"},
+        "rootId": {"$ref": "#/$defs/source/properties/rootId"},
+        "relativePath": {"$ref": "#/$defs/source/properties/relativePath"},
+        "sha256": {"$ref": "#/$defs/source/properties/sha256"},
+        "sizeBytes": {"$ref": "#/$defs/source/properties/sizeBytes"},
+        "kind": {"$ref": "#/$defs/text"}, "subject": {"$ref": "#/$defs/text"},
+        "supplier": {"$ref": "#/$defs/text"}, "rights": {"$ref": "#/$defs/right"}
+      }
+    },
+    "root": {
+      "type": "object", "additionalProperties": false, "required": ["rootId", "locator"],
+      "properties": {
+        "rootId": {"$ref": "#/$defs/id"},
+        "locator": {"type": "string", "minLength": 1, "maxLength": 4096}
+      }
+    },
+    "roundRequest": {
+      "type": "object", "additionalProperties": false,
+      "required": ["contractVersion", "operation", "actor", "reason", "expectedBasis", "proposalHash", "itemId", "assetIndex", "background", "roots", "options"],
+      "properties": {
+        "contractVersion": {"const": "1.0.0"}, "operation": {"const": "asset-review"},
+        "actor": {"$ref": "#/$defs/text"}, "reason": {"$ref": "#/$defs/text"},
+        "expectedBasis": {"$ref": "avo.motion-review.schema.json#/properties/basisHeads"},
+        "proposalHash": {"$ref": "#/$defs/digest"}, "itemId": {"$ref": "#/$defs/id"},
+        "assetIndex": {"type": "integer", "minimum": 0, "maximum": 99},
+        "background": {"type": "string", "pattern": "^#[a-fA-F0-9]{6}$"},
+        "backgroundSource": {"$ref": "#/$defs/source"},
+        "roots": {"type": "array", "minItems": 1, "maxItems": 8, "items": {"$ref": "#/$defs/root"}},
+        "options": {"type": "array", "maxItems": 16, "items": {"$ref": "#/$defs/option"}}
+      }
+    },
+    "optionEvidence": {
+      "type": "object", "additionalProperties": false,
+      "required": ["number", "optionId", "state", "source", "kind", "subject", "supplier", "rights"],
+      "properties": {
+        "number": {"type": "integer", "minimum": 1, "maximum": 16},
+        "optionId": {"$ref": "#/$defs/id"},
+        "state": {"enum": ["ready-for-review", "subject-mismatch", "kind-mismatch", "supplier-mismatch", "rights-unverified", "duplicate", "source-unavailable", "source-changed", "capture-failed"]},
+        "source": {"$ref": "#/$defs/source"},
+        "kind": {"$ref": "#/$defs/text"}, "subject": {"$ref": "#/$defs/text"},
+        "supplier": {"$ref": "#/$defs/text"}, "rights": {"$ref": "#/$defs/right"}
+      }
+    },
+    "sheetRef": {
+      "type": "object", "additionalProperties": false, "required": ["locator", "sha256"],
+      "properties": {
+        "locator": {"type": "string", "pattern": "^edit/motion/assets/sheets/[a-f0-9]{64}\\.png$"},
+        "sha256": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "roundRecord": {
+      "type": "object", "additionalProperties": false,
+      "required": ["provider", "videoId", "request", "need", "rootStatus", "options", "contactSheet"],
+      "properties": {
+        "provider": {"$ref": "#/$defs/text"}, "videoId": {"$ref": "#/$defs/text"},
+        "request": {"$ref": "#/$defs/roundRequest"},
+        "need": {"$ref": "avo.motion-proposal.schema.json#/$defs/asset"},
+        "rootStatus": {"type": "object", "minProperties": 1, "maxProperties": 8,
+          "propertyNames": {"$ref": "#/$defs/id"}, "additionalProperties": {"enum": ["available", "unavailable"]}},
+        "options": {"type": "array", "maxItems": 16, "items": {"$ref": "#/$defs/optionEvidence"}},
+        "contactSheet": {"$ref": "#/$defs/sheetRef"}
+      }
+    },
+    "roundRef": {
+      "type": "object", "additionalProperties": false,
+      "required": ["locator", "sha256"],
+      "properties": {
+        "locator": {"type": "string", "pattern": "^edit/motion/assets/[a-f0-9]{64}\\.json$"},
+        "sha256": {"$ref": "#/$defs/digest"}
+      }
+    },
+    "choice": {
+      "type": "object", "additionalProperties": false,
+      "required": ["roundRef", "disposition"],
+      "properties": {
+        "roundRef": {"$ref": "#/$defs/roundRef"},
+        "disposition": {"enum": ["choose", "reject", "supply"]},
+        "optionNumber": {"type": "integer", "minimum": 1, "maximum": 16}
+      },
+      "allOf": [{"if": {"properties": {"disposition": {"enum": ["choose", "supply"]}}}, "then": {"required": ["optionNumber"]}}]
+    },
+    "choiceEvidence": {
+      "type": "object", "additionalProperties": false,
+      "required": ["choice", "itemId", "assetIndex", "option", "contactSheet"],
+      "properties": {
+        "choice": {"$ref": "#/$defs/choice"}, "itemId": {"$ref": "#/$defs/id"},
+        "assetIndex": {"type": "integer", "minimum": 0, "maximum": 99},
+        "option": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/optionEvidence"}]},
+        "contactSheet": {"$ref": "#/$defs/sheetRef"}
+      },
+      "allOf": [{"if": {"properties": {"choice": {"properties": {"disposition": {"enum": ["choose", "supply"]}}}}},
+        "then": {"properties": {"option": {"$ref": "#/$defs/optionEvidence"}}}}]
+    }
+  }
+}

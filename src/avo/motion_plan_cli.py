@@ -13,7 +13,12 @@ AUTHORING_OPERATIONS = (
     "camera-propose",
     "camera-apply",
 )
-ANALYSIS_OPERATIONS = ("face-analyze", "reference-analyze", "reference-decide")
+ANALYSIS_OPERATIONS = (
+    "face-analyze",
+    "reference-analyze",
+    "reference-decide",
+    "asset-review",
+)
 
 
 def _camera_runtime():
@@ -54,7 +59,12 @@ def add_plan_parsers(subparsers) -> None:
         parser.add_argument("--json", action="store_true", dest="as_json")
         if operation in (*AUTHORING_OPERATIONS, *ANALYSIS_OPERATIONS):
             parser.add_argument("--request", type=Path, required=True)
-        if operation in {"plan-apply", "camera-apply", *ANALYSIS_OPERATIONS}:
+        if operation in {
+            "plan-select",
+            "plan-apply",
+            "camera-apply",
+            *ANALYSIS_OPERATIONS,
+        }:
             parser.add_argument("--request-sha256")
         if operation == "plan-show":
             parser.add_argument("--proposal-hash")
@@ -73,6 +83,14 @@ def run_craft_command(args) -> int:
 
 
 def _run_visual_analysis(operation, workspace, request):
+    if operation == "asset-review":
+        from avo.adapters.qc.asset_review import render_asset_sheet
+        from avo.timeline.asset_review import open_asset_round
+        from avo.timeline.motion_authoring import MotionAuthoringService
+
+        return open_asset_round(
+            MotionAuthoringService(workspace), request, render_asset_sheet
+        )
     if operation == "face-analyze":
         from avo.adapters.registry import build_face_analyzer
         from avo.timeline.face_analysis import analyze_face
