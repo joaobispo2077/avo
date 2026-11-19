@@ -212,6 +212,29 @@ print('provider favorite frozen module/schema/read-only guards ok')
 PY
 fi
 
+echo "smoke: default craft views and bundled optional worker scripts"
+AVO_ROOT= "$LAUNCHER" cli animation plan-show --project "$BRIEF_PROJECT" --json >"$UNPACK/motion-plan.json"
+AVO_ROOT= "$LAUNCHER" cli timeline-export status --project "$BRIEF_PROJECT" --json >"$UNPACK/editor-targets.json"
+AVO_ROOT= "$LAUNCHER" cli sfx show --project "$BRIEF_PROJECT" --json >"$UNPACK/sound-catalogue.json"
+"$PYTHON" - "$UNPACK" "$BRIEF_PROJECT" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+root = Path(sys.argv[1])
+motion = json.loads((root / 'motion-plan.json').read_text(encoding='utf-8'))
+editor = json.loads((root / 'editor-targets.json').read_text(encoding='utf-8'))
+sound = json.loads((root / 'sound-catalogue.json').read_text(encoding='utf-8'))
+assert motion['effect'] == 'metadata-read', motion
+assert motion['snapshot']['items'] == motion['snapshot']['storyboardCards'] == [], motion
+assert editor['profiles'] and all(row['status'] == 'unqualified' for row in editor['profiles']), editor
+assert sound['effect'] == 'metadata-read' and sound['coverage']['total'] == 0, sound
+assert not (Path(sys.argv[2]).parent / 'edit').exists()
+for worker in ('clap_embeddings_worker.py', 'visual_motion_worker.py'):
+    assert any(root.rglob(worker)), f'missing bundled optional worker {worker}'
+print('default craft views verify without initialized media or model runtimes')
+PY
+
 if [[ -f "$ROOT/schemas/avo.preparation.schema.json" ]]; then
   echo "smoke: source preparation command and bundled schema (no model execution)"
   "$LAUNCHER" preparation --help >/dev/null
