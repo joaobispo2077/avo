@@ -151,7 +151,9 @@ When a sound choice uses selected production chunks, the result lists all chunks
 containing its current or previous audible contribution. A tail that crosses a
 chunk boundary remains a listening obligation even when that chunk was outside
 the production selection. Removing a sound includes its former range. Review
-and approval still belong to the current encoded candidate.
+and approval still belong to the current encoded candidate. An identical audio
+choice with only new proposal and application references adds no listening
+sections.
 
 ## Compatibility and validation
 
