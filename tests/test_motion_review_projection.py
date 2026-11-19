@@ -75,7 +75,16 @@ def cue(identifier="mo04", ticks=12, **fields):
 
 @pytest.mark.parametrize(
     "stale",
-    [None, "review", "bmap", "tracks", "watch", "watch-lock", "watch-duplicate"],
+    [
+        None,
+        "review",
+        "bmap",
+        "basis-state",
+        "tracks",
+        "watch",
+        "watch-lock",
+        "watch-duplicate",
+    ],
 )
 def test_linked_storyboard_uses_only_selected_current_sampled_review(
     workspace, monkeypatch, stale
@@ -135,6 +144,11 @@ def test_linked_storyboard_uses_only_selected_current_sampled_review(
     )
     if stale == "bmap":
         advance(stores["bmap"])
+    elif stale == "basis-state":
+        stores["bmap"].set_active_state(
+            "stale", reason="Current cue dependency can no longer be verified"
+        )
+        assert stores["bmap"].head_hash() == bmap
     elif stale == "tracks":
         # The record is exact for the prior absent Tracks state.
         install(workspace, monkeypatch, {"tracks": {"video": {}, "audio": {}}})
