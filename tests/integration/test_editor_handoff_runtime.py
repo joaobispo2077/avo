@@ -249,3 +249,29 @@ def test_returned_edit_stays_a_review_proposal_and_preserves_original_bytes(
         expected_code=2,
     )
     assert "Unsupported returned editor bytes" in blocked["message"]
+
+    from avo.project_inventory import _fallback_reconstruction_metadata
+    from avo.timeline.editor_retention import retained_editor_files
+    from avo.timeline.reconstruction import _required_files
+
+    orphan = xml.parent / "not-referenced.xml"
+    orphan.write_bytes(b"interrupted export residue")
+    kept = retained_editor_files(ws)
+    expected = (
+        result["handoffRef"],
+        result["xmlRef"],
+        inspection["inspectionRef"],
+        inspection["returnedXmlRef"],
+        review["proposalRef"],
+        rejected["inspectionRef"],
+        rejected["returnedXmlRef"],
+    )
+    assert all(kept[ws.raw_dir / ref["locator"]] == ref["sha256"] for ref in expected)
+    assert orphan not in kept
+    bundle_inputs = _required_files(ws.raw_dir, [], workspace=ws)
+    assert kept.items() <= bundle_inputs.items()
+    inventory = _fallback_reconstruction_metadata(ws.raw_dir, ws.timeline_dir, ws)
+    assert set(kept) <= set(inventory) and orphan not in inventory
+    xml.write_bytes(b"changed exported artifact")
+    with pytest.raises(ValueError, match="identity changed"):
+        retained_editor_files(ws)
