@@ -14,6 +14,14 @@ from .store import timeline_writer, write_immutable_json
 ANALYSIS_PARAMETERS = ("sourceRange", "seed", "minimumOverlap", "maximumGapTicks")
 
 
+def _check_original_binding(source, request):
+    if source["fingerprint"]["sha256"] != request["sourceSha256"]:
+        raise ValueError("Face analysis differs from the current original source")
+    declared = (source.get("streamMetadata") or {}).get("videoStreamIndex")
+    if declared is not None and declared != request["streamIndex"]:
+        raise ValueError("Face analysis differs from the current original video stream")
+
+
 def _current_source(workspace, request):
     index = workspace.require_active("cmap")
     cmap = workspace.store("cmap").revision(index["headRevisionId"])["snapshot"]
@@ -23,12 +31,8 @@ def _current_source(workspace, request):
     if len(matches) != 1:
         raise ValueError("Face analysis requires one current original source")
     (source,) = matches
+    _check_original_binding(source, request)
     identity = source["fingerprint"]
-    if identity["sha256"] != request["sourceSha256"]:
-        raise ValueError("Face analysis differs from the current original source")
-    declared_stream = (source.get("streamMetadata") or {}).get("videoStreamIndex")
-    if declared_stream is not None and declared_stream != request["streamIndex"]:
-        raise ValueError("Face analysis differs from the current original video stream")
     locator = source.get("locator") or identity.get("locator")
     if not locator or not Path(locator).is_absolute():
         raise ValueError("The current original requires an absolute local path")
