@@ -162,11 +162,18 @@ visual findings for a current canonical proof. Playback review covers continuous
 motion, lip sync and reading time. Listening covers audibility and masking.
 The motion map and storyboard link those sampled findings when the selected
 candidate and current timeline still match the recorded review.
+A safe repair routed to its owning stage rechecks the inspected candidate bytes
+and canonical timeline before it runs.
 
 The wrap exports scoped learning from the approved master and retained iteration
 ledger when both are available. Curated lessons record where to use or exclude a
 technique. Animation promotion still requires the current provider's explicit
 decision.
+
+Cleanup and reconstruction follow the retained preparation journal and
+selected sound evidence. An interrupted recovery result remains available when
+its attempt is already journaled. Unselected generated result files are eligible
+for cleanup.
 
 Existing CMap, BMap, Tracks, Animation and Sync ownership remains unchanged.
 Before an approved cut, concepts stay provisional. BMap owns executable cue timing;
