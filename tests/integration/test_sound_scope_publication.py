@@ -70,15 +70,26 @@ def test_context_only_sound_scope_is_rejected_before_any_publication(tmp_path):
 def test_reselecting_identical_audio_does_not_add_listening_sections(tmp_path):
     from tests.test_sound_application import repropose
 
-    _, _, service, _, request, shown = application(tmp_path)
+    workspace, _, service, _, request, shown = application(tmp_path)
     first = service.apply(scoped(request, shown["proposal"], ["opening"]))
     assert first["reviewScope"]["outsideProductionChunkIds"] == ["answer"]
+    owners = {
+        name: workspace.artifact_path(name).read_bytes()
+        for name in ("cmap", "bmap", "tracks", "animation")
+    }
 
     repeated = repropose(service, request, identity="same-sound-choice")
     proposal = service.load(repeated["proposalHash"])["proposal"]
-    result = service.apply(scoped(repeated, proposal, ["opening"]))
+    repeated = scoped(repeated, proposal, ["opening"])
+    result = service.apply(repeated)
 
     assert result["headsCurrent"] is True
+    assert result["committedHeads"] == first["committedHeads"]
+    assert result["receiptRef"] != first["receiptRef"]
+    assert service.apply(repeated)["receiptRef"] == result["receiptRef"]
+    assert {
+        name: workspace.artifact_path(name).read_bytes() for name in owners
+    } == owners
     assert result["reviewScope"]["affectedChunkIds"] == []
     assert result["reviewScope"]["outsideProductionChunkIds"] == []
     assert result["reviewScope"]["approval"] == "not-granted"
