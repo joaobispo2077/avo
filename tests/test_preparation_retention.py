@@ -41,12 +41,16 @@ def test_recovery_retention_never_reopens_unbounded_journal_readers(
 
 
 def test_recovery_evidence_is_in_reconstruction_and_fallback_inventory(tmp_path):
-    cutting, _, service, _, request = recovery(tmp_path)
+    cutting, _, service, runtime, request = recovery(tmp_path)
     shown = service.recover(request)
+    frozen_ref = shown["requestRef"]
+    frozen_request = service.store.load_document(frozen_ref)["payload"]
+    assert frozen_request["modelBindings"] == runtime.bindings
+    runtime.bindings["transcription"]["files"]["model.bin"] = "b" * 64
     expected = {
         service.store.ledger.path,
         service.store.directory / request["analysisRef"]["locator"],
-        service.store.directory / shown["requestRef"]["locator"],
+        service.store.directory / frozen_ref["locator"],
     }
     assert expected <= set(
         _required_files(cutting.workspace.raw_dir, [], workspace=cutting.workspace)
@@ -56,6 +60,7 @@ def test_recovery_evidence_is_in_reconstruction_and_fallback_inventory(tmp_path)
             cutting.workspace.raw_dir, cutting.workspace.timeline_dir, cutting.workspace
         )
     )
+    assert service.store.load_document(frozen_ref)["payload"] == frozen_request
 
 
 def test_missing_recovery_dependency_blocks_reconstruction(tmp_path):
