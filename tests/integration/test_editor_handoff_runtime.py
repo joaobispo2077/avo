@@ -68,6 +68,62 @@ def _feedback_command(ws, request_file, capsys, operation, data, *, expected_cod
     return json.loads(output.out if expected_code == 0 else output.err)
 
 
+def _bind_observed_fixture_signal(workspace, revision, frame_rate):
+    from avo.timeline.cutting_contracts import make_document, selected_source_range
+
+    owner = build_cutting_service(workspace)
+    owner.run_store.initialize(
+        run_id="editor-handoff-fixture",
+        video_id=workspace.video_id,
+        provider=workspace.project["provider"],
+        project_path=workspace.project_path,
+    )
+    basis = owner._proposal_basis(revision, frame_rate)
+    (source,) = revision["snapshot"]["sources"]
+    (segment,) = revision["snapshot"]["segments"]
+    analysis = owner.store.save_document(
+        make_document(
+            "source-analysis",
+            {
+                "sourceRef": basis["sourceRefs"][0],
+                "syncRef": basis["syncRef"],
+                "routing": source["streamMetadata"]["audioSelection"],
+                "preprocessing": {"sourceRange": selected_source_range(segment)},
+                "status": "pass",
+                "coverage": {"observed": True},
+                "pauseCandidates": [],
+                # A known region of the synthesized waveform exercises native comparison.
+                "words": [
+                    {
+                        "text": "fixture signal",
+                        "start": 0.25,
+                        "end": 0.5,
+                        "eligibleEdge": True,
+                    }
+                ],
+            },
+        )
+    )
+    proposal = owner.store.save_document(
+        make_document(
+            "proposal",
+            {
+                **basis,
+                "occurrences": [],
+                "edits": [],
+                "requiredWindows": [],
+                "status": "needs-review",
+                "implementationBindings": {
+                    **owner._implementation_binding(),
+                    "sourceAnalysisRefs": [analysis],
+                },
+            },
+        )
+    )
+    owner.run_store.bind_cutting_context({"proposal": proposal})
+    return analysis
+
+
 @pytest.mark.integration
 @pytest.mark.skipif(
     not shutil.which("ffmpeg") or not shutil.which("ffprobe"),
@@ -113,11 +169,12 @@ def test_native_validation_preserves_original_picture_and_independent_audio(
             "sourceSampleRate": 48000,
         },
     }
-    CMapService(ws).author(
+    revision = CMapService(ws).author(
         body, actor="creator", reason="Make validation example from the original source"
     )
     original = file_fingerprint(source)
     request = editor_request(ws)
+    analysis = _bind_observed_fixture_signal(ws, revision, request["programRate"])
     payload = tmp_path / "handoff-request.json"
     command = [
         "timeline-export",
@@ -251,6 +308,7 @@ def test_native_validation_preserves_original_picture_and_independent_audio(
     owner = build_cutting_service(ws)
     proposal = owner.store.load_document(reference)["payload"]
     assert proposal["scope"]["editorFeedbackRef"] == review["proposalRef"]
+    assert proposal["implementationBindings"]["sourceAnalysisRefs"] == [analysis]
     assert len(proposal["edits"]) == 1
     interval = proposal["edits"][0]["removeRange"]
     assert (interval["startTicks"], interval["endTicksExclusive"]) == (920, 1000)
@@ -265,6 +323,50 @@ def test_native_validation_preserves_original_picture_and_independent_audio(
         ws
     )
     assert MotionReviewService(ws).project()["basisHeads"] == request["expectedBasis"]
+    assert file_fingerprint(source) == original
+
+    from avo.timeline.cutting_service import CuttingServiceError
+
+    first_preview = owner.preview(reference)
+    assert first_preview["status"] == "blocked"
+    decision = {
+        "occurrenceId": proposal["occurrences"][0]["occurrenceId"],
+        "disposition": "shorten",
+        "reason": "Fixture review accepts the 80 ms ending trim",
+        "editorialApproval": True,
+    }
+    owner.decide(
+        reference,
+        {"previewRef": first_preview["verificationRef"], "decisions": [decision]},
+    )
+    with pytest.raises(CuttingServiceError, match="exact preview verification"):
+        owner.apply(reference)
+    assert MotionReviewService(ws).project()["basisHeads"] == request["expectedBasis"]
+
+    owner = build_cutting_service(ws)
+    final_preview = owner.preview(reference)
+    assert final_preview["status"] == "pass", final_preview
+    assert final_preview["verificationRef"] != first_preview["verificationRef"]
+    owner.decide(
+        reference,
+        {"previewRef": final_preview["verificationRef"], "decisions": [decision]},
+    )
+    applied = owner.apply(reference)
+    assert applied["status"] == "applied"
+    revised = applied["revision"]["snapshot"]
+    assert revised["cuttingRef"] == final_preview["verificationRef"]
+    (retained_segment,) = revised["segments"]
+    assert retained_segment["out"]["ticks"] == 920
+    assert (
+        build_editor_handoff(ws).status(
+            {
+                "contractVersion": "1.0.0",
+                "operation": "status",
+                "handoffRef": whole["handoffRef"],
+            }
+        )["basisStatus"]
+        == "historical"
+    )
     assert file_fingerprint(source) == original
 
 
