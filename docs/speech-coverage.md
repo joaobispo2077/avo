@@ -138,3 +138,13 @@ previously unavailable source unit can therefore gain useful measured coverage
 for the selected interval while the rest stays protected. Replaced or unmeasured
 pause certifications do not carry over. This remains a derived view: original
 analysis and source bytes are retained unchanged.
+
+Qualified retained words can supply optional sound anchors through
+`sourceAnchor.spokenEvidence`. The request selects an immutable analysis reference
+and zero-based word index; it does not guess a cue fraction. Current measured
+coverage, source/routing/Sync, selected transcript and model/runtime provenance
+must agree. New actual initial analyses retain speech dependency records across
+the analysis and reject a dependency change during that pass. Older original
+records lacking that complete binding cannot certify new word-exact cues.
+Selected recovery words retain the actual frozen result's model provenance.
+See [word candidate fitting](sound-candidate-fitting.md).

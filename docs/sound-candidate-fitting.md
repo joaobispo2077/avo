@@ -45,6 +45,29 @@ final proof admission recomputes it against current canonical metadata. Full
 and window exports preserve the same absolute frame. Ordinary cue-phase events
 do not request an additional source-map read.
 
+To choose a retained spoken word, add
+`spokenEvidence: {analysisRef: {locator, sha256}, wordIndex}` inside the source
+anchor. `wordIndex` is zero-based in that immutable source-analysis document,
+as returned by `cutting analyze`. A separate `sourceTime` is optional: AVO
+derives the qualified word start and freezes its native source point, word hash
+and current transcript-selection hash in the opportunity. Supplied time/hash
+values must agree with the evidence.
+
+The word needs measured coverage, individually eligible aligned timing and
+current source/routing/Sync/model evidence. Unrelated gaps remain protected
+without globally blocking a reliable word. Missing provenance, uncertain words,
+changed selections and words crossing a retained cut stay unresolved. Legacy
+original analyses without complete speech dependency evidence remain inspectable
+but cannot certify a new word-exact cue. Selected recoveries use their actual
+frozen request/result provenance. No word cue starts transcription or alignment.
+
+The dependency reader checks prepared model/resource bytes, interpreter identity
+and speech package versions. It reads the isolated environment's distribution
+metadata with Python's [standard metadata API](https://docs.python.org/3.11/library/importlib.metadata.html),
+without loading those packages or running that interpreter. Missing or ambiguous
+package metadata stays unavailable. It never installs or updates prerequisites.
+Ordinary phase/source/camera events do not perform these speech checks.
+
 For a selected native trim, the relative transient is:
 
 `original marker sample - trim start sample`

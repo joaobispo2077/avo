@@ -32,6 +32,20 @@ fingerprint, retained occurrence and derived cue frame again. An altered source
 or mapping requires a new current selection. The anchor never supplies picture
 or audio media to the render and does not confer listening approval.
 
+For a selected spoken word, publication reopens its immutable analysis and
+current source-evidence selection before preparing canonical writes, then
+rechecks those dependencies before staging. Native proof admission and approval
+of an existing rendered plan repeat the current word check. A changed model,
+transcript choice or retained word cannot reuse an older plan's approval.
+Removing an effect or choosing silence does not require a ready speech model.
+
+Qualified pinned word analyses join the bounded preparation retention closure even when
+there was no recovery journal. Sound reconstruction retains their exact metadata
+and referenced alternatives/choices. Model packages, source media and temporary
+PCM do not become preparation documents or new bundled prerequisites.
+Unresolved requests retain their requested references and issues without
+requiring an invented missing input file.
+
 The service freezes the reviewed asset, rights, marker, source trim, output
 sample schedule, channel routing and mix settings. Each contribution has one
 Tracks layer and an exactly bound BMap cue, with `tracks-native` playback

@@ -121,6 +121,16 @@ removed, changed, ambiguous, still or picture-sampled occurrences stay
 unresolved. This is an explicit timed source point, not inferred word timing.
 See [source anchor fitting](../../../docs/sound-candidate-fitting.md).
 
+For a word-timed source accent, include
+`spokenEvidence: {analysisRef: {locator, sha256}, wordIndex}` in `sourceAnchor`.
+Use an exact immutable source-analysis reference from current `cutting analyze`
+and a zero-based word index. AVO derives native word time and freezes the word
+and current selection hashes. Current measured/aligned timing, source/routing/
+Sync, prepared model bytes and runtime package metadata are required. Changed,
+uncertain or cut-crossing words stay unresolved. This never runs ASR/alignment.
+Ordinary sound intents do no additional speech work. Publication, native proof
+and existing-plan approval recheck the word evidence; listening stays separate.
+
 Proposals save immutable metadata under `edit/motion/sound/`, binding current
 heads, selected sound direction, options, library generation, queries and actual
 bounded search results. Repeating the same operation returns its saved proposal;

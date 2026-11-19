@@ -1350,6 +1350,21 @@ no model; cutting and recovery producer identities bind its implementation.
 Before/after adapter and recovery tests preserve the existing behavior, including
 configured ASR with separate alignment and changed local dependency bytes.
 
+Optional word-timed sound remains a source anchor on the existing CMap clock.
+`timeline.preparation_words` qualifies an immutable word's measured, aligned and
+unprotected source time against current model facts. `timeline.sound_word_evidence`
+reuses CuttingStore/preparation selection and bounded retention; it binds exact
+original or selected-result provenance without a new mutable store. Shared speech
+dependency metadata reads package versions from the declared isolated environment
+without importing its runtimes. Actual initial analysis records dependencies
+before/after the pass and rejects changes. Proposals freeze concrete source time,
+word and selection hashes; publication, native sound admission and existing-plan
+approval recheck them. Exact analysis roots survive reconstruction without a
+recovery journal. Model packages and temporary PCM remain outside this metadata
+closure. Ordinary intents do no speech work. Unit, publication, actual encoded
+full/window and separately prepared Portuguese ASR/alignment tests cover these
+boundaries; listening and creator approval remain independent.
+
 Camera movement, face anchoring, sound matching, reference analysis, spoken
 notes/recovery and editor handoff are selected options resolved through existing
 settings scopes and frozen requests. Preferences seed future work and cannot
