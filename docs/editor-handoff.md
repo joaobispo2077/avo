@@ -37,15 +37,21 @@ absolute JSON request path for each operation that writes review evidence. The
   timeline heads. It compares the original export, the current AVO edit and the
   returned file. Independent changes become review proposals. Divergent changes
   become conflicts. Ambiguous matches and omissions remain unresolved.
+- `timeline-export apply-feedback` records which proposed fields to keep or take
+  from the return. A supported inward trim must select both the program and
+  source edge for the exact picture clip and each linked audio clip. AVO routes
+  it to `/avo.trim` for preview, editorial approval and application. The route
+  retains the original comparison and cutting proposal together. Placed edits,
+  unmatched clips, markers and unsupported finishing stay in manual review.
 - `timeline-export qualify-target` binds a target review to the exact exported
   and returned files and the selected app and OS versions. Record the observed
   checks, frame drift, and reviewer decision. A production request requires the
   exact qualified review reference. Missing routing, markers, or reviewer
   evidence keeps the target unqualified.
 
-The proposal preserves immutable copies of all three XML inputs. Review it before
-making any changes through the normal cutting, motion or sound workflow. An
-inspection can retain an unsupported XML file for manual review.
+The proposal preserves immutable copies of all three XML inputs. An inspection
+can retain an unsupported XML file for manual review. A change published through
+cutting needs its normal cut approval before downstream finishing uses it.
 
 ## Observed Resolve behavior
 
