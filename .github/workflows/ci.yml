@@ -114,7 +114,7 @@ jobs:
         run: npm ci
 
       - name: Install ffmpeg
-        timeout-minutes: 8
+        timeout-minutes: 12
         run: bash scripts/ci/ensure-ffmpeg.sh
 
       - name: Run unit tests
@@ -173,7 +173,7 @@ jobs:
         run: echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
 
       - name: Install ffmpeg
-        timeout-minutes: 8
+        timeout-minutes: 12
         run: bash scripts/ci/ensure-ffmpeg.sh
 
       - name: Install managed Chromium for code-drawn integration
@@ -258,7 +258,7 @@ jobs:
         run: npm ci
 
       - name: Install ffmpeg
-        timeout-minutes: 8
+        timeout-minutes: 12
         run: bash scripts/ci/ensure-ffmpeg.sh
 
       # Spec v1.4 / task-013: Phase-1 fast gates — all fail-immediately (no soft stubs).
