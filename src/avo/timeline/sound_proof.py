@@ -77,6 +77,7 @@ class _Selections:
         self.retained = _Retention(workspace)
         self.contexts = {}
         self.animation = None
+        self.cmap = None
 
     def _camera_animation(self, intent):
         if "cameraAnchor" not in intent:
@@ -84,6 +85,13 @@ class _Selections:
         if self.animation is None:
             self.animation = _snapshot(self.workspace, "animation")
         return self.animation
+
+    def _source_cmap(self, intent):
+        if "sourceAnchor" not in intent:
+            return None
+        if self.cmap is None:
+            self.cmap = _snapshot(self.workspace, "cmap")
+        return self.cmap
 
     def _published(self, layer):
         selected = layer["provenance"]["soundSelection"]
@@ -149,6 +157,7 @@ class _Selections:
             record["intent"],
             Fraction(fps["num"], fps["den"]),
             animation=self._camera_animation(record["intent"]),
+            cmap=self._source_cmap(record["intent"]),
         )
         _require(
             fresh == choice["fit"]["opportunity"],

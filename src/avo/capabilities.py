@@ -162,6 +162,7 @@ _PROOF_BUILTINS = {
 }
 
 _PROOF_CODE_PATHS = (
+    Path(__file__).parent / "timeline" / "mapping.py",
     Path(__file__).parent / "timeline" / "sound_anchors.py",
     Path(__file__).parent / "timeline" / "sound_planning.py",
     Path(__file__).parent / "timeline" / "sound_proof.py",

@@ -13,7 +13,7 @@ from .event_clock import (
     sample_rate_boundary,
 )
 from .motion_authoring import MotionAuthoringService
-from .sound_anchors import sound_phase
+from .sound_anchors import sound_phase, source_anchor_time
 from .sound_choices import _sound_document, freeze_sound_choices
 from .sound_fitting import SCHEMA, SoundPlanningError, _clock, fit_sound_candidate
 from .store import timeline_writer, write_immutable_json
@@ -36,13 +36,16 @@ def _sound_part(item, intent):
     return parts[0] if len(parts) == 1 else None
 
 
-def _sound_opportunity(item, part, intent, fps, *, animation=None):
+def _sound_opportunity(item, part, intent, fps, *, animation=None, cmap=None):
     first = _cue_frame(part["timing"]["start"], fps)
     end = _cue_frame(part["timing"]["end"], fps)
-    phase = sound_phase(intent, part, animation) * max(0, end - first - 1)
-    impact = first + sample_rate_boundary(
-        phase.numerator, source_rate=phase.denominator, target_rate=1
-    )
+    if "sourceAnchor" in intent:
+        impact = _cue_frame(source_anchor_time(intent["sourceAnchor"], cmap), fps)
+    else:
+        phase = sound_phase(intent, part, animation) * max(0, end - first - 1)
+        impact = first + sample_rate_boundary(
+            phase.numerator, source_rate=phase.denominator, target_rate=1
+        )
     return {
         "eventId": intent["eventId"],
         "itemId": item["itemId"],
@@ -55,11 +58,11 @@ def _sound_opportunity(item, part, intent, fps, *, animation=None):
         "visibleRange": {"startFrame": first, "endFrameExclusive": end},
         "material": intent.get("material"),
         "strength": intent.get("strength", "unknown"),
-        **(
-            {"cameraAnchor": deepcopy(intent["cameraAnchor"])}
-            if "cameraAnchor" in intent
-            else {}
-        ),
+        **{
+            key: deepcopy(intent[key])
+            for key in ("cameraAnchor", "sourceAnchor")
+            if key in intent
+        },
     }
 
 
@@ -85,7 +88,9 @@ def _sound_recommendation(intent):
     return "audition"
 
 
-def _derive_sound_record(item, intent, fps, program_end_frame, animation=None):
+def _derive_sound_record(
+    item, intent, fps, program_end_frame, animation=None, cmap=None
+):
     record = {
         "eventId": intent["eventId"],
         "itemId": intent["itemId"],
@@ -114,7 +119,9 @@ def _derive_sound_record(item, intent, fps, program_end_frame, animation=None):
         ]
         return record
     try:
-        opportunity = _sound_opportunity(item, part, intent, fps, animation=animation)
+        opportunity = _sound_opportunity(
+            item, part, intent, fps, animation=animation, cmap=cmap
+        )
         _clock(opportunity, fps, program_end_frame, 48000)
     except (ValueError, TypeError, KeyError) as error:
         record["issues"] = ["outside-program-or-empty-cue: " + str(error)[:300]]
@@ -128,7 +135,7 @@ def _derive_sound_record(item, intent, fps, program_end_frame, animation=None):
 
 
 def derive_sound_opportunities(
-    snapshot, intents, *, frame_rate, program_end_frame, animation=None
+    snapshot, intents, *, frame_rate, program_end_frame, animation=None, cmap=None
 ):
     """Derive only requested sound events from current metadata, with silence valid.
 
@@ -164,6 +171,7 @@ def derive_sound_opportunities(
                 frame_rate,
                 program_end_frame,
                 animation,
+                cmap,
             )
             for intent in intents
         ]
@@ -343,6 +351,13 @@ class SoundPlanningService:
 
         return MotionReviewService(self.workspace)._metadata()[1].get("animation")
 
+    def _source_cmap(self, intents):
+        if not any("sourceAnchor" in intent for intent in intents):
+            return None
+        from .motion_review import MotionReviewService
+
+        return MotionReviewService(self.workspace)._metadata()[1].get("cmap")
+
     def _propose(self, request):
         from .pipeline import TimelinePipeline
 
@@ -365,6 +380,7 @@ class SoundPlanningService:
             frame_rate=fps,
             program_end_frame=request["clock"]["programEndFrame"],
             animation=self._camera_animation(request["intents"]),
+            cmap=self._source_cmap(request["intents"]),
         )
         budget = request.get("maxCandidates", 100)
         used = self._match(

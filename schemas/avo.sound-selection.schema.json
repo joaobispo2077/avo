@@ -198,6 +198,28 @@
       "required": ["startSample", "endSampleExclusive"],
       "properties": {"startSample": {"$ref": "#/$defs/sample"}, "endSampleExclusive": {"$ref": "#/$defs/sample"}}
     },
+    "sourceAnchor": {
+      "type": "object", "additionalProperties": false,
+      "required": ["sourceId", "sourceSha256", "sourceTime"],
+      "properties": {
+        "sourceId": {"$ref": "#/$defs/id"},
+        "sourceSha256": {"$ref": "avo.sfx-catalog.schema.json#/$defs/sha"},
+        "sourceTime": {
+          "type": "object", "additionalProperties": false, "required": ["ticks", "timebase"],
+          "properties": {
+            "ticks": {"$ref": "#/$defs/sample"},
+            "timebase": {"$ref": "https://avo.local/avo.cutting.schema.json#/$defs/timebase"}
+          }
+        },
+        "segmentId": {"$ref": "#/$defs/id"},
+        "placementId": {"$ref": "#/$defs/id"},
+        "trackId": {"$ref": "#/$defs/id"}
+      },
+      "oneOf": [
+        {"required": ["segmentId"], "not": {"anyOf": [{"required": ["placementId"]}, {"required": ["trackId"]}]}},
+        {"required": ["placementId"], "not": {"required": ["segmentId"]}}
+      ]
+    },
     "cameraAnchor": {
       "type": "object", "additionalProperties": false,
       "required": ["componentId", "pathHash", "sourceSha256", "nodeIndex"],
@@ -210,12 +232,13 @@
     },
     "opportunity": {
       "type": "object", "additionalProperties": false,
-      "allOf": [{"if": {"required": ["cameraAnchor"]}, "then": {"properties": {"kind": {"const": "camera-emphasis"}}}}],
+      "allOf": [{"if": {"required": ["cameraAnchor"]}, "then": {"properties": {"kind": {"const": "camera-emphasis"}}, "not": {"required": ["sourceAnchor"]}}}],
       "required": ["eventId", "itemId", "cueId", "kind", "purpose", "role", "visibility", "programFrame", "visibleRange"],
       "properties": {
         "eventId": {"$ref": "#/$defs/id"}, "itemId": {"$ref": "#/$defs/id"}, "cueId": {"$ref": "#/$defs/id"},
         "kind": {"enum": ["click", "reveal", "camera-emphasis", "transition", "explicit"]},
         "cameraAnchor": {"$ref": "#/$defs/cameraAnchor"},
+        "sourceAnchor": {"$ref": "#/$defs/sourceAnchor"},
         "purpose": {"type": "string", "minLength": 1, "maxLength": 4096, "pattern": "\\S"},
         "role": {"enum": ["main", "bass", "support", "detail", "tail"]},
         "visibility": {"enum": ["visible", "hidden", "unknown"]},
@@ -288,7 +311,10 @@
     "intent": {
       "type": "object",
       "additionalProperties": false,
-      "allOf": [{"if": {"required": ["cameraAnchor"]}, "then": {"properties": {"kind": {"const": "camera-emphasis"}}, "not": {"required": ["phase"]}}}],
+      "allOf": [
+        {"if": {"required": ["cameraAnchor"]}, "then": {"properties": {"kind": {"const": "camera-emphasis"}}, "not": {"required": ["phase"]}}},
+        {"if": {"required": ["sourceAnchor"]}, "then": {"not": {"anyOf": [{"required": ["phase"]}, {"required": ["cameraAnchor"]}]}}}
+      ],
       "required": [
         "eventId",
         "itemId",
@@ -332,6 +358,7 @@
           "maximum": 1
         },
         "cameraAnchor": {"$ref": "#/$defs/cameraAnchor"},
+        "sourceAnchor": {"$ref": "#/$defs/sourceAnchor"},
         "motionCharacter": {
           "enum": [
             "accent",
