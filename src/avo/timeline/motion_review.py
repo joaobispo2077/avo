@@ -18,6 +18,7 @@ from .contracts import (
 )
 from .craft_work import project_craft_work
 from .motion_metadata import (
+    LIFECYCLE,
     MAX_DOCUMENT_BYTES,
     METADATA_LIMITS,
     MotionReviewError,
@@ -39,7 +40,6 @@ from .workspace import ARTIFACTS
 
 GENERATOR = {"id": "avo.motion-review", "version": "1.12.0"}
 MAX_ITEMS = 500
-LIFECYCLE = ("preEntry", "entrance", "hold", "payoff", "exit")
 CONCEPT_TEXT_FIELDS = {
     "dominantFocus": ("Dominant focus", 4096),
     "supportingMotion": ("Supporting motion", 4096),

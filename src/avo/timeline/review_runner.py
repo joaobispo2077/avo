@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from .contracts import content_hash, dependency_lock_hash, file_fingerprint
+from .editing_craft_qc import attach_craft_report
 from .ports import ToolError
 from .review import (
     EVIDENCE_PROFILES,
@@ -359,7 +360,14 @@ def _watch_extra(watch: dict[str, Any]) -> dict[str, Any]:
         "visionCoverageManifest",
         "disposition",
     )
-    return {key: watch[key] for key in fields if key in watch}
+    extra = {key: watch[key] for key in fields if key in watch}
+    if isinstance(extra.get("reviewContext"), dict):
+        extra["reviewContext"] = {
+            key: value
+            for key, value in extra["reviewContext"].items()
+            if key != "craftChecks"
+        }
+    return extra
 
 
 def _automated_review_status(evidence: list[dict[str, Any]]) -> str | None:
@@ -949,16 +957,23 @@ class ReviewRunner:
                 transcript, qc, identity, lock_hash, transcription_windows
             )
         )
+        watch_evidence = self._watch_evidence(
+            watch,
+            qc,
+            identity,
+            lock_hash,
+            review_windows,
+            transcript,
+            terms,
+            names,
+        )
         evidence.append(
-            self._watch_evidence(
-                watch,
-                qc,
+            attach_craft_report(
+                watch_evidence,
+                self.workspace,
                 identity,
-                lock_hash,
-                review_windows,
-                transcript,
-                terms,
-                names,
+                materialization,
+                watch_evidence["coverage"],
             )
         )
         findings = [

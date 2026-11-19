@@ -1,6 +1,7 @@
 """Shared bounded JSON motion metadata; no authoring, persistence or media imports."""
 
 MAX_DOCUMENT_BYTES = 4 * 1024 * 1024
+LIFECYCLE = ("preEntry", "entrance", "hold", "payoff", "exit")
 
 
 METADATA_LIMITS = {

@@ -829,6 +829,8 @@ def run_fix_loop(
 def write_review_package(
     directory: Path, manifest: dict[str, Any]
 ) -> tuple[Path, Path | None]:
+    from .editing_craft_qc import craft_review_markdown
+
     directory.mkdir(parents=True, exist_ok=True)
     validate_document(manifest, "avo.review-evidence.schema.json")
     json_path = atomic_write_json(directory / "review.json", manifest)
@@ -891,6 +893,7 @@ def write_review_package(
             f"- {item['kind']}: {item['status']} "
             f"(scope={scope.get('mode')}; candidate={item['candidateHash'][:12]})"
         )
+    lines.extend(craft_review_markdown(manifest))
     lines.extend(["", "## Stale dependencies", ""])
     stale = list(change_summary.get("staleDependencies") or [])
     for item in manifest.get("evidence") or []:
