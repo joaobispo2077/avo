@@ -127,7 +127,7 @@ def _uncovered(activity, words):
             yield cursor, end
 
 
-def _reliable_words(facts, bounds, issues):
+def _reliable_words(facts, bounds, issues, measured):
     if facts["alignmentStatus"] != "pass":
         issues.append("word-alignment-unavailable")
         return []
@@ -141,10 +141,31 @@ def _reliable_words(facts, bounds, issues):
             issues.append("word-timing-unreliable")
             continue
         try:
-            result.append(_interval(word, bounds))
+            result.append(_measured_interval(word, bounds, measured))
         except (ValueError, TypeError, KeyError):
             issues.append("word-timing-unreliable")
     return _union(result)
+
+
+def _measured_windows(coverage, bounds):
+    if "intervals" not in coverage:
+        return [_interval(coverage, bounds)]
+    windows = coverage["intervals"]
+    if (
+        "start" in coverage
+        or "end" in coverage
+        or not isinstance(windows, list)
+        or not 1 <= len(windows) <= 128
+    ):
+        raise ValueError("Measured coverage requires bounded, unambiguous windows")
+    return _union(_interval(row, bounds) for row in windows)
+
+
+def _measured_interval(row, bounds, measured):
+    interval = _interval(row, bounds)
+    if not any(first <= interval[0] < interval[1] <= end for first, end in measured):
+        raise ValueError("Observation crosses an unmeasured source interval")
+    return interval
 
 
 def _source_range(interval, requested):
@@ -220,18 +241,18 @@ def _observations(facts, binding, issues):
         or not _has_coverage_facts(facts, binding)
     ):
         raise ValueError("Source acoustics or model/runtime provenance is unavailable")
-    bounds = _interval(coverage, requested)
-    activity = _union(_interval(row, bounds) for row in facts["vad"] or [])
-    words = _reliable_words(facts, bounds, issues)
+    measured = _measured_windows(coverage, requested)
+    activity = _union(
+        _measured_interval(row, requested, measured) for row in facts["vad"] or []
+    )
+    words = _reliable_words(facts, requested, issues, measured)
     result = [
         _observation("possible-speech-without-reliable-words", interval, binding)
         for interval in _uncovered(activity, words)
     ]
-    outside = [(requested[0], bounds[0]), (bounds[1], requested[1])]
     result.extend(
         _observation("unmeasured", interval, binding)
-        for interval in outside
-        if interval[0] < interval[1]
+        for interval in _uncovered([requested], measured)
     )
     return result
 
