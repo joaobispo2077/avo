@@ -133,8 +133,10 @@ do not require their unused library source to preview.
 Optional ducking follows a current unmuted dialogue layer's source and selected
 channels, including a single selected microphone duplicated to stereo. Missing,
 wrong-channel or ambiguous stream routing fails rather than choosing another
-microphone. Proof planning performs metadata validation; physical source checks,
-native execution and contextual listening remain separate requirements.
+microphone. Application checks native gain and ducking limits plus the presence
+of the selected active dialogue layer before probing a source or publishing a
+timeline revision. Proof planning verifies the exact rendered dialogue nodes
+and channel mapping. Contextual listening uses the current encode.
 
 Successful propose/apply operations automatically publish the current motion map
 and linked storyboard. Opportunities link to their exact saved proposal; selected
