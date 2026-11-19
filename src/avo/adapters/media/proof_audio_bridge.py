@@ -5,6 +5,7 @@ from copy import deepcopy
 from fractions import Fraction
 from pathlib import Path
 
+from avo.timeline.contracts import content_hash
 from avo.timeline.event_clock import (
     EventClockError,
     frame_to_sample,
@@ -163,4 +164,5 @@ def render_mix(listing, directory, context, *, start_sample, end_sample):
         lead_pcm_start_sample=start_sample,
         window=(start_sample, end_sample),
     )
+    context["result"]["inputGraphHash"] = content_hash(context["graph"])
     return output

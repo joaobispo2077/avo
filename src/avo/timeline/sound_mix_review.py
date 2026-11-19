@@ -3,6 +3,7 @@
 import math
 import re
 
+from .contracts import content_hash
 from .event_clock import frame_to_sample
 
 SPEECH_BAND_HZ = (300, 4000)
@@ -76,8 +77,8 @@ def _valid_levels(measurement, keys):
     return {key: measurement[key] for key in keys}
 
 
-def _observed_native_mix(mix, expected, rate):
-    if not isinstance(mix, dict):
+def _observed_native_mix(mix, expected, rate, graph):
+    if not isinstance(mix, dict) or mix.get("inputGraphHash") != content_hash(graph):
         return None
     count = expected["endSampleExclusive"] - expected["startSample"]
     observed = (
@@ -91,12 +92,12 @@ def _observed_native_mix(mix, expected, rate):
     channels = mix.get("channels")
     pcm_output = mix.get("output")
     pcm = pcm_output.get("sha256") if isinstance(pcm_output, dict) else None
-    graph = mix.get("graphHash")
+    compiled_graph = mix.get("graphHash")
     if (
         type(channels) is not int
         or channels < 1
         or not _is_digest(pcm)
-        or not _is_digest(graph)
+        or not _is_digest(compiled_graph)
     ):
         return None
     levels = _valid_levels(mix.get("measurement"), ("peakDbfs", "rmsDbfs"))
@@ -104,7 +105,7 @@ def _observed_native_mix(mix, expected, rate):
         return None
     return {
         "channels": channels,
-        "mixGraphHash": graph,
+        "mixGraphHash": compiled_graph,
         "pcmSha256": pcm,
         **levels,
     }
@@ -213,7 +214,7 @@ def summarize_sound_mix(plan, rendered, window):
         "candidateSha256": rendered["output"]["sha256"],
     }
     mix = rendered.get("audioMix") or {}
-    observed = _observed_native_mix(mix, expected, rate)
+    observed = _observed_native_mix(mix, expected, rate, plan["audioGraph"])
     if observed is None:
         return {
             **identity,
