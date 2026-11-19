@@ -1323,6 +1323,13 @@ producer bindings include this composer. No media/model execution or new timing
 owner is introduced. Actual local alignment validation additionally verifies
 cutting consumes the selected facts without another analysis call.
 
+Explicit source-point consumers can select a contiguous CMap `segment_id` through
+the existing raw-to-output mapper. This identifies repeated occurrences without
+changing program offsets or the default mapping. The selected segment owns its
+native source clock; an unknown occurrence stays unresolved. Placed CMaps retain
+their placement/track selectors and reject the contiguous-only selector. This is
+a mapping primitive, not a second timeline or automatic spoken-sound trigger.
+
 Camera movement, face anchoring, sound matching, reference analysis, spoken
 notes/recovery and editor handoff are selected options resolved through existing
 settings scopes and frozen requests. Preferences seed future work and cannot
