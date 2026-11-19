@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from avo.timeline.contracts import content_hash, validate_document
+from avo.timeline.contracts import content_hash, dependency_lock_hash, validate_document
 from avo.timeline.motion_review import MotionReviewService, render_html, render_text
 from avo.timeline.store import atomic_write_json
 from avo.timeline.workspace import ARTIFACTS, TimelineWorkspace
@@ -73,7 +73,10 @@ def cue(identifier="mo04", ticks=12, **fields):
     }
 
 
-@pytest.mark.parametrize("stale", [None, "review", "bmap", "tracks"])
+@pytest.mark.parametrize(
+    "stale",
+    [None, "review", "bmap", "tracks", "watch", "watch-lock", "watch-duplicate"],
+)
 def test_linked_storyboard_uses_only_selected_current_sampled_review(
     workspace, monkeypatch, stale
 ):
@@ -99,9 +102,25 @@ def test_linked_storyboard_uses_only_selected_current_sampled_review(
             {"cueId": "mo05", "observedFrames": [], "frameFindings": []},
         ],
     }
+    dependencies = {"materialization": materialization, "bmap": bmap}
+    lock = dependency_lock_hash(dependencies)
+    watch = {
+        "kind": "watch",
+        "status": "stale" if stale == "watch" else "fail",
+        "candidateHash": candidate_sha,
+        "candidateIdentityHash": candidate_identity,
+        "dependencyHashes": dependencies,
+        "dependencyLockSha256": "f" * 64 if stale == "watch-lock" else lock,
+        "reviewContext": {"craftChecks": report},
+    }
     review = {
-        "candidate": {"sha256": candidate_sha, "identityHash": candidate_identity},
-        "evidence": [{"kind": "watch", "reviewContext": {"craftChecks": report}}],
+        "candidate": {
+            "sha256": candidate_sha,
+            "identityHash": candidate_identity,
+            "dependencies": dependencies,
+        },
+        "dependencyLockSha256": lock,
+        "evidence": [watch, watch] if stale == "watch-duplicate" else [watch],
     }
     path = workspace.review_dir / "motion-proof" / candidate_sha[:12] / "review.json"
     atomic_write_json(path, review)
