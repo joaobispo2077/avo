@@ -32,7 +32,7 @@
     "format": "fcp7-xmeml",
     "xmlVersion": 5,
     "status": "unqualified",
-    "representedFields": ["original-media", "picture-range", "track-order", "audio-channel", "markers"],
+    "representedFields": ["original-media", "picture-range", "track-order", "audio-channel", "markers", "display-origin"],
     "evidenceRequirements": ["target-opened", "relink", "ranges", "lanes", "audio-channels", "markers", "alpha", "framing", "reviewer-response"]
   }
 ]

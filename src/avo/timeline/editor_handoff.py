@@ -16,6 +16,7 @@ from .contracts import (
 )
 from .editor_layout import (
     _loss,
+    exact_display_frame,
     original_occurrences,
     program_picture_format,
     representable_clip_gain,
@@ -194,6 +195,24 @@ def _cue_coverage(snapshots, window, fps):
     return markers, losses
 
 
+def _sequence_origin(snapshot, profile, window, fps):
+    origin = (snapshot.get("layout") or {}).get("displayOrigin")
+    first = window["startFrame"]
+    if origin is None:
+        return first, []
+    if "display-origin" in profile["representedFields"]:
+        observed = exact_display_frame(origin, fps, first)
+        if observed is not None:
+            return observed, []
+    return first, [
+        {
+            "field": "display-origin",
+            "scope": window,
+            "reason": "Original editor display timecode lacks exact target representation",
+        }
+    ]
+
+
 def _bounded_window(request):
     value = request["programRate"]
     fps = Fraction(value["num"], value["den"])
@@ -295,14 +314,7 @@ class EditorHandoffService:
                 "No original-source occurrence is representable in the chosen validation window"
             )
         markers, cue_losses = _cue_coverage(snapshots, window, fps)
-        if (cmap.get("layout") or {}).get("displayOrigin") is not None:
-            losses.append(
-                {
-                    "field": "display-origin",
-                    "scope": window,
-                    "reason": "Original editor display timecode awaits target qualification",
-                }
-            )
+        origin, origin_losses = _sequence_origin(cmap, profile, window, fps)
         validation = request["mode"] == "validation"
         model = {
             "id": "avo-validation-example" if validation else "avo-editor-handoff",
@@ -311,7 +323,7 @@ class EditorHandoffService:
             else "AVO editor handoff",
             "rate": fps,
             "duration": window["endFrameExclusive"] - window["startFrame"],
-            "originFrame": window["startFrame"],
+            "originFrame": origin,
             "pictureFormat": program_picture_format(cmap, files_by_id),
             "sources": files_by_id,
             "tracks": lanes,
@@ -330,7 +342,7 @@ class EditorHandoffService:
             "implementation": IMPLEMENTATION,
             "sources": list(sources.values()),
             "occurrences": evidence,
-            "losses": [*losses, *cue_losses],
+            "losses": [*losses, *origin_losses, *cue_losses],
         }
         return bundle, xml
 

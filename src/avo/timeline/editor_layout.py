@@ -4,10 +4,27 @@ from fractions import Fraction
 
 from .event_clock import sample_rate_boundary
 from .import_layout import seconds
+from .otio_import import _clock_fraction
 
 
 def representable_clip_gain(gain):
     return type(gain) in (int, float) and -60 <= gain <= 12
+
+
+def exact_display_frame(origin, program_rate, window_start):
+    if not isinstance(origin, dict) or set(origin) != {"value", "rate"}:
+        return None
+    try:
+        source_rate = _clock_fraction(origin["rate"], "editor display origin")
+        display = _clock_fraction(origin["value"], "editor display origin")
+    except ValueError:
+        return None
+    if source_rate <= 0:
+        return None
+    frame = display * program_rate / source_rate + window_start
+    if frame.denominator != 1 or not 0 <= frame <= 1_000_000_000:
+        return None
+    return frame.numerator
 
 
 def rational(value):
