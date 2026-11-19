@@ -405,6 +405,19 @@
         "$ref": "#/$defs/intent"
       }
     },
+    "candidateTiming": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["entryId", "status", "issues", "trimRange", "scheduledAudioStartSample", "scheduledAudioEndSample"],
+      "properties": {
+        "entryId": {"$ref": "avo.sfx-catalog.schema.json#/$defs/sha"},
+        "status": {"enum": ["fit", "unresolved"]},
+        "issues": {"$ref": "#/$defs/opportunityRecord/properties/issues"},
+        "trimRange": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/sampleRange"}]},
+        "scheduledAudioStartSample": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/sample"}]},
+        "scheduledAudioEndSample": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/sample"}]}
+      }
+    },
     "opportunityRecord": {
       "type": "object",
       "additionalProperties": false,
@@ -496,6 +509,11 @@
             "type": "string",
             "maxLength": 512
           }
+        },
+        "candidateTiming": {
+          "type": "array",
+          "maxItems": 20,
+          "items": {"$ref": "#/$defs/candidateTiming"}
         },
         "search": {
           "oneOf": [

@@ -15,7 +15,13 @@ from .event_clock import (
 from .motion_authoring import MotionAuthoringService
 from .sound_anchors import qualified_source_anchor, sound_phase, source_anchor_time
 from .sound_choices import _sound_document, freeze_sound_choices
-from .sound_fitting import SCHEMA, SoundPlanningError, _clock, fit_sound_candidate
+from .sound_fitting import (
+    SCHEMA,
+    SoundPlanningError,
+    _clock,
+    audition_timing,
+    fit_sound_candidate,
+)
 from .store import timeline_writer, write_immutable_json
 
 _previous_sound_choices = _sound_choices._previous_sound_choices
@@ -196,6 +202,24 @@ def derive_sound_opportunities(
         raise SoundPlanningError(str(error)) from error
 
 
+def _review_timing(record, entries, clock):
+    timing = []
+    for result in record["search"]["results"]:
+        entry = entries.get(result["entryId"])
+        if entry is None or (entry["entryRevision"], entry["source"]["sha256"]) != (
+            result["entryRevision"],
+            result["sourceSha256"],
+        ):
+            raise SoundPlanningError(
+                "Sound candidate differs from the selected catalogue"
+            )
+        timing.append(audition_timing(record["opportunity"], entry, clock))
+    record["candidateTiming"] = timing
+    if timing and all(candidate["status"] != "fit" for candidate in timing):
+        record["issues"].append("no-returned-candidate-fits-timing")
+    return len(timing)
+
+
 class SoundPlanningService:
     """Explicit proposal writes; construction never scans, renders or approves."""
 
@@ -295,7 +319,8 @@ class SoundPlanningService:
         except ProgramClockError as error:
             raise SoundPlanningError(str(error)) from error
 
-    def _match(self, records, generation, mode, budget, filters):
+    def _match(self, records, catalogue, mode, budget, filters, clock):
+        entries = {entry["entryId"]: entry for entry in catalogue["entries"]}
         used = 0
         for record in records:
             record["search"] = None
@@ -310,10 +335,10 @@ class SoundPlanningService:
                     record["query"],
                     filters=filters,
                     limit=min(20, budget - used),
-                    generation=generation,
+                    generation=catalogue["generationId"],
                     mode=mode,
                 )
-                used += len(record["search"]["results"])
+                used += _review_timing(record, entries, clock)
         return used
 
     def _direction(self, request):
@@ -393,7 +418,8 @@ class SoundPlanningService:
                 "Sound matching requires explicitly selected options"
             )
         fps = self._program_clock(request["clock"])
-        generation = self.catalogue.show()["generationId"]
+        catalogue = self.catalogue.show()
+        generation = catalogue["generationId"]
         if request["expectedGeneration"] != generation:
             raise SoundPlanningError("Sound catalogue generation changed")
         direction_ref, direction = self._direction(request)
@@ -409,10 +435,11 @@ class SoundPlanningService:
         budget = request.get("maxCandidates", 100)
         used = self._match(
             records,
-            generation,
+            catalogue,
             matching["mode"],
             budget,
             request.get("filters", {"rights": ["licensed"]}),
+            request["clock"],
         )
         if (
             self.catalogue.show()["generationId"] != generation

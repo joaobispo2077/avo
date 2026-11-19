@@ -127,6 +127,9 @@ def _schedule(result, entry, trim, clock, program_end_sample):
     duration = sample_rate_boundary(
         trim["endSampleExclusive"], **source_clock
     ) - sample_rate_boundary(trim["startSample"], **source_clock)
+    if duration <= 0:
+        result["issues"] = ["trim-has-no-output-samples"]
+        return
     finish = resolved["scheduledAudioStartSample"] + duration
     if finish > program_end_sample:
         result["issues"] = ["insufficient-program-tail-space"]
@@ -187,6 +190,39 @@ def fit_sound_candidate(
         return result
     except (ValueError, TypeError, KeyError, OverflowError) as error:
         raise SoundPlanningError(str(error)) from error
+
+
+def audition_timing(opportunity, entry, clock):
+    """Test the smallest source range containing the useful sound and reviewed marker."""
+    facts, marker = entry["measurement"], entry["marker"]
+    trim = None
+    if facts is not None and marker is not None:
+        useful = facts["usefulRange"]
+        trim = {
+            "startSample": min(useful["startSample"], marker["sample"]),
+            "endSampleExclusive": max(
+                useful["endSampleExclusive"], marker["sample"] + 1
+            ),
+        }
+    rate = clock["frameRate"]
+    result = fit_sound_candidate(
+        opportunity,
+        entry,
+        trim_range=trim,
+        frame_rate=Fraction(rate["num"], rate["den"]),
+        program_end_frame=clock["programEndFrame"],
+        sample_rate=clock["sampleRate"],
+    )
+    return {
+        "entryId": entry["entryId"],
+        "status": result["status"],
+        "issues": result["issues"],
+        "trimRange": result["trimRange"],
+        "scheduledAudioStartSample": (result["event"] or {}).get(
+            "scheduledAudioStartSample"
+        ),
+        "scheduledAudioEndSample": result["scheduledAudioEndSample"],
+    }
 
 
 __all__ = ["SoundPlanningError", "fit_sound_candidate"]
