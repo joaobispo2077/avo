@@ -151,6 +151,12 @@ def test_silence_and_single_id_revision_report_before_after_without_touching_oth
     assert result["choices"][0]["sourceEntry"] is None
     assert result["changes"][0]["before"]["sourceSha256"] == entry["source"]["sha256"]
     assert result["changes"][0]["after"]["sourceSha256"] is None
+    ranges = result["changes"][0]["listeningRanges"]
+    assert (
+        ranges["before"]["startSample"]
+        == first["choices"][0]["fit"]["event"]["scheduledAudioStartSample"]
+    )
+    assert ranges["after"] is None
     assert first["choices"][0]["mix"]["gainDb"] == -12
 
 
