@@ -81,4 +81,6 @@ See [Provider sound favorites](sfx-provider-favorites.md) for explicit shared di
 
 See [Offline semantic SFX qualification](sfx-semantic-runtime.md) for separately provisioned models and the explicitly selected real-runtime test.
 
+See [Optional face detector runtime](visual-motion-runtime.md) for the pinned Windows CPU environment and explicit model readiness check.
+
 See [Source speech coverage](speech-coverage.md) for bound omission evidence and protection of uncertain speech during retake proposals.

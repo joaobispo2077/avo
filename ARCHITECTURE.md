@@ -1365,6 +1365,14 @@ closure. Ordinary intents do no speech work. Unit, publication, actual encoded
 full/window and separately prepared Portuguese ASR/alignment tests cover these
 boundaries; listening and creator approval remain independent.
 
+The optional face detector uses the existing model-source scope resolver. Its
+explicit preflight seals the pinned local YuNet bytes and checks an isolated CPU
+Python worker. AVO packages the worker code and schemas. A separate hashed wheel
+list describes the qualified environment. Geometry association uses normalized
+boxes and native source ticks in pure code. Ambiguity, missing detections and
+sampling gaps require a new selection. Runtime readiness and observations are
+separate from camera application or proof approval.
+
 Camera movement, face anchoring, sound matching, reference analysis, spoken
 notes/recovery and editor handoff are selected options resolved through existing
 settings scopes and frozen requests. Preferences seed future work and cannot
