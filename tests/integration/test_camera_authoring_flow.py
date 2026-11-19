@@ -28,7 +28,7 @@ from avo.timeline.motion_authoring import MotionAuthoringError, MotionAuthoringS
 from avo.timeline.tracks import TracksService
 
 
-def camera_application(tmp_path):
+def camera_application(tmp_path, *, face_anchor=False):
     workspace, _, _ = approved_workspace(tmp_path)
     bmap = BMapService(workspace).author(
         {"cues": [cue()]}, actor="fixture", reason="Existing text"
@@ -52,6 +52,8 @@ def camera_application(tmp_path):
         sourceId="camera",
         sourceSha256=file_fingerprint(workspace.raw_dir / "raw.bin")["sha256"],
     )
+    if face_anchor:
+        add_prepared_face(workspace, proposal_request, item["cameraRecipe"])
     proposed = service.propose(proposal_request)
     chosen = select(workspace, proposed)
     frozen = proposed["proposal"]["items"][0]
@@ -99,6 +101,74 @@ def camera_application(tmp_path):
         },
     )
     return workspace, service, value, animation, tracks
+
+
+def add_prepared_face(workspace, proposal_request, recipe):
+    from tests.integration.test_face_anchor_flow import selected_face_request
+
+    from avo.timeline.face_analysis import analyze_face
+
+    face_request, observation = selected_face_request(workspace, stream_origin=0)
+    result = analyze_face(workspace, face_request, lambda path, value: observation)
+    proposal_request["selection"] = face_request["selection"]
+    recipe["sourceGeometry"] = {
+        "codedWidth": 1080,
+        "codedHeight": 1920,
+        "rotationDegrees": 90,
+        "sampleAspectRatio": {"num": 1, "den": 1},
+        "baselineCrop": {"x": 0, "y": 0, "width": 1920, "height": 1080},
+    }
+    recipe["faceAnchor"] = {
+        "observationRef": result["observationRef"],
+        "trajectoryHash": result["trajectoryHash"],
+        "transitionFrames": 3,
+    }
+
+
+@pytest.mark.parametrize("stale", [True, False])
+def test_camera_application_and_proof_recheck_selected_face_evidence(
+    tmp_path, declared_camera, stale
+):
+    from avo.timeline.motion_retention import retained_motion_files
+    from avo.timeline.motion_review import MotionReviewService
+    from avo.timeline.proof_plan import ProofPlanCompiler
+
+    workspace, service, value, _, _ = camera_application(tmp_path, face_anchor=True)
+    basis = heads(workspace)
+    component = value["authoring"]["animation"]["components"][1]
+    binding = component["extensions"]["editingCraft"]["faceAnchor"]
+    path = workspace.raw_dir / binding["observationRef"]["locator"]
+    if stale:
+        path.write_bytes(path.read_bytes() + b"\n")
+        with pytest.raises(MotionAuthoringError, match="observation bytes changed"):
+            service.apply(value)
+        assert heads(workspace) == basis
+        return
+    result = service.apply(value)
+    assert result["status"] == "committed"
+    snapshot = MotionReviewService(workspace).project()
+    for key in ("items", "storyboardCards"):
+        row = next(item for item in snapshot[key] if item["itemId"] == "mo04")
+        assert (
+            row["camera"]["during"]["faceAnchor"]["status"]
+            == "fallback-review-required"
+        )
+    assert path in retained_motion_files(workspace)
+    plan = {
+        "videoGraph": {
+            "operations": [
+                {
+                    "kind": "camera-transform",
+                    "operationId": "face-camera",
+                    "parameters": {"faceAnchor": binding},
+                }
+            ]
+        }
+    }
+    compiler = ProofPlanCompiler(workspace)
+    assert compiler._face_preflight(plan) == []
+    path.write_bytes(path.read_bytes() + b"\n")
+    assert compiler._face_preflight(plan)[0]["code"] == "PROOF_FACE_EVIDENCE_INVALID"
 
 
 @pytest.mark.parametrize("entrypoint", ["service", "native", "mcp"])
