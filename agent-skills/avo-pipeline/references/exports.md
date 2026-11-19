@@ -1,5 +1,15 @@
 # /avo.exports reference
 
+## Step/state mapping
+
+**Durable state:** The immutable handoff, inspection, proposal and qualification records in the canonical timeline directory.
+
+**Approval or input gate:** Confirm the selected target, range and returned evidence. Require the exact qualified review for production export.
+
+**Stop when:** The selected operation is verified, evidence is stale or unsupported, or target review needs a creator decision.
+
+**Valid next commands:** /avo.watch, /avo.trim, /avo.motion or /avo.sound.
+
 Resolve the provider, video and current timeline before preparing an optional
 editor handoff. Use the exact selected editor profile. Ask for the intended
 range and target only when existing project context leaves them unclear.

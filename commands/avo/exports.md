@@ -2,6 +2,8 @@
 
 **Timeline integration:** Admin
 
+## Workflow guidance
+
 **Workflow steps:** Select a target and range → Prepare an editor handoff → Inspect returned XML → Review proposed changes
 **Step state source:** The immutable editor handoff, inspection and comparison references under the canonical timeline directory
 **Stopping conditions:** Unqualified production target, stale or unsupported evidence, unresolved changes requiring review, or completion of the selected operation
