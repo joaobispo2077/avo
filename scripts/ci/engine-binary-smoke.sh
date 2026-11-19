@@ -129,6 +129,7 @@ if [[ -f "$ROOT/schemas/avo.preparation.schema.json" ]]; then
   "$LAUNCHER" preparation --help >/dev/null
   "$LAUNCHER" preparation coverage --help >/dev/null
   "$LAUNCHER" preparation recover --help >/dev/null
+  "$LAUNCHER" preparation recover-decide --help >/dev/null
 fi
 
 echo "smoke: native OTIO reader, public staging, plugin isolation and licenses"
@@ -239,6 +240,34 @@ error = json.loads(Path(sys.argv[1]).read_text(encoding='utf-8'))
 assert error['status'] == 'invalid-input', error
 assert not (Path(sys.argv[2]).parent / 'edit').exists()
 print('preparation frozen module/schema/read-only guards ok')
+PY
+  PREPARATION_CHOICE="$UNPACK/preparation-choice-request.json"
+  "$PYTHON" - "$PREPARATION_CHOICE" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+Path(sys.argv[1]).write_text(json.dumps({
+    'contractVersion': '1.0.0', 'operation': 'recover-decide',
+    'operationId': 'package-choice', 'actor': 'smoke', 'reason': 'defer missing evidence',
+    'requestRef': {'locator': 'documents/speech-recovery-request/absent.json', 'sha256': '0' * 64},
+    'intervalIndex': 0, 'resultRef': None, 'choice': 'defer',
+    'expectedLedgerHash': '0' * 64, 'expectedDecisionRefs': [],
+}), encoding='utf-8')
+PY
+  if AVO_ROOT= "$LAUNCHER" preparation recover-decide --project "$BRIEF_PROJECT" --request "$PREPARATION_CHOICE" --json >"$UNPACK/preparation-choice-unexpected.json" 2>"$PREPARATION_ERROR"; then
+    echo "error: preparation choice accepted missing source evidence" >&2
+    exit 1
+  fi
+  "$PYTHON" - "$PREPARATION_ERROR" "$BRIEF_PROJECT" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+error = json.loads(Path(sys.argv[1]).read_text(encoding='utf-8'))
+assert error['status'] == 'invalid-input', error
+assert not (Path(sys.argv[2]).parent / 'edit').exists()
+print('preparation choice frozen module/schema/no-model guards ok')
 PY
 fi
 
