@@ -387,12 +387,18 @@ def test_editor_review_tool_gate_seals_exact_requests(tmp_path: Path) -> None:
         "status",
         "inspect-feedback",
         "propose-feedback",
+        "qualify-target",
     }
     assert not by_operation["status"].spec.destructive
     target = tmp_path / "request.json"
     target.write_bytes(b'{"operation":"propose-feedback"}')
     arguments = {"project": str(tmp_path / "avo.project.json"), "request": str(target)}
-    for operation in ("prepare", "inspect-feedback", "propose-feedback"):
+    for operation in (
+        "prepare",
+        "inspect-feedback",
+        "propose-feedback",
+        "qualify-target",
+    ):
         definition = by_operation[operation]
         assert definition.spec.destructive
         qualified = _decision_gate_args(definition, arguments)

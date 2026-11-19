@@ -227,6 +227,47 @@ def test_returned_edit_stays_a_review_proposal_and_preserves_original_bytes(
     assert MotionReviewService(ws).project()["basisHeads"] == request["expectedBasis"]
     assert file_fingerprint(source) == original
 
+    profile = result["profile"]
+    qualification_request = {
+        "profileId": profile["id"],
+        "inspectionRef": inspection["inspectionRef"],
+        "evidence": {
+            "contractVersion": "1.0.0",
+            **{
+                key: profile[key]
+                for key in ("application", "applicationVersion", "os", "osVersion")
+            },
+            "initialXmlSha256": result["xmlRef"]["sha256"],
+            "returnedXmlSha256": returned_sha,
+            "checks": [],
+            "maxCutDriftFrames": None,
+            "reviewerDecision": "needs-work",
+            "reviewer": "fixture operator",
+        },
+    }
+    qualification = run("qualify-target", qualification_request)
+    assert qualification["status"] == "unqualified"
+    assert "Target review needs verified target-opened" in qualification["blockers"]
+    assert "The fixture or return lacks sequence markers" in qualification["blockers"]
+    bad_target = {**qualification_request["evidence"], "osVersion": "different version"}
+    blocked_qualification = run(
+        "qualify-target",
+        {**qualification_request, "evidence": bad_target},
+        expected_code=2,
+    )
+    assert (
+        "different target version or operating system"
+        in blocked_qualification["message"]
+    )
+    with pytest.raises(ValueError, match="unqualified"):
+        build_editor_handoff(ws).prepare(
+            {
+                **request,
+                "mode": "production",
+                "qualificationRef": qualification["qualificationRef"],
+            }
+        )
+
     returned.write_bytes(b"<?xml version='1.0'?><unrecognized-editor-format/>")
     rejected = run(
         "inspect-feedback",
@@ -265,6 +306,7 @@ def test_returned_edit_stays_a_review_proposal_and_preserves_original_bytes(
         review["proposalRef"],
         rejected["inspectionRef"],
         rejected["returnedXmlRef"],
+        qualification["qualificationRef"],
     )
     assert all(kept[ws.raw_dir / ref["locator"]] == ref["sha256"] for ref in expected)
     assert orphan not in kept
