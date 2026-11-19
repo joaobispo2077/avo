@@ -33,9 +33,10 @@ absolute JSON request path for each operation that writes review evidence. The
   XML path and SHA-256. It retains the exact returned bytes, checks referenced
   originals within the declared roots, and records unfamiliar XML elements.
   Missing and changed originals stay visible in the report.
-  A finite positive full-clip Audio Levels value is available in decibels
-  for review. The returned file retains gain automation, disabled effects, and
-  partial-clip settings for manual review. [Apple's XMEML audio level reference](https://developer.apple.com/library/archive/documentation/AppleApplications/Reference/FinalCutPro_XML/Topics/Topics.html)
+  A finite positive Audio Levels value that covers the entire source range
+  of a clip occurrence is available in decibels for review. The returned file
+  retains gain automation, disabled effects, and partial-clip settings for
+  manual review. [Apple's XMEML audio level reference](https://developer.apple.com/library/archive/documentation/AppleApplications/Reference/FinalCutPro_XML/Topics/Topics.html)
 - `timeline-export propose-feedback` takes the inspection reference and current
   timeline heads. It compares the original export, the current AVO edit and the
   returned file. Independent changes become review proposals. Divergent changes
@@ -62,5 +63,10 @@ cutting needs its normal cut approval before downstream finishing uses it.
 A synthetic 36-frame example opened in Resolve Studio 21.0.0.47 on Windows 11
 25H2 with one picture lane and two audio lanes linked to the original file.
 Resolve returned both audio lanes with the same source track index and omitted
-the test timeline marker. Audio routing, marker transfer, alpha, and camera
-finishing need further validation before production qualification.
+the test timeline marker.
+
+On that version, both audio lanes returned the selected constant levels of
+1.0 and 0.5 in separate runs. The corresponding 48 kHz renders measured
+6.00 dB lower peak audio on both channels for the half-level fixture.
+Audio routing, marker transfer, alpha, and camera finishing still need
+validation before production qualification.
