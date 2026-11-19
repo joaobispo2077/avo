@@ -3,7 +3,11 @@
 import pytest
 
 from avo.model_sources import PreflightError, preflight, resolve_job
-from avo.reference_analysis import associate_selected_face
+from avo.reference_analysis import (
+    associate_selected_face,
+    freeze_face_observation,
+    freeze_face_trajectory,
+)
 
 
 def sample(tick, *boxes):
@@ -221,3 +225,56 @@ def test_face_observation_rejects_inconsistent_observed_scope(field, message):
         observations["proxySha256"] = "c" * 64
     with pytest.raises(ValueError, match=message):
         freeze_face_observation(request, observations)
+
+
+def test_face_trajectory_smooths_center_jitter_without_crossing_a_loss():
+    request, observed = observation_inputs()
+    request["sourceRange"]["endTicks"] = 27361
+    request["proxy"]["sourceTicks"] = [24000, 24480, 24960, 25440, 25920, 26400]
+    observed["detections"] = [
+        [{"box": [x, 48, 40, 50], "score": 0.95}] for x in (32, 38, 33)
+    ] + [[], [{"box": [35, 48, 40, 50], "score": 0.95}], []]
+    observation = freeze_face_observation(request, observed)
+
+    trajectory = freeze_face_trajectory(observation)
+
+    assert trajectory == freeze_face_trajectory(observation)
+    assert trajectory["observationHash"] == observation["analysisHash"]
+    assert trajectory["streamOriginTicks"] is None
+    assert trajectory["smoothing"] == "median-three-v1"
+    assert [point["sourceTick"] for point in trajectory["points"]] == [
+        24000,
+        24480,
+        24960,
+    ]
+    assert [point["center"]["x"] for point in trajectory["points"]] == pytest.approx(
+        [52 / 320, 53 / 320, 53 / 320]
+    )
+    assert (
+        trajectory["points"][1]["box"]
+        == observation["samples"][1]["detections"][0]["box"]
+    )
+    assert trajectory["uncertainIntervals"] == [
+        {"startTicks": 24961, "endTicks": 25440, "reason": "unobserved"},
+        {"startTicks": 25440, "endTicks": 25920, "reason": "lost"},
+        {"startTicks": 25920, "endTicks": 27361, "reason": "reseed-required"},
+    ]
+
+
+def test_face_trajectory_exposes_preseed_and_unmeasured_tail():
+    request, observed = observation_inputs()
+    request["seed"]["sourceTick"] = 24960
+    observed["detections"][1] = observed["detections"][0]
+    result = freeze_face_trajectory(freeze_face_observation(request, observed))
+    assert result["uncertainIntervals"] == [
+        {"startTicks": 24000, "endTicks": 24960, "reason": "unselected"},
+        {"startTicks": 24961, "endTicks": 25920, "reason": "unobserved"},
+    ]
+
+
+def test_face_trajectory_rejects_mutated_observation():
+    request, observed = observation_inputs()
+    observation = freeze_face_observation(request, observed)
+    observation["samples"][0]["detections"][0]["box"][0] = 0.2
+    with pytest.raises(ValueError, match="observation identity changed"):
+        freeze_face_trajectory(observation)

@@ -93,6 +93,110 @@ def test_prepared_proxy_cannot_use_unverified_bytes(tmp_path, provisioned):
         )
 
 
+def test_actual_face_measurements_drive_encoded_window_and_hold_after_loss(
+    tmp_path, provisioned
+):
+    import numpy as np
+    from tests.integration.test_camera_proof_runtime import operation, pixels, render
+
+    from avo.adapters.understand.visual_motion import observe_selected_face
+    from avo.reference_analysis import freeze_face_trajectory
+    from avo.timeline.camera import evaluate_camera, reframe_face_camera
+    from avo.timeline.contracts import content_hash
+
+    resolved, image = provisioned
+    size = 160
+    with Image.open(image) as original:
+        face = original.convert("RGB").resize((size, size)).tobytes("raw", "BGR")
+    source = tmp_path / "presenter.mkv"
+    subprocess.run(
+        [
+            "ffmpeg",
+            "-v",
+            "error",
+            "-f",
+            "rawvideo",
+            "-pixel_format",
+            "bgr24",
+            "-video_size",
+            f"{size}x{size}",
+            "-framerate",
+            "25",
+            "-i",
+            "pipe:0",
+            "-vf",
+            "setsar=1",
+            "-c:v",
+            "ffv1",
+            "-pix_fmt",
+            "gbrp16le",
+            str(source),
+        ],
+        input=face * 18 + bytes([96, 50, 100]) * size * size * 6,
+        check=True,
+        timeout=25,
+    )
+    original = source.read_bytes()
+    selected = operation(source, size=(size, size))
+    parameters = selected["parameters"]
+    observation = observe_selected_face(
+        resolved,
+        source,
+        {
+            "sourceId": parameters["sourceId"],
+            "sourceSha256": parameters["sourceSha256"],
+            "sourceRange": {
+                "startTicks": 0,
+                "endTicks": 960,
+                "timebase": {"num": 1, "den": 1000},
+            },
+            "streamIndex": 0,
+            "sampleEvery": 2,
+            "seed": {"sourceTick": 0, "detectionIndex": 0},
+            "minimumOverlap": 0.3,
+            "maximumGapTicks": 80,
+        },
+    )
+    assert observation["coverage"] == {"observedFrames": 12, "selectedFrames": 9}
+    assert observation["association"][9]["status"] == "lost"
+    trajectory = freeze_face_trajectory(observation)
+    frame_range, geometry = parameters["originalFrameRange"], parameters["geometry"]
+    behavior = reframe_face_camera(
+        parameters["behavior"],
+        frame_range=frame_range,
+        geometry=geometry,
+        points=trajectory["points"],
+        source_ticks=range(0, 960, 40),
+        transition_frames=4,
+        fallback="hold",
+    )
+    parameters["behavior"] = behavior
+    parameters["pathHash"] = content_hash({"behavior": behavior, "geometry": geometry})
+
+    def crop(frame):
+        return evaluate_camera(
+            behavior, frame=frame, frame_range=frame_range, geometry=geometry
+        )["crop"]
+
+    assert crop(16) == crop(23)
+    full = render(source, tmp_path / "full.mkv", selected, width=size, height=size)
+    window = render(
+        source,
+        tmp_path / "window.mkv",
+        selected,
+        first=15,
+        last=20,
+        width=size,
+        height=size,
+    )
+    comparison = pixels(source, size, size)
+    np.testing.assert_array_equal(full[0], comparison[0])
+    assert not np.array_equal(full[16], comparison[16])
+    assert np.all(full[23] > 0)
+    np.testing.assert_array_equal(window, full[15:20])
+    assert source.read_bytes() == original
+
+
 @pytest.mark.skipif(not shutil.which("ffmpeg"), reason="FFmpeg required for decode")
 @pytest.mark.parametrize("offset_seconds", [0, 5])
 def test_original_source_decoder_keeps_native_frames_and_range(
@@ -149,6 +253,7 @@ def test_original_source_decoder_keeps_native_frames_and_range(
         sample_every=2,
     )
     proxy = measured["proxy"]
+    assert measured["streamOriginTicks"] == offset
     assert proxy["sourceTicks"] == [offset + 40, offset + 120]
     assert measured["geometry"]["width"] == width
     assert hashlib.sha256(source.read_bytes()).hexdigest() == source_hash
@@ -163,13 +268,15 @@ def test_original_source_decoder_keeps_native_frames_and_range(
     assert [len(rows) for rows in detections["detections"]] == [1, 0]
 
 
-def selected_face_request(workspace):
+def selected_face_request(workspace, *, stream_origin=None):
     from tests.test_visual_motion_analysis import observation_inputs
 
     from avo.editing_craft import resolve_editing_craft_selection
     from avo.timeline.motion_review import MotionReviewService
 
     fixture, detection = observation_inputs()
+    if stream_origin is not None:
+        fixture["streamOriginTicks"] = stream_origin
     cmap = workspace.store("cmap").load()["revisions"][-1]["snapshot"]
     raw = cmap["sources"][0]
     fixture["source"] = {
@@ -218,7 +325,33 @@ def test_selected_analysis_publishes_observation_without_applying_camera(tmp_pat
     evidence = json.loads(output.read_bytes())
     assert evidence["observation"] == observed
     assert evidence["request"] == request
+    trajectory = evidence["trajectory"]
+    assert result["trajectoryHash"] == trajectory["trajectoryHash"]
+    assert result["uncertainIntervals"] == trajectory["uncertainIntervals"]
+    assert trajectory["uncertainIntervals"][-1]["reason"] == "lost"
     assert {path: path.read_bytes() for path in before} == before
+
+
+def test_frozen_face_reader_requires_exact_saved_bytes(tmp_path):
+    from tests.test_timeline_bmap_service import approved_workspace
+
+    from avo.timeline.face_analysis import analyze_face, read_face_anchor
+
+    workspace, _, _ = approved_workspace(tmp_path)
+    request, observed = selected_face_request(workspace, stream_origin=23040)
+    result = analyze_face(workspace, request, lambda path, value: observed)
+    binding = {
+        "observationRef": result["observationRef"],
+        "trajectoryHash": result["trajectoryHash"],
+        "transitionFrames": 4,
+    }
+    trajectory, stream_index = read_face_anchor(workspace, binding)
+    assert trajectory["streamOriginTicks"] == 23040
+    assert stream_index == request["streamIndex"]
+    path = workspace.raw_dir / result["observationRef"]["locator"]
+    path.write_bytes(path.read_bytes() + b"\n")
+    with pytest.raises(ValueError, match="observation bytes changed"):
+        read_face_anchor(workspace, binding)
 
 
 def test_face_analysis_fails_before_capture_when_current_source_differs(tmp_path):
