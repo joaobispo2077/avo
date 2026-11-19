@@ -298,6 +298,9 @@ class CuttingService:
                 root / "adapters/media/timeline_render.py",
                 root / "transcribe.py",
                 directory / "preparation.py",
+                directory / "preparation_recovery.py",
+                directory / "preparation_choices.py",
+                directory / "preparation_selected.py",
                 root.parent.parent / "schemas/avo.cutting.schema.json",
                 root.parent.parent / "schemas/avo.preparation.schema.json",
             ]
@@ -314,12 +317,39 @@ class CuttingService:
                 "analysis": self.analysis_port.dependency_bindings()
                 if hasattr(self.analysis_port, "dependency_bindings")
                 else None,
+                "preparation": self._preparation_identity(),
             },
         }
 
     def _bind(self, **references):
         if self.workspace.pipeline_run_path.exists():
             self.run_store.bind_cutting_context(references)
+
+    def _preparation_identity(self):
+        snapshot = self.store._snapshot()
+        roles = ("preparationRequests", "preparationResults", "preparationDecisions")
+        references = {role: snapshot.get(role, []) for role in roles}
+        return content_hash(references) if any(references.values()) else None
+
+    def _prepared_source(self, source, source_range, routing, sync_ref):
+        if not self.store.ledger.path.exists() or not routing:
+            return None
+        from .preparation_recovery import PreparationService
+
+        result = PreparationService(
+            self.workspace, recovery_port=self.analysis_port
+        ).source_evidence(
+            source, source_range=source_range, routing=routing, sync_ref=sync_ref
+        )
+        return result if result["status"] != "absent" else None
+
+    @staticmethod
+    def _preparation_context(analysis, prepared):
+        if prepared is not None:
+            analysis["preparationEvidence"] = {
+                key: value for key, value in prepared.items() if key != "analysis"
+            }
+        return analysis
 
     def _analysis(self, source, segment, sync_ref):
         source_ref = {
@@ -328,14 +358,23 @@ class CuttingService:
         }
         source_range = segment_range(segment)
         routing = source.get("streamMetadata", {}).get("audioSelection")
+        prepared = self._prepared_source(source, source_range, routing, sync_ref)
+        if prepared is not None and prepared["analysis"] is not None:
+            return prepared["analysis"]
         if self.analysis_port is None or not routing:
-            return {
-                "sourceRef": source_ref,
-                "status": "blocked",
-                "uncertainty": ["routed analysis unavailable"],
-                "coverage": {"observed": False},
-                "pauseCandidates": [],
-            }
+            return self._preparation_context(
+                {
+                    "sourceRef": source_ref,
+                    "routing": deepcopy(routing),
+                    "syncRef": deepcopy(sync_ref),
+                    "preprocessing": {"sourceRange": deepcopy(source_range)},
+                    "status": "blocked",
+                    "uncertainty": ["routed analysis unavailable"],
+                    "coverage": {"observed": False},
+                    "pauseCandidates": [],
+                },
+                prepared,
+            )
         result = self.analysis_port.analyze(
             Path(source["locator"]),
             selection=routing,
@@ -356,7 +395,9 @@ class CuttingService:
             raise CuttingServiceError(
                 "analysis selection or source-clock coverage differs"
             )
-        return self._contextual_analysis(source, result, sync_ref)
+        return self._preparation_context(
+            self._contextual_analysis(source, result, sync_ref), prepared
+        )
 
     def _contextual_analysis(self, source, analysis, sync_ref):
         if self.context_port is None:
@@ -493,10 +534,15 @@ class CuttingService:
 
     @staticmethod
     def _speech_protections(analyses):
+        from .preparation_selected import selected_evidence_protections
+
         return tuple(
             protection
             for analysis in analyses.values()
-            for protection in coverage_protections(analysis["speechCoverage"])
+            for protection in (
+                *coverage_protections(analysis["speechCoverage"]),
+                *selected_evidence_protections(analysis),
+            )
         )
 
     def _analyze_units(self, snapshot, scope, sync_ref, request):

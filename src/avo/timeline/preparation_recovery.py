@@ -128,6 +128,13 @@ class PreparationService:
 
         return decide_recovery(self, request)
 
+    def source_evidence(self, source, *, source_range, routing, sync_ref):
+        from .preparation_selected import selected_source_evidence
+
+        return selected_source_evidence(
+            self, source, source_range=source_range, routing=routing, sync_ref=sync_ref
+        )
+
     def __init__(self, workspace, *, recovery_port=None):
         self.workspace = workspace
         self.recovery_port = recovery_port
