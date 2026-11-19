@@ -38,11 +38,23 @@
         "committedHeads": {"type": "object", "additionalProperties": {"$ref": "https://avo.local/avo.motion-proposal.schema.json#/$defs/headRef"}, "propertyNames": {"enum": ["bmap", "tracks"]}},
         "choices": {"$ref": "#/$defs/frozenChoices"},
         "productionScope": {"$ref": "#/$defs/productionScopePlan"},
-        "changes": {"type": "array", "maxItems": 500, "items": {"type": "object", "maxProperties": 8}},
+        "changes": {"type": "array", "maxItems": 500, "items": {"type": "object", "maxProperties": 8, "properties": {
+          "listeningRanges": {"type": "object", "additionalProperties": false, "required": ["before", "after"], "properties": {
+            "before": {"$ref": "#/$defs/listeningRange"}, "after": {"$ref": "#/$defs/listeningRange"}
+          }}
+        }}},
         "sourceRefs": {"type": "object", "maxProperties": 500, "additionalProperties": {"$ref": "#/$defs/compileSource"}},
         "advisories": {"type": "array", "maxItems": 1000, "items": {"type": "object", "maxProperties": 8}},
         "previousReceiptRef": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/selectedTrack/properties/applicationRef"}]},
         "lastError": {"type": ["string", "null"], "maxLength": 2048}
+      }
+    },
+    "listeningRange": {
+      "type": ["object", "null"], "additionalProperties": false, "required": ["sampleRate", "startSample", "endSampleExclusive"],
+      "properties": {
+        "sampleRate": {"$ref": "#/$defs/candidateFit/properties/clock/properties/sampleRate"},
+        "startSample": {"$ref": "#/$defs/sample"},
+        "endSampleExclusive": {"$ref": "#/$defs/sample"}
       }
     },
     "scopeFrame": {

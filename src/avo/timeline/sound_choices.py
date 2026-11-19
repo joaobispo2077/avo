@@ -203,6 +203,29 @@ def _sound_choice_summary(choice):
     }
 
 
+def _listening_range(choice):
+    if choice is None or choice["fit"]["status"] != "fit":
+        return None
+    fit = choice["fit"]
+    return {
+        "sampleRate": fit["clock"]["sampleRate"],
+        "startSample": fit["event"]["scheduledAudioStartSample"],
+        "endSampleExclusive": fit["scheduledAudioEndSample"],
+    }
+
+
+def _sound_change(before, after):
+    return {
+        "eventId": after["eventId"],
+        "before": _sound_choice_summary(before),
+        "after": _sound_choice_summary(after),
+        "listeningRanges": {
+            "before": _listening_range(before),
+            "after": _listening_range(after),
+        },
+    }
+
+
 def _previous_sound_choices(previous):
     previous = _sound_document(previous, "frozenChoices")
     for choice in previous:
@@ -257,14 +280,7 @@ def freeze_sound_choices(
         _check_sound_roles(prepared, context_map)
         return {
             "choices": prepared,
-            "changes": [
-                {
-                    "eventId": c["eventId"],
-                    "before": _sound_choice_summary(before.get(c["eventId"])),
-                    "after": _sound_choice_summary(c),
-                }
-                for c in prepared
-            ],
+            "changes": [_sound_change(before.get(c["eventId"]), c) for c in prepared],
             "advisories": _sound_choice_advisories(prepared),
             "reviewObligations": [
                 "current-source-and-catalogue",
