@@ -155,6 +155,61 @@ def test_sound_cue_needs_listening_even_at_sampled_frames(tmp_path):
     assert row["listening"] == "required"
 
 
+def test_overlapping_edit_layers_keep_distinct_checks_and_observations(tmp_path):
+    workspace, identity, record, coverage = _fixture(tmp_path)
+    cues = workspace.store.return_value.revision.return_value["snapshot"]["cues"]
+    lifecycle = cues[0]["animation"]["lifecycle"]
+    lifecycle.update(payoff="Reveal the title", exit="Clear before the next scene")
+    cues.extend(
+        [
+            {
+                "cueId": "caption",
+                "kind": "caption",
+                "intent": "Keep the spoken comparison legible",
+                "targetLayerId": "captions",
+                "start": _stamp(24),
+                "end": _stamp(31),
+            },
+            {
+                "cueId": "title-sound",
+                "kind": "sfx",
+                "intent": "Accent the title without masking dialogue",
+                "targetLayerId": "sfx",
+                "start": _stamp(24),
+                "end": _stamp(31),
+            },
+        ]
+    )
+    findings = [
+        _finding("alpha-border", "visual-quality", 20, 24, [20]),
+        _finding("caption-clipped", "caption", 29, 31, [30]),
+        _finding("timing-needs-playback", "continuity", 23, 25, [24]),
+    ]
+    report = candidate_craft_report(workspace, identity, record, coverage, findings)
+    title, caption, sound = report["cues"]
+    assert title["lifecycle"]["payoff"] == lifecycle["payoff"]
+    assert title["lifecycle"]["exit"] == lifecycle["exit"]
+    assert "handoffs" in title["playbackChecks"]
+    assert "alpha-compositing" in title["frameChecks"]
+    assert [row["findingId"] for row in title["frameFindings"]] == [
+        "alpha-border",
+        "timing-needs-playback",
+    ]
+    assert "glyphs-grouping-alignment" in caption["frameChecks"]
+    assert "source-caption-safe-regions" in caption["frameChecks"]
+    assert "reading-time" in caption["playbackChecks"]
+    assert caption["observedFrames"] == [24, 30]
+    assert [row["findingId"] for row in caption["frameFindings"]] == [
+        "caption-clipped",
+        "timing-needs-playback",
+    ]
+    assert sound["observedFrames"] == sound["frameFindings"] == []
+    assert all(
+        row["continuousPlayback"] == row["listening"] == "required"
+        for row in report["cues"]
+    )
+
+
 @pytest.mark.parametrize("clock_matches", [True, False])
 def test_assembly_observations_require_the_render_clock(tmp_path, clock_matches):
     workspace, identity, proof, coverage = _fixture(tmp_path)

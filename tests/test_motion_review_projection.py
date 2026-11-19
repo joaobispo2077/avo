@@ -144,7 +144,8 @@ def test_linked_storyboard_uses_only_selected_current_sampled_review(
         ] = [23]
         atomic_write_json(path, review)
 
-    plan = MotionReviewService(workspace).project()
+    service = MotionReviewService(workspace)
+    plan = service.project()
     if stale:
         assert "encodedReview" not in plan
         return
@@ -164,6 +165,15 @@ def test_linked_storyboard_uses_only_selected_current_sampled_review(
         assert "layout-issue" in displayed
         assert "14, 17" in displayed
         assert "listen before accepting" in displayed
+    before = workspace.active_dependency_snapshot()
+    original_review = path.read_bytes()
+    candidate_reference = deepcopy(reference)
+    published = service.publish(plan)
+    assert published["freshness"] == "current"
+    assert workspace.active_dependency_snapshot() == before
+    assert path.read_bytes() == original_review
+    assert reference == candidate_reference
+    assert service.project()["encodedReview"] == plan["encodedReview"]
 
 
 def test_empty_projection_is_read_only_with_explicit_absence(workspace, monkeypatch):
