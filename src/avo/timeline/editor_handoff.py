@@ -18,6 +18,7 @@ from .editor_layout import (
     _loss,
     original_occurrences,
     program_picture_format,
+    representable_clip_gain,
     selected_placements,
 )
 from .import_layout import seconds
@@ -29,6 +30,7 @@ from .store import timeline_writer, write_immutable_json
 SCHEMA = "avo.editor-handoff.schema.json#/$defs/"
 IMPLEMENTATION = "fcp7-xmeml-source-v1"
 OCCURRENCE_LIMIT = 10_000
+RESOLVE_LEVEL_VALIDATION = "davinci-resolve-21-0-0-47-windows-11-25h2"
 
 
 def target_profiles():
@@ -109,7 +111,18 @@ def _rounded_audio_frames(clips):
     )
 
 
-def _assembly(rows, sources, measured, fps, window):
+def _audio_level(row, include_clip_levels):
+    gain = row.get("gainDb")
+    if (
+        include_clip_levels
+        and row["mediaKind"] == "audio"
+        and representable_clip_gain(gain)
+    ):
+        return {"gainDb": gain}
+    return {}
+
+
+def _assembly(rows, sources, measured, fps, window, *, include_clip_levels):
     files_by_id, lanes, evidence, losses = {}, {}, [], []
     for row in rows:
         try:
@@ -124,6 +137,7 @@ def _assembly(rows, sources, measured, fps, window):
             losses.append(_loss(row, fps, str(error)))
             continue
         files_by_id[file_id] = source
+        level = _audio_level(row, include_clip_levels)
         for output, clip, proof in clips:
             if len(evidence) >= OCCURRENCE_LIMIT:
                 raise ValueError("Editor handoff exceeds its occurrence budget")
@@ -131,13 +145,14 @@ def _assembly(rows, sources, measured, fps, window):
             lane = lanes.setdefault(
                 key, {"kind": row["kind"], "outputChannel": output, "clips": []}
             )
-            lane["clips"].append(clip)
+            lane["clips"].append({**clip, **level})
             evidence.append(proof)
         losses.extend(
             _loss(
                 row, fps, "This treatment needs target representation evidence", field
             )
             for field in row["effects"]
+            if field not in level
         )
         if _rounded_audio_frames(clips):
             losses.append(
@@ -266,7 +281,13 @@ class EditorHandoffService:
                 workspace, cmap, rows, roots, self.inventory
             )
             files_by_id, lanes, evidence, losses = _assembly(
-                rows, sources, measured, fps, window
+                rows,
+                sources,
+                measured,
+                fps,
+                window,
+                include_clip_levels=(request["mode"], profile["id"])
+                == ("validation", RESOLVE_LEVEL_VALIDATION),
             )
         if not evidence:
             raise ValueError(

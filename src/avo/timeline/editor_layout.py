@@ -6,6 +6,10 @@ from .event_clock import sample_rate_boundary
 from .import_layout import seconds
 
 
+def representable_clip_gain(gain):
+    return type(gain) in (int, float) and -60 <= gain <= 12
+
+
 def rational(value):
     return {"num": value.numerator, "den": value.denominator}
 
@@ -64,6 +68,7 @@ def _placed(snapshot):
             "enabled": row["enabled"] and lane["enabled"],
             "muted": row.get("muted", False) or lane["muted"],
             "routing": row["routing"],
+            "gainDb": row.get("gainDb"),
             "effects": [
                 key
                 for key in (

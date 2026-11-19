@@ -10,6 +10,8 @@ from urllib.parse import unquote, urlsplit
 from xml.etree.ElementTree import Element, SubElement, TreeBuilder, tostring
 from xml.parsers import expat
 
+from avo.timeline.editor_layout import representable_clip_gain
+
 MAX_BYTES = 16 * 1024 * 1024
 MAX_DEPTH = 64
 MAX_ELEMENTS = 250_000
@@ -498,6 +500,30 @@ def _write_file(node, identity, sources, emitted):
     emitted.add(identity)
 
 
+def _write_audio_levels(node, gain):
+    if not representable_clip_gain(gain):
+        raise Fcp7Error("Clip Audio Levels gain must be between -60 and 12 dB")
+    filter_node = SubElement(node, "filter")
+    _scalar(filter_node, "enabled", "TRUE")
+    _frame_text(filter_node, "start", -1)
+    _frame_text(filter_node, "end", -1)
+    effect = SubElement(filter_node, "effect")
+    for key, value in {
+        "name": "Audio Levels",
+        "effectid": "audiolevels",
+        "effectcategory": "audio",
+        "effecttype": "filter",
+        "mediatype": "audio",
+    }.items():
+        _scalar(effect, key, value)
+    parameter = SubElement(effect, "parameter")
+    _scalar(parameter, "parameterid", "level")
+    _scalar(parameter, "name", "Level")
+    _scalar(parameter, "valuemin", 0)
+    _scalar(parameter, "valuemax", 10 ** (12 / 20))
+    _scalar(parameter, "value", 10 ** (gain / 20))
+
+
 def _write_clip(parent, lane, clip, sources, emitted):
     if (
         clip.get("rangeStatus", "observed") != "observed"
@@ -520,6 +546,8 @@ def _write_clip(parent, lane, clip, sources, emitted):
         _scalar(port, "mediatype", lane["kind"])
         _frame_text(port, "trackindex", clip["sourceTrack"])
     _write_markers(node, clip.get("markers", []))
+    if lane["kind"] == "audio" and "gainDb" in clip:
+        _write_audio_levels(node, clip["gainDb"])
 
 
 def _write_picture_format(video, description, rate):
