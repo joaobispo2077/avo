@@ -385,6 +385,27 @@ class ProofPlanCompiler:
                 )
         return operations
 
+    def _face_preflight(self, plan):
+        from .face_analysis import read_face_anchor
+
+        blockers = []
+        for operation in (plan.get("videoGraph") or {}).get("operations", []):
+            binding = (operation.get("parameters") or {}).get("faceAnchor")
+            if operation.get("kind") != "camera-transform" or not binding:
+                continue
+            try:
+                read_face_anchor(self.workspace, binding)
+            except ValueError as error:
+                blockers.append(
+                    self._blocker(
+                        "PROOF_FACE_EVIDENCE_INVALID",
+                        str(error),
+                        "Restore the selected face observation or compile a new camera proof",
+                        entity_ref=operation.get("operationId"),
+                    )
+                )
+        return blockers
+
     @staticmethod
     def _camera_basis(snapshot, lock):
         for name in ("cmap", "bmap", "tracks"):
@@ -397,6 +418,7 @@ class ProofPlanCompiler:
 
     def _compile_camera_operations(self, snapshot, request):
         from .camera_plan import compile_camera_operations
+        from .face_analysis import read_face_treatment
 
         def current(name):
             store = self.workspace.store(name)
@@ -413,6 +435,9 @@ class ProofPlanCompiler:
                 video_graph=request.get("videoGraph", {}),
                 output=request["output"],
                 selection=None,
+                read_face=lambda treatment: read_face_treatment(
+                    self.workspace, treatment
+                ),
             )
         except ValueError as error:
             raise ProofPlanError(
@@ -923,6 +948,7 @@ class ProofPlanCompiler:
         blockers.extend(self._import_preflight(plan))
         blockers.extend(self._source_mix_preflight(plan))
         blockers.extend(self._sound_preflight(plan))
+        blockers.extend(self._face_preflight(plan))
         blockers.extend(self._generated_preflight(plan, tool_readiness))
         lock = plan.get("canonicalInputLock") or {}
         resolved_paths: dict[str, Path] = {}

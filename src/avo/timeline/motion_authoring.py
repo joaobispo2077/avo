@@ -116,6 +116,7 @@ def _recipe_treatment(recipe, selection):
             target_scale=recipe.get("targetScale"),
             target_center=recipe.get("targetCenter"),
             safe_regions=recipe.get("safeRegions", []),
+            face_anchor=recipe.get("faceAnchor"),
         )
     except CameraError as error:
         raise MotionAuthoringError("MOTION_CAMERA_INVALID", str(error)) from error
@@ -534,7 +535,22 @@ class MotionAuthoringService:
         )
         _check_item_identities(items, previous, retired)
         items = _camera_concepts(items, previous, selection)
+        self._check_face_treatments(items)
         return items, retired, _changes(previous, items)
+
+    def _check_face_treatments(self, items):
+        from .face_analysis import read_face_treatment
+
+        for item in items:
+            treatment = item.get("cameraTreatment") or {}
+            if "faceAnchor" not in treatment:
+                continue
+            try:
+                read_face_treatment(self.workspace, treatment)
+            except ValueError as error:
+                raise MotionAuthoringError(
+                    "MOTION_FACE_EVIDENCE_INVALID", str(error)
+                ) from error
 
     def _proposal_result(self, digest):
         proposal, reference = self._load("proposals", digest, "proposal")
@@ -969,6 +985,7 @@ class MotionAuthoringService:
                 "Camera application requires its selected Animation components",
             )
         scoped = self._camera_scope(shown)
+        self._check_face_treatments(scoped["proposal"]["items"])
         environment = self._camera_runtime_hash()
         if environment != shown["proposal"].get("cameraEnvironmentHash"):
             raise MotionAuthoringError(

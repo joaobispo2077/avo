@@ -116,6 +116,8 @@ class _Retention:
         value = self.reference(reference, "proposal")
         validate_editing_craft_selection(value["options"])
         self.operation(value.get("operation", "plan-propose"), value, reference)
+        for item in value["items"]:
+            self.face_evidence(item.get("cameraTreatment") or {})
         if value["directionRef"]:
             self.direction(value["directionRef"])
         if value["predecessor"]:
@@ -124,6 +126,16 @@ class _Retention:
                 {"path": f"edit/motion/proposals/{digest}.json", "sha256": digest}
             )
         return value
+
+    def face_evidence(self, treatment):
+        from .face_analysis import validate_face_record
+
+        binding = treatment.get("faceAnchor")
+        if binding is None:
+            return
+        reference = binding["observationRef"]
+        value, digest = self.read(self.raw / reference["locator"])
+        validate_face_record(self.workspace, binding, value, digest)
 
     def direction(self, reference):
         root = self.raw / "edit/briefstart"
@@ -291,10 +303,17 @@ class _Retention:
                     and revision["artifactType"] == name,
                     "canonical revision reference identity changed",
                 )
+                if name == "animation":
+                    self.animation_face_evidence(revision["snapshot"])
                 for evidence in revision.get("inputEvidenceRefs", []):
                     definition = EVIDENCE.get(evidence.get("kind"))
                     if definition:
                         self.authorial_evidence(evidence, definition)
+
+    def animation_face_evidence(self, snapshot):
+        for component in snapshot.get("components", []):
+            treatment = (component.get("extensions") or {}).get("editingCraft") or {}
+            self.face_evidence(treatment)
 
     def authorial_evidence(self, evidence, definition):
         reference = {key: evidence[key] for key in ("path", "sha256")}
