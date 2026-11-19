@@ -41,14 +41,19 @@ def add_options_parsers(subparsers) -> None:
 
 
 def add_plan_parsers(subparsers) -> None:
-    for operation in ("plan-show", "plan-publish", *AUTHORING_OPERATIONS):
+    for operation in (
+        "plan-show",
+        "plan-publish",
+        *AUTHORING_OPERATIONS,
+        "face-analyze",
+    ):
         parser = subparsers.add_parser(operation)
         parser.add_argument("--project", type=Path, required=True)
         parser.add_argument("--video-id", default="")
         parser.add_argument("--json", action="store_true", dest="as_json")
-        if operation in AUTHORING_OPERATIONS:
+        if operation in (*AUTHORING_OPERATIONS, "face-analyze"):
             parser.add_argument("--request", type=Path, required=True)
-        if operation in {"plan-apply", "camera-apply"}:
+        if operation in {"plan-apply", "camera-apply", "face-analyze"}:
             parser.add_argument("--request-sha256")
         if operation == "plan-show":
             parser.add_argument("--proposal-hash")
@@ -57,11 +62,43 @@ def add_plan_parsers(subparsers) -> None:
 
 
 def run_craft_command(args) -> int:
+    if args.animation_command == "face-analyze":
+        return run_face_analysis_command(args)
     if args.animation_command in AUTHORING_OPERATIONS:
         return run_authoring_command(args)
     if args.animation_command in {"plan-show", "plan-publish"}:
         return run_plan_command(args)
     return run_options_command(args)
+
+
+def run_face_analysis_command(args) -> int:
+    from subprocess import SubprocessError
+
+    from avo.adapters.registry import build_face_analyzer
+    from avo.editing_craft_requests import read_craft_request
+    from avo.timeline.face_analysis import analyze_face
+    from avo.timeline.workspace import TimelineWorkspace
+
+    try:
+        if not args.project.is_absolute():
+            raise ValueError("Project manifest path must be absolute")
+        request = read_craft_request(
+            args.request, expected_sha256=getattr(args, "request_sha256", None)
+        )
+        workspace = TimelineWorkspace.from_project(
+            args.project, video_id=args.video_id or None
+        )
+        result = analyze_face(workspace, request, build_face_analyzer(workspace))
+    except (ValueError, OSError, RuntimeError, SubprocessError) as error:
+        print(
+            json.dumps(
+                {"status": "unavailable", "message": str(error)}, ensure_ascii=False
+            ),
+            file=sys.stderr,
+        )
+        return 2
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+    return 0
 
 
 def run_authoring_command(args) -> int:

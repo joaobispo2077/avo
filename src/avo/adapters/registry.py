@@ -123,6 +123,21 @@ def build_sound_source_probe():
     return probe
 
 
+def build_face_analyzer(workspace):
+    """Construct the optional adapter only when the source request is admitted."""
+
+    def analyze(source, request):
+        from avo.adapters.understand.visual_motion import observe_selected_face
+        from avo.model_sources import resolve_job
+
+        resolved = resolve_job(
+            "face_detect", project=workspace.project, video_key=workspace.video_id
+        )
+        return observe_selected_face(resolved, source, request)
+
+    return analyze
+
+
 def build_preparation_service(workspace, *, recover=False):
     """Read-only construction imports no speech adapter or model readiness checks."""
     from avo.timeline.preparation_recovery import PreparationService

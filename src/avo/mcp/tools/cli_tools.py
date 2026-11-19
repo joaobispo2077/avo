@@ -274,6 +274,15 @@ def _core_bridge_defs() -> list[BridgeToolDef]:
         ),
         # --- animation ---
         _tool(
+            "avo_animation_face_analyze",
+            "animation",
+            "face-analyze",
+            "Run the selected local face detector on a bounded original source range. "
+            "Confirmation binds the exact request. Saves observations for review.",
+            destructive=True,
+            extra_params=(ParamSpec("request", str, required=True),),
+        ),
+        _tool(
             "avo_animation_camera_apply",
             "animation",
             "camera-apply",
@@ -1214,6 +1223,7 @@ def _decision_gate_args(defn, bridge_args):
         ("briefstart", "decide"),
         ("animation", "plan-apply"),
         ("animation", "camera-apply"),
+        ("animation", "face-analyze"),
         ("sfx", "apply"),
         ("sfx", "favorite-promote"),
         ("sfx", "favorite-remove"),
@@ -1227,6 +1237,7 @@ def _decision_gate_args(defn, bridge_args):
             ("preparation", "recover-decide"),
             ("animation", "plan-apply"),
             ("animation", "camera-apply"),
+            ("animation", "face-analyze"),
             ("sfx", "apply"),
             ("sfx", "favorite-promote"),
             ("sfx", "favorite-remove"),
