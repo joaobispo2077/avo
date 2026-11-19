@@ -803,12 +803,15 @@ class _Application:
         return _sound_document(receipt, "applicationReceipt")
 
     def _result(self, receipt, reference):
+        from .sound_scope import sound_review_scope
+
         actual = self.authoring._actual_committed(receipt, require_active=False)
         if actual != receipt["committedHeads"] or set(actual) != set(OWNERS):
             raise SoundPlanningError(
                 "Committed sound receipt differs from actual canonical history"
             )
         current = self.authoring._heads()
+        scope = receipt.get("productionScope")
         return {
             "operation": "apply",
             "status": "applied",
@@ -821,6 +824,7 @@ class _Application:
             "changes": receipt["changes"],
             "advisories": receipt["advisories"],
             "acceptance": "pending-listening",
+            **({"reviewScope": sound_review_scope(scope)} if scope else {}),
         }
 
     def _commit(self, request, receipt):
