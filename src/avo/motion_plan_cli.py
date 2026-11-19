@@ -13,7 +13,7 @@ AUTHORING_OPERATIONS = (
     "camera-propose",
     "camera-apply",
 )
-ANALYSIS_OPERATIONS = ("face-analyze", "reference-analyze")
+ANALYSIS_OPERATIONS = ("face-analyze", "reference-analyze", "reference-decide")
 
 
 def _camera_runtime():
@@ -78,6 +78,10 @@ def _run_visual_analysis(operation, workspace, request):
         from avo.timeline.face_analysis import analyze_face
 
         return analyze_face(workspace, request, build_face_analyzer(workspace))
+    if operation == "reference-decide":
+        from avo.timeline.reference_decision import decide_reference
+
+        return decide_reference(workspace, request)
     from avo.adapters.registry import build_reference_analyzer
     from avo.timeline.reference_observation import analyze_reference
 

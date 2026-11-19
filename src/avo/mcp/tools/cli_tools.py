@@ -292,6 +292,15 @@ def _core_bridge_defs() -> list[BridgeToolDef]:
             extra_params=(ParamSpec("request", str, required=True),),
         ),
         _tool(
+            "avo_animation_reference_decide",
+            "animation",
+            "reference-decide",
+            "Record a project-only decision for reviewed reference measurements. "
+            "Confirmation binds the exact request and optional direction descriptor.",
+            destructive=True,
+            extra_params=(ParamSpec("request", str, required=True),),
+        ),
+        _tool(
             "avo_animation_camera_apply",
             "animation",
             "camera-apply",
@@ -1234,6 +1243,7 @@ def _decision_gate_args(defn, bridge_args):
         ("animation", "camera-apply"),
         ("animation", "face-analyze"),
         ("animation", "reference-analyze"),
+        ("animation", "reference-decide"),
         ("sfx", "apply"),
         ("sfx", "favorite-promote"),
         ("sfx", "favorite-remove"),
@@ -1249,6 +1259,7 @@ def _decision_gate_args(defn, bridge_args):
             ("animation", "camera-apply"),
             ("animation", "face-analyze"),
             ("animation", "reference-analyze"),
+            ("animation", "reference-decide"),
             ("sfx", "apply"),
             ("sfx", "favorite-promote"),
             ("sfx", "favorite-remove"),

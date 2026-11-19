@@ -1316,6 +1316,7 @@ def _animation(args: argparse.Namespace) -> int:
         "camera-apply",
         "face-analyze",
         "reference-analyze",
+        "reference-decide",
     }:
         from avo.motion_plan_cli import run_craft_command
 
