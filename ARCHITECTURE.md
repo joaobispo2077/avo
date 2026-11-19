@@ -1296,8 +1296,22 @@ explicit selected recovery operation. Coverage constructs no model adapter and
 does not verify source bytes. Recovery confirmation binds exact bounded request
 bytes. `timeline.preparation_retention` verifies a bounded transitive journal
 closure for reconstruction and fallback inventory, including unpublished durable
-results, without retaining extracted PCM or unreferenced drafts. Alternative
-selection and downstream cut-evidence integration remain separate work.
+results, without retaining extracted PCM or unreferenced drafts.
+
+`timeline.preparation_choices` records explicit original/recovered/reject/defer
+decisions in the same cutting journal, guarded by current-head CAS, complete
+overlapping predecessor identities and exact result/request scope. Immutable
+alternatives and superseded decisions remain reconstruction dependencies.
+`timeline.preparation_selected` derives a bounded source-unit view for existing
+cutting analysis. Pending/deferred, stale and unqualified timing ranges retain
+speech protection. Replaced word/character spans cannot silently cross selected
+boundaries, and recovered text drops affected pause certifications. Selection
+grants no cut approval, replaces no source transcript and starts no inference.
+Recovered choices revalidate source/model/execution bindings; choosing original,
+rejecting or deferring requires no model adapter. Cutting producer dependencies
+include the selected-evidence documents and implementation. Metadata-only
+coverage retains its existing no-source/no-model boundary. Disjoint measured
+windows preserve their unmeasured gaps rather than claiming envelope coverage.
 
 Camera movement, face anchoring, sound matching, reference analysis, spoken
 notes/recovery and editor handoff are selected options resolved through existing

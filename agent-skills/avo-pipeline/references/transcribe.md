@@ -58,5 +58,12 @@ and preserves the original/recovered alternatives for review. Defaults are one
 attempt per interval, 30 seconds per interval and 120 seconds total; oversized
 scopes are rejected without clipping. Missing alignment preserves recovered text
 without exact word anchors or safe-cut certification. Restart reuses evidence;
-interrupted attempts do not run again automatically. Evidence selection and cut
-approval remain separate gates. See [source speech coverage](../../../docs/speech-coverage.md).
+interrupted attempts do not run again automatically. `preparation recover-decide`
+records explicit original/recovered/reject/defer choices against the exact saved
+request, result, current journal and overlapping predecessor decisions. It starts
+no inference and grants no cut approval. Normal cutting consumes the selected
+view; pending/deferred intervals and unqualified word timing remain protected.
+Replaced words cannot inherit their original character alignment or affected
+pause certifications. Changed dependencies stale the affected recovered choice;
+restart and exact replay retain history without another attempt. See
+[source speech coverage](../../../docs/speech-coverage.md).
