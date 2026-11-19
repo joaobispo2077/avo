@@ -91,7 +91,9 @@ def test_frozen_current_view_survives_preference_changes_for_future_requests(tmp
 
 
 @pytest.mark.parametrize("version", ["1.8.0", "1.9.0"])
-def test_older_report_remains_readable_without_claiming_current_context(tmp_path, version):
+def test_older_report_remains_readable_without_claiming_current_context(
+    tmp_path, version
+):
     workspace = blank_workspace(tmp_path)
     review = MotionReviewService(workspace)
     snapshot = review.project()
