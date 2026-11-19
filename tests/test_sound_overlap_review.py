@@ -132,3 +132,34 @@ def test_equal_sample_counts_at_different_rates_are_not_a_collision(tmp_path):
     assert not {"colliding-attacks", "overlapping-sounds"} & {
         row["code"] for row in reports
     }
+
+
+def test_repetition_window_compares_impact_times_across_output_sample_rates(tmp_path):
+    entry, event, choice, context, clock = inputs(tmp_path)
+    observed = []
+    for identity, frame, rate in [
+        ("later", 60, 24000),
+        ("nearby", 45, 24000),
+        ("first", 30, 48000),
+    ]:
+        event.update(
+            eventId=identity,
+            programFrame=frame,
+            visibleRange={"startFrame": 0, "endFrameExclusive": 90},
+        )
+        choice["eventId"] = identity
+        observed.extend(
+            prepare(entry, [event], [choice], [context], {**clock, "sampleRate": rate})[
+                "choices"
+            ]
+        )
+    # Consecutive impacts are exactly 625 ms apart, regardless of sample rate.
+    below = _sound_choice_advisories(observed, repetition_window_ms=624)
+    assert "repeated-source" not in {row["code"] for row in below}
+    at_limit = _sound_choice_advisories(observed, repetition_window_ms=625)
+    repeat = next(row for row in at_limit if row["code"] == "repeated-source")
+    assert repeat == {
+        "code": "repeated-source",
+        "eventIds": ["first", "nearby", "later"],
+        "maxGapMs": 625,
+    }

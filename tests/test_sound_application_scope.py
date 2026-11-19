@@ -111,6 +111,30 @@ def test_per_id_update_preserves_unselected_sound_music_and_picture(tmp_path):
     assert overlap["assessment"] == "timing-only"
 
 
+def test_publication_repetition_window_includes_unchanged_siblings(tmp_path):
+    internal, entry, request, proposal, shown, ref, sources, snapshot = setup(tmp_path)
+    updated = proposal["opportunities"][1]["opportunity"]
+    updated["programFrame"] = 45
+    request["choices"] = request["choices"][1:]
+    prepared = internal._choices(request, proposal, {"entries": [entry]}, snapshot)
+    contexts = {c["cueId"]: c for c in request["contexts"]}
+    for window, expect_repeat in [(624, False), (625, True)]:
+        _, advisories = internal._authoring(
+            request,
+            shown,
+            prepared,
+            sources,
+            deepcopy(snapshot),
+            ref,
+            contexts,
+            repetition_window_ms=window,
+        )
+        repeats = [row for row in advisories if row["code"] == "repeated-source"]
+        assert bool(repeats) is expect_repeat
+        if expect_repeat:
+            assert repeats[0]["eventIds"] == ["reveal-one", "second"]
+
+
 def test_new_second_sound_cannot_borrow_approval_from_preserved_single_sound(tmp_path):
     internal, entry, request, proposal, shown, ref, sources, snapshot = setup(
         tmp_path, ordered=False

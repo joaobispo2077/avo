@@ -85,6 +85,27 @@ def test_defaults_are_static_and_have_no_map_enablement_choice():
     assert validate_editing_craft_selection(selection) == selection
 
 
+def test_repetition_window_is_optional_and_retains_precedence_and_provenance():
+    selection = resolve_editing_craft_selection(
+        provider_settings={"soundMatching": {"repetitionWindowMs": 3000}},
+        invocation={"soundMatching": {"enabled": True, "repetitionWindowMs": 0}},
+    )
+    assert selection["effective"]["soundMatching"]["repetitionWindowMs"] == 0
+    assert selection["sources"]["soundMatching.repetitionWindowMs"] == "invocation"
+    assert selection["maskedChoices"] == [
+        {
+            "path": "soundMatching.repetitionWindowMs",
+            "value": 3000,
+            "source": "provider",
+            "maskedBy": "invocation",
+        }
+    ]
+    assert (
+        "repetitionWindowMs"
+        not in resolve_editing_craft_selection()["effective"]["soundMatching"]
+    )
+
+
 @pytest.mark.parametrize(
     ("scope", "source"),
     [
