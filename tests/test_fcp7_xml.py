@@ -49,6 +49,83 @@ def test_bom_rate_origins_tracks_and_repeated_local_source(tmp_path):
     assert video["clips"][0]["unknown"]["filter"] == 1
 
 
+def _levels(value, *, envelope="", enabled="TRUE", start=-1, effects=1):
+    row = (
+        f"<filter><enabled>{enabled}</enabled><start>{start}</start><end>-1</end>"
+        "<effect><name>Audio Levels</name><effectid>audiolevels</effectid>"
+        "<mediatype>audio</mediatype><parameter><parameterid>level</parameterid>"
+        f"<name>Level</name><value>{value}</value>{envelope}</parameter></effect></filter>"
+    )
+    return row * effects
+
+
+def _with_audio_levels(tmp_path, effect):
+    source = tmp_path / "original.mov"
+    xml = document(source.as_uri()).replace("</sourcetrack>", "</sourcetrack>" + effect)
+    return parse_fcp7_xml(xml.encode(), roots=[tmp_path])
+
+
+@pytest.mark.parametrize(
+    ("value", "db"), [("1", 0), ("0.5", -6.020599913), ("2", 6.020599913)]
+)
+def test_constant_returned_audio_level_is_converted_for_comparison(tmp_path, value, db):
+    from avo.timeline.editor_feedback import compare_editor_feedback
+
+    exported = _with_audio_levels(tmp_path, _levels("1"))
+    returned = _with_audio_levels(tmp_path, _levels(value))
+    clip = returned["tracks"][1]["clips"][0]
+    assert clip["gainDb"] == pytest.approx(db, abs=1e-8)
+    assert "filter" in clip["unknown"]
+    difference = compare_editor_feedback(exported, exported, returned)
+    assert [(row["id"], row["field"]) for row in difference["proposals"]] == (
+        [("audio-first", "gainDb")] if db else []
+    )
+
+
+def test_returned_level_does_not_impute_a_missing_original_gain(tmp_path):
+    from avo.timeline.editor_feedback import compare_editor_feedback
+
+    exported = _with_audio_levels(tmp_path, "")
+    returned = _with_audio_levels(tmp_path, _levels("0.5"))
+    difference = compare_editor_feedback(exported, exported, returned)
+    assert difference["proposals"] == []
+    assert difference["unresolved"] == [
+        {
+            "id": "audio-first",
+            "field": "gainDb",
+            "reason": "baseline-or-current-field-unobserved",
+        }
+    ]
+
+
+@pytest.mark.parametrize(
+    "effect",
+    [
+        _levels("0"),
+        _levels("-1"),
+        _levels("nan"),
+        _levels("inf"),
+        _levels("0.5", enabled="FALSE"),
+        _levels("0.5", start=2),
+        _levels("0.5", effects=2),
+        _levels("0.5", envelope="<keyframe><when>0</when><value>1</value></keyframe>"),
+    ],
+)
+def test_complex_or_nonfinite_gain_stays_external_for_review(tmp_path, effect):
+    from avo.timeline.editor_feedback import compare_editor_feedback
+
+    returned = _with_audio_levels(tmp_path, effect)
+    clip = returned["tracks"][1]["clips"][0]
+    assert "gainDb" not in clip
+    assert "filter" in clip["unknown"]
+    expected = _with_audio_levels(tmp_path, _levels("0.5"))
+    report = compare_editor_feedback(expected, expected, returned)
+    assert report["proposals"] == []
+    assert report["unresolved"] == [
+        {"id": "audio-first", "field": "gainDb", "reason": "returned-field-unobserved"}
+    ]
+
+
 @pytest.mark.parametrize(
     "change",
     [
