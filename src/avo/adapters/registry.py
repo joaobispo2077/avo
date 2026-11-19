@@ -144,6 +144,19 @@ def build_reference_analyzer():
     return observe_reference_clip
 
 
+def build_editor_handoff(workspace):
+    from avo.adapters.media.fcp7_xml import parse_fcp7_xml, write_fcp7_xml
+    from avo.adapters.media.ffprobe import FfprobeMediaAdapter
+    from avo.timeline.editor_handoff import EditorHandoffService
+
+    return EditorHandoffService(
+        workspace,
+        inventory=FfprobeMediaAdapter().inventory,
+        write_xml=write_fcp7_xml,
+        read_xml=parse_fcp7_xml,
+    )
+
+
 def build_preparation_service(workspace, *, recover=False):
     """Read-only construction imports no speech adapter or model readiness checks."""
     from avo.timeline.preparation_recovery import PreparationService

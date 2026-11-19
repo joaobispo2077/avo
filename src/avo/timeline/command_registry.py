@@ -37,6 +37,7 @@ _MATRIX = {
     "deliver": ("Consumes", ()),
     "docs": ("Admin", ()),
     "end-screen": ("Owns", ("bmap", "tracks")),
+    "exports": ("Admin", ()),
     "explainer": ("Profile", ()),
     "figma": ("Owns", ("animation", "tracks")),
     "format": ("Consumes", ()),

@@ -59,6 +59,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     configure_preparation(sub)
 
+    from avo.timeline_export_cli import configure as configure_timeline_export
+
+    configure_timeline_export(sub)
+
     from avo.costs_cli import configure as configure_costs
     from avo.costs_cli import cost_context_argument
 
@@ -2572,6 +2576,10 @@ def _trim(args: argparse.Namespace) -> int:
 
 
 def _run_cli(args: argparse.Namespace) -> int:
+    if args.command == "timeline-export":
+        from avo.timeline_export_cli import run as timeline_export_run
+
+        return timeline_export_run(args)
     if args.command == "preparation":
         from avo.preparation_cli import run as preparation_run
 
