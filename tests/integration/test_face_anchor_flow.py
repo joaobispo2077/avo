@@ -388,6 +388,67 @@ def test_source_change_during_face_analysis_prevents_publication(tmp_path):
     assert not (workspace.raw_dir / "edit/motion/face").exists()
 
 
+@pytest.mark.parametrize(
+    "field", ["sourceRange", "seed", "minimumOverlap", "maximumGapTicks"]
+)
+def test_face_capture_cannot_publish_evidence_from_another_request(tmp_path, field):
+    from tests.test_timeline_bmap_service import approved_workspace
+
+    from avo.timeline.face_analysis import analyze_face
+
+    workspace, _, _ = approved_workspace(tmp_path)
+    request, observation = selected_face_request(workspace)
+    changed = {
+        "sourceRange": {**request["sourceRange"], "endTicks": 27_840},
+        "seed": {**request["seed"], "detectionIndex": 1},
+        "minimumOverlap": 0.45,
+        "maximumGapTicks": 1920,
+    }
+    request[field] = changed[field]
+    with pytest.raises(ValueError, match="analysis parameters"):
+        analyze_face(workspace, request, lambda *_: observation)
+    assert not (workspace.raw_dir / "edit/motion/face").exists()
+
+
+def test_frozen_treatment_requires_matching_display_geometry_without_inference(
+    tmp_path, monkeypatch
+):
+    from tests.test_timeline_bmap_service import approved_workspace
+
+    from avo.timeline.face_analysis import analyze_face, read_face_treatment
+
+    workspace, _, _ = approved_workspace(tmp_path)
+    request, observation = selected_face_request(workspace, stream_origin=23040)
+    result = analyze_face(workspace, request, lambda *_: observation)
+    geometry = observation["request"]["geometry"]
+    treatment = {
+        "faceAnchor": {
+            "observationRef": result["observationRef"],
+            "trajectoryHash": result["trajectoryHash"],
+            "transitionFrames": 4,
+        },
+        "sourceGeometry": {
+            "codedWidth": geometry["width"],
+            "codedHeight": geometry["height"],
+            "rotationDegrees": geometry["rotation"],
+            "sampleAspectRatio": geometry["sampleAspectRatio"],
+        },
+        "camera": {"sourceId": request["sourceId"]},
+        "sourceSha256": request["sourceSha256"],
+    }
+
+    def forbidden(*args, **kwargs):
+        pytest.fail("Frozen camera treatment started vision inference")
+
+    monkeypatch.setattr("avo.visual_motion_runtime._run_worker", forbidden)
+    trajectory, stream = read_face_treatment(workspace, treatment)
+    assert trajectory["trajectoryHash"] == result["trajectoryHash"]
+    assert stream == request["streamIndex"]
+    treatment["sourceGeometry"]["rotationDegrees"] = 180
+    with pytest.raises(ValueError, match="display geometry"):
+        read_face_treatment(workspace, treatment)
+
+
 @pytest.mark.parametrize("wrong_hash", [False, True])
 def test_face_analysis_command_checks_request_bytes_before_adapter(
     tmp_path, capsys, monkeypatch, wrong_hash
