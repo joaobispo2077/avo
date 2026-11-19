@@ -67,6 +67,23 @@ def test_context_only_sound_scope_is_rejected_before_any_publication(tmp_path):
     assert probe.calls == []
 
 
+def test_reselecting_identical_audio_does_not_add_listening_sections(tmp_path):
+    from tests.test_sound_application import repropose
+
+    _, _, service, _, request, shown = application(tmp_path)
+    first = service.apply(scoped(request, shown["proposal"], ["opening"]))
+    assert first["reviewScope"]["outsideProductionChunkIds"] == ["answer"]
+
+    repeated = repropose(service, request, identity="same-sound-choice")
+    proposal = service.load(repeated["proposalHash"])["proposal"]
+    result = service.apply(scoped(repeated, proposal, ["opening"]))
+
+    assert result["headsCurrent"] is True
+    assert result["reviewScope"]["affectedChunkIds"] == []
+    assert result["reviewScope"]["outsideProductionChunkIds"] == []
+    assert result["reviewScope"]["approval"] == "not-granted"
+
+
 def test_resealed_scope_cannot_claim_another_owner_or_drop_its_original_scope(tmp_path):
     from avo.timeline.contracts import content_hash
     from avo.timeline.sound_application import _Application
