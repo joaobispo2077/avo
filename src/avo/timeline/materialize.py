@@ -1082,7 +1082,13 @@ def _proof_render(
             "renderer output identity differs from the produced bytes",
             "repair the renderer output record before review",
         )
-    return {**rendered, "output": actual}
+    result = {**rendered, "output": actual}
+    from .sound_mix_review import summarize_sound_mix
+
+    sound_review = summarize_sound_mix(plan, result, window)
+    if sound_review is not None:
+        result["soundMixReview"] = sound_review
+    return result
 
 
 def _cutting_window_verification(port, plan, output, window):
@@ -1198,6 +1204,8 @@ def _render_required_microproofs(port, plan, windows, directory, suffix):
             camera = (rendered.get("producer") or {}).get("camera")
             if camera is not None:
                 result["cameraProvenance"] = deepcopy(camera)
+            if "soundMixReview" in rendered:
+                result["soundMixReview"] = rendered["soundMixReview"]
             _attach_cutting_verification(port, plan, result, frame_range)
         except Exception as exc:
             result = {
@@ -1406,6 +1414,8 @@ def materialize_proof_plan(
         "createdAt": now_iso(),
         "materializationHash": "",
     }
+    if "soundMixReview" in rendered:
+        record["soundMixReview"] = rendered["soundMixReview"]
     record["materializationHash"] = content_hash(
         {key: value for key, value in record.items() if key != "materializationHash"}
     )
