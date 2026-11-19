@@ -3,6 +3,7 @@
 import json
 import shutil
 import subprocess
+from copy import deepcopy
 from xml.etree import ElementTree
 
 import pytest
@@ -265,8 +266,6 @@ def test_placed_validation_preserves_gaps_overlay_order_and_repeated_occurrences
 
 @pytest.mark.integration
 def test_validation_exports_constant_gain_only_for_the_observed_target(tmp_path):
-    from copy import deepcopy
-
     from tests.integration.test_otio_placed_pipeline import _trial
 
     imported, source, initial = _trial(tmp_path)
@@ -323,6 +322,82 @@ def test_validation_exports_constant_gain_only_for_the_observed_target(tmp_path)
         assert result["profile"]["status"] == "unqualified"
     assert MotionReviewService(ws).project()["basisHeads"] == before
     assert file_fingerprint(source) == original
+
+
+@pytest.mark.integration
+def test_placed_validation_links_the_original_alpha_layer(tmp_path):
+    from tests.integration.test_otio_placed_pipeline import _trial
+
+    imported, _, initial = _trial(tmp_path)
+    ws = imported.workspace
+    overlay = ws.raw_dir / "transparent original.mov"
+    subprocess.run(
+        [
+            "ffmpeg",
+            "-v",
+            "error",
+            "-f",
+            "lavfi",
+            "-i",
+            "color=red@0.5:size=128x96:rate=24:duration=3,format=rgba",
+            "-threads:v",
+            "1",
+            "-c:v",
+            "prores_ks",
+            "-profile:v",
+            "4444",
+            "-pix_fmt",
+            "yuva444p10le",
+            str(overlay),
+        ],
+        check=True,
+        timeout=45,
+    )
+    before = file_fingerprint(overlay)
+    revised = deepcopy(initial["snapshot"])
+    source_id = "original-alpha"
+    revised["sources"].append(
+        {
+            "sourceId": source_id,
+            "kind": "raw",
+            "locator": str(overlay),
+            "fingerprint": before,
+            "streamMetadata": {"videoStreamIndex": 0},
+        }
+    )
+    lanes = revised["layout"]["tracks"]
+    lane = max(
+        (item for item in lanes if item["kind"] == "video"),
+        key=lambda item: item["order"],
+    )
+    placement = next(
+        row
+        for row in revised["layout"]["placements"]
+        if row["trackId"] == lane["trackId"]
+    )
+    placement["sourceId"] = source_id
+    for name in ("in", "out"):
+        placement[name]["sourceId"] = source_id
+    CMapService(ws).author(
+        revised,
+        actor="creator",
+        reason="Select an original alpha layer on the upper picture lane",
+        expected_head_hash=initial["contentHash"],
+    )
+    request = editor_request(ws)
+    request["programRate"] = {"num": 24, "den": 1}
+    request["window"] = {"startFrame": 0, "endFrameExclusive": 60}
+
+    result = build_editor_handoff(ws).prepare(request)
+    payload = (ws.raw_dir / result["xmlRef"]["locator"]).read_bytes()
+    parsed = parse_fcp7_xml(payload, roots=[ws.raw_dir])
+    (clip,) = parsed["tracks"][1]["clips"]
+    assert (clip["start"], clip["end"], clip["in"], clip["out"]) == (24, 30, 0, 6)
+    assert parsed["sources"][clip["fileId"]]["locator"] == overlay
+    assert {row["sourceId"]: row["sha256"] for row in result["sources"]}[
+        source_id
+    ] == before["sha256"]
+    assert file_fingerprint(overlay) == before
 
 
 @pytest.mark.integration
