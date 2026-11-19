@@ -38,6 +38,7 @@ CORE_CLI_GROUPS: tuple[str, ...] = (
 
 # Remaining groups bridged in task-008.
 REMAINING_CLI_GROUPS: tuple[str, ...] = (
+    "timeline-export",
     "preparation",
     "sfx",
     "costs",
@@ -1001,14 +1002,7 @@ def _creative_bridge_defs():
 
 def _all_bridge_defs() -> list[BridgeToolDef]:
     """Core (task-007) + remaining (task-008) bridge defs."""
-    return (
-        _core_bridge_defs()
-        + _remaining_bridge_defs()
-        + _creative_bridge_defs()
-        + _cost_bridge_defs()
-        + _sfx_bridge_defs()
-        + _preparation_bridge_defs()
-    )
+    return _core_bridge_defs() + remaining_bridge_defs()
 
 
 def _cost_bridge_defs():
@@ -1085,7 +1079,28 @@ def remaining_bridge_defs() -> list[BridgeToolDef]:
         + _cost_bridge_defs()
         + _sfx_bridge_defs()
         + _preparation_bridge_defs()
+        + _editor_handoff_bridge_defs()
     )
+
+
+def _editor_handoff_bridge_defs() -> list[BridgeToolDef]:
+    descriptions = {
+        "prepare": "Create an explicitly selected, bounded original-media editor handoff. Unqualified profiles can generate validation examples only.",
+        "status": "Read editor target profiles and optionally check one retained handoff against the current timeline.",
+        "inspect-feedback": "Retain exact returned XML bytes and review source identities, unknown fields and supported interchange syntax.",
+        "propose-feedback": "Compare the retained handoff, current edit and returned XML. Save proposed fields, conflicts and unresolved identities for review.",
+    }
+    return [
+        _tool(
+            "avo_timeline_export_" + operation.replace("-", "_"),
+            "timeline-export",
+            operation,
+            description,
+            destructive=operation != "status",
+            extra_params=(ParamSpec("request", str, required=operation != "status"),),
+        )
+        for operation, description in descriptions.items()
+    ]
 
 
 def _preparation_bridge_defs() -> list[BridgeToolDef]:
@@ -1245,7 +1260,8 @@ def _decision_gate_args(defn, bridge_args):
     from avo.mcp.bridge import normalize_cost_arguments
 
     normalize_cost_arguments(defn.cli_prefix, bridge_args)
-    if defn.cli_prefix not in {
+    editor_handoff = defn.cli_prefix[0] == "timeline-export"
+    if not editor_handoff and defn.cli_prefix not in {
         ("preparation", "recover"),
         ("preparation", "recover-decide"),
         ("preparation", "notes-detect"),
@@ -1266,7 +1282,8 @@ def _decision_gate_args(defn, bridge_args):
         return bridge_args
     limit = (
         MAX_REQUEST_BYTES
-        if defn.cli_prefix
+        if editor_handoff
+        or defn.cli_prefix
         in {
             ("preparation", "recover"),
             ("preparation", "recover-decide"),
