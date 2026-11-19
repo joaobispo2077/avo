@@ -5,18 +5,28 @@ import re
 import subprocess
 import tempfile
 from fractions import Fraction
+from io import BytesIO
 from pathlib import Path
 
 from avo.adapters.media.camera import _rotation
 from avo.adapters.media.ffprobe import INVENTORY_ENTRIES
 from avo.adapters.media.local_source import local_source_arguments
-from avo.reference_analysis import SCHEMA, _display_aspect, freeze_face_observation
+from avo.reference_analysis import (
+    SCHEMA,
+    _display_aspect,
+    freeze_face_observation,
+    freeze_reference_motion,
+)
 from avo.timeline.contracts import (
     file_fingerprint,
     fingerprint_stage,
     validate_document,
 )
-from avo.visual_motion_runtime import detect_proxy_faces, preflight_face_job
+from avo.visual_motion_runtime import (
+    detect_proxy_faces,
+    measure_reference_proxy,
+    preflight_face_job,
+)
 
 MAX_PROXY_BYTES = 64 * 1024 * 1024
 
@@ -264,4 +274,73 @@ def observe_selected_face(resolved, source, request):
     )
 
 
-__all__ = ["capture_display_proxy", "observe_selected_face"]
+def _reference_contact_sheet(path, proxy):
+    from PIL import Image, ImageDraw
+
+    width, height = proxy["width"], proxy["height"]
+    ticks = proxy["sourceTicks"]
+    frame_count = min(6, len(ticks))
+    positions = [
+        round(Fraction(index * (len(ticks) - 1), frame_count - 1))
+        for index in range(frame_count)
+    ]
+    cell_width, cell_height = 208, 170
+    columns = min(3, frame_count)
+    rows = (frame_count + columns - 1) // columns
+    sheet = Image.new("RGB", (columns * cell_width, rows * cell_height), (20, 24, 29))
+    draw = ImageDraw.Draw(sheet)
+    with Path(path).open("rb") as stream:
+        for index, frame_number in enumerate(positions):
+            frame_size = width * height * 3
+            stream.seek(frame_number * frame_size)
+            frame = Image.frombytes(
+                "RGB", (width, height), stream.read(frame_size), "raw", "BGR"
+            )
+            frame.thumbnail((192, 140))
+            x, y = (index % columns) * cell_width, (index // columns) * cell_height
+            sheet.paste(frame, (x + (cell_width - frame.width) // 2, y + 5))
+            draw.text(
+                (x + 8, y + 150),
+                f"Source PTS {ticks[frame_number]}",
+                fill=(238, 241, 244),
+            )
+    output = BytesIO()
+    sheet.save(output, format="PNG")
+    return output.getvalue()
+
+
+def observe_reference_clip(source, clip, python):
+    """Observe one sealed local range and prepare a labeled visual contact sheet."""
+    with tempfile.TemporaryDirectory(prefix="avo-reference-proxy-") as directory:
+        path = Path(directory).resolve() / "display.bgr"
+        captured = capture_display_proxy(
+            source,
+            path,
+            stream_index=clip["streamIndex"],
+            source_range=clip["sourceRange"],
+            expected_sha256=clip["source"]["sha256"],
+            sample_every=clip["sampleEvery"],
+        )
+        proxy = captured["proxy"]
+        if captured["sourceSizeBytes"] != clip["source"]["sizeBytes"]:
+            raise ValueError("Reference file size differs from the selected source")
+        measured = measure_reference_proxy(
+            python,
+            path,
+            width=proxy["width"],
+            height=proxy["height"],
+            frame_count=len(proxy["sourceTicks"]),
+            sha256=proxy["sha256"],
+        )
+        observation = freeze_reference_motion(
+            {
+                **{key: clip[key] for key in ("source", "sourceRange", "aspects")},
+                "geometry": captured["geometry"],
+                "proxy": proxy,
+            },
+            measured,
+        )
+        return observation, _reference_contact_sheet(path, proxy)
+
+
+__all__ = ["capture_display_proxy", "observe_reference_clip", "observe_selected_face"]

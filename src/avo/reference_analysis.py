@@ -297,9 +297,89 @@ def freeze_face_trajectory(observation):
     return result
 
 
+def _visual_interval(start, end, measured, aspects):
+    result = {"startTicks": start, "endTicks": end}
+    if "brightness" in aspects:
+        result["brightness"] = deepcopy(measured["brightness"])
+    if "scene-changes" in aspects:
+        result["cutCandidate"] = measured["status"] == "cut-candidate"
+    if aspects.intersection(("global-motion", "element-motion")):
+        result["motionStatus"] = measured["status"]
+        if "reason" in measured:
+            result["reason"] = measured["reason"]
+        else:
+            result["coverage"] = deepcopy(measured["coverage"])
+            for aspect, metric in (
+                ("global-motion", "global"),
+                ("element-motion", "residual"),
+            ):
+                if aspect in aspects:
+                    result[metric] = deepcopy(measured[metric])
+    return result
+
+
+def _require_reference_pairs(request, observed):
+    ticks = request["proxy"]["sourceTicks"]
+    pairs = observed["pairs"]
+    validate_document(pairs, SCHEMA + "#/$defs/referencePairs")
+    gaps = [second - first for first, second in pairwise(ticks)]
+    if len(pairs) != len(gaps) or min(gaps) <= 0:
+        raise ValueError(
+            "Reference measurements require an exact increasing sampled frame grid"
+        )
+    for pair in pairs:
+        coverage = pair.get("coverage")
+        if coverage and (
+            coverage["inliers"] > coverage["tracked"]
+            or pair["residual"]["movingPoints"] > coverage["tracked"]
+        ):
+            raise ValueError(
+                "Reference motion coverage exceeds observed feature tracks"
+            )
+    return pairs, ticks, gaps
+
+
+def freeze_reference_motion(request, observed):
+    """Store selected measured aspects on native time, separately from interpretation."""
+    validate_document(request, SCHEMA + "#/$defs/referenceObservationRequest")
+    _require_observation_scope(request, observed)
+    pairs, ticks, gaps = _require_reference_pairs(request, observed)
+    aspects = set(request["aspects"])
+    result = {
+        "contractVersion": "1.0.0",
+        "request": deepcopy(request),
+        "runtime": {
+            key: deepcopy(observed[key])
+            for key in ("isolated", "device", "versions", "method")
+        },
+        "coverage": {
+            "sampledFrames": len(ticks),
+            "pairCount": len(pairs),
+            "minimumGapTicks": min(gaps),
+            "maximumGapTicks": max(gaps),
+        },
+        "intervals": [
+            _visual_interval(first, last, pair, aspects)
+            for (first, last), pair in zip(pairwise(ticks), pairs, strict=True)
+        ],
+        "interpretation": {
+            "easing": "uninterpreted",
+            "availableEvidence": {
+                aspect: "unavailable"
+                for aspect in request["aspects"]
+                if aspect in {"hold-reveal", "audio-word-timing"}
+            },
+        },
+    }
+    result["analysisHash"] = content_hash(result)
+    validate_document(result, SCHEMA + "#/$defs/referenceObservation")
+    return result
+
+
 __all__ = [
     "associate_selected_face",
     "freeze_face_observation",
     "freeze_face_trajectory",
+    "freeze_reference_motion",
     "map_proxy_face_samples",
 ]
