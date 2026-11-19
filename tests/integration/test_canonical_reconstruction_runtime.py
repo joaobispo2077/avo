@@ -185,6 +185,7 @@ def test_retained_code_drawn_source_rematerializes_real_pixels_after_derived_vid
 
     from avo.adapters.motion.code_drawn import CodeDrawnAdapter, runtime_readiness
     from avo.motion import load_composition, scaffold_code_drawn
+    from avo.project_inventory import run_cleanup
     from avo.timeline.store import write_immutable_json
 
     readiness = runtime_readiness()
@@ -274,7 +275,15 @@ def test_retained_code_drawn_source_rematerializes_real_pixels_after_derived_vid
     paths = {entry["path"] for entry in bundle["files"]}
     assert lock_path.relative_to(workspace.raw_dir).as_posix() in paths
     assert first.relative_to(workspace.raw_dir).as_posix() not in paths
-    first.unlink()  # Only this fixture's regenerable generated video is removed.
+
+    removed = run_cleanup(
+        workspace.raw_dir,
+        basename,
+        rimraf_runner=lambda path: path.unlink(),
+        purge_session=False,
+    )
+    assert removed.leftover == 0
+    assert first in removed.paths and not first.exists()
     verify_reconstruction_bundle(workspace.raw_dir)
     second = generated / "asset-rematerialized.mkv"
     adapter.render(composition, input_lock=lock_path, output=second)
