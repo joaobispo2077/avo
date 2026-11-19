@@ -12,7 +12,7 @@ import numpy as np
 import pytest
 from tests.editing_craft_fixtures import channel_impulses, labeled_video
 
-from avo.timeline.camera import evaluate_camera
+from avo.timeline.camera import evaluate_camera, reframe_face_camera
 from avo.timeline.contracts import content_hash
 
 pytestmark = pytest.mark.integration
@@ -120,6 +120,7 @@ def operation(
 
 def render(path, destination, selected, *, first=0, last=24, width=160, height=90):
     from avo.adapters.media.camera import camera_filter, camera_input_arguments
+    from avo.adapters.media.proof_executor import _run
 
     metadata = probe(path)
     specification = {"width": width, "height": height, "pixelFormat": "gbrp16le"}
@@ -132,7 +133,7 @@ def render(path, destination, selected, *, first=0, last=24, width=160, height=9
         end_frame=last,
     )
     assert isinstance(chain, str)
-    result = subprocess.run(
+    _run(
         [
             "ffmpeg",
             "-v",
@@ -154,10 +155,8 @@ def render(path, destination, selected, *, first=0, last=24, width=160, height=9
             "-pix_fmt",
             "+gbrp16le",
             str(destination),
-        ],
-        capture_output=True,
+        ]
     )
-    assert result.returncode == 0, result.stderr.decode(errors="replace")
     return pixels(destination, width, height)
 
 
@@ -189,6 +188,41 @@ def test_boundary_zoom_preserves_the_final_original_pixel_without_a_dark_border(
     np.testing.assert_array_equal(full[-1, -1, -1], pixels(source, 160, 90)[-1, -1, -1])
     window = render(source, tmp_path / "last-frame.mkv", selected, first=23, last=24)
     np.testing.assert_array_equal(window, full[23:24])
+
+
+def test_encoded_face_path_preserves_entry_release_and_arbitrary_preview_window(
+    tmp_path,
+):
+    from tests.test_camera_planning import detected_face
+
+    source = labeled_video(tmp_path / "original.mkv", bit_depth=16)
+    original = source.read_bytes()
+    baseline = operation(source)
+    selected = deepcopy(baseline)
+    parameters = selected["parameters"]
+    parameters["behavior"] = reframe_face_camera(
+        parameters["behavior"],
+        frame_range=parameters["originalFrameRange"],
+        geometry=parameters["geometry"],
+        points=[detected_face(100, 0.51), detected_face(123, 0.55)],
+        source_ticks=range(100, 124),
+        transition_frames=4,
+        fallback="review",
+    )
+    parameters["pathHash"] = content_hash(
+        {key: parameters[key] for key in ("behavior", "geometry")}
+    )
+    plain = render(source, tmp_path / "plain.mkv", baseline)
+    full = render(source, tmp_path / "anchored.mkv", selected)
+    window = render(
+        source, tmp_path / "anchored-window.mkv", selected, first=11, last=16
+    )
+    np.testing.assert_array_equal(full[0], plain[0])
+    np.testing.assert_array_equal(full[-1], plain[-1])
+    assert not np.array_equal(full[12], plain[12])
+    np.testing.assert_array_equal(window, full[11:16])
+    assert np.any(full % 257 != 0)
+    assert source.read_bytes() == original
 
 
 @pytest.mark.parametrize(
