@@ -152,12 +152,19 @@ separate cue fraction; see [sound candidate fitting](sound-candidate-fitting.md)
 The default motion map and linked storyboard also show the current audio and
 picture lanes, their roles, and the source or cue for each contribution.
 For editor review, the optional [editor handoff](editor-handoff.md) prepares a
-short original-source XMEML example and compares returned changes. The target
-profiles are validation-only while production qualification is pending.
+short original-source XMEML example and compares returned changes. Selected exact
+trims on the original picture and audio can enter normal cutting review. The
+target profiles are validation-only while production qualification is pending.
 
 Watch reports the exact observed intervals and leaves missing intervals visible.
-The sampled vision pass can identify visual layout and readability findings.
-Playback review covers continuous motion, lip sync and audibility.
+The approval gate shows the planned cue states, exact sampled frames and linked
+visual findings for a current canonical proof. Playback review covers continuous
+motion, lip sync and reading time. Listening covers audibility and masking.
+
+The wrap exports scoped learning from the approved master and retained iteration
+ledger when both are available. Curated lessons record where to use or exclude a
+technique. Animation promotion still requires the current provider's explicit
+decision.
 
 Existing CMap, BMap, Tracks, Animation and Sync ownership remains unchanged.
 Before an approved cut, concepts stay provisional. BMap owns executable cue timing;

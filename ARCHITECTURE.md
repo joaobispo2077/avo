@@ -1447,6 +1447,14 @@ its matching reproduction evidence, affected program windows and the observed
 engine, runtime, profile and platform. Provider learning retains the summarized
 defect. Workaround details stay in the originating project review.
 
+Candidate craft review reads current BMap intent only after the proof
+materialization and canonical hashes match the encoded candidate. Sampled
+findings link to cues through cited frame numbers and half-open program
+intervals. The review package preserves playback and listening requirements.
+The wrap uses the approved master, candidate snapshot and retained ledger for
+provider learning. Project-only records stay out of direction suggestions.
+Provider animation decisions verify their own proposal and provider identity.
+
 Camera movement, face anchoring, sound matching, reference analysis, spoken
 notes/recovery and editor handoff are selected options resolved through existing
 settings scopes and frozen requests. Preferences seed future work and cannot

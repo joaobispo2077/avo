@@ -98,9 +98,10 @@ existing ignore policy; they are not published feature documentation.
 Motion maps and linked storyboards are built in for applicable motion planning
 and review. Camera movement, face anchoring, sound matching, reference
 analysis and spoken notes or recovery are selected options. The optional
-[editor handoff](editor-handoff.md) currently supports validation examples and
-returned XML review. Production editor qualification and creator acceptance
-remain open.
+[editor handoff](editor-handoff.md) supports validation examples, returned XML
+review and selected original-media trims routed to cutting review. Canonical
+proofs show sampled craft findings by cue. Production editor qualification and
+creator acceptance remain open.
 
 | ID | Proposal | Smallest useful outcome | Existing alignment |
 | -- | -------- | ----------------------- | ------------------ |
