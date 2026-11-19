@@ -78,6 +78,33 @@ def test_python_distribution_declares_runtime_schema_data() -> None:
     assert '"share/avo/schemas" = ["schemas/*.json"]' in configuration
 
 
+def test_optional_craft_workers_are_package_files_and_models_stay_external():
+    import tomllib
+    from importlib.resources import files
+
+    configuration = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    worker_package = "avo.adapters.understand"
+    workers = configuration["tool"]["setuptools"]["package-data"][worker_package]
+    for worker in ("clap_embeddings_worker.py", "visual_motion_worker.py"):
+        assert worker in workers
+        assert files(worker_package).joinpath(worker).is_file()
+    dependencies = configuration["project"]["dependencies"]
+    assert not any(
+        item.startswith(("opencv", "torch", "transformers")) for item in dependencies
+    )
+    collected = {
+        value for operation, value in _packaging_calls() if operation == "_collect"
+    }
+    assert collected.isdisjoint({"cv2", "torch", "transformers"})
+    for schema in (
+        "avo.clap-manifest.schema.json",
+        "avo.motion-review.schema.json",
+        "avo.editor-handoff.schema.json",
+        "avo.timeline-learning.schema.json",
+    ):
+        assert (ROOT / "schemas" / schema).is_file()
+
+
 def test_library_review_resources_are_packaged_and_available():
     import tomllib
     from importlib import resources
