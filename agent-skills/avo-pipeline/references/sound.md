@@ -97,6 +97,12 @@ Supply the current `expectedBasis` heads, `expectedGeneration`, exact output
 must be explicitly enabled; an active request retains its original options until
 an explicit new request is selected.
 
+Check the proposal's `candidateTiming` rows alongside the search rank. A fit
+includes the shortest native trim preserving the reviewed marker, useful attack
+and tail, plus the scheduled output samples. Unresolved rows explain which
+timing or review condition is missing. Audition the result in context before
+selecting its trim and mix. Silence remains available.
+
 Each intent identifies a stable `eventId`, current motion `itemId`, purpose,
 role, declared visibility and motion character. An optional `cueId` resolves
 split items; `phase` locates an accent inside the canonical cue. Missing,

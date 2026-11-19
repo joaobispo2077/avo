@@ -3,8 +3,8 @@
 `avo.timeline.sound_planning.fit_sound_candidate` is a pure fitting primitive for
 the selected-sound workflow. It reads a bounded opportunity and a validated saved
 catalogue entry. It does not inspect current media bytes, select an effect,
-publish timing, change picture duration or approve a mix. Native proposal/apply
-orchestration and actual encoded/listening qualification remain separate work.
+publish timing, change picture duration or approve a mix. AVO uses it in
+proposals and rechecks the explicitly selected trim during application.
 
 The opportunity identifies its item/cue/event, visible frame interval, purpose
 and main/bass/support/detail/tail role. The candidate requires complete acoustic
@@ -79,6 +79,19 @@ the primitive does not shorten a sound or extend the picture to make it fit.
 Duration follows the native source clock's separately converted start/end
 boundaries. The audio event carries no picture-visible range; visual context stays
 on the opportunity, matching the existing native audio event owner.
+
+For each returned search match, a proposal includes `candidateTiming` alongside
+the original search results. Each row binds the entry in the selected catalogue
+generation and tries the shortest native trim containing its measured useful
+range and reviewed marker. The row shows that trim and its scheduled output
+sample range when it fits. Missing marker review, insufficient pre-roll or tail
+overflow stays unresolved with the reason. If none of the returned entries fit,
+the event flags that outcome and still allows silence. A returned page can
+represent only part of the library.
+
+Search scores continue to describe descriptor or semantic match. Timing fits use
+saved catalogue facts. Audition the candidate in context before selecting its
+asset, trim and mix.
 
 The strict `avo.sound-selection.schema.json` candidate-fit document binds the
 rational/output clock, program extent, source/measurement identity, current
