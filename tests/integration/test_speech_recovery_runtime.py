@@ -50,6 +50,8 @@ def test_real_local_asr_retains_source_offset_alternatives_and_reuses_restart(
         snapshot, actor="qualification", reason="explicit synthetic source"
     )
     workspace.project["models"] = {"transcribe": pin["model"]}
+    if pin.get("alignment"):
+        workspace.project["cutting"] = {"runtimeRefs": {"alignment": pin["alignment"]}}
     workspace.project_path.write_text(json.dumps(workspace.project), encoding="utf-8")
     cutting = CuttingService(
         workspace,
@@ -81,7 +83,7 @@ def test_real_local_asr_retains_source_offset_alternatives_and_reuses_restart(
         "selection": resolve_editing_craft_selection(
             invocation={"speechRecovery": {"enabled": True}}
         ),
-        "language": "en",
+        "language": pin.get("language", "en"),
         "ranges": [
             {
                 "sourceId": "dialogue",
@@ -106,7 +108,20 @@ def test_real_local_asr_retains_source_offset_alternatives_and_reuses_restart(
         transcript["analysisProvenance"]["sourceFingerprint"]
         == file_fingerprint(media)["sha256"]
     )
-    assert result["wordAnchorsEligible"] is False and result["selection"] == "pending"
+    assert result["selection"] == "pending"
+    analysis = result["recovered"]["analysis"]
+    if pin.get("alignment"):
+        assert analysis["alignment"]["status"] == "pass", analysis["uncertainty"]
+        assert analysis["alignment"]["characters"]
+        assert any(word.get("eligibleEdge") is True for word in analysis["words"])
+        assert all(
+            0.25 <= word["start"] < word["end"] <= end / 48000
+            for word in analysis["words"]
+            if word.get("eligibleEdge") is True
+        )
+        assert result["wordAnchorsEligible"] == service._word_eligibility(analysis)
+    else:
+        assert result["wordAnchorsEligible"] is False
     assert result["recovered"]["analysis"]["coverage"]["observed"] is True
     assert service.store.load_document(original_ref) == original_analysis
     resumed = build_preparation_service(workspace, recover=True)
@@ -140,8 +155,9 @@ def test_real_local_asr_retains_source_offset_alternatives_and_reuses_restart(
     )
     assert evidence["status"] == "selected", evidence["issues"]
     assert selected["decisionRef"] in evidence["decisionRefs"]
-    assert evidence["protectedRanges"]
-    assert selected["wordAnchorsEligible"] is False
+    if not result["wordAnchorsEligible"]:
+        assert evidence["protectedRanges"]
+    assert selected["wordAnchorsEligible"] == result["wordAnchorsEligible"]
     assert selected["cutApproval"] == "not-granted"
     assert service.store.load_document(original_ref) == original_analysis
     assert workspace.store("cmap").head_hash() == head
@@ -149,6 +165,26 @@ def test_real_local_asr_retains_source_offset_alternatives_and_reuses_restart(
     frozen = service.store.load_document(shown["requestRef"])["payload"]
     record_property(
         "modelBindings", json.dumps(frozen["modelBindings"], sort_keys=True)
+    )
+    record_property(
+        "alignmentObservation",
+        json.dumps(
+            {
+                "status": analysis["alignment"]["status"],
+                "wordCount": len(analysis["words"]),
+                "eligibleWordCount": sum(
+                    word.get("eligibleEdge") is True for word in analysis["words"]
+                ),
+                "characterCount": len(analysis["alignment"]["characters"]),
+                "wordAnchorsEligible": result["wordAnchorsEligible"],
+            },
+            sort_keys=True,
+        ),
+    )
+    record_property("alignmentStatus", analysis["alignment"]["status"])
+    record_property(
+        "eligibleWordCount",
+        sum(word.get("eligibleEdge") is True for word in analysis["words"]),
     )
     record_property(
         "transcript",
