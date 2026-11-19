@@ -1,6 +1,7 @@
 """Render a source-bound accent from originals, without granting listening approval."""
 
 import shutil
+from copy import deepcopy
 
 import numpy as np
 import pytest
@@ -8,12 +9,14 @@ from tests.integration import test_canonical_sound_proof_runtime as sound_runtim
 from tests.integration.test_camera_proof_runtime import pixels
 from tests.integration.test_ffmpeg_proof_executor import _pcm
 from tests.integration.test_source_sound_anchor_flow import source_intent
+from tests.integration.test_word_sound_anchor_flow import declared_models, retained_word
 from tests.test_proof_plan import regression_contract
 from tests.test_timeline_animation_service import strategy
 
 from avo.adapters.media.proof_executor import execute_ffmpeg_proof
 from avo.adapters.media.timeline_render import TimelineRenderAdapter
 from avo.capabilities import default_proof_capability_registry
+from avo.timeline import sound_word_evidence
 from avo.timeline.animation import AnimationService
 from avo.timeline.initial_cut import initial_cut_proof_request
 from avo.timeline.materialize import canonical_proof_media_inputs
@@ -28,14 +31,26 @@ pytestmark = [
 ]
 
 
+@pytest.mark.parametrize("anchor_kind", ["point", "word"])
 def test_source_point_keeps_its_absolute_clock_in_full_and_window_exports(
-    tmp_path, monkeypatch
+    tmp_path, monkeypatch, anchor_kind
 ):
     workspace = sound_runtime.recorded_program(tmp_path)
     cmap = workspace.store("cmap").load()["revisions"][-1]["snapshot"]
+    word_anchor = None
+    if anchor_kind == "word":
+        models = declared_models()
+        monkeypatch.setattr(
+            sound_word_evidence,
+            "workspace_speech_dependencies",
+            lambda ws: deepcopy(models),
+        )
+        word_anchor, _ = retained_word(workspace, models)
 
     def selected_intent(**kwargs):
         selected = source_intent(cmap)
+        if word_anchor is not None:
+            selected["sourceAnchor"] = word_anchor
         kwargs.pop("phase", None)
         selected.update(kwargs)
         return selected

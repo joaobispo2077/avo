@@ -179,6 +179,29 @@ def test_real_local_asr_retains_source_offset_alternatives_and_reuses_restart(
             and row["sourceRange"]["endTicksExclusive"] == 12000
             for row in saved["speechCoverage"]["observations"]
         )
+        if result["wordAnchorsEligible"]:
+            from fractions import Fraction
+
+            from avo.timeline.sound_word_evidence import WordEvidenceReader
+
+            reader = WordEvidenceReader(workspace)
+            anchored = reader.anchor(
+                {
+                    "sourceId": "dialogue",
+                    "sourceSha256": file_fingerprint(media)["sha256"],
+                    "segmentId": snapshot["segments"][0]["segmentId"],
+                    "spokenEvidence": {"analysisRef": prepared_ref, "wordIndex": 0},
+                },
+                frame_rate=Fraction(30),
+            )
+            reader.recheck()
+            assert (
+                abs(
+                    anchored["sourceTime"]["ticks"] / 48000 - saved["words"][0]["start"]
+                )
+                <= 1 / 48000
+            )
+            record_property("wordAnchor", json.dumps(anchored, sort_keys=True))
     assert service.store.load_document(original_ref) == original_analysis
     assert workspace.store("cmap").head_hash() == head
     assert file_fingerprint(media)["sha256"] == pin["sourceSha256"]
