@@ -169,6 +169,32 @@ def test_reference_motion_discloses_cut_and_untrackable_blur(
     assert "global" not in cut and "global" not in soft
 
 
+def test_motion_in_one_subject_area_does_not_establish_camera_movement(
+    tmp_path, reference_runtime
+):
+    import numpy as np
+
+    random = np.random.default_rng(9)
+    subject = random.integers(35, 220, size=(22, 26, 3), dtype=np.uint8)
+    frames = np.full((2, 96, 128, 3), 105, dtype=np.uint8)
+    frames[0, 38:60, 45:71] = subject
+    frames[1, 38:60, 49:75] = subject
+    proxy = tmp_path / "subject-only.bgr"
+    proxy.write_bytes(frames.tobytes())
+    result = measure_reference_proxy(
+        reference_runtime,
+        proxy,
+        width=128,
+        height=96,
+        frame_count=len(frames),
+        sha256=file_fingerprint(proxy)["sha256"],
+    )
+    (pair,) = result["pairs"]
+    assert pair["status"] == "unmeasurable"
+    assert pair["reason"] == "unqualified-global-motion"
+    assert "global" not in pair
+
+
 def test_freeze_preserves_exact_native_grid_and_requested_aspects_only():
     request = {
         "source": {"sourceId": "reference", "sha256": "a" * 64, "sizeBytes": 800},
