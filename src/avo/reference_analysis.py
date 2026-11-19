@@ -6,6 +6,7 @@ from itertools import pairwise
 from math import isfinite
 from statistics import median
 
+from .reference_timing import interpret_reference_timing
 from .timeline.contracts import content_hash, validate_document
 
 SCHEMA = "avo.visual-motion-analysis.schema.json"
@@ -339,7 +340,7 @@ def _require_reference_pairs(request, observed):
     return pairs, ticks, gaps
 
 
-def freeze_reference_motion(request, observed):
+def freeze_reference_motion(request, observed, *, audio=None):
     """Store selected measured aspects on native time, separately from interpretation."""
     validate_document(request, SCHEMA + "#/$defs/referenceObservationRequest")
     _require_observation_scope(request, observed)
@@ -362,14 +363,9 @@ def freeze_reference_motion(request, observed):
             _visual_interval(first, last, pair, aspects)
             for (first, last), pair in zip(pairwise(ticks), pairs, strict=True)
         ],
-        "interpretation": {
-            "easing": "uninterpreted",
-            "availableEvidence": {
-                aspect: "unavailable"
-                for aspect in request["aspects"]
-                if aspect in {"hold-reveal", "audio-word-timing"}
-            },
-        },
+        "interpretation": interpret_reference_timing(
+            ticks, pairs, aspects, request["sourceRange"], audio=audio
+        ),
     }
     result["analysisHash"] = content_hash(result)
     validate_document(result, SCHEMA + "#/$defs/referenceObservation")

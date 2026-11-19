@@ -11,6 +11,7 @@ from pathlib import Path
 from avo.adapters.media.camera import _rotation
 from avo.adapters.media.ffprobe import INVENTORY_ENTRIES
 from avo.adapters.media.local_source import local_source_arguments
+from avo.adapters.media.reference_audio import measure_reference_audio
 from avo.reference_analysis import (
     SCHEMA,
     _display_aspect,
@@ -31,7 +32,7 @@ from avo.visual_motion_runtime import (
 MAX_PROXY_BYTES = 64 * 1024 * 1024
 
 
-def _source_video(path, index, options):
+def _source_stream(path, index, options, kind):
     result = subprocess.run(
         [
             "ffprobe",
@@ -52,8 +53,8 @@ def _source_video(path, index, options):
         timeout=30,
     )
     streams = json.loads(result.stdout).get("streams") or []
-    if len(streams) != 1 or streams[0].get("codec_type") != "video":
-        raise ValueError("Face capture requires one exact original video stream")
+    if len(streams) != 1 or streams[0].get("codec_type") != kind:
+        raise ValueError(f"Selected analysis requires one exact original {kind} stream")
     return streams[0]
 
 
@@ -139,10 +140,10 @@ def _decode_log(command):
         errors.seek(0)
         data = errors.read(1024 * 1024 + 1)
     if len(data) > 1024 * 1024:
-        raise ValueError("Face proxy decoding exceeds its log budget")
+        raise ValueError("Source decoding exceeds its log budget")
     log = data.decode("utf-8", errors="replace")
     if result.returncode:
-        raise ValueError(f"Face proxy decoding failed: {log[-1200:]}")
+        raise ValueError(f"Source decoding failed: {log[-1200:]}")
     return log
 
 
@@ -194,7 +195,7 @@ def capture_display_proxy(
         source_file = file_fingerprint(source)
         if source_file["sha256"] != expected_sha256:
             raise ValueError("Face capture source bytes differ from the original")
-        stream = _source_video(source, stream_index, options)
+        stream = _source_stream(source, stream_index, options, "video")
         scale = source_range["timebase"]
         if Fraction(stream["time_base"]) != Fraction(scale["num"], scale["den"]):
             raise ValueError("Face capture range must use the original video time base")
@@ -309,6 +310,18 @@ def _reference_contact_sheet(path, proxy):
     return output.getvalue()
 
 
+def _reference_audio(source, clip, destination):
+    selection = clip.get("audio")
+    if selection is None:
+        return None
+    stream = _source_stream(
+        source, selection["streamIndex"], local_source_arguments(source), "audio"
+    )
+    return measure_reference_audio(
+        source, destination, clip["sourceRange"], selection, stream, _decode_log
+    )
+
+
 def observe_reference_clip(source, clip, python):
     """Observe one sealed local range and prepare a labeled visual contact sheet."""
     with tempfile.TemporaryDirectory(prefix="avo-reference-proxy-") as directory:
@@ -332,6 +345,7 @@ def observe_reference_clip(source, clip, python):
             frame_count=len(proxy["sourceTicks"]),
             sha256=proxy["sha256"],
         )
+        audio = _reference_audio(source, clip, path.with_suffix(".f32"))
         observation = freeze_reference_motion(
             {
                 **{key: clip[key] for key in ("source", "sourceRange", "aspects")},
@@ -339,6 +353,7 @@ def observe_reference_clip(source, clip, python):
                 "proxy": proxy,
             },
             measured,
+            audio=audio,
         )
         return observation, _reference_contact_sheet(path, proxy)
 

@@ -41,6 +41,20 @@ def _validate_budget(request):
         raise ValueError("Reference selection exceeds its explicit time or clip budget")
     if len({clip["clipId"] for clip in clips}) != len(clips):
         raise ValueError("Reference selections require unique clip identities")
+    for clip in clips:
+        _validate_word_sources(clip)
+
+
+def _validate_word_sources(clip):
+    source = clip["source"]
+    for word in clip.get("wordAnchors", []):
+        if (word["sourceId"], word["sourceSha256"]) != (
+            source["sourceId"],
+            source["sha256"],
+        ):
+            raise ValueError(
+                "Prepared reference words must bind the same original source"
+            )
 
 
 def _local_path(locator):
@@ -64,6 +78,9 @@ def _validate_clip_result(clip, observation, sheet):
         observation["request"][key] != clip[key] for key in CLIP_FACTS
     ):
         raise ValueError("Reference observations differ from the selected clip")
+    audio = observation["interpretation"].get("audioTiming", {})
+    if audio.get("selection") != clip.get("audio"):
+        raise ValueError("Reference timing differs from the selected audio")
     if (
         not isinstance(sheet, bytes)
         or not sheet.startswith(b"\x89PNG\r\n\x1a\n")
@@ -118,8 +135,12 @@ def _measure_selected_clips(request, analyze, python):
 
 
 def _publish_observations(workspace, request, measured):
-    for path, clip, _, _ in measured:
+    from .reference_words import add_reference_words
+
+    for path, clip, observation, sheet in measured:
         _check_source(path, clip["source"])
+        add_reference_words(workspace, clip, observation)
+        _validate_clip_result(clip, observation, sheet)
     rows = [
         {
             "clipId": clip["clipId"],

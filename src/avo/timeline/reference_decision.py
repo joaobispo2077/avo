@@ -64,6 +64,38 @@ def _brightness_summary(rows):
     )
 
 
+def _timing_summary(interpretation):
+    rows = interpretation.get("timingCandidates", [])
+    holds = sum(row["kind"] == "hold" for row in rows)
+    return f"The sampled frames support {holds} candidate holds and {len(rows) - holds} candidate reveals."
+
+
+def _easing_summary(interpretation):
+    result = interpretation["easing"]
+    return f"Approximate {result['curve']} fit on {result['axis']} between ticks {result['startTicks']}–{result['endTicks']} (normalized progress RMSE {result['progressRmse']:.3f})."
+
+
+def _audio_summary(interpretation):
+    audio = interpretation["audioTiming"]
+    words = sum(
+        row["status"] == "observed" for row in interpretation.get("wordTiming", [])
+    )
+    overlaps = len(interpretation["audioRevealRelationships"])
+    return f"Observed {len(audio['onsetSamples'])} energy onset candidates at {audio['sampleRate']} Hz, with possible overlap in {overlaps} reveal windows. Bound {words} prepared word starts to this audio clock."
+
+
+def _interpreted_summary(observation, aspect):
+    details = observation["interpretation"]
+    available = details["availableEvidence"]
+    if aspect == "hold-reveal" and available.get(aspect) == "measured-candidates":
+        return _timing_summary(details)
+    if aspect == "easing" and isinstance(details["easing"], dict):
+        return _easing_summary(details)
+    if aspect == "audio-word-timing" and available.get(aspect) == "audio-candidates":
+        return _audio_summary(details)
+    raise ValueError(f"Selected reference aspect has no measured coverage: {aspect}")
+
+
 def _measurements_summary(observation, aspects):
     scope = observation["request"]["sourceRange"]
     clock = scope["timebase"]
@@ -86,6 +118,9 @@ def _measurements_summary(observation, aspects):
     }
     for aspect in aspects:
         metric = METRICS.get(aspect)
+        if metric is None:
+            details.append(_interpreted_summary(observation, aspect))
+            continue
         rows = [interval[metric] for interval in intervals if metric in interval]
         if not rows:
             raise ValueError(
@@ -97,6 +132,8 @@ def _measurements_summary(observation, aspects):
 
 def _descriptor(workspace, request, observation):
     reference = request["observationRef"]
+    if "easing" in request["selectedAspects"] and request["disposition"] != "qualify":
+        raise ValueError("Approximate easing requires a qualified reference decision")
     result = {
         "schemaVersion": "1.0.0",
         "referenceId": "measured-reference-" + content_hash(request)[:24],

@@ -226,9 +226,59 @@
       "items": {"$ref": "#/$defs/referencePair"}
     },
     "referenceAspects": {
-      "type": "array", "minItems": 1, "maxItems": 6, "uniqueItems": true,
-      "items": {"enum": ["global-motion", "element-motion", "scene-changes", "brightness", "hold-reveal", "audio-word-timing"]}
+      "type": "array", "minItems": 1, "maxItems": 7, "uniqueItems": true,
+      "items": {"enum": ["global-motion", "element-motion", "scene-changes", "brightness", "hold-reveal", "easing", "audio-word-timing"]}
     },
+    "referenceAudioSelection": {
+      "type": "object", "additionalProperties": false,
+      "required": ["streamIndex", "channelIndex", "energyThreshold"],
+      "properties": {
+        "streamIndex": {"$ref": "#/$defs/faceAnalyzeRequest/properties/streamIndex"},
+        "channelIndex": {"type": "integer", "minimum": 0, "maximum": 63},
+        "energyThreshold": {"type": "number", "minimum": 0.000001, "maximum": 1}
+      }
+    },
+    "referenceAudioTiming": {
+      "type": "object", "additionalProperties": false,
+      "required": ["status", "selection"],
+      "properties": {
+        "status": {"enum": ["observed", "unavailable"]},
+        "selection": {"$ref": "#/$defs/referenceAudioSelection"},
+        "reason": {"const": "unverified-audio-clock"},
+        "sampleRate": {"type": "integer", "minimum": 8000, "maximum": 96000},
+        "streamOriginSample": {"type": "integer"},
+        "startSample": {"type": "integer"},
+        "endSampleExclusive": {"type": "integer"},
+        "windowSamples": {"type": "integer", "minimum": 1},
+        "hopSamples": {"type": "integer", "minimum": 1},
+        "clockUncertaintySamples": {"type": "integer", "minimum": 1},
+        "onsetSamples": {"type": "array", "maxItems": 128, "items": {"type": "integer"}},
+        "truncated": {"type": "boolean"}
+      },
+      "allOf": [{
+        "if": {"properties": {"status": {"const": "observed"}}},
+        "then": {"required": ["sampleRate", "startSample", "endSampleExclusive", "windowSamples", "hopSamples", "clockUncertaintySamples", "onsetSamples", "truncated"], "properties": {"reason": false}},
+        "else": {"required": ["reason"], "properties": {"sampleRate": false, "streamOriginSample": false, "startSample": false, "endSampleExclusive": false, "windowSamples": false, "hopSamples": false, "clockUncertaintySamples": false, "onsetSamples": false, "truncated": false}}
+      }]
+    },
+    "referenceWordAnchor": {"allOf": [
+      {"$ref": "avo.sound-selection.schema.json#/$defs/sourceAnchor"},
+      {"required": ["spokenEvidence"]}
+    ]},
+    "referenceWordTiming": {"oneOf": [
+      {"type": "object", "additionalProperties": false,
+       "required": ["status", "anchor", "startSample", "clockUncertaintySamples", "revealWindows"],
+       "properties": {
+         "status": {"const": "observed"}, "anchor": {"$ref": "#/$defs/referenceWordAnchor"},
+         "startSample": {"type": "integer"}, "clockUncertaintySamples": {"type": "integer", "minimum": 1},
+         "revealWindows": {"type": "array", "maxItems": 299, "items": {
+           "type": "object", "additionalProperties": false, "required": ["startTicks", "endTicks"],
+           "properties": {"startTicks": {"$ref": "#/$defs/sourceTick"}, "endTicks": {"$ref": "#/$defs/sourceTick"}}
+         }}
+       }},
+      {"type": "object", "additionalProperties": false, "required": ["status", "reason"],
+       "properties": {"status": {"const": "unavailable"}, "reason": {"const": "unverified-word-evidence"}}}
+    ]},
     "referenceAnalyzeRequest": {
       "type": "object", "additionalProperties": false,
       "required": ["contractVersion", "operation", "actor", "reason", "expectedBasis", "selection", "runtimePython", "clips"],
@@ -259,8 +309,14 @@
               "sourceRange": {"$ref": "#/$defs/sourceRange"},
               "sampleEvery": {"$ref": "#/$defs/faceAnalyzeRequest/properties/sampleEvery"},
               "aspects": {"$ref": "#/$defs/referenceAspects"},
+              "audio": {"$ref": "#/$defs/referenceAudioSelection"},
+              "wordAnchors": {"type": "array", "minItems": 1, "maxItems": 16, "uniqueItems": true, "items": {"$ref": "#/$defs/referenceWordAnchor"}},
               "attribution": {"type": "string", "minLength": 1, "maxLength": 2048}
-            }
+            },
+            "allOf": [
+              {"if": {"required": ["audio"]}, "then": {"properties": {"aspects": {"contains": {"const": "audio-word-timing"}}}}},
+              {"if": {"required": ["wordAnchors"]}, "then": {"required": ["audio"]}}
+            ]
           }
         }
       }
@@ -349,10 +405,58 @@
           "type": "object", "additionalProperties": false,
           "required": ["easing", "availableEvidence"],
           "properties": {
-            "easing": {"const": "uninterpreted"},
+            "easing": {"oneOf": [{"const": "uninterpreted"}, {
+              "type": "object", "additionalProperties": false,
+              "required": ["status", "curve", "axis", "startTicks", "endTicks", "progressRmse"],
+              "properties": {
+                "status": {"const": "approximate"},
+                "curve": {"enum": ["linear", "quadratic-in", "quadratic-out", "quadratic-in-out"]},
+                "axis": {"enum": ["translateX", "translateY", "scale"]},
+                "startTicks": {"$ref": "#/$defs/sourceTick"}, "endTicks": {"$ref": "#/$defs/sourceTick"},
+                "progressRmse": {"type": "number", "minimum": 0, "maximum": 0.08}
+              }
+            }]},
+            "timingCandidates": {
+              "type": "array", "maxItems": 299,
+              "items": {
+                "type": "object", "additionalProperties": false,
+                "required": ["kind", "startTicks", "endTicks", "evidence"],
+                "properties": {
+                  "kind": {"enum": ["hold", "reveal"]},
+                  "startTicks": {"$ref": "#/$defs/sourceTick"}, "endTicks": {"$ref": "#/$defs/sourceTick"},
+                  "evidence": {"enum": ["low-motion", "motion-onset", "candidate-cut"]}
+                }
+              }
+            },
             "availableEvidence": {
               "type": "object", "additionalProperties": false,
-              "properties": {"hold-reveal": {"const": "unavailable"}, "audio-word-timing": {"const": "unavailable"}}
+              "properties": {"hold-reveal": {"enum": ["measured-candidates", "unavailable"]}, "audio-word-timing": {"enum": ["audio-candidates", "unavailable"]}, "prepared-words": {"enum": ["not-selected", "observed", "unavailable"]}}
+            },
+            "audioTiming": {"$ref": "#/$defs/referenceAudioTiming"},
+            "wordTiming": {"type": "array", "minItems": 1, "maxItems": 16, "items": {"$ref": "#/$defs/referenceWordTiming"}},
+            "fadeCandidates": {
+              "type": "array", "minItems": 1, "maxItems": 99,
+              "items": {
+                "type": "object", "additionalProperties": false,
+                "required": ["direction", "startTicks", "endTicks", "before", "after"],
+                "properties": {
+                  "direction": {"enum": ["brightening", "darkening"]},
+                  "startTicks": {"$ref": "#/$defs/sourceTick"}, "endTicks": {"$ref": "#/$defs/sourceTick"},
+                  "before": {"$ref": "#/$defs/unit"}, "after": {"$ref": "#/$defs/unit"}
+                }
+              }
+            },
+            "audioRevealRelationships": {
+              "type": "array", "maxItems": 299,
+              "items": {
+                "type": "object", "additionalProperties": false,
+                "required": ["startTicks", "endTicks", "onsetSamples"],
+                "properties": {
+                  "startTicks": {"$ref": "#/$defs/sourceTick"},
+                  "endTicks": {"$ref": "#/$defs/sourceTick"},
+                  "onsetSamples": {"type": "array", "minItems": 1, "maxItems": 128, "items": {"type": "integer"}}
+                }
+              }
             }
           }
         },

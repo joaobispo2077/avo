@@ -121,7 +121,7 @@ class WordEvidenceReader:
         _unique_word(baseline, digest)
         return baseline.get("speechDependencies")
 
-    def anchor(self, anchor, *, frame_rate):
+    def anchor(self, anchor, *, frame_rate, expected_audio=None):
         _check_budget(anchor, METADATA_LIMITS)
         validate_document(anchor, "avo.sound-selection.schema.json#/$defs/sourceAnchor")
         spoken = anchor["spokenEvidence"]
@@ -135,6 +135,8 @@ class WordEvidenceReader:
             else pinned
         )
         cmap, source, routing, sync_ref, view = self._view(baseline)
+        if expected_audio is not None:
+            _require_word_audio(routing, expected_audio)
         if preparation and preparation["selectionHash"] != view["selectionHash"]:
             raise ValueError("Pinned transcript selection changed")
         if (
@@ -170,6 +172,14 @@ class WordEvidenceReader:
         ):
             raise ValueError("Selected word crosses its retained source occurrence")
         return _frozen_word_anchor(anchor, point, digest, view["selectionHash"])
+
+
+def _require_word_audio(routing, selection):
+    if (
+        routing["streamIndex"] != selection["streamIndex"]
+        or selection["channelIndex"] not in routing["channels"]
+    ):
+        raise ValueError("Prepared word uses a different original audio route")
 
 
 def word_intent_anchors(intents):
