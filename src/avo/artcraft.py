@@ -3,13 +3,21 @@
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import dataclass
 from importlib.resources import files
 from pathlib import Path
+from tempfile import NamedTemporaryFile
 from typing import Any
 
 from avo.paths import repo_root
-from avo.timeline.contracts import ContractError, content_hash, validate_document
+from avo.telemetry import disk_free
+from avo.timeline.contracts import (
+    ContractError,
+    content_hash,
+    file_fingerprint,
+    validate_document,
+)
 from avo.timeline.store import (
     StoreError,
     atomic_write_json,
@@ -26,12 +34,14 @@ __all__ = [
     "assess_request",
     "catalog",
     "guard_legacy_component_request",
+    "prepare_authoring",
     "require_eligible",
     "seal_record",
     "validate_record",
 ]
 
 _SEALED = frozenset({"decision", "job", "event", "package", "receipt"})
+_NATIVE_SUFFIXES = {"anicraft": ".anicraft"}
 _OPERATIONAL_FAILURES = frozenset(
     {"not-installed", "invalid-input", "permission-denied", "transient-error", "defect"}
 )
@@ -40,12 +50,16 @@ _OPERATIONAL_FAILURES = frozenset(
 class ArtCraftError(ValueError):
     """A request cannot proceed within its confirmed scope and evidence."""
 
-    def __init__(self, message, *, code="ARTCRAFT_INVALID_REQUEST"):
+    def __init__(self, message, *, code="ARTCRAFT_INVALID_REQUEST", remediation=None):
         super().__init__(message)
         self.code = code
+        self.remediation = remediation
 
     def to_dict(self):
-        return {"code": self.code, "message": str(self), "blocking": True}
+        result = {"code": self.code, "message": str(self), "blocking": True}
+        if self.remediation:
+            result["remediation"] = self.remediation
+        return result
 
 
 @dataclass(frozen=True)
@@ -379,11 +393,11 @@ class ArtCraftJobStore:
             self.directory, self.directory / f"job-{job_id}", "job directory"
         )
 
-    def _job_path(self, job_id: str) -> Path:
+    def reference(self, job_id: str) -> Path:
         directory = self._job_dir(job_id)
         return _bounded_path(directory, directory / "job.json", "job record")
 
-    def _writer(self):
+    def writer(self):
         lock = _bounded_path(
             self.workspace, self.directory / ".mutation.lock", "job writer lock"
         )
@@ -399,8 +413,8 @@ class ArtCraftJobStore:
             )
         for root in job["roots"]["write"]:
             _bounded_path(self.workspace, Path(root), "write root")
-        with self._writer():
-            path = self._job_path(job["jobId"])
+        with self.writer():
+            path = self.reference(job["jobId"])
             if path.exists():
                 stored = self.load(job["jobId"])
                 if stored != job:
@@ -412,7 +426,7 @@ class ArtCraftJobStore:
         return job
 
     def load(self, job_id: str) -> dict[str, Any]:
-        job = validate_record("job", _read_record(self._job_path(job_id)))
+        job = validate_record("job", _read_record(self.reference(job_id)))
         if job["jobId"] != job_id or Path(job["workspace"]) != self.workspace:
             raise ArtCraftError(
                 "ArtCraft stored job does not match its workspace and ID"
@@ -469,7 +483,7 @@ class ArtCraftJobStore:
     ) -> dict[str, Any]:
         operation_id = event.get("operationId")
         validate_document(operation_id, _schema("id"))
-        with self._writer():
+        with self.writer():
             job = self.load(job_id)
             directory = self._job_dir(job_id)
             index = self._index(directory)
@@ -527,3 +541,243 @@ def _event_record(job, event, predecessor):
             "predecessorHash": predecessor,
         },
     )
+
+
+def prepare_authoring(
+    request, spec, *, decision, intent, adapter, routes=None, pinned=None
+):
+    """Observe one eligible environment and prepare a source-preserving job."""
+    selected = require_eligible(
+        request, decision, intent=intent, routes=routes, pinned=pinned
+    )
+    validate_document(spec, _schema("jobSpec"))
+    store, base, project_facts = _preparation_workspace(request, spec)
+    scope = selected["scope"]
+    document = _owned_document(store, base, spec["jobId"], scope["app"])
+    roots = _preparation_roots(spec, document.parent)
+    source = _preparation_source(spec, roots, document)
+    _require_preparation_capacity(store.workspace, spec["budget"], source)
+    observation = adapter.observe(
+        scope=scope,
+        mode=spec["mode"],
+        roots=roots,
+        cli_path=spec.get("cliPath"),
+        app_path=spec.get("appPath"),
+    )
+    _require_preparation_observation(observation, spec, roots)
+    job = {
+        "version": 1,
+        "jobId": spec["jobId"],
+        "request": request,
+        "decision": selected,
+        "workspace": str(store.workspace),
+        "roots": roots,
+        "observation": observation,
+        "document": document.relative_to(store.workspace).as_posix(),
+        "documentState": spec["document"]["state"],
+        "inputs": [source] if source else [],
+        "recipeHash": content_hash([scope, spec["document"]["state"], spec["output"]]),
+        "output": spec["output"],
+        "budget": spec["budget"],
+        **project_facts,
+    }
+    return _publish_preparation(store, job, document, source)
+
+
+def _preparation_workspace(request, spec):
+    from avo.init_project import load_provider
+
+    provider = request["provider"]
+    if spec["provider"] != provider:
+        raise ArtCraftError("ArtCraft provider differs from the current request")
+    try:
+        load_provider(provider)
+    except (OSError, ValueError) as exc:
+        raise ArtCraftError(
+            f"ArtCraft provider could not be resolved: {provider}"
+        ) from exc
+    selected = Path(spec["workspace"])
+    if request["context"]["kind"] == "provider-only":
+        store = ArtCraftJobStore(selected)
+        return store, store.workspace / "artcraft-media", {}
+    return _video_preparation_workspace(selected, request)
+
+
+def _video_preparation_workspace(selected, request):
+    from avo.timeline.workspace import TimelineWorkspace
+
+    context = request["context"]
+    path = Path(context["project"])
+    if not path.is_absolute() or path.resolve(strict=True) != path:
+        raise ArtCraftError("ArtCraft requires the exact absolute project path")
+    project = TimelineWorkspace.from_project(path)
+    if (
+        project.raw_dir.resolve() != selected
+        or project.project.get("provider") != request["provider"]
+        or project.video_id != context["videoId"]
+    ):
+        raise ArtCraftError(
+            "ArtCraft project, provider or raw workspace differs from the current request"
+        )
+    edit = selected / "edit"
+    metadata = _bounded_path(
+        edit, project.timeline_dir / "artcraft-jobs", "video job metadata"
+    )
+    store = ArtCraftJobStore(selected, metadata_root=metadata)
+    return (
+        store,
+        edit / "artcraft-media",
+        {
+            "projectFingerprint": file_fingerprint(path),
+            "canonicalHeads": project.active_dependency_snapshot(),
+        },
+    )
+
+
+def _owned_document(store, base, job_id, app):
+    suffix = _NATIVE_SUFFIXES.get(app)
+    if suffix is None:
+        raise ArtCraftError(
+            f"No checked authoring profile for {app}", code="ARTCRAFT_NOT_READY"
+        )
+    return _bounded_path(
+        store.workspace,
+        base / f"job-{job_id}" / f"component{suffix}",
+        "native document",
+    )
+
+
+def _preparation_roots(spec, owned):
+    supplied = [Path(path) for path in spec["readRoots"]]
+    for root in supplied:
+        if (
+            not root.is_absolute()
+            or not root.is_dir()
+            or root.resolve(strict=True) != root
+        ):
+            raise ArtCraftError(
+                "ArtCraft read root must be an exact absolute directory"
+            )
+    return {"read": sorted({str(owned), *map(str, supplied)}), "write": [str(owned)]}
+
+
+def _preparation_source(spec, roots, document):
+    selected = spec["document"].get("source")
+    if selected is None:
+        return None
+    source = Path(selected)
+    if not any(source.is_relative_to(Path(root)) for root in roots["read"]):
+        raise ArtCraftError("ArtCraft source falls outside the selected read roots")
+    if (
+        source.resolve(strict=True) != source
+        or source.suffix != document.suffix
+        or source.is_relative_to(document.parent)
+    ):
+        raise ArtCraftError(
+            "ArtCraft source must be the exact selected native original"
+        )
+    metadata = source.stat()
+    if (
+        not source.is_file()
+        or metadata.st_nlink != 1
+        or metadata.st_size > spec["budget"]["bytes"]
+    ):
+        raise ArtCraftError(
+            "ArtCraft native source exceeds the byte limit or has a file alias"
+        )
+    return file_fingerprint(source)
+
+
+def _require_preparation_capacity(workspace, budget, source):
+    if budget["bytes"] > disk_free(workspace):
+        raise ArtCraftError(
+            "ArtCraft workspace has insufficient verified free disk",
+            code="ARTCRAFT_NOT_READY",
+        )
+    if source is not None and source["sizeBytes"] >= budget["bytes"]:
+        raise ArtCraftError(
+            "ArtCraft budget leaves no space for the selected output",
+            code="ARTCRAFT_NOT_READY",
+        )
+
+
+def _require_preparation_observation(observation, spec, roots):
+    validate_document(observation, _schema("observation"))
+    if (
+        observation.get("effectiveRoots") != roots
+        or observation["mode"] != spec["mode"]
+    ):
+        raise ArtCraftError(
+            "ArtCraft effective roots or working mode were not independently established",
+            code="ARTCRAFT_NOT_READY",
+        )
+
+
+def _publish_preparation(store, job, document, source):
+    with store.writer():
+        job = store.create(job)
+        prior = store.head(job["jobId"])
+        if prior is not None and prior["state"] != "prepared":
+            raise ArtCraftError(
+                "ArtCraft job already advanced beyond preparation",
+                code="ARTCRAFT_SCOPE_CHANGED",
+            )
+        if source is not None:
+            document = _bounded_path(store.workspace, document, "native document")
+            _copy_native_source(document, source)
+        elif document.exists():
+            raise ArtCraftError(
+                "ArtCraft empty job already contains a native document",
+                code="ARTCRAFT_SCOPE_CHANGED",
+            )
+        event = store.append(
+            job["jobId"],
+            expected_head="empty",
+            event={"operationId": "prepare", "state": "prepared"},
+        )
+    return {
+        "status": "prepared",
+        "job": job,
+        "jobRef": str(store.reference(job["jobId"])),
+        "head": event["eventHash"],
+    }
+
+
+def _copy_native_source(document, source):
+    document.parent.mkdir(parents=True, exist_ok=True)
+    if document.exists():
+        _require_exact_copy(document, source)
+        return
+    with NamedTemporaryFile(
+        "wb", dir=document.parent, prefix=".source-", delete=False
+    ) as scratch:
+        temporary = Path(scratch.name)
+        try:
+            with Path(source["locator"]).open("rb") as origin:
+                _copy_bounded_bytes(origin, scratch, source["sizeBytes"])
+            scratch.close()
+            _require_exact_copy(temporary, source)
+            os.link(temporary, document)
+        finally:
+            scratch.close()
+            temporary.unlink(missing_ok=True)
+
+
+def _copy_bounded_bytes(origin, scratch, size):
+    remaining = size
+    while chunk := origin.read(min(remaining + 1, 1024 * 1024)):
+        remaining -= len(chunk)
+        if remaining < 0:
+            raise ArtCraftError("ArtCraft source changed during the job copy")
+        scratch.write(chunk)
+    scratch.flush()
+    os.fsync(scratch.fileno())
+
+
+def _require_exact_copy(path, original):
+    current = file_fingerprint(path)
+    if path.stat().st_nlink != 1 or current != {**original, "locator": str(path)}:
+        raise ArtCraftError(
+            "ArtCraft retained job copy differs from the source fingerprint",
+            code="ARTCRAFT_SCOPE_CHANGED",
+        )

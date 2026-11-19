@@ -21,6 +21,17 @@ def configure(sub):
     index.add_argument("--app")
     index.add_argument("--behavior")
     index.add_argument("--json", action="store_true")
+    prepare = operations.add_parser(
+        "prepare", help="Prepare one selected authoring job"
+    )
+    prepare.add_argument("--request-json", required=True)
+    prepare.add_argument("--job-spec-json", required=True)
+    for field in ("provider", "workspace", "app", "mode"):
+        prepare.add_argument(f"--{field}", required=True)
+    prepare.add_argument("--operation", action="append", required=True)
+    prepare.add_argument("--cli")
+    prepare.add_argument("--application")
+    prepare.add_argument("--json", action="store_true")
 
 
 def _distinct_keys(pairs):
@@ -32,12 +43,21 @@ def _distinct_keys(pairs):
     return result
 
 
-def _decode_request(raw):
-    from avo.artcraft import ArtCraftError, validate_record
+def _decode_object(raw):
+    from avo.artcraft import ArtCraftError
 
     if len(raw.encode("utf-8")) > _MAX_REQUEST_BYTES:
         raise ArtCraftError("ArtCraft request exceeds 256 KiB")
-    return validate_record("request", json.loads(raw, object_pairs_hook=_distinct_keys))
+    document = json.loads(raw, object_pairs_hook=_distinct_keys)
+    if not isinstance(document, dict):
+        raise ArtCraftError("ArtCraft request must be a structured object")
+    return document
+
+
+def _decode_request(raw):
+    from avo.artcraft import validate_record
+
+    return validate_record("request", _decode_object(raw))
 
 
 def encode_request(value):
@@ -109,18 +129,55 @@ def _native_routes(request):
     )
 
 
+def _prepare_job(request, args):
+    from avo.adapters.artcraft import SelectedArtCraftAdapter
+    from avo.artcraft import (
+        ArtCraftError,
+        ArtCraftIntent,
+        assess_request,
+        prepare_authoring,
+    )
+
+    spec = _decode_object(args.job_spec_json)
+    for key in ("provider", "workspace", "mode"):
+        if spec.get(key) != getattr(args, key):
+            raise ArtCraftError(
+                f"ArtCraft job {key} differs from the selected invocation"
+            )
+    for key, selected in (("cliPath", args.cli), ("appPath", args.application)):
+        if key in spec and spec[key] != selected:
+            raise ArtCraftError(
+                f"Select the exact installed ArtCraft {key} in the invocation"
+            )
+        if selected is not None:
+            spec[key] = selected
+    intent = ArtCraftIntent("explicit", args.app, tuple(args.operation))
+    decision = assess_request(request, intent=intent)
+    return prepare_authoring(
+        request,
+        spec,
+        intent=intent,
+        decision=decision,
+        adapter=SelectedArtCraftAdapter(),
+    )
+
+
 def run(args):
     from avo.artcraft import ArtCraftError, assess_request, catalog
 
     try:
         if args.artcraft_operation == "catalog":
             result = catalog(app=args.app, behavior=args.behavior)
+        elif args.artcraft_operation == "prepare":
+            result = _prepare_job(_decode_request(args.request_json), args)
         else:
             request = _decode_request(args.request_json)
             result = assess_request(
                 request, intent=_assessment_intent(args), routes=_native_routes(request)
             )
-    except ValueError as exc:
+    except ArtCraftError:
+        raise
+    except (ValueError, OSError) as exc:
         raise ArtCraftError(str(exc)) from exc
     print(json.dumps(result, ensure_ascii=False, indent=2))
     return 0

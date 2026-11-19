@@ -151,6 +151,7 @@
         "release": { "$ref": "#/$defs/text" },
         "mode": { "$ref": "#/$defs/mode" },
         "executable": { "$ref": "#/$defs/fingerprint" },
+        "application": { "$ref": "#/$defs/fingerprint" },
         "operations": { "type": "array", "minItems": 1, "maxItems": 16, "uniqueItems": true, "items": { "$ref": "#/$defs/id" } },
         "commandSchemaHash": { "$ref": "#/$defs/hash" },
         "effectiveRoots": { "$ref": "#/$defs/roots" }
@@ -197,6 +198,32 @@
         "bytes": { "$ref": "#/$defs/positiveInteger" }
       }
     },
+    "jobSpec": {
+      "type": "object", "additionalProperties": false,
+      "required": ["version", "jobId", "provider", "workspace", "mode", "document", "readRoots", "output", "budget"],
+      "properties": {
+        "version": { "const": 1 },
+        "jobId": { "$ref": "#/$defs/id" },
+        "provider": { "$ref": "#/$defs/id" },
+        "workspace": { "$ref": "#/$defs/text" },
+        "mode": { "$ref": "#/$defs/mode" },
+        "document": {
+          "type": "object", "additionalProperties": false, "required": ["state"],
+          "properties": {
+            "state": { "enum": ["empty", "saved"] },
+            "source": { "$ref": "#/$defs/text" }
+          },
+          "if": { "properties": { "state": { "const": "saved" } } },
+          "then": { "required": ["source"] },
+          "else": { "not": { "required": ["source"] } }
+        },
+        "readRoots": { "type": "array", "maxItems": 31, "uniqueItems": true, "items": { "$ref": "#/$defs/text" } },
+        "cliPath": { "$ref": "#/$defs/text" },
+        "appPath": { "$ref": "#/$defs/text" },
+        "output": { "$ref": "#/$defs/output" },
+        "budget": { "$ref": "#/$defs/budget" }
+      }
+    },
     "job": {
       "type": "object", "additionalProperties": false,
       "required": ["version", "jobId", "request", "decision", "workspace", "roots", "observation", "document", "inputs", "recipeHash", "output", "budget", "jobHash"],
@@ -209,6 +236,9 @@
         "roots": { "$ref": "#/$defs/roots" },
         "observation": { "$ref": "#/$defs/observation" },
         "document": { "$ref": "#/$defs/relativePath" },
+        "documentState": { "enum": ["empty", "saved"] },
+        "projectFingerprint": { "$ref": "#/$defs/fingerprint" },
+        "canonicalHeads": { "type": "object", "maxProperties": 12, "propertyNames": { "$ref": "#/$defs/id" }, "additionalProperties": { "$ref": "#/$defs/hash" } },
         "inputs": { "type": "array", "maxItems": 16384, "items": { "$ref": "#/$defs/fingerprint" } },
         "recipeHash": { "$ref": "#/$defs/hash" },
         "output": { "$ref": "#/$defs/output" },
