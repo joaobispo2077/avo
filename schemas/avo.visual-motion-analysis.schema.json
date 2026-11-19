@@ -276,6 +276,35 @@
         "aspects": {"$ref": "#/$defs/referenceAspects"}
       }
     },
+    "referenceDecisionRequest": {
+      "type": "object", "additionalProperties": false,
+      "required": ["contractVersion", "operation", "actor", "reason", "expectedBasis", "observationRef", "clipId", "disposition"],
+      "properties": {
+        "contractVersion": {"const": "1.0.0"}, "operation": {"const": "reference-decide"},
+        "actor": {"$ref": "#/$defs/faceAnalyzeRequest/properties/actor"},
+        "reason": {"$ref": "#/$defs/faceAnalyzeRequest/properties/reason"},
+        "expectedBasis": {"$ref": "avo.motion-review.schema.json#/properties/basisHeads"},
+        "observationRef": {
+          "type": "object", "additionalProperties": false, "required": ["locator", "sha256"],
+          "properties": {
+            "locator": {"type": "string", "pattern": "^edit/motion/references/[a-f0-9]{64}\\.json$"},
+            "sha256": {"$ref": "#/$defs/sha256"}
+          }
+        },
+        "clipId": {"$ref": "#/$defs/sourceIdentity/properties/sourceId"},
+        "disposition": {"enum": ["accept", "qualify", "reject"]},
+        "selectedAspects": {"$ref": "#/$defs/referenceAspects"},
+        "qualification": {"type": "string", "minLength": 1, "maxLength": 2048, "pattern": "\\S"}
+      },
+      "allOf": [
+        {"if": {"properties": {"disposition": {"const": "reject"}}},
+         "then": {"properties": {"selectedAspects": false}},
+         "else": {"required": ["selectedAspects"]}},
+        {"if": {"properties": {"disposition": {"const": "qualify"}}},
+         "then": {"required": ["qualification"]},
+         "else": {"properties": {"qualification": false}}}
+      ]
+    },
     "referenceObservation": {
       "type": "object", "additionalProperties": false,
       "required": ["contractVersion", "request", "runtime", "coverage", "intervals", "interpretation", "analysisHash"],
