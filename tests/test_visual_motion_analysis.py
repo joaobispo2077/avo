@@ -114,3 +114,110 @@ def test_face_model_preflight_checks_bytes_before_running_an_interpreter(
     monkeypatch.setattr("subprocess.run", forbidden)
     with pytest.raises(PreflightError, match="exact pinned YuNet 2023 model bytes"):
         preflight(selected)
+
+
+def test_proxy_boxes_map_to_original_display_fractions_at_original_ticks():
+    from avo.reference_analysis import map_proxy_face_samples
+
+    rect = {"x": 0, "y": 40, "width": 320, "height": 240}
+    responses = [
+        [{"box": [32, 88, 64, 72], "score": 0.95}],
+        [{"box": [290, 22, 70, 78], "score": 0.93}],
+        [{"box": [0, 0, 30, 20], "score": 0.91}],
+    ]
+    frames = map_proxy_face_samples(responses, [7250, 7500, 7900], rect)
+    assert frames == [
+        sample(7250, [0.1, 0.2, 0.2, 0.3]),
+        {
+            "sourceTick": 7500,
+            "detections": [{"box": [0.90625, 0.0, 0.09375, 0.25], "score": 0.93}],
+        },
+        sample(7900),
+    ]
+
+
+def test_proxy_frame_responses_cannot_use_inferred_or_repeated_source_ticks():
+    from avo.reference_analysis import map_proxy_face_samples
+
+    rect = {"x": 0, "y": 0, "width": 320, "height": 240}
+    with pytest.raises(ValueError, match="exact source ticks"):
+        map_proxy_face_samples([[], []], [20], rect)
+    with pytest.raises(ValueError, match="increasing source ticks"):
+        map_proxy_face_samples([[], []], [20, 20], rect)
+
+
+def observation_inputs():
+    from avo.visual_motion_runtime import VERSIONS, YUNET_SHA256
+
+    request = {
+        "contractVersion": "1.0.0",
+        "source": {"sourceId": "camera", "sha256": "a" * 64, "sizeBytes": 1000},
+        "sourceRange": {
+            "startTicks": 24000,
+            "endTicks": 25920,
+            "timebase": {"num": 1, "den": 48000},
+        },
+        "geometry": {
+            "width": 1080,
+            "height": 1920,
+            "rotation": 90,
+            "sampleAspectRatio": {"num": 1, "den": 1},
+        },
+        "proxy": {
+            "sha256": "b" * 64,
+            "width": 320,
+            "height": 240,
+            "content": {"x": 0, "y": 30, "width": 320, "height": 180},
+            "sourceTicks": [24000, 24960],
+        },
+        "seed": {"sourceTick": 24000, "detectionIndex": 0},
+        "minimumOverlap": 0.3,
+        "maximumGapTicks": 960,
+    }
+    observed = {
+        "device": "cpu",
+        "isolated": True,
+        "modelSha256": YUNET_SHA256,
+        "versions": VERSIONS,
+        "proxySha256": "b" * 64,
+        "detections": [[{"box": [32, 48, 40, 50], "score": 0.95}], []],
+    }
+    return request, observed
+
+
+def test_frozen_face_observation_contains_exact_source_proxy_and_measurement():
+    from avo.reference_analysis import freeze_face_observation
+
+    request, observations = observation_inputs()
+    result = freeze_face_observation(request, observations)
+    assert result["request"] == request
+    assert result["detector"]["modelSha256"] == observations["modelSha256"]
+    assert result["coverage"] == {"observedFrames": 2, "selectedFrames": 1}
+    assert result["association"][1]["status"] == "lost"
+    changed = {**request, "source": {**request["source"], "sha256": "c" * 64}}
+    assert (
+        freeze_face_observation(changed, observations)["analysisHash"]
+        != result["analysisHash"]
+    )
+
+
+@pytest.mark.parametrize(
+    ("field", "message"),
+    [
+        ("geometry", "display aspect"),
+        ("range", "source range"),
+        ("proxy", "proxy identity"),
+    ],
+)
+def test_face_observation_rejects_inconsistent_observed_scope(field, message):
+    from avo.reference_analysis import freeze_face_observation
+
+    request, observations = observation_inputs()
+    if field == "geometry":
+        request["geometry"]["rotation"] = 0
+    elif field == "range":
+        request["sourceRange"]["endTicks"] = 24960
+    else:
+        observations["proxySha256"] = "c" * 64
+    with pytest.raises(ValueError, match=message):
+        freeze_face_observation(request, observations)
