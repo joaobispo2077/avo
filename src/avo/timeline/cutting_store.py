@@ -441,3 +441,132 @@ class CuttingStore:
                     snapshot, attempt["actor"], "retain speech recovery pending review"
                 )
             return reference
+
+    def recovery_decision(self, operation_id):
+        for reference in self._snapshot().get("preparationDecisions", []):
+            document = self.load_document(reference)
+            validate_cutting_document(document, "speech-recovery-decision")
+            if document["payload"]["input"]["operationId"] == operation_id:
+                return reference, document
+        return None
+
+    def active_recovery_decisions(self):
+        records = [
+            (reference, self.load_document(reference))
+            for reference in self._snapshot().get("preparationDecisions", [])
+        ]
+        superseded = {
+            content_hash(reference)
+            for _, document in records
+            for reference in document["payload"]["input"]["expectedDecisionRefs"]
+        }
+        return [
+            (reference, document["payload"])
+            for reference, document in records
+            if content_hash(reference) not in superseded
+        ]
+
+    def recovery_overlaps(
+        self, request_ref, interval, other_request_ref, other_interval
+    ):
+        left = self.load_document(request_ref)["payload"]["binding"]
+        right = self.load_document(other_request_ref)["payload"]["binding"]
+        if self._recovery_budget_source(left) != self._recovery_budget_source(right):
+            return False
+        _, first, end = source_interval(interval)
+        _, start, last = source_interval(other_interval)
+        return max(first, start) < min(end, last)
+
+    def overlapping_recovery_decisions(self, request_ref, interval):
+        return [
+            (reference, payload)
+            for reference, payload in self.active_recovery_decisions()
+            if self.recovery_overlaps(
+                request_ref,
+                interval,
+                payload["input"]["requestRef"],
+                payload["sourceRange"],
+            )
+        ]
+
+    def overlapping_recovery_results(self, request_ref, interval):
+        references = []
+        for reference in self._snapshot().get("preparationResults", []):
+            payload = self.load_document(reference)["payload"]
+            if self.recovery_overlaps(
+                request_ref, interval, payload["requestRef"], payload["sourceRange"]
+            ):
+                references.append(reference)
+        return references
+
+    def record_recovery_decision(self, document):
+        document = validate_cutting_document(document, "speech-recovery-decision")
+        payload, request = document["payload"], document["payload"]["input"]
+        if payload["requestHash"] != content_hash(request):
+            raise CuttingStoreError("recovery decision changes request identity")
+        with _exclusive_lock(self.directory / ".repair-ledger.lock"):
+            existing = self.recovery_decision(request["operationId"])
+            if existing:
+                if existing[1]["payload"]["requestHash"] != payload["requestHash"]:
+                    raise CuttingStoreError(
+                        "recovery decision operation changes request identity"
+                    )
+                return existing[0]
+            self._check_head(request["expectedLedgerHash"])
+            self._check_recovery_decision_scope(payload)
+            reference = self.save_document(document)
+            snapshot = self._snapshot()
+            snapshot.setdefault("preparationDecisions", []).append(reference)
+            self._append_preparation(
+                snapshot,
+                request["actor"],
+                "review source transcript alternatives without approving cuts",
+            )
+            return reference
+
+    def _check_recovery_decision_scope(self, payload):
+        request = payload["input"]
+        if request["requestRef"] not in self._snapshot().get("preparationRequests", []):
+            raise CuttingStoreError("recovery decision has no retained request")
+        frozen = self.load_document(request["requestRef"])["payload"]
+        intervals = frozen["input"]["ranges"]
+        if (
+            request["intervalIndex"] >= len(intervals)
+            or payload["sourceRange"] != intervals[request["intervalIndex"]]
+        ):
+            raise CuttingStoreError("recovery decision changes its source interval")
+        active = self.overlapping_recovery_decisions(
+            request["requestRef"], payload["sourceRange"]
+        )
+        if {content_hash(ref) for ref, _ in active} != {
+            content_hash(ref) for ref in request["expectedDecisionRefs"]
+        }:
+            raise CuttingStoreError(
+                "recovery decision predecessor conflicts with current choices"
+            )
+        results = self.overlapping_recovery_results(
+            request["requestRef"], payload["sourceRange"]
+        )
+        if payload["knownResultRefs"] != results or (
+            request["resultRef"] is not None and request["resultRef"] not in results
+        ):
+            raise CuttingStoreError("recovery decision alternatives changed")
+        self._check_recovery_choice_result(request)
+
+    def _check_recovery_choice_result(self, request):
+        if request["resultRef"] is None:
+            if request["choice"] == "recovered":
+                raise CuttingStoreError("recovered choice requires its exact result")
+            return
+        document = self.load_document(request["resultRef"])
+        payload = document["payload"]
+        if (
+            document["documentType"] != "speech-recovery-result"
+            or payload["requestRef"] != request["requestRef"]
+            or payload["intervalIndex"] != request["intervalIndex"]
+        ):
+            raise CuttingStoreError("recovery choice result changes its source scope")
+        if request["choice"] == "recovered" and (
+            payload["status"] != "pending-review" or payload["recovered"] is None
+        ):
+            raise CuttingStoreError("recovery choice result is unavailable")

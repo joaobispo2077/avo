@@ -4,6 +4,47 @@
   "title": "Source-bound preparation evidence",
   "$ref": "#/$defs/coverage",
   "$defs": {
+    "selectedEvidence": {
+      "type": "object", "additionalProperties": false,
+      "required": ["contractVersion", "status", "originalAnalysisRef", "requestRefs", "resultRefs", "decisionRefs", "protectedRanges", "issues", "selectionHash"],
+      "properties": {
+        "contractVersion": {"const": "1.0.0"},
+        "status": {"enum": ["absent", "pending", "partial", "selected", "rejected", "deferred", "stale"]},
+        "originalAnalysisRef": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/ref"}]},
+        "requestRefs": {"type": "array", "maxItems": 2000, "uniqueItems": true, "items": {"$ref": "#/$defs/ref"}},
+        "resultRefs": {"type": "array", "maxItems": 2000, "uniqueItems": true, "items": {"$ref": "#/$defs/ref"}},
+        "decisionRefs": {"type": "array", "maxItems": 2000, "uniqueItems": true, "items": {"$ref": "#/$defs/ref"}},
+        "protectedRanges": {"type": "array", "maxItems": 20000, "items": {"$ref": "#/$defs/range"}},
+        "issues": {"type": "array", "maxItems": 256, "items": {"type": "string", "minLength": 1, "maxLength": 1000}},
+        "selectionHash": {"$ref": "#/$defs/sha"}
+      }
+    },
+    "recoveryDecision": {
+      "type": "object", "additionalProperties": false,
+      "required": ["input", "requestHash", "sourceRange", "knownResultRefs", "decidedAt"],
+      "properties": {
+        "input": {"$ref": "#/$defs/decideRequest"}, "requestHash": {"$ref": "#/$defs/sha"},
+        "sourceRange": {"$ref": "#/$defs/range"},
+        "knownResultRefs": {"type": "array", "maxItems": 128, "uniqueItems": true, "items": {"$ref": "#/$defs/ref"}},
+        "decidedAt": {"type": "string", "minLength": 1, "maxLength": 100}
+      }
+    },
+    "decideRequest": {
+      "type": "object", "additionalProperties": false,
+      "allOf": [{"if": {"properties": {"choice": {"const": "recovered"}}}, "then": {"properties": {"resultRef": {"$ref": "#/$defs/ref"}}}}],
+      "required": ["contractVersion", "operation", "operationId", "actor", "reason", "requestRef", "intervalIndex", "resultRef", "choice", "expectedLedgerHash", "expectedDecisionRefs"],
+      "properties": {
+        "contractVersion": {"const": "1.0.0"}, "operation": {"const": "recover-decide"},
+        "operationId": {"type": "string", "minLength": 1, "maxLength": 128, "pattern": "\\S"},
+        "actor": {"type": "string", "minLength": 1, "maxLength": 200, "pattern": "\\S"},
+        "reason": {"type": "string", "minLength": 1, "maxLength": 4096, "pattern": "\\S"},
+        "requestRef": {"$ref": "#/$defs/ref"}, "intervalIndex": {"type": "integer", "minimum": 0, "maximum": 127},
+        "resultRef": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/ref"}]},
+        "choice": {"enum": ["original", "recovered", "reject", "defer"]},
+        "expectedLedgerHash": {"$ref": "#/$defs/sha"},
+        "expectedDecisionRefs": {"type": "array", "maxItems": 128, "uniqueItems": true, "items": {"$ref": "#/$defs/ref"}}
+      }
+    },
     "coverageRequest": {
       "type": "object", "additionalProperties": false,
       "required": ["contractVersion", "operation", "analysisRef"],
