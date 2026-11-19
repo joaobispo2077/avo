@@ -149,22 +149,6 @@
     },
     {
       "path": "src/avo/learndown_export.py",
-      "name": "build_timeline_learning_snapshot",
-      "kind": "function",
-      "lineno": 87,
-      "confidence": 60,
-      "reason": "Feature 006 public/dynamic contract covered by focused tests and runtime registration"
-    },
-    {
-      "path": "src/avo/learndown_export.py",
-      "name": "export_timeline_learning_snapshot",
-      "kind": "function",
-      "lineno": 242,
-      "confidence": 60,
-      "reason": "Feature 006 public/dynamic contract covered by focused tests and runtime registration"
-    },
-    {
-      "path": "src/avo/learndown_export.py",
       "name": "load_active_timeline_learning",
       "kind": "function",
       "lineno": 275,
