@@ -151,7 +151,7 @@ def build_editor_handoff(workspace):
 
     return EditorHandoffService(
         workspace,
-        inventory=FfprobeMediaAdapter().inventory,
+        inventory=FfprobeMediaAdapter(include_display_rotation=True).inventory,
         write_xml=write_fcp7_xml,
         read_xml=parse_fcp7_xml,
     )

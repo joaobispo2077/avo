@@ -123,6 +123,17 @@ def _audio_level(row, include_clip_levels):
     return {}
 
 
+def _unrepresented_effects(row, fps, level, clips):
+    represented = set(level)
+    if any("camera" in clip for _, clip, _ in clips):
+        represented.add("pictureTransform")
+    return [
+        _loss(row, fps, "This treatment needs target representation evidence", field)
+        for field in row["effects"]
+        if field not in represented
+    ]
+
+
 def _assembly(rows, sources, measured, fps, window, *, resolve_validation):
     files_by_id, lanes, evidence, losses = {}, {}, [], []
     for row in rows:
@@ -149,13 +160,7 @@ def _assembly(rows, sources, measured, fps, window, *, resolve_validation):
             )
             lane["clips"].append({**clip, **level})
             evidence.append(proof)
-        losses.extend(
-            _loss(
-                row, fps, "This treatment needs target representation evidence", field
-            )
-            for field in row["effects"]
-            if field not in level
-        )
+        losses.extend(_unrepresented_effects(row, fps, level, clips))
         if _rounded_audio_frames(clips):
             losses.append(
                 _loss(

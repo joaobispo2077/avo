@@ -608,6 +608,50 @@ def _write_audio_pan(node, pan):
     )
 
 
+def _write_centered_zoom(node, camera):
+    if camera != {"scale": 1.25}:
+        raise Fcp7Error("Basic Motion export requires the measured 125% centered zoom")
+    filter_node = SubElement(node, "filter")
+    _scalar(filter_node, "enabled", "TRUE")
+    _frame_text(filter_node, "start", -1)
+    _frame_text(filter_node, "end", -1)
+    effect = SubElement(filter_node, "effect")
+    for key, value in {
+        "name": "Basic Motion",
+        "effectid": "basic",
+        "effecttype": "motion",
+        "mediatype": "video",
+        "effectcategory": "motion",
+    }.items():
+        _scalar(effect, key, value)
+    for identity, name, value in (
+        ("scale", "Scale", 125),
+        ("center", "Center", None),
+        ("rotation", "Rotation", 0),
+        ("centerOffset", "Anchor Point", None),
+    ):
+        parameter = SubElement(effect, "parameter")
+        _scalar(parameter, "name", name)
+        _scalar(parameter, "parameterid", identity)
+        if value is None:
+            point = SubElement(parameter, "value")
+            _scalar(point, "horiz", 0)
+            _scalar(point, "vert", 0)
+        else:
+            _scalar(parameter, "value", value)
+
+
+def _write_clip_treatments(node, lane, clip):
+    if lane["kind"] == "video":
+        if "camera" in clip:
+            _write_centered_zoom(node, clip["camera"])
+        return
+    if "gainDb" in clip:
+        _write_audio_levels(node, clip["gainDb"])
+    if "pan" in clip:
+        _write_audio_pan(node, clip["pan"])
+
+
 def _write_clip(parent, lane, clip, sources, emitted):
     if (
         clip.get("rangeStatus", "observed") != "observed"
@@ -630,12 +674,7 @@ def _write_clip(parent, lane, clip, sources, emitted):
         _scalar(port, "mediatype", lane["kind"])
         _frame_text(port, "trackindex", clip["sourceTrack"])
     _write_markers(node, clip.get("markers", []))
-    if lane["kind"] != "audio":
-        return
-    if "gainDb" in clip:
-        _write_audio_levels(node, clip["gainDb"])
-    if "pan" in clip:
-        _write_audio_pan(node, clip["pan"])
+    _write_clip_treatments(node, lane, clip)
 
 
 def _write_picture_format(video, description, rate):

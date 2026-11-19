@@ -86,6 +86,7 @@ def _placed(snapshot):
             "muted": row.get("muted", False) or lane["muted"],
             "routing": row["routing"],
             "gainDb": row.get("gainDb"),
+            "pictureTransform": row.get("pictureTransform"),
             "effects": [
                 key
                 for key in (
@@ -267,6 +268,30 @@ def _resolve_stereo_pans(row, stream, *, validation):
     return {1: -1, 2: 1} if route == (2, "stereo", "stereo", [0, 1]) else {}
 
 
+def _resolve_centered_zoom(row, stream, *, validation):
+    transform = row.get("pictureTransform")
+    if not validation or row["kind"] != "video" or transform is None:
+        return {}
+    width, height = stream["width"], stream["height"]
+    if (
+        stream.get("sampleAspectRatio") != "1:1"
+        or stream.get("hasDisplayRotation") is not False
+    ):
+        return {}
+    # The validation fixture exercises a 125% uniform scale on the original canvas.
+    scale = Fraction(5, 4)
+    if transform != {
+        "canvasWidth": width,
+        "canvasHeight": height,
+        "width": width * scale,
+        "height": height * scale,
+        "x": width * (1 - scale) / 2,
+        "y": height * (1 - scale) / 2,
+    }:
+        return {}
+    return {"camera": {"scale": float(scale)}}
+
+
 def original_occurrences(
     row, original, facts, program_rate, start_frame, *, resolve_validation=False
 ):
@@ -293,6 +318,7 @@ def original_occurrences(
         }
     result = []
     pans = _resolve_stereo_pans(row, stream, validation=resolve_validation)
+    zoom = _resolve_centered_zoom(row, stream, validation=resolve_validation)
     for output, channel in _channels(row, facts, stream):
         identity = row["id"] if output is None else f"{row['id']}-channel-{output}"
         clip = {
@@ -303,6 +329,7 @@ def original_occurrences(
             "name": row["id"],
             "enabled": row["enabled"] and not row["muted"],
             "sourceTrack": channel,
+            **zoom,
         }
         if output in pans:
             clip["pan"] = pans[output]
