@@ -325,20 +325,37 @@ def _materialization_dependencies(
     }
 
 
-def _active_revision_hashes(
+def _canonical_review_basis(
     workspace: Any | None, materialization: dict[str, Any] | None
 ) -> dict[str, str] | None:
     if materialization is None or workspace is None:
         return None
     if not hasattr(workspace, "active_dependency_snapshot"):
         return None
-    active = workspace.active_dependency_snapshot()
+    return workspace.active_dependency_snapshot()
+
+
+def _qc_revision_hashes(active: dict[str, str] | None) -> dict[str, str] | None:
+    if active is None:
+        return None
     return {
         "cmapRevisionHash": str(active.get("cmap") or ""),
         "syncRevisionHash": str(active.get("sync-map") or ""),
         "bmapRevisionHash": str(active.get("bmap") or ""),
         "tracksRevisionHash": str(active.get("tracks") or ""),
     }
+
+
+def _safe_fix_basis_current(workspace, candidate, identity, canonical_basis):
+    try:
+        if file_fingerprint(candidate)["sha256"] != identity["sha256"]:
+            return False
+        return (
+            canonical_basis is None
+            or workspace.active_dependency_snapshot() == canonical_basis
+        )
+    except (OSError, RuntimeError, ValueError):
+        return False
 
 
 def _normalized_watch_status(watch: dict[str, Any]) -> str:
@@ -1147,6 +1164,7 @@ class ReviewRunner:
         dependencies: dict[str, str],
         render_profile: str,
         identity: dict[str, Any],
+        canonical_basis: dict[str, str] | None,
         evidence: list[dict[str, Any]],
         attempts: list[dict[str, Any]],
         findings: list[dict[str, Any]],
@@ -1156,6 +1174,10 @@ class ReviewRunner:
             blocker = "safe findings require an owning-stage fix executor"
         elif fix_number >= self.max_fix_attempts:
             blocker = "maximum safe-fix attempts reached"
+        elif not _safe_fix_basis_current(
+            self.workspace, candidate, identity, canonical_basis
+        ):
+            blocker = "safe-fix candidate or canonical basis changed after inspection"
         if blocker:
             return {
                 "result": self._blocked(
@@ -1229,9 +1251,8 @@ class ReviewRunner:
         if self.watch_policy is not None:
             current_dependencies["watch-policy"] = str(self.watch_policy.policy_hash)
         current_dependencies.update(_materialization_dependencies(materialization))
-        current_revision_hashes = _active_revision_hashes(
-            self.workspace, materialization
-        )
+        canonical_basis = _canonical_review_basis(self.workspace, materialization)
+        current_revision_hashes = _qc_revision_hashes(canonical_basis)
         current_dependencies = dict(sorted(current_dependencies.items()))
         last_identity = candidate_identity(
             current_candidate, current_dependencies, render_profile
@@ -1282,6 +1303,7 @@ class ReviewRunner:
                 dependencies=current_dependencies,
                 render_profile=render_profile,
                 identity=identity,
+                canonical_basis=canonical_basis,
                 evidence=evidence,
                 attempts=attempts,
                 findings=findings,
