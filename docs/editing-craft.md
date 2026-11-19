@@ -169,7 +169,10 @@ The approval gate shows the planned cue states, exact sampled frames and linked
 visual findings for a current canonical proof. Playback review covers continuous
 motion, lip sync and reading time. Listening covers audibility and masking.
 The motion map and storyboard link those sampled findings when the selected
-candidate and current timeline still match the recorded review.
+candidate and its declared timeline dependencies are current and valid.
+Full build readiness checks the exact frame ranges and encoded bytes of saved
+preview windows. A changed window requires fresh evidence from the current
+plan.
 A safe repair routed to its owning stage rechecks the inspected candidate bytes
 and canonical timeline before it runs.
 
