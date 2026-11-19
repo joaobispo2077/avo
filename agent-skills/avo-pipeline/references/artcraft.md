@@ -25,6 +25,15 @@ integration metadata and code.
 
 ## Preserve source and review
 
+For the selected AniCraft lower-third profile, `avo cli artcraft prepare`
+accepts `--request-json`, `--job-spec-json`, `--provider`, `--workspace`,
+`--app anicraft`, `--operation lower-third` and `--mode cli`. The job options
+declare an empty or saved native document, permitted source roots, an output
+contract and resource limits. Choose explicit installed paths through `--cli`
+and `--application` when needed. The selected app and CLI must match releases,
+and readiness requires verified file confinement for the requested roots.
+Missing or unqualified prerequisites produce a specific readiness result.
+
 Before any native authoring, identify the effective roots, owner of the job's
 document, output contract and bounds. A provider-only component has a declared
 external source workspace. A real video keeps canonical decisions under
