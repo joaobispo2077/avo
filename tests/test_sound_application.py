@@ -308,6 +308,38 @@ def test_replacing_and_retiming_a_sound_reports_both_listening_ranges(tmp_path):
     assert service.apply(current)["changes"] == result["changes"]
 
 
+@pytest.mark.parametrize(
+    ("amount", "message"),
+    [
+        (21, "Selected ducking exceeds native mix support"),
+        (8, "Sound ducking requires a current unmuted dialogue layer"),
+    ],
+)
+def test_unsupported_ducking_fails_before_sources_or_timeline_writes(
+    tmp_path, amount, message
+):
+    workspace, _, service, probe, request, _ = application(tmp_path)
+    request["choices"][0]["mix"]["ducking"] = {
+        "sidechainLayerId": "missing-dialogue",
+        "amountDb": amount,
+        "attackMs": 20,
+        "releaseMs": 250,
+    }
+    before = {
+        path: path.read_bytes()
+        for path in workspace.raw_dir.rglob("*")
+        if path.is_file()
+    }
+    with pytest.raises(SoundPlanningError, match=message):
+        service.apply(request)
+    assert probe.calls == []
+    assert {
+        path: path.read_bytes()
+        for path in workspace.raw_dir.rglob("*")
+        if path.is_file()
+    } == before
+
+
 def test_partial_sound_recovery_rejects_changed_rights(tmp_path, monkeypatch):
     from avo.timeline.tracks import TracksService
 
