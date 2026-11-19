@@ -149,11 +149,26 @@ def build_editor_handoff(workspace):
     from avo.adapters.media.ffprobe import FfprobeMediaAdapter
     from avo.timeline.editor_handoff import EditorHandoffService
 
+    def inspect_generated(plan, fps):
+        from avo.adapters.media.editor_alpha import editor_alpha_copy
+        from avo.adapters.media.proof_executor import _generated_inputs
+        from avo.proof_composition import create_generated_asset_validator
+        from avo.timeline.editor_generated import is_full_canvas_alpha
+
+        sources = _generated_inputs(
+            plan, plan["output"], fps, create_generated_asset_validator(workspace)
+        )
+        for asset in sources.values():
+            if is_full_canvas_alpha(asset, plan["output"]):
+                asset["editorSource"] = editor_alpha_copy(asset, fps)
+        return sources
+
     return EditorHandoffService(
         workspace,
         inventory=FfprobeMediaAdapter(include_display_rotation=True).inventory,
         write_xml=write_fcp7_xml,
         read_xml=parse_fcp7_xml,
+        inspect_generated=inspect_generated,
     )
 
 

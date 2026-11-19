@@ -151,6 +151,7 @@ def _current_xml(service, base, expected):
         _verify_originals(base["sources"])
         return _artifact_bytes(workspace, base["xmlRef"]), base["sources"]
     request = {**base["request"], "expectedBasis": expected}
+    request.pop("generatedAlphaPlan", None)
     window, fps = _bounded_window(request)
     roots = [_admitted_path(value) for value in request["admittedRoots"]]
     workspace.require_active("cmap")

@@ -36,6 +36,10 @@
         "actor": {"$ref": "#/$defs/text"}, "reason": {"$ref": "#/$defs/text"}, "profileId": {"$ref": "#/$defs/id"},
         "mode": {"enum": ["validation", "production"]},
         "qualificationRef": {"$ref": "#/$defs/ref"},
+        "generatedAlphaPlan": {
+          "type": "object", "additionalProperties": false, "required": ["id", "sha256"],
+          "properties": {"id": {"type": "string", "pattern": "^proof-plan-[a-f0-9]{12}$"}, "sha256": {"$ref": "#/$defs/sha"}}
+        },
         "expectedBasis": {"$ref": "avo.motion-review.schema.json#/properties/basisHeads"},
         "selection": {"$ref": "avo.editing-craft.schema.json#/$defs/selection"},
         "programRate": {"$ref": "#/$defs/rate"}, "window": {"$ref": "#/$defs/frames"},
@@ -187,8 +191,21 @@
       "required": ["sourceId", "locator", "sha256", "sizeBytes", "kind"],
       "properties": {
         "sourceId": {"$ref": "#/$defs/text"}, "locator": {"$ref": "#/$defs/text"}, "sha256": {"$ref": "#/$defs/sha"},
-        "sizeBytes": {"type": "integer", "minimum": 1}, "kind": {"$ref": "#/$defs/text"}
-      }
+        "sizeBytes": {"type": "integer", "minimum": 1}, "kind": {"$ref": "#/$defs/text"},
+        "generatedAsset": {
+          "type": "object", "additionalProperties": false, "required": ["id", "sha256", "original"],
+          "properties": {
+            "id": {"$ref": "#/$defs/id"}, "sha256": {"$ref": "#/$defs/sha"},
+            "original": {
+              "type": "object", "additionalProperties": false, "required": ["locator", "sizeBytes", "sha256"],
+              "properties": {"locator": {"$ref": "#/$defs/text"}, "sizeBytes": {"type": "integer", "minimum": 1}, "sha256": {"$ref": "#/$defs/sha"}}
+            }
+          }
+        }
+      },
+      "if": {"properties": {"kind": {"const": "generated-alpha"}}},
+      "then": {"required": ["generatedAsset"]},
+      "else": {"not": {"required": ["generatedAsset"]}}
     },
     "loss": {
       "type": "object", "additionalProperties": false, "required": ["field", "scope", "reason"],

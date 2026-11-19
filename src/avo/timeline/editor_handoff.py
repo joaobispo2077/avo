@@ -256,11 +256,20 @@ def _publish_xml(workspace, payload):
 
 
 class EditorHandoffService:
-    def __init__(self, workspace, *, inventory=None, write_xml=None, read_xml=None):
+    def __init__(
+        self,
+        workspace,
+        *,
+        inventory=None,
+        write_xml=None,
+        read_xml=None,
+        inspect_generated=None,
+    ):
         self.workspace = workspace
         self.inventory = inventory
         self.write_xml = write_xml
         self.read_xml = read_xml
+        self.inspect_generated = inspect_generated
 
     def prepare(self, request):
         validate_document(request, SCHEMA + "prepareRequest")
@@ -314,10 +323,23 @@ class EditorHandoffService:
                 resolve_validation=(request["mode"], profile["id"])
                 == ("validation", RESOLVE_AUDIO_VALIDATION),
             )
-        if not evidence:
-            raise ValueError(
-                "No original-source occurrence is representable in the chosen validation window"
-            )
+            if not evidence:
+                raise ValueError(
+                    "No original-source occurrence is representable in the chosen validation window"
+                )
+            picture_format = program_picture_format(cmap, files_by_id)
+            if generated := request.get("generatedAlphaPlan"):
+                validation = (
+                    request["mode"] == "validation"
+                    and profile["id"] == RESOLVE_AUDIO_VALIDATION
+                )
+                overlays, overlay_losses = self._generated(
+                    generated, validation, picture_format, fps, window, roots
+                )
+                lanes = _place_generated(
+                    overlays, sources, files_by_id, lanes, evidence
+                )
+                losses.extend(overlay_losses)
         markers, cue_losses = _cue_coverage(snapshots, window, fps)
         origin, origin_losses = _sequence_origin(cmap, profile, window, fps)
         validation = request["mode"] == "validation"
@@ -329,7 +351,7 @@ class EditorHandoffService:
             "rate": fps,
             "duration": window["endFrameExclusive"] - window["startFrame"],
             "originFrame": origin,
-            "pictureFormat": program_picture_format(cmap, files_by_id),
+            "pictureFormat": picture_format,
             "sources": files_by_id,
             "tracks": lanes,
             "markers": markers,
@@ -350,6 +372,23 @@ class EditorHandoffService:
             "losses": [*losses, *origin_losses, *cue_losses],
         }
         return bundle, xml
+
+    def _generated(self, reference, validation, canvas, fps, window, roots):
+        if not validation or not self.inspect_generated or not canvas:
+            raise ValueError(
+                "Generated alpha requires the measured Resolve validation profile and canvas"
+            )
+        from .editor_generated import generated_alpha
+
+        return generated_alpha(
+            self.workspace,
+            reference,
+            self.inspect_generated,
+            canvas,
+            fps,
+            window,
+            roots,
+        )
 
     def _publish(self, bundle, payload):
         workspace = self.workspace
@@ -381,16 +420,44 @@ class EditorHandoffService:
         return {**manifest, "basisStatus": basis}
 
 
-def _verify_originals(sources):
-    for row in sources:
-        measured = file_fingerprint(Path(row["locator"]))
-        if (measured["sha256"], measured["sizeBytes"]) != (
-            row["sha256"],
-            row["sizeBytes"],
+def _place_generated(overlays, sources, files_by_id, lanes, evidence):
+    if len(evidence) + len(overlays) > OCCURRENCE_LIMIT:
+        raise ValueError("Editor handoff exceeds its occurrence budget")
+    ids = {row["id"] for row in evidence}
+    generated = []
+    for source, file, lane, occurrence in overlays:
+        identity, source_id = occurrence["id"], source["sourceId"]
+        if (
+            identity in ids
+            or sources.get(source_id, source) != source
+            or files_by_id.get(source_id, file) != file
         ):
             raise ValueError(
-                "Original editor source changed before handoff publication"
+                "Generated alpha collides with an editor source or occurrence"
             )
+        ids.add(identity)
+        sources[source_id], files_by_id[source_id] = source, file
+        evidence.append(occurrence)
+        generated.append(lane)
+    if len(sources) > 128:
+        raise ValueError("Editor validation source count exceeds its budget")
+    return [*lanes, *generated]
+
+
+def _verify_originals(sources):
+    for row in sources:
+        _verify_source(row)
+        if generated := row.get("generatedAsset"):
+            _verify_source(generated["original"])
+
+
+def _verify_source(row):
+    measured = file_fingerprint(Path(row["locator"]))
+    if (measured["sha256"], measured["sizeBytes"]) != (
+        row["sha256"],
+        row["sizeBytes"],
+    ):
+        raise ValueError("Original editor source changed before handoff publication")
 
 
 def load_handoff(workspace, reference):

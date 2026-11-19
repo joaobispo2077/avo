@@ -2,8 +2,9 @@
 
 import hashlib
 import json
+from pathlib import Path
 
-from .contracts import content_hash, validate_document
+from .contracts import content_hash, file_fingerprint, validate_document
 from .editor_handoff import SCHEMA, _artifact, _output_root
 from .preparation_retention import retained_preparation_files
 
@@ -63,7 +64,7 @@ def _reference_path(workspace, root, reference):
     return path
 
 
-def _report(workspace, root, path, data, cutting_refs):
+def _report(workspace, root, path, data, cutting_refs, generated_files):
     body = json.loads(data)
     category = path.parent.name
     validate_document(body, SCHEMA + RECORD_DEFINITIONS[category])
@@ -76,10 +77,58 @@ def _report(workspace, root, path, data, cutting_refs):
         raise ValueError("Editor evidence belongs to a different project")
     if category == "routes" and body["cuttingProposalRef"] is not None:
         cutting_refs.append(body["cuttingProposalRef"])
+    if category == "manifests" and body["request"].get("generatedAlphaPlan"):
+        generated_files.update(_generated_files(workspace, body))
     return [
         (_reference_path(workspace, root, ref), ref["sha256"])
         for ref in _references(body, category)
     ]
+
+
+def _generated_files(workspace, manifest):
+    """Keep selected alpha originals and exact receipts usable after cleanup."""
+    from .editor_generated import load_alpha_plan
+    from .generated_assets import GeneratedAssetService
+
+    plan_ref = manifest["request"]["generatedAlphaPlan"]
+    _, proof_path, plan = load_alpha_plan(workspace, plan_ref)
+    retained = {proof_path: file_fingerprint(proof_path)["sha256"]}
+    registry = GeneratedAssetService(workspace)
+    for source in manifest["sources"]:
+        if source["kind"] == "generated-alpha":
+            retained.update(
+                _generated_source_files(source, plan, registry, workspace.raw_dir)
+            )
+    return retained
+
+
+def _generated_source_files(source, plan, registry, raw_dir):
+    reference = source["generatedAsset"]
+    record = registry.load(reference["id"])
+    if (
+        record["recordHash"] != reference["sha256"]
+        or plan["canonicalInputLock"].get("generated:" + reference["id"])
+        != reference["sha256"]
+    ):
+        raise ValueError("Retained generated alpha receipt identity changed")
+    original, keys = reference["original"], ("locator", "sha256", "sizeBytes")
+    if any(original[key] != record["output"][key] for key in keys):
+        raise ValueError("Retained generated alpha original differs from its receipt")
+    retained = {}
+    for item in (original, source):
+        path = Path(item["locator"])
+        if path.is_symlink() or not path.resolve().is_relative_to(
+            (raw_dir / "edit/derived").resolve()
+        ):
+            raise ValueError(
+                "Retained generated alpha escaped its project output folder"
+            )
+        measured = file_fingerprint(path)
+        if any(measured[key] != item[key] for key in keys):
+            raise ValueError("Retained generated alpha source changed")
+        retained[path] = measured["sha256"]
+    receipt = registry.path(reference["id"])
+    return {**retained, receipt: file_fingerprint(receipt)["sha256"]}
 
 
 def _read_evidence(path, remaining):
@@ -101,7 +150,7 @@ def retained_editor_files(workspace):
         raise ValueError("Editor evidence directory must be project-owned")
     queue = [(path, None) for path in _selected_records(root)]
     remaining = MAX_TOTAL_BYTES
-    selected, cutting_refs = {}, []
+    selected, cutting_refs, generated_files = {}, [], {}
     while queue:
         path, expected = queue.pop()
         if path not in selected:
@@ -109,11 +158,14 @@ def retained_editor_files(workspace):
             remaining -= len(data)
             selected[path] = hashlib.sha256(data).hexdigest()
             if path.suffix == ".json":
-                queue.extend(_report(workspace, root, path, data, cutting_refs))
+                queue.extend(
+                    _report(workspace, root, path, data, cutting_refs, generated_files)
+                )
             elif path.stem != selected[path]:
                 raise ValueError("Editor evidence XML identity changed")
         if expected is not None and selected[path] != expected:
             raise ValueError("Editor evidence reference changed")
     if cutting_refs:
         selected.update(retained_preparation_files(workspace, references=cutting_refs))
+    selected.update(generated_files)
     return selected
