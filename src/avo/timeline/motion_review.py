@@ -83,7 +83,11 @@ def _matching_review_heads(report, heads):
     declared = report["canonicalRevisionHashes"]
     for name, digest in declared.items():
         head = heads[name] or {}
-        if head.get("availability") == "unavailable" or head.get("sha256") != digest:
+        if (
+            head.get("availability") == "unavailable"
+            or head.get("sha256") != digest
+            or (digest is not None and head.get("activeState") != "valid")
+        ):
             return False
     return True
 
