@@ -132,3 +132,38 @@ def test_required_proof_window_retains_measurement_with_verified_candidate(
     assert evidence["eventIds"] == ["hit"]
     assert evidence["candidateSha256"] == result["output"]["sha256"]
     assert evidence["aboveFullScale"] is True
+
+
+@pytest.mark.parametrize("stale", [False, True])
+def test_dialogue_balance_binds_selected_effect_margin_and_exact_overlap(
+    program, stale
+):
+    plan, rendered, window = program
+    plan["audioGraph"]["operations"].append(
+        {"kind": "duck", "parameters": {"nodeId": "hit", "minimumDialogueMarginDb": 12}}
+    )
+    observed = {
+        "nodeId": "hit",
+        "minimumDialogueMarginDb": 12,
+        "bandHz": [300, 4000],
+        "window": {
+            "startSample": 1600,
+            "endSampleExclusive": 2400 if not stale else 2399,
+        },
+        "status": "measured",
+        "dialogueRmsDbfs": -16.0,
+        "effectRmsDbfs": -22.0,
+    }
+    rendered["audioMix"]["dialogueBalance"] = [
+        observed,
+        {**observed, "nodeId": "unknown"},
+    ]
+    (review,) = summarize_sound_mix(plan, rendered, window)["dialogueBalance"]
+    assert review["eventId"] == "hit"
+    assert review["window"] == {"startSample": 1600, "endSampleExclusive": 2400}
+    if stale:
+        assert review["status"] == "measurement-unavailable"
+        assert "suggestedAdditionalAttenuationDb" not in review
+    else:
+        assert review["status"] == "below-selected-margin"
+        assert review["suggestedAdditionalAttenuationDb"] == 6.0
