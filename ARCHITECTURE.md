@@ -1400,6 +1400,11 @@ measurements and labeled contact sheets form an immutable inspection record
 under the project. They enter editorial decisions through reviewed document
 references and keep proof source admission independent.
 
+Reviewed reference decisions seal the selected measured aspects into a compact
+project-only `ReferenceDescriptor`. Briefstart consumes that document through
+its existing source loader and checks the inspection hash and project identity.
+The direction layer has no dependency on the vision runtime or reference media.
+
 Camera movement, face anchoring, sound matching, reference analysis, spoken
 notes/recovery and editor handoff are selected options resolved through existing
 settings scopes and frozen requests. Preferences seed future work and cannot

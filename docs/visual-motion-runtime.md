@@ -107,3 +107,10 @@ candidates between sampled frames. Dark or poorly tracked intervals stay
 unmeasurable. Easing interpretation and any unavailable hold/reveal or
 audio/word evidence are reported separately from observed frame measurements.
 [OpenCV feature tracking](https://docs.opencv.org/4.12.0/dc/d6b/group__video__track.html)
+
+After inspecting a clip, use `avo cli animation reference-decide` with a
+new exact request to record `accept`, `qualify` or `reject`. Accept and qualify
+require the selected measured aspects. Qualify also records a usage limit.
+The decision stores a project-scoped descriptor for Briefstart. Provide its
+path explicitly as a reference when preparing a brief. Briefstart checks the
+provider, project identity and inspection digest before consuming the document.
