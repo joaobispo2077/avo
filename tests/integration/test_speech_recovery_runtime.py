@@ -117,6 +117,33 @@ def test_real_local_asr_retains_source_offset_alternatives_and_reuses_restart(
     )
     again = resumed.recover(request)
     assert again["results"][0]["resultRef"] == row["resultRef"]
+    choice = {
+        "contractVersion": "1.0.0",
+        "operation": "recover-decide",
+        "operationId": "actual-local-asr-choice",
+        "actor": "qualification",
+        "reason": "retain real ASR text with uncertain timing",
+        "requestRef": shown["requestRef"],
+        "resultRef": row["resultRef"],
+        "intervalIndex": 0,
+        "choice": "recovered",
+        "expectedLedgerHash": resumed.store.head_hash(),
+        "expectedDecisionRefs": [],
+    }
+    selected = resumed.decide(choice)
+    context = resumed._source_context(request)
+    evidence = resumed.source_evidence(
+        context["source"],
+        source_range=context["binding"]["sourceRange"],
+        routing=context["routing"],
+        sync_ref=context["syncRef"],
+    )
+    assert evidence["status"] == "selected", evidence["issues"]
+    assert selected["decisionRef"] in evidence["decisionRefs"]
+    assert evidence["protectedRanges"]
+    assert selected["wordAnchorsEligible"] is False
+    assert selected["cutApproval"] == "not-granted"
+    assert service.store.load_document(original_ref) == original_analysis
     assert workspace.store("cmap").head_hash() == head
     assert file_fingerprint(media)["sha256"] == pin["sourceSha256"]
     frozen = service.store.load_document(shown["requestRef"])["payload"]
