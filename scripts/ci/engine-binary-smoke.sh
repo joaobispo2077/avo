@@ -232,6 +232,8 @@ assert sound['effect'] == 'metadata-read' and sound['coverage']['total'] == 0, s
 assert not (Path(sys.argv[2]).parent / 'edit').exists()
 for worker in ('clap_embeddings_worker.py', 'visual_motion_worker.py'):
     assert any(root.rglob(worker)), f'missing bundled optional worker {worker}'
+for lock in ('sfx-clap-cpu-windows.requirements.txt', 'visual-motion-cpu-windows.requirements.txt'):
+    assert any(root.rglob(lock)), f'missing bundled optional runtime lock {lock}'
 print('default craft views verify without initialized media or model runtimes')
 PY
 

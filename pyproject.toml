@@ -60,6 +60,7 @@ where = ["src"]
 
 [tool.setuptools.data-files]
 "share/avo/schemas" = ["schemas/*.json"]
+"share/avo/config" = ["config/*-cpu-windows.requirements.txt"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
