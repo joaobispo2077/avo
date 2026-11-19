@@ -500,14 +500,6 @@
       "reason": "Timeline domain/API surface (dynamic CLI and future stages)"
     },
     {
-      "path": "src/avo/timeline/mapping.py",
-      "name": "cmap_raw_to_output",
-      "kind": "function",
-      "lineno": 44,
-      "confidence": 60,
-      "reason": "Timeline domain/API surface (dynamic CLI and future stages)"
-    },
-    {
       "path": "src/avo/timeline/materialize.py",
       "name": "materialize_synced_raw",
       "kind": "function",
