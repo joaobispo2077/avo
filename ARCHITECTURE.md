@@ -1400,6 +1400,13 @@ measurements and labeled contact sheets form an immutable inspection record
 under the project. They enter editorial decisions through reviewed document
 references and keep proof source admission independent.
 
+Visual timing derives hold, reveal, fade and easing candidates from the sampled
+frame grid. With an explicit audio selection, the media adapter measures energy
+onsets on the original sample clock. The timeline may attach current prepared
+word evidence from the same route. It validates the source, scope and retained
+analysis before publication. These observations inform review and carry no
+rendering or source-admission authority.
+
 Reviewed reference decisions seal the selected measured aspects into a compact
 project-only `ReferenceDescriptor`. Briefstart consumes that document through
 its existing source loader and checks the inspection hash and project identity.

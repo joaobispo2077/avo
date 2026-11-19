@@ -102,15 +102,26 @@ inspection record and sheets live under `edit/motion/references/`.
 
 Global movement estimates report scale, rotation in degrees and frame-center
 translation as fractions of display width and height. Residual movement uses
-the display diagonal. Brightness uses normalized mean grayscale. Cuts are
-candidates between sampled frames. Dark or poorly tracked intervals stay
-unmeasurable. Easing interpretation and any unavailable hold/reveal or
-audio/word evidence are reported separately from observed frame measurements.
+the display diagonal. Brightness uses normalized mean grayscale. Fade candidates
+record gradual, directional brightness changes. Cuts and reveals use the range
+between sampled frames. Hold candidates need consecutive low-motion intervals.
+Dark or poorly tracked motion stays unmeasurable. Easing is an approximate fit
+to the observed progress and includes its fit error.
 [OpenCV feature tracking](https://docs.opencv.org/4.12.0/dc/d6b/group__video__track.html)
+
+To compare sound with a reveal, select `audio-word-timing` and provide the exact
+original audio `streamIndex`, `channelIndex` and `energyThreshold` in `audio`.
+The threshold is mean-squared energy. AVO records energy onset candidates on
+the original sample clock and reports the processing window and clock uncertainty.
+With `wordAnchors`, the same analysis can place previously prepared word starts
+from that original audio route. Timing stays unavailable whenever the audio clock,
+current transcript, or original word evidence cannot be verified. AVO reports
+possible timing overlaps for inspection and leaves editorial choices to the reviewer.
 
 After inspecting a clip, use `avo cli animation reference-decide` with a
 new exact request to record `accept`, `qualify` or `reject`. Accept and qualify
-require the selected measured aspects. Qualify also records a usage limit.
+require evidence for the selected aspects. Qualify records a usage limit and is
+required when using an approximate easing fit for direction.
 The decision stores a project-scoped descriptor for Briefstart. Provide its
 path explicitly as a reference when preparing a brief. Briefstart checks the
 provider, project identity and inspection digest before consuming the document.

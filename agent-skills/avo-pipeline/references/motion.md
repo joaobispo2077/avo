@@ -179,3 +179,9 @@ estimate as display-wide movement and inspect residual movement separately.
 Review candidate cuts between sampled frames and separate brightness changes,
 approximate easing and available audio/word evidence. Keep measured artifacts
 within the project until a reviewed reference is selected for direction.
+To inspect sound and reveal timing, select `audio-word-timing` and name the
+original audio stream, channel and energy threshold. Reuse current prepared word
+anchors from that same route when a word matters. Compare ranges and their
+uncertainty before using the observations in direction. Keep source rights and
+creator decisions with the project evidence. Provider reuse requires its own
+creator decision.
