@@ -29,6 +29,10 @@ FORBIDDEN_FIELDS = {
     "assetPath",
     "locator",
     "absolutePath",
+    "approvalEvidence",
+    "approvalRef",
+    "reviewRefs",
+    "sourceRights",
 }
 _SEMVER = re.compile(r"^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$")
 _MEDIA = re.compile(
@@ -107,6 +111,8 @@ class ProviderAnimationService:
             "avo.animation-library.schema.json",
             root=Path(__file__).resolve().parents[3] / "providers",
         )
+        if value["provider"] != self.provider:
+            raise AnimationError("animation catalogue belongs to another provider")
         return value
 
     @staticmethod
@@ -399,6 +405,21 @@ class ProviderAnimationService:
         atomic_write_json(path, proposal)
         return {**proposal, "path": str(path)}
 
+    def _read_promotion(self, proposal_path: Path) -> dict[str, Any]:
+        proposal = json.loads(Path(proposal_path).read_text(encoding="utf-8"))
+        expected = content_hash(
+            {
+                key: value
+                for key, value in proposal.items()
+                if key not in {"proposalSha256", "path"}
+            }
+        )
+        if proposal.get("proposalSha256") != expected:
+            raise AnimationError("animation proposal hash mismatch")
+        if proposal.get("provider") != self.provider:
+            raise AnimationError("animation proposal belongs to another provider")
+        return proposal
+
     def decide(
         self,
         proposal_path: Path,
@@ -410,16 +431,7 @@ class ProviderAnimationService:
     ) -> dict[str, Any]:
         if decision not in {"approved", "rejected"}:
             raise AnimationError("promotion decision must be approved or rejected")
-        proposal = json.loads(Path(proposal_path).read_text(encoding="utf-8"))
-        expected = content_hash(
-            {
-                key: value
-                for key, value in proposal.items()
-                if key not in {"proposalSha256", "path"}
-            }
-        )
-        if proposal.get("proposalSha256") != expected:
-            raise AnimationError("animation proposal hash mismatch")
+        proposal = self._read_promotion(proposal_path)
         pattern = self.sanitize(proposal["pattern"])
         catalog = self.initialize()
         base_catalog_hash = content_hash(catalog)
