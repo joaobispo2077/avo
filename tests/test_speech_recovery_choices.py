@@ -318,3 +318,32 @@ def test_changed_source_unit_with_no_analysis_port_remains_protected(tmp_path):
     protections = cutting._speech_protections({"source": saved})
     assert protections
     assert not any(word.get("text") == "recovered" for word in saved.get("words", []))
+
+
+def test_choosing_the_unchanged_original_keeps_untimed_words_for_review(tmp_path):
+    from avo.timeline.cutting_contracts import make_document
+
+    cutting, cmap, service, _, request = recovery(tmp_path)
+    original = deepcopy(service._analysis(request["analysisRef"]))
+    original["words"] = [
+        {
+            "text": "uncertain original",
+            "start": None,
+            "end": None,
+            "alignmentStatus": "unsupported",
+            "eligibleEdge": False,
+        }
+    ]
+    original["alignment"] = {"status": "missing", "characters": []}
+    request["analysisRef"] = cutting.store.save_document(
+        make_document("source-analysis", original)
+    )
+    shown = service.recover(request)
+    selected = service.decide(decision(service, shown, "original"))
+    observed = evidence(service, request)
+    assert observed["status"] == "selected"
+    assert observed["analysis"]["words"] == original["words"]
+    assert selected["wordAnchorsEligible"] is False
+    assert request["ranges"][0] in observed["protectedRanges"]
+    assert cutting.store.load_document(request["analysisRef"])["payload"] == original
+    assert cutting.workspace.store("cmap").head_hash() == cmap["contentHash"]
