@@ -2,6 +2,7 @@
 
 import pytest
 
+from avo.project_inventory import _fallback_reconstruction_metadata
 from avo.timeline.reconstruction import _required_files
 from tests.test_speech_recovery import recovery
 
@@ -40,8 +41,6 @@ def test_recovery_retention_never_reopens_unbounded_journal_readers(
 
 
 def test_recovery_evidence_is_in_reconstruction_and_fallback_inventory(tmp_path):
-    from avo.project_inventory import _fallback_reconstruction_metadata
-
     cutting, _, service, _, request = recovery(tmp_path)
     shown = service.recover(request)
     expected = {
@@ -88,4 +87,8 @@ def test_durable_terminal_result_is_retained_even_before_journal_publication(
     retained = _required_files(
         cutting.workspace.raw_dir, [], workspace=cutting.workspace
     )
-    assert service.store.directory / result["locator"] in retained
+    selected = service.store.directory / result["locator"]
+    assert selected in retained
+    assert selected in _fallback_reconstruction_metadata(
+        cutting.workspace.raw_dir, cutting.workspace.timeline_dir, cutting.workspace
+    )
