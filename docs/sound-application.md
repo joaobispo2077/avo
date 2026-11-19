@@ -96,6 +96,16 @@ Positive peaks flag signal above digital full scale. The receipt records
 unavailable measurements when the renderer cannot provide matching evidence.
 True peak, dialogue masking and contextual listening require their own checks.
 
+For an effect with selected dialogue ducking, set optional
+`mix.ducking.minimumDialogueMarginDb` to review a specific dialogue-to-effect
+level difference. A separate measurement pass compares the exact sidechain and
+post-duck effect over their selected output samples, using 300–4,000 Hz band
+RMS. The receipt reports the observed margin and the additional attenuation
+needed under the chosen policy. Silent stems and unavailable measurements have
+their own statuses. Up to 16 comparisons run per review window of 30 seconds
+or less. The result guides listening and keeps the selected gains and render
+unchanged. [FFmpeg audio statistics](https://ffmpeg.org/ffmpeg-filters.html#astats)
+
 An explicit silence choice can also retire a previously owned event whose visual
 anchor is now absent or unresolved. The receipt retains its historical timing
 only to identify the removal, without scheduling playback on the new programme.

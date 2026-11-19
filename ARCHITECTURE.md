@@ -1384,6 +1384,14 @@ face records referenced by proposals or Animation survive reconstruction. The
 linked map and storyboard read face readiness from metadata without running the
 detector. Existing non-face moves retain their recorded options and cue clock.
 
+For selected SFX, proof receipts bind the native combined sample peak and RMS
+to the exact output window, candidate and mixed PCM. An explicit ducking review
+margin adds a bounded, separate analysis pass on the prepared control signal
+and post-duck effect. Timeline review verifies the overlapping sample range and
+the frozen setting before deriving an attenuation suggestion. The analysis
+never contributes samples to the proof output. Native PCM fixtures verify
+bit-for-bit equivalence with the optional analysis on or off.
+
 Camera movement, face anchoring, sound matching, reference analysis, spoken
 notes/recovery and editor handoff are selected options resolved through existing
 settings scopes and frozen requests. Preferences seed future work and cannot
