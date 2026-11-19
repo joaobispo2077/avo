@@ -80,3 +80,31 @@ def test_unique_fallback_is_reviewable_and_external_finishing_is_preserved():
         ("end", "suggested"),
     }
     assert result["external"]["filter"] == 1
+
+
+def test_unobserved_markers_and_channel_fields_stay_unresolved():
+    base = state(occurrence("first", 0, 0))
+    base["markers"] = [{"name": "Proof boundary", "in": 0, "out": -1}]
+    base["tracks"][0]["outputChannel"] = 2
+    returned = deepcopy(base)
+    returned["markers"] = []
+    returned["tracks"][0].update(outputChannel=None)
+    returned["tracks"][0]["clips"][0]["sourceTrack"] = None
+    review = compare_editor_feedback(base, base, returned)
+    assert review["proposals"] == review["conflicts"] == []
+    assert {(row["id"], row["field"]) for row in review["unresolved"]} == {
+        ("first", "sourceTrack"),
+        ("first", "outputChannel"),
+        ("sequence", "markers"),
+    }
+
+
+def test_explicit_gain_and_camera_values_follow_independent_three_way_rules():
+    base = state(occurrence("first", 0, 0))
+    base["tracks"][0]["clips"][0].update(gainDb=0, camera={"scale": 1})
+    current, returned = deepcopy(base), deepcopy(base)
+    current["tracks"][0]["clips"][0]["gainDb"] = -5
+    returned["tracks"][0]["clips"][0].update(gainDb=-6, camera={"scale": 1.1})
+    result = compare_editor_feedback(base, current, returned)
+    assert [row["field"] for row in result["proposals"]] == ["camera"]
+    assert [row["field"] for row in result["conflicts"]] == ["gainDb"]
