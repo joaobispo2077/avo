@@ -12,7 +12,13 @@ def test_media_locators_cannot_be_mistaken_for_preparation_documents():
     media = {"locator": "documents/original.wav", "sha256": "a" * 64}
     evidence = {"locator": "documents/source-analysis/record.json", "sha256": "b" * 64}
     assert list(
-        _references({"sourceRef": media, "input": {"analysisRef": evidence}})
+        _references(
+            {
+                "sourceRef": media,
+                "speechDependencies": {"manifestRef": evidence},
+                "input": {"analysisRef": evidence},
+            }
+        )
     ) == [evidence]
 
 
