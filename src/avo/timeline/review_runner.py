@@ -74,12 +74,33 @@ def _ranges_in_seconds(
     return normalized
 
 
+def _observed_windows(coverage):
+    if "observedWindows" in coverage:
+        return coverage["observedWindows"] or []
+    return coverage.get("windows") or []
+
+
+def _covered_window_count(coverage, required_windows):
+    frame_rate = coverage.get("frameRate") or {}
+    observed = _merged_ranges(
+        _ranges_in_seconds(_observed_windows(coverage), frame_rate)
+    )
+    required = _ranges_in_seconds(required_windows, frame_rate)
+    return sum(
+        any(
+            span["start"] <= window["start"] < window["end"] <= span["end"]
+            for span in observed
+        )
+        for window in required
+    )
+
+
 def actual_coverage(
     coverage: dict[str, Any], *, required_windows: list[dict[str, Any]]
 ) -> dict[str, Any]:
     """Compute coverage only from observed/decoded evidence, never nominal scope."""
     normalized = deepcopy(coverage)
-    inspected = list(coverage.get("inspectedRanges") or coverage.get("windows") or [])
+    inspected = coverage.get("inspectedRanges", _observed_windows(coverage)) or []
     partial = list(coverage.get("partiallyInspectedRanges") or [])
     deterministic = list(coverage.get("deterministicallyCheckedRanges") or [])
     duration = float(coverage.get("durationSeconds") or coverage.get("duration") or 0)
@@ -98,14 +119,13 @@ def actual_coverage(
         cursor = max(cursor, item["end"])
     if duration > cursor:
         uninspected.append({"start": cursor, "end": duration})
-    observed_windows = coverage.get("observedWindows") or coverage.get("windows") or []
     normalized.update(
         {
             "durationSeconds": duration,
             "reviewedSeconds": _range_seconds(reviewed_ranges),
             "deterministicallyCheckedSeconds": _range_seconds(checked_ranges),
             "requiredWindows": len(required_windows),
-            "reviewedWindows": len(observed_windows),
+            "reviewedWindows": _covered_window_count(coverage, required_windows),
             "inspectedRanges": reviewed_ranges,
             "deterministicallyCheckedRanges": checked_ranges,
             "uninspectedRanges": uninspected,
@@ -278,8 +298,7 @@ def _validate_watch_coverage(
             False,
             "rerun full Watch",
         )
-    reviewed_windows = coverage.get("observedWindows") or coverage.get("windows") or []
-    if required_windows and len(reviewed_windows) < len(required_windows):
+    if _covered_window_count(coverage, required_windows) != len(required_windows):
         raise ToolError(
             "WATCH_SCOPE_INSUFFICIENT",
             "Watch did not cover every required join/changed/privacy/risk window",

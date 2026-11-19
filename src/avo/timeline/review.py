@@ -228,6 +228,10 @@ def render_human_review_package(package: dict[str, Any]) -> str:
             f"- Requested samples: {coverage.get('requestedSamples', 0)}",
             f"- Observed samples: {coverage.get('observedSamples', 0)}",
             f"- Failed samples: {coverage.get('failedSamples', 0)}",
+            (
+                "- The vision pass observes individual frames. Review playback for "
+                "continuous motion, lip sync and audibility."
+            ),
         ]
     )
     for hole in coverage.get("coverageHoles") or []:
