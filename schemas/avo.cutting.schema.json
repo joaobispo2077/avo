@@ -442,6 +442,11 @@
       "properties": {
         "recoveryContext": {"$ref": "avo.preparation.schema.json#/$defs/recoveryContext"},
         "preparationEvidence": {"$ref": "avo.preparation.schema.json#/$defs/selectedEvidence"},
+        "speechDependencies": {
+          "type": "object", "additionalProperties": false,
+          "required": ["transcription", "alignment"],
+          "properties": {"transcription": {"type": "object"}, "alignment": {"type": "object"}}
+        },
         "sourceRef": {
           "$ref": "#/$defs/artifactRef"
         },

@@ -242,6 +242,7 @@ class CuttingAnalysisAdapter:
             return payload
         started = time.perf_counter()
         try:
+            dependencies = self.dependency_bindings()
             transcriber = self._transcriber(language)
             aligner = self._alignment()
             adapter = CuttingAcousticsAdapter(transcriber=transcriber, aligner=aligner)
@@ -251,8 +252,14 @@ class CuttingAnalysisAdapter:
                 raise ToolError(
                     "cutting-alignment-empty", "no aligned speech was observed"
                 )
+            if dependencies != self.dependency_bindings():
+                raise ToolError(
+                    "cutting-analysis-stale",
+                    "Speech dependencies changed during analysis",
+                )
             payload.update(
                 status="pass",
+                speechDependencies=dependencies,
                 words=alignment["words"],
                 acousticRanges=result["waveform"]["frames"],
                 vad=result["speechRanges"],

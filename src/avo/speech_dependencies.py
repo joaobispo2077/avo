@@ -1,6 +1,8 @@
 """Read current local speech dependencies without loading a speech runtime."""
 
-from importlib.metadata import PackageNotFoundError, version
+from copy import deepcopy
+from importlib.metadata import PackageNotFoundError, distributions, version
+from itertools import islice
 from pathlib import Path
 
 from avo.model_sources import PreflightError, resolve_job
@@ -43,7 +45,46 @@ def _alignment_config_complete(runtime, punkt_files):
     )
 
 
+def _alignment_sites(runtime):
+    if not runtime.get("python"):
+        return []
+    parent = Path(runtime["python"]).parent
+    prefix = parent.parent if parent.name.lower() in {"scripts", "bin"} else parent
+    roots = [prefix / "Lib/site-packages"]
+    libraries = list(islice((prefix / "lib").glob("python*"), 17))
+    if len(libraries) > 16:
+        raise ValueError("Alignment runtime has ambiguous package roots")
+    roots.extend(
+        root / directory
+        for root in libraries
+        for directory in ("site-packages", "dist-packages")
+    )
+    return [str(path) for path in roots if path.is_dir()]
+
+
+def _distribution_version(name, sites):
+    matches = list(islice(distributions(name=name, path=sites), 2))
+    if len(matches) != 1:
+        return None
+    value = matches[0].version
+    return value if isinstance(value, str) and 0 < len(value) <= 128 else None
+
+
+def _alignment_runtime_versions(runtime):
+    """Read isolated environment metadata without importing its packages or Python."""
+    packages = ("whisperx", "torch", "torchaudio", "transformers", "numpy", "nltk")
+    unknown = dict.fromkeys(packages)
+    try:
+        sites = _alignment_sites(runtime)
+        if not sites:
+            return unknown
+        return {name: _distribution_version(name, sites) for name in packages}
+    except (OSError, ValueError, UnicodeError):
+        return unknown
+
+
 def _alignment_dependencies(runtime):
+    runtime = deepcopy(runtime)
     paths = []
     if runtime.get("python"):
         paths.append(Path(runtime["python"]))
@@ -53,8 +94,11 @@ def _alignment_dependencies(runtime):
         [path for path in Path(punkt).rglob("*") if path.is_file()] if punkt else []
     )
     paths.extend(punkt_files)
-    result = {"configured": runtime, **_dependency_files(paths)}
-    if not _alignment_config_complete(runtime, punkt_files):
+    versions = _alignment_runtime_versions(runtime)
+    result = {"configured": runtime, "versions": versions, **_dependency_files(paths)}
+    if not _alignment_config_complete(runtime, punkt_files) or not all(
+        versions.values()
+    ):
         result["status"] = "unknown"
     return result
 
@@ -103,3 +147,24 @@ def speech_dependency_bindings(
         "transcription": transcription,
         "alignment": _alignment_dependencies(runtime),
     }
+
+
+def workspace_speech_dependencies(workspace):
+    """Resolve current saved speech settings; never instantiate a media adapter."""
+    from avo.init_project import load_config, load_provider
+    from avo.paths import repo_root
+    from avo.timeline.cutting_policy import resolve_cutting_policy
+
+    root = repo_root()
+    provider = {}
+    if workspace.project.get("provider"):
+        try:
+            provider = load_provider(workspace.project["provider"], root=root)
+        except FileNotFoundError:
+            pass
+    policy = resolve_cutting_policy(
+        global_settings=load_config(root).get("cutting"),
+        provider_settings=(provider.get("routingOverrides") or {}).get("cutting"),
+        project_settings=workspace.project.get("cutting"),
+    )
+    return speech_dependency_bindings(workspace.project, policy.effective)
