@@ -1291,7 +1291,7 @@ def _require_cutting_gate(plan, gate):
 
 
 def _require_current_microproof_gate(
-    plan: dict[str, Any], gate: dict[str, Any], *, preflight_hash: str
+    plan: dict[str, Any], gate: dict[str, Any], *, preflight_hash: str, workspace=None
 ) -> None:
     from .contracts import content_hash
     from .review_runner import select_microproof_windows
@@ -1328,6 +1328,12 @@ def _require_current_microproof_gate(
             "rerun every changed-operation and historical-risk window",
         )
     _require_cutting_gate(plan, gate)
+    _require_window_statuses(gate, required)
+    if workspace is not None:
+        _require_encoded_windows(workspace, plan, gate)
+
+
+def _require_window_statuses(gate, required):
     statuses = [str(item.get("status")) for item in gate.get("results") or []]
     if any(
         status in {"needs-human", "needs-human-judgment", "ambiguous"}
@@ -1349,6 +1355,35 @@ def _require_current_microproof_gate(
             "PROOF_MICROPROOF_FAILED",
             "one or more required microproofs failed",
             "repair the defect and rerun the gate",
+        )
+
+
+def _require_encoded_windows(workspace, plan, gate):
+    from .contracts import file_fingerprint
+
+    directory = (
+        Path(workspace.timeline_dir).resolve() / "microproofs" / plan["proofPlanId"]
+    )
+    suffix = Path(plan["output"]["path"]).suffix or ".mp4"
+    for index, (window, result) in enumerate(
+        zip(gate["requiredWindows"], gate["results"], strict=True), 1
+    ):
+        expected = directory / f"window-{index:04d}{suffix}"
+        try:
+            recorded = result["output"]
+            if (
+                result["window"] == window
+                and expected.resolve() == expected
+                and Path(recorded["locator"]).resolve() == expected
+                and file_fingerprint(expected) == recorded
+            ):
+                continue
+        except (OSError, KeyError, TypeError, ValueError):
+            pass
+        raise ProofMaterializationError(
+            "PROOF_MICROPROOF_OUTPUT_STALE",
+            f"encoded evidence changed for frames {window['startFrame']} to {window['endFrameExclusive'] - 1}",
+            "rerender the required microproof windows from the current canonical plan",
         )
 
 
@@ -1392,6 +1427,7 @@ def materialize_proof_plan(
             plan,
             gate,
             preflight_hash=preflight["reportHash"],
+            workspace=workspace,
         )
         output = Path(plan["output"]["path"])
         rendered = _proof_render(port, plan, output, window=None)
@@ -1456,6 +1492,7 @@ def proof_build_status(
                 plan,
                 gate,
                 preflight_hash=preflight["reportHash"],
+                workspace=workspace,
             )
             gate_state = "pass"
             gate_hash = gate["gateHash"]
