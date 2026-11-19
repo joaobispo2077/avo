@@ -3,6 +3,7 @@
 import json
 import shutil
 import subprocess
+from xml.etree import ElementTree
 
 import pytest
 from tests.test_timeline_cmap_service import snapshot, workspace
@@ -295,8 +296,10 @@ def test_validation_exports_constant_gain_only_for_the_observed_target(tmp_path)
             window={"startFrame": 0, "endFrameExclusive": 60},
         )
         result = build_editor_handoff(ws).prepare(request)
-        model = parse_fcp7_xml(
-            (ws.raw_dir / result["xmlRef"]["locator"]).read_bytes(), roots=[ws.raw_dir]
+        payload = (ws.raw_dir / result["xmlRef"]["locator"]).read_bytes()
+        model = parse_fcp7_xml(payload, roots=[ws.raw_dir])
+        routing = ElementTree.fromstring(payload).findall(
+            ".//audio/track/clipitem/filter/effect[effectid='audiopan']/parameter/value"
         )
         clips = [
             clip
@@ -309,11 +312,13 @@ def test_validation_exports_constant_gain_only_for_the_observed_target(tmp_path)
         if profile == PROFILE:
             assert all("gainDb" not in clip for clip in clips)
             assert len(losses) == 1
+            assert routing == []
         else:
             assert [clip["gainDb"] for clip in clips] == pytest.approx(
                 [item["gainDb"]] * 2
             )
             assert losses == []
+            assert [int(value.text) for value in routing] == [-1, 1]
         assert result["status"] == "validation-only"
         assert result["profile"]["status"] == "unqualified"
     assert MotionReviewService(ws).project()["basisHeads"] == before
