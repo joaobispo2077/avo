@@ -33,10 +33,14 @@ absolute JSON request path for each operation that writes review evidence. The
   XML path and SHA-256. It retains the exact returned bytes, checks referenced
   originals within the declared roots, and records unfamiliar XML elements.
   Missing and changed originals stay visible in the report.
+  A finite positive full-clip Audio Levels value is available in decibels
+  for review. The returned file retains gain automation, disabled effects, and
+  partial-clip settings for manual review. [Apple's XMEML audio level reference](https://developer.apple.com/library/archive/documentation/AppleApplications/Reference/FinalCutPro_XML/Topics/Topics.html)
 - `timeline-export propose-feedback` takes the inspection reference and current
   timeline heads. It compares the original export, the current AVO edit and the
   returned file. Independent changes become review proposals. Divergent changes
-  become conflicts. Ambiguous matches and omissions remain unresolved.
+  become conflicts. Ambiguous matches and omissions remain unresolved. Gain
+  proposals require observations in the original export, current edit and return.
 - `timeline-export apply-feedback` records which proposed fields to keep or take
   from the return. A supported inward trim must select both the program and
   source edge for the exact picture clip and each linked audio clip. AVO routes
