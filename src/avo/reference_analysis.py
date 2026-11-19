@@ -1,8 +1,11 @@
 """Data-only visual observations and selected-subject association."""
 
+from copy import deepcopy
+from fractions import Fraction
 from itertools import pairwise
+from math import isfinite
 
-from .timeline.contracts import validate_document
+from .timeline.contracts import content_hash, validate_document
 
 SCHEMA = "avo.visual-motion-analysis.schema.json"
 
@@ -84,4 +87,125 @@ def associate_selected_face(request):
     return result
 
 
-__all__ = ["associate_selected_face"]
+def _display_box(detection, rect):
+    x, y, width, height = detection["box"]
+    if not all(isfinite(value) for value in (x, y, width, height)):
+        raise ValueError("Proxy face box must be finite")
+    if width <= 0 or height <= 0 or not 0 <= detection["score"] <= 1:
+        raise ValueError("Proxy face box or detector score is invalid")
+    left, top, content_width, content_height = (
+        rect[key] for key in ("x", "y", "width", "height")
+    )
+    first_x, first_y = max(x, left), max(y, top)
+    last_x = min(x + width, left + content_width)
+    last_y = min(y + height, top + content_height)
+    if first_x >= last_x or first_y >= last_y:
+        return None
+    return {
+        "box": [
+            (first_x - left) / content_width,
+            (first_y - top) / content_height,
+            (last_x - first_x) / content_width,
+            (last_y - first_y) / content_height,
+        ],
+        "score": detection["score"],
+    }
+
+
+def map_proxy_face_samples(observed, source_ticks, content_rect):
+    """Map bounded pixel observations onto an explicit original-source frame grid."""
+    for value, definition in (
+        (observed, "proxyDetectionRows"),
+        (source_ticks, "sampledSourceTicks"),
+        (content_rect, "proxyContentRect"),
+    ):
+        validate_document(value, SCHEMA + "#/$defs/" + definition)
+    if len(observed) != len(source_ticks):
+        raise ValueError(
+            "Detection samples require exact source ticks for every proxy frame"
+        )
+    frames = [
+        {
+            "sourceTick": tick,
+            "detections": [
+                mapped
+                for detection in rows
+                if (mapped := _display_box(detection, content_rect)) is not None
+            ],
+        }
+        for tick, rows in zip(source_ticks, observed, strict=True)
+    ]
+    _validate_frame_sequence(frames)
+    return frames
+
+
+def _display_aspect(geometry):
+    sar = geometry["sampleAspectRatio"]
+    aspect = Fraction(geometry["width"] * sar["num"], geometry["height"] * sar["den"])
+    return 1 / aspect if geometry["rotation"] in (90, 270) else aspect
+
+
+def _require_observation_scope(request, observed):
+    proxy, scope = request["proxy"], request["sourceRange"]
+    if observed.get("proxySha256") != proxy["sha256"]:
+        raise ValueError("Face observations differ from the selected proxy identity")
+    if any(
+        not scope["startTicks"] <= tick < scope["endTicks"]
+        for tick in proxy["sourceTicks"]
+    ):
+        raise ValueError(
+            "Every sampled frame must lie inside the selected source range"
+        )
+    rect = proxy["content"]
+    if (
+        rect["x"] + rect["width"] > proxy["width"]
+        or rect["y"] + rect["height"] > proxy["height"]
+    ):
+        raise ValueError("Face proxy content lies outside its display frame")
+    aspect = _display_aspect(request["geometry"])
+    if (
+        abs(rect["width"] - rect["height"] * aspect) > 1
+        and abs(rect["height"] - rect["width"] / aspect) > 1
+    ):
+        raise ValueError("Face proxy differs from the original display aspect")
+
+
+def freeze_face_observation(request, observed):
+    """Bind measured proxy facts and association to exact source and detector inputs."""
+    validate_document(request, SCHEMA + "#/$defs/faceObservationRequest")
+    _require_observation_scope(request, observed)
+    proxy = request["proxy"]
+    frames = map_proxy_face_samples(
+        observed["detections"], proxy["sourceTicks"], proxy["content"]
+    )
+    association = associate_selected_face(
+        {
+            "frames": frames,
+            **{
+                key: request[key]
+                for key in ("seed", "minimumOverlap", "maximumGapTicks")
+            },
+        }
+    )
+    identity = ("modelSha256", "device", "isolated", "versions")
+    result = {
+        "contractVersion": "1.0.0",
+        "request": deepcopy(request),
+        "detector": {key: deepcopy(observed[key]) for key in identity},
+        "samples": frames,
+        "association": association,
+        "coverage": {
+            "observedFrames": len(frames),
+            "selectedFrames": sum(item["status"] == "selected" for item in association),
+        },
+    }
+    result["analysisHash"] = content_hash(result)
+    validate_document(result, SCHEMA + "#/$defs/faceObservation")
+    return result
+
+
+__all__ = [
+    "associate_selected_face",
+    "freeze_face_observation",
+    "map_proxy_face_samples",
+]

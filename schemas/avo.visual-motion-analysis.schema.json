@@ -30,6 +30,137 @@
         "detections": {"type": "array", "maxItems": 32, "items": {"$ref": "#/$defs/detection"}}
       }
     },
+    "proxyContentRect": {
+      "type": "object", "additionalProperties": false, "required": ["x", "y", "width", "height"],
+      "properties": {
+        "x": {"type": "integer", "minimum": 0}, "y": {"type": "integer", "minimum": 0},
+        "width": {"type": "integer", "minimum": 1}, "height": {"type": "integer", "minimum": 1}
+      }
+    },
+    "proxyDetectionRows": {
+      "type": "array", "minItems": 1, "maxItems": 900,
+      "items": {
+        "type": "array", "maxItems": 32,
+        "items": {
+          "type": "object", "additionalProperties": false, "required": ["box", "score"],
+          "properties": {
+            "box": {"type": "array", "minItems": 4, "maxItems": 4, "items": {"type": "number"}},
+            "score": {"$ref": "#/$defs/unit"}
+          }
+        }
+      }
+    },
+    "sampledSourceTicks": {
+      "type": "array", "minItems": 1, "maxItems": 900, "items": {"$ref": "#/$defs/sourceTick"}
+    },
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "ratio": {
+      "type": "object", "additionalProperties": false, "required": ["num", "den"],
+      "properties": {"num": {"type": "integer", "minimum": 1}, "den": {"type": "integer", "minimum": 1}}
+    },
+    "sourceIdentity": {
+      "type": "object", "additionalProperties": false, "required": ["sourceId", "sha256", "sizeBytes"],
+      "properties": {
+        "sourceId": {"type": "string", "minLength": 1, "maxLength": 128},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "sizeBytes": {"type": "integer", "minimum": 1}
+      }
+    },
+    "sourceRange": {
+      "type": "object", "additionalProperties": false, "required": ["startTicks", "endTicks", "timebase"],
+      "properties": {
+        "startTicks": {"$ref": "#/$defs/sourceTick"},
+        "endTicks": {"$ref": "#/$defs/sourceTick"},
+        "timebase": {"$ref": "#/$defs/ratio"}
+      }
+    },
+    "sourceGeometry": {
+      "type": "object", "additionalProperties": false, "required": ["width", "height", "rotation", "sampleAspectRatio"],
+      "properties": {
+        "width": {"type": "integer", "minimum": 1, "maximum": 65536},
+        "height": {"type": "integer", "minimum": 1, "maximum": 65536},
+        "rotation": {"enum": [0, 90, 180, 270]},
+        "sampleAspectRatio": {"$ref": "#/$defs/ratio"}
+      }
+    },
+    "proxyIdentity": {
+      "type": "object", "additionalProperties": false, "required": ["sha256", "width", "height", "content", "sourceTicks"],
+      "properties": {
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "width": {"type": "integer", "minimum": 32, "maximum": 640},
+        "height": {"type": "integer", "minimum": 32, "maximum": 640},
+        "content": {"$ref": "#/$defs/proxyContentRect"},
+        "sourceTicks": {"allOf": [{"$ref": "#/$defs/sampledSourceTicks"}, {"maxItems": 300}]}
+      }
+    },
+    "detectorIdentity": {
+      "type": "object", "additionalProperties": false, "required": ["modelSha256", "device", "isolated", "versions"],
+      "properties": {
+        "modelSha256": {"$ref": "#/$defs/sha256"},
+        "device": {"const": "cpu"},
+        "isolated": {"const": true},
+        "versions": {
+          "type": "object", "additionalProperties": false, "required": ["opencv-python-headless", "numpy"],
+          "properties": {
+            "opencv-python-headless": {"type": "string", "minLength": 1, "maxLength": 128},
+            "numpy": {"type": "string", "minLength": 1, "maxLength": 128}
+          }
+        }
+      }
+    },
+    "faceObservationRequest": {
+      "type": "object", "additionalProperties": false,
+      "required": ["contractVersion", "source", "sourceRange", "geometry", "proxy", "seed", "minimumOverlap", "maximumGapTicks"],
+      "properties": {
+        "contractVersion": {"const": "1.0.0"},
+        "source": {"$ref": "#/$defs/sourceIdentity"},
+        "sourceRange": {"$ref": "#/$defs/sourceRange"},
+        "geometry": {"$ref": "#/$defs/sourceGeometry"},
+        "proxy": {"$ref": "#/$defs/proxyIdentity"},
+        "seed": {"$ref": "#/$defs/faceAssociationRequest/properties/seed"},
+        "minimumOverlap": {"$ref": "#/$defs/faceAssociationRequest/properties/minimumOverlap"},
+        "maximumGapTicks": {"$ref": "#/$defs/faceAssociationRequest/properties/maximumGapTicks"}
+      }
+    },
+    "faceAnalyzeRequest": {
+      "type": "object", "additionalProperties": false,
+      "required": ["contractVersion", "operation", "actor", "reason", "expectedBasis", "selection", "sourceId", "sourceSha256", "streamIndex", "sourceRange", "sampleEvery", "seed", "minimumOverlap", "maximumGapTicks"],
+      "properties": {
+        "contractVersion": {"const": "1.0.0"},
+        "operation": {"const": "face-analyze"},
+        "actor": {"type": "string", "minLength": 1, "maxLength": 256, "pattern": "\\S"},
+        "reason": {"type": "string", "minLength": 1, "maxLength": 4096, "pattern": "\\S"},
+        "expectedBasis": {"$ref": "avo.motion-review.schema.json#/properties/basisHeads"},
+        "selection": {"$ref": "avo.editing-craft.schema.json#/$defs/selection"},
+        "sourceId": {"$ref": "#/$defs/sourceIdentity/properties/sourceId"},
+        "sourceSha256": {"$ref": "#/$defs/sha256"},
+        "streamIndex": {"type": "integer", "minimum": 0},
+        "sourceRange": {"$ref": "#/$defs/sourceRange"},
+        "sampleEvery": {"type": "integer", "minimum": 1, "maximum": 120},
+        "seed": {"$ref": "#/$defs/faceAssociationRequest/properties/seed"},
+        "minimumOverlap": {"$ref": "#/$defs/faceAssociationRequest/properties/minimumOverlap"},
+        "maximumGapTicks": {"$ref": "#/$defs/faceAssociationRequest/properties/maximumGapTicks"}
+      }
+    },
+    "faceObservation": {
+      "type": "object", "additionalProperties": false,
+      "required": ["contractVersion", "request", "detector", "samples", "association", "coverage", "analysisHash"],
+      "properties": {
+        "contractVersion": {"const": "1.0.0"},
+        "request": {"$ref": "#/$defs/faceObservationRequest"},
+        "detector": {"$ref": "#/$defs/detectorIdentity"},
+        "samples": {"$ref": "#/$defs/faceAssociationRequest/properties/frames"},
+        "association": {"$ref": "#/$defs/faceAssociation"},
+        "coverage": {
+          "type": "object", "additionalProperties": false, "required": ["observedFrames", "selectedFrames"],
+          "properties": {
+            "observedFrames": {"type": "integer", "minimum": 1, "maximum": 300},
+            "selectedFrames": {"type": "integer", "minimum": 1, "maximum": 300}
+          }
+        },
+        "analysisHash": {"$ref": "#/$defs/sha256"}
+      }
+    },
     "faceAssociationRequest": {
       "type": "object", "additionalProperties": false,
       "required": ["frames", "seed", "minimumOverlap", "maximumGapTicks"],
