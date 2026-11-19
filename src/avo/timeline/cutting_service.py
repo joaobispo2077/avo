@@ -579,18 +579,47 @@ class CuttingService:
         self._revalidate_protections(snapshot, edits)
         if not edits or not consolidate_removals(snapshot, edits)["segments"]:
             raise CuttingServiceError("Editor trims require a nonempty retained cut")
+        basis = self._proposal_basis(revision, frame_rate)
+        implementation = self._implementation_binding()
         payload = {
-            **self._proposal_basis(revision, frame_rate),
+            **basis,
             "occurrences": occurrences,
             "edits": edits,
             "requiredWindows": audit_joins(snapshot, frame_rate=frame_rate),
             "scope": {"editorFeedbackRef": editor_ref},
-            "implementationBindings": self._implementation_binding(),
+            "implementationBindings": {
+                **implementation,
+                "sourceAnalysisRefs": self._editor_analysis_refs(basis, implementation),
+            },
             "status": "needs-review",
         }
         reference = self.store.save_document(make_document("proposal", payload))
         self._bind(proposal=reference)
         return reference
+
+    def _editor_analysis_refs(self, basis, implementation):
+        if not self.workspace.pipeline_run_path.exists():
+            return []
+        current = self.run_store.load()["activeRefs"].get("cutting") or {}
+        reference = current.get("proposal")
+        if reference is None:
+            return []
+        previous = self.store.load_document(reference)
+        if previous["documentType"] != "proposal":
+            raise CuttingServiceError(
+                "Active cutting analysis must belong to a proposal"
+            )
+        payload = previous["payload"]
+        bindings = payload.get("implementationBindings") or {}
+        if (
+            any(
+                payload.get(key) != basis[key]
+                for key in ("baseCMapHash", "baseCMapRevisionId", "syncRef")
+            )
+            or bindings.get("dependencies") != implementation["dependencies"]
+        ):
+            return []
+        return bindings.get("sourceAnalysisRefs", [])
 
     @serialized_timeline(lambda self: self.workspace.timeline_dir)
     def propose_spoken_note_exclusion(self, note):
