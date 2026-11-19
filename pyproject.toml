@@ -57,6 +57,7 @@ where = ["src"]
 ]
 "avo.resources.directions" = ["*.json"]
 "avo.resources.interchange" = ["*.json"]
+"avo.resources.artcraft" = ["catalog.json"]
 
 [tool.setuptools.data-files]
 "share/avo/schemas" = ["schemas/*.json"]

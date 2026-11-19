@@ -72,6 +72,15 @@ if ($Got.Trim() -ne $Version) {
   Write-Error "error: avo version '$Got' != pyproject '$Version'"
 }
 
+Write-Host "smoke: bundled ArtCraft capability metadata"
+$ArtCraftCatalogJson = & $Launcher cli artcraft catalog --app anicraft --json
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+$AniCraftProfile = ($ArtCraftCatalogJson -join "`n" | ConvertFrom-Json).profiles
+if ($AniCraftProfile.Count -ne 1 -or $AniCraftProfile[0].claimedState -ne "documented-only") {
+  Write-Error "error: bundled ArtCraft metadata smoke failed"
+  exit 1
+}
+
 Write-Host "smoke: avo --help (cold + warm; warm target <= 3s)"
 & $Python -c @"
 import subprocess, sys, time
