@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 from copy import deepcopy
 from pathlib import Path
@@ -58,7 +59,8 @@ def _reject_constant(value):
     raise ValueError(f"Non-finite JSON value: {value}")
 
 
-def load_craft_request(path: Path | str, *, operation: str) -> dict[str, Any]:
+def read_craft_request(path: Path | str, *, expected_sha256: str | None = None) -> Any:
+    """Read a bounded request, optionally bound to exact confirmation bytes."""
     path = Path(path)
     if not path.is_absolute():
         raise _invalid("Request path must be absolute.", field="requestPath")
@@ -67,6 +69,11 @@ def load_craft_request(path: Path | str, *, operation: str) -> dict[str, Any]:
             raw = handle.read(MAX_REQUEST_BYTES + 1)
         if len(raw) > MAX_REQUEST_BYTES:
             raise _invalid("Request exceeds the 1 MiB input budget.")
+        if (
+            expected_sha256 is not None
+            and hashlib.sha256(raw).hexdigest() != expected_sha256
+        ):
+            raise _invalid("Request changed after confirmation.")
         value = json.loads(
             raw, object_pairs_hook=_unique_object, parse_constant=_reject_constant
         )
@@ -74,7 +81,11 @@ def load_craft_request(path: Path | str, *, operation: str) -> dict[str, Any]:
         if isinstance(error, CraftRequestError):
             raise
         raise _invalid(f"Cannot read request: {error}") from error
-    return validate_craft_request(value, operation=operation)
+    return value
+
+
+def load_craft_request(path: Path | str, *, operation: str) -> dict[str, Any]:
+    return validate_craft_request(read_craft_request(path), operation=operation)
 
 
 def options_result(result: dict, request: dict | None = None) -> dict:

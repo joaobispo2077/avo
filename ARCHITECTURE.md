@@ -944,8 +944,12 @@ source-only import preservation remain distinct, with compatibility regressions.
 The local working design is `specs/017-editing-craft-parity/plan.md`; numbered
 working specs remain ignored by existing repository policy. Scoped preferences,
 typed request freezing and the default motion-review projection are implemented.
-Camera, analysis, sound matching, preparation and editor interchange below remain
-planned until their own execution and acceptance evidence is complete.
+Untimed proposal/selection and recoverable canonical application use the existing
+timeline owners. The sound catalogue and descriptor search are local source-read
+and saved-metadata operations respectively; semantic execution has an explicit
+isolated optional boundary. Camera, visual analysis, sound placement, preparation
+and editor interchange below remain planned until their own execution and
+acceptance evidence is complete.
 
 Motion map and linked lightweight storyboard are built-in, engine-independent
 projections at applicable motion planning/review. They join the selected brief,
@@ -953,6 +957,240 @@ untimed proposals and exact available CMap/BMap/Tracks/Animation/Sync heads,
 including absence/static/unresolved state. Status remains metadata-only and
 cannot initialize canonical records, run models or render. Explicit authoring
 and review publish immutable derived views; no second timeline is introduced.
+
+`MotionAuthoringService` freezes selected direction/options in existing run
+extensions, stores immutable concept/decision documents and projects them into
+the same default map. It prevalidates full prospective BMap/Tracks/Animation
+revisions under the timeline writer, then publishes through each owner with exact
+prepared identities. A narrowly scoped pending-application guard blocks unrelated
+canonical work until the same operation recovers. Receipts record staged,
+committing, committed or recovery-needed state; they do not transfer approval.
+
+Motion retention preserves legacy metadata that claims no head or revisions as
+opaque fingerprinted bytes. Claimed heads/revisions and their motion evidence
+remain strictly validated. This compatibility boundary grants no canonical read,
+render or approval authority to a legacy metadata stub.
+
+`SfxCatalogService` retains immutable project-local generations and separates
+source-bound measurement facts from manual curation, rights and reviewed markers.
+It reuses shared safe-path/library guards without invoking media organization.
+Warm descriptor searches perform no source enumeration, decode or model work.
+An explicit semantic operation injects a ranker and paired local CLAP worker;
+manifest/model/preprocessing/runtime identities must agree before cosine scores
+are accepted. The optional worker uses offline local files and bounded validated
+vectors; ordinary model defaults and proof capability registration stay unchanged.
+No model package or weights are an AVO core prerequisite. Real provisioned-model
+acceptance remains unperformed until the artifacts/runtime are available.
+
+Advanced camera strategy validation reserves a closed relative-behavior extension
+and publishes the revision reference with an index-v2 capability fence in one
+atomic replacement. Generic snapshot writers and metadata-only readers enforce
+the same guard; existing v1 snapshots do not cause an upgrade on inspection.
+The pure camera planner derives frames from BMap and binds moves to exact source
+occurrences, geometry, source bytes and frozen options. Camera proof compilation
+uses a strict v2 operation contract and requires a qualified native implementation;
+legacy proof contracts are unchanged. Encoded execution remains a qualification
+candidate until the native capability, provenance and authoring controls are
+registered together.
+
+Selected untimed camera recipes expand inside `MotionAuthoringService` into
+strict relative paths with frozen options, source identity and display geometry.
+The pure recipe factory performs no source access or canonical writes. Stable
+concept IDs retain unchanged paths across revisions; publication rejects a path,
+option or component that differs from the selected concept. BMap and the existing
+camera compiler remain the only timing and source-occurrence authorities.
+
+The native camera sampler accepts sealed numeric paths over freshly verified
+original-source occurrences. Its frame expressions retain the complete cue
+interval during partial renders and run before independent captions or graphics.
+Contiguous and placed execution share this source-bound sampler. Explicit
+precision composition uses 16-bit RGB/alpha planes and bounded raw picture
+chunks; opaque alpha insertion/removal copies planes instead of introducing a
+libswscale RGB/RGBA matrix round trip. Legacy proofs retain their existing pixel
+path. Optional placed-stage reuse is disabled for the new precision profile
+until its complete camera recipe is qualified for caching.
+An accepted delivery profile keeps RGB16 through source sampling and independent
+composition, then performs one final BT.709 conversion with square output pixels.
+Unsupported timing, source geometry and fidelity combinations fail preflight. Runtime evidence and
+remaining activation requirements are documented in
+[`docs/source-picture-camera-rendering.md`](docs/source-picture-camera-rendering.md).
+
+Selected native camera execution records actual tool bytes/version identities,
+implementation code and the complete recipe in the existing producer record.
+The adapter binds its observed environment to preflight and verifies execution
+against it; the environment changes the microproof gate's preflight hash. Existing
+materialization and reconstruction owners retain these records without another
+source ledger. Packaged native implementations bind program bytes containing the
+embedded code, while checkout fingerprints include camera and precision modules.
+No runtime probe is added to ordinary metadata-only motion views.
+
+Explicit camera proposal/application bind the observed installed environment to
+selected recipes, exact dispositions and existing recoverable canonical owners.
+Application is confined to the selected picture components/layers, rejects
+duplicate scope identities and preserves unrelated graphics/dialogue/global
+settings. Generic plan application cannot bypass the selected camera runtime.
+Runtime inspection follows known Chocolatey launcher targets and fingerprints the
+final executable as well as launcher bytes; tools stay separately installed.
+Motion-review generator 1.2.0 derives planned/authored before/during/after states
+from the relative path and unambiguous component links, while retaining readable
+1.1.0 reports. Gate JSON joins existing reconstruction ancestry evidence; disposable
+proof clips and tool binaries are not reconstruction sources. Actual native
+fixtures verify full/window source sampling, independent overlays, color/depth,
+runtime identity and unsupported-profile rejection. These checks do not replace
+Watch, listening or creator suitability review.
+
+Sound candidate fitting is a pure timeline primitive over validated catalogue
+metadata and an explicit native-sample trim. Shared catalogue identities and
+validation live in `avo.sfx_contracts`; the existing catalogue imports those same
+unchanged checks, keeping source execution outside the planner. It reuses the existing event clock,
+keeps useful attacks/tails, and returns unresolved pre-roll/tail/rights/visibility
+cases instead of changing picture or audio ranges. Its derived hash binds clock,
+source/measurement and current annotation identities. It creates no source reads,
+canonical timing, selection, gain policy or listening approval. Publication and
+encoded contextual qualification belong to their existing owners.
+
+Explicit sound proposals now reuse `MotionAuthoringService` head guards and
+`PipelineRunStore` option freezing, with strict bounded intent/proposal contracts
+and immutable metadata below `edit/motion/sound/`. The timeline service derives
+events only from current motion items and canonical cue timing, captures selected
+sound direction, and calls an injected catalogue for generation-bound candidates.
+Silence and unresolved anchors remain first-class outcomes. Native/MCP entry
+points share the same request and operation replay; they do not scan source media,
+provision models, publish audio or approve listening. Proposal validation precedes
+option freezing. Unregistered drafts do not enter reconstruction closure; canonical
+publication and typed evidence retention use their dedicated owners below.
+Pure per-event choice preparation reuses the existing overlay role and channel
+validators. It freezes entry/marker/mix identities and uses the same native event
+clock for before/after reports, while exposing repeated sources and coincident
+attacks. Explicit source peak/fade limits cannot establish combined-mix safety or
+listening acceptance; current source/catalogue/head checks stay with publication.
+The pure sound graph compiler translates frozen choices to existing native
+trim/gain/fade/duck nodes and timed events. It retains absolute program coordinates
+through cut windows and makes identical compilation idempotent. Existing source
+processing remains unchanged; extending a program mix requires its exact original
+node set and policy. Native execution still admits original source bytes and
+performs rendering. This qualification kernel is not a canonical sound publisher.
+Source-native fitting lives in the data-only `timeline.sound_fitting` module so
+canonical readers can reuse the same validation without importing authoring or
+persistence. `sound_planning` retains its existing fitting/error imports for
+compatibility; the moved fitting bodies and their failure semantics are unchanged.
+JSON budgets, track channel/overlay rules and frozen sound choice validation live
+in the data-only `motion_metadata`, `track_rules` and `sound_choices` modules.
+Existing review, Tracks and sound-planning imports remain available. Canonical
+readers reuse these rules without importing authoring, rendering or models.
+
+Selected sound Tracks carry a strict source/choice/cue/request binding and require
+the `sound-selection-v1` reader capability. Generic publication atomically updates
+the Tracks index to version 2 with its revision reference; unchanged legacy reads
+retain version 1. Animation version 2 keeps its separate camera capabilities.
+Invalid or resealed choices, changed source/channel/gain/clock bindings, duplicate
+contributions and untyped references fail closed. The legacy audio projection
+rejects these tracks rather than ignoring their native trim. New readers support
+both legacy and selected-sound data; published advanced history retains its reader
+fence on later revisions. The internal `timeline.sound_application` service now
+publishes explicit per-event selections through the existing BMap/Tracks owners
+under the shared timeline writer. Frozen choices bind actual local source bytes
+and an injected first-audio-stream probe. Exact owned cue/layer bindings and
+current visual contexts prevent replacement from altering unrelated content or
+borrowing ordered-layer approval. Silence removes only its selected contribution.
+Immutable requests, staged prepared revisions and linked receipts support exact
+retry after partial publication, including an interrupted initial operation log.
+Recovery rechecks heads, source/catalogue, direction and frozen options; pending
+markers remain blocking until the actual publication is reconciled. Completed
+replay reports historical heads separately from their currentness.
+
+`timeline.sound_retention` extends the existing bounded motion evidence ledger
+with selected sound proposals, their actual operations, receipt history, exact
+catalogue generations and pending recovery inputs. Unfinished publication keeps
+its actual current catalogue selector, including a stale basis; committed replay
+retains frozen metadata without adopting later curation. Catalogue reads share
+the data-only catalogue byte limit inside the unchanged total evidence budget.
+Canonical/history and explicitly requested work references drive retention; unrelated
+drafts and generated review caches do not. The timeline domain owns validation
+and publication; `adapters.registry` composes the optional explicit source probe
+using the existing ffprobe adapter. Metadata readers never execute it. Native and
+MCP apply share the strict saved request, canonical owner permissions and exact
+confirmation-byte binding. Recoverable errors report actual heads/receipt/state.
+See
+[`docs/sound-application.md`](docs/sound-application.md) for the boundary and checks.
+
+Typed sound application selectors preserve exact staged inputs even when staging
+is interrupted before its operation log or pending marker. Bounded discovery uses
+only the owned selector directory. Generic authoring retention excludes the typed
+sound draft collections, then adds their verified dependencies; adjacent creator
+notes remain authoring inputs. `timeline.sound_sources` registers current and
+still-staged external sound originals with reconstruction's existing
+`externalSources` contract and the native sound source identity. Existing
+fingerprinting verifies the selected files without copying or decoding a library.
+Project-local selected or staged sound assets join the fingerprinted bundle files,
+including staging before the first canonical owner write.
+The metadata/file coverage path grants no rendering or listening authority.
+
+`timeline.sound_proof` joins current selected Tracks, exact committed publication
+recipes and current visual anchors into ordinary proof compilation. It reuses the
+pure native graph compiler and adds no decoder, model or media-adapter dependency.
+Preflight recomputes the contribution and rejects omissions, altered events/mix,
+unpublished recipes and overlapping copies of a selected source. Cut proofs keep
+their source-only pass. Optional ducking binds current unmuted dialogue to actual
+source/stream/channel routing, including a selected microphone duplicated to
+stereo. Native source descriptors declare original ancestry explicitly for the
+existing strict media resolver. Physical admission and listening remain separate.
+Sound finalization/recovery accepts expected descendant staleness only after an
+actual published parent, while preserving unchanged revision and approval checks.
+It leaves Animation stale until its existing owner refreshes that dependency.
+
+`timeline.motion_sound_review` derives proposed and selected sound links for the
+built-in motion map and storyboard from bounded metadata. Generator 1.3 retains
+readable 1.1/1.2 reports. Selected sound adds no visual timing authority; stale
+opportunities become unresolved, and foreign or invalid context becomes a gap.
+Sound propose/apply reuse the existing report publisher without source/model
+execution. Presentation failure preserves valid canonical publication and is
+reported separately. Ordinary inspection remains read-only.
+
+Motion-review generator 1.4 projects applied plans against verified publication
+heads while preserving immutable proposal bodies and their original basis.
+The shared data-only basis comparator keeps authoring and review consistent;
+current dependency state and changed direction remain stale. Older 1.1/1.2/1.3
+reports remain readable. This presentation correction transfers no proof approval.
+
+Sound programme admission reuses native sequential frame rounding and preserves
+placed picture clocks. Existing BMap duration validation still bounds audio cues.
+Explicit silence can retire a previously owned contribution after its visual
+anchor disappears. Missing audio cues are permitted only for that removal;
+present bindings remain exact. Immutable parent Tracks supply historical recipe
+verification for replay, while remaining ordered sound contexts stay unchanged.
+
+`timeline.craft_work` links explicit proposal operations to at most 500 typed
+references in the existing `PipelineRunStore`, with original request/item/event
+scope and no new timing or approval authority. The built-in 1.5 review derives
+pending, partial, completed, recovery and unavailable states from exact existing
+decisions and receipts. Missing evidence keeps the recorded scope visible; changed
+heads, direction, catalogue or active request remain stale. Canonical head guards
+read canonical metadata directly instead of traversing these derived views.
+Requested pending proposals join the existing bounded reconstruction closure;
+unregistered drafts and generated reports remain disposable. Readers neither
+decode/hash source media nor execute optional models. Earlier 1.1 through 1.4
+reports remain readable. See [`docs/craft-pending-work.md`](docs/craft-pending-work.md).
+
+`timeline.craft_work` records reversible per-ID queue dispositions in the same
+run, with bounded append-only request hashes and per-work predecessor checks.
+Pure `timeline.craft_work_decisions` rules let lifecycle validation reject
+rewritten, detached or conflicting history without importing media execution.
+The 1.6 projection separates deferred/closed IDs from actual canonical completion;
+it transfers no concept, media or film approval. Native/MCP `pipeline work-decide`
+validate a bounded request before project/execution setup and reuse the existing
+report publisher. The ordinary pipeline flow remains behind its existing handler.
+Unknown scope, stale decision heads, unavailable evidence and partial publication
+block decisions. Applied contributions require their canonical revision owners.
+
+`timeline.motion_scope` provides pure exact visual comparisons after audio-only
+revisions. Motion review verifies retained canonical metadata with the existing
+contained, bounded, schema/hash/reader checks; recorded source/sync identities,
+selected direction and the exact Animation revision remain required. Applied
+timed visual items can retain direction while the full proposal, composite and
+Animation remain stale. No media caching or evidence/approval transfer is added.
+Changed visual assembly currently blocks this reuse for the whole assembly.
+See [`docs/motion-review-scope.md`](docs/motion-review-scope.md).
 
 Camera movement, face anchoring, sound matching, reference analysis, spoken
 notes/recovery and editor handoff are selected options resolved through existing

@@ -992,7 +992,7 @@ def _proof_plan_value(workspace: Any, proof_plan: dict[str, Any] | str | Path):
     compiler = ProofPlanCompiler(workspace)
     if isinstance(proof_plan, dict):
         value = proof_plan
-        from .contracts import document_hash_excluding, validate_document
+        from .contracts import document_hash_excluding
 
         if value.get("proofPlanHash") != document_hash_excluding(
             value, "proofPlanHash"
@@ -1002,7 +1002,9 @@ def _proof_plan_value(workspace: Any, proof_plan: dict[str, Any] | str | Path):
                 "proof plan changed after compilation",
                 "restore the immutable plan or compile a new one",
             )
-        validate_document(value, "avo.proof-plan.schema.json")
+        from .contracts import validate_proof_plan_document
+
+        validate_proof_plan_document(value)
         return compiler, value
     return compiler, compiler.load(proof_plan)
 
@@ -1165,6 +1167,8 @@ def render_proof_microproofs(
         "gateHash": "",
     }
     _record_cutting_coverage(plan, gate)
+    if "cameraEnvironmentHash" in preflight:
+        gate["cameraEnvironmentHash"] = preflight["cameraEnvironmentHash"]
     gate["gateHash"] = content_hash(
         {key: value for key, value in gate.items() if key != "gateHash"}
     )
@@ -1191,6 +1195,9 @@ def _render_required_microproofs(port, plan, windows, directory, suffix):
                 "output": rendered["output"],
                 "graphHash": str(rendered.get("graphHash") or ""),
             }
+            camera = (rendered.get("producer") or {}).get("camera")
+            if camera is not None:
+                result["cameraProvenance"] = deepcopy(camera)
             _attach_cutting_verification(port, plan, result, frame_range)
         except Exception as exc:
             result = {

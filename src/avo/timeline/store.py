@@ -21,7 +21,15 @@ from threading import local
 from typing import Any
 from uuid import uuid4
 
-from .contracts import ContractError, content_hash, validate_document
+from .contracts import (
+    ContractError,
+    content_hash,
+    require_animation_reader,
+    require_tracks_reader,
+    required_animation_readers,
+    required_tracks_readers,
+    validate_document,
+)
 
 _SHA256 = re.compile(r"^[a-f0-9]{64}$")
 
@@ -32,6 +40,14 @@ class StoreError(RuntimeError):
 
 _WRITERS = local()
 _WRITER_HANDLES = set()
+
+
+def _required_revision_readers(body):
+    if body["artifactType"] == "animation":
+        return required_animation_readers(body["snapshot"])
+    if body["artifactType"] == "tracks":
+        return required_tracks_readers(body["snapshot"])
+    return ()
 
 
 def _close_forked_writers():
@@ -90,7 +106,43 @@ def _kernel_writer(path):
             _release_writer(stream, owner_pid)
 
 
+def _owned_motion_marker(directory, marker):
+    key = (os.getpid(), str(Path(directory).resolve()))
+    access = getattr(_WRITERS, "motion_access", None)
+    if access is None or access[0] != key:
+        return False
+    try:
+        if marker.is_symlink() or marker.stat().st_size > 4096:
+            return False
+        return json.loads(marker.read_text(encoding="utf-8")) == access[1]
+    except (OSError, ValueError, RecursionError):
+        return False
+
+
+@contextmanager
+def motion_application_access(directory, expected_marker):
+    """Permit only this writer's exact pending motion operation to read its basis."""
+    key = (os.getpid(), str(Path(directory).resolve()))
+    if key not in getattr(_WRITERS, "held", set()):
+        raise StoreError(
+            "Motion application access requires its owning timeline writer"
+        )
+    previous = getattr(_WRITERS, "motion_access", None)
+    _WRITERS.motion_access = (key, deepcopy(expected_marker))
+    try:
+        yield
+    finally:
+        _WRITERS.motion_access = previous
+
+
 def require_reconciled(directory):
+    motion = Path(directory) / "motion-application.pending.json"
+    if (motion.exists() or motion.is_symlink()) and not _owned_motion_marker(
+        directory, motion
+    ):
+        raise StoreError(
+            "MOTION_RECOVERY_REQUIRED: reconcile the pending motion application before editing or rendering"
+        )
     marker = Path(directory) / "import-activation.pending.json"
     if marker.exists() or marker.is_symlink():
         raise StoreError(
@@ -365,8 +417,16 @@ class ArtifactStore:
         for ref in index["revisionRefs"]:
             revision = self._read_json(self.timeline_dir / ref["path"])
             self._validate_revision(revision)
-            if revision["contentSha256"] != ref["contentSha256"]:
+            if (
+                revision["contentSha256"] != ref["contentSha256"]
+                or revision["revisionId"] != ref["revisionId"]
+                or revision["artifactType"] != index["artifactType"]
+            ):
                 raise StoreError(f"revision ref hash mismatch: {ref['revisionId']}")
+            if revision["artifactType"] == "animation":
+                require_animation_reader(index, revision["snapshot"])
+            elif revision["artifactType"] == "tracks":
+                require_tracks_reader(index, revision["snapshot"])
         for ref in index["eventRefs"]:
             event = self._read_json(self.timeline_dir / ref["path"])
             self._validate_event(event)
@@ -377,6 +437,7 @@ class ArtifactStore:
     def _validate_revision(self, revision: dict[str, Any]) -> None:
         try:
             validate_document(revision, "avo.timeline-revision.schema.json")
+            _required_revision_readers(revision)
         except ContractError as exc:
             raise StoreError(f"invalid immutable revision: {exc}") from exc
         body = {key: value for key, value in revision.items() if key != "contentSha256"}
@@ -491,8 +552,7 @@ class ArtifactStore:
                 return candidate
             sequence += 1
 
-    @serialized_timeline(lambda self: self.timeline_dir)
-    def append_revision(
+    def prepare_revision(
         self,
         *,
         snapshot: dict[str, Any],
@@ -513,19 +573,9 @@ class ArtifactStore:
         index = self.load_index()
         actual_head_hash = self._head_hash(index)
         _check_expected_head(expected_head_hash, actual_head_hash)
-        existing = {item["revisionId"] for item in index["revisionRefs"]}
-        revision_id = revision_id or self._next_revision_id(
-            str(index["artifactType"]), existing
+        revision_id, parent_revision_id = self._prepared_identity(
+            index, revision_id, parent_revision_id
         )
-        if revision_id in existing:
-            raise StoreError(f"revision id already exists: {revision_id}")
-        current = index["headRevisionId"]
-        if parent_revision_id is None and current is not None:
-            parent_revision_id = current
-        if parent_revision_id is not None and parent_revision_id not in existing:
-            raise StoreError(f"parent revision does not exist: {parent_revision_id}")
-        if parent_revision_id == revision_id:
-            raise StoreError("revision cannot parent itself")
         timestamp = created_at or self.clock()
         body: dict[str, Any] = {
             "schemaVersion": "1.0.0",
@@ -544,9 +594,56 @@ class ArtifactStore:
         }
         body["contentSha256"] = content_hash(body)
         self._validate_revision(body)
+        return body
+
+    def _prepared_identity(self, index, revision_id, parent_revision_id):
+        existing = {item["revisionId"] for item in index["revisionRefs"]}
+        revision_id = revision_id or self._next_revision_id(
+            str(index["artifactType"]), existing
+        )
+        if revision_id in existing:
+            raise StoreError(f"revision id already exists: {revision_id}")
+        if parent_revision_id is None:
+            parent_revision_id = index["headRevisionId"]
+        if parent_revision_id is not None and parent_revision_id not in existing:
+            raise StoreError(f"parent revision does not exist: {parent_revision_id}")
+        if parent_revision_id == revision_id:
+            raise StoreError("revision cannot parent itself")
+        return revision_id, parent_revision_id
+
+    @serialized_timeline(lambda self: self.timeline_dir)
+    def append_revision(self, **kwargs) -> dict[str, Any]:
+        body = self.prepare_revision(**kwargs)
+        return self._publish_revision(body)
+
+    @serialized_timeline(lambda self: self.timeline_dir)
+    def append_prepared_revision(self, prepared, *, expected_head_hash):
+        """Publish an exactly prepared body only while its real parent is current."""
+        self._validate_revision(prepared)
+        args = {
+            "snapshot": prepared["snapshot"],
+            "actor": prepared["actor"],
+            "reason": prepared["reason"],
+            "parent_revision_id": prepared["parentRevisionId"],
+            "diff": prepared["diff"],
+            "dependencies": prepared["basis"],
+            "evidence": prepared["inputEvidenceRefs"],
+            "revision_id": prepared["revisionId"],
+            "created_at": prepared["createdAt"],
+            "expected_head_hash": expected_head_hash,
+        }
+        if self.prepare_revision(**args) != prepared:
+            raise StoreError(
+                "Prepared revision differs from its current canonical target"
+            )
+        return self._publish_revision(prepared)
+
+    def _publish_revision(self, body):
+        index = self.load_index()
+        revision_id, timestamp = body["revisionId"], body["createdAt"]
+        parent_revision_id = body["parentRevisionId"]
         revision_path = self._revision_dir(index) / f"{revision_id}.json"
         revision_existed = revision_path.exists()
-        write_immutable_json(revision_path, body)
         ref = {
             "revisionId": revision_id,
             "path": self._relative(revision_path),
@@ -560,7 +657,14 @@ class ArtifactStore:
         updated["activeState"] = "valid"
         updated.pop("stateReason", None)
         updated["updatedAt"] = timestamp
+        required = _required_revision_readers(body)
+        if required:
+            updated["schemaVersion"] = "2.0.0"
+            updated["requiredReaderCapabilities"] = sorted(
+                set(updated.get("requiredReaderCapabilities", [])) | set(required)
+            )
         self._validate_index(updated)
+        write_immutable_json(revision_path, body)
         try:
             atomic_write_json(self.path, updated)
         except Exception:

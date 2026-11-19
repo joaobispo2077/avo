@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from avo.timeline.contracts import validate_document
-from avo.timeline.motion_review import MotionReviewService, render_text
+from avo.timeline.motion_review import MotionReviewService, render_html, render_text
 from avo.timeline.store import atomic_write_json
 from avo.timeline.workspace import ARTIFACTS, TimelineWorkspace
 
@@ -90,6 +90,32 @@ def test_empty_projection_is_read_only_with_explicit_absence(workspace, monkeypa
     validate_document(snapshot, "avo.motion-review.schema.json")
 
 
+@pytest.mark.parametrize("basis", [[], "invalid", {"bmap": {"sha256": "a" * 64}}])
+def test_invalid_proposal_basis_stays_stale_without_breaking_inspection(
+    workspace, basis
+):
+    snapshot = MotionReviewService(workspace).project(
+        {"proposal": {"basisHeads": basis, "items": [{"itemId": "mo04"}]}}
+    )
+    assert snapshot["readiness"] == "stale"
+    assert snapshot["items"][0]["disposition"] == "stale"
+
+
+def test_selected_staleness_survives_unchanged_canonical_heads(workspace):
+    service = MotionReviewService(workspace)
+    snapshot = service.project(
+        {
+            "proposal": {
+                "basisHeads": service.project()["basisHeads"],
+                "items": [{"itemId": "mo04", "disposition": "selected"}],
+            },
+            "proposalStale": True,
+        }
+    )
+    assert snapshot["readiness"] == "stale"
+    assert snapshot["items"][0]["disposition"] == "stale"
+
+
 def test_static_provisional_items_have_linked_cards_without_fake_timing(workspace):
     context = {
         "proposal": {
@@ -117,6 +143,138 @@ def test_static_provisional_items_have_linked_cards_without_fake_timing(workspac
     assert snapshot["pendingRevisions"] == context["pendingRevisions"]
     assert service.project(context)["snapshotHash"] == snapshot["snapshotHash"]
     assert context["proposal"]["items"][0].get("timing") is None
+
+
+def test_persisted_concept_explanation_reaches_map_cards_text_and_html(
+    workspace, monkeypatch
+):
+    metadata = {
+        "density": 0,
+        "dominantFocus": "Keep the evidence dominant",
+        "supportingMotion": "Reveal the pointer only when needed",
+        "ambientMotion": "Hold the background still",
+        "readingIntent": "Hold the full comparison until both values are read",
+        "depthIntent": "Keep <plane> behind evidence & preserve focus",
+        "continuityIntent": "Carry the selected line into the conclusion",
+        "cameraIntent": "Keep the original presenter framing",
+        "soundIntent": "Choose silence during this explanation",
+        "layout": {"mode": "lateral-overlay", "placement": "left of evidence"},
+    }
+    proposal = {
+        "items": [
+            {
+                "itemId": "mo04",
+                "label": "mo04",
+                "sectionId": "opening",
+                "purpose": "Explain the actual comparison",
+                "concept": "One continuous comparison",
+                "treatment": "static",
+                **metadata,
+            }
+        ]
+    }
+    install(
+        workspace, monkeypatch, {"bmap": {"cues": [cue(contentRef={"itemId": "mo04"})]}}
+    )
+    before = {
+        path: path.read_bytes()
+        for path in workspace.raw_dir.rglob("*")
+        if path.is_file()
+    }
+
+    def prohibited(*args, **kwargs):
+        raise AssertionError(
+            "Concept explanation attempted source work or initialization"
+        )
+
+    monkeypatch.setattr(workspace, "initialize", prohibited)
+    monkeypatch.setattr(workspace, "require_active", prohibited)
+    monkeypatch.setattr("avo.timeline.contracts.file_fingerprint", prohibited)
+    snapshot = MotionReviewService(workspace).project({"proposal": proposal})
+    item, card = snapshot["items"][0], snapshot["storyboardCards"][0]
+    for field, value in metadata.items():
+        assert item[field] == value
+        assert card[field] == value
+    assert item["timing"]["start"]["ticks"] == 12
+    assert card["evidence"]["status"] == "unverified"
+    text, visual = render_text(snapshot), render_html(snapshot)
+    storyboard = visual.split('aria-label="Linked storyboard"', 1)[1].split(
+        "Equivalent text", 1
+    )[0]
+    motion_map = visual.split('aria-label="Chronological motion map"', 1)[1].split(
+        'aria-label="Linked storyboard"', 1
+    )[0]
+    for field in (
+        "dominantFocus",
+        "supportingMotion",
+        "ambientMotion",
+        "readingIntent",
+        "continuityIntent",
+        "cameraIntent",
+        "soundIntent",
+    ):
+        assert metadata[field] in text
+        assert metadata[field] in storyboard
+    assert "Density: 0" in text
+    assert metadata["dominantFocus"] in motion_map
+    assert "&lt;plane&gt;" in storyboard and "&amp; preserve focus" in storyboard
+    assert "<plane>" not in visual
+    assert {
+        path: path.read_bytes()
+        for path in workspace.raw_dir.rglob("*")
+        if path.is_file()
+    } == before
+    validate_document(snapshot, "avo.motion-review.schema.json")
+
+
+def test_recorded_repetition_advisories_are_preserved_without_new_judgment(workspace):
+    advisory = {
+        "code": "motion-repetition",
+        "itemIds": ["mo01", "mo02", "mo03"],
+        "message": "Repeated treatments may be intentional; review variation and reading time.",
+    }
+    context = {
+        "proposal": {
+            "items": [
+                {"itemId": f"mo0{index}", "treatment": "reveal"}
+                for index in range(1, 4)
+            ]
+        },
+        "advisories": [advisory],
+    }
+    snapshot = MotionReviewService(workspace).project(context)
+    assert snapshot["advisories"] == [advisory]
+    assert advisory["message"] in render_text(snapshot)
+    assert advisory["message"] in render_html(snapshot)
+    assert all(item["disposition"] == "proposed" for item in snapshot["items"])
+    assert (
+        MotionReviewService(workspace).project({"proposal": context["proposal"]})[
+            "advisories"
+        ]
+        == []
+    )
+
+
+def test_invalid_optional_concept_details_remain_explicit_partial_metadata(workspace):
+    snapshot = MotionReviewService(workspace).project(
+        {
+            "proposal": {
+                "items": [
+                    {
+                        "itemId": "mo04",
+                        "readingIntent": {"unexpected": "object"},
+                        "density": True,
+                    }
+                ]
+            },
+            "advisories": [{"message": "missing required identity"}],
+        }
+    )
+    assert snapshot["items"][0]["readingIntent"] is None
+    assert snapshot["items"][0]["density"] is None
+    assert snapshot["advisories"] == []
+    assert any("readingIntent" in str(gap) for gap in snapshot["gaps"])
+    assert any("advisories" in str(gap) for gap in snapshot["gaps"])
 
 
 def test_cues_sort_by_time_without_renumbering_and_preserve_anchor_types(

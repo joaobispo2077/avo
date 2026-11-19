@@ -17,7 +17,9 @@ from .still_probe import _SUFFIXES
 INVENTORY_ENTRIES = (
     "format=duration:stream=index,codec_name,codec_type,width,height,time_base,"
     "r_frame_rate,avg_frame_rate,duration_ts,duration,start_pts,start_time,"
-    "sample_rate,channels,channel_layout,sample_aspect_ratio,nb_frames:stream_tags=DURATION"
+    "sample_rate,channels,channel_layout,sample_aspect_ratio,nb_frames,pix_fmt,"
+    "bits_per_raw_sample,color_range,color_space,color_transfer,color_primaries:"
+    "stream_tags=DURATION,rotate:stream_side_data=rotation"
 )
 
 

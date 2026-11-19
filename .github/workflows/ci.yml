@@ -19,6 +19,7 @@ concurrency:
 env:
   PYTHON_VERSION: '3.12'
   NODE_VERSION: '24'
+  ONNXRUNTIME_NODE_INSTALL_CUDA: skip
   AVO_CI: '1'
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: 'true'
 
@@ -79,7 +80,8 @@ jobs:
     name: Unit tests (AVO repo)
     runs-on: ubuntu-24.04
     needs: prerequisites-gate
-    timeout-minutes: 30
+    # Run 44227189622 reached 92% before the 45-minute job timeout.
+    timeout-minutes: 60
     outputs:
       evidence_url: ${{ steps.unit-evidence.outputs.artifact-url }}
     steps:
@@ -144,7 +146,7 @@ jobs:
     name: Integration tests (AVO repo)
     runs-on: ubuntu-24.04
     needs: prerequisites-gate
-    timeout-minutes: 20
+    timeout-minutes: 30
     # Real capture checks must fail, rather than skip, when this runtime is absent.
     env:
       AVO_REQUIRE_CODE_DRAWN_RUNTIME: '1'
@@ -221,7 +223,8 @@ jobs:
     permissions:
       contents: read
     # Coverage re-runs the unit suite only (tests/integration has its own job).
-    timeout-minutes: 35
+    # Run 44170109995 reached 99% coverage progress before the 35-minute timeout.
+    timeout-minutes: 50
     outputs:
       evidence_url: ${{ steps.quality-evidence.outputs.artifact-url }}
     steps:

@@ -181,13 +181,19 @@ def _validate_code_drawn_strategy(value: dict[str, Any], root: Path) -> None:
         component_ids, instance_ids = set(), set()
         for component in value["components"]:
             component_id = component["componentId"]
-            reference = component["extensions"]["codeDrawn"]
-            instance_id = reference["instanceId"]
-            if component_id in component_ids or instance_id in instance_ids:
+            if component_id in component_ids:
                 raise AnimationError(
                     "Code-drawn component and instance IDs must be unique."
                 )
             component_ids.add(component_id)
+            reference = component["extensions"].get("codeDrawn")
+            if reference is None:
+                continue  # A typed v2 native camera does not need a generated asset.
+            instance_id = reference["instanceId"]
+            if instance_id in instance_ids:
+                raise AnimationError(
+                    "Code-drawn component and instance IDs must be unique."
+                )
             instance_ids.add(instance_id)
             validate_code_drawn_reference(reference, root=root)
     except (ContractError, MotionError) as error:
@@ -196,6 +202,9 @@ def _validate_code_drawn_strategy(value: dict[str, Any], root: Path) -> None:
 
 def _validate_strategy_engine(value: dict[str, Any], root: Path) -> None:
     from avo.motion import MotionError, validate_engine
+    from avo.timeline.contracts import required_animation_readers
+
+    required_animation_readers(value)
 
     try:
         engine = validate_engine(value.get("framework", "hyperframes"))
@@ -210,6 +219,32 @@ def _validate_strategy_engine(value: dict[str, Any], root: Path) -> None:
         raise AnimationError(
             "Code-drawn references require the recorded code-drawn engine."
         )
+
+
+def _validate_authoring_context(value):
+    _assert_no_timing(value)
+    policy = value.get("visibleTextPolicy") or {}
+    validate_visible_text_policy(
+        value, em_dash_authorization_ref=policy.get("emDashAuthorizationRef")
+    )
+    diagnosis = value.get("formatDiagnosis") or {}
+    if not diagnosis.get("format") or not diagnosis.get("viewerIntent"):
+        raise AnimationError(
+            "animation strategy requires format diagnosis and viewer intent"
+        )
+    if not value.get("components"):
+        raise AnimationError("animation strategy requires declared components")
+
+
+def _validate_component_lifecycles(components):
+    for component in components:
+        lifecycle = component.get("lifecycle") or {}
+        if not all(
+            key in lifecycle for key in ("preEntry", "entrance", "hold", "exit")
+        ):
+            raise AnimationError(
+                "every component requires pre-entry/entrance/hold/exit"
+            )
 
 
 class AnimationService:
@@ -231,36 +266,24 @@ class AnimationService:
             "tracks": tracks["contentHash"],
         }
 
-    @serialized_timeline(lambda self: self.workspace.timeline_dir)
-    def author(
-        self, strategy: dict[str, Any], *, actor: str, reason: str
+    def prepare_authoring(
+        self,
+        strategy: dict[str, Any],
+        *,
+        actor: str,
+        reason: str,
+        parents=None,
+        revision_id=None,
+        created_at=None,
+        evidence=None,
     ) -> dict[str, Any]:
 
         value = deepcopy(strategy)
-        _assert_no_timing(value)
-        policy = value.get("visibleTextPolicy") or {}
-        validate_visible_text_policy(
-            value,
-            em_dash_authorization_ref=policy.get("emDashAuthorizationRef"),
-        )
-        diagnosis = value.get("formatDiagnosis") or {}
-        if not diagnosis.get("format") or not diagnosis.get("viewerIntent"):
-            raise AnimationError(
-                "animation strategy requires format diagnosis and viewer intent"
-            )
-        if not value.get("components"):
-            raise AnimationError("animation strategy requires declared components")
-        dependencies = self._dependencies()
+        _validate_authoring_context(value)
+        dependencies = self._prepared_dependencies(parents)
         value["dependencies"] = dependencies
         _validate_strategy_engine(value, Path(self.workspace.raw_dir))
-        for component in value["components"]:
-            lifecycle = component.get("lifecycle") or {}
-            if not all(
-                key in lifecycle for key in ("preEntry", "entrance", "hold", "exit")
-            ):
-                raise AnimationError(
-                    "every component requires pre-entry/entrance/hold/exit"
-                )
+        _validate_component_lifecycles(value["components"])
         index = self.store.load_index()
         expected = None
         if index["headRevisionId"]:
@@ -269,21 +292,65 @@ class AnimationService:
         for artifact_type in ("cmap", "bmap", "tracks"):
             store = self.workspace.store(artifact_type)
             active = store.load_index()
-            revision_id = active["headRevisionId"]
+            parent = (parents or {}).get(artifact_type)
+            parent_revision_id = (
+                parent["revisionId"] if parent else active["headRevisionId"]
+            )
             basis.append(
                 {
                     "artifactType": artifact_type,
                     "artifactId": active["artifactId"],
-                    "revisionId": revision_id,
+                    "revisionId": parent_revision_id,
                     "contentSha256": dependencies[artifact_type],
                 }
             )
-        revision = self.store.append_revision(
+        return self.store.prepare_revision(
             snapshot=value,
             actor=actor,
             reason=reason,
             dependencies=basis,
             expected_head_hash=expected,
+            revision_id=revision_id,
+            created_at=created_at,
+            evidence=evidence,
+        )
+
+    def _prepared_dependencies(self, parents):
+        if not parents:
+            return self._dependencies()
+        values = {}
+        for name in ("cmap", "bmap", "tracks"):
+            if name in parents:
+                values[name] = parents[name]["contentSha256"]
+            else:
+                active = self.workspace.require_active(name)
+                values[name] = self.workspace.store(name).revision(
+                    active["headRevisionId"]
+                )["contentHash"]
+        tracks = parents.get("tracks")
+        if tracks and tracks["snapshot"]["cmapBasis"]["sha256"] != values["cmap"]:
+            raise AnimationError("Animation requires exact inherited CMap basis")
+        return values
+
+    @serialized_timeline(lambda self: self.workspace.timeline_dir)
+    def author(self, strategy, *, actor, reason, prepared=None):
+        expected = self.store.head_hash()
+        stamps = (
+            {}
+            if prepared is None
+            else {
+                "revision_id": prepared["revisionId"],
+                "created_at": prepared["createdAt"],
+                "evidence": prepared["inputEvidenceRefs"],
+            }
+        )
+        actual = self.prepare_authoring(strategy, actor=actor, reason=reason, **stamps)
+        if prepared is not None and actual != prepared:
+            raise AnimationError(
+                "Prepared Animation differs from current dependencies or target"
+            )
+        revision = self.store.append_prepared_revision(
+            actual, expected_head_hash=expected or "empty"
         )
         if expected and expected != revision["contentHash"]:
             self.workspace.invalidate_descendants(

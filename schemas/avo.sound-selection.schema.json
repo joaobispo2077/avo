@@ -1,0 +1,613 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://avo.local/schemas/avo.sound-selection.schema.json",
+  "title": "Sound proposals and selected candidate fits, separate from publication and listening approval",
+  "$ref": "#/$defs/candidateFit",
+  "$defs": {
+    "applyRequest": {
+      "type": "object", "additionalProperties": false,
+      "required": ["contractVersion", "operation", "operationId", "actor", "reason", "proposalHash", "expectedBasis", "expectedGeneration", "choices", "contexts"],
+      "properties": {
+        "contractVersion": {"const": "1.0.0"}, "operation": {"const": "apply"},
+        "operationId": {"$ref": "#/$defs/proposeRequest/properties/operationId"},
+        "actor": {"$ref": "#/$defs/proposeRequest/properties/actor"}, "reason": {"$ref": "#/$defs/proposeRequest/properties/reason"},
+        "proposalHash": {"$ref": "avo.sfx-catalog.schema.json#/$defs/sha"},
+        "expectedBasis": {"$ref": "#/$defs/proposeRequest/properties/expectedBasis"},
+        "expectedGeneration": {"$ref": "#/$defs/proposeRequest/properties/expectedGeneration"},
+        "choices": {"allOf": [{"$ref": "#/$defs/choiceInputs"}, {"minItems": 1}]},
+        "contexts": {"$ref": "#/$defs/soundContexts"}
+      }
+    },
+    "applicationReceipt": {
+      "type": "object", "additionalProperties": false,
+      "required": ["contractVersion", "operationId", "requestHash", "requestRef", "proposalRef", "expectedBasis", "actor", "reason", "state", "prepared", "committedHeads", "choices", "changes", "sourceRefs", "advisories", "previousReceiptRef", "lastError"],
+      "properties": {
+        "contractVersion": {"const": "1.0.0"},
+        "operationId": {"$ref": "#/$defs/proposeRequest/properties/operationId"},
+        "requestHash": {"$ref": "avo.sfx-catalog.schema.json#/$defs/sha"},
+        "requestRef": {"$ref": "#/$defs/selectedTrack/properties/applicationRef"},
+        "proposalRef": {"$ref": "#/$defs/selectedTrack/properties/proposalRef"},
+        "expectedBasis": {"$ref": "#/$defs/proposeRequest/properties/expectedBasis"},
+        "actor": {"$ref": "#/$defs/proposeRequest/properties/actor"}, "reason": {"$ref": "#/$defs/proposeRequest/properties/reason"},
+        "state": {"enum": ["staged", "committing", "committed", "recovery-needed"]},
+        "prepared": {"type": "object", "additionalProperties": false, "required": ["bmap", "tracks"], "properties": {
+          "bmap": {"$ref": "https://avo.local/avo.timeline-revision.schema.json"},
+          "tracks": {"$ref": "https://avo.local/avo.timeline-revision.schema.json"}
+        }},
+        "committedHeads": {"type": "object", "additionalProperties": {"$ref": "https://avo.local/avo.motion-proposal.schema.json#/$defs/headRef"}, "propertyNames": {"enum": ["bmap", "tracks"]}},
+        "choices": {"$ref": "#/$defs/frozenChoices"},
+        "changes": {"type": "array", "maxItems": 500, "items": {"type": "object", "maxProperties": 8}},
+        "sourceRefs": {"type": "object", "maxProperties": 500, "additionalProperties": {"$ref": "#/$defs/compileSource"}},
+        "advisories": {"type": "array", "maxItems": 1000, "items": {"type": "object", "maxProperties": 8}},
+        "previousReceiptRef": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/selectedTrack/properties/applicationRef"}]},
+        "lastError": {"type": ["string", "null"], "maxLength": 2048}
+      }
+    },
+    "applicationOperation": {
+      "type": "object", "additionalProperties": false,
+      "required": ["requestHash", "requestRef", "initialReceiptRef"],
+      "properties": {
+        "requestHash": {"$ref": "avo.sfx-catalog.schema.json#/$defs/sha"},
+        "requestRef": {"$ref": "#/$defs/selectedTrack/properties/applicationRef"},
+        "initialReceiptRef": {"$ref": "#/$defs/selectedTrack/properties/applicationRef"}
+      }
+    },
+    "selectedContext": {
+      "type": "object", "additionalProperties": false,
+      "required": ["cueId", "role", "syntheticEffectApproved", "orderedLayeringApproved"],
+      "properties": {
+        "cueId": {"$ref": "#/$defs/id"}, "role": {"$ref": "#/$defs/soundContext/properties/role"},
+        "syntheticEffectApproved": {"type": "boolean"}, "orderedLayeringApproved": {"type": "boolean"}
+      }
+    },
+    "selectedTrack": {
+      "type": "object", "additionalProperties": false,
+      "required": ["contractVersion", "choice", "cueId", "generationId", "proposalRef", "applicationRef"],
+      "properties": {
+        "contractVersion": {"const": "1.0.0"}, "choice": {"$ref": "#/$defs/frozenChoice"},
+        "cueId": {"$ref": "#/$defs/id"}, "generationId": {"$ref": "avo.sfx-catalog.schema.json#/$defs/sha"},
+        "proposalRef": {"$ref": "https://avo.local/avo.motion-proposal.schema.json#/$defs/ref"},
+        "applicationRef": {"$ref": "https://avo.local/avo.motion-proposal.schema.json#/$defs/ref"},
+        "sourceRef": {"$ref": "#/$defs/compileSource"}, "context": {"$ref": "#/$defs/selectedContext"}
+      }
+    },
+    "compileSource": {
+      "type": "object", "additionalProperties": false,
+      "required": ["locator", "sha256", "mediaClass", "streamIndex"],
+      "properties": {
+        "locator": {"type": "string", "minLength": 1, "maxLength": 8192},
+        "sha256": {"$ref": "avo.sfx-catalog.schema.json#/$defs/sha"},
+        "mediaClass": {"const": "source"}, "streamIndex": {"type": "integer", "minimum": 0}
+      }
+    },
+    "soundMix": {
+      "type": "object", "additionalProperties": false,
+      "required": ["sourceLayout", "targetLayout", "channelMap", "gainDb", "peakCeilingDbfs", "fadeInSamples", "fadeOutSamples", "ducking"],
+      "properties": {
+        "sourceLayout": {"enum": ["mono", "stereo"]}, "targetLayout": {"enum": ["mono", "stereo"]},
+        "channelMap": {"type": "array", "minItems": 1, "maxItems": 2, "items": {"type": "integer", "minimum": 0, "maximum": 1}},
+        "gainDb": {"type": "number", "minimum": -120, "maximum": 60},
+        "peakCeilingDbfs": {"type": "number", "minimum": -120, "maximum": 0},
+        "fadeInSamples": {"$ref": "#/$defs/sample"}, "fadeOutSamples": {"$ref": "#/$defs/sample"},
+        "ducking": {"oneOf": [{"type": "null"}, {
+          "type": "object", "additionalProperties": false,
+          "required": ["sidechainLayerId", "amountDb", "attackMs", "releaseMs"],
+          "properties": {
+            "sidechainLayerId": {"$ref": "#/$defs/id"},
+            "amountDb": {"type": "number", "exclusiveMinimum": 0},
+            "attackMs": {"type": "number", "exclusiveMinimum": 0},
+            "releaseMs": {"type": "number", "exclusiveMinimum": 0}
+          }
+        }]}
+      }
+    },
+    "choiceInput": {
+      "type": "object", "additionalProperties": false,
+      "required": ["eventId", "entryId", "trimRange", "mix"],
+      "properties": {
+        "eventId": {"$ref": "#/$defs/id"},
+        "entryId": {"$ref": "avo.sfx-catalog.schema.json#/$defs/nullableSha"},
+        "trimRange": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/sampleRange"}]},
+        "mix": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/soundMix"}]}
+      },
+      "allOf": [{"if": {"properties": {"entryId": {"type": "null"}}},
+        "then": {"properties": {"trimRange": {"type": "null"}, "mix": {"type": "null"}}},
+        "else": {"properties": {"trimRange": {"type": "object"}, "mix": {"type": "object"}}}
+      }]
+    },
+    "choiceInputs": {"type": "array", "maxItems": 500, "items": {"$ref": "#/$defs/choiceInput"}},
+    "choiceOpportunities": {"type": "array", "maxItems": 500, "items": {"$ref": "#/$defs/opportunity"}},
+    "choiceEntries": {"type": "array", "maxItems": 1000, "items": {"$ref": "avo.sfx-catalog.schema.json#/$defs/entry"}},
+    "soundContext": {
+      "type": "object", "additionalProperties": false,
+      "required": ["cueId", "role", "orderedEventIds", "syntheticEffectApproved"],
+      "properties": {
+        "cueId": {"$ref": "#/$defs/id"},
+        "role": {"enum": ["main-scene", "overlay-image", "overlay-video", "authored-graphic", "comparison-only"]},
+        "orderedEventIds": {"type": "array", "maxItems": 500, "uniqueItems": true, "items": {"$ref": "#/$defs/id"}},
+        "syntheticEffectApproved": {"type": "boolean"}
+      }
+    },
+    "soundContexts": {"type": "array", "maxItems": 500, "items": {"$ref": "#/$defs/soundContext"}},
+    "frozenChoice": {
+      "type": "object", "additionalProperties": false,
+      "required": ["eventId", "itemId", "fit", "mix", "sourceEntry", "acceptance", "choiceHash"],
+      "properties": {
+        "eventId": {"$ref": "#/$defs/id"}, "itemId": {"$ref": "#/$defs/id"},
+        "fit": {"$ref": "#/$defs/candidateFit"},
+        "mix": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/soundMix"}]},
+        "sourceEntry": {"oneOf": [{"type": "null"}, {"$ref": "avo.sfx-catalog.schema.json#/$defs/entry"}]},
+        "acceptance": {"const": "pending-listening"},
+        "choiceHash": {"$ref": "avo.sfx-catalog.schema.json#/$defs/sha"}
+      },
+      "allOf": [{
+        "if": {"properties": {"fit": {"properties": {"status": {"const": "silence"}}}}},
+        "then": {"properties": {"mix": {"type": "null"}, "sourceEntry": {"type": "null"}}},
+        "else": {"properties": {"mix": {"type": "object"}, "sourceEntry": {"type": "object"}}}
+      }]
+    },
+    "frozenChoices": {"type": "array", "maxItems": 500, "items": {"$ref": "#/$defs/frozenChoice"}},
+    "id": {"type": "string", "minLength": 1, "maxLength": 128, "pattern": "\\S"},
+    "sample": {"type": "integer", "minimum": 0},
+    "frameRange": {
+      "type": "object", "additionalProperties": false,
+      "required": ["startFrame", "endFrameExclusive"],
+      "properties": {"startFrame": {"$ref": "#/$defs/sample"}, "endFrameExclusive": {"$ref": "#/$defs/sample"}}
+    },
+    "sampleRange": {
+      "type": "object", "additionalProperties": false,
+      "required": ["startSample", "endSampleExclusive"],
+      "properties": {"startSample": {"$ref": "#/$defs/sample"}, "endSampleExclusive": {"$ref": "#/$defs/sample"}}
+    },
+    "opportunity": {
+      "type": "object", "additionalProperties": false,
+      "required": ["eventId", "itemId", "cueId", "kind", "purpose", "role", "visibility", "programFrame", "visibleRange"],
+      "properties": {
+        "eventId": {"$ref": "#/$defs/id"}, "itemId": {"$ref": "#/$defs/id"}, "cueId": {"$ref": "#/$defs/id"},
+        "kind": {"enum": ["click", "reveal", "camera-emphasis", "transition", "explicit"]},
+        "purpose": {"type": "string", "minLength": 1, "maxLength": 4096, "pattern": "\\S"},
+        "role": {"enum": ["main", "bass", "support", "detail", "tail"]},
+        "visibility": {"enum": ["visible", "hidden", "unknown"]},
+        "material": {"type": ["string", "null"], "minLength": 1, "maxLength": 512},
+        "strength": {"enum": ["subtle", "moderate", "strong", "unknown"]},
+        "programFrame": {"$ref": "#/$defs/sample"}, "visibleRange": {"$ref": "#/$defs/frameRange"}
+      }
+    },
+    "source": {
+      "type": "object", "additionalProperties": false,
+      "required": ["entryId", "entryRevision", "sourceSha256", "measurementHash", "annotationHash"],
+      "properties": {
+        "entryId": {"$ref": "avo.sfx-catalog.schema.json#/$defs/sha"},
+        "entryRevision": {"$ref": "avo.sfx-catalog.schema.json#/$defs/sha"},
+        "sourceSha256": {"$ref": "avo.sfx-catalog.schema.json#/$defs/sha"},
+        "measurementHash": {"$ref": "avo.sfx-catalog.schema.json#/$defs/sha"},
+        "annotationHash": {"$ref": "avo.sfx-catalog.schema.json#/$defs/sha"}
+      }
+    },
+    "resolvedEvent": {
+      "type": "object", "additionalProperties": false,
+      "required": ["eventId", "role", "programFrame", "visibleRange", "transientOffset", "resolvedImpactSample", "scheduledAudioStartSample"],
+      "properties": {
+        "eventId": {"$ref": "#/$defs/id"}, "role": {"const": "sfx"},
+        "programFrame": {"$ref": "#/$defs/sample"}, "visibleRange": {"type": "null"},
+        "resolvedImpactSample": {"$ref": "#/$defs/sample"}, "scheduledAudioStartSample": {"$ref": "#/$defs/sample"},
+        "transientOffset": {
+          "type": "object", "additionalProperties": false,
+          "required": ["sourceSamples", "sourceRate", "resolvedOutputSamples"],
+          "properties": {
+            "sourceSamples": {"$ref": "#/$defs/sample"}, "sourceRate": {"type": "integer", "minimum": 1},
+            "resolvedOutputSamples": {"$ref": "#/$defs/sample"}
+          }
+        }
+      }
+    },
+    "candidateFit": {
+      "type": "object", "additionalProperties": false,
+      "required": ["contractVersion", "clock", "opportunity", "status", "source", "trimRange", "event", "scheduledAudioEndSample", "issues", "acceptance", "fitHash"],
+      "properties": {
+        "clock": {
+          "type": "object", "additionalProperties": false, "required": ["frameRate", "sampleRate", "programEndFrame"],
+          "properties": {
+            "frameRate": {
+              "type": "object", "additionalProperties": false, "required": ["num", "den"],
+              "properties": {"num": {"type": "integer", "minimum": 1}, "den": {"type": "integer", "minimum": 1}}
+            },
+            "sampleRate": {"type": "integer", "minimum": 1}, "programEndFrame": {"type": "integer", "minimum": 1}
+          }
+        },
+        "contractVersion": {"const": "1.0.0"}, "opportunity": {"$ref": "#/$defs/opportunity"},
+        "status": {"enum": ["fit", "silence", "unresolved"]},
+        "source": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/source"}]},
+        "trimRange": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/sampleRange"}]},
+        "event": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/resolvedEvent"}]},
+        "scheduledAudioEndSample": {"type": ["integer", "null"], "minimum": 0},
+        "issues": {"type": "array", "maxItems": 16, "uniqueItems": true, "items": {"type": "string", "maxLength": 512}},
+        "acceptance": {"const": "pending-listening"}, "fitHash": {"$ref": "avo.sfx-catalog.schema.json#/$defs/sha"}
+      },
+      "allOf": [
+        {"if": {"properties": {"status": {"const": "fit"}}}, "then": {
+          "properties": {"source": {"type": "object"}, "trimRange": {"type": "object"}, "event": {"type": "object"}, "scheduledAudioEndSample": {"type": "integer"}, "issues": {"maxItems": 0}}
+        }, "else": {
+          "properties": {"source": {"type": "null"}, "trimRange": {"type": "null"}, "event": {"type": "null"}, "scheduledAudioEndSample": {"type": "null"}}
+        }},
+        {"if": {"properties": {"status": {"const": "unresolved"}}}, "then": {"properties": {"issues": {"minItems": 1}}}},
+        {"if": {"properties": {"status": {"const": "silence"}}}, "then": {"properties": {"issues": {"maxItems": 0}}}}
+      ]
+    },
+    "intent": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "eventId",
+        "itemId",
+        "kind",
+        "purpose",
+        "role",
+        "visibility",
+        "motionCharacter"
+      ],
+      "properties": {
+        "eventId": {
+          "$ref": "#/$defs/opportunity/properties/eventId"
+        },
+        "itemId": {
+          "$ref": "#/$defs/opportunity/properties/itemId"
+        },
+        "cueId": {
+          "$ref": "#/$defs/opportunity/properties/cueId"
+        },
+        "kind": {
+          "$ref": "#/$defs/opportunity/properties/kind"
+        },
+        "purpose": {
+          "$ref": "#/$defs/opportunity/properties/purpose"
+        },
+        "role": {
+          "$ref": "#/$defs/opportunity/properties/role"
+        },
+        "visibility": {
+          "$ref": "#/$defs/opportunity/properties/visibility"
+        },
+        "material": {
+          "$ref": "#/$defs/opportunity/properties/material"
+        },
+        "strength": {
+          "$ref": "#/$defs/opportunity/properties/strength"
+        },
+        "phase": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "motionCharacter": {
+          "enum": [
+            "accent",
+            "slow",
+            "background",
+            "static"
+          ]
+        },
+        "choice": {
+          "enum": [
+            "audition",
+            "silence"
+          ]
+        },
+        "query": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "pattern": "\\S"
+        }
+      }
+    },
+    "intents": {
+      "type": "array",
+      "maxItems": 500,
+      "items": {
+        "$ref": "#/$defs/intent"
+      }
+    },
+    "opportunityRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "eventId",
+        "itemId",
+        "intent",
+        "opportunity",
+        "origin",
+        "recommendation",
+        "query",
+        "silenceAllowed",
+        "issues"
+      ],
+      "properties": {
+        "eventId": {
+          "$ref": "#/$defs/id"
+        },
+        "itemId": {
+          "$ref": "#/$defs/id"
+        },
+        "intent": {
+          "$ref": "#/$defs/intent"
+        },
+        "opportunity": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/opportunity"
+            }
+          ]
+        },
+        "origin": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "cueId",
+                "componentRef",
+                "anchor",
+                "camera"
+              ],
+              "properties": {
+                "cueId": {
+                  "$ref": "#/$defs/id"
+                },
+                "componentRef": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "maxLength": 128
+                },
+                "anchor": {
+                  "$ref": "https://avo.local/avo.motion-review.schema.json#/$defs/item/properties/anchor"
+                },
+                "camera": {}
+              }
+            }
+          ]
+        },
+        "recommendation": {
+          "enum": [
+            "audition",
+            "silence",
+            "unresolved"
+          ]
+        },
+        "query": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 512
+        },
+        "silenceAllowed": {
+          "const": true
+        },
+        "issues": {
+          "type": "array",
+          "maxItems": 16,
+          "items": {
+            "type": "string",
+            "maxLength": 512
+          }
+        },
+        "search": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "avo.sfx-search.schema.json"
+            }
+          ]
+        }
+      }
+    },
+    "proposeRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "contractVersion": {
+          "const": "1.0.0"
+        },
+        "operation": {
+          "const": "propose"
+        },
+        "operationId": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{2,63}$"
+        },
+        "actor": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "pattern": "\\S"
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096,
+          "pattern": "\\S"
+        },
+        "expectedBasis": {
+          "$ref": "https://avo.local/avo.motion-review.schema.json#/properties/basisHeads"
+        },
+        "selection": {
+          "$ref": "https://avo.local/avo.editing-craft.schema.json#/$defs/selection"
+        },
+        "expectedGeneration": {
+          "$ref": "avo.sfx-catalog.schema.json#/$defs/nullableSha"
+        },
+        "clock": {
+          "$ref": "#/$defs/candidateFit/properties/clock"
+        },
+        "intents": {
+          "$ref": "#/$defs/intents"
+        },
+        "maxCandidates": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000
+        },
+        "filters": {
+          "$ref": "avo.sfx-search.schema.json#/$defs/filters"
+        },
+        "requestId": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{2,63}$"
+        },
+        "newRequest": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "contractVersion",
+        "operation",
+        "operationId",
+        "actor",
+        "reason",
+        "expectedBasis",
+        "selection",
+        "expectedGeneration",
+        "clock",
+        "intents"
+      ]
+    },
+    "proposal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "contractVersion",
+        "operationId",
+        "requestHash",
+        "requestId",
+        "provider",
+        "videoId",
+        "basisHeads",
+        "options",
+        "directionRef",
+        "direction",
+        "clock",
+        "generationId",
+        "opportunities",
+        "coverage",
+        "proposalHash"
+      ],
+      "properties": {
+        "contractVersion": {
+          "const": "1.0.0"
+        },
+        "operationId": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{2,63}$"
+        },
+        "requestHash": {
+          "$ref": "avo.sfx-catalog.schema.json#/$defs/sha"
+        },
+        "requestId": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9-]{2,63}$"
+        },
+        "provider": {
+          "$ref": "#/$defs/id"
+        },
+        "videoId": {
+          "$ref": "#/$defs/id"
+        },
+        "basisHeads": {
+          "$ref": "https://avo.local/avo.motion-review.schema.json#/properties/basisHeads"
+        },
+        "options": {
+          "$ref": "https://avo.local/avo.editing-craft.schema.json#/$defs/selection"
+        },
+        "directionRef": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "https://avo.local/avo.motion-proposal.schema.json#/$defs/ref"
+            }
+          ]
+        },
+        "direction": {
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "clock": {
+          "$ref": "#/$defs/candidateFit/properties/clock"
+        },
+        "generationId": {
+          "$ref": "avo.sfx-catalog.schema.json#/$defs/nullableSha"
+        },
+        "opportunities": {
+          "type": "array",
+          "maxItems": 500,
+          "items": {
+            "$ref": "#/$defs/opportunityRecord"
+          }
+        },
+        "coverage": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "intents",
+            "candidates",
+            "candidateBudget"
+          ],
+          "properties": {
+            "intents": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1000
+            },
+            "candidates": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1000
+            },
+            "candidateBudget": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 1000
+            }
+          }
+        },
+        "proposalHash": {
+          "$ref": "avo.sfx-catalog.schema.json#/$defs/sha"
+        }
+      }
+    },
+    "operationRecord": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "requestHash",
+        "request",
+        "proposalRef"
+      ],
+      "properties": {
+        "requestHash": {
+          "$ref": "avo.sfx-catalog.schema.json#/$defs/sha"
+        },
+        "request": {
+          "$ref": "#/$defs/proposeRequest"
+        },
+        "proposalRef": {
+          "$ref": "https://avo.local/avo.motion-proposal.schema.json#/$defs/ref"
+        }
+      }
+    }
+  }
+}

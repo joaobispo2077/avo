@@ -24,6 +24,7 @@ from avo.timeline.proof_validation_stage import in_proof_validation_batch
 
 from .local_source import local_source_arguments
 from .proof_audio_mix import render_proof_audio_mix, validate_proof_audio_mix
+from .proof_precision import source_pixel_filter
 
 
 def _require_implementation(execution, operation):
@@ -44,7 +45,8 @@ def _layout_operation(execution):
     operations = execution["videoGraph"]["operations"]
     layouts = [op for op in operations if op["kind"] == "source-layout"]
     if len(layouts) != 1 or any(
-        op["kind"] not in {"source-layout", "overlay-video"} for op in operations
+        op["kind"] not in {"source-layout", "overlay-video", "camera-transform"}
+        for op in operations
     ):
         raise RuntimeError(
             "Placed proof requires one source-layout and only admitted overlays"
@@ -309,6 +311,12 @@ def _picture_fades(item, count):
 
 
 def _picture_arguments(source, spec, fps, *, start_frame=0, stop_frame=None):
+    if "camera" in source:
+        from .proof_precision import camera_picture_arguments
+
+        return camera_picture_arguments(
+            source, spec, fps, start_frame=start_frame, stop_frame=stop_frame
+        )
     item = source["item"]
     region = item["outputRange"]
     offset = max(0, start_frame - region["startFrame"])
@@ -333,6 +341,7 @@ def _picture_arguments(source, spec, fps, *, start_frame=0, stop_frame=None):
         else f"scale={spec['width']}:{spec['height']}:force_original_aspect_ratio=decrease,"
         f"pad={spec['width']}:{spec['height']}:(ow-iw)/2:(oh-ih)/2:black"
     )
+    pixels = source_pixel_filter(source, spec, _picture_fades(item, original_count))
     filters = (
         (
             f"fps={source_fps}:start_time=0:round=near:eof_action=pass,"
@@ -343,7 +352,7 @@ def _picture_arguments(source, spec, fps, *, start_frame=0, stop_frame=None):
         f"settb=expr={source_fps.denominator}/{source_fps.numerator},setpts=N,"
         f"{sampling}"
         f"settb=expr={fps.denominator}/{fps.numerator},setpts=N,trim=end_frame={count},"
-        f"{sizing},setsar=1,format=rgba{_picture_fades(item, original_count)},format=bgra,"
+        f"{sizing},setsar=1,{pixels},"
         f"trim=start_frame={offset},setpts=PTS-STARTPTS"
     )
     return (
@@ -525,6 +534,10 @@ def _cached_video_stage(execution, source, parent, spec, fps):
         proof_pixel_observations,
     )
 
+    # Precision layers are rebuilt from originals until their complete camera
+    # recipe is qualified for the optional intermediate cache.
+    if "pixelFormat" in spec:
+        return None
     observations, resources = proof_pixel_observations(), proof_batch_resources()
     if observations is None or resources is None or not _stage_cache_enabled(execution):
         return None
@@ -626,6 +639,10 @@ def _compose_picture(
 ):
     from . import proof_executor as native
 
+    if "pixelFormat" in spec:
+        from .proof_precision import compose_picture
+
+        return compose_picture(staged, output, spec, fps, window, raw=raw)
     first, last = window
     arguments = [
         "ffmpeg",
@@ -881,6 +898,7 @@ def execute_placed_proof(
     items, total = _operation(execution)
     cache = {}
     admitted = _admit_picture(execution, items, total, fps, cache)
+    _admit_precision_picture(execution, admitted, cache, spec, fps)
 
     def resolver(node, parameters):
         return native._source(
@@ -921,7 +939,9 @@ def execute_placed_proof(
         "producer": {"name": "avo.ffmpeg-proof-plan", "version": "1"},
         "media": media,
         "sourceVideoTailPolicies": [],
-        "sourceDialogueNoisePolicies": [],
+        "sourceDialogueNoisePolicies": native._noise_policy_records(
+            execution["audioGraph"]
+        ),
         "sourceDialogueTreatmentPolicies": [],
         "generatedOperations": [
             proof_generated.operation_metadata(asset["operation"])
@@ -929,3 +949,19 @@ def execute_placed_proof(
         ],
         "overlayOperations": metadata,
     }
+
+
+def _admit_precision_picture(execution, admitted, cache, spec, fps):
+    camera = any(
+        op["kind"] == "camera-transform" for op in execution["videoGraph"]["operations"]
+    )
+    if camera and "pixelFormat" not in spec:
+        raise RuntimeError(
+            "Camera placements require an explicit precision pixel format"
+        )
+    if "pixelFormat" in spec:
+        from .proof_precision import admit_camera_placements
+
+        if _layout_operation(execution)["parameters"].get("privacyMasks"):
+            raise RuntimeError("Precision placed privacy masks are not qualified")
+        admit_camera_placements(execution, admitted, cache, spec, fps)

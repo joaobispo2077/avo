@@ -20,7 +20,8 @@
     "lanes",
     "gaps",
     "pendingRevisions",
-    "coverage"
+    "coverage",
+    "advisories"
   ],
   "properties": {
     "schemaVersion": {
@@ -42,7 +43,7 @@
           "const": "avo.motion-review"
         },
         "version": {
-          "const": "1.0.0"
+            "enum": ["1.1.0", "1.2.0", "1.3.0", "1.4.0", "1.5.0", "1.6.0", "1.7.0"]
         }
       }
     },
@@ -564,6 +565,9 @@
           "type": "boolean"
         }
       }
+    },
+    "advisories": {
+      "$ref": "#/$defs/advisories"
     }
   },
   "$defs": {
@@ -626,7 +630,17 @@
         "componentRef",
         "targetLayerId",
         "parts",
-        "identityConflicts"
+        "identityConflicts",
+        "dominantFocus",
+        "supportingMotion",
+        "ambientMotion",
+        "readingIntent",
+        "depthIntent",
+        "continuityIntent",
+        "cameraIntent",
+        "soundIntent",
+        "density",
+        "layout"
       ],
       "properties": {
         "itemId": {
@@ -748,6 +762,76 @@
           "items": {
             "type": "object"
           }
+        },
+        "dominantFocus": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 4096
+        },
+        "supportingMotion": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 4096
+        },
+        "ambientMotion": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 4096
+        },
+        "readingIntent": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 4000
+        },
+        "depthIntent": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 4000
+        },
+        "continuityIntent": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 4000
+        },
+        "cameraIntent": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 4096
+        },
+        "soundIntent": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 4096
+        },
+        "density": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 5
+        },
+        "layout": {
+          "type": [
+            "object",
+            "null"
+          ]
         }
       }
     },
@@ -765,7 +849,16 @@
         "sound",
         "assets",
         "evidence",
-        "unresolvedFields"
+        "unresolvedFields",
+        "dominantFocus",
+        "supportingMotion",
+        "ambientMotion",
+        "readingIntent",
+        "depthIntent",
+        "continuityIntent",
+        "cameraIntent",
+        "soundIntent",
+        "density"
       ],
       "properties": {
         "itemId": {
@@ -861,6 +954,70 @@
           "items": {
             "type": "string"
           }
+        },
+        "dominantFocus": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 4096
+        },
+        "supportingMotion": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 4096
+        },
+        "ambientMotion": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 4096
+        },
+        "readingIntent": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 4000
+        },
+        "depthIntent": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 4000
+        },
+        "continuityIntent": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 4000
+        },
+        "cameraIntent": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 4096
+        },
+        "soundIntent": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 4096
+        },
+        "density": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 5
         }
       }
     },
@@ -913,6 +1070,41 @@
       "type": "array",
       "items": {
         "$ref": "https://github.com/joaobispo2077/avo/schemas/avo.bmap.schema.json#/$defs/cue"
+      }
+    },
+    "advisories": {
+      "type": "array",
+      "maxItems": 64,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "code",
+          "itemIds",
+          "message"
+        ],
+        "properties": {
+          "code": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "itemIds": {
+            "type": "array",
+            "maxItems": 4096,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          },
+          "message": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096
+          }
+        }
       }
     }
   }

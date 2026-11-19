@@ -420,14 +420,6 @@
       "reason": "Feature 006 public/dynamic contract covered by focused tests and runtime registration"
     },
     {
-      "path": "src/avo/timeline/event_clock.py",
-      "name": "resolve_timed_event",
-      "kind": "function",
-      "lineno": 110,
-      "confidence": 60,
-      "reason": "Feature 006 public/dynamic contract covered by focused tests and runtime registration"
-    },
-    {
       "path": "src/avo/timeline/iterations.py",
       "name": "fingerprint_candidate",
       "kind": "method",
@@ -1042,14 +1034,6 @@
       "lineno": 18,
       "confidence": 60,
       "reason": "Timeline domain/API surface (dynamic CLI and future stages)"
-    },
-    {
-      "path": "src/avo/timeline/tracks.py",
-      "name": "apply_event_role_defaults",
-      "kind": "function",
-      "lineno": 218,
-      "confidence": 60,
-      "reason": "Feature 006 public/dynamic contract covered by focused tests and runtime registration"
     },
     {
       "path": "src/avo/timeline/tracks.py",

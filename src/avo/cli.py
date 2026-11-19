@@ -51,6 +51,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     configure_library(sub)
 
+    from avo.sfx_cli import configure as configure_sfx
+
+    configure_sfx(sub)
+
     from avo.costs_cli import configure as configure_costs
     from avo.costs_cli import cost_context_argument
 
@@ -76,6 +80,10 @@ def build_parser() -> argparse.ArgumentParser:
         item = pipeline_sub.add_parser(name)
         _project_arg(item)
         _add_pipeline_entry_args(item, name)
+    pipeline_work = pipeline_sub.add_parser("work-decide")
+    _project_arg(pipeline_work)
+    pipeline_work.add_argument("--request", type=Path, required=True)
+    pipeline_work.add_argument("--request-sha256", help=argparse.SUPPRESS)
     pipeline_resume = pipeline_sub.add_parser("resume")
     _project_arg(pipeline_resume)
     pipeline_resume.add_argument("--actor", required=True)
@@ -542,6 +550,15 @@ def _pipeline_import(pipeline, args):
 
 
 def _pipeline(args: argparse.Namespace) -> int:
+    if args.pipeline_command == "work-decide":
+        from avo.motion_plan_cli import run_work_decision_command
+
+        return run_work_decision_command(args)
+
+    return _pipeline_command(args)
+
+
+def _pipeline_command(args: argparse.Namespace) -> int:
     from avo.timeline.command_registry import registry_document
     from avo.timeline.pipeline import TimelinePipeline
 
@@ -1288,6 +1305,11 @@ def _animation(args: argparse.Namespace) -> int:
         "options-reset",
         "plan-show",
         "plan-publish",
+        "plan-propose",
+        "plan-select",
+        "plan-apply",
+        "camera-propose",
+        "camera-apply",
     }:
         from avo.motion_plan_cli import run_craft_command
 
@@ -2542,6 +2564,10 @@ def _trim(args: argparse.Namespace) -> int:
 
 
 def _run_cli(args: argparse.Namespace) -> int:
+    if args.command == "sfx":
+        from avo.sfx_cli import run as sfx_run
+
+        return sfx_run(args)
     if args.command == "timeline-import":
         from avo.timeline_import_cli import run as timeline_import_run
 

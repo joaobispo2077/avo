@@ -266,12 +266,24 @@ def _ducking_filter(label: str, sidechain: str, ducking: dict, end: float) -> st
     )
 
 
+def _reject_selected_sound(layers):
+    if any(
+        isinstance(layer.get("provenance"), dict)
+        and "soundSelection" in layer["provenance"]
+        for layer in layers
+    ):
+        raise AudioGraphError(
+            "Selected sound timing requires the canonical native proof graph"
+        )
+
+
 def compile_audio_layers(
     layers: list[dict[str, Any]],
     *,
     first_input_index: int = 1,
 ) -> dict[str, Any]:
     """Compile dialogue, music beds, SFX, and ambience with ducking and fades."""
+    _reject_selected_sound(layers)
     if any(len(layer.get("regions") or []) > 1 for layer in layers):
         raise AudioGraphError(
             "Legacy audio projection cannot represent multiple regions; use the canonical placed proof graph"
