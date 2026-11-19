@@ -100,8 +100,10 @@ and review. Camera movement, face anchoring, sound matching, reference
 analysis and spoken notes or recovery are selected options. The optional
 [editor handoff](editor-handoff.md) supports validation examples, returned XML
 review and selected original-media trims routed to cutting review. Canonical
-proofs show sampled craft findings by cue. Production editor qualification and
-creator acceptance remain open.
+proofs link their current sampled craft findings to storyboard cues. Local SFX
+search uses descriptors by default and can opt into a separately provisioned
+offline CLAP runtime. Production editor qualification, the creator study and
+contextual sound listening remain open.
 
 | ID | Proposal | Smallest useful outcome | Existing alignment |
 | -- | -------- | ----------------------- | ------------------ |

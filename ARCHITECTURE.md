@@ -947,9 +947,10 @@ typed request freezing and the default motion-review projection are implemented.
 Untimed proposal/selection and recoverable canonical application use the existing
 timeline owners. The sound catalogue and descriptor search are local source-read
 and saved-metadata operations respectively; semantic execution has an explicit
-isolated optional boundary. Camera, visual analysis, sound placement, preparation
-and editor interchange below remain planned until their own execution and
-acceptance evidence is complete.
+isolated optional boundary. Camera, visual analysis, sound placement and source
+preparation use explicit selections. Editor interchange exposes source-preserving
+validation, returned XML review and selected cuts through the normal trim owner.
+Its production targets await version-specific qualification.
 
 Motion map and linked lightweight storyboard are built-in, engine-independent
 projections at applicable motion planning/review. They join the selected brief,
@@ -979,8 +980,10 @@ An explicit semantic operation injects a ranker and paired local CLAP worker;
 manifest/model/preprocessing/runtime identities must agree before cosine scores
 are accepted. The optional worker uses offline local files and bounded validated
 vectors; ordinary model defaults and proof capability registration stay unchanged.
-No model package or weights are an AVO core prerequisite. Explicit local runtime
-qualification uses `AVO_TEST_CLAP_PIN` without changing ordinary job defaults;
+No model package or weights are an AVO core prerequisite. The distributions
+include separate Windows CPU wheel locks for CLAP and face analysis. Explicit
+local runtime qualification uses `AVO_TEST_CLAP_PIN` without changing ordinary
+job defaults;
 the real worker test records joint-space/manifest identity, normalized vectors,
 exact source-bound cache reuse and changed-source rejection. Human suitability
 and listening acceptance remain separate.
@@ -992,9 +995,8 @@ the same guard; existing v1 snapshots do not cause an upgrade on inspection.
 The pure camera planner derives frames from BMap and binds moves to exact source
 occurrences, geometry, source bytes and frozen options. Camera proof compilation
 uses a strict v2 operation contract and requires a qualified native implementation;
-legacy proof contracts are unchanged. Encoded execution remains a qualification
-candidate until the native capability, provenance and authoring controls are
-registered together.
+legacy proof contracts are unchanged. The selected native route verifies tool
+and input identity before executing and leaves creative approval to review.
 
 Selected untimed camera recipes expand inside `MotionAuthoringService` into
 strict relative paths with frozen options, source identity and display geometry.

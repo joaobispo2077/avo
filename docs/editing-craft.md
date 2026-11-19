@@ -147,6 +147,12 @@ artifact/runtime contract and the explicitly selected real-model test. Camera
 sound accents can optionally select an actual path node rather than entering a
 separate cue fraction; see [sound candidate fitting](sound-candidate-fitting.md).
 
+When a sound choice uses selected production chunks, the result lists all chunks
+containing its current or previous audible contribution. A tail that crosses a
+chunk boundary remains a listening obligation even when that chunk was outside
+the production selection. Removing a sound includes its former range. Review
+and approval still belong to the current encoded candidate.
+
 ## Compatibility and validation
 
 The default motion map and linked storyboard also show the current audio and
