@@ -677,7 +677,7 @@ class MotionAuthoringService:
             "cameraEnvironmentHash": self._camera_runtime_hash(),
         }
 
-    def _dispositions(self, proposal, requested):
+    def _dispositions(self, proposal, requested, previous):
         ids = {item["itemId"] for item in proposal["items"]}
         supplied = [item["itemId"] for item in requested]
         if len(supplied) != len(set(supplied)) or not set(supplied) <= ids:
@@ -685,12 +685,12 @@ class MotionAuthoringService:
                 "MOTION_IDENTITY_AMBIGUOUS",
                 "Disposition must name unique existing items",
             )
-        inherited = self._inherited_dispositions(proposal)
+        inherited = self._inherited_dispositions(proposal, previous)
         inherited.update({item["itemId"]: deepcopy(item) for item in requested})
         return [inherited[key] for key in sorted(inherited)]
 
-    def _inherited_dispositions(self, proposal):
-        shown = self.show()
+    @staticmethod
+    def _inherited_dispositions(proposal, shown):
         if (
             not shown.get("decision")
             or shown["proposal"]["requestId"] != proposal["requestId"]
@@ -724,6 +724,8 @@ class MotionAuthoringService:
         return selector
 
     def select(self, request):
+        from .asset_selection import resolve_asset_choices
+
         request = self._request(request, "plan-select")
         with timeline_writer(self.workspace.timeline_dir):
             known = self._known_operation(request)
@@ -736,7 +738,9 @@ class MotionAuthoringService:
                     "decisions", known["sha256"], "decision"
                 )
             else:
+                previous = self.show()
                 decision = {
+                    **resolve_asset_choices(self, request, previous),
                     "contractVersion": "1.0.0",
                     "operationId": request["operationId"],
                     "requestHash": content_hash(request),
@@ -745,7 +749,7 @@ class MotionAuthoringService:
                     "requestId": proposal["requestId"],
                     "proposalHash": proposal_ref["sha256"],
                     "dispositions": self._dispositions(
-                        proposal, request["selection"]["dispositions"]
+                        proposal, request["selection"]["dispositions"], previous
                     ),
                     "actor": request["actor"],
                     "reason": request["reason"],
@@ -916,6 +920,7 @@ class MotionAuthoringService:
             )
 
     def _prepare(self, request, shown):
+        from .asset_selection import verify_application_assets
         from .motion_scope_application import prepare_scope
 
         if self.workspace.authority != "canonical":
@@ -938,6 +943,7 @@ class MotionAuthoringService:
         scoped, scope_fields = prepare_scope(self, request, shown)
         scoped, camera = self._camera_application(request, scoped)
         self._scope(scoped, request["authoring"])
+        verify_application_assets(self, scoped)
         request_ref = self._put("requests", request, "applyRequest")
         evidence = self._application_evidence(
             shown["proposalRef"], shown["decisionRef"], request_ref
@@ -1353,6 +1359,7 @@ class MotionAuthoringService:
 
     @staticmethod
     def review_context(shown):
+        from .asset_selection import attach_asset_choices
         from .motion_scope_application import item_was_applied
 
         proposal = deepcopy(shown.get("proposal") or {})
@@ -1360,6 +1367,7 @@ class MotionAuthoringService:
             item["itemId"]: item["status"]
             for item in (shown.get("decision") or {}).get("dispositions", [])
         }
+        attach_asset_choices(proposal, shown.get("decision") or {})
         for item in proposal.get("items", []):
             state = choices.get(item["itemId"], "proposed")
             item["disposition"] = (

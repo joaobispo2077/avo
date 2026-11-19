@@ -473,6 +473,10 @@
               "items": {
                 "$ref": "#/$defs/disposition"
               }
+            },
+            "assetChoices": {
+              "type": "array", "maxItems": 16,
+              "items": {"$ref": "avo.asset-review.schema.json#/$defs/choice"}
             }
           },
           "required": [
@@ -745,6 +749,10 @@
           "items": {
             "$ref": "#/$defs/disposition"
           }
+        },
+        "assetChoices": {
+          "type": "array", "maxItems": 16,
+          "items": {"$ref": "avo.asset-review.schema.json#/$defs/choiceEvidence"}
         },
         "actor": {
           "type": "string",

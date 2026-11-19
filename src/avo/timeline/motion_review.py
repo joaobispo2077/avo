@@ -10,7 +10,12 @@ from html import escape
 from importlib.resources import files
 from string import Template
 
-from .contracts import content_hash, document_hash_excluding, validate_document
+from .contracts import (
+    ContractError,
+    content_hash,
+    document_hash_excluding,
+    validate_document,
+)
 from .craft_work import project_craft_work
 from .motion_metadata import (
     MAX_DOCUMENT_BYTES,
@@ -198,16 +203,44 @@ def _text(value, default="Unresolved"):
 
 def _assets(data):
     assets = deepcopy(data.get("assets") or [])
+    references = [part["cue"].get("assetRef") or {} for part in data.get("_parts", [])]
+    for asset in assets:
+        _reviewed_asset_state(asset, references)
     if data.get("assetRef"):
         assets.append({"status": "declared", "source": deepcopy(data["assetRef"])})
-    if any(
-        asset.get("status") in {"missing", "unavailable", "restricted"}
-        for asset in assets
-    ):
-        return assets, "missing"
+    return assets, _asset_readiness(assets, data.get("treatment"))
+
+
+def _asset_readiness(assets, treatment):
+    states = {asset.get("status") for asset in assets}
+    if states.intersection({"missing", "unavailable", "restricted"}):
+        return "missing"
+    if "unresolved" in states:
+        return "unresolved"
     if assets:
-        return assets, "declared"
-    return assets, "not-required" if data.get("treatment") == "static" else "unresolved"
+        return "declared"
+    return "not-required" if treatment == "static" else "unresolved"
+
+
+def _reviewed_asset_state(asset, references):
+    review = asset.get("review")
+    if review is None:
+        return
+    try:
+        validate_document(review, "avo.asset-review.schema.json#/$defs/choiceEvidence")
+    except ContractError:
+        asset["status"] = "unresolved"
+        return
+    if review["choice"]["disposition"] == "reject":
+        asset["status"] = "missing"
+        return
+    source = review["option"]["source"]
+    key = (source["sha256"], source["sizeBytes"])
+    applied = any(
+        (reference.get("sha256"), reference.get("sizeBytes")) == key
+        for reference in references
+    )
+    asset["status"] = "declared" if applied else "unresolved"
 
 
 def _evidence(data, heads):
