@@ -221,6 +221,153 @@
         "trajectoryHash": {"$ref": "#/$defs/sha256"}
       }
     },
+    "referencePairs": {
+      "type": "array", "minItems": 1, "maxItems": 299,
+      "items": {"$ref": "#/$defs/referencePair"}
+    },
+    "referenceAspects": {
+      "type": "array", "minItems": 1, "maxItems": 6, "uniqueItems": true,
+      "items": {"enum": ["global-motion", "element-motion", "scene-changes", "brightness", "hold-reveal", "audio-word-timing"]}
+    },
+    "referenceAnalyzeRequest": {
+      "type": "object", "additionalProperties": false,
+      "required": ["contractVersion", "operation", "actor", "reason", "expectedBasis", "selection", "runtimePython", "clips"],
+      "properties": {
+        "contractVersion": {"const": "1.0.0"}, "operation": {"const": "reference-analyze"},
+        "actor": {"$ref": "#/$defs/faceAnalyzeRequest/properties/actor"},
+        "reason": {"$ref": "#/$defs/faceAnalyzeRequest/properties/reason"},
+        "expectedBasis": {"$ref": "avo.motion-review.schema.json#/properties/basisHeads"},
+        "selection": {"$ref": "avo.editing-craft.schema.json#/$defs/selection"},
+        "runtimePython": {"type": "string", "minLength": 1, "maxLength": 8192},
+        "budget": {
+          "type": "object", "additionalProperties": false, "required": ["maxClips", "maxTotalSeconds"],
+          "properties": {
+            "maxClips": {"type": "integer", "minimum": 1, "maximum": 20},
+            "maxTotalSeconds": {"type": "integer", "minimum": 1, "maximum": 600}
+          }
+        },
+        "clips": {
+          "type": "array", "minItems": 1, "maxItems": 20,
+          "items": {
+            "type": "object", "additionalProperties": false,
+            "required": ["clipId", "source", "locator", "streamIndex", "sourceRange", "sampleEvery", "aspects"],
+            "properties": {
+              "clipId": {"$ref": "#/$defs/sourceIdentity/properties/sourceId"},
+              "source": {"$ref": "#/$defs/sourceIdentity"},
+              "locator": {"type": "string", "minLength": 1, "maxLength": 8192},
+              "streamIndex": {"$ref": "#/$defs/faceAnalyzeRequest/properties/streamIndex"},
+              "sourceRange": {"$ref": "#/$defs/sourceRange"},
+              "sampleEvery": {"$ref": "#/$defs/faceAnalyzeRequest/properties/sampleEvery"},
+              "aspects": {"$ref": "#/$defs/referenceAspects"},
+              "attribution": {"type": "string", "minLength": 1, "maxLength": 2048}
+            }
+          }
+        }
+      }
+    },
+    "referenceObservationRequest": {
+      "type": "object", "additionalProperties": false,
+      "required": ["source", "sourceRange", "geometry", "proxy", "aspects"],
+      "properties": {
+        "source": {"$ref": "#/$defs/sourceIdentity"},
+        "sourceRange": {"$ref": "#/$defs/sourceRange"},
+        "geometry": {"$ref": "#/$defs/sourceGeometry"},
+        "proxy": {"$ref": "#/$defs/proxyIdentity"},
+        "aspects": {"$ref": "#/$defs/referenceAspects"}
+      }
+    },
+    "referenceObservation": {
+      "type": "object", "additionalProperties": false,
+      "required": ["contractVersion", "request", "runtime", "coverage", "intervals", "interpretation", "analysisHash"],
+      "properties": {
+        "contractVersion": {"const": "1.0.0"},
+        "request": {"$ref": "#/$defs/referenceObservationRequest"},
+        "runtime": {
+          "type": "object", "additionalProperties": false, "required": ["isolated", "device", "versions", "method"],
+          "properties": {
+            "isolated": {"const": true}, "device": {"const": "cpu"},
+            "versions": {"$ref": "#/$defs/detectorIdentity/properties/versions"},
+            "method": {"const": "pyramidal-lk-partial-affine-v1"}
+          }
+        },
+        "coverage": {
+          "type": "object", "additionalProperties": false,
+          "required": ["sampledFrames", "pairCount", "minimumGapTicks", "maximumGapTicks"],
+          "properties": {
+            "sampledFrames": {"type": "integer", "minimum": 2, "maximum": 300},
+            "pairCount": {"type": "integer", "minimum": 1, "maximum": 299},
+            "minimumGapTicks": {"type": "integer", "minimum": 1},
+            "maximumGapTicks": {"type": "integer", "minimum": 1}
+          }
+        },
+        "intervals": {
+          "type": "array", "minItems": 1, "maxItems": 299,
+          "items": {
+            "type": "object", "additionalProperties": false, "required": ["startTicks", "endTicks"],
+            "properties": {
+              "startTicks": {"$ref": "#/$defs/sourceTick"}, "endTicks": {"$ref": "#/$defs/sourceTick"},
+              "brightness": {"$ref": "#/$defs/referencePair/properties/brightness"},
+              "motionStatus": {"$ref": "#/$defs/referencePair/properties/status"},
+              "reason": {"$ref": "#/$defs/referencePair/properties/reason"},
+              "global": {"$ref": "#/$defs/referencePair/properties/global"},
+              "coverage": {"$ref": "#/$defs/referencePair/properties/coverage"},
+              "residual": {"$ref": "#/$defs/referencePair/properties/residual"},
+              "cutCandidate": {"type": "boolean"}
+            }
+          }
+        },
+        "interpretation": {
+          "type": "object", "additionalProperties": false,
+          "required": ["easing", "availableEvidence"],
+          "properties": {
+            "easing": {"const": "uninterpreted"},
+            "availableEvidence": {
+              "type": "object", "additionalProperties": false,
+              "properties": {"hold-reveal": {"const": "unavailable"}, "audio-word-timing": {"const": "unavailable"}}
+            }
+          }
+        },
+        "analysisHash": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "referencePair": {
+      "type": "object", "additionalProperties": false, "required": ["status", "brightness"],
+      "properties": {
+        "status": {"enum": ["measured", "cut-candidate", "unmeasurable"]},
+        "reason": {"enum": ["dark-frame", "insufficient-detail", "tracking-break-and-histogram-change", "unqualified-global-motion"]},
+        "brightness": {
+          "type": "object", "additionalProperties": false, "required": ["before", "after"],
+          "properties": {"before": {"$ref": "#/$defs/unit"}, "after": {"$ref": "#/$defs/unit"}}
+        },
+        "global": {
+          "description": "Partial affine estimate. Translation is the movement at frame center in fractions of display dimensions.",
+          "type": "object", "additionalProperties": false, "required": ["scale", "rotationDegrees", "translateX", "translateY"],
+          "properties": {
+            "scale": {"type": "number", "exclusiveMinimum": 0},
+            "rotationDegrees": {"type": "number", "minimum": -180, "maximum": 180},
+            "translateX": {"type": "number"}, "translateY": {"type": "number"}
+          }
+        },
+        "coverage": {
+          "type": "object", "additionalProperties": false, "required": ["tracked", "inliers", "spanX", "spanY"],
+          "properties": {
+            "tracked": {"type": "integer", "minimum": 12, "maximum": 160},
+            "inliers": {"type": "integer", "minimum": 12, "maximum": 160},
+            "spanX": {"$ref": "#/$defs/unit"}, "spanY": {"$ref": "#/$defs/unit"}
+          }
+        },
+        "residual": {
+          "type": "object", "additionalProperties": false, "required": ["p90DisplayDiagonal", "movingPoints"],
+          "properties": {
+            "p90DisplayDiagonal": {"type": "number", "minimum": 0},
+            "movingPoints": {"type": "integer", "minimum": 0, "maximum": 160}
+          }
+        }
+      },
+      "if": {"properties": {"status": {"const": "measured"}}},
+      "then": {"required": ["global", "coverage", "residual"], "properties": {"reason": false}},
+      "else": {"required": ["reason"], "properties": {"global": false, "coverage": false, "residual": false}}
+    },
     "faceAssociationRequest": {
       "type": "object", "additionalProperties": false,
       "required": ["frames", "seed", "minimumOverlap", "maximumGapTicks"],

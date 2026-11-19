@@ -1,4 +1,4 @@
-"""Verify an explicitly prepared local CPU face detector."""
+"""Run explicit local analysis in the separately prepared CPU vision runtime."""
 
 import hashlib
 import json
@@ -15,10 +15,10 @@ YUNET_BYTES = 232589
 VERSIONS = {"opencv-python-headless": "4.12.0.88", "numpy": "2.2.6"}
 
 
-def _local_file(value, name):
+def _local_file(value, name, action="Face analysis"):
     path = Path(value or "")
     if not path.is_absolute() or not path.is_file():
-        raise ValueError(f"Face analysis needs a prepared local {name}")
+        raise ValueError(f"{action} needs a prepared local {name}")
     return path.resolve()
 
 
@@ -31,13 +31,13 @@ def _verify_model(path):
         )
 
 
-def _run_worker(python, model, *arguments, timeout=30, output_limit=4096):
+def _run_worker(python, *arguments, action="Face", timeout=30, output_limit=4096):
     worker = (
         Path(__file__).parent / "adapters" / "understand" / "visual_motion_worker.py"
     )
     with tempfile.TemporaryFile() as output, tempfile.TemporaryFile() as errors:
         result = subprocess.run(
-            [str(python), "-I", str(worker), str(model), YUNET_SHA256, *arguments],
+            [str(python), "-I", str(worker), *map(str, arguments)],
             stdout=output,
             stderr=errors,
             check=False,
@@ -46,11 +46,11 @@ def _run_worker(python, model, *arguments, timeout=30, output_limit=4096):
         if result.returncode:
             errors.seek(0)
             detail = errors.read(1024).decode("utf-8", errors="replace")
-            raise ValueError(f"Face runtime failed: {detail}")
+            raise ValueError(f"{action} runtime failed: {detail}")
         output.seek(0)
         data = output.read(output_limit + 1)
     if len(data) > output_limit:
-        raise ValueError("Face runtime exceeds its output budget")
+        raise ValueError(f"{action} runtime exceeds its output budget")
     return json.loads(data)
 
 
@@ -67,10 +67,15 @@ def _runtime_paths(resolved):
         raise ValueError("Face analysis requires an offline CPU runtime")
     model = _local_file(source.get("artifactPath"), "YuNet model")
     _verify_model(model)
-    python = _local_file(runtime.get("pythonEnv"), "isolated Python interpreter")
-    if python == Path(sys.executable).resolve():
-        raise ValueError("Face analysis needs a separate Python environment")
+    python = _isolated_python(runtime.get("pythonEnv"), "Face analysis")
     return python, model
+
+
+def _isolated_python(value, action):
+    python = _local_file(value, "isolated Python interpreter", action)
+    if python == Path(sys.executable).resolve():
+        raise ValueError(f"{action} needs a separate Python environment")
+    return python
 
 
 def _require_runtime_identity(report):
@@ -89,7 +94,7 @@ def _require_runtime_identity(report):
 
 
 def preflight_face_job(resolved):
-    report = _run_worker(*_runtime_paths(resolved))
+    report = _run_worker(*_runtime_paths(resolved), YUNET_SHA256)
     _require_runtime_identity(report)
     return report
 
@@ -105,6 +110,7 @@ def detect_proxy_faces(resolved, proxy_path, *, width, height, frame_count, sha2
         raise ValueError("The display proxy needs an exact SHA-256")
     report = _run_worker(
         *_runtime_paths(resolved),
+        YUNET_SHA256,
         str(proxy),
         str(width),
         str(height),
@@ -121,4 +127,40 @@ def detect_proxy_faces(resolved, proxy_path, *, width, height, frame_count, sha2
     return report
 
 
-__all__ = ["detect_proxy_faces", "preflight_face_job"]
+def measure_reference_proxy(python, proxy_path, *, width, height, frame_count, sha256):
+    """Read bounded verified proxy bytes with classical CPU vision and no model."""
+    action = "Reference analysis"
+    runtime = _isolated_python(python, action)
+    proxy = _local_file(proxy_path, "display proxy", action)
+    validate_document(sha256, SCHEMA + "#/$defs/sha256")
+    report = _run_worker(
+        runtime,
+        "reference-motion",
+        proxy,
+        width,
+        height,
+        frame_count,
+        sha256,
+        action=action,
+        timeout=120,
+        output_limit=512 * 1024,
+    )
+    required = {
+        "isolated": True,
+        "device": "cpu",
+        "versions": VERSIONS,
+        "proxySha256": sha256,
+        "method": "pyramidal-lk-partial-affine-v1",
+    }
+    if not isinstance(report, dict) or any(
+        report.get(key) != value for key, value in required.items()
+    ):
+        raise ValueError("Reference analysis differs from the pinned runtime or proxy")
+    pairs = report.get("pairs")
+    validate_document(pairs, SCHEMA + "#/$defs/referencePairs")
+    if len(pairs) != frame_count - 1:
+        raise ValueError("Reference measurements differ from the sampled frame grid")
+    return report
+
+
+__all__ = ["detect_proxy_faces", "measure_reference_proxy", "preflight_face_job"]
