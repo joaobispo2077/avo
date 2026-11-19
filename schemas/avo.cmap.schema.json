@@ -423,7 +423,7 @@
           "minLength": 1
         },
         "kind": {
-          "const": "raw"
+          "enum": ["raw", "authorial"]
         },
         "fingerprint": {
           "$ref": "#/$defs/fingerprint"
@@ -494,17 +494,60 @@
         "sourceSampleRate": {"type": "integer", "minimum": 1}
       }
     },
+    "placedPictureTransform": {
+      "type": "object", "additionalProperties": false,
+      "required": ["canvasWidth", "canvasHeight", "x", "y", "width", "height"],
+      "properties": {
+        "canvasWidth": {"type": "integer", "minimum": 1, "maximum": 8192},
+        "canvasHeight": {"type": "integer", "minimum": 1, "maximum": 8192},
+        "width": {"type": "integer", "minimum": 1, "maximum": 8192},
+        "height": {"type": "integer", "minimum": 1, "maximum": 8192},
+        "x": {"type": "integer", "minimum": -65536, "maximum": 65536},
+        "y": {"type": "integer", "minimum": -65536, "maximum": 65536}
+      }
+    },
+    "placedPictureFade": {
+      "type": "object", "additionalProperties": false,
+      "required": ["inFrames", "outFrames"],
+      "properties": {
+        "inFrames": {"type": "integer", "minimum": 0, "maximum": 1000000},
+        "outFrames": {"type": "integer", "minimum": 0, "maximum": 1000000}
+      }
+    },
+    "placedTitle": {
+      "type": "object", "additionalProperties": false,
+      "required": ["text", "canvasWidth", "canvasHeight", "x", "y", "fontSize", "color", "anchor"],
+      "properties": {
+        "text": {"type": "string", "minLength": 1, "maxLength": 256, "pattern": "^[^\\u0000-\\u001f\\u007f]+$"},
+        "canvasWidth": {"type": "integer", "minimum": 1, "maximum": 8192},
+        "canvasHeight": {"type": "integer", "minimum": 1, "maximum": 8192},
+        "x": {"type": "integer", "minimum": -65536, "maximum": 65536},
+        "y": {"type": "integer", "minimum": -65536, "maximum": 65536},
+        "fontSize": {"type": "integer", "minimum": 1, "maximum": 1024},
+        "color": {"type": "string", "pattern": "^#[0-9a-fA-F]{8}$"},
+        "anchor": {"enum": ["center", "top-left"]}
+      }
+    },
     "layoutPlacement": {
       "type": "object", "additionalProperties": false,
       "required": ["placementId", "elementId", "trackId", "sourceId", "mediaKind", "in", "out", "start", "end", "enabled", "routing", "evidenceOrigin"],
       "properties": {
         "placementId": {"type": "string", "minLength": 1}, "elementId": {"type": "string", "minLength": 1},
         "trackId": {"type": "string", "minLength": 1}, "sourceId": {"type": "string", "minLength": 1},
-        "mediaKind": {"enum": ["video", "still", "audio"]},
+        "mediaKind": {"enum": ["video", "still", "audio", "title", "generator"]},
+        "generator": {"type": "object"},
+        "title": {"$ref": "#/$defs/placedTitle"},
+        "fontSourceId": {"type": "string", "minLength": 1},
+        "pictureSampling": {"const": "repeat-2x"},
+        "pictureEndGapFrames": {"type": "integer", "minimum": 1, "maximum": 3},
+        "audioTailSilenceSamples": {"type": "integer", "minimum": 1},
+        "pictureTransform": {"$ref": "#/$defs/placedPictureTransform"},
+        "pictureFade": {"$ref": "#/$defs/placedPictureFade"},
         "in": {"$ref": "#/$defs/timeValue"}, "out": {"$ref": "#/$defs/timeValue"},
         "start": {"$ref": "#/$defs/programTime"}, "end": {"$ref": "#/$defs/programTime"},
         "enabled": {"type": "boolean"}, "muted": {"type": "boolean"},
         "gainDb": {"type": "number", "minimum": -60, "maximum": 24},
+        "audioPeakCeilingDbfs": {"type": "number", "minimum": -12, "maximum": -1},
         "routing": {
           "type": "object", "additionalProperties": false,
           "properties": {"videoStreamIndex": {"type": "integer", "minimum": 0}, "audioSelection": {"$ref": "#/$defs/layoutAudioSelection"}}
@@ -512,7 +555,15 @@
         "evidenceOrigin": {"$ref": "#/$defs/layoutEvidence"}
       },
       "allOf": [
-        {"if": {"properties": {"mediaKind": {"const": "audio"}}}, "then": {"properties": {"routing": {"required": ["audioSelection"], "not": {"required": ["videoStreamIndex"]}}}}, "else": {"properties": {"routing": {"required": ["videoStreamIndex"], "not": {"required": ["audioSelection"]}}, "gainDb": {"const": 0}, "muted": {"const": false}}}}
+        {"if": {"required": ["audioPeakCeilingDbfs"]}, "then": {"properties": {"mediaKind": {"const": "audio"}}}},
+        {"if": {"required": ["pictureTransform"]}, "then": {"properties": {"mediaKind": {"enum": ["video", "still"]}}}},
+        {"if": {"required": ["pictureFade"]}, "then": {"properties": {"mediaKind": {"enum": ["video", "still", "title", "generator"]}}}},
+        {"if": {"properties": {"mediaKind": {"const": "generator"}}}, "then": {"required": ["generator"]}, "else": {"not": {"required": ["generator"]}}},
+        {"if": {"required": ["pictureEndGapFrames"]}, "then": {"properties": {"mediaKind": {"const": "video"}}}},
+        {"if": {"required": ["pictureSampling"]}, "then": {"properties": {"mediaKind": {"const": "video"}}}},
+        {"if": {"required": ["audioTailSilenceSamples"]}, "then": {"properties": {"mediaKind": {"const": "audio"}}}},
+        {"if": {"properties": {"mediaKind": {"const": "title"}}}, "then": {"required": ["title", "fontSourceId"], "properties": {"routing": {"maxProperties": 0}}}, "else": {"not": {"anyOf": [{"required": ["title"]}, {"required": ["fontSourceId"]}]}}},
+        {"if": {"properties": {"mediaKind": {"const": "audio"}}}, "then": {"properties": {"routing": {"required": ["audioSelection"], "not": {"required": ["videoStreamIndex"]}}}}, "else": {"if": {"properties": {"mediaKind": {"enum": ["title", "generator"]}}}, "then": {"properties": {"routing": {"maxProperties": 0}, "gainDb": {"const": 0}, "muted": {"const": false}}}, "else": {"properties": {"routing": {"required": ["videoStreamIndex"], "not": {"required": ["audioSelection"]}}, "gainDb": {"const": 0}, "muted": {"const": false}}}}}
       ]
     },
     "layoutGap": {
@@ -524,15 +575,59 @@
         "evidenceOrigin": {"$ref": "#/$defs/layoutEvidence"}
       }
     },
+    "placedPrivacyMasks": {
+      "type": "object", "additionalProperties": false,
+      "required": ["canvasWidth", "canvasHeight", "regions"],
+      "properties": {
+        "canvasWidth": {"type": "integer", "minimum": 1},
+        "canvasHeight": {"type": "integer", "minimum": 1},
+        "regions": {"type": "array", "minItems": 1, "maxItems": 128, "items": {
+          "type": "object", "additionalProperties": false,
+          "required": ["maskId", "startFrame", "endFrameExclusive", "x", "y", "width", "height"],
+          "properties": {
+            "maskId": {"type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9][a-zA-Z0-9._:-]*$"},
+            "startFrame": {"type": "integer", "minimum": 0},
+            "endFrameExclusive": {"type": "integer", "minimum": 1},
+            "x": {"type": "integer", "minimum": 0},
+            "y": {"type": "integer", "minimum": 0},
+            "width": {"type": "integer", "minimum": 1},
+            "height": {"type": "integer", "minimum": 1}
+          }
+        }}
+      }
+    },
     "placedLayout": {
       "type": "object", "additionalProperties": false,
       "required": ["programClock", "duration", "displayOrigin", "background", "tracks", "placements", "gaps"],
       "properties": {
+        "importMode": {"const": "export-driven"},
+        "resolveEffects": {"type": "array", "maxItems": 2048, "items": {
+          "type": "object", "additionalProperties": false,
+          "required": ["pointer", "ownerPointer", "name", "state", "payload", "evidenceOrigin"],
+          "properties": {
+            "pointer": {"type": "string", "maxLength": 2048},
+            "ownerPointer": {"type": "string", "maxLength": 2048},
+            "name": {"type": "string", "maxLength": 240},
+            "state": {"enum": ["inactive", "reconstructed", "unresolved"]},
+            "payload": {"type": "object"}, "evidenceOrigin": {"const": "export"}
+          }
+        }},
         "programClock": {"type": "object", "additionalProperties": false, "required": ["frameRate", "timebase", "audioSampleRate"], "properties": {"frameRate": {"$ref": "#/$defs/timebase"}, "timebase": {"$ref": "#/$defs/timebase"}, "audioSampleRate": {"type": "integer", "minimum": 1}}},
         "duration": {"$ref": "#/$defs/programTime"}, "displayOrigin": {"type": ["object", "null"]}, "background": {"const": "black"},
         "tracks": {"type": "array", "minItems": 1, "items": {"$ref": "#/$defs/layoutTrack"}},
         "placements": {"type": "array", "items": {"$ref": "#/$defs/layoutPlacement"}},
-        "gaps": {"type": "array", "items": {"$ref": "#/$defs/layoutGap"}}
+        "gaps": {"type": "array", "items": {"$ref": "#/$defs/layoutGap"}},
+        "privacyMasks": {"$ref": "#/$defs/placedPrivacyMasks"},
+        "inactiveEffects": {"type": "array", "maxItems": 2048, "items": {
+          "type": "object", "additionalProperties": false,
+          "required": ["pointer", "ownerPointer", "name", "enabled", "evidenceOrigin"],
+          "properties": {
+            "pointer": {"type": "string", "maxLength": 4096},
+            "ownerPointer": {"type": "string", "maxLength": 4096},
+            "name": {"type": "string", "minLength": 1, "maxLength": 240},
+            "enabled": {"const": false}, "evidenceOrigin": {"const": "export"}
+          }
+        }}
       }
     },
     "cmapSnapshot": {
@@ -543,7 +638,7 @@
         "sources"
       ],
       "oneOf": [
-        {"required": ["segments"], "not": {"anyOf": [{"required": ["layoutMode"]}, {"required": ["layout"]}]}},
+        {"required": ["segments"], "not": {"anyOf": [{"required": ["layoutMode"]}, {"required": ["layout"]}]}, "properties": {"sources": {"items": {"properties": {"kind": {"const": "raw"}}}}}},
         {"required": ["layoutMode", "layout", "originRef", "sourceAssemblyPolicy", "importOutput"], "not": {"required": ["segments"]}}
       ],
       "properties": {

@@ -47,6 +47,32 @@ Run **`--adopt`** first when project already has local assets to register.
 
 ## Canonical track integration
 
+### Local sound discovery
+
+Use native `sfx show/search` for existing local sound catalogue metadata before
+requesting a new asset. `assets.sfx` is an absolute local read-only source root;
+empty project values inherit the provider. `sfx scan --request <absolute JSON>`
+explicitly inventories and measures bounded audio, writes a project-local
+immutable generation and exposes incomplete coverage/resume. It never renames,
+moves, trims or normalizes library sources and never calls footage organization.
+`show --offset <n> --limit <1..100>` returns an excerpt plus complete local link.
+
+Record tags/material/favorites/variant groups, rights evidence and reviewed markers
+with `sfx annotate` against the exact generation. Favorites stay project-scoped;
+provider promotion is unavailable in this increment and requires the later scoped
+promotion route. Identical audio bytes can share
+measurements while separate locators retain different rights/notes. Unknown or
+stale rights remain unresolved; search inclusion is not permission to publish.
+Present result reasons, native sample audition range, source identity and coverage
+before selection. Do not treat a detected attack as a reviewed perceptual marker.
+
+Descriptor `sfx search` reads saved metadata only and may correctly return no-match
+or silence. Use explicit `sfx search-semantic` only for selected model execution
+after actual paired-model/runtime readiness and source/license disclosure. Missing
+readiness stays unavailable; do not relabel descriptor matching as semantic.
+Neither search operation publishes sound into the edit. See the
+[catalogue guide](../../../docs/editing-craft.md#discover-and-curate-local-sounds).
+
 Inspect videoTracks before render: source/generator fingerprint, regions, z-order, fit/crop, compositing, captions/evidence safe zones, and face avoidance. Every contribution links to BMap intent; unresolved or changed sources block.
 
 ## Selected artistic guidance

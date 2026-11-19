@@ -110,16 +110,27 @@ def _remember_fingerprint(observations, key, result, path):
     observations[key] = dict(result)
 
 
+def _schema_location(name: str, root: Path | None = None) -> tuple[Path, str]:
+    # An existing literal filename wins over interpreting its hashes as fragments.
+    offsets = [len(name), *(index for index, value in enumerate(name) if value == "#")]
+    for offset in offsets:
+        filename, fragment = name[:offset], name[offset + 1 :]
+        path = (Path(root) / filename) if root else schema_path(filename)
+        if path.is_file():
+            return path, fragment
+    filename, _, fragment = name.partition("#")
+    return (Path(root) / filename) if root else schema_path(filename), fragment
+
+
 def _schema_and_fragment(
     name: str, root: Path | None = None
 ) -> tuple[dict[str, Any], str]:
-    filename, separator, fragment = name.partition("#")
-    path = (Path(root) / filename) if root else schema_path(filename)
+    path, fragment = _schema_location(name, root)
     try:
         schema = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError) as exc:
         raise ContractError(f"cannot load schema {path}: {exc}") from exc
-    return schema, fragment if separator else ""
+    return schema, fragment
 
 
 def _schema_registry(root: Path):
@@ -184,9 +195,7 @@ def validate_document(
     root: Path | None = None,
 ) -> Any:
     schema = load_schema(schema_name, root)
-    schema_root = (
-        Path(root) if root else schema_path(schema_name.partition("#")[0]).parent
-    )
+    schema_root = Path(root) if root else _schema_location(schema_name)[0].parent
     try:
         validator_cls = _checked_validator(canonical_json_bytes(schema))
         errors = sorted(
@@ -206,6 +215,84 @@ def validate_document(
         )
         raise ContractError(details)
     return document
+
+
+def validate_proof_plan_document(document):
+    """Read legacy and camera-aware plans explicitly; unknown versions fail closed."""
+    if not isinstance(document, dict):
+        raise ContractError("proof plan must be an object")
+    version = document.get("schemaVersion")
+    if not isinstance(version, str):
+        raise ContractError("unsupported proof plan contract version")
+    schema = {
+        "1.0.0": "avo.proof-plan.schema.json",
+        "2.0.0": "avo.proof-plan.v2.schema.json",
+    }.get(version)
+    if schema is None:
+        raise ContractError("unsupported proof plan contract version")
+    validate_document(document, schema)
+    if version == "1.0.0" and any(
+        operation["kind"] == "camera-transform"
+        for operation in document["videoGraph"]["operations"]
+    ):
+        raise ContractError("camera operations require proof plan contract 2.0.0")
+    return document
+
+
+def _has_editing_craft(snapshot):
+    components = snapshot.get("components")
+    if not isinstance(components, list):
+        return False
+    return any(
+        isinstance(component, dict)
+        and isinstance(component.get("extensions"), dict)
+        and "editingCraft" in component["extensions"]
+        for component in components
+    )
+
+
+def required_animation_readers(snapshot: dict[str, Any]) -> tuple[str, ...]:
+    """Validate advanced intent even when a generic revision writer receives it."""
+    if "strategyContractVersion" not in snapshot and not _has_editing_craft(snapshot):
+        return ()
+    if snapshot.get("strategyContractVersion") != "2.0.0":
+        raise ContractError("advanced camera strategy requires contract 2.0.0")
+    validate_document(snapshot, "avo.animation.schema.json#/$defs/videoStrategy")
+    return ("animation-strategy-v2", "camera-behavior-v1")
+
+
+def require_animation_reader(index: dict[str, Any], snapshot: dict[str, Any]) -> None:
+    """An advanced snapshot is unreadable without its atomic index capability fence."""
+    required = set(required_animation_readers(snapshot))
+    if required and (
+        index["artifactType"] != "animation"
+        or index["schemaVersion"] != "2.0.0"
+        or not required.issubset(index.get("requiredReaderCapabilities", []))
+    ):
+        raise ContractError(
+            "camera strategy requires its versioned index reader capabilities"
+        )
+
+
+def required_tracks_readers(snapshot: dict[str, Any]) -> tuple[str, ...]:
+    from .sound_tracks import validate_sound_tracks
+
+    try:
+        return validate_sound_tracks(snapshot)
+    except (ValueError, TypeError, KeyError, OverflowError) as error:
+        raise ContractError(str(error)) from error
+
+
+def require_tracks_reader(index: dict[str, Any], snapshot: dict[str, Any]) -> None:
+    required = set(required_tracks_readers(snapshot))
+    if required and (
+        index["artifactType"] != "tracks"
+        or index["schemaVersion"] != "2.0.0"
+        or not required.issubset(index.get("requiredReaderCapabilities", []))
+    ):
+        raise ContractError(
+            "selected sound requires its versioned index reader capabilities"
+        )
 
 
 def dependency_lock_hash(dependencies: dict[str, str]) -> str:

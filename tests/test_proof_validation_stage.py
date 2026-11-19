@@ -3,6 +3,7 @@
 import hashlib
 import os
 from fractions import Fraction
+from pathlib import Path
 from unittest.mock import patch
 
 import pytest
@@ -153,8 +154,15 @@ def test_sequential_render_keeps_deleted_segments_out_of_batch_guard(
 
     source = tmp_path / "original.bin"
     source.write_bytes(b"original")
-    output = tmp_path / "proof.mkv"
     staged = []
+    original_open, reads = Path.open, []
+
+    def opened(path, mode="r", *args, **kwargs):
+        if path == source and mode == "rb":
+            reads.append(path)
+        return original_open(path, mode, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "open", opened)
 
     def piece(_segment, _left, _right, _spec, _fps, _rate, path, **_kwargs):
         path.write_bytes(b"private segment")
@@ -175,16 +183,105 @@ def test_sequential_render_keeps_deleted_segments_out_of_batch_guard(
     node = {"outputRange": {"startSample": 0, "endSampleExclusive": 48000}}
     with proof_validation_batch():
         original = contracts.file_fingerprint(source)
-        proof_executor._render_media(
-            output,
-            [(0, 1, None, None, None, node)],
-            {"conformance": True},
-            Fraction(1),
-            48000,
-            0,
-            1,
-            [],
-            verify,
-        )
+        for index in range(2):
+            output = tmp_path / f"proof-{index}.mkv"
+            proof_executor._render_media(
+                output,
+                [(0, 1, None, None, None, node)],
+                {"conformance": True},
+                Fraction(1),
+                48000,
+                0,
+                1,
+                [],
+                verify,
+            )
+        assert len(reads) == 1
         assert all(not path.exists() for path in staged)
+    assert len(reads) == 2
     assert output.read_bytes() == b"candidate"
+
+
+@pytest.mark.parametrize("native_batch", [False, True])
+@pytest.mark.parametrize(
+    "window",
+    [None, {"startFrame": 0, "endFrameExclusive": 1}],
+    ids=["bounded", "legacy"],
+)
+def test_placed_render_shares_source_reads_only_in_native_batch(
+    tmp_path, monkeypatch, native_batch, window
+):
+    from avo.adapters.media import (
+        proof_bounded,
+        proof_executor,
+        proof_placed,
+        proof_stream,
+    )
+
+    source = tmp_path / "source.bin"
+    source.write_bytes(b"original")
+    original_open, reads = Path.open, []
+
+    def opened(path, mode="r", *args, **kwargs):
+        if path == source and mode == "rb":
+            reads.append(path)
+        return original_open(path, mode, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "open", opened)
+    monkeypatch.setattr(proof_placed, "_layout_operation", lambda _: {"parameters": {}})
+    monkeypatch.setattr(proof_placed, "_compose_picture", lambda *args: None)
+
+    def mix(_graph, output, **_kwargs):
+        output.write_bytes(b"temporary mix")
+        return {"output": contracts.file_fingerprint(output)}
+
+    monkeypatch.setattr(proof_placed, "render_proof_audio_mix", mix)
+
+    paths = []
+
+    def final(_listing, output, *_args, **_kwargs):
+        paths.append("legacy")
+        output.write_bytes(b"candidate")
+        return {}, []
+
+    def bounded_picture(_execution, _sources, _directory, output, *_args):
+        paths.append("bounded")
+        output.write_bytes(b"candidate")
+        return []
+
+    def budget(directory, **kwargs):
+        return proof_stream.StorageBudget(
+            directory, candidate_reserve=128, headroom=128, **kwargs
+        )
+
+    monkeypatch.setattr(proof_executor, "_render_final", final)
+    monkeypatch.setattr(proof_executor, "_check_encoded", lambda *_args: {})
+    monkeypatch.setattr(proof_bounded, "_stream_picture", bounded_picture)
+    monkeypatch.setattr(proof_bounded, "StorageBudget", budget)
+    monkeypatch.setattr(
+        proof_placed,
+        "_revalidate_sources",
+        lambda *args: contracts.file_fingerprint(source),
+    )
+    context = (
+        proof_validation_batch() if native_batch else contracts.fingerprint_stage()
+    )
+    with context:
+        contracts.file_fingerprint(source)
+        for index in range(2):
+            proof_placed._render(
+                {"audioGraph": {"nodes": []}, "window": window},
+                tmp_path / f"proof-{index}.mkv",
+                [],
+                1,
+                {"width": 64, "height": 48, "conformance": True},
+                Fraction(60),
+                None,
+                (0, 1),
+                {},
+                None,
+            )
+            assert (tmp_path / f"proof-{index}.mkv").read_bytes() == b"candidate"
+        assert paths == ["bounded" if window is None else "legacy"] * 2
+        assert len(reads) == (1 if native_batch else 3)
+    assert len(reads) == (2 if native_batch else 3)

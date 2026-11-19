@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import json
 import re
+import shutil
 import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -13,6 +15,22 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class ReleasePipelineTests(unittest.TestCase):
+    def _release_fixture(self) -> Path:
+        temporary = tempfile.TemporaryDirectory(prefix="avo-release-")
+        self.addCleanup(temporary.cleanup)
+        root = Path(temporary.name)
+        for relative in (
+            "CHANGELOG.md",
+            "package.json",
+            "pyproject.toml",
+            "scripts/ci/sync-pyproject-version.mjs",
+            "scripts/ci/verify-release-version.py",
+        ):
+            destination = root / relative
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(ROOT / relative, destination)
+        return root
+
     def test_release_config_declares_release_branch_only(self) -> None:
         text = (ROOT / "release.config.mjs").read_text(encoding="utf-8")
         self.assertIn("'release'", text)
@@ -161,14 +179,13 @@ class ReleasePipelineTests(unittest.TestCase):
         self.assertEqual(json.loads(proc.stdout), [case[-1] for case in cases])
 
     def test_sync_pyproject_version_script(self) -> None:
-        script = ROOT / "scripts/ci/sync-pyproject-version.mjs"
+        root = self._release_fixture()
+        script = root / "scripts/ci/sync-pyproject-version.mjs"
         self.assertTrue(script.is_file())
-        py_path = ROOT / "pyproject.toml"
-        py_original = py_path.read_text(encoding="utf-8")
-        self.addCleanup(lambda: py_path.write_text(py_original, encoding="utf-8"))
+        py_path = root / "pyproject.toml"
         proc = subprocess.run(
             ["node", str(script), "9.9.9-test"],
-            cwd=ROOT,
+            cwd=root,
             capture_output=True,
             text=True,
         )
@@ -177,14 +194,15 @@ class ReleasePipelineTests(unittest.TestCase):
         self.assertIn('version = "9.9.9-test"', pyproject)
 
     def test_sync_pyproject_version_noop_when_already_set(self) -> None:
-        script = ROOT / "scripts/ci/sync-pyproject-version.mjs"
-        py_original = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
+        root = self._release_fixture()
+        script = root / "scripts/ci/sync-pyproject-version.mjs"
+        py_original = (root / "pyproject.toml").read_text(encoding="utf-8")
         match = re.search(r'^version\s*=\s*"([^"]+)"', py_original, re.MULTILINE)
         self.assertIsNotNone(match)
         current = match.group(1)
         proc = subprocess.run(
             ["node", str(script), current],
-            cwd=ROOT,
+            cwd=root,
             capture_output=True,
             text=True,
         )
@@ -192,7 +210,8 @@ class ReleasePipelineTests(unittest.TestCase):
         self.assertIn("already", proc.stdout)
 
     def test_verify_release_version_accepts_prerelease_tag(self) -> None:
-        changelog = ROOT / "CHANGELOG.md"
+        root = self._release_fixture()
+        changelog = root / "CHANGELOG.md"
         original = changelog.read_text(encoding="utf-8")
         version = "0.0.0-alpha.99"
         heading = f"## [{version}]"
@@ -202,12 +221,12 @@ class ReleasePipelineTests(unittest.TestCase):
                 f"## [Unreleased]\n\n## [{version}]\n\n### Test\n- smoke\n",
             )
             changelog.write_text(patched, encoding="utf-8")
-        pkg_path = ROOT / "package.json"
+        pkg_path = root / "package.json"
         pkg_original = pkg_path.read_text(encoding="utf-8")
         pkg = json.loads(pkg_original)
         pkg["version"] = version
         pkg_path.write_text(json.dumps(pkg, indent=2) + "\n", encoding="utf-8")
-        py_original = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
+        py_original = (root / "pyproject.toml").read_text(encoding="utf-8")
         py_patched = re.sub(
             r'^version\s*=\s*"[^"]+"',
             f'version = "{version}"',
@@ -215,16 +234,9 @@ class ReleasePipelineTests(unittest.TestCase):
             count=1,
             flags=re.MULTILINE,
         )
-        (ROOT / "pyproject.toml").write_text(py_patched, encoding="utf-8")
-
-        def restore() -> None:
-            changelog.write_text(original, encoding="utf-8")
-            pkg_path.write_text(pkg_original, encoding="utf-8")
-            (ROOT / "pyproject.toml").write_text(py_original, encoding="utf-8")
-
-        self.addCleanup(restore)
+        (root / "pyproject.toml").write_text(py_patched, encoding="utf-8")
         pkg = json.loads(pkg_path.read_text(encoding="utf-8"))["version"]
-        pyproject = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
+        pyproject = (root / "pyproject.toml").read_text(encoding="utf-8")
         match = re.search(r'^version\s*=\s*"([^"]+)"', pyproject, re.MULTILINE)
         self.assertIsNotNone(match)
         self.assertEqual(pkg, version)
@@ -232,7 +244,8 @@ class ReleasePipelineTests(unittest.TestCase):
         self.assertIn(heading, changelog.read_text(encoding="utf-8"))
 
     def test_verify_release_version_accepts_h1_linked_changelog_heading(self) -> None:
-        changelog = ROOT / "CHANGELOG.md"
+        root = self._release_fixture()
+        changelog = root / "CHANGELOG.md"
         original = changelog.read_text(encoding="utf-8")
         version = "1.1.0"
         semantic_heading = f"# [{version}](https://github.com/joaobispo2077/avo/compare/v1.0.1...v{version}) (2026-08-02)"
@@ -241,12 +254,12 @@ class ReleasePipelineTests(unittest.TestCase):
             "* **release:** smoke\n\n{original}"
         )
         changelog.write_text(patched, encoding="utf-8")
-        pkg_path = ROOT / "package.json"
+        pkg_path = root / "package.json"
         pkg_original = pkg_path.read_text(encoding="utf-8")
         pkg = json.loads(pkg_original)
         pkg["version"] = version
         pkg_path.write_text(json.dumps(pkg, indent=2) + "\n", encoding="utf-8")
-        py_original = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
+        py_original = (root / "pyproject.toml").read_text(encoding="utf-8")
         py_patched = re.sub(
             r'^version\s*=\s*"[^"]+"',
             f'version = "{version}"',
@@ -254,17 +267,10 @@ class ReleasePipelineTests(unittest.TestCase):
             count=1,
             flags=re.MULTILINE,
         )
-        (ROOT / "pyproject.toml").write_text(py_patched, encoding="utf-8")
-
-        def restore() -> None:
-            changelog.write_text(original, encoding="utf-8")
-            pkg_path.write_text(pkg_original, encoding="utf-8")
-            (ROOT / "pyproject.toml").write_text(py_original, encoding="utf-8")
-
-        self.addCleanup(restore)
+        (root / "pyproject.toml").write_text(py_patched, encoding="utf-8")
         proc = subprocess.run(
             [sys.executable, "scripts/ci/verify-release-version.py", version],
-            cwd=ROOT,
+            cwd=root,
             capture_output=True,
             text=True,
         )
@@ -274,7 +280,8 @@ class ReleasePipelineTests(unittest.TestCase):
     def test_verify_release_version_accepts_semantic_release_changelog_heading(
         self,
     ) -> None:
-        changelog = ROOT / "CHANGELOG.md"
+        root = self._release_fixture()
+        changelog = root / "CHANGELOG.md"
         original = changelog.read_text(encoding="utf-8")
         version = "1.0.0"
         semantic_heading = f"# {version} (2026-08-02)"
@@ -283,12 +290,12 @@ class ReleasePipelineTests(unittest.TestCase):
             "* **release:** smoke\n"
         )
         changelog.write_text(patched, encoding="utf-8")
-        pkg_path = ROOT / "package.json"
+        pkg_path = root / "package.json"
         pkg_original = pkg_path.read_text(encoding="utf-8")
         pkg = json.loads(pkg_original)
         pkg["version"] = version
         pkg_path.write_text(json.dumps(pkg, indent=2) + "\n", encoding="utf-8")
-        py_original = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
+        py_original = (root / "pyproject.toml").read_text(encoding="utf-8")
         py_patched = re.sub(
             r'^version\s*=\s*"[^"]+"',
             f'version = "{version}"',
@@ -296,17 +303,10 @@ class ReleasePipelineTests(unittest.TestCase):
             count=1,
             flags=re.MULTILINE,
         )
-        (ROOT / "pyproject.toml").write_text(py_patched, encoding="utf-8")
-
-        def restore() -> None:
-            changelog.write_text(original, encoding="utf-8")
-            pkg_path.write_text(pkg_original, encoding="utf-8")
-            (ROOT / "pyproject.toml").write_text(py_original, encoding="utf-8")
-
-        self.addCleanup(restore)
+        (root / "pyproject.toml").write_text(py_patched, encoding="utf-8")
         proc = subprocess.run(
             [sys.executable, "scripts/ci/verify-release-version.py", version],
-            cwd=ROOT,
+            cwd=root,
             capture_output=True,
             text=True,
         )

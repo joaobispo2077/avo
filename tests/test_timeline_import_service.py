@@ -97,6 +97,50 @@ def _probe(paths):
     }
 
 
+def test_activation_initializes_missing_pipeline_run_and_retry_is_idempotent(
+    import_project,
+):
+    project, provider, original = import_project
+    service = TimelineImportService(
+        project, provider_root=provider, reader=read_otio, probe=_probe
+    )
+    prepared = _trial(service, original)
+    waiting = service.validate(prepared["importId"])
+    _approve_fixture_sync(service, waiting["proposal"])
+    ready = service.validate(prepared["importId"])
+    service.workspace.pipeline_run_path.unlink(missing_ok=True)
+    arguments = {
+        "validation_hash": ready["validationHash"],
+        "expected_head": "empty",
+        "actor": "fixture",
+        "reason": "Select imported draft",
+    }
+    selected = service.activate(prepared["importId"], **arguments)
+    from avo.timeline.lifecycle import PipelineRunStore
+
+    run = PipelineRunStore(service.workspace.pipeline_run_path).load()
+    assert run["mainState"] == "cmap-draft"
+    assert "executionChoices" not in run
+    retry = service.activate(prepared["importId"], **arguments)
+    assert retry["revision"]["revisionId"] == selected["revision"]["revisionId"]
+    assert service.workspace.store("cmap").effective_approval() is None
+
+
+@pytest.mark.parametrize("pin", ["large-v3", False])
+def test_provider_model_pin_uses_local_shared_schema(import_project, pin):
+    project, provider, _ = import_project
+    path = provider / "avo.provider.json"
+    manifest = json.loads(path.read_text())
+    manifest["models"] = {"transcribe": pin}
+    path.write_text(json.dumps(manifest))
+    if pin is False:
+        with pytest.raises(ImportError, match="Provider manifest"):
+            TimelineImportService(project, provider_root=provider)
+    else:
+        service = TimelineImportService(project, provider_root=provider)
+        assert service.provider_manifest["models"]["transcribe"] == pin
+
+
 def _approve_fixture_sync(service, proposal):
     # Explicit fixture-only decision, never production review evidence.
     sources = proposal["snapshot"]["sources"]

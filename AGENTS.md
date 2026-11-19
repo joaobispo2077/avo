@@ -448,6 +448,23 @@ sensory/emotional texture. Avoid generic stock footage that weakens credibility
 or contradicts narration. Label archival, simulated, reenacted, illustrative,
 or AI-generated visuals when viewers could mistake them for direct evidence.
 
+## Optional ArtCraft Authoring
+
+ArtCraft is an optional specialist authoring route, currently under specification.
+Use it only for a direct user request, an evidenced required capability gap after
+checking existing approved reuse and supported AVO routes, or necessary rebuilding
+of an explicitly selected pinned component. Native setup, permission, input,
+transient failures and defects are not creative gaps. Do not probe apps, load
+ArtCraft-specific guides, fetch their docs, connect servers or install tools for
+ordinary AVO work. Eligible tasks inspect only required apps/operations and retain
+existing engine choices, canonical admission, source preservation and human gates.
+ArtCraft never becomes an implicit motion default or automatic error fallback.
+ArtCraft applications and matching CLIs are separately user-installed prerequisites.
+AVO ships only its own integration code, metadata and guides; its distribution,
+setup, update and authoring flows must not bundle, download, install or update
+ArtCraft tools or third-party plugins. Missing selected tools require official
+separate-installation guidance, not automatic setup or a whole-suite requirement.
+
 ## Animation And Motion Design System
 
 Animation is visual communication over time, not decoration after editing. Every

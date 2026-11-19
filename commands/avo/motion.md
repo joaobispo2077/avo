@@ -51,6 +51,11 @@ choice. To change a saved global/provider/project default use
 
 ## Instructions
 
+Present the built-in motion map and every-item linked storyboard at each applicable
+planning/review boundary, including static and provisional concepts. Follow the
+[native concept workflow](../../agent-skills/avo-pipeline/references/motion.md#built-in-motion-map-and-linked-storyboard)
+for exact propose/select/apply requests; selected concepts do not approve media.
+
 1. Inspect canonical state and confirm required exact cut approval. Read the
    active brief, provider design, source/rights records and target render contract.
 2. Normalize intent, inspect the selected engine and report its actual readiness.
@@ -68,8 +73,9 @@ choice. To change a saved global/provider/project default use
 
 ## Canonical timeline contract
 
-`/avo.motion` blocks until the latest CMap revision and exact generated cut
-fingerprint have explicit required approval. It authors BMap cues only in
+Timed `/avo.motion` application blocks until the latest CMap revision and exact
+generated cut fingerprint have explicit required approval. Untimed concepts may
+be proposed and selected earlier. It authors BMap cues only in
 `cmap-output` time, then resolves Animation and Tracks through shared services.
 Raw/semantic anchors are rebase hints, never timing truth. Code-drawn composition
 time is local to its generated component; it does not own edited-video placement.

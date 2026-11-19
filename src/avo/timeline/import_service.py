@@ -16,7 +16,7 @@ from urllib.parse import urlsplit
 from urllib.request import url2pathname
 from uuid import uuid4
 
-from avo.paths import providers_dir, repo_root
+from avo.paths import providers_dir, repo_root, schema_path
 
 from .contracts import (
     canonical_json_bytes,
@@ -25,6 +25,7 @@ from .contracts import (
     fingerprint_stage,
     validate_document,
 )
+from .import_layout import import_capability_version, picture_source_rate
 from .otio_import import (
     NORMALIZER_VERSION,
     ImportError,
@@ -178,11 +179,11 @@ def _repair_options(predecessor, source, roots, mappings, declarations):
     return options
 
 
-def _clock_port(probe, override):
+def _clock_port(probe, override, method="verify_video_clock"):
     return (
         override
         if override is not None
-        else getattr(getattr(probe, "__self__", None), "verify_video_clock", None)
+        else getattr(getattr(probe, "__self__", None), method, None)
     )
 
 
@@ -200,6 +201,45 @@ def _mapping_defaults(source):
         "sizeBytes": source["fingerprint"]["sizeBytes"],
     }
     return defaults
+
+
+def _mapping_lock(mapping, actual, placed, scope):
+    if not placed and {
+        "pictureSampling",
+        "pictureEndGapFrames",
+        "audioTailSilenceSamples",
+    }.intersection(mapping):
+        raise ImportError(
+            "OTIO_TREATMENT_UNSUPPORTED",
+            "Declared placement operations require placed layout",
+            scope=scope,
+        )
+    selected = mapping.get("fingerprint")
+    if selected and any(
+        selected[key] != actual[key] for key in ("sha256", "sizeBytes")
+    ):
+        raise ImportError(
+            "OTIO_SOURCE_CHANGED",
+            "Selected original bytes differ from the explicit mapping lock",
+            scope=scope,
+        )
+
+
+def _verified_audio_samples(evidence, actual, stream, scope):
+    count = evidence.get("sampleCount")
+    if (
+        evidence.get("status") != "verified"
+        or evidence.get("sourceSha256") != actual["sha256"]
+        or evidence.get("streamIndex") != stream["index"]
+        or type(count) is not int
+        or count <= 0
+    ):
+        raise ImportError(
+            "OTIO_SOURCE_CHANGED",
+            "Decoded sample evidence differs from selected original",
+            scope=scope,
+        )
+    return count
 
 
 def _local_reference(url):
@@ -294,6 +334,17 @@ def _audio_state(mapping, kind, scope):
 def _placed_raw_bounds(clip, kind, fps, source_id):
     start = Fraction(0) if kind == "still" else clip["start"]
     end = Fraction(1, 1) / fps if kind == "still" else clip["start"] + clip["duration"]
+    if kind in {"video", "title", "generator"}:
+        return {
+            "in": _time_value(start, source_id, fps),
+            "out": _time_value(end, source_id, fps),
+        }
+    if kind == "audio":
+        clock = Fraction(math.lcm(start.denominator, end.denominator, int(fps)))
+        return {
+            "in": _time_value(start, source_id, clock),
+            "out": _time_value(end, source_id, clock),
+        }
     return {
         "in": _exact_time(start, "raw-source", source_id),
         "out": _exact_time(end, "raw-source", source_id),
@@ -365,12 +416,43 @@ def _checked_readiness(checks, sync, *, attempted, state):
     }
 
 
-def _output_settings(declarations):
-    if declarations.get("sourceOnly") is not True:
+def _reconstruction_declaration(declarations):
+    mode = declarations.get("reconstructionMode")
+    if mode is None and declarations.get("sourceOnly") is True:
+        return
+    if (
+        mode in {"declared-treatments", "export-driven"}
+        and declarations.get("sourceOnly") is False
+        and declarations.get("layoutMode") == "placed"
+    ):
+        return
+    raise ImportError(
+        "OTIO_TREATMENT_UNSUPPORTED",
+        "Declare source-only reconstruction or distinct placed declared-treatments mode",
+    )
+
+
+def _picture_state(mapping, kind, declarations, scope):
+    result = {
+        key: deepcopy(mapping[key])
+        for key in ("pictureTransform", "pictureFade", "pictureEndGapFrames")
+        if key in mapping
+    }
+    if result and (
+        kind not in {"video", "still", "title", "generator"}
+        or declarations.get("reconstructionMode")
+        not in {"declared-treatments", "export-driven"}
+    ):
         raise ImportError(
             "OTIO_TREATMENT_UNSUPPORTED",
-            "Declare and verify whether this is a source-only edit; export metadata cannot establish omitted treatments",
+            "Explicit picture operations require declared-treatments picture placement",
+            scope=scope,
         )
+    return result
+
+
+def _output_settings(declarations):
+    _reconstruction_declaration(declarations)
     output = deepcopy(declarations.get("output") or {})
     required = {"width", "height", "frameRate", "audioSampleRate", "channelLayout"}
     if not isinstance(output, dict) or set(output) != required:
@@ -396,6 +478,10 @@ def _output_settings(declarations):
 def _declared_output(declarations, source):
     allowed = {
         "sourceOnly",
+        "reconstructionMode",
+        "generatedTitles",
+        "generatedReferences",
+        "automatic",
         "output",
         "layoutMode",
         "rateInterpretations",
@@ -683,6 +769,8 @@ class TimelineImportService:
         probe=None,
         still_probe=None,
         clock_probe=None,
+        audio_clock_probe=None,
+        metadata_reader=None,
     ):
         self.workspace = TimelineWorkspace.from_project(Path(project_path))
         self.provider = str(self.workspace.project.get("provider") or "")
@@ -702,7 +790,9 @@ class TimelineImportService:
         try:
             self.provider_manifest = _document(directory / "avo.provider.json")
             validate_document(
-                self.provider_manifest, "avo.provider.schema.json", root=providers_dir()
+                self.provider_manifest,
+                str(providers_dir() / "avo.provider.schema.json"),
+                root=schema_path("avo.model-source.schema.json").parent,
             )
         except (OSError, ValueError) as exc:
             raise ImportError(
@@ -723,7 +813,11 @@ class TimelineImportService:
             )
         self.reader, self.probe = reader, probe
         self.still_probe = still_probe
+        self.metadata_reader = metadata_reader
         self.clock_probe = _clock_port(probe, clock_probe)
+        self.audio_clock_probe = _clock_port(
+            probe, audio_clock_probe, "verify_audio_sample_count"
+        )
         self.context_lock = self._read_context_lock()
 
     def _read_context_lock(self):
@@ -947,6 +1041,36 @@ class TimelineImportService:
                 **previous["options"]["mappings"].get(pointer, {}),
             }
 
+    def prepare_automatic(
+        self, input_path, *, timeline=None, media_roots=None, actor, reason
+    ):
+        from .import_auto import automatic_options
+
+        self._check_context()
+        try:
+            with fingerprint_stage(verify_on_exit=True):
+                file_fingerprint(input_path)
+                options = automatic_options(
+                    self, input_path, timeline=timeline, media_roots=media_roots
+                )
+                prepared = self.prepare(
+                    input_path, **options, actor=actor, reason=reason
+                )
+        except ImportError:
+            raise
+        except (
+            KeyError,
+            TypeError,
+            AttributeError,
+            ValueError,
+            ZeroDivisionError,
+        ) as exc:
+            raise ImportError(
+                "OTIO_INPUT_INVALID",
+                "Export metadata cannot supply valid automatic import options",
+            ) from exc
+        return prepared
+
     def prepare(
         self,
         input_path,
@@ -1110,44 +1234,69 @@ class TimelineImportService:
             )
         return {"sources": list(sources.values()), "segments": segments}
 
+    def _probe_placed_media(self, layout, resolved):
+        media_clips = [
+            c for c in layout["clips"] if c["mediaKind"] not in {"title", "generator"}
+        ]
+        media_resolved = [
+            r
+            for c, r in zip(layout["clips"], resolved, strict=True)
+            if c["mediaKind"] not in {"title", "generator"}
+        ]
+        return (
+            self._probe_originals(media_resolved, media_clips)
+            if media_clips
+            else ({}, {})
+        )
+
     def _placed_material(self, layout, session, output):
         resolved = [self._source_path(clip, session) for clip in layout["clips"]]
-        described, fingerprints = self._probe_originals(resolved, layout["clips"])
+        described, fingerprints = self._probe_placed_media(layout, resolved)
         sources, placements, clocks = {}, [], {}
         fps = Fraction(output["frameRate"]["num"], output["frameRate"]["den"])
         for clip, (path, mapping) in zip(layout["clips"], resolved, strict=True):
-            info = described[path]
-            source, kind = self._admit_original(
-                path,
-                mapping,
-                info,
-                output,
-                clip,
-                fingerprints[path],
-                placed=True,
-                clocks=clocks,
+            mapping = self._export_picture_state(
+                layout, clip, mapping, described.get(path), output, session
             )
+            if clip["mediaKind"] == "title":
+                source, font = self._admit_title(path, mapping, clip, session)
+                sources[font["sourceId"]] = font
+                kind = "title"
+            elif clip["mediaKind"] == "generator":
+                source = self._authorial_source(
+                    path,
+                    "generator-reference",
+                    mapping,
+                    session,
+                    clip["referencePointer"],
+                    64 * 1024 * 1024,
+                )
+                kind = "generator"
+            else:
+                source, kind = self._admit_placed_original(
+                    path,
+                    mapping,
+                    described[path],
+                    output,
+                    clip,
+                    fingerprints[path],
+                    placed=True,
+                    clocks=clocks,
+                    draft=session["options"]["declarations"].get("reconstructionMode")
+                    == "export-driven",
+                )
             source_id = source["sourceId"]
             sources[source_id] = source
             placements.append(
-                {
-                    "placementId": "placement-" + content_hash(clip["pointer"])[:24],
-                    "elementId": clip["pointer"],
-                    "trackId": clip["trackId"],
-                    "sourceId": source_id,
-                    "mediaKind": kind,
-                    **_placed_raw_bounds(clip, kind, fps, source_id),
-                    "start": _program_time(clip["programStart"], fps),
-                    "end": _program_time(clip["programStart"] + clip["duration"], fps),
-                    "enabled": clip["enabled"],
-                    "routing": {
-                        key: value
-                        for key, value in source["streamMetadata"].items()
-                        if key in {"videoStreamIndex", "audioSelection"}
-                    },
-                    "evidenceOrigin": "export",
-                    **_audio_state(mapping, kind, clip["pointer"]),
-                }
+                self._placed_item(
+                    clip,
+                    mapping,
+                    source,
+                    kind,
+                    font if kind == "title" else None,
+                    fps,
+                    session["options"]["declarations"],
+                )
             )
         gaps = [
             {
@@ -1174,8 +1323,194 @@ class TimelineImportService:
                 "tracks": layout["tracks"],
                 "placements": placements,
                 "gaps": gaps,
+                **(
+                    {
+                        "importMode": "export-driven",
+                        "resolveEffects": layout.get("resolveEffects", []),
+                    }
+                    if session["options"]["declarations"].get("reconstructionMode")
+                    == "export-driven"
+                    else {}
+                ),
+                **(
+                    {"inactiveEffects": layout["inactiveEffects"]}
+                    if layout.get("inactiveEffects")
+                    else {}
+                ),
             },
         }
+
+    def _export_picture_state(self, layout, clip, mapping, info, output, session):
+        from .resolve_export import picture_treatments
+
+        if (
+            session["options"]["declarations"].get("reconstructionMode")
+            != "export-driven"
+            or clip["mediaKind"] == "audio"
+        ):
+            return mapping
+        stream = None
+        if info is not None:
+            stream = _selected_stream(
+                info["streams"],
+                mapping.get("videoStreamIndex"),
+                "video",
+                clip["referencePointer"],
+            )
+        operations = picture_treatments(
+            layout.get("resolveEffects", []),
+            clip["pointer"],
+            output,
+            stream,
+            duration_frames=clip["duration"]
+            * Fraction(output["frameRate"]["num"], output["frameRate"]["den"]),
+        )
+        if any(
+            key in mapping and mapping[key] != value
+            for key, value in operations.items()
+        ):
+            raise ImportError(
+                "OTIO_TREATMENT_UNSUPPORTED",
+                "Explicit mapping contradicts an exported picture treatment",
+                scope=clip["pointer"],
+            )
+        return {**mapping, **operations}
+
+    def _admit_placed_original(
+        self, path, mapping, info, output, clip, actual, *, placed, clocks, draft
+    ):
+        try:
+            return self._admit_original(
+                path, mapping, info, output, clip, actual, placed=placed, clocks=clocks
+            )
+        except ImportError as exc:
+            if not draft or exc.code != "OTIO_RATE_UNVERIFIED":
+                raise
+            source, kind = self._placed_source(
+                path, mapping, info, clip, output, actual, clocks=clocks
+            )
+            source["streamMetadata"]["videoClock"] = {
+                "status": "unverified",
+                "reason": str(exc),
+            }
+            return source, kind
+
+    def _placed_item(self, clip, mapping, source, kind, font, fps, declarations):
+        source_id = source["sourceId"]
+        sampling = (
+            {"pictureSampling": mapping["pictureSampling"]}
+            if "pictureSampling" in mapping
+            else {}
+        )
+        source_fps = picture_source_rate({"mediaKind": kind, **sampling}, fps)
+        raw_rate = (
+            Fraction(source["streamMetadata"]["audioSelection"]["sourceSampleRate"])
+            if kind == "audio"
+            else source_fps
+        )
+        tail = mapping.get("audioTailSilenceSamples", 0)
+        retained = {**clip, "duration": clip["duration"] - Fraction(tail, 48000)}
+        return {
+            "placementId": "placement-" + content_hash(clip["pointer"])[:24],
+            "elementId": clip["pointer"],
+            "trackId": clip["trackId"],
+            "sourceId": source_id,
+            "mediaKind": kind,
+            **_placed_raw_bounds(retained, kind, raw_rate, source_id),
+            "start": _program_time(clip["programStart"], fps),
+            "end": _program_time(clip["programStart"] + clip["duration"], fps),
+            "enabled": clip["enabled"],
+            "routing": {
+                key: value
+                for key, value in source["streamMetadata"].items()
+                if key in {"videoStreamIndex", "audioSelection"}
+            },
+            **(
+                {
+                    "title": deepcopy(mapping["title"]),
+                    "fontSourceId": font["sourceId"],
+                }
+                if kind == "title"
+                else {}
+            ),
+            **(
+                {"generator": deepcopy(mapping["generator"])}
+                if kind == "generator"
+                else {}
+            ),
+            "evidenceOrigin": "export",
+            **_picture_state(
+                mapping,
+                kind,
+                declarations,
+                clip["referencePointer"],
+            ),
+            **sampling,
+            **({"audioTailSilenceSamples": tail} if tail else {}),
+            **_audio_state(mapping, kind, clip["pointer"]),
+        }
+
+    def _authorial_source(self, path, role, mapping, session, scope, limit):
+        self._source_boundary(path, mapping, session, scope)
+        if path.stat().st_size > limit:
+            raise ImportError(
+                "OTIO_INPUT_LIMIT",
+                "Authorial input exceeds its byte limit",
+                scope=scope,
+            )
+        actual = file_fingerprint(path)
+        _mapping_lock(mapping, actual, True, scope)
+        self._reject_derived_originals({path: actual}, scope)
+        return {
+            "sourceId": "source-"
+            + content_hash(
+                {"path": str(path), "sha256": actual["sha256"], "authorialRole": role}
+            )[:24],
+            "kind": "authorial",
+            "locator": str(path),
+            "fingerprint": actual,
+            "streamMetadata": {"authorialRole": role},
+        }
+
+    def _admit_title(self, path, mapping, clip, session):
+        scope = clip["referencePointer"]
+        if (
+            mapping.get("mediaKind") != "title"
+            or not {"title", "font"} <= mapping.keys()
+        ):
+            raise ImportError(
+                "OTIO_TREATMENT_UNSUPPORTED",
+                "Generated title requires explicit title and pinned font",
+                scope=scope,
+            )
+        if {
+            "pictureSampling",
+            "pictureEndGapFrames",
+            "audioTailSilenceSamples",
+            "audioSelection",
+            "videoStreamIndex",
+        }.intersection(mapping):
+            raise ImportError(
+                "OTIO_ROUTING_UNVERIFIED",
+                "Authorial titles cannot select media streams or sampling",
+                scope=scope,
+            )
+        document = self._authorial_source(
+            path, "title-document", mapping, session, scope, 64 * 1024 * 1024
+        )
+        font_mapping = mapping["font"]
+        _require_local_path(font_mapping["path"])
+        font_path = Path(font_mapping["path"]).expanduser()
+        if not font_path.is_absolute():
+            raise ImportError(
+                "OTIO_MEDIA_MISSING",
+                "Title font must use an absolute original path",
+                scope=scope,
+            )
+        font = self._authorial_source(
+            font_path.resolve(), "font", font_mapping, session, scope, 32 * 1024 * 1024
+        )
+        return document, font
 
     def _placed_streams(self, path, mapping, info, clip, output):
         kind = clip["mediaKind"]
@@ -1197,7 +1532,11 @@ class TimelineImportService:
                 kind = "still"
                 self._verify_still(path, scope)
             elif not _matching_cfr(
-                stream, Fraction(output["frameRate"]["num"], output["frameRate"]["den"])
+                stream,
+                picture_source_rate(
+                    {**mapping, "mediaKind": kind},
+                    Fraction(output["frameRate"]["num"], output["frameRate"]["den"]),
+                ),
             ):
                 raise ImportError(
                     "OTIO_RATE_UNVERIFIED",
@@ -1205,6 +1544,18 @@ class TimelineImportService:
                     scope=scope,
                 )
             _square_picture(stream, scope)
+        if "pictureSampling" in mapping and kind != "video":
+            raise ImportError(
+                "OTIO_RATE_UNVERIFIED",
+                "Picture sampling requires moving picture",
+                scope=scope,
+            )
+        if "audioTailSilenceSamples" in mapping and kind != "audio":
+            raise ImportError(
+                "OTIO_ROUTING_UNVERIFIED",
+                "Audio tail silence requires an audio placement",
+                scope=scope,
+            )
         return metadata, stream, kind
 
     def _local_probe(self, paths, scope):
@@ -1286,19 +1637,11 @@ class TimelineImportService:
         self, path, mapping, info, output, clip, actual, *, placed=False, clocks=None
     ):
         scope = clip["referencePointer"]
-        selected = mapping.get("fingerprint")
-        if selected and any(
-            selected[key] != actual[key] for key in ("sha256", "sizeBytes")
-        ):
-            raise ImportError(
-                "OTIO_SOURCE_CHANGED",
-                "Selected original bytes differ from the explicit mapping lock",
-                scope=scope,
-            )
+        _mapping_lock(mapping, actual, placed, scope)
         try:
             if placed:
                 source, kind = self._placed_source(
-                    path, mapping, info, clip, output, actual
+                    path, mapping, info, clip, output, actual, clocks=clocks
                 )
             else:
                 source = self._verified_source(
@@ -1306,10 +1649,26 @@ class TimelineImportService:
                 )
                 kind = "video"
             if kind == "video":
-                source["streamMetadata"]["videoClock"] = self._video_clock(
-                    path, info, source, output, scope, clocks
+                fps = picture_source_rate(
+                    {**mapping, "mediaKind": kind},
+                    Fraction(output["frameRate"]["num"], output["frameRate"]["den"]),
                 )
-                self._video_extent(clip, output, source["streamMetadata"]["videoClock"])
+                clock_output = {
+                    **output,
+                    "frameRate": {"num": fps.numerator, "den": fps.denominator},
+                }
+                source["streamMetadata"]["videoClock"] = self._video_clock(
+                    path,
+                    info,
+                    source,
+                    clock_output,
+                    scope,
+                    clocks,
+                    end_gap_frames=mapping.get("pictureEndGapFrames", 0),
+                )
+                self._video_extent(
+                    clip, clock_output, source["streamMetadata"]["videoClock"]
+                )
             return (source, kind) if placed else source
         except ImportError:
             raise
@@ -1324,7 +1683,7 @@ class TimelineImportService:
     def _video_extent(clip, output, evidence):
         fps = Fraction(output["frameRate"]["num"], output["frameRate"]["den"])
         end = max(clip["start"] + clip["duration"], clip["availableDuration"] or 0)
-        count = evidence.get("packetCount")
+        count = evidence.get("presentationFrameCount", evidence.get("packetCount"))
         if type(count) is not int or count <= 0 or end * fps > count:
             raise ImportError(
                 "OTIO_RATE_UNVERIFIED",
@@ -1332,20 +1691,25 @@ class TimelineImportService:
                 scope=clip["referencePointer"],
             )
 
-    def _video_clock(self, path, info, source, output, scope, clocks):
+    def _video_clock(
+        self, path, info, source, output, scope, clocks, *, end_gap_frames=0
+    ):
         index = source["streamMetadata"]["videoStreamIndex"]
         fps = Fraction(output["frameRate"]["num"], output["frameRate"]["den"])
-        key = (path, source["fingerprint"]["sha256"], index, fps)
+        key = (path, source["fingerprint"]["sha256"], index, fps, end_gap_frames)
         if clocks is not None and key in clocks:
             return deepcopy(clocks[key])
         stream = _selected_stream(info["streams"], index, "video", scope)
         try:
-            evidence = self._clock_evidence(path, stream, source, fps)
+            evidence = self._clock_evidence(
+                path, stream, source, fps, end_gap_frames=end_gap_frames
+            )
             if (
                 evidence.get("status") != "verified"
                 or evidence.get("sourceSha256") != source["fingerprint"]["sha256"]
                 or evidence.get("streamIndex") != index
                 or evidence.get("frameRate") != output["frameRate"]
+                or evidence.get("endGapFrames", 0) != end_gap_frames
             ):
                 raise ValueError("Clock evidence differs from selected source")
         except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as exc:
@@ -1358,7 +1722,7 @@ class TimelineImportService:
             clocks[key] = deepcopy(evidence)
         return evidence
 
-    def _clock_evidence(self, path, stream, source, fps):
+    def _clock_evidence(self, path, stream, source, fps, *, end_gap_frames=0):
         if self.clock_probe is None:
             # Injected inventory ports may supply evidence; the native inventory
             # strips opaque fields and always uses its bound clock verifier.
@@ -1374,9 +1738,42 @@ class TimelineImportService:
             expected_sha256=source["fingerprint"]["sha256"],
             expected_frames=stream.get("frameCount"),
             start_ticks=stream.get("startTicks"),
+            **({"allow_end_gap": True} if end_gap_frames else {}),
         )
 
-    def _placed_source(self, path, mapping, info, clip, output, actual):
+    def _audio_tail_evidence(self, path, mapping, stream, clip, actual, clocks):
+        scope = clip["referencePointer"]
+        if stream["sampleRate"] != 48000:
+            raise ImportError(
+                "OTIO_ROUTING_UNVERIFIED",
+                "Audio tail silence requires native 48000 Hz",
+                scope=scope,
+            )
+        if self.audio_clock_probe is None:
+            raise ImportError(
+                "OTIO_RUNTIME_UNAVAILABLE",
+                "Native decoded audio sample verifier is required",
+                scope=scope,
+            )
+        key = ("audio-samples", path, actual["sha256"], stream["index"])
+        evidence = (clocks or {}).get(key)
+        if evidence is None:
+            evidence = self.audio_clock_probe(
+                path, stream["index"], expected_sha256=actual["sha256"]
+            )
+            if clocks is not None:
+                clocks[key] = deepcopy(evidence)
+        count = _verified_audio_samples(evidence, actual, stream, scope)
+        gap = (clip["start"] + clip["duration"]) * 48000 - count
+        if gap != mapping["audioTailSilenceSamples"] or clip["start"] * 48000 >= count:
+            raise ImportError(
+                "OTIO_ROUTING_UNVERIFIED",
+                "Declared audio tail does not match decoded source endpoint",
+                scope=scope,
+            )
+        return deepcopy(evidence)
+
+    def _placed_source(self, path, mapping, info, clip, output, actual, *, clocks=None):
         if any(
             info["fingerprint"][key] != actual[key] for key in ("sha256", "sizeBytes")
         ):
@@ -1387,11 +1784,23 @@ class TimelineImportService:
             )
         metadata, stream, kind = self._placed_streams(path, mapping, info, clip, output)
         scope = clip["referencePointer"]
+        if "audioTailSilenceSamples" in mapping:
+            metadata["audioClock"] = self._audio_tail_evidence(
+                path, mapping, stream, clip, actual, clocks
+            )
         if kind != "still":
             _probed_seconds(stream, "start", scope)
             end = clip["start"] + clip["duration"]
             exported_extent = clip["availableDuration"] or end
-            if max(end, exported_extent) > _probed_seconds(stream, "duration", scope):
+            # Container duration tags can truncate a rational frame endpoint to
+            # one source tick. Complete packet-count verification below remains
+            # authoritative for picture extent; this does not pad picture.
+            tolerance = Fraction(stream["timeBase"]) if kind == "video" else 0
+            if (
+                "audioTailSilenceSamples" not in mapping
+                and max(end, exported_extent)
+                > _probed_seconds(stream, "duration", scope) + tolerance
+            ):
                 raise ImportError(
                     "OTIO_SOURCE_CHANGED",
                     "Placement exceeds selected stream extent",
@@ -1469,6 +1878,8 @@ class TimelineImportService:
         }
 
     def _proposal(self, session, checks):
+        from .resolve_export import import_warnings
+
         import_id = session["importId"]
         if session["normalizerVersion"] != NORMALIZER_VERSION:
             raise ImportError(
@@ -1519,6 +1930,8 @@ class TimelineImportService:
             "snapshot": snapshot,
             "output": {**output, "displayOrigin": layout["globalStart"]},
             "findings": [],
+            "importWarnings": import_warnings(snapshot),
+            "importNotes": declarations.get("automatic", {}).get("warnings", []),
             "provisionalFinishing": [],
         }
 
@@ -1581,6 +1994,17 @@ class TimelineImportService:
         proposal["findings"] = deepcopy(findings)
         proposal["activeEditDiff"] = self._active_edit_diff(proposal, head)
         checks = _checked_readiness(checks, sync, attempted=attempted, state=state)
+        if (
+            session["options"]["declarations"].get("reconstructionMode")
+            == "export-driven"
+        ):
+            from .resolve_export import unresolved_treatments
+
+            checks["structureReady"] = (
+                "passed" if checks["mediaReady"] == "passed" else "not-ready"
+            )
+            if unresolved_treatments(proposal["snapshot"]):
+                checks["reconstructionReady"] = "not-ready"
         locks = {
             "expectedHeadHash": head,
             "proposalHash": content_hash(proposal),
@@ -1667,6 +2091,11 @@ class TimelineImportService:
         atomic_write_json(self.packet_path(session["importId"]), session)
 
     def _validation_result(self, session, proposal, receipt):
+        from .resolve_export import unresolved_treatments
+
+        supported = receipt["locks"]["checks"][
+            "mediaReady"
+        ] == "passed" and not unresolved_treatments(proposal["snapshot"])
         return self._result(
             "validate",
             session,
@@ -1676,6 +2105,8 @@ class TimelineImportService:
             validationHash=content_hash(receipt),
             activeEditDiff=proposal.get("activeEditDiff", []),
             findings=receipt["findings"],
+            warnings=proposal.get("importWarnings", []),
+            notes=proposal.get("importNotes", []),
             mediaMappings=receipt.get("mediaMappings", {}),
             elements=proposal.get("elements", []),
             summary={
@@ -1689,6 +2120,8 @@ class TimelineImportService:
                 "inspectionComplete": True,
                 **receipt["locks"]["checks"],
                 "activationAllowed": receipt["ready"],
+                "renderSupported": supported,
+                "renderAllowed": receipt["ready"] and supported,
                 "reviewState": "not-started",
             },
         )
@@ -1841,9 +2274,7 @@ class TimelineImportService:
                     session["importId"], f"proposals/{content_hash(proposal)}.json"
                 ),
             )["sha256"],
-            "capabilityVersion": "placed-1.0.0"
-            if snapshot.get("layoutMode") == "placed"
-            else "contiguous-1.0.0",
+            "capabilityVersion": import_capability_version(snapshot),
             "activationId": intent["operationId"],
         }
         return snapshot
@@ -1952,7 +2383,15 @@ class TimelineImportService:
             "cmapRevisionId": revision["revisionId"],
             "cmapRevisionHash": revision["contentHash"],
         }
-        PipelineRunStore(self.workspace.pipeline_run_path).reconcile_import_draft(
+        run_store = PipelineRunStore(self.workspace.pipeline_run_path)
+        run_store.initialize(
+            run_id=f"{self.workspace.video_id}-run-0001",
+            video_id=self.workspace.video_id,
+            provider=self.provider,
+            project_path=self.workspace.project_path,
+            command="timeline-import",
+        )
+        run_store.reconcile_import_draft(
             activation_id=intent["operationId"],
             cmap_revision_id=revision["revisionId"],
             cmap_revision_hash=revision["contentHash"],

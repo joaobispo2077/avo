@@ -100,6 +100,9 @@
         "schemaVersion": {
           "const": "1.0.0"
         },
+        "editingCraft": {
+          "$ref": "https://avo.local/avo.editing-craft.schema.json#/$defs/config"
+        },
         "motion": {
           "$ref": "#/$defs/config"
         }

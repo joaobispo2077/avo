@@ -34,9 +34,29 @@ Keep approved cuts/audio and canonical cue/placement ownership. Existing HyperFr
 | ---------- | ----- |
 | Graphic cards, lower-thirds, data callouts | This command → `talking-head-recut` |
 | Spoken-word subtitles only | [`captions.md`](captions.md) |
+| Explicit source-picture push/pull/punch/reframe | Native [camera controls](motion.md#optional-source-picture-camera-controls), before independent overlays |
 | Single motion sting | [`motion.md`](motion.md) |
 
 ## Workflow phases
+
+Create an isolated child timeline with its exact parent reference before writes.
+Forward explicit craft options and source identity to the child's normal motion
+owner; this Profile cannot change the parent or grant itself canonical ownership.
+Always show the child's built-in motion map and linked storyboard, including
+static/provisional cards. Use [motion concept planning](motion.md#built-in-motion-map-and-linked-storyboard)
+to propose/select treatments before approved-cut timed authoring. Camera movement,
+alternation, face anchoring and SFX remain separate explicit choices whose actual
+execution readiness must be checked. An option declaration is not an applied zoom.
+
+For selected camera movement, use `camera-propose`, actual `plan-select`
+dispositions and recoverable `camera-apply` inside the child. Preserve the source
+fingerprint, display-correct baseline crop, exact path/options and current heads.
+Review the built-in before/during/after camera states before rendering. Keep
+graphics/captions independent, preserve dialogue and show static alternatives.
+Section alternation/drift and face anchoring each need their own explicit choice;
+a vertical child needs a matching approved baseline crop. Without these options,
+keep the existing talking-head/Shorts framing. Normal Watch/transcript/QC and human
+approval still apply to the actual rendered output.
 
 | Phase | Action | Reference |
 | ----- | ------ | --------- |

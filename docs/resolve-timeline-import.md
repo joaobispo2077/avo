@@ -1,12 +1,100 @@
 # Import a Resolve timeline export
 
-AVO supports dependency-free inspection and an experimental checkout importer
-for complete source-only edits, including an opt-in placed-layout model. Inspection inventories the selected
-timeline without reading media. Editable import stages a proposal, verifies
-originals and current approved Sync/N/A, and explicitly activates a canonical
-draft after an explicit expected-head selection. Re-import shows a hash-bound
-diff against the current edit; returning to prior content creates another draft.
-Activation does not approve a video.
+AVO imports an exported edit without opening Resolve or asking you to inspect
+every timeline detail. Supply the OTIO and original media in your provider-bound
+footage project. If available, keep the same-named DRT beside the OTIO: AVO reads
+its output settings and supported static title data automatically. DRT alone
+is a metadata companion, not a replacement for the OTIO edit structure.
+
+The default workflow stages an editable structural draft and returns consolidated
+warnings. Supported treatments become canonical operations; unsupported effects
+and generators remain retained data. Import readiness and rendering readiness
+are separate. Preserving an unknown effect does not certify its appearance.
+Activation remains an explicit action with current Sync evidence and an expected
+head check; it does not approve a video.
+
+## Automatic import
+
+Use your existing `avo.project.json` and its provider. No mappings or declarations
+document is needed for an ordinary local export:
+
+```powershell
+python -m avo.cli pipeline run --project "D:/video/avo.project.json" --timeline-import "D:/video/timeline.otio" --actor "editor" --reason "Continue exported edit" --json
+```
+
+The pipeline prepares and validates the draft without activating it. The lower
+level `timeline-import prepare` command also selects automatic preparation when
+no mappings, declarations or repair predecessor is supplied; call
+`timeline-import validate` afterward to obtain readiness and warnings.
+
+Automatic preparation resolves exact exported local paths, locks original bytes,
+retains track order, placements, gaps, enabled state, and independent audio. It
+reads Resolve audio stream ordinals and channel selections, including duplicated
+mono channels. Native packet and decoded audio checks verify timing. An exact
+2:1 program/source rate selects an explicit nearest-repeat draft policy; this
+does not claim that Resolve used optical flow or another unexported method.
+Small verified missing 48 kHz audio tails become declared silence without changing
+existing samples. No speech cleanup, pacing changes or creative cuts are added.
+
+The paired DRT can supply program dimensions/rate and a narrowly supported plain
+static Text+ template with an exact installed font. AVO never executes Fusion or
+Lua, downloads fonts, or substitutes an unknown font. Ambiguous, styled or
+animated generators remain opaque references. Without DRT canvas settings, a
+draft uses the first moving-picture source dimensions and reports that choice
+so it can be changed in AVO. A standalone DRT cannot be imported as a timeline.
+
+Complete static Resolve zoom/pan/tilt and integer frame faders can be reconstructed.
+Disabled effects are inert; enabled empty parameter lists remain unknown.
+Unknown effects and unverified original video clocks produce warnings and block
+strict proof rendering, while the structurally valid draft can continue through
+normal editing and explicit activation. Transitions, retimes, nested compositions
+and unsupported parent trims still block structural import. Missing or prohibited
+sources, changed inputs and ambiguous routing also remain blockers.
+
+Normal review, sync, source provenance and creator approval still apply. Optional
+reference comparisons can qualify visual fidelity; inspecting the Resolve UI is
+not an import prerequisite. Model analysis uses original media and does not
+approve or activate the imported edit.
+
+### A first approximation proof
+
+With explicit authorization, a preview can render the supported treatments while
+recording every unresolved effect in `importApproximation`. Such a plan must
+have `previewOnly: true`; it cannot be promoted to a full proof or master.
+Unknown generated sources and unverified picture clocks cannot be waived.
+The canonical draft retains all original effect payloads. The preview filename
+and its review report must identify the approximation and its limitations.
+
+For recordings with an otherwise exact picture grid, automatic preparation can
+declare one to three missing positions immediately before the final packet as
+`pictureEndGapFrames`. Native execution holds the preceding source frame at
+those verified timestamps. It does not invent missing pictures, alter original
+files, or waive timing irregularities elsewhere. New packets use normalizer
+2.7.0, and end-gap imports record `placed-end-gap-1.0.0`.
+
+For explicit privacy corrections, an authored CMap revision can add
+`layout.privacyMasks` with its canonical `canvasWidth`, `canvasHeight` and
+`regions`. Each region has a stable `maskId`, integral `startFrame`,
+`endFrameExclusive`, `x`, `y`, `width` and `height`. The interval is measured on
+the imported program clock; the rectangle must remain inside its canvas.
+These are opaque black covers above every imported picture layer, including
+fades. Scaled preview edges round outward. They preserve audio and edit timing,
+require a fresh canonical proof, and do not imply that every private field has
+been identified. Review the complete affected interval before delivery.
+
+Authored audio placements can optionally combine `gainDb` with
+`audioPeakCeilingDbfs` (-12 to -1) for clip-local peak protection. This is never
+enabled automatically by import. The limiter compensates lookahead latency and
+runs before microproof extraction; it does not process other tracks. Measure the
+encoded mix's true peak and review listening quality before delivery.
+
+Late-timeline microproofs keep only the requested picture intersections in
+temporary lossless files and composite on the window's local clock. Source
+sampling, fades and privacy retain their original clocks, and audio retains
+continuous mix history. Original media is still decoded and validated as needed;
+this does not introduce approximate seeking or reuse an earlier proof as input.
+
+## Inspect without reading media
 
 Export the timeline using Resolve's timeline export menu and choose OTIO. Keep
 the original Resolve project and media unchanged. From an AVO checkout:
@@ -49,7 +137,7 @@ and normal candidate review gates. Resolve renders and previous AVO proofs or
 masters are comparison references, never reconstruction sources. Per-video
 import records belong under the external project's `edit/`, not this repository.
 
-## Experimental editable trial
+## Explicit source-only and repair workflow
 
 Install the optional pinned reader in the checkout environment with
 `uv sync --extra dev --extra resolve-import`. Use `uv run --extra resolve-import
@@ -57,7 +145,7 @@ python -m avo.cli ...` for these commands so the optional dependency remains
 selected. A local Windows engine build also passed the packaged reader smoke;
 see [runtime qualification](#reconstruction-cleanup-and-runtime-qualification).
 
-The default contiguous mode supports one contributing video track, normal-speed cuts and
+The explicit contiguous mode supports one contributing video track, normal-speed cuts and
 explicit linked source audio. It requires exported media origins/available
 ranges, matching verified frame rates, explicit audio streams/channels and
 declared output settings. Gaps, stills, layered picture, independent audio,
@@ -151,8 +239,8 @@ still apply. BMap/finishing cannot inherit imported approvals.
 
 Qualification uses synthetic FFV1/PCM originals: exact decoded frame/sample
 comparisons, a scoped one-frame trim, restart, stale-proposal/source/config
-rejection and before/after-commit interruption recovery. A real user Resolve
-export and actual creator reviews remain pending.
+rejection and before/after-commit interruption recovery. Real-export fidelity qualification and actual creator reviews remain separate
+gates.
 
 ## Placed-layout trial
 
@@ -175,6 +263,18 @@ example; muxed picture audio is not added automatically. Audio mappings may
 declare `gainDb` and `muted`. These are hash-bound editor declarations, not
 facts inferred from Resolve metadata. Intentional audio gaps are silent; overlaps
 mix without automatic normalization, fades, restoration or ducking.
+
+For a post-cut voice/game balance change, keep the approved CMap and BMap and
+author a new Tracks revision with optional `audioTracks.sourceMixAdjustments`.
+Each adjustment requires `placementId`, `sourceId`, `sourceSha256`, `streamIndex`,
+`channels`, and `gainDeltaDb`; `peakCeilingDeltaDb` can shift an existing source
+ceiling. These controls change the existing imported source node, without
+adding a second copy of its audio. Unknown, disabled, duplicate or mismatched
+targets fail before rendering. Non-cut ProofPlans apply the adjustment exactly
+once and recheck it at preflight; cut-proof rendering keeps the original CMap
+mix. Use the native ProofPlan route, since legacy assembly rendering rejects
+source-mix adjustments. Changed Tracks still require current Animation and
+generated-asset dependency bindings before a composite proof.
 
 For a static original image, add `"mediaKind": "still"` to that reference's
 mapping. Admission verifies a supported single-frame image and uses literal
@@ -330,5 +430,58 @@ service but require their own platform runs.
 
 Synthetic tests cover exact native frames/PCM, placed layers/gaps/stills/audio,
 twelve native recovery exercises, source changes, re-import/return, two-provider
-isolation and reconstruction/cleanup. Actual user Resolve exports and creator
-reviews remain pending; successful parsing is not evidence of omitted effects.
+isolation and reconstruction/cleanup. Real-export fidelity qualification and creator
+reviews remain separate gates; successful parsing is not evidence of omitted effects.
+# Explicit picture sampling
+
+A moving-picture mapping in `layoutMode: "placed"` may explicitly declare
+`"pictureSampling": "repeat-2x"` when each native source frame should appear
+twice in the program. For example, a verified 30 fps original can be placed in
+a declared 60 fps program without retiming its source interval. In this strict route, this is an
+explicit reconstruction choice. Automatic import instead records the nearest-repeat
+draft policy described above; neither path claims to infer Resolve optical flow
+or another unexported interpolation mode.
+
+Admission still verifies the complete native packet clock, source fingerprints,
+native-frame trim boundaries and exact output extent. Rendering preserves the
+audio graph and uses the same sampling operation in microproof and full proof.
+Unknown modes, fractional native trims and implicit frame-rate conversion fail.
+The field is invalid for stills, audio, and contiguous-mode imports.
+
+New packets use normalizer 2.6.2 and sampling drafts record
+`placed-sampling-1.0.0`; prior canonical histories retain their original version.
+
+## Explicit treatment reconstruction
+
+Placed imports may declare `sourceOnly: false` together with
+`reconstructionMode: "declared-treatments"`. Each treatment needs explicit,
+scoped data; this mode does not infer defaults or waive unsupported findings.
+
+- `pictureTransform` declares canvas dimensions and the scaled picture rectangle
+  (`x`, `y`, `width`, `height`). `pictureFade` declares program-frame alpha fades
+  (`inFrames`, `outFrames`). The full proof and microproof use the same operation.
+- `audioTailSilenceSamples` records an exact missing tail at 48 kHz. Admission
+  counts decoded native samples against the locked source and checks that the
+  declaration exactly fills the exported interval. Only the missing tail becomes
+  silence; existing source samples and program placement remain intact.
+- `generatedTitles` identifies active generated references. Each requires an
+  explicit media origin, an original authorial file, a pinned font file, and
+  bounded static title data: text, canvas dimensions, position, font size, RGBA
+  color, and center or top-left anchor. Both files participate in proof input
+  locks. Fusion/Lua payloads are never executed. This supports declared static
+  text, not arbitrary Text+ typography, animation, shading, or font collections.
+- Explicitly disabled Resolve `Effect.1` entries remain inert `inactiveEffects`
+  reference records. Enabled or unknown-state effects still block. Empty
+  parameter arrays never establish identity. Effects on parent compositions and
+  retiming remain unsupported.
+
+Treatment and title drafts record `placed-treatments-1.0.0` and
+`placed-title-1.0.0` respectively. Audio-tail-only drafts record
+`placed-audio-tail-1.0.0`. Reprepare older staged packets after a normalizer
+upgrade; immutable packets and prior canonical history are not rewritten.
+
+These capabilities are covered by synthetic frame, sample, and admission tests.
+Faithful rendering still requires supported retained treatments, current source
+fingerprints, sync review, reference qualification where needed, and creator
+approval. Automatic drafts use `placed-export-driven-1.0.0`; explicit strict
+imports retain the historical capability contracts described above.

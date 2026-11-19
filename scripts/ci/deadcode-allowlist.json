@@ -420,14 +420,6 @@
       "reason": "Feature 006 public/dynamic contract covered by focused tests and runtime registration"
     },
     {
-      "path": "src/avo/timeline/event_clock.py",
-      "name": "resolve_timed_event",
-      "kind": "function",
-      "lineno": 110,
-      "confidence": 60,
-      "reason": "Feature 006 public/dynamic contract covered by focused tests and runtime registration"
-    },
-    {
       "path": "src/avo/timeline/iterations.py",
       "name": "fingerprint_candidate",
       "kind": "method",
@@ -1045,14 +1037,6 @@
     },
     {
       "path": "src/avo/timeline/tracks.py",
-      "name": "apply_event_role_defaults",
-      "kind": "function",
-      "lineno": 218,
-      "confidence": 60,
-      "reason": "Feature 006 public/dynamic contract covered by focused tests and runtime registration"
-    },
-    {
-      "path": "src/avo/timeline/tracks.py",
       "name": "audit_contributions",
       "kind": "function",
       "lineno": 332,
@@ -1166,6 +1150,22 @@
       "lineno": 590,
       "confidence": 60,
       "reason": "Public read-only ordered-frame diagnostic API used by physical repeat/reverse/fresh-session conformance checks; intentionally callable without encoding or canonical mutations."
+    },
+    {
+      "path": "src/avo/adapters/media/proof_bounded.py",
+      "name": "observe_mix",
+      "kind": "function",
+      "lineno": 26,
+      "confidence": 60,
+      "reason": "Private in-process render-job hook consumed by external footage controllers outside the src/avo scan; callback, rejection, and tamper behavior are covered by tests/test_proof_bounded.py."
+    },
+    {
+      "path": "src/avo/adapters/media/proof_stream.py",
+      "name": "traceback",
+      "kind": "variable",
+      "lineno": 97,
+      "confidence": 100,
+      "reason": "Mandatory third context-manager __exit__ argument is intentionally unused while ManagedProcess preserves the original exception and closes or stops child processes; lifecycle behavior is covered by tests/test_proof_stream.py."
     }
   ]
 }

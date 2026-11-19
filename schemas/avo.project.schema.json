@@ -24,6 +24,7 @@
       "description": "Optional working title for this video project."
     },
     "motion": {"$ref": "https://avo.local/avo.motion.schema.json#/$defs/config"},
+    "editingCraft": {"$ref": "https://avo.local/avo.editing-craft.schema.json#/$defs/config"},
     "cutting": {"$ref": "https://avo.local/avo.cutting.schema.json#/$defs/config"},
     "direction": {
       "type": "object",
@@ -80,7 +81,9 @@
         "transcribe": { "$ref": "avo.model-source.schema.json#/$defs/modelPin" },
         "understand": { "$ref": "avo.model-source.schema.json#/$defs/modelPin" },
         "plan": { "$ref": "avo.model-source.schema.json#/$defs/modelPin" },
-        "transcribe_paid": { "$ref": "avo.model-source.schema.json#/$defs/modelPin" }
+        "transcribe_paid": { "$ref": "avo.model-source.schema.json#/$defs/modelPin" },
+        "audio_embed": { "$ref": "avo.model-source.schema.json#/$defs/modelPin" },
+        "text_embed": { "$ref": "avo.model-source.schema.json#/$defs/modelPin" }
       }
     },
     "watch": {

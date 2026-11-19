@@ -17,6 +17,8 @@ __all__ = [
     "CapabilityRegistryError",
     "adapter_for_routing_suffix",
     "build_cutting_service",
+    "build_sfx_catalog",
+    "build_sound_source_probe",
     "default_proof_capability_registry",
 ]
 
@@ -55,6 +57,24 @@ JOB_REGISTRIES: dict[str, dict[str, str]] = {
 }
 
 
+def build_sfx_catalog(workspace, *, roots, analyze=False, semantic=False, root=None):
+    """Compose only the explicitly selected sound-analysis or matching boundary."""
+    from avo.sfx_catalog import SfxCatalogService
+
+    analyzer = backend = None
+    if analyze:
+        from avo.adapters.media.sfx_analysis import SfxAnalyzer
+
+        analyzer = SfxAnalyzer()
+    if semantic:
+        from avo.sfx_semantic import build_semantic_backend
+
+        backend = build_semantic_backend(workspace, roots, root=root)
+    return SfxCatalogService(
+        workspace, roots=roots, analyzer=analyzer, semantic=backend
+    )
+
+
 def adapter_for_routing_suffix(job: str, suffix: str) -> type[JobAdapter]:
     from avo.adapters.base import AdapterError, load_adapter_class
 
@@ -68,6 +88,35 @@ def adapter_for_routing_suffix(job: str, suffix: str) -> type[JobAdapter]:
             f"no adapter for job '{job}' routing suffix '{suffix}' (known: {known})"
         )
     return load_adapter_class(module_path)
+
+
+def build_sound_source_probe():
+    """Observe the first measured audio stream only for explicit sound admission."""
+    import subprocess
+
+    from .media.ffprobe import FfprobeMediaAdapter
+
+    def probe(path, *, expected_sha256):
+        try:
+            source = FfprobeMediaAdapter().inventory([path])["sources"][0]
+        except (OSError, subprocess.SubprocessError) as error:
+            raise ValueError(
+                f"Cannot inspect selected sound source: {error}"
+            ) from error
+        if source["fingerprint"]["sha256"] != expected_sha256:
+            raise ValueError("Selected sound source fingerprint changed during probe")
+        streams = source["streams"]["audio"]
+        if not streams:
+            raise ValueError("Selected sound source has no audio stream")
+        stream = streams[0]
+        return {
+            "sourceSha256": expected_sha256,
+            "streamIndex": stream["index"],
+            "sampleRate": stream["sampleRate"],
+            "channels": stream["channels"],
+        }
+
+    return probe
 
 
 def build_cutting_service(workspace, *, invocation=None):

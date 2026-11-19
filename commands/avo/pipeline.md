@@ -67,6 +67,10 @@ Optional: `--skip-motion`, `--motion-engine hyperframes|remotion|code-drawn`, `-
 
 ## Role
 
+Always present the current built-in motion map and linked storyboard at applicable
+planning and review boundaries, including partial/static plans and lane gaps.
+Use status metadata and current local reports; viewing requires no optional tool.
+
 Orchestrate stages 0–7: plan (optional Spec Kit) → transcribe → edit → watch-skill LOOP → **human approval** → motion (unless skipped) → render → deliver → cleanup.
 
 ---

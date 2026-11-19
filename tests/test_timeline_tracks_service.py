@@ -94,3 +94,23 @@ def test_author_refreshes_editlog_audio_layer(tmp_path: Path) -> None:
     text = (workspace.raw_dir / "EDITLOG.md").read_text(encoding="utf-8")
     assert "dialogue" in text
     assert "`dialogue`" in text
+
+
+def test_unmatched_source_mix_cannot_be_saved_as_tracks(tmp_path: Path) -> None:
+    workspace, _, _ = approved_workspace(tmp_path)
+    BMapService(workspace).author({"cues": [cue()]}, actor="avo", reason="beat")
+    value = canonical_tracks(workspace, workspace.raw_dir / "raw.bin")
+    value["audioTracks"]["sourceMixAdjustments"] = [
+        {
+            "placementId": "missing-placement",
+            "sourceId": "missing-source",
+            "sourceSha256": "a" * 64,
+            "streamIndex": 2,
+            "channels": [0, 0],
+            "gainDeltaDb": 1.5,
+        }
+    ]
+    before = workspace.store("tracks").load_index()
+    with pytest.raises(TrackError):
+        TracksService(workspace).author(value, actor="avo", reason="unmatched mix")
+    assert workspace.store("tracks").load_index() == before

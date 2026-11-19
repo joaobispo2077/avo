@@ -236,6 +236,19 @@ def _review_windows(
     return windows
 
 
+def _transcription_windows(
+    risk_windows: list[dict[str, Any]], qc: dict[str, Any]
+) -> list[dict[str, Any]]:
+    return _review_windows(
+        risk_windows,
+        {
+            "requiredWindows": qc.get(
+                "requiredTranscriptionWindows", qc.get("requiredWindows")
+            )
+        },
+    )
+
+
 def _watch_policy_values(
     policy: Any | None,
 ) -> tuple[dict[str, Any] | None, dict[str, Any]]:
@@ -856,11 +869,12 @@ class ReviewRunner:
             attempts,
         )
         review_windows = _review_windows(risk_windows, qc)
+        transcription_windows = _transcription_windows(risk_windows, qc)
         transcript = self._call(
             "transcription",
             lambda: self.transcription.transcribe(
                 candidate,
-                risk_windows=review_windows,
+                risk_windows=transcription_windows,
                 terms=terms,
                 names=names,
                 edit_dir=self.review_root.parent,
@@ -913,7 +927,7 @@ class ReviewRunner:
         evidence = self._qc_evidence(qc, identity, lock_hash, review_windows)
         evidence.append(
             self._transcript_evidence(
-                transcript, qc, identity, lock_hash, review_windows
+                transcript, qc, identity, lock_hash, transcription_windows
             )
         )
         evidence.append(

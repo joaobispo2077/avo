@@ -272,6 +272,74 @@ def _known_import_draft_selection(document, identity):
     return bool(matches)
 
 
+def _craft_request(
+    current, selection, *, request_id, direction_ref, basis_heads, actor, reason
+):
+    from uuid import uuid4
+
+    from avo.editing_craft import validate_editing_craft_selection
+
+    from .contracts import ContractError, validate_document
+
+    try:
+        requested = {
+            "runId": current["runId"],
+            "requestId": request_id
+            if request_id is not None
+            else f"craft-{uuid4().hex}",
+            "selection": validate_editing_craft_selection(selection),
+            "directionRef": direction_ref,
+            "basisHeads": basis_heads
+            if basis_heads is not None
+            else {
+                name: None
+                for name in ("cmap", "bmap", "tracks", "animation", "sync-map")
+            },
+            "actor": actor,
+            "reason": reason,
+        }
+        validate_document(requested, "avo.editing-craft-run.schema.json")
+    except (ContractError, ValueError, TypeError) as exc:
+        raise LifecycleError(f"invalid editing craft request: {exc}") from exc
+    return requested
+
+
+def _known_craft_request(document, request_id):
+    if request_id is None:
+        return None
+    current = (document.get("executionChoices") or {}).get("editingCraft")
+    history = (document.get("extensions") or {}).get("editingCraftRequestHistory", [])
+    return next(
+        (
+            item
+            for item in [current, *history]
+            if item is not None and item["requestId"] == request_id
+        ),
+        None,
+    )
+
+
+def _validate_craft_work(document):
+    identities = set()
+    for work in (document.get("extensions") or {}).get("editingCraftWork", []):
+        identity = work["kind"], work["operationId"]
+        frozen = _known_craft_request(document, work["requestId"])
+        if identity in identities:
+            raise LifecycleError("editing craft work repeats an operation identity")
+        identities.add(identity)
+        if frozen is None or frozen["runId"] != document["runId"]:
+            raise LifecycleError(
+                "editing craft work requires its original frozen request"
+            )
+        namespace = "sound/" if work["kind"] == "sound" else ""
+        reference = work["proposalRef"]
+        if (
+            reference["path"]
+            != f"edit/motion/{namespace}proposals/{reference['sha256']}.json"
+        ):
+            raise LifecycleError("editing craft work changes its typed proposal path")
+
+
 class PipelineRunStore:
     """Persist the lifecycle state and explicit recovery history."""
 
@@ -299,6 +367,18 @@ class PipelineRunStore:
                 raise LifecycleError(
                     "motion execution choice requires a request identity"
                 )
+        _validate_craft_work(document)
+        from .craft_work_decisions import (
+            WorkDecisionError,
+            validate_work_decision_history,
+        )
+
+        try:
+            validate_work_decision_history(document)
+        except WorkDecisionError as error:
+            raise LifecycleError(
+                f"invalid requested-work decision history: {error}"
+            ) from error
 
     @serialized_timeline(lambda self: self.path.parent)
     def initialize(
@@ -385,6 +465,125 @@ class PipelineRunStore:
             ).append(deepcopy(previous))
         updated.setdefault("executionChoices", {})["motion"] = requested
         updated["updatedAt"] = self.clock()
+        return self._write(updated, expected_updated_at=current["updatedAt"])
+
+    @serialized_timeline(lambda self: self.path.parent)
+    def bind_editing_craft_selection(
+        self,
+        selection,
+        *,
+        actor,
+        reason,
+        request_id=None,
+        new_request=False,
+        direction_ref=None,
+        basis_heads=None,
+    ):
+        """Freeze one authoring request; future defaults never revise its choices."""
+        from copy import deepcopy
+
+        if type(new_request) is not bool:
+            raise LifecycleError("new_request must be a boolean")
+        current = self.load()
+        requested = _craft_request(
+            current,
+            selection,
+            request_id=request_id,
+            direction_ref=direction_ref,
+            basis_heads=basis_heads,
+            actor=actor,
+            reason=reason,
+        )
+        known = _known_craft_request(current, request_id)
+        if known is not None:
+            if requested != known:
+                raise LifecycleError(
+                    "editing craft request identity conflicts with its recorded selection"
+                )
+            return current
+        previous = (current.get("executionChoices") or {}).get("editingCraft")
+        if previous is not None and not new_request:
+            if request_id is not None:
+                raise LifecycleError(
+                    "a different editing craft request requires new_request=True"
+                )
+            return current
+        updated = deepcopy(current)
+        if previous is not None:
+            updated.setdefault("extensions", {}).setdefault(
+                "editingCraftRequestHistory", []
+            ).append(deepcopy(previous))
+        updated.setdefault("executionChoices", {})["editingCraft"] = deepcopy(requested)
+        updated["updatedAt"] = self.clock()
+        return self._write(updated, expected_updated_at=current["updatedAt"])
+
+    @serialized_timeline(lambda self: self.path.parent)
+    def bind_editing_craft_work(self, work):
+        """Retain an exact requested proposal without selecting media or advancing state."""
+        from copy import deepcopy
+
+        from .contracts import ContractError, validate_document
+
+        try:
+            validate_document(
+                work, "avo.editing-craft-run.schema.json#/$defs/workReference"
+            )
+        except ContractError as exc:
+            raise LifecycleError(f"invalid editing craft work: {exc}") from exc
+        current = self.load()
+        entries = (current.get("extensions") or {}).get("editingCraftWork", [])
+        identity = work["kind"], work["operationId"]
+        known = next(
+            (
+                entry
+                for entry in entries
+                if (entry["kind"], entry["operationId"]) == identity
+            ),
+            None,
+        )
+        if known is not None:
+            if known != work:
+                raise LifecycleError(
+                    "editing craft operation conflicts with its saved proposal"
+                )
+            return current
+        updated = deepcopy(current)
+        updated.setdefault("extensions", {}).setdefault("editingCraftWork", []).append(
+            deepcopy(work)
+        )
+        updated["updatedAt"] = self.clock()
+        return self._write(updated, expected_updated_at=current["updatedAt"])
+
+    @serialized_timeline(lambda self: self.path.parent)
+    def record_editing_craft_work_decision(self, request):
+        from copy import deepcopy
+
+        from .contracts import content_hash, validate_document
+
+        validate_document(
+            request, "avo.editing-craft-run.schema.json#/$defs/workDecisionRequest"
+        )
+        current = self.load()
+        records = (current.get("extensions") or {}).get("editingCraftWorkDecisions", [])
+        for record in records:
+            if record["request"]["operationId"] == request["operationId"]:
+                if record["request"] != request:
+                    raise LifecycleError(
+                        "work decision operation records different inputs"
+                    )
+                return current
+        updated = deepcopy(current)
+        timestamp = self.clock()
+        updated.setdefault("extensions", {}).setdefault(
+            "editingCraftWorkDecisions", []
+        ).append(
+            {
+                "request": deepcopy(request),
+                "requestHash": content_hash(request),
+                "createdAt": timestamp,
+            }
+        )
+        updated["updatedAt"] = timestamp
         return self._write(updated, expected_updated_at=current["updatedAt"])
 
     @serialized_timeline(lambda self: self.path.parent)
