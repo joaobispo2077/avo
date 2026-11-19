@@ -16,6 +16,9 @@ and audio channel routing. The immutable manifest records the canonical
 timeline heads, exact source and program frame coordinates, the integer audio
 frame conversion, and affected ranges where treatments need manual handling.
 Camera moves, alpha treatments, gain and fades require target-specific evidence.
+On Resolve Studio 21.0.0.47 for Windows 11 25H2, validation exports can include
+a placed original audio clip's constant gain from -60 to +12 dB. Other
+profiles and levels outside that range report the treatment for manual review.
 The format is FCP7 XMEML. See the [XMEML timing reference](https://developer.apple.com/library/archive/documentation/AppleApplications/Reference/FinalCutPro_XML/Topics/Topics.html).
 
 ## Prepare and review
