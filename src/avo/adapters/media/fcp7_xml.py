@@ -323,12 +323,11 @@ def _covers_source_range(filter_node, frames):
         return False
 
 
-def _full_clip_audio_levels(element, frames):
+def _full_clip_effect(element, frames, effect_ids):
     filters = [
         item
         for item in element.findall("filter")
-        if _text(item, "effect/effectid", "").casefold()
-        in {"audiolevels", "audio levels"}
+        if _text(item, "effect/effectid", "").casefold() in effect_ids
     ]
     if len(filters) != 1:
         return None
@@ -349,23 +348,72 @@ def _linear_level(effect):
     if len(params) != 1:
         return None
     values = params[0].findall("value")
-    if len(values) != 1 or len(values[0]):
+    if len(values) != 1:
+        return None
+    return _literal_number(values[0])
+
+
+def _literal_number(value):
+    if len(value):
         return None
     try:
-        level = float(values[0].text or "")
+        number = float(value.text or "")
     except ValueError:
         return None
-    if level <= 0 or not isfinite(level):
-        return None
-    return level
+    return number if isfinite(number) else None
 
 
 def _observed_audio_gain(element, frames):
-    effect = _full_clip_audio_levels(element, frames)
+    effect = _full_clip_effect(element, frames, {"audiolevels", "audio levels"})
     if effect is None or effect.find(".//keyframe") is not None:
         return {}
     level = _linear_level(effect)
-    return {"gainDb": 20 * log10(level)} if level is not None else {}
+    return {"gainDb": 20 * log10(level)} if level is not None and level > 0 else {}
+
+
+def _motion_values(effect):
+    params = effect.findall("parameter")
+    values = {
+        _text(node, "parameterid", "").casefold(): node.findall("value")
+        for node in params
+    }
+    if len(params) != 4 or set(values) != {
+        "scale",
+        "rotation",
+        "center",
+        "centeroffset",
+    }:
+        return {}
+    if any(len(group) != 1 for group in values.values()):
+        return {}
+    return {name: group[0] for name, group in values.items()}
+
+
+def _neutral_point(value):
+    return sorted(child.tag for child in value) == ["horiz", "vert"] and all(
+        _literal_number(child) == 0 for child in value
+    )
+
+
+def _observed_video_motion(element, frames):
+    effect = _full_clip_effect(element, frames, {"basic"})
+    if effect is None or effect.find(".//keyframe") is not None:
+        return {}
+    if (_text(effect, "effecttype"), _text(effect, "mediatype")) != ("motion", "video"):
+        return {}
+    values = _motion_values(effect)
+    if not values:
+        return {}
+    scale = _literal_number(values["scale"])
+    if (
+        scale is None
+        or scale <= 0
+        or _literal_number(values["rotation"]) != 0
+        or not _neutral_point(values["center"])
+        or not _neutral_point(values["centeroffset"])
+    ):
+        return {}
+    return {"camera": {"scale": scale / 100}}
 
 
 def _clip(element, rate, sources, kind):
@@ -384,7 +432,11 @@ def _clip(element, rate, sources, kind):
         "enabled": _boolean(element, "enabled", True),
         "markers": _markers(element),
         "unknown": _unknown(element),
-        **(_observed_audio_gain(element, frame) if kind == "audio" else {}),
+        **(
+            _observed_audio_gain(element, frame)
+            if kind == "audio"
+            else _observed_video_motion(element, frame)
+        ),
         "rangeStatus": "external"
         if source is None or min(frame["start"], frame["end"]) < 0
         else "observed",
