@@ -81,13 +81,12 @@ Brief paths (when checked out): `specs/backlog/<slug>.md`
 
 ---
 
-## Editing craft and motion planning (research proposals)
+## Editing craft and motion planning
 
 Extracted from the 2026-11-04
-[fluxo-de-edicao comparison](fluxo-de-edicao-comparison.md). These items are
-**proposed, not implemented or scheduled**. Audio/video Tracks, BMap cue timing,
-Animation strategy and storyboard templates already exist; the proposals reuse
-them. Listed order is a prioritization recommendation, not a delivery promise.
+[fluxo-de-edicao comparison](fluxo-de-edicao-comparison.md). The work builds on
+audio and video Tracks, BMap cue timing, Animation strategy and storyboard
+templates. See [Editing craft](editing-craft.md) for available behavior.
 
 Full scope is specified together in the local working feature
 `specs/017-editing-craft-parity/spec.md`, including track/asset review, supported
@@ -96,11 +95,12 @@ editor feedback and bounded recovery of speech omitted by transcription. Its
 capability boundaries. Working specs remain local under the repository's
 existing ignore policy; they are not published feature documentation.
 
-Planned defaults: motion maps and linked lightweight storyboards are built in
-for applicable motion planning/review. Camera movement, face anchoring, sound
-matching, reference analysis, spoken notes/recovery and editor handoff remain
-selected options. Default presentation does not start optional tools or alter
-an existing edit.
+Motion maps and linked storyboards are built in for applicable motion planning
+and review. Camera movement, face anchoring, sound matching, reference
+analysis and spoken notes or recovery are selected options. The optional
+[editor handoff](editor-handoff.md) currently supports validation examples and
+returned XML review. Production editor qualification and creator acceptance
+remain open.
 
 | ID | Proposal | Smallest useful outcome | Existing alignment |
 | -- | -------- | ----------------------- | ------------------ |

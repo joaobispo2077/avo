@@ -41,6 +41,11 @@ Selected-engine motion **render QC** — after motion slots, before final compos
 - [ ] Preview vs render parity spot-checked
 - [ ] Source attribution and factual labels preserved
 
+Use the linked storyboard to check the intended entrance, readable hold,
+payoff and exit. Record the exact observed times. Use continuous playback
+for motion handoffs, lip sync and audibility. The sampled vision report
+covers the individual frames it observed.
+
 ## Output
 
 Write `<rawDir>/edit/review/animation-qc.md` with PASS/FAIL and blockers.

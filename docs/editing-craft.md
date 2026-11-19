@@ -149,6 +149,16 @@ separate cue fraction; see [sound candidate fitting](sound-candidate-fitting.md)
 
 ## Compatibility and validation
 
+The default motion map and linked storyboard also show the current audio and
+picture lanes, their roles, and the source or cue for each contribution.
+For editor review, the optional [editor handoff](editor-handoff.md) prepares a
+short original-source XMEML example and compares returned changes. The target
+profiles are validation-only while production qualification is pending.
+
+Watch reports the exact observed intervals and leaves missing intervals visible.
+The sampled vision pass can identify visual layout and readability findings.
+Playback review covers continuous motion, lip sync and audibility.
+
 Existing CMap, BMap, Tracks, Animation and Sync ownership remains unchanged.
 Before an approved cut, concepts stay provisional. BMap owns executable cue timing;
 an unresolved proposal cannot establish timing merely by naming a cue.
@@ -158,8 +168,9 @@ index capability guard. Legacy edits keep their existing format. The pure camera
 planner joins BMap intervals to exact original source occurrences, retains frozen
 options and evaluates each frame independently, including windowed and backward
 seeks. Camera-aware proof plans use version 2; ordinary proofs remain version 1.
-A missing qualified renderer returns an explicit unavailable result. These
-contracts and evaluator checks do not establish encoded camera readiness.
+A missing qualified renderer returns an explicit unavailable result. Encoded
+camera fixtures cover native frame and window behavior. Creator suitability and
+format-specific playback review are separate checks.
 
 Focused automated checks cover read-only defaults, partial/static plans,
 selection provenance/freezing, schema compatibility, native/MCP parity and
