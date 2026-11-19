@@ -237,7 +237,22 @@ def _channels(row, facts, stream):
     return [(output, channel + 1) for output, channel in enumerate(channels, 1)]
 
 
-def original_occurrences(row, original, facts, program_rate, start_frame):
+def _resolve_stereo_pans(row, stream, *, validation):
+    if not validation or row["kind"] != "audio":
+        return {}
+    selection = row["routing"]["audioSelection"]
+    route = (
+        stream["channels"],
+        selection["sourceLayout"],
+        selection["outputLayout"],
+        selection["channels"],
+    )
+    return {1: -1, 2: 1} if route == (2, "stereo", "stereo", [0, 1]) else {}
+
+
+def original_occurrences(
+    row, original, facts, program_rate, start_frame, *, resolve_validation=False
+):
     if row["mediaKind"] not in {"video", "audio"}:
         raise ValueError(
             "Selected still, title or generator needs target representation evidence"
@@ -260,6 +275,7 @@ def original_occurrences(row, original, facts, program_rate, start_frame):
             else None,
         }
     result = []
+    pans = _resolve_stereo_pans(row, stream, validation=resolve_validation)
     for output, channel in _channels(row, facts, stream):
         identity = row["id"] if output is None else f"{row['id']}-channel-{output}"
         clip = {
@@ -271,6 +287,8 @@ def original_occurrences(row, original, facts, program_rate, start_frame):
             "enabled": row["enabled"] and not row["muted"],
             "sourceTrack": channel,
         }
+        if output in pans:
+            clip["pan"] = pans[output]
         evidence = {
             "id": identity,
             "placementId": row["id"],

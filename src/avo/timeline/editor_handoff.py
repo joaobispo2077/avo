@@ -30,7 +30,7 @@ from .store import timeline_writer, write_immutable_json
 SCHEMA = "avo.editor-handoff.schema.json#/$defs/"
 IMPLEMENTATION = "fcp7-xmeml-source-v1"
 OCCURRENCE_LIMIT = 10_000
-RESOLVE_LEVEL_VALIDATION = "davinci-resolve-21-0-0-47-windows-11-25h2"
+RESOLVE_AUDIO_VALIDATION = "davinci-resolve-21-0-0-47-windows-11-25h2"
 
 
 def target_profiles():
@@ -122,7 +122,7 @@ def _audio_level(row, include_clip_levels):
     return {}
 
 
-def _assembly(rows, sources, measured, fps, window, *, include_clip_levels):
+def _assembly(rows, sources, measured, fps, window, *, resolve_validation):
     files_by_id, lanes, evidence, losses = {}, {}, [], []
     for row in rows:
         try:
@@ -132,12 +132,13 @@ def _assembly(rows, sources, measured, fps, window, *, include_clip_levels):
                 measured.get(row["sourceId"]),
                 fps,
                 window["startFrame"],
+                resolve_validation=resolve_validation,
             )
         except (ValueError, ZeroDivisionError) as error:
             losses.append(_loss(row, fps, str(error)))
             continue
         files_by_id[file_id] = source
-        level = _audio_level(row, include_clip_levels)
+        level = _audio_level(row, resolve_validation)
         for output, clip, proof in clips:
             if len(evidence) >= OCCURRENCE_LIMIT:
                 raise ValueError("Editor handoff exceeds its occurrence budget")
@@ -286,8 +287,8 @@ class EditorHandoffService:
                 measured,
                 fps,
                 window,
-                include_clip_levels=(request["mode"], profile["id"])
-                == ("validation", RESOLVE_LEVEL_VALIDATION),
+                resolve_validation=(request["mode"], profile["id"])
+                == ("validation", RESOLVE_AUDIO_VALIDATION),
             )
         if not evidence:
             raise ValueError(

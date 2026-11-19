@@ -500,28 +500,60 @@ def _write_file(node, identity, sources, emitted):
     emitted.add(identity)
 
 
-def _write_audio_levels(node, gain):
-    if not representable_clip_gain(gain):
-        raise Fcp7Error("Clip Audio Levels gain must be between -60 and 12 dB")
+def _write_audio_filter(node, effect_fields, parameter_fields):
     filter_node = SubElement(node, "filter")
     _scalar(filter_node, "enabled", "TRUE")
     _frame_text(filter_node, "start", -1)
     _frame_text(filter_node, "end", -1)
     effect = SubElement(filter_node, "effect")
-    for key, value in {
-        "name": "Audio Levels",
-        "effectid": "audiolevels",
-        "effectcategory": "audio",
-        "effecttype": "filter",
-        "mediatype": "audio",
-    }.items():
+    _scalar(effect, "mediatype", "audio")
+    for key, value in effect_fields.items():
         _scalar(effect, key, value)
     parameter = SubElement(effect, "parameter")
-    _scalar(parameter, "parameterid", "level")
-    _scalar(parameter, "name", "Level")
-    _scalar(parameter, "valuemin", 0)
-    _scalar(parameter, "valuemax", 10 ** (12 / 20))
-    _scalar(parameter, "value", 10 ** (gain / 20))
+    for key, value in parameter_fields.items():
+        _scalar(parameter, key, value)
+
+
+def _write_audio_levels(node, gain):
+    if not representable_clip_gain(gain):
+        raise Fcp7Error("Clip Audio Levels gain must be between -60 and 12 dB")
+    _write_audio_filter(
+        node,
+        {
+            "name": "Audio Levels",
+            "effectid": "audiolevels",
+            "effectcategory": "audio",
+            "effecttype": "filter",
+        },
+        {
+            "parameterid": "level",
+            "name": "Level",
+            "valuemin": 0,
+            "valuemax": 10 ** (12 / 20),
+            "value": 10 ** (gain / 20),
+        },
+    )
+
+
+def _write_audio_pan(node, pan):
+    if type(pan) is not int or pan not in (-1, 1):
+        raise Fcp7Error("Clip Audio Pan must select one stereo channel")
+    _write_audio_filter(
+        node,
+        {
+            "name": "Audio Pan",
+            "effectid": "audiopan",
+            "effectcategory": "audiopan",
+            "effecttype": "audiopan",
+        },
+        {
+            "parameterid": "pan",
+            "name": "Pan",
+            "value": pan,
+            "valuemin": -1,
+            "valuemax": 1,
+        },
+    )
 
 
 def _write_clip(parent, lane, clip, sources, emitted):
@@ -546,8 +578,12 @@ def _write_clip(parent, lane, clip, sources, emitted):
         _scalar(port, "mediatype", lane["kind"])
         _frame_text(port, "trackindex", clip["sourceTrack"])
     _write_markers(node, clip.get("markers", []))
-    if lane["kind"] == "audio" and "gainDb" in clip:
+    if lane["kind"] != "audio":
+        return
+    if "gainDb" in clip:
         _write_audio_levels(node, clip["gainDb"])
+    if "pan" in clip:
+        _write_audio_pan(node, clip["pan"])
 
 
 def _write_picture_format(video, description, rate):
