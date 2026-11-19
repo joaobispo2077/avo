@@ -73,7 +73,7 @@ def _feedback_command(ws, request_file, capsys, operation, data, *, expected_cod
     reason="FFmpeg and FFprobe required",
 )
 def test_native_validation_preserves_original_picture_and_independent_audio(
-    tmp_path, capsys
+    tmp_path, capsys, monkeypatch
 ):
     ws = workspace(tmp_path)
     source = ws.raw_dir / "original source.mov"
@@ -216,9 +216,37 @@ def test_native_validation_preserves_original_picture_and_independent_audio(
         },
     )
     assert retained["status"] == "current-retained"
+
+    from avo.timeline import editor_feedback_service
+
+    interrupted_proposals = []
+    seal = editor_feedback_service._seal
+
+    def interrupt_route(workspace, body, collection, definition):
+        if collection == "routes":
+            interrupted_proposals.append(body["cuttingProposalRef"])
+            raise OSError("fixture interrupted the editor route write")
+        return seal(workspace, body, collection, definition)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(editor_feedback_service, "_seal", interrupt_route)
+        with pytest.raises(OSError, match="interrupted the editor route"):
+            editor_feedback_service.apply_feedback(
+                build_editor_handoff(ws),
+                {
+                    "contractVersion": "1.0.0",
+                    "operation": "apply-feedback",
+                    "actor": "creator",
+                    "reason": "Review a returned edit",
+                    **route_request,
+                },
+                cutting_factory=lambda: build_cutting_service(ws),
+            )
+    assert MotionReviewService(ws).project()["basisHeads"] == request["expectedBasis"]
     route = _feedback_command(ws, payload, capsys, "apply-feedback", route_request)
     assert route["status"] == "cutting-review-required" and route["mutated"] is False
     reference = route["cuttingProposalRef"]
+    assert interrupted_proposals == [reference]
     owner = build_cutting_service(ws)
     proposal = owner.store.load_document(reference)["payload"]
     assert proposal["scope"]["editorFeedbackRef"] == review["proposalRef"]
@@ -292,7 +320,7 @@ def test_validation_exports_constant_gain_only_for_the_observed_target(tmp_path)
                 invocation={"handoff": {"mode": "editor", "targetProfile": profile}}
             ),
             programRate={"num": 24, "den": 1},
-            window={"startFrame": 0, "endFrameExclusive": 60},
+            window={"startFrame": 2, "endFrameExclusive": 60},
         )
         result = build_editor_handoff(ws).prepare(request)
         payload = (ws.raw_dir / result["xmlRef"]["locator"]).read_bytes()
@@ -309,10 +337,14 @@ def test_validation_exports_constant_gain_only_for_the_observed_target(tmp_path)
         assert len(clips) == 2
         losses = [row for row in result["losses"] if row["field"] == "gainDb"]
         if profile == PROFILE:
+            assert model["originFrame"] == 2
+            assert any(row["field"] == "display-origin" for row in result["losses"])
             assert all("gainDb" not in clip for clip in clips)
             assert len(losses) == 1
             assert routing == []
         else:
+            assert model["originFrame"] == 86402
+            assert all(row["field"] != "display-origin" for row in result["losses"])
             assert [clip["gainDb"] for clip in clips] == pytest.approx(
                 [item["gainDb"]] * 2
             )
@@ -325,8 +357,11 @@ def test_validation_exports_constant_gain_only_for_the_observed_target(tmp_path)
 
 
 @pytest.mark.integration
-def test_placed_validation_links_the_original_alpha_layer(tmp_path):
+@pytest.mark.parametrize("source_kind", ["raw", "authorial"])
+def test_placed_alpha_handoff_requires_an_original_video_source(tmp_path, source_kind):
     from tests.integration.test_otio_placed_pipeline import _trial
+
+    from avo.timeline.lineage import LineageError
 
     imported, _, initial = _trial(tmp_path)
     ws = imported.workspace
@@ -359,7 +394,7 @@ def test_placed_validation_links_the_original_alpha_layer(tmp_path):
     revised["sources"].append(
         {
             "sourceId": source_id,
-            "kind": "raw",
+            "kind": source_kind,
             "locator": str(overlay),
             "fingerprint": before,
             "streamMetadata": {"videoStreamIndex": 0},
@@ -378,12 +413,17 @@ def test_placed_validation_links_the_original_alpha_layer(tmp_path):
     placement["sourceId"] = source_id
     for name in ("in", "out"):
         placement[name]["sourceId"] = source_id
-    CMapService(ws).author(
-        revised,
-        actor="creator",
-        reason="Select an original alpha layer on the upper picture lane",
-        expected_head_hash=initial["contentHash"],
-    )
+    authoring = {
+        "actor": "creator",
+        "reason": "Select an original alpha layer on the upper picture lane",
+        "expected_head_hash": initial["contentHash"],
+    }
+    if source_kind == "authorial":
+        with pytest.raises(LineageError, match="Moving media requires raw media"):
+            CMapService(ws).author(revised, **authoring)
+        assert ws.store("cmap").head_hash() == initial["contentHash"]
+        return
+    CMapService(ws).author(revised, **authoring)
     request = editor_request(ws)
     request["programRate"] = {"num": 24, "den": 1}
     request["window"] = {"startFrame": 0, "endFrameExclusive": 60}
@@ -394,9 +434,8 @@ def test_placed_validation_links_the_original_alpha_layer(tmp_path):
     (clip,) = parsed["tracks"][1]["clips"]
     assert (clip["start"], clip["end"], clip["in"], clip["out"]) == (24, 30, 0, 6)
     assert parsed["sources"][clip["fileId"]]["locator"] == overlay
-    assert {row["sourceId"]: row["sha256"] for row in result["sources"]}[
-        source_id
-    ] == before["sha256"]
+    selected = next(row for row in result["sources"] if row["sourceId"] == source_id)
+    assert selected["sha256"] == before["sha256"] and selected["kind"] == source_kind
     assert file_fingerprint(overlay) == before
 
 

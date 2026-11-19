@@ -49,6 +49,38 @@ def test_bom_rate_origins_tracks_and_repeated_local_source(tmp_path):
     assert video["clips"][0]["unknown"]["filter"] == 1
 
 
+@pytest.mark.parametrize(
+    ("origin", "rate", "expected"),
+    [
+        ({"value": "200.0", "rate": "48.0"}, Fraction(24), 102),
+        ({"value": "99", "rate": "30000/1001"}, Fraction(30000, 1001), 101),
+        ({"value": "1", "rate": "48"}, Fraction(24), None),
+        ({"value": "5", "rate": "0"}, Fraction(24), None),
+        ({"value": "1e400", "rate": "24"}, Fraction(24), None),
+        ({"value": "5"}, Fraction(24), None),
+    ],
+)
+def test_exact_canonical_display_clock_includes_selected_window(origin, rate, expected):
+    from avo.timeline.editor_layout import exact_display_frame
+
+    assert exact_display_frame(origin, rate, 2) == expected
+
+
+def test_writer_keeps_sequence_and_media_timecodes_independent(tmp_path):
+    source = tmp_path / "original.mov"
+    plain = document(source.as_uri()).replace(
+        "<filter><effect><name>External finishing</name></effect></filter>", ""
+    )
+    model = parse_fcp7_xml(plain.encode(), roots=[tmp_path])
+    restored = parse_fcp7_xml(write_fcp7_xml(model), roots=[tmp_path])
+    assert restored["originFrame"] == 108_000
+    assert restored["sources"]["source-one"]["originFrame"] == 1800
+    assert [(row["start"], row["in"]) for row in restored["tracks"][0]["clips"]] == [
+        (0, 2),
+        (24, 22),
+    ]
+
+
 def _levels(value, *, envelope="", enabled="TRUE", start=-1, end=-1, effects=1):
     row = (
         f"<filter><enabled>{enabled}</enabled><start>{start}</start><end>{end}</end>"
