@@ -15,6 +15,7 @@ from avo.editing_craft import resolve_editing_craft_selection
 from avo.engine_cli import main
 from avo.timeline.cmap_service import CMapService
 from avo.timeline.contracts import file_fingerprint
+from avo.timeline.import_layout import seconds
 from avo.timeline.motion_review import MotionReviewService
 
 PROFILE = "premiere-pro-25-0-windows-11-24h2"
@@ -293,7 +294,7 @@ def test_placed_validation_preserves_gaps_overlay_order_and_repeated_occurrences
 
 
 @pytest.mark.integration
-def test_validation_exports_constant_gain_only_for_the_observed_target(tmp_path):
+def test_validation_exports_constant_level_and_zoom_for_the_observed_target(tmp_path):
     from tests.integration.test_otio_placed_pipeline import _trial
 
     imported, source, initial = _trial(tmp_path)
@@ -304,11 +305,30 @@ def test_validation_exports_constant_gain_only_for_the_observed_target(tmp_path)
         row for row in body["layout"]["placements"] if row["mediaKind"] == "audio"
     )
     item["gainDb"] = -6.020599913279624
+    centered, shifted, other_scale = (
+        row for row in body["layout"]["placements"] if row["mediaKind"] == "video"
+    )
+    centered["pictureTransform"] = {
+        "canvasWidth": 128,
+        "canvasHeight": 96,
+        "width": 160,
+        "height": 120,
+        "x": -16,
+        "y": -12,
+    }
+    shifted["pictureTransform"] = {**centered["pictureTransform"], "x": -15}
+    other_scale["pictureTransform"] = {
+        **centered["pictureTransform"],
+        "width": 192,
+        "height": 144,
+        "x": -32,
+        "y": -24,
+    }
     CMapService(ws).author(
         body,
         expected_head_hash=initial["contentHash"],
         actor="creator",
-        reason="Set a constant level on one original clip",
+        reason="Set a constant level and test centered picture transforms",
     )
     before = MotionReviewService(ws).project()["basisHeads"]
 
@@ -336,12 +356,32 @@ def test_validation_exports_constant_gain_only_for_the_observed_target(tmp_path)
         ]
         assert len(clips) == 2
         losses = [row for row in result["losses"] if row["field"] == "gainDb"]
+        zooms = {
+            clip["id"]: clip["camera"]
+            for lane in model["tracks"]
+            for clip in lane["clips"]
+            if "camera" in clip
+        }
+        manual_windows = {
+            (row["scope"]["startFrame"], row["scope"]["endFrameExclusive"])
+            for row in result["losses"]
+            if row["field"] == "pictureTransform"
+        }
+        expected_windows = {
+            placement["placementId"]: (
+                max(2, int(seconds(placement["start"]) * 24)),
+                min(60, int(seconds(placement["end"]) * 24)),
+            )
+            for placement in (centered, shifted, other_scale)
+        }
         if profile == PROFILE:
             assert model["originFrame"] == 2
             assert any(row["field"] == "display-origin" for row in result["losses"])
             assert all("gainDb" not in clip for clip in clips)
             assert len(losses) == 1
             assert routing == []
+            assert zooms == {}
+            assert manual_windows == set(expected_windows.values())
         else:
             assert model["originFrame"] == 86402
             assert all(row["field"] != "display-origin" for row in result["losses"])
@@ -350,6 +390,10 @@ def test_validation_exports_constant_gain_only_for_the_observed_target(tmp_path)
             )
             assert losses == []
             assert [int(value.text) for value in routing] == [-1, 1]
+            assert zooms == {centered["placementId"]: {"scale": 1.25}}
+            assert manual_windows == {
+                expected_windows[row["placementId"]] for row in (shifted, other_scale)
+            }
         assert result["status"] == "validation-only"
         assert result["profile"]["status"] == "unqualified"
     assert MotionReviewService(ws).project()["basisHeads"] == before
