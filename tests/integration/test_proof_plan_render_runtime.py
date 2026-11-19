@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -167,6 +168,23 @@ def test_representative_json_first_proof_plan_needs_no_orchestration_script(
         render_port=renderer,
     )
     assert after["status"] == "ready-for-full-build"
+    selected_window = Path(gate["results"][0]["output"]["locator"])
+    original_window = selected_window.read_bytes()
+    try:
+        selected_window.write_bytes(original_window + b"changed")
+        stale = proof_build_status(
+            workspace=workspace,
+            proof_plan=plan,
+            media_inputs={"camera-main": source},
+            microproof_gate=gate,
+            render_port=renderer,
+        )
+        assert stale["status"] == "blocked"
+        assert (
+            stale["microproofGate"]["error"]["code"] == "PROOF_MICROPROOF_OUTPUT_STALE"
+        )
+    finally:
+        selected_window.write_bytes(original_window)
     pipeline = TimelinePipeline(workspace)
     snapshots = []
 
