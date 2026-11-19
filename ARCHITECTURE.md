@@ -1313,6 +1313,16 @@ include the selected-evidence documents and implementation. Metadata-only
 coverage retains its existing no-source/no-model boundary. Disjoint measured
 windows preserve their unmeasured gaps rather than claiming envelope coverage.
 
+`timeline.preparation_facts` composes selected measured windows through the same
+pure coverage rules. Each incoming measurement needs its own observed facts and
+tool provenance; it cannot borrow missing original provenance. Valid original
+measurements and activity remain available, while unmeasured source time remains
+protected. A previously blocked analysis gains only the selected actual coverage,
+and unmeasured or affected pause certifications are not transferred. Cutting
+producer bindings include this composer. No media/model execution or new timing
+owner is introduced. Actual local alignment validation additionally verifies
+cutting consumes the selected facts without another analysis call.
+
 Camera movement, face anchoring, sound matching, reference analysis, spoken
 notes/recovery and editor handoff are selected options resolved through existing
 settings scopes and frozen requests. Preferences seed future work and cannot

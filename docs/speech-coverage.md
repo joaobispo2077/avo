@@ -123,3 +123,13 @@ Choices, superseded choices and both alternatives belong to reconstruction's
 bounded dependency closure. Temporary PCM and unreferenced drafts remain
 disposable. Final quality and listening acceptance remain separate from evidence
 selection.
+
+When a selected recovered alternative contains qualified acoustic measurements,
+the derived cutting view combines those exact observed windows with any valid
+original measurements. It preserves separate unmeasured gaps instead of filling
+the envelope between windows. Incoming measurements need their own provenance;
+missing original measurements cannot borrow the recovery's model records. A
+previously unavailable source unit can therefore gain useful measured coverage
+for the selected interval while the rest stays protected. Replaced or unmeasured
+pause certifications do not carry over. This remains a derived view: original
+analysis and source bytes are retained unchanged.
