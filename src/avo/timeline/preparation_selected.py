@@ -34,7 +34,9 @@ def _inside_selection(word, bounds):
     return inside
 
 
-def _selected_words(base, incoming, bounds):
+def _selected_words(base, incoming, bounds, *, same_evidence=False):
+    if same_evidence:
+        return deepcopy(base)
     retained = [deepcopy(word) for word in base if not _inside_selection(word, bounds)]
     selected = [deepcopy(word) for word in incoming if _inside_selection(word, bounds)]
     return sorted(
@@ -147,7 +149,11 @@ class _Selection:
         analysis = deepcopy(self.analysis)
         if request["choice"] != "reject":
             analysis["words"] = _selected_words(
-                analysis.get("words", []), chosen.get("words", []), bounds
+                analysis.get("words", []),
+                chosen.get("words", []),
+                bounds,
+                same_evidence=request["choice"] == "original"
+                and frozen["input"]["analysisRef"] == self.original_ref,
             )
         if request["choice"] == "recovered":
             eligible = self._apply_recovered(analysis, chosen, bounds) and eligible
