@@ -159,6 +159,26 @@ def test_real_local_asr_retains_source_offset_alternatives_and_reuses_restart(
         assert evidence["protectedRanges"]
     assert selected["wordAnchorsEligible"] == result["wordAnchorsEligible"]
     assert selected["cutApproval"] == "not-granted"
+    if pin.get("alignment"):
+        assert evidence["analysis"]["status"] == "pass"
+        assert evidence["analysis"]["alignment"]["status"] == "pass"
+        cutting.analysis_port = resumed.recovery_port
+        monkeypatch.setattr(
+            cutting.analysis_port,
+            "analyze",
+            lambda *a, **k: pytest.fail("selected facts started another analysis"),
+        )
+        prepared = cutting.analyze()
+        prepared_ref = prepared["coverage"]["speech"][0]["analysisRef"]
+        saved = cutting.store.load_document(prepared_ref)["payload"]
+        assert selected["decisionRef"] in saved["preparationEvidence"]["decisionRefs"]
+        assert saved["speechCoverage"]["status"] == "needs-review"
+        assert any(
+            row["kind"] == "unmeasured"
+            and row["sourceRange"]["startTicks"] == 0
+            and row["sourceRange"]["endTicksExclusive"] == 12000
+            for row in saved["speechCoverage"]["observations"]
+        )
     assert service.store.load_document(original_ref) == original_analysis
     assert workspace.store("cmap").head_hash() == head
     assert file_fingerprint(media)["sha256"] == pin["sourceSha256"]
