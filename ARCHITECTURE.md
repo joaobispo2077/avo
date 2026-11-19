@@ -1330,6 +1330,18 @@ native source clock; an unknown occurrence stays unresolved. Placed CMaps retain
 their placement/track selectors and reject the contiguous-only selector. This is
 a mapping primitive, not a second timeline or automatic spoken-sound trigger.
 
+Optional original-source sound anchors resolve through the existing CMap mapping
+primitive in `timeline.sound_anchors`. They bind the raw fingerprint, rational
+source point and exact segment/placement, reject ambiguous or unsupported inverse
+mapping, and require the derived output frame inside the linked cue. Proposals
+read current metadata only when this option is selected; canonical publication
+binds the unchanged heads and verifies originals. Native sound admission reuses
+the same resolver against current CMap and compares the frozen opportunity.
+Mapping implementation bytes join native producer identity, so cached proof
+evidence cannot survive an unqualified mapping change. Encoded full/window tests
+measure the selected transient while preserving source picture and the original
+CMap. This route does not infer spoken timing or grant listening approval.
+
 Camera movement, face anchoring, sound matching, reference analysis, spoken
 notes/recovery and editor handoff are selected options resolved through existing
 settings scopes and frozen requests. Preferences seed future work and cannot

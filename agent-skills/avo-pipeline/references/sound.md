@@ -112,6 +112,15 @@ cue are authoritative. Missing, changed or ambiguous camera context stays
 unresolved, including at proof admission. This does not enable camera authoring
 or sound matching by itself.
 
+To accent an explicitly chosen original-source moment, use `sourceAnchor`
+instead of `phase` or `cameraAnchor`. Supply `sourceId`, `sourceSha256`,
+`sourceTime: {ticks, timebase: {num, den}}`, and exact `segmentId` or
+`placementId` (with optional `trackId`). Copy the current original identity and
+occurrence from CMap. The mapped frame must remain inside the linked cue;
+removed, changed, ambiguous, still or picture-sampled occurrences stay
+unresolved. This is an explicit timed source point, not inferred word timing.
+See [source anchor fitting](../../../docs/sound-candidate-fitting.md).
+
 Proposals save immutable metadata under `edit/motion/sound/`, binding current
 heads, selected sound direction, options, library generation, queries and actual
 bounded search results. Repeating the same operation returns its saved proposal;

@@ -27,6 +27,24 @@ absolute frame rather than restarting the camera or sound at the window edge.
 This option requests an audition; static, hidden and background motion still
 recommend silence and no sound is added automatically.
 
+An optional `sourceAnchor` selects an explicit point in a fingerprinted original
+through the current CMap. It carries `sourceId`, `sourceSha256`, native rational
+`sourceTime: {ticks, timebase: {num, den}}`, and one exact occurrence selector:
+`segmentId` for contiguous edits, or `placementId` with optional `trackId` for
+placed edits. Repeated footage never defaults to the first take. Supply this
+anchor instead of `phase` or `cameraAnchor`. The source point must lie inside
+the retained half-open source occurrence and its mapped frame must lie inside
+the linked visible cue. Missing, changed, disabled or ambiguous context remains
+unresolved; it is never clamped to a cue edge. Still images and sampled picture
+placements are not qualified for inverse source-point mapping.
+
+Source anchoring reads bounded canonical metadata and reuses the native CMap
+mapping and output-frame rounding. It does not infer a spoken word's timing or
+approve the selected source moment. Published choices retain the anchor and
+final proof admission recomputes it against current canonical metadata. Full
+and window exports preserve the same absolute frame. Ordinary cue-phase events
+do not request an additional source-map read.
+
 For a selected native trim, the relative transient is:
 
 `original marker sample - trim start sample`

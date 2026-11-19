@@ -25,6 +25,13 @@ camera revision cannot silently retime a published sound; revise its explicit
 selection against the current camera before rendering. Source-only cut proofs
 retain their existing behavior.
 
+For an explicit original-source anchor, proposals map its selected segment or
+placement through current CMap metadata. Publication binds the unchanged CMap
+head and verifies the original bytes; final proof admission checks the source
+fingerprint, retained occurrence and derived cue frame again. An altered source
+or mapping requires a new current selection. The anchor never supplies picture
+or audio media to the render and does not confer listening approval.
+
 The service freezes the reviewed asset, rights, marker, source trim, output
 sample schedule, channel routing and mix settings. Each contribution has one
 Tracks layer and an exactly bound BMap cue, with `tracks-native` playback
