@@ -47,6 +47,7 @@
         },
         "targetScale": {"type": "number", "exclusiveMinimum": 0},
         "targetCenter": {"$ref": "https://avo.local/schemas/avo.camera-behavior.schema.json#/$defs/center"},
+        "faceAnchor": {"$ref": "https://avo.local/avo.visual-motion-analysis.schema.json#/$defs/faceAnchor"},
         "safeRegions": {
           "type": "array", "maxItems": 64,
           "items": {"$ref": "https://avo.local/schemas/avo.camera-behavior.schema.json#/$defs/safeRegion"}

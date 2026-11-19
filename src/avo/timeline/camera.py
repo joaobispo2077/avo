@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import math
+from bisect import bisect_right
 from copy import deepcopy
 from fractions import Fraction
 from functools import lru_cache
@@ -27,6 +28,8 @@ CURVES = {
     "exponential-out",
 }
 MAX_SCHEDULE_FRAMES = 2_000_000
+MAX_FACE_FRAMES = 256
+WIDE_STATE = (Fraction(1), Fraction(1, 2), Fraction(1, 2))
 
 
 class CameraError(ValueError):
@@ -290,6 +293,175 @@ def evaluate_camera(behavior, *, frame, frame_range, geometry, predecessor=None)
     return _evaluate(prepared, frame)
 
 
+def _blend(first, last, amount):
+    return tuple(a + (b - a) * amount for a, b in zip(first, last, strict=True))
+
+
+def _face_pose(tick, ticks, values):
+    if not ticks[0] <= tick <= ticks[-1]:
+        return None
+    left = bisect_right(ticks, tick) - 1
+    if left == len(ticks) - 1:
+        return values[left]
+    right = left + 1
+    amount = Fraction(tick - ticks[left]) / (ticks[right] - ticks[left])
+    return _blend(values[left], values[right], amount)
+
+
+def _face_axis(amount, center, target, left, length, width, low, high, display):
+    wanted = center + (target * display - left - length * center) / length * amount
+    minimum = max(Fraction(0), (low + width / 2 - left) / length)
+    maximum = min(Fraction(1), (display - high - width / 2 - left) / length)
+    if minimum > maximum:
+        raise CameraError(
+            "Face anchor scale cannot fit inside the declared camera margins"
+        )
+    epsilon = min(Fraction(1, 10**9), (maximum - minimum) / 2)
+    return min(maximum - epsilon, max(minimum + epsilon, wanted))
+
+
+def _face_center(state, pose, amount, prepared_geometry):
+    if not amount:
+        return state
+    (width, height), (x, y, w, h), (left, right, top, bottom) = prepared_geometry
+    scale, center_x, center_y = state
+    return (
+        scale,
+        _face_axis(amount, center_x, pose[0], x, w, w / scale, left, right, width),
+        _face_axis(amount, center_y, pose[1], y, h, h / scale, top, bottom, height),
+    )
+
+
+def _transition(distance, span):
+    return ease_curve("quadratic-in-out", Fraction(min(distance, span), span))
+
+
+def _leading_states(entry, count, transition, fallback):
+    if fallback == "static":
+        return [
+            _blend(entry, WIDE_STATE, _transition(i, transition)) for i in range(count)
+        ]
+    return [entry] * count
+
+
+def _trailing_states(previous, count, transition, fallback):
+    if fallback == "static":
+        length = min(count, transition)
+        return [
+            _blend(previous, WIDE_STATE, _transition(i + 1, length))
+            for i in range(count)
+        ]
+    return [previous] * count
+
+
+def _tracked_states(base, poses, bounds, *, transition, geometry, leading, source_cut):
+    first, last = bounds
+    exit_blend = last == len(poses) - 1
+    tracked = []
+    for index in range(first, last + 1):
+        travel = _transition(index - first, transition)
+        if not leading and source_cut:
+            travel = Fraction(1)
+        base_state = (
+            _blend(leading[-1], base[index], travel) if leading else base[index]
+        )
+        release = _transition(last - index, transition) if exit_blend else Fraction(1)
+        tracked.append(
+            _face_center(base_state, poses[index], min(travel, release), geometry)
+        )
+    return tracked
+
+
+def _freeze_face_nodes(behavior, states):
+    denominator = len(states) - 1
+    nodes = []
+    for index, (scale, x, y) in enumerate(states):
+        state = {
+            "scale": _finite_output(scale),
+            "center": {"x": _finite_output(x), "y": _finite_output(y)},
+        }
+        # The compiled states belong to exact integer output frames. A hold
+        # changes halfway between adjacent frame times, avoiding an inexact
+        # decimal phase boundary when seeking the integer sample itself.
+        phase = (
+            (index - 0.5) / denominator
+            if 0 < index < denominator
+            else index / denominator
+        )
+        nodes.append(_recipe_node(phase, state))
+    return {**behavior, "nodes": nodes}
+
+
+def _check_tracked_faces(anchored, poses, frame_range, geometry):
+    prepared = _prepared(anchored, frame_range, geometry, None)
+    nodes, _, first, end, (size, baseline, _) = prepared
+    for index, pose in enumerate(poses):
+        if pose is not None:
+            state = _interpolate(nodes, Fraction(index, end - first - 1))
+            _check_regions(
+                _crop(state, baseline), size, [("selected face", pose[2:], 0)]
+            )
+        _evaluate(prepared, first + index)
+
+
+def _face_poses(points, source_ticks):
+    ticks = [point["sourceTick"] for point in points]
+    values = [
+        tuple(
+            _number(value, "face trajectory")
+            for value in (point["center"]["x"], point["center"]["y"], *point["box"])
+        )
+        for point in points
+    ]
+    return [_face_pose(tick, ticks, values) for tick in source_ticks]
+
+
+def _face_bounds(poses, fallback):
+    trusted = [index for index, pose in enumerate(poses) if pose is not None]
+    if not trusted:
+        raise CameraError("Camera cue has no measured frames for the selected face")
+    if len(trusted) != len(poses) and fallback not in {"hold", "static"}:
+        raise CameraError("Uncertain face frames require a reviewed fallback")
+    return trusted[0], trusted[-1]
+
+
+def reframe_face_camera(
+    behavior,
+    *,
+    frame_range,
+    geometry,
+    points,
+    source_ticks,
+    transition_frames,
+    fallback,
+    source_cut=False,
+):
+    """Resolve frozen display points to an ordinary seekable camera behavior."""
+    count = frame_range["endFrameExclusive"] - frame_range["firstFrame"]
+    if not 2 <= count <= MAX_FACE_FRAMES or len(source_ticks) != count:
+        raise CameraError(
+            "Face anchoring requires 2 to 256 exact camera frames per cue"
+        )
+    nodes, _, _, _, prepared_geometry = _prepared(behavior, frame_range, geometry, None)
+    poses = _face_poses(points, source_ticks)
+    first, last = _face_bounds(poses, fallback)
+    base = [_interpolate(nodes, Fraction(i, count - 1)) for i in range(count)]
+    lead = _leading_states(base[0], first, transition_frames, fallback)
+    tracked = _tracked_states(
+        base,
+        poses,
+        (first, last),
+        transition=transition_frames,
+        geometry=prepared_geometry,
+        leading=lead,
+        source_cut=source_cut,
+    )
+    tail = _trailing_states(tracked[-1], count - last - 1, transition_frames, fallback)
+    anchored = _freeze_face_nodes(behavior, [*lead, *tracked, *tail])
+    _check_tracked_faces(anchored, poses, frame_range, geometry)
+    return anchored
+
+
 def _owners(move):
     owners = move["propertyOwners"]
     if owners["scale"] != move["moveId"] or owners["center"] != move["moveId"]:
@@ -356,14 +528,14 @@ CAMERA_TREATMENTS = frozenset(
 )
 
 
-def _recipe_options(options, preset):
+def _recipe_options(options, preset, face_anchor):
     from avo.editing_craft import validate_editing_craft_selection
 
     selected = validate_editing_craft_selection(options)
     camera = selected["effective"]["camera"]
     if not camera["enabled"]:
         raise CameraError("camera recipes require explicitly selected enabled options")
-    if camera["faceAnchor"] != "off":
+    if (camera["faceAnchor"] == "selected-subject") != (face_anchor is not None):
         raise CameraError(
             "selected face anchoring requires its frozen subject trajectory"
         )
@@ -491,6 +663,7 @@ def make_camera_treatment(
     target_scale=None,
     target_center=None,
     safe_regions=(),
+    face_anchor=None,
 ):
     """Build selected untimed intent; canonical compilation still validates every frame.
 
@@ -500,7 +673,7 @@ def make_camera_treatment(
     if not isinstance(preset, str) or preset not in CAMERA_TREATMENTS:
         raise CameraError("unknown selected camera recipe")
     try:
-        selected = _recipe_options(options, preset)
+        selected = _recipe_options(options, preset, face_anchor)
         entry = _recipe_state(
             predecessor
             if predecessor is not None
@@ -527,6 +700,8 @@ def make_camera_treatment(
             "options": deepcopy(selected),
             "entryPolicy": policy,
         }
+        if face_anchor is not None:
+            wrapper["faceAnchor"] = deepcopy(face_anchor)
         _validate_recipe_geometry(wrapper)
         return wrapper
     except (ValueError, TypeError, KeyError, OverflowError, ZeroDivisionError) as error:

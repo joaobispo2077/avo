@@ -10,9 +10,11 @@ from itertools import pairwise
 from avo.editing_craft import validate_editing_craft_selection
 
 from .camera import (
+    MAX_FACE_FRAMES,
     MAX_SCHEDULE_FRAMES,
     CameraError,
     evaluate_camera,
+    reframe_face_camera,
     validate_camera_schedule,
 )
 from .contracts import content_hash, validate_document
@@ -51,7 +53,7 @@ def _components(strategy):
     ]
 
 
-def _selection(selection):
+def _selection(selection, face_anchor):
     if selection is None:
         raise CameraError("camera options must be frozen with the selected component")
     result = validate_editing_craft_selection(selection)
@@ -60,11 +62,11 @@ def _selection(selection):
         raise CameraError(
             "source-picture camera behavior requires explicit selected camera options"
         )
-    if camera["faceAnchor"] != "off":
+    if (camera["faceAnchor"] == "selected-subject") != (face_anchor is not None):
         raise CameraError(
             "selected face anchoring requires its qualified frozen subject trajectory"
         )
-    return result["selectionHash"]
+    return result
 
 
 def _cue(component, cues, fps):
@@ -173,7 +175,87 @@ def _normal_speed(part, fps):
         raise CameraError("retimed or padded camera contributions are not qualified")
 
 
-def _move(component, cues, tracks, parts, fps, selection):
+def _face_part(matching, frame_range, stream):
+    start, stop = frame_range["firstFrame"], frame_range["endFrameExclusive"]
+    overlap = [
+        item
+        for item in matching
+        if item["outputRange"]["startFrame"] < stop
+        and start < item["outputRange"]["endFrameExclusive"]
+    ]
+    if len(overlap) != 1:
+        raise CameraError(
+            "Face camera cue requires one exact visible source occurrence"
+        )
+    (part,) = overlap
+    extent = part["outputRange"]
+    if extent["startFrame"] > start or extent["endFrameExclusive"] < stop:
+        raise CameraError(
+            "Face camera cue crosses a visible source occurrence boundary"
+        )
+    if part["source"].get("streamIndex") != stream:
+        raise CameraError(
+            "Face trajectory stream differs from the visible camera stream"
+        )
+    return part
+
+
+def _face_source_ticks(trajectory, part, frame_range, fps):
+    scope = trajectory["sourceRange"]
+    native = _seconds(1, scope["timebase"])
+    original = part["sourceRange"]
+    start = _seconds(original["startTicks"], original["timebase"])
+    first = frame_range["firstFrame"]
+    count = frame_range["endFrameExclusive"] - first
+    if not 2 <= count <= MAX_FACE_FRAMES:
+        raise CameraError(
+            "Face anchoring requires 2 to 256 exact camera frames per cue"
+        )
+    offset = first - part["outputRange"]["startFrame"]
+    spacing = 1 / (native * fps)
+    origin = trajectory["streamOriginTicks"] + start / native + offset * spacing
+    if (
+        (start * fps).denominator != 1
+        or origin.denominator != 1
+        or spacing.denominator != 1
+    ):
+        raise CameraError("Face anchoring requires an exact original frame clock")
+    ticks = range(int(origin), int(origin + spacing * count), int(spacing))
+    if ticks[0] < scope["startTicks"] or ticks[-1] >= scope["endTicks"]:
+        raise CameraError(
+            "Camera source frames exceed the selected face analysis range"
+        )
+    return ticks
+
+
+def _anchored_behavior(wrapper, matching, frame_range, fps, selection, read_face):
+    if read_face is None:
+        raise CameraError(
+            "Selected face anchoring requires its qualified frozen subject trajectory"
+        )
+    trajectory, stream = read_face(wrapper)
+    part = _face_part(matching, frame_range, stream)
+    ticks = _face_source_ticks(trajectory, part, frame_range, fps)
+    binding = wrapper["faceAnchor"]
+    fallback = (
+        selection["effective"]["camera"]["onLost"]
+        if "fallbackReview" in binding
+        else "review"
+    )
+    behavior = reframe_face_camera(
+        wrapper["camera"],
+        frame_range=frame_range,
+        geometry=wrapper["sourceGeometry"],
+        points=trajectory["points"],
+        source_ticks=ticks,
+        transition_frames=binding["transitionFrames"],
+        fallback=fallback,
+        source_cut=wrapper.get("entryPolicy") == "source-cut",
+    )
+    return behavior, [part]
+
+
+def _move(component, cues, tracks, parts, fps, selection, read_face):
     wrapper = component["extensions"]["editingCraft"]
     validate_document(wrapper, "avo.animation.schema.json#/$defs/editingCraft")
     if not {"sourceGeometry", "sourceSha256"} <= wrapper.keys():
@@ -181,18 +263,25 @@ def _move(component, cues, tracks, parts, fps, selection):
     cue, interval = _cue(component, cues, fps)
     _layer(wrapper, cue, tracks)
     selected = _matching_parts(wrapper, parts, fps)
+    frozen = _selection(wrapper.get("options", selection), wrapper.get("faceAnchor"))
+    behavior = wrapper["camera"]
+    if "faceAnchor" in wrapper:
+        behavior, selected = _anchored_behavior(
+            wrapper, selected, interval, fps, frozen, read_face
+        )
     identifier = (
         "camera-move-" + content_hash([component["componentId"], cue["cueId"]])[:24]
     )
     return {
-        "optionsHash": _selection(wrapper.get("options", selection)),
+        "optionsHash": frozen["selectionHash"],
         "moveId": identifier,
         "componentId": component["componentId"],
         "cueId": cue["cueId"],
-        "behavior": wrapper["camera"],
+        "behavior": behavior,
         "geometry": wrapper["sourceGeometry"],
         "sourceSha256": wrapper["sourceSha256"],
         "entryPolicy": wrapper.get("entryPolicy", "continuous"),
+        "faceAnchor": wrapper.get("faceAnchor"),
         "frameRange": interval,
         "parts": selected,
         "propertyOwners": {"scale": identifier, "center": identifier},
@@ -300,6 +389,8 @@ def _operation(move, part, first, last, options_hash):
         ),
         "optionsHash": options_hash,
     }
+    if move["faceAnchor"] is not None:
+        parameters["faceAnchor"] = deepcopy(move["faceAnchor"])
     return {
         "operationId": "camera-" + content_hash(identity)[:24],
         "kind": "camera-transform",
@@ -336,7 +427,7 @@ def _operations(moves):
 
 
 def compile_camera_operations(
-    strategy, *, bmap, tracks, video_graph, output, selection
+    strategy, *, bmap, tracks, video_graph, output, selection, read_face=None
 ):
     """Keep BMap's original interval when splitting or holding a selected path."""
     components = _components(strategy)
@@ -349,7 +440,7 @@ def compile_camera_operations(
     parts = _contributions(video_graph)
     end = max((part["outputRange"]["endFrameExclusive"] for part in parts), default=0)
     moves = [
-        _move(component, bmap.get("cues", []), tracks, parts, fps, selection)
+        _move(component, bmap.get("cues", []), tracks, parts, fps, selection, read_face)
         for component in components
     ]
     return _operations(_ordered_moves(moves, end))
