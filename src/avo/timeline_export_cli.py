@@ -9,7 +9,13 @@ from subprocess import SubprocessError
 def configure(subparsers):
     parent = subparsers.add_parser("timeline-export")
     subcommands = parent.add_subparsers(dest="export_command", required=True)
-    for operation in ("prepare", "status", "inspect-feedback", "propose-feedback"):
+    for operation in (
+        "prepare",
+        "status",
+        "inspect-feedback",
+        "propose-feedback",
+        "qualify-target",
+    ):
         parser = subcommands.add_parser(operation)
         parser.add_argument("--project", type=Path, required=True)
         parser.add_argument("--video-id", default="")
@@ -23,6 +29,7 @@ def run(args):
     from avo.editing_craft_requests import read_craft_request
     from avo.timeline.command_registry import authorize
     from avo.timeline.editor_feedback_service import inspect_feedback, propose_feedback
+    from avo.timeline.editor_qualification import qualify_target
     from avo.timeline.workspace import TimelineWorkspace
 
     try:
@@ -47,6 +54,7 @@ def run(args):
             "status": lambda: service.status(request),
             "inspect-feedback": lambda: inspect_feedback(service, request),
             "propose-feedback": lambda: propose_feedback(service, request),
+            "qualify-target": lambda: qualify_target(service, request),
         }[args.export_command]()
     except (OSError, ValueError, RuntimeError, SubprocessError) as error:
         print(

@@ -28,6 +28,7 @@ from .store import timeline_writer, write_immutable_json
 
 SCHEMA = "avo.editor-handoff.schema.json#/$defs/"
 IMPLEMENTATION = "fcp7-xmeml-source-v1"
+OCCURRENCE_LIMIT = 10_000
 
 
 def target_profiles():
@@ -100,6 +101,14 @@ def _probe_sources(selected, inventory):
     return measured
 
 
+def _rounded_audio_frames(clips):
+    return any(
+        point["den"] != 1
+        for _, _, proof in clips
+        for point in proof["exactFrames"].values()
+    )
+
+
 def _assembly(rows, sources, measured, fps, window):
     files_by_id, lanes, evidence, losses = {}, {}, [], []
     for row in rows:
@@ -116,6 +125,8 @@ def _assembly(rows, sources, measured, fps, window):
             continue
         files_by_id[file_id] = source
         for output, clip, proof in clips:
+            if len(evidence) >= OCCURRENCE_LIMIT:
+                raise ValueError("Editor handoff exceeds its occurrence budget")
             key = (row["kind"], row["order"], row["laneId"], output or 0)
             lane = lanes.setdefault(
                 key, {"kind": row["kind"], "outputChannel": output, "clips": []}
@@ -128,10 +139,7 @@ def _assembly(rows, sources, measured, fps, window):
             )
             for field in row["effects"]
         )
-        if any(
-            any(clock["den"] != 1 for clock in proof["exactFrames"].values())
-            for _, _, proof in clips
-        ):
+        if _rounded_audio_frames(clips):
             losses.append(
                 _loss(
                     row,
@@ -175,7 +183,9 @@ def _bounded_window(request):
     fps = Fraction(value["num"], value["den"])
     window = request["window"]
     duration = window["endFrameExclusive"] - window["startFrame"]
-    if not 0 < duration <= 30 * fps:
+    if duration <= 0:
+        raise ValueError("Editor handoff requires a nonempty window")
+    if request["mode"] == "validation" and duration > 30 * fps:
         raise ValueError("Editor validation examples must cover at most 30 seconds")
     return window, fps
 
@@ -224,9 +234,9 @@ class EditorHandoffService:
                 "Editor interchange requires the exact explicitly selected target"
             )
         if request["mode"] != "validation":
-            raise ValueError(
-                "Editor target is unqualified. Only validation examples are available."
-            )
+            from .editor_qualification import require_qualification
+
+            require_qualification(self, profile, request.get("qualificationRef"))
         window, fps = _bounded_window(request)
         roots = tuple(_admitted_path(value) for value in request["admittedRoots"])
         workspace = self.workspace
@@ -236,7 +246,7 @@ class EditorHandoffService:
         _, snapshots, _ = MotionReviewService(workspace)._metadata()
         if workspace.authority != "canonical" or "cmap" not in snapshots:
             raise ValueError(
-                "Editor validation requires the current canonical original-source cut"
+                "Editor handoff requires the current canonical original-source cut"
             )
         workspace.require_active("cmap")
         bundle, payload = self._measure(request, profile, snapshots, window, fps, roots)
@@ -248,6 +258,8 @@ class EditorHandoffService:
     def _measure(self, request, profile, snapshots, window, fps, roots):
         cmap = snapshots["cmap"]
         rows = selected_placements(cmap, fps, window)
+        if len(rows) > OCCURRENCE_LIMIT:
+            raise ValueError("Editor handoff exceeds its occurrence budget")
         workspace = self.workspace
         with fingerprint_stage(verify_on_exit=True):
             sources, measured = _selected_sources(
@@ -269,9 +281,12 @@ class EditorHandoffService:
                     "reason": "Original editor display timecode awaits target qualification",
                 }
             )
+        validation = request["mode"] == "validation"
         model = {
-            "id": "avo-validation-example",
-            "name": "AVO editor validation example",
+            "id": "avo-validation-example" if validation else "avo-editor-handoff",
+            "name": "AVO editor validation example"
+            if validation
+            else "AVO editor handoff",
             "rate": fps,
             "duration": window["endFrameExclusive"] - window["startFrame"],
             "originFrame": window["startFrame"],
@@ -286,7 +301,7 @@ class EditorHandoffService:
             "contractVersion": "1.0.0",
             "provider": workspace.project["provider"],
             "videoId": workspace.video_id,
-            "status": "validation-only",
+            "status": "validation-only" if validation else "production",
             "request": request,
             "profile": profile,
             "profileHash": content_hash(profile),

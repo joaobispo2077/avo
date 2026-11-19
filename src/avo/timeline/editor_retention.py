@@ -12,6 +12,7 @@ RECORD_DEFINITIONS = {
     "manifests": "manifest",
     "inspections": "inspection",
     "feedback": "feedbackProposal",
+    "qualifications": "qualification",
 }
 
 
@@ -30,9 +31,12 @@ def _selected_records(root):
 
 def _references(body, category):
     if category == "manifests":
-        return (body["xmlRef"],)
+        selected = body["request"].get("qualificationRef")
+        return (body["xmlRef"], selected) if selected else (body["xmlRef"],)
     if category == "inspections":
         return (body["input"]["handoffRef"], body["receipt"])
+    if category == "qualifications":
+        return body["basisRef"], body["input"]["inspectionRef"], body["returnedXmlRef"]
     return (
         body["basisRef"],
         body["input"]["inspectionRef"],
