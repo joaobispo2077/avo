@@ -98,6 +98,22 @@ def test_returned_level_does_not_impute_a_missing_original_gain(tmp_path):
     ]
 
 
+@pytest.mark.parametrize("gain", [0, -6.020599913279624, -60, 12])
+def test_write_explicit_audio_gain_as_linear_clip_level(tmp_path, gain):
+    source = tmp_path / "original.mov"
+    plain = document(source.as_uri()).replace(
+        "<filter><effect><name>External finishing</name></effect></filter>", ""
+    )
+    model = parse_fcp7_xml(plain.encode(), roots=[tmp_path])
+    model["tracks"][1]["clips"][0]["gainDb"] = gain
+
+    encoded = write_fcp7_xml(model)
+    returned = parse_fcp7_xml(encoded, roots=[tmp_path])
+
+    assert returned["tracks"][1]["clips"][0]["gainDb"] == pytest.approx(gain)
+    assert "gainDb" not in returned["tracks"][0]["clips"][0]
+
+
 @pytest.mark.parametrize(("start", "end"), [(0, 240), (2, 14)])
 def test_explicit_filter_range_can_cover_entire_source_occurrence(tmp_path, start, end):
     returned = _with_audio_levels(tmp_path, _levels("0.5", start=start, end=end))

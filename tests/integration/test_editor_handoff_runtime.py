@@ -263,6 +263,64 @@ def test_placed_validation_preserves_gaps_overlay_order_and_repeated_occurrences
 
 
 @pytest.mark.integration
+def test_validation_exports_constant_gain_only_for_the_observed_target(tmp_path):
+    from copy import deepcopy
+
+    from tests.integration.test_otio_placed_pipeline import _trial
+
+    imported, source, initial = _trial(tmp_path)
+    ws = imported.workspace
+    original = file_fingerprint(source)
+    body = deepcopy(initial["snapshot"])
+    item = next(
+        row for row in body["layout"]["placements"] if row["mediaKind"] == "audio"
+    )
+    item["gainDb"] = -6.020599913279624
+    CMapService(ws).author(
+        body,
+        expected_head_hash=initial["contentHash"],
+        actor="creator",
+        reason="Set a constant level on one original clip",
+    )
+    before = MotionReviewService(ws).project()["basisHeads"]
+
+    for profile in (PROFILE, "davinci-resolve-21-0-0-47-windows-11-25h2"):
+        request = editor_request(ws)
+        request.update(
+            profileId=profile,
+            selection=resolve_editing_craft_selection(
+                invocation={"handoff": {"mode": "editor", "targetProfile": profile}}
+            ),
+            programRate={"num": 24, "den": 1},
+            window={"startFrame": 0, "endFrameExclusive": 60},
+        )
+        result = build_editor_handoff(ws).prepare(request)
+        model = parse_fcp7_xml(
+            (ws.raw_dir / result["xmlRef"]["locator"]).read_bytes(), roots=[ws.raw_dir]
+        )
+        clips = [
+            clip
+            for lane in model["tracks"]
+            for clip in lane["clips"]
+            if clip["id"].startswith(item["placementId"] + "-channel-")
+        ]
+        assert len(clips) == 2
+        losses = [row for row in result["losses"] if row["field"] == "gainDb"]
+        if profile == PROFILE:
+            assert all("gainDb" not in clip for clip in clips)
+            assert len(losses) == 1
+        else:
+            assert [clip["gainDb"] for clip in clips] == pytest.approx(
+                [item["gainDb"]] * 2
+            )
+            assert losses == []
+        assert result["status"] == "validation-only"
+        assert result["profile"]["status"] == "unqualified"
+    assert MotionReviewService(ws).project()["basisHeads"] == before
+    assert file_fingerprint(source) == original
+
+
+@pytest.mark.integration
 def test_returned_edit_stays_a_review_proposal_and_preserves_original_bytes(
     tmp_path, capsys
 ):
