@@ -56,6 +56,7 @@ where = ["src"]
     "**/*.md",
 ]
 "avo.resources.directions" = ["*.json"]
+"avo.resources.interchange" = ["*.json"]
 
 [tool.setuptools.data-files]
 "share/avo/schemas" = ["schemas/*.json"]
