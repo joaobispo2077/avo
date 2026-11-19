@@ -16,7 +16,11 @@ from .contracts import (
     fingerprint_stage,
     validate_document,
 )
-from .media_admission import is_code_drawn_asset, require_media_admission
+from .media_admission import (
+    is_artcraft_asset,
+    is_code_drawn_asset,
+    require_media_admission,
+)
 from .store import StoreError, write_immutable_json
 
 
@@ -352,6 +356,10 @@ class GeneratedAssetService:
         environment: dict[str, Any] | None,
         hyperframes_environment: dict[str, Any] | None = None,
     ) -> None:
+        if is_artcraft_asset(record):
+            raise GeneratedAssetError(
+                "ArtCraft admission requires independent native observations"
+            )
         if (record.get("parameters") or {}).get("hyperframes"):
             if hyperframes_environment is None:
                 raise GeneratedAssetError(
