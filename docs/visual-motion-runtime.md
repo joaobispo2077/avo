@@ -83,3 +83,27 @@ to the baseline crop. Both choices require `faceAnchor.fallbackReview` with the
 actor and reason. The linked map and storyboard show the measured source range,
 uncertain intervals and fallback status. AVO checks the selected evidence when
 publishing and admitting a proof, and seeking uses the frozen camera path.
+
+## Selected reference ranges
+
+Run `avo cli animation reference-analyze --project <absolute-project>`
+`--request <request.json> --json` for explicit reference measurements. The
+request binds the current project basis, enables `referenceAnalysis`, supplies
+the absolute isolated `runtimePython` path and selects each local original
+by size, digest, stream, native source range, frame stride and desired aspects.
+Reference feature tracking runs with the pinned OpenCV and NumPy environment
+alone.
+
+The default processing budget allows ten clips and 300 seconds total, with
+each range at most 30 seconds. An explicit budget can raise the total to 20
+clips and 600 seconds. Each successful clip returns its measured coverage and a
+PNG with up to six frames labeled by original presentation timestamp. The
+inspection record and sheets live under `edit/motion/references/`.
+
+Global movement estimates report scale, rotation in degrees and frame-center
+translation as fractions of display width and height. Residual movement uses
+the display diagonal. Brightness uses normalized mean grayscale. Cuts are
+candidates between sampled frames. Dark or poorly tracked intervals stay
+unmeasurable. Easing interpretation and any unavailable hold/reveal or
+audio/word evidence are reported separately from observed frame measurements.
+[OpenCV feature tracking](https://docs.opencv.org/4.12.0/dc/d6b/group__video__track.html)

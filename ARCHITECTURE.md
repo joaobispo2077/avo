@@ -1392,6 +1392,14 @@ the frozen setting before deriving an attenuation suggestion. The analysis
 never contributes samples to the proof output. Native PCM fixtures verify
 bit-for-bit equivalence with the optional analysis on or off.
 
+Explicit reference analysis shares the bounded display proxy and isolated CPU
+vision runtime. It uses feature tracking without the face model, binds its
+partial-affine estimates and residuals to actual adjacent native timestamps,
+and exposes cut candidates and unmeasurable intervals separately. Reference
+measurements and labeled contact sheets form an immutable inspection record
+under the project. They enter editorial decisions through reviewed document
+references and keep proof source admission independent.
+
 Camera movement, face anchoring, sound matching, reference analysis, spoken
 notes/recovery and editor handoff are selected options resolved through existing
 settings scopes and frozen requests. Preferences seed future work and cannot
