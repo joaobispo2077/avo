@@ -163,9 +163,10 @@ Choice preparation checks measured channel count, the explicitly selected source
 peak ceiling, and fade space outside the useful attack/tail. It does not invent a
 gain target or change the original dialogue/music. Repeated sources and coincident
 attacks are advisories. Per-ID changes report before/after asset identities, role,
-gain and schedule; live source checks, combined peak, speech masking and actual
-contextual listening remain review obligations. Choice preparation alone does
-not publish canonical audio.
+gain and schedule. Use the before and after `listeningRanges` for contextual
+review of edits, including the lead-in and complete tail. Their sample rates
+belong to the respective schedules. Check live sources, combined peak and speech
+clarity during review. Explicit application publishes the selected audio.
 
 `overlapping-sounds` additionally identifies scheduled overlapping pairs, their
 roles and exact rational intervals in seconds. The report includes pre-roll and

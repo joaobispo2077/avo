@@ -58,6 +58,13 @@ Changes address stable event IDs. Replacing a sound or changing its level keeps
 its layer/cue identities; selecting silence removes that contribution without
 probing an asset. Other sound selections and unrelated picture/audio layers
 remain intact. Multi-effect groups require the exact ordered event list.
+
+Each new change receipt includes `listeningRanges.before` and
+`listeningRanges.after`. They identify the old and new playback intervals,
+including lead-in and tail, in samples at their recorded rates. Additions
+have an empty old interval and removals have an empty new interval. Use both
+ranges when listening to a retimed effect. Earlier receipts remain readable.
+Whole-program sound approval still requires listening to the current encode.
 Adding a second effect cannot borrow approval from a preserved ordinary single
 effect: changing that effect's context requires explicit reselection.
 
