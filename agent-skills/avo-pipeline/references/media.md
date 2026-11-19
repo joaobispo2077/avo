@@ -94,6 +94,13 @@ Follow a cue link to its storyboard card and check any missing links in the text
 or HTML report. Review picture order apart from the stored lane order and check
 playback in the encoded proof. Locale delivery audio has its own workflow.
 
+For a declared motion asset need, list existing local options before sourcing
+anything new. Use `animation asset-review` to compare numbered candidates against
+their intended background and review the supplier, subject and rights evidence.
+Record the chosen, rejected or supplied option in `animation plan-select` using
+the exact round reference. Keep the placeholder visible until normal canonical
+application links the chosen source to the item.
+
 ## Selected artistic guidance
 
 Before style-dependent authoring, run the shared native pipeline status for this project (checkout: `python -m avo.cli pipeline status --project <project> --json`; installed: `avo cli pipeline status --project <project> --json`). Read `briefing.stageContexts.bmap` and its exact selected brief, treatment, constraints, exclusions and current canonical-head identities. Treat this context as offered guidance, never proof that a choice was applied, an approval, or permission to change protected content. Current creator instructions and integrity/accessibility/rights rules take precedence. A bypassed or unselected brief adds no creative gate. Do not discover provider history or select a latest profile independently. See [briefstart](briefstart.md).

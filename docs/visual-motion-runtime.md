@@ -125,3 +125,21 @@ required when using an approximate easing fit for direction.
 The decision stores a project-scoped descriptor for Briefstart. Provide its
 path explicitly as a reference when preparing a brief. Briefstart checks the
 provider, project identity and inspection digest before consuming the document.
+
+## Contextual asset options
+
+Run `avo cli animation asset-review --project <absolute-project> --request <request.json> --json`
+for one declared asset need on a motion proposal. Select local folders and up to
+16 exact options. Give each option a stable ID, the original file digest, the
+asset type and subject, the responsible supplier, and the rights evidence.
+Choose a background color and optionally provide a fingerprinted local still
+for the intended shot. The command returns a numbered sheet and the frozen
+round reference. The current capture path accepts images that Pillow can decode.
+
+Options with mismatched metadata, unverified rights, failed previews or changed
+files stay flagged. Preserve the option number in `plan-select` using
+`selection.assetChoices` with `roundRef`, `disposition` and `optionNumber`.
+Use `choose`, `reject`, or `supply`. For another asset, make a new round with the
+supplied file. The selected decision appears on the storyboard. The need stays
+pending until a matching fingerprint appears in a canonical cue. Reuse outside
+the project goes through the separately scoped library workflow.

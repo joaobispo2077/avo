@@ -1412,6 +1412,13 @@ project-only `ReferenceDescriptor`. Briefstart consumes that document through
 its existing source loader and checks the inspection hash and project identity.
 The direction layer has no dependency on the vision runtime or reference media.
 
+Contextual asset review binds one motion proposal need, scoped local folders,
+fingerprinted options and an optional prepared background. The image adapter
+produces a numbered comparison sheet. Motion plan selection retains the chosen
+round and revalidates its precise source before canonical application. The
+storyboard bases declared readiness on a matching canonical cue fingerprint.
+Library promotion and media admission keep their existing owners.
+
 Camera movement, face anchoring, sound matching, reference analysis, spoken
 notes/recovery and editor handoff are selected options resolved through existing
 settings scopes and frozen requests. Preferences seed future work and cannot
