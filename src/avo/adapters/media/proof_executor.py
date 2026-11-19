@@ -36,6 +36,33 @@ PROOF_AUDIO_BITRATE = "192k"
 
 
 def _run(arguments: list[str]) -> None:
+    long_filter = next(
+        (
+            index
+            for index, argument in enumerate(arguments[:-1])
+            if argument in {"-vf", "-filter_complex"}
+            and len(arguments[index + 1]) > 16000
+        ),
+        None,
+    )
+    if long_filter is not None:
+        with tempfile.TemporaryDirectory(prefix="avo-proof-filter-") as directory:
+            script = Path(directory) / "proof.ffgraph"
+            script.write_text(arguments[long_filter + 1], encoding="utf-8")
+            option = (
+                "-filter_script:v"
+                if arguments[long_filter] == "-vf"
+                else "-filter_complex_script"
+            )
+            _run(
+                [
+                    *arguments[:long_filter],
+                    option,
+                    str(script),
+                    *arguments[long_filter + 2 :],
+                ]
+            )
+        return
     result = subprocess.run(arguments, capture_output=True, text=True)
     if result.returncode:
         raise RuntimeError(f"ProofPlan ffmpeg failed: {result.stderr[-4000:]}")
