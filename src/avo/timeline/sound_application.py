@@ -585,7 +585,7 @@ class _Application:
         snapshots["tracks"]["audioTracks"]["layers"].append(layer)
         snapshots["bmap"]["cues"].append(cue)
 
-    def _combined_roles(self, snapshots, choices, contexts):
+    def _combined_roles(self, snapshots, choices, contexts, *, repetition_window_ms):
         layers = sorted(
             self._selected_layers(snapshots["tracks"]).values(),
             key=lambda layer: layer["order"],
@@ -605,7 +605,9 @@ class _Application:
             ],
             contexts,
         )
-        return _sound_choice_advisories(combined)
+        return _sound_choice_advisories(
+            combined, repetition_window_ms=repetition_window_ms
+        )
 
     @staticmethod
     def _check_preserved_contexts(layers, affected, contexts):
@@ -656,7 +658,16 @@ class _Application:
         self._append_layer(snapshots, layer, cue)
 
     def _authoring(
-        self, request, shown, prepared, sources, snapshots, request_ref, contexts
+        self,
+        request,
+        shown,
+        prepared,
+        sources,
+        snapshots,
+        request_ref,
+        contexts,
+        *,
+        repetition_window_ms=None,
     ):
         current = self._selected_layers(snapshots["tracks"])
         order = max(
@@ -682,7 +693,12 @@ class _Application:
                 current.get(choice["eventId"]),
                 order,
             )
-        return snapshots, self._combined_roles(snapshots, prepared["choices"], contexts)
+        return snapshots, self._combined_roles(
+            snapshots,
+            prepared["choices"],
+            contexts,
+            repetition_window_ms=repetition_window_ms,
+        )
 
     def _prepare(self, request):
         from .sound_scope import require_sound_scope_parent
@@ -705,8 +721,16 @@ class _Application:
         choices = self._choices(request, shown["proposal"], generation, snapshots)
         sources = self._source_refs(choices["choices"], generation)
         _, request_ref, _ = self._reference("requests", request, "applyRequest")
+        matching = shown["proposal"]["options"]["effective"]["soundMatching"]
         snapshots, advisories = self._authoring(
-            request, shown, choices, sources, snapshots, request_ref, contexts
+            request,
+            shown,
+            choices,
+            sources,
+            snapshots,
+            request_ref,
+            contexts,
+            repetition_window_ms=matching.get("repetitionWindowMs"),
         )
         _, cmap, _ = BMapService(self.workspace).current_basis()
         CMapService(self.workspace)._verify_raw(cmap["snapshot"])

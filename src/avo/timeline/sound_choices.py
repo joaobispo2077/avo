@@ -4,6 +4,7 @@ import json
 import math
 from copy import deepcopy
 from fractions import Fraction
+from itertools import pairwise
 
 from avo.sfx_contracts import _validate_entries
 
@@ -112,26 +113,55 @@ def _check_sound_roles(choices, contexts):
             raise SoundPlanningError("Comparison-only references cannot publish sound")
 
 
-def _sound_choice_advisories(choices):
-    groups = {"repeated-source": {}, "colliding-attacks": {}}
+def _nearby_impacts(impacts, max_gap):
+    ordered = sorted(impacts)
+    nearby = set()
+    for before, after in pairwise(ordered):
+        if after[0] - before[0] <= max_gap:
+            nearby.update((before[1], after[1]))
+    return [identity for _, identity in ordered if identity in nearby]
+
+
+def _repetition_advisories(sources, window_ms):
+    results = []
+    for impacts in sources.values():
+        if len(impacts) < 2:
+            continue
+        if window_ms is None:
+            event_ids = [identity for _, identity in impacts]
+        else:
+            event_ids = _nearby_impacts(impacts, Fraction(window_ms, 1000))
+        if event_ids:
+            advisory = {"code": "repeated-source", "eventIds": event_ids}
+            if window_ms is not None:
+                advisory["maxGapMs"] = window_ms
+            results.append(advisory)
+    return results
+
+
+def _sound_choice_advisories(choices, *, repetition_window_ms=None):
+    sources, attacks = {}, {}
     for choice in choices:
         fit = choice["fit"]
         if fit["status"] != "fit":
             continue
-        values = {
-            "repeated-source": fit["source"]["sourceSha256"],
-            "colliding-attacks": Fraction(
-                fit["event"]["resolvedImpactSample"], fit["clock"]["sampleRate"]
-            ),
-        }
-        for code, key in values.items():
-            groups[code].setdefault(key, []).append(choice["eventId"])
-    return [
-        {"code": code, "eventIds": identities}
-        for code, grouped in groups.items()
-        for identities in grouped.values()
+        impact = Fraction(
+            fit["event"]["resolvedImpactSample"], fit["clock"]["sampleRate"]
+        )
+        sources.setdefault(fit["source"]["sourceSha256"], []).append(
+            (impact, choice["eventId"])
+        )
+        attacks.setdefault(impact, []).append(choice["eventId"])
+    collisions = [
+        {"code": "colliding-attacks", "eventIds": identities}
+        for identities in attacks.values()
         if len(identities) > 1
-    ] + _sound_overlap_advisories(choices)
+    ]
+    return (
+        _repetition_advisories(sources, repetition_window_ms)
+        + collisions
+        + _sound_overlap_advisories(choices)
+    )
 
 
 def _sound_intervals(choices):

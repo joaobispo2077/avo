@@ -50,6 +50,10 @@
         },
         "allowLayering": {
           "type": "boolean"
+        },
+        "repetitionWindowMs": {
+          "type": "integer",
+          "minimum": 0
         }
       }
     },
