@@ -310,7 +310,18 @@ def _clip_frames(element):
     return frame
 
 
-def _full_clip_audio_levels(element):
+def _covers_source_range(filter_node, frames):
+    start = _text(filter_node, "start", "-1")
+    end = _text(filter_node, "end", "-1")
+    if (start, end) == ("-1", "-1"):
+        return True
+    try:
+        return 0 <= int(start) <= frames["in"] and frames["out"] <= int(end)
+    except ValueError:
+        return False
+
+
+def _full_clip_audio_levels(element, frames):
     filters = [
         item
         for item in element.findall("filter")
@@ -322,7 +333,7 @@ def _full_clip_audio_levels(element):
     (item,) = filters
     if _text(item, "enabled", "TRUE").casefold() != "true":
         return None
-    if any(_text(item, key, "-1") != "-1" for key in ("start", "end")):
+    if not _covers_source_range(item, frames):
         return None
     return item.find("effect")
 
@@ -347,8 +358,8 @@ def _linear_level(effect):
     return level
 
 
-def _observed_audio_gain(element):
-    effect = _full_clip_audio_levels(element)
+def _observed_audio_gain(element, frames):
+    effect = _full_clip_audio_levels(element, frames)
     if effect is None or effect.find(".//keyframe") is not None:
         return {}
     level = _linear_level(effect)
@@ -371,7 +382,7 @@ def _clip(element, rate, sources, kind):
         "enabled": _boolean(element, "enabled", True),
         "markers": _markers(element),
         "unknown": _unknown(element),
-        **(_observed_audio_gain(element) if kind == "audio" else {}),
+        **(_observed_audio_gain(element, frame) if kind == "audio" else {}),
         "rangeStatus": "external"
         if source is None or min(frame["start"], frame["end"]) < 0
         else "observed",
