@@ -92,10 +92,16 @@ def source_movie(tmp_path):
             "25",
             "-i",
             "pipe:0",
+            "-f",
+            "lavfi",
+            "-i",
+            r"aevalsrc=if(gte(t\,0.046)\,0.7*sin(2*PI*1000*t)\,0):s=48000:d=0.12",
             "-vf",
             "setsar=1",
             "-c:v",
             "ffv1",
+            "-c:a",
+            "pcm_f32le",
             str(source),
         ],
         input=reference_frames().tobytes(),
@@ -131,6 +137,36 @@ def test_reference_motion_uses_actual_proxy_and_abstains_in_darkness(
     assert dark["brightness"]["after"] == 0
     assert result["versions"]["opencv-python-headless"] == "4.12.0.88"
     assert "modelSha256" not in result
+
+
+def test_reference_motion_discloses_cut_and_untrackable_blur(
+    tmp_path, reference_runtime
+):
+    import numpy as np
+
+    random = np.random.default_rng(7)
+    shape = (96, 128, 1)
+    first = random.integers(16, 80, size=shape, dtype=np.uint8).repeat(3, axis=2)
+    second = random.integers(165, 240, size=shape, dtype=np.uint8).repeat(3, axis=2)
+    blurred = np.full_like(second, 195)
+    frames = np.stack([first, second, blurred])
+    proxy = tmp_path / "cut-and-blur.bgr"
+    proxy.write_bytes(frames.tobytes())
+    result = measure_reference_proxy(
+        reference_runtime,
+        proxy,
+        width=128,
+        height=96,
+        frame_count=len(frames),
+        sha256=file_fingerprint(proxy)["sha256"],
+    )
+    cut, soft = result["pairs"]
+    assert cut["status"] == "cut-candidate"
+    assert cut["reason"] == "tracking-break-and-histogram-change"
+    assert cut["brightness"]["after"] > cut["brightness"]["before"]
+    assert soft["status"] == "unmeasurable"
+    assert soft["reason"] == "insufficient-detail"
+    assert "global" not in cut and "global" not in soft
 
 
 def test_freeze_preserves_exact_native_grid_and_requested_aspects_only():
@@ -189,7 +225,10 @@ def test_freeze_preserves_exact_native_grid_and_requested_aspects_only():
     }
     assert result["interpretation"] == {
         "easing": "uninterpreted",
-        "availableEvidence": {"audio-word-timing": "unavailable"},
+        "availableEvidence": {
+            "audio-word-timing": "unavailable",
+            "prepared-words": "not-selected",
+        },
     }
     stale = deepcopy(request)
     stale["proxy"]["sourceTicks"] = [4001, 4020, 4020]
@@ -263,6 +302,11 @@ def test_native_reference_analysis_saves_inspection_only_sheet_and_observations(
     workspace, _, _ = approved_workspace(tmp_path)
     source = source_movie(tmp_path)
     request = reference_request(workspace, source, reference_runtime)
+    request["clips"][0]["audio"] = {
+        "streamIndex": 1,
+        "channelIndex": 0,
+        "energyThreshold": 0.05,
+    }
     request_path = tmp_path / "reference-request.json"
     request_path.write_text(json.dumps(request), encoding="utf-8")
     before = {
@@ -297,6 +341,10 @@ def test_native_reference_analysis_saves_inspection_only_sheet_and_observations(
     assert motion["startTicks"] == 0
     assert motion["endTicks"] == 40
     assert motion["global"]["translateX"] == pytest.approx(5 / 128, abs=0.008)
+    audio = row["observation"]["interpretation"]["audioTiming"]
+    assert audio["status"] == "observed"
+    assert audio["sampleRate"] == 48000
+    assert audio["onsetSamples"] == [pytest.approx(2208, abs=96)]
     sheet = workspace.raw_dir / row["contactSheet"]["locator"]
     assert sheet.read_bytes().startswith(b"\x89PNG\r\n\x1a\n")
     assert file_fingerprint(sheet)["sha256"] == row["contactSheet"]["sha256"]
