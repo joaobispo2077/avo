@@ -4,6 +4,109 @@
   "title": "Source-bound preparation evidence",
   "$ref": "#/$defs/coverage",
   "$defs": {
+    "noteTarget": {
+      "type": "object", "additionalProperties": false, "required": ["phrase", "stage", "targetId"],
+      "properties": {
+        "phrase": {"type": "string", "minLength": 1, "maxLength": 256, "pattern": "\\S"},
+        "stage": {"enum": ["cutting", "motion", "sound", "assets"]},
+        "targetId": {"type": "string", "minLength": 1, "maxLength": 128, "pattern": "\\S"}
+      }
+    },
+    "notesDetectRequest": {
+      "type": "object", "additionalProperties": false,
+      "required": ["contractVersion", "operation", "analysisRef", "selection", "targets"],
+      "properties": {
+        "contractVersion": {"const": "1.0.0"}, "operation": {"const": "notes-detect"},
+        "analysisRef": {"$ref": "#/$defs/ref"},
+        "selection": {"$ref": "avo.editing-craft.schema.json#/$defs/selection"},
+        "targets": {"type": "array", "maxItems": 64, "items": {"$ref": "#/$defs/noteTarget"}}
+      }
+    },
+    "noteId": {"type": "string", "pattern": "^note-[a-f0-9]{24}$"},
+    "spokenNote": {
+      "type": "object", "additionalProperties": false,
+      "required": ["noteId", "literal", "body", "sourceRange", "interpretation", "issues", "status", "review"],
+      "properties": {
+        "noteId": {"$ref": "#/$defs/noteId"},
+        "literal": {"type": "string", "minLength": 1, "maxLength": 8192},
+        "body": {"type": "string", "maxLength": 8192},
+        "sourceRange": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/range"}]},
+        "interpretation": {
+          "type": "object", "additionalProperties": false, "required": ["intent", "stage", "targetId", "confidence"],
+          "properties": {
+            "intent": {"type": "string", "maxLength": 8192},
+            "stage": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/noteTarget/properties/stage"}]},
+            "targetId": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/noteTarget/properties/targetId"}]},
+            "confidence": {"enum": ["matched-convention", "unresolved"]}
+          }
+        },
+        "issues": {"type": "array", "maxItems": 16, "uniqueItems": true, "items": {"type": "string", "maxLength": 128}},
+        "status": {"enum": ["candidate", "unresolved"]},
+        "review": {"const": "required"}
+      }
+    },
+    "noteBinding": {
+      "type": "object", "additionalProperties": false,
+      "required": ["sourceRef", "sourceRange", "routingHash", "syncRef", "transcriptSelectionHash", "wordsHash"],
+      "properties": {
+        "sourceRef": {"$ref": "#/$defs/ref"}, "sourceRange": {"$ref": "#/$defs/range"},
+        "routingHash": {"$ref": "#/$defs/sha"}, "syncRef": {"$ref": "#/$defs/ref"},
+        "transcriptSelectionHash": {"$ref": "#/$defs/sha"}, "wordsHash": {"$ref": "#/$defs/sha"}
+      }
+    },
+    "spokenNoteReport": {
+      "type": "object", "additionalProperties": false,
+      "required": ["input", "provider", "videoId", "binding", "status", "notes", "issues", "truncated"],
+      "properties": {
+        "input": {"$ref": "#/$defs/notesDetectRequest"},
+        "provider": {"type": "string", "minLength": 1, "maxLength": 256},
+        "videoId": {"type": "string", "minLength": 1, "maxLength": 256},
+        "binding": {"$ref": "#/$defs/noteBinding"},
+        "status": {"enum": ["observed", "unavailable"]},
+        "notes": {"type": "array", "maxItems": 100, "items": {"$ref": "#/$defs/spokenNote"}},
+        "issues": {"type": "array", "maxItems": 16, "items": {"type": "string", "maxLength": 128}},
+        "truncated": {"type": "boolean"}
+      }
+    },
+    "noteDecisionRequest": {
+      "type": "object", "additionalProperties": false,
+      "required": ["contractVersion", "operation", "operationId", "actor", "reason", "reportRef", "noteId"],
+      "anyOf": [{"required": ["interpretation"]}, {"required": ["speech"]}],
+      "dependentRequired": {"interpretation": ["expectedInterpretationRef"], "speech": ["expectedSpeechRef"]},
+      "properties": {
+        "contractVersion": {"const": "1.0.0"}, "operation": {"const": "notes-decide"},
+        "operationId": {"type": "string", "minLength": 1, "maxLength": 128, "pattern": "\\S"},
+        "actor": {"type": "string", "minLength": 1, "maxLength": 256, "pattern": "\\S"},
+        "reason": {"type": "string", "minLength": 1, "maxLength": 2048, "pattern": "\\S"},
+        "reportRef": {"$ref": "#/$defs/ref"}, "noteId": {"$ref": "#/$defs/noteId"},
+        "interpretation": {"enum": ["accept", "reject", "defer"]},
+        "speech": {"enum": ["propose-exclusion", "keep", "defer"]},
+        "expectedInterpretationRef": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/ref"}]},
+        "expectedSpeechRef": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/ref"}]},
+        "currentInstructions": {
+          "type": "object", "additionalProperties": false,
+          "properties": {
+            "keepSpeech": {"type": "boolean"},
+            "blockedTargets": {"type": "array", "maxItems": 64, "items": {
+              "type": "object", "additionalProperties": false, "required": ["stage", "targetId"],
+              "properties": {"stage": {"$ref": "#/$defs/noteTarget/properties/stage"}, "targetId": {"$ref": "#/$defs/noteTarget/properties/targetId"}}
+            }}
+          }
+        }
+      }
+    },
+    "spokenNoteDecision": {
+      "type": "object", "additionalProperties": false,
+      "required": ["input", "requestHash", "note", "interpretationEffect", "speechEffect", "cuttingProposalRef"],
+      "properties": {
+        "input": {"$ref": "#/$defs/noteDecisionRequest"},
+        "requestHash": {"$ref": "#/$defs/sha"},
+        "note": {"$ref": "#/$defs/spokenNote"},
+        "interpretationEffect": {"enum": ["pending-owner-review", "reject", "defer", null]},
+        "speechEffect": {"enum": ["cutting-review-required", "keep", "defer", null]},
+        "cuttingProposalRef": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/ref"}]}
+      }
+    },
     "selectedEvidence": {
       "type": "object", "additionalProperties": false,
       "required": ["contractVersion", "status", "originalAnalysisRef", "requestRefs", "resultRefs", "decisionRefs", "protectedRanges", "issues", "selectionHash"],
