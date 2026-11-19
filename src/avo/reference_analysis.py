@@ -4,10 +4,12 @@ from copy import deepcopy
 from fractions import Fraction
 from itertools import pairwise
 from math import isfinite
+from statistics import median
 
 from .timeline.contracts import content_hash, validate_document
 
 SCHEMA = "avo.visual-motion-analysis.schema.json"
+ASSOCIATION_PARAMETERS = ("seed", "minimumOverlap", "maximumGapTicks")
 
 
 def _seed_index(frames, seed):
@@ -181,10 +183,7 @@ def freeze_face_observation(request, observed):
     association = associate_selected_face(
         {
             "frames": frames,
-            **{
-                key: request[key]
-                for key in ("seed", "minimumOverlap", "maximumGapTicks")
-            },
+            **{key: request[key] for key in ASSOCIATION_PARAMETERS},
         }
     )
     identity = ("modelSha256", "device", "isolated", "versions")
@@ -204,8 +203,103 @@ def freeze_face_observation(request, observed):
     return result
 
 
+def _require_face_observation(observation):
+    validate_document(observation, SCHEMA + "#/$defs/faceObservation")
+    payload = {
+        key: value for key, value in observation.items() if key != "analysisHash"
+    }
+    if observation["analysisHash"] != content_hash(payload):
+        raise ValueError("Face observation identity changed")
+
+
+def _trajectory_points(frames, association):
+    points = []
+    for frame, item in zip(frames, association, strict=True):
+        if item["status"] == "selected":
+            box = frame["detections"][item["detectionIndex"]]["box"]
+            points.append({"sourceTick": item["sourceTick"], "box": deepcopy(box)})
+    centers = [
+        [x + width / 2, y + height / 2]
+        for x, y, width, height in (point["box"] for point in points)
+    ]
+    for index, point in enumerate(points):
+        neighbors = (
+            centers[index - 1 : index + 2]
+            if 0 < index < len(centers) - 1
+            else centers[index : index + 1]
+        )
+        x, y = map(median, zip(*neighbors, strict=True))
+        point["center"] = {"x": x, "y": y}
+    return points
+
+
+def _append_uncertainty(intervals, start, end, reason):
+    if start >= end:
+        return
+    if (
+        intervals
+        and intervals[-1]["endTicks"] == start
+        and intervals[-1]["reason"] == reason
+    ):
+        intervals[-1]["endTicks"] = end
+    else:
+        intervals.append({"startTicks": start, "endTicks": end, "reason": reason})
+
+
+def _uncertain_intervals(association, scope):
+    intervals = []
+    _append_uncertainty(
+        intervals, scope["startTicks"], association[0]["sourceTick"], "unobserved"
+    )
+    stop = {"sourceTick": scope["endTicks"], "status": "unobserved"}
+    for current, following in pairwise([*association, stop]):
+        start, end, reason = (
+            current["sourceTick"],
+            following["sourceTick"],
+            current["status"],
+        )
+        if reason == "selected":
+            if following["status"] == "selected":
+                continue
+            start, reason = start + 1, "unobserved"
+        _append_uncertainty(intervals, start, end, reason)
+    return intervals
+
+
+def freeze_face_trajectory(observation):
+    """Smooth measured framing offline and expose exact uncertainty for review."""
+    _require_face_observation(observation)
+    request, frames = observation["request"], observation["samples"]
+    scope, proxy = request["sourceRange"], request["proxy"]
+    _require_observation_scope(request, {"proxySha256": proxy["sha256"]})
+    association = associate_selected_face(
+        {"frames": frames, **{key: request[key] for key in ASSOCIATION_PARAMETERS}}
+    )
+    if [frame["sourceTick"] for frame in frames] != proxy[
+        "sourceTicks"
+    ] or association != observation["association"]:
+        raise ValueError(
+            "Face observation samples or association differ from the frozen selection"
+        )
+    result = {
+        "contractVersion": "1.0.0",
+        "observationHash": observation["analysisHash"],
+        "smoothing": "median-three-v1",
+        "streamOriginTicks": request.get("streamOriginTicks"),
+        **{
+            key: deepcopy(request[key]) for key in ("source", "sourceRange", "geometry")
+        },
+        "points": _trajectory_points(frames, association),
+        "uncertainIntervals": _uncertain_intervals(association, scope),
+    }
+    result["trajectoryHash"] = content_hash(result)
+    validate_document(result, SCHEMA + "#/$defs/faceTrajectory")
+    return result
+
+
 __all__ = [
     "associate_selected_face",
     "freeze_face_observation",
+    "freeze_face_trajectory",
     "map_proxy_face_samples",
 ]

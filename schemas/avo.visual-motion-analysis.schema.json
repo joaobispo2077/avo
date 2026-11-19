@@ -7,6 +7,7 @@
     "unit": {"type": "number", "minimum": 0, "maximum": 1},
     "positiveUnit": {"type": "number", "exclusiveMinimum": 0, "maximum": 1},
     "sourceTick": {"type": "integer", "minimum": 0},
+    "streamOriginTicks": {"type": ["integer", "null"]},
     "detectionIndex": {"type": "integer", "minimum": 0, "maximum": 31},
     "faceBox": {
       "type": "array", "minItems": 4, "maxItems": 4,
@@ -116,6 +117,7 @@
         "source": {"$ref": "#/$defs/sourceIdentity"},
         "sourceRange": {"$ref": "#/$defs/sourceRange"},
         "geometry": {"$ref": "#/$defs/sourceGeometry"},
+        "streamOriginTicks": {"$ref": "#/$defs/streamOriginTicks"},
         "proxy": {"$ref": "#/$defs/proxyIdentity"},
         "seed": {"$ref": "#/$defs/faceAssociationRequest/properties/seed"},
         "minimumOverlap": {"$ref": "#/$defs/faceAssociationRequest/properties/minimumOverlap"},
@@ -159,6 +161,64 @@
           }
         },
         "analysisHash": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "faceAnchor": {
+      "type": "object", "additionalProperties": false,
+      "required": ["observationRef", "trajectoryHash", "transitionFrames"],
+      "properties": {
+        "observationRef": {
+          "type": "object", "additionalProperties": false, "required": ["locator", "sha256"],
+          "properties": {
+            "locator": {"type": "string", "pattern": "^edit/motion/face/[0-9a-f]{64}\\.json$"},
+            "sha256": {"$ref": "#/$defs/sha256"}
+          }
+        },
+        "trajectoryHash": {"$ref": "#/$defs/sha256"},
+        "transitionFrames": {"type": "integer", "minimum": 1, "maximum": 60},
+        "fallbackReview": {
+          "type": "object", "additionalProperties": false, "required": ["actor", "reason"],
+          "properties": {
+            "actor": {"$ref": "#/$defs/faceAnalyzeRequest/properties/actor"},
+            "reason": {"$ref": "#/$defs/faceAnalyzeRequest/properties/reason"}
+          }
+        }
+      }
+    },
+    "faceTrajectory": {
+      "type": "object", "additionalProperties": false,
+      "required": ["contractVersion", "observationHash", "smoothing", "source", "sourceRange", "geometry", "streamOriginTicks", "points", "uncertainIntervals", "trajectoryHash"],
+      "properties": {
+        "contractVersion": {"const": "1.0.0"},
+        "observationHash": {"$ref": "#/$defs/sha256"},
+        "smoothing": {"const": "median-three-v1"},
+        "source": {"$ref": "#/$defs/sourceIdentity"},
+        "sourceRange": {"$ref": "#/$defs/sourceRange"},
+        "geometry": {"$ref": "#/$defs/sourceGeometry"},
+        "streamOriginTicks": {"$ref": "#/$defs/streamOriginTicks"},
+        "points": {
+          "type": "array", "minItems": 1, "maxItems": 300,
+          "items": {
+            "type": "object", "additionalProperties": false, "required": ["sourceTick", "box", "center"],
+            "properties": {
+              "sourceTick": {"$ref": "#/$defs/sourceTick"},
+              "box": {"$ref": "#/$defs/faceBox"},
+              "center": {"$ref": "https://avo.local/schemas/avo.camera-behavior.schema.json#/$defs/center"}
+            }
+          }
+        },
+        "uncertainIntervals": {
+          "type": "array", "maxItems": 301,
+          "items": {
+            "type": "object", "additionalProperties": false, "required": ["startTicks", "endTicks", "reason"],
+            "properties": {
+              "startTicks": {"$ref": "#/$defs/sourceTick"},
+              "endTicks": {"$ref": "#/$defs/sourceTick"},
+              "reason": {"enum": ["unobserved", "unselected", "lost", "ambiguous", "gap", "reseed-required"]}
+            }
+          }
+        },
+        "trajectoryHash": {"$ref": "#/$defs/sha256"}
       }
     },
     "faceAssociationRequest": {

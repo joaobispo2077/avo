@@ -1,9 +1,11 @@
 """Publish an explicit face observation against the current original source."""
 
+import hashlib
+from fractions import Fraction
 from pathlib import Path
 
 from avo.editing_craft import validate_editing_craft_selection
-from avo.reference_analysis import SCHEMA
+from avo.reference_analysis import SCHEMA, freeze_face_trajectory
 
 from .contracts import content_hash, file_fingerprint, validate_document
 from .motion_authoring import MotionAuthoringService
@@ -24,6 +26,9 @@ def _current_source(workspace, request):
     identity = source["fingerprint"]
     if identity["sha256"] != request["sourceSha256"]:
         raise ValueError("Face analysis differs from the current original source")
+    declared_stream = (source.get("streamMetadata") or {}).get("videoStreamIndex")
+    if declared_stream is not None and declared_stream != request["streamIndex"]:
+        raise ValueError("Face analysis differs from the current original video stream")
     locator = source.get("locator") or identity.get("locator")
     if not locator or not Path(locator).is_absolute():
         raise ValueError("The current original requires an absolute local path")
@@ -38,11 +43,7 @@ def _current_source(workspace, request):
 
 
 def _require_observed_scope(observed, request, source):
-    validate_document(observed, SCHEMA + "#/$defs/faceObservation")
-    payload = {key: value for key, value in observed.items() if key != "analysisHash"}
     actual = observed["request"]
-    if observed["analysisHash"] != content_hash(payload):
-        raise ValueError("Face observation identity changed")
     if actual["source"] != source or any(
         actual[key] != request[key] for key in ANALYSIS_PARAMETERS
     ):
@@ -62,10 +63,12 @@ def analyze_face(workspace, request, analyze):
     authoring._check_heads(request["expectedBasis"])
     source, identity = _current_source(workspace, request)
     observed = analyze(source, request)
+    trajectory = freeze_face_trajectory(observed)
     _require_observed_scope(observed, request, identity)
     record = {
         "request": request,
         "observation": observed,
+        "trajectory": trajectory,
         "videoId": workspace.video_id,
         "provider": workspace.project["provider"],
     }
@@ -84,8 +87,145 @@ def analyze_face(workspace, request, analyze):
         "status": "observed",
         "observationRef": {"locator": name, "sha256": digest},
         "coverage": observed["coverage"],
+        "trajectoryHash": trajectory["trajectoryHash"],
+        "uncertainIntervals": trajectory["uncertainIntervals"],
         "review": "required",
     }
 
 
-__all__ = ["analyze_face"]
+def validate_face_record(workspace, binding, record, digest):
+    """Validate selected evidence, including when retained from an older revision."""
+    validate_document(binding, SCHEMA + "#/$defs/faceAnchor")
+    reference = binding["observationRef"]
+    if (
+        digest != reference["sha256"]
+        or content_hash(record) != Path(reference["locator"]).stem
+    ):
+        raise ValueError("Frozen face observation bytes changed")
+    if (
+        record.get("videoId") != workspace.video_id
+        or record.get("provider") != workspace.project["provider"]
+    ):
+        raise ValueError("Frozen face observation belongs to another video")
+    request = record.get("request")
+    validate_document(request, SCHEMA + "#/$defs/faceAnalyzeRequest")
+    observation = record.get("observation")
+    trajectory = freeze_face_trajectory(observation)
+    source = trajectory["source"]
+    if (source["sourceId"], source["sha256"]) != (
+        request["sourceId"],
+        request["sourceSha256"],
+    ):
+        raise ValueError("Face observation differs from its selected original source")
+    _require_observed_scope(observation, request, source)
+    if (
+        record.get("trajectory") != trajectory
+        or binding["trajectoryHash"] != trajectory["trajectoryHash"]
+    ):
+        raise ValueError("Frozen face trajectory changed or needs a new face analysis")
+    return trajectory
+
+
+def read_face_anchor(workspace, binding):
+    """Resolve exact prepared evidence without decoding video or loading a model."""
+    validate_document(binding, SCHEMA + "#/$defs/faceAnchor")
+    reference = binding["observationRef"]
+    path = workspace.raw_dir / reference["locator"]
+    record, raw = MotionAuthoringService(workspace)._read(path)
+    trajectory = validate_face_record(
+        workspace, binding, record, hashlib.sha256(raw).hexdigest()
+    )
+    request = record["request"]
+    _, source = _current_source(workspace, request)
+    if trajectory["source"] != source:
+        raise ValueError(
+            "Frozen face trajectory differs from the current source fingerprint"
+        )
+    if trajectory["streamOriginTicks"] is None:
+        raise ValueError(
+            "Frozen face trajectory requires a verified source stream origin"
+        )
+    return trajectory, request["streamIndex"]
+
+
+def read_face_treatment(workspace, treatment):
+    trajectory, stream = read_face_anchor(workspace, treatment["faceAnchor"])
+    geometry = treatment["sourceGeometry"]
+    measured = trajectory["geometry"]
+    if (measured["width"], measured["height"], measured["rotation"]) != (
+        geometry["codedWidth"],
+        geometry["codedHeight"],
+        geometry["rotationDegrees"] % 360,
+    ) or _ratio(measured["sampleAspectRatio"]) != _ratio(geometry["sampleAspectRatio"]):
+        raise ValueError(
+            "Face trajectory display geometry differs from the selected camera"
+        )
+    source = trajectory["source"]
+    if (source["sourceId"], source["sha256"]) != (
+        treatment["camera"].get("sourceId"),
+        treatment["sourceSha256"],
+    ):
+        raise ValueError("Face trajectory source differs from the selected camera")
+    return trajectory, stream
+
+
+def _ratio(value):
+    return Fraction(value["num"], value["den"])
+
+
+def _face_pin_present(workspace):
+    from avo.model_sources import resolve_job
+
+    job = resolve_job(
+        "face_detect", project=workspace.project, video_key=workspace.video_id
+    )
+    source = job.pin.get("source") or {}
+    runtime = job.pin.get("runtime") or {}
+    paths = (source.get("artifactPath"), runtime.get("pythonEnv"))
+    return source.get("kind") == "artifact" and all(
+        path and Path(path).is_file() for path in paths
+    )
+
+
+def describe_face_readiness(workspace, treatment, options):
+    """Describe opt-in preparation from local metadata; never invoke the detector."""
+    binding = (treatment or {}).get("faceAnchor")
+    if binding is None:
+        try:
+            available = _face_pin_present(workspace)
+        except (OSError, ValueError, TypeError):
+            available = False
+        if not available:
+            return {
+                "status": "capability-unavailable",
+                "next": "Prepare a pinned local face model and isolated CPU runtime.",
+            }
+        return {
+            "status": "subject-selection-required",
+            "next": "Choose the original source range and a sampled face, then run face analysis.",
+        }
+    try:
+        trajectory, _ = read_face_treatment(workspace, treatment)
+    except (ValueError, OSError, KeyError, TypeError) as error:
+        return {"status": "observation-unavailable", "next": str(error)[:500]}
+    uncertainty = trajectory["uncertainIntervals"]
+    fallback = options["onLost"]
+    status = "measured"
+    if uncertainty:
+        reviewed = fallback in {"hold", "static"} and "fallbackReview" in binding
+        status = "fallback-recorded" if reviewed else "fallback-review-required"
+    return {
+        "status": status,
+        "trajectoryHash": trajectory["trajectoryHash"],
+        "sourceRange": trajectory["sourceRange"],
+        "uncertainIntervals": uncertainty,
+        "onLost": fallback,
+    }
+
+
+__all__ = [
+    "analyze_face",
+    "read_face_anchor",
+    "read_face_treatment",
+    "validate_face_record",
+]

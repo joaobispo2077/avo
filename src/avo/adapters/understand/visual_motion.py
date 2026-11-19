@@ -188,6 +188,8 @@ def capture_display_proxy(
         scale = source_range["timebase"]
         if Fraction(stream["time_base"]) != Fraction(scale["num"], scale["den"]):
             raise ValueError("Face capture range must use the original video time base")
+        raw_origin = stream.get("start_pts")
+        origin = None if raw_origin in (None, "N/A") else int(raw_origin)
         geometry = _geometry(stream)
         width, height = _dimensions(geometry)
         command, limit = _decode_command(
@@ -198,7 +200,7 @@ def capture_display_proxy(
             source_range,
             sample_every,
             (width, height),
-            int(stream.get("start_pts") or 0),
+            origin or 0,
         )
         ticks = _observed_source_ticks(_decode_log(command), source_range, limit)
         proxy_file = file_fingerprint(destination)
@@ -208,6 +210,7 @@ def capture_display_proxy(
             )
     return {
         "sourceSizeBytes": source_file["sizeBytes"],
+        "streamOriginTicks": origin,
         "geometry": geometry,
         "proxy": {
             "sha256": proxy_file["sha256"],
@@ -250,6 +253,7 @@ def observe_selected_face(resolved, source, request):
                 "sizeBytes": measured["sourceSizeBytes"],
             },
             "geometry": measured["geometry"],
+            "streamOriginTicks": measured["streamOriginTicks"],
             "proxy": proxy,
             **{
                 key: request[key]
