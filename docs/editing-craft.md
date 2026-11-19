@@ -160,6 +160,8 @@ Watch reports the exact observed intervals and leaves missing intervals visible.
 The approval gate shows the planned cue states, exact sampled frames and linked
 visual findings for a current canonical proof. Playback review covers continuous
 motion, lip sync and reading time. Listening covers audibility and masking.
+The motion map and storyboard link those sampled findings when the selected
+candidate and current timeline still match the recorded review.
 
 The wrap exports scoped learning from the approved master and retained iteration
 ledger when both are available. Curated lessons record where to use or exclude a

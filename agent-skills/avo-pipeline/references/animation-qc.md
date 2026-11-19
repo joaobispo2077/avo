@@ -54,6 +54,12 @@ caption and source safety, and alpha at the relevant states. Play through
 the entrances, holds, payoffs and exits, and check that local and program-wide
 treatments have a single owner before changing their settings.
 
+Once the current candidate snapshot retains the exact review, the motion map
+and storyboard show the linked frame numbers and finding IDs for each cue.
+Use the cited intervals to propose changes through their owning motion or
+sound command. Repeat the applicable playback and listening review for the
+resulting candidate.
+
 Record a proposed workaround with the exact candidate, reproduction finding,
 program windows, engine and runtime versions, platform and render profile.
 Review the proposed change in that environment through the normal owning stage.
