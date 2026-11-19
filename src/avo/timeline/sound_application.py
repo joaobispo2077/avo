@@ -17,6 +17,7 @@ from .sound_choices import (
     _sound_document,
     _unique_sound_ids,
     freeze_sound_choices,
+    require_native_mix_support,
 )
 from .sound_fitting import SoundPlanningError
 from .sound_tracks import validate_sound_bindings
@@ -62,6 +63,24 @@ def _encoded(value):
     return (
         json.dumps(value, indent=2, ensure_ascii=False, sort_keys=True) + "\n"
     ).encode("utf-8")
+
+
+def _require_mix_admission(choices, tracks):
+    dialogue = {
+        layer["layerId"]
+        for layer in tracks["audioTracks"]["layers"]
+        if layer["role"] == "dialogue" and not layer.get("mute", False)
+    }
+    for choice in choices:
+        if choice["fit"]["status"] != "fit":
+            continue
+        mix = choice["mix"]
+        require_native_mix_support(mix)
+        ducking = mix["ducking"]
+        if ducking is not None and ducking["sidechainLayerId"] not in dialogue:
+            raise SoundPlanningError(
+                "Sound ducking requires a current unmuted dialogue layer"
+            )
 
 
 class _Application:
@@ -719,6 +738,7 @@ class _Application:
             self.workspace, request, shown["proposal"]
         )
         choices = self._choices(request, shown["proposal"], generation, snapshots)
+        _require_mix_admission(choices["choices"], snapshots["tracks"])
         sources = self._source_refs(choices["choices"], generation)
         _, request_ref, _ = self._reference("requests", request, "applyRequest")
         matching = shown["proposal"]["options"]["effective"]["soundMatching"]
