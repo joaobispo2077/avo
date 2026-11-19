@@ -44,3 +44,23 @@ to check the selected global pin. Checkout users can run
 Face observations support geometric association from an explicitly selected
 box. A missing face, competing overlaps or a gap leaves the association
 unresolved until the creator selects a new seed.
+
+The capture adapter decodes one selected original video stream over a range of
+up to 30 seconds. It verifies the original bytes and reads the selected frame
+timestamps directly from FFmpeg. The proxy keeps the original display aspect
+after rotation and pixel aspect correction. Preparation accepts up to 300
+frames and 64 MiB of proxy data. A longer range of samples can use a larger
+frame stride. The worker checks the proxy hash before detection.
+
+The observation record binds the selected source range, exact frame timestamps,
+display geometry, detector versions, face boxes and association coverage. The
+camera evaluator will consume a reviewed trajectory derived from these
+observations.
+
+Use `avo cli animation face-analyze --project <absolute-project>`
+`--request <request.json> --json` for an explicit analysis. The request names
+the current canonical basis, original source fingerprint, exact video stream,
+source range, sampling stride and selected sampled detection. Its editing craft
+selection enables camera and selected-subject face anchoring. MCP confirms the
+exact request bytes before executing. The resulting observation is saved under
+`edit/motion/face/` for review and keeps the current camera edit in place.
