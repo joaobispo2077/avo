@@ -123,6 +123,11 @@ def _scope_response(reference, ranges, status, issue):
 
 
 class PreparationService:
+    def decide(self, request):
+        from .preparation_choices import decide_recovery
+
+        return decide_recovery(self, request)
+
     def __init__(self, workspace, *, recovery_port=None):
         self.workspace = workspace
         self.recovery_port = recovery_port
