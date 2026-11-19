@@ -921,6 +921,47 @@ def test_placed_foreground_retains_original_rgb_detail_and_independent_source_al
     np.testing.assert_array_equal(pixels(window, 160, 90), actual[9:17])
 
 
+def test_precision_placement_clips_zoom_and_keeps_disjoint_layers_out_of_frame(
+    tmp_path,
+):
+    from avo.adapters.media.proof_placed import _compose_picture
+
+    width, height, count = 160, 96, 6
+    spec = {"width": width, "height": height, "pixelFormat": "gbrp16le"}
+    interval = {"outputRange": {"startFrame": 0, "endFrameExclusive": count}}
+    base = labeled_video(
+        tmp_path / "base.mkv", size=(width, height), frame_count=count, bit_depth=16
+    )
+    alpha = labeled_video(
+        tmp_path / "alpha.mkv", size=(width, height), frame_count=count, alpha=True
+    )
+    zoom = {
+        "canvasWidth": width,
+        "canvasHeight": height,
+        "width": 200,
+        "height": 120,
+        "x": -20,
+        "y": -12,
+    }
+    visible = ({**interval, "pictureTransform": zoom}, alpha)
+    outside = ({**interval, "pictureTransform": {**zoom, "x": width}}, alpha)
+    full, retained, plain = (
+        tmp_path / f"{name}.mkv" for name in ("full", "kept", "plain")
+    )
+    for overlay, output in (
+        ([outside, visible], full),
+        ([visible], retained),
+        ([], plain),
+    ):
+        _compose_picture(
+            [(interval, base), *overlay], output, spec, Fraction(24), (0, count)
+        )
+    composed = pixels(full, width, height)
+    assert composed.shape[0] == count
+    np.testing.assert_array_equal(composed, pixels(retained, width, height))
+    assert np.any(composed != pixels(plain, width, height))
+
+
 def test_placed_camera_keeps_the_closed_original_input_policy_after_admission(
     tmp_path, monkeypatch
 ):
