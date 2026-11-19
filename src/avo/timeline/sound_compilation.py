@@ -6,7 +6,11 @@ from pathlib import Path
 
 from .contracts import content_hash, validate_document
 from .event_clock import frame_to_sample
-from .sound_choices import _previous_sound_choices, sound_source_id
+from .sound_choices import (
+    _previous_sound_choices,
+    require_native_mix_support,
+    sound_source_id,
+)
 from .sound_fitting import SCHEMA, SoundPlanningError
 
 
@@ -77,12 +81,6 @@ def _ducking(choice, node_id, sidechains, known):
     nodes = sidechains.get(ducking["sidechainLayerId"], [])
     if not nodes or set(nodes) - known or len(nodes) != len(set(nodes)):
         raise SoundPlanningError("Sound ducking requires exact current dialogue nodes")
-    if not (
-        1 <= ducking["amountDb"] <= 20
-        and 0.01 <= ducking["attackMs"] <= 2000
-        and 0.01 <= ducking["releaseMs"] <= 9000
-    ):
-        raise SoundPlanningError("Selected ducking exceeds native mix support")
     return {
         "nodeId": node_id,
         "sidechainNodeIds": list(nodes),
@@ -92,8 +90,7 @@ def _ducking(choice, node_id, sidechains, known):
 
 def _contribution(choice, source, sidechains, known):
     fit, mix, entry = choice["fit"], choice["mix"], choice["sourceEntry"]
-    if mix["gainDb"] > 30:
-        raise SoundPlanningError("Selected gain exceeds native mix support")
+    require_native_mix_support(mix)
     node_id = "sound-" + content_hash(choice["eventId"])[:24]
     source_id = sound_source_id(entry["entryId"], source["sha256"])
     region = {

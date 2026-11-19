@@ -26,6 +26,22 @@ def _unique_sound_ids(values, key):
     return result
 
 
+def require_native_mix_support(mix):
+    """Use the same numeric bounds for publication and proof compilation."""
+    if mix["gainDb"] > 30:
+        raise SoundPlanningError("Selected gain exceeds native mix support")
+    ducking = mix["ducking"]
+    if ducking is not None and not all(
+        first <= ducking[key] <= last
+        for key, first, last in (
+            ("amountDb", 1, 20),
+            ("attackMs", 0.01, 2000),
+            ("releaseMs", 0.01, 9000),
+        )
+    ):
+        raise SoundPlanningError("Selected ducking exceeds native mix support")
+
+
 def _check_choice_mix(entry, fit, mix):
     normalize_audio_track_layer({"role": "sfx", **mix})
     facts = entry["measurement"]
