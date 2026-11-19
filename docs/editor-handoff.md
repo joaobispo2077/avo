@@ -65,6 +65,10 @@ absolute JSON request path for each operation that writes review evidence. The
   it to `/avo.trim` for preview, editorial approval and application. The route
   retains the original comparison and cutting proposal together. Placed edits,
   unmatched clips, markers and unsupported finishing stay in manual review.
+  An opening or ending trim gets a fresh verification window at the retained
+  program edge even when the edit creates no join. AVO reuses retained speech
+  observations from the current cutting basis when their source, Sync and
+  preparation still match. Missing observations keep the cut in review.
 - `timeline-export qualify-target` binds a target review to the exact exported
   and returned files and the selected app and OS versions. Record the observed
   checks, frame drift, and reviewer decision. A production request requires the
@@ -93,6 +97,8 @@ transparent, half-transparent and opaque sample points. Its returned XML
 omitted the original alpha declaration and a marker that appeared at frame 6
 in the editor. Resolve imported the 125% zoom directly from AVO's validation
 XML. The 640 by 360 render moved the expected edge from pixel 160 to 120, and
-the returned XML recorded a scale of 125.
+the returned XML recorded a scale of 125. AVO's high-precision compositor
+matched those edge positions at the first, middle and last frames. It clips
+picture layers to the visible canvas before compositing their alpha.
 Production qualification still requires editor evidence for round-trip
 routing, markers, alpha treatment and animated camera finishing.
