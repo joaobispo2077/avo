@@ -72,7 +72,7 @@ def kwargs_to_argv(
     - ``as_json`` → ``--json`` (CLI dest name differs from the flag)
     - other keys → ``--{key}`` with underscores replaced by dashes
     """
-    kwargs = normalize_cost_arguments(prefix, kwargs)
+    kwargs = _normalize_structured_arguments(prefix, kwargs)
     overrides = {**_FLAG_OVERRIDES, **(flag_overrides or {})}
     argv = [str(part) for part in prefix]
     for key, value in kwargs.items():
@@ -91,6 +91,15 @@ def kwargs_to_argv(
             continue
         argv.extend([flag, str(value)])
     return argv
+
+
+def _normalize_structured_arguments(prefix, kwargs):
+    result = normalize_cost_arguments(prefix, kwargs)
+    if tuple(prefix) == ("artcraft", "assess") and "request" in result:
+        from avo.artcraft_cli import encode_request
+
+        result["request_json"] = encode_request(result.pop("request"))
+    return result
 
 
 def normalize_cost_arguments(prefix, kwargs):
@@ -214,6 +223,12 @@ def run_bridged(
     except CostError as exc:
         error = json.dumps({"status": "invalid-input", "message": str(exc)})
         return BridgeResult(False, 2, "", error)
+    except ValueError as exc:
+        from avo.artcraft import ArtCraftError
+
+        if not isinstance(exc, ArtCraftError):
+            raise
+        return BridgeResult(False, 2, "", json.dumps(exc.to_dict()))
     return run_cli(argv)
 
 

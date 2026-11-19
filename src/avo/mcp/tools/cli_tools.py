@@ -38,6 +38,7 @@ CORE_CLI_GROUPS: tuple[str, ...] = (
 
 # Remaining groups bridged in task-008.
 REMAINING_CLI_GROUPS: tuple[str, ...] = (
+    "artcraft",
     "timeline-export",
     "preparation",
     "sfx",
@@ -1080,7 +1081,35 @@ def remaining_bridge_defs() -> list[BridgeToolDef]:
         + _sfx_bridge_defs()
         + _preparation_bridge_defs()
         + _editor_handoff_bridge_defs()
+        + _artcraft_bridge_defs()
     )
+
+
+def _artcraft_bridge_defs():
+    scope = (ParamSpec("app", str | None), ParamSpec("as_json", bool, default=True))
+    return [
+        _tool(
+            "avo_artcraft_assess",
+            "artcraft",
+            "assess",
+            "Assess one structured request against current ArtCraft selection rules. Reads metadata only.",
+            include_project=False,
+            extra_params=(
+                *scope,
+                ParamSpec("request", dict[str, Any], required=True),
+                ParamSpec("operation", list[str] | None),
+                ParamSpec("knowledge_only", bool, default=False),
+            ),
+        ),
+        _tool(
+            "avo_artcraft_catalog",
+            "artcraft",
+            "catalog",
+            "Read documented capabilities for one or more ArtCraft apps and operations.",
+            include_project=False,
+            extra_params=(*scope, ParamSpec("behavior", str | None)),
+        ),
+    ]
 
 
 def _editor_handoff_bridge_defs() -> list[BridgeToolDef]:

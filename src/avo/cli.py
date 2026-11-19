@@ -80,6 +80,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     configure_timeline_import(sub)
 
+    from avo.artcraft_cli import configure as configure_artcraft
+
+    configure_artcraft(sub)
+
     _trim_parser(sub)
 
     pipeline = sub.add_parser("pipeline")
@@ -2389,7 +2393,10 @@ def _proof(args: argparse.Namespace) -> int:
         )
         return 0
     if operation == "component-scaffold":
+        from avo.artcraft import guard_legacy_component_request
+
         request = _request(args.request)
+        guard_legacy_component_request(request)
         gap = request.get("capabilityGap") or {}
         if gap.get("status") != "unsupported":
             raise ProofPlanError(
@@ -2400,7 +2407,10 @@ def _proof(args: argparse.Namespace) -> int:
         _emit(ComponentInstanceService(workspace).scaffold(str(request["componentId"])))
         return 0
     if operation == "component-register":
+        from avo.artcraft import guard_legacy_component_request
+
         request = _request(args.request)
+        guard_legacy_component_request(request)
         if request.get("recordType") == "generated-asset":
             result = GeneratedAssetService(workspace).register(request["record"])
         else:
@@ -2608,7 +2618,10 @@ def _run_cli(args: argparse.Namespace) -> int:
         from avo.breathing import run as breathing_run
 
         return breathing_run(args)
+    from avo.artcraft_cli import run as artcraft_run
+
     handlers = {
+        "artcraft": artcraft_run,
         "trim": _trim,
         "pipeline": _pipeline,
         "timeline": _timeline,

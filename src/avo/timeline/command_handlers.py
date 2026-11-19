@@ -250,8 +250,11 @@ class CommandHandlers:
                 "revision": result["revision"],
             }
         elif command == "pipeline" and operation == "component-scaffold":
+            from avo.artcraft import guard_legacy_component_request
+
             from .component_instances import ComponentInstanceService
 
+            guard_legacy_component_request(payload)
             gap = payload.pop("capabilityGap", None) or {}
             if gap.get("status") != "unsupported":
                 raise ValueError(
@@ -262,9 +265,12 @@ class CommandHandlers:
                 component_id
             )
         elif command == "pipeline" and operation == "component-register":
+            from avo.artcraft import guard_legacy_component_request
+
             from .component_instances import ComponentInstanceService
             from .generated_assets import GeneratedAssetService
 
+            guard_legacy_component_request(payload)
             if payload.pop("recordType", None) == "generated-asset":
                 result = GeneratedAssetService(self.pipeline.workspace).register(
                     payload.pop("record")
