@@ -419,6 +419,7 @@ def _fallback_timeline_files(root, imports, *, motion_cache=None):
         if path.is_file()
         and not path.is_symlink()
         and not path.is_relative_to(imports)
+        and not path.is_relative_to(root / "editor-handoff")
         and (motion_cache is None or not path.is_relative_to(motion_cache))
         and path.suffix.lower() in {".json", ".md"}
     ]
@@ -435,6 +436,7 @@ def _fallback_reconstruction_metadata(raw_dir, timeline, workspace):
         cache = root / "motion-plan" if root != timeline else None
         paths.extend(_fallback_timeline_files(root, imports, motion_cache=cache))
     paths.extend(_retained_import_metadata(workspace, timeline))
+    paths.extend(_retained_editor_metadata(workspace, timeline))
     if workspace is not None:
         from avo.timeline.motion_retention import retained_motion_paths
         from avo.timeline.preparation_retention import retained_preparation_files
@@ -461,6 +463,19 @@ def _fallback_reconstruction_metadata(raw_dir, timeline, workspace):
         if path.is_file() and not path.is_symlink():
             paths.append(path)
     return sorted(set(paths))
+
+
+def _retained_editor_metadata(workspace, timeline):
+    directory = timeline / "editor-handoff"
+    if not directory.exists() and not directory.is_symlink():
+        return []
+    if workspace is None:
+        raise PreservedSetViolation(
+            "Editor handoff retention requires its declared project"
+        )
+    from avo.timeline.editor_retention import retained_editor_files
+
+    return list(retained_editor_files(workspace))
 
 
 def _import_storage_present(timeline):
