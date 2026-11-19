@@ -88,6 +88,12 @@ Neither search operation publishes sound into the edit. See the
 
 Inspect videoTracks before render: source/generator fingerprint, regions, z-order, fit/crop, compositing, captions/evidence safe zones, and face avoidance. Every contribution links to BMap intent; unresolved or changed sources block.
 
+The motion plan shows named production audio and picture tracks with the exact
+declared order, enabled or muted state, levels, channels and program intervals.
+Follow a cue link to its storyboard card and check any missing links in the text
+or HTML report. Review picture order apart from the stored lane order and check
+playback in the encoded proof. Locale delivery audio has its own workflow.
+
 ## Selected artistic guidance
 
 Before style-dependent authoring, run the shared native pipeline status for this project (checkout: `python -m avo.cli pipeline status --project <project> --json`; installed: `avo cli pipeline status --project <project> --json`). Read `briefing.stageContexts.bmap` and its exact selected brief, treatment, constraints, exclusions and current canonical-head identities. Treat this context as offered guidance, never proof that a choice was applied, an approval, or permission to change protected content. Current creator instructions and integrity/accessibility/rights rules take precedence. A bypassed or unselected brief adds no creative gate. Do not discover provider history or select a latest profile independently. See [briefstart](briefstart.md).
