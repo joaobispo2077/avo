@@ -30,7 +30,7 @@ from .motion_sound_review import (
 from .store import atomic_write_json
 from .workspace import ARTIFACTS
 
-GENERATOR = {"id": "avo.motion-review", "version": "1.10.0"}
+GENERATOR = {"id": "avo.motion-review", "version": "1.11.0"}
 MAX_ITEMS = 500
 LIFECYCLE = ("preEntry", "entrance", "hold", "payoff", "exit")
 CONCEPT_TEXT_FIELDS = {
@@ -368,7 +368,14 @@ def _camera_states(data):
 
 def _typed_camera_preview(data, gaps):
     wrapper = data.get("_authoredCamera") or data.get("cameraTreatment")
+    face = (
+        {"faceAnchor": deepcopy(data["_faceReadiness"])}
+        if "_faceReadiness" in data
+        else {}
+    )
     if wrapper is None:
+        if face:
+            return {"during": face}
         return deepcopy(data.get("camera"))
     try:
         validate_document(wrapper, "avo.animation.schema.json#/$defs/editingCraft")
@@ -387,7 +394,7 @@ def _typed_camera_preview(data, gaps):
         ),
         "optionsHash": content_hash(wrapper.get("options")),
         "before": deepcopy(camera["nodes"][0]),
-        "during": {"nodes": deepcopy(camera["nodes"])},
+        "during": {"nodes": deepcopy(camera["nodes"]), **face},
         "after": deepcopy(camera["nodes"][-1]),
     }
 
@@ -577,6 +584,23 @@ def _component_reference(data):
     return identifiers[0] if len(identifiers) == 1 else None
 
 
+def _face_options(wrapper, selection):
+    options = (wrapper or {}).get("options", selection) or {}
+    return (options.get("effective") or {}).get("camera") or {}
+
+
+def _enrich_face_reviews(items, selection, read_face_state):
+    if read_face_state is None:
+        return
+    for data in items.values():
+        wrapper = data.get("_authoredCamera") or data.get("cameraTreatment")
+        if not (wrapper or data.get("cameraRecipe") or data.get("cameraIntent")):
+            continue
+        camera = _face_options(wrapper, selection)
+        if camera.get("enabled") and camera.get("faceAnchor") == "selected-subject":
+            data["_faceReadiness"] = read_face_state(wrapper, camera)
+
+
 def _proposal_basis_stale(proposal, heads, applied_heads, selected_stale):
     if selected_stale:
         return True
@@ -602,6 +626,7 @@ def _project_items(
     applied_heads=None,
     proposal_stale=False,
     reusable_visual_items=(),
+    read_face_state=None,
 ):
     groups = _combined(proposal, snapshots, gaps)
     add_sound_groups(groups, sound_context)
@@ -620,6 +645,7 @@ def _project_items(
         for identifier, group in ordered[:MAX_ITEMS]
     }
     _enrich_components(selected, snapshots.get("animation") or {})
+    _enrich_face_reviews(selected, proposal.get("options"), read_face_state)
     enrich_sound_items(selected, snapshots.get("tracks") or {}, sound_context, heads)
     pairs = [
         _item(
@@ -919,6 +945,8 @@ class MotionReviewService:
         }
 
     def project(self, context=None, *, scope_request=None):
+        from .face_analysis import describe_face_readiness
+
         self._validate_scope_clock(scope_request)
         heads, snapshots, gaps, context, basis = self._capture_inputs(context)
         pairs, counts, stale = _project_items(
@@ -930,6 +958,9 @@ class MotionReviewService:
             applied_heads=context["appliedHeads"],
             proposal_stale=context["proposalStale"],
             reusable_visual_items=self._visual_reuse(context, heads, snapshots, gaps),
+            read_face_state=lambda treatment, options: describe_face_readiness(
+                self.workspace, treatment, options
+            ),
         )
         items, cards = [pair[0] for pair in pairs], [pair[1] for pair in pairs]
         snapshot = {
