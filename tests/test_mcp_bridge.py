@@ -372,6 +372,38 @@ def test_remaining_bridge_defs_match_cli_groups() -> None:
     assert {d.spec.group for d in core_bridge_defs()} == set(CORE_CLI_GROUPS)
 
 
+def test_editor_review_tool_gate_seals_exact_requests(tmp_path: Path) -> None:
+    from hashlib import sha256
+
+    from avo.mcp.tools.cli_tools import _decision_gate_args
+
+    by_operation = {
+        item.cli_prefix[1]: item
+        for item in all_bridge_defs()
+        if item.spec.group == "timeline-export"
+    }
+    assert set(by_operation) == {
+        "prepare",
+        "status",
+        "inspect-feedback",
+        "propose-feedback",
+    }
+    assert not by_operation["status"].spec.destructive
+    target = tmp_path / "request.json"
+    target.write_bytes(b'{"operation":"propose-feedback"}')
+    arguments = {"project": str(tmp_path / "avo.project.json"), "request": str(target)}
+    for operation in ("prepare", "inspect-feedback", "propose-feedback"):
+        definition = by_operation[operation]
+        assert definition.spec.destructive
+        qualified = _decision_gate_args(definition, arguments)
+        assert (
+            qualified["_decisionDocumentSha256"]
+            == sha256(target.read_bytes()).hexdigest()
+        )
+    target.write_bytes(b'{"operation":"inspect-feedback"}')
+    assert _decision_gate_args(by_operation["propose-feedback"], arguments) != qualified
+
+
 def test_register_cli_tools_on_server() -> None:
     pytest.importorskip("mcp")
     import asyncio

@@ -51,6 +51,27 @@ def test_spec_bundles_direction_resources_and_new_schema_contracts() -> None:
         assert (ROOT / "schemas" / name).is_file()
 
 
+def test_bundled_editor_profiles_are_discoverable_and_unqualified():
+    import tomllib
+
+    from avo.engine_cli import PUBLIC_VERBS
+    from avo.timeline.editor_handoff import target_profiles
+
+    configuration = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    assert configuration["tool"]["setuptools"]["package-data"][
+        "avo.resources.interchange"
+    ] == ["*.json"]
+    assert 'collect_data_files("avo.resources.interchange")' in SPEC
+    assert (ROOT / "schemas" / "avo.editor-handoff.schema.json").is_file()
+    assert "timeline-export" in PUBLIC_VERBS
+    profiles = target_profiles()
+    assert {item["application"] for item in profiles} == {
+        "premiere-pro",
+        "davinci-resolve",
+    }
+    assert all(item["status"] == "unqualified" for item in profiles)
+
+
 def test_python_distribution_declares_runtime_schema_data() -> None:
     configuration = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
     assert "[tool.setuptools.data-files]" in configuration
