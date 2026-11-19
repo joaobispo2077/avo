@@ -101,6 +101,22 @@ def test_silence_removes_the_previous_audio_owner_instead_of_the_new_visual_owne
         project(silent, ["middle"], previous=previous)
 
 
+def test_review_scope_keeps_removed_audio_tail_and_ignores_new_silence(tmp_path):
+    from avo.timeline.sound_scope import sound_review_scope
+
+    previous = frozen(tmp_path / "old", frame=30)
+    silent = frozen(tmp_path / "new", frame=60, silence=True)
+    removed = project(silent, ["opening"], previous=previous)
+    assert sound_review_scope(removed) == {
+        "affectedChunkIds": ["opening", "middle"],
+        "outsideProductionChunkIds": ["middle"],
+        "approval": "not-granted",
+    }
+
+    fresh = project(silent, ["ending"])
+    assert sound_review_scope(fresh)["affectedChunkIds"] == []
+
+
 def test_new_explicit_silence_uses_its_visual_anchor_without_scheduling_audio(tmp_path):
     result = project(frozen(tmp_path, silence=True), ["middle"])
     row = result["contributions"][0]

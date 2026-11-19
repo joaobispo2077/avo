@@ -36,6 +36,11 @@ def test_selected_audio_scope_preserves_picture_and_replays_without_source_work(
     assert report["contributions"][0]["ownerChunkId"] == "opening"
     assert report["approval"] == "not-granted"
     assert result["acceptance"] == "pending-listening"
+    assert result["reviewScope"] == {
+        "affectedChunkIds": ["opening", "answer"],
+        "outsideProductionChunkIds": ["answer"],
+        "approval": "not-granted",
+    }
     cues = workspace.store("bmap").load()["revisions"][-1]["snapshot"]["cues"]
     assert next(c for c in cues if c["cueId"] == original["cueId"]) == original
 
@@ -46,6 +51,7 @@ def test_selected_audio_scope_preserves_picture_and_replays_without_source_work(
         workspace, catalogue=catalogue, source_probe=forbidden
     ).apply(request)
     assert replay["receiptRef"] == result["receiptRef"]
+    assert replay["reviewScope"] == result["reviewScope"]
     assert len(workspace.store("tracks").load_index()["revisionRefs"]) == 1
 
 
