@@ -60,6 +60,37 @@ def test_optional_learning_status_keeps_unknown_count_and_strict_reader(
         workspace.finalized_provider_learning()
 
 
+def test_provider_guidance_refuses_another_providers_sealed_snapshot(tmp_path):
+    from avo.learndown_export import (
+        build_timeline_learning_snapshot,
+        export_timeline_learning_snapshot,
+    )
+
+    workspace = TimelineWorkspace.from_project(project_fixture(tmp_path))
+    history = tmp_path / "history"
+    workspace.project["providerLearningDirectory"] = str(history)
+    snapshot = build_timeline_learning_snapshot(
+        ledger={
+            "videoId": "other-video",
+            "provider": "unrelated",
+            "ledgerHash": "a" * 64,
+            "iterations": [],
+            "decisions": [],
+            "reworkItems": [],
+        },
+        candidate_snapshot_hash="b" * 64,
+        master_fingerprint={"sha256": "c" * 64, "sizeBytes": 100},
+        status="final",
+    )
+    export_timeline_learning_snapshot(history / "other", snapshot)
+
+    with pytest.raises(WorkspaceError, match="belongs to another provider"):
+        workspace.finalized_provider_learning()
+    result = workspace.provider_learning_diagnostic()
+    assert result["status"] == "unavailable"
+    assert result["snapshots"] == []
+
+
 def test_required_current_timeline_corruption_stays_blocking(tmp_path):
     workspace = TimelineWorkspace.from_project(project_fixture(tmp_path))
     workspace.initialize()
