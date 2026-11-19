@@ -34,6 +34,30 @@
     "contextBasis": {"$ref": "#/$defs/contextBasis"},
     "projectionSource": {"$ref": "#/$defs/projectionSource"},
     "productionScope": {"$ref": "avo.editing-craft-run.schema.json#/$defs/productionScopePlan"},
+    "encodedReview": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["candidateSha256", "reviewSha256", "reviewPath", "links"],
+      "properties": {
+        "candidateSha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "reviewSha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "reviewPath": {"type": "string", "minLength": 1},
+        "links": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["itemId", "cueIds", "observedFrames", "findingIds"],
+            "properties": {
+              "itemId": {"type": "string", "minLength": 1},
+              "cueIds": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string"}},
+              "observedFrames": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "integer", "minimum": 0}},
+              "findingIds": {"type": "array", "uniqueItems": true, "items": {"type": "string"}}
+            }
+          }
+        }
+      }
+    },
     "schemaVersion": {
       "const": "1.0.0"
     },

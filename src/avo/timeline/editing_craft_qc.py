@@ -47,18 +47,24 @@ def _matches_materialization(identity, record):
     )
 
 
-def _matching_bmap_hash(record, active):
+def _canonical_hashes(record):
     lock = record.get("canonicalInputLock") or {}
     if record["kind"] == "assembly":
-        if all(
-            lock.get(field) and lock[field] == active.get(artifact)
+        return {
+            artifact: lock.get(field)
             for artifact, field in _ASSEMBLY_LOCK_FIELDS.items()
-        ):
-            return lock["bmapRevisionHash"]
+        }
+    return {name: lock.get(name) for name in sorted(_CANONICAL)}
+
+
+def _current_canonical_hashes(workspace, record):
+    canonical = _canonical_hashes(record)
+    if record["kind"] == "assembly" and not all(canonical.values()):
         return None
-    if any(active.get(name) != lock.get(name) for name in _CANONICAL):
+    active = workspace.active_dependency_snapshot()
+    if any(active.get(name) != sha256 for name, sha256 in canonical.items()):
         return None
-    return lock.get("bmap")
+    return canonical
 
 
 def _current_bmap(workspace, identity, record):
@@ -68,7 +74,8 @@ def _current_bmap(workspace, identity, record):
         or not _matches_materialization(identity, record)
     ):
         return None
-    bmap_hash = _matching_bmap_hash(record, workspace.active_dependency_snapshot())
+    canonical = _current_canonical_hashes(workspace, record) or {}
+    bmap_hash = canonical.get("bmap")
     if not bmap_hash:
         return None
     store = workspace.store("bmap")
@@ -196,6 +203,7 @@ def candidate_craft_report(workspace, identity, materialization, coverage, findi
         "candidateIdentityHash": identity["identityHash"],
         "materializationHash": materialization["materializationHash"],
         "bmapRevisionHash": revision["contentHash"],
+        "canonicalRevisionHashes": _canonical_hashes(materialization),
         "scope": "encoded-full-proof",
         "frameRate": {"num": rate.numerator, "den": rate.denominator} if rate else None,
         "cues": [
@@ -214,10 +222,21 @@ def attach_craft_report(evidence, workspace, identity, materialization, coverage
     return evidence
 
 
-def craft_review_markdown(manifest):
+def report_from_review(manifest):
     watch = next((item for item in manifest["evidence"] if item["kind"] == "watch"), {})
     report = (watch.get("reviewContext") or {}).get("craftChecks") or {}
-    if report.get("candidateIdentityHash") != manifest["candidate"]["identityHash"]:
+    candidate = manifest["candidate"]
+    if (
+        report.get("candidateIdentityHash") == candidate["identityHash"]
+        and report.get("candidateSha256") == candidate["sha256"]
+    ):
+        return report
+    return None
+
+
+def craft_review_markdown(manifest):
+    report = report_from_review(manifest)
+    if report is None:
         return []
     lines = [
         "",

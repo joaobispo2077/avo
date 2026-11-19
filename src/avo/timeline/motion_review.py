@@ -79,6 +79,95 @@ def _metadata_path(path, root):
     return path
 
 
+def _matching_review_heads(report, heads):
+    declared = report["canonicalRevisionHashes"]
+    for name, digest in declared.items():
+        head = heads[name] or {}
+        if head.get("availability") == "unavailable" or head.get("sha256") != digest:
+            return False
+    return True
+
+
+def _recorded_review(workspace, heads):
+    from .editing_craft_qc import report_from_review
+    from .pipeline import TimelinePipeline
+
+    selected = TimelinePipeline(workspace).active_candidate_snapshot() or {}
+    reference = selected.get("review") or {}
+    checkpoint = str(reference.get("artifactId") or "").removesuffix("-review")
+    if checkpoint not in {"motion-proof", "pre-master", "deliver"}:
+        return None
+    candidate_sha256 = selected["candidate"]["sha256"]
+    path = _metadata_path(
+        workspace.review_dir / checkpoint / candidate_sha256[:12] / "review.json",
+        workspace.review_dir.resolve(),
+    )
+    review = _bounded_json(path, {"remaining": MAX_DOCUMENT_BYTES})
+    if content_hash(review) != reference["sha256"]:
+        return None
+    report = report_from_review(review)
+    if report is None:
+        return None
+    if (
+        report["candidateSha256"],
+        report["materializationHash"],
+        report["bmapRevisionHash"],
+    ) != (
+        candidate_sha256,
+        selected["materialization"]["sha256"],
+        heads["bmap"]["sha256"],
+    ):
+        return None
+    if not _matching_review_heads(report, heads):
+        return None
+    return path, report, reference
+
+
+def _cue_review_link(item_id, matches):
+    return {
+        "itemId": item_id,
+        "cueIds": [cue["cueId"] for cue in matches],
+        "observedFrames": sorted(
+            {frame for cue in matches for frame in cue["observedFrames"]}
+        ),
+        "findingIds": sorted(
+            {row["findingId"] for cue in matches for row in cue["frameFindings"]}
+        ),
+    }
+
+
+def _cue_review_links(items, cues):
+    observed = {cue["cueId"]: cue for cue in cues if cue["observedFrames"]}
+    links = []
+    for item in items:
+        cue_ids = {item["cueId"], *(part["cueId"] for part in item["parts"])}
+        matches = [observed[cue_id] for cue_id in sorted(cue_ids & observed.keys())]
+        if matches:
+            links.append(_cue_review_link(item["itemId"], matches))
+    return links
+
+
+def _recorded_review_view(workspace, heads, items):
+    if not heads["bmap"] or not workspace.pipeline_run_path.is_file():
+        return {}
+    try:
+        result = _recorded_review(workspace, heads)
+        if result is None:
+            return {}
+        path, report, reference = result
+        links = _cue_review_links(items, report["cues"])
+        return {
+            "encodedReview": {
+                "candidateSha256": report["candidateSha256"],
+                "reviewSha256": reference["sha256"],
+                "reviewPath": path.relative_to(workspace.raw_dir.resolve()).as_posix(),
+                "links": links,
+            }
+        }
+    except (OSError, RuntimeError, ValueError, TypeError, KeyError):
+        return {}
+
+
 def _head_reference(index):
     head = index["headRevisionId"]
     reference = next(ref for ref in index["revisionRefs"] if ref["revisionId"] == head)
@@ -1045,6 +1134,7 @@ class MotionReviewService:
         }
         if context["projectionSource"] is not None:
             snapshot["projectionSource"] = context["projectionSource"]
+        snapshot.update(_recorded_review_view(self.workspace, heads, items))
         self._add_scope(snapshot, scope_request)
         snapshot["snapshotHash"] = document_hash_excluding(snapshot, "snapshotHash")
         validate_document(snapshot, "avo.motion-review.schema.json")
@@ -1236,12 +1326,15 @@ def _track_lines(snapshot, include_tracks):
 
 
 def render_text(snapshot, *, include_tracks=True):
+    recorded = snapshot.get("encodedReview") or {}
+    review_links = _craft_review_descriptions(recorded)
     lines = [
         f"Motion plan: {snapshot['videoId']}",
         f"Readiness: {snapshot['readiness']}",
         f"Applicability: {snapshot['applicability']}",
         "",
         *_scope_summary(snapshot),
+        *_craft_review_header(recorded),
     ]
     for item, card in zip(snapshot["items"], snapshot["storyboardCards"], strict=True):
         lines.extend(
@@ -1264,6 +1357,7 @@ def render_text(snapshot, *, include_tracks=True):
                 f"Canonical parts (exact BMap ranges): {_text(item['parts'])}",
                 f"Non-authoritative proposal identity conflicts: {_text(item['identityConflicts'])}",
                 f"Evidence: {_text(card['evidence'])}",
+                *review_links.get(item["itemId"], []),
                 f"Unresolved: {', '.join(card['unresolvedFields'])}",
                 "",
             ]
@@ -1281,6 +1375,34 @@ def render_text(snapshot, *, include_tracks=True):
         ]
     )
     return "\n".join(lines) + "\n"
+
+
+def _craft_review_header(recorded):
+    if not recorded:
+        return []
+    return [
+        f"Encoded cue review for {recorded['candidateSha256'][:12]} in {recorded['reviewPath']}",
+        "Play the affected intervals and listen before accepting a change.",
+        "Route picture and sound revisions through their owning commands.",
+        "",
+    ]
+
+
+def _craft_review_descriptions(recorded):
+    return {
+        link["itemId"]: [
+            f"Observed frames for {', '.join(link['cueIds'])}: {_bounded_labels(link['observedFrames'])}",
+            f"Linked findings: {_bounded_labels(link['findingIds'])}",
+        ]
+        for link in recorded.get("links", [])
+    }
+
+
+def _bounded_labels(values):
+    first = ", ".join(map(str, values[:12]))
+    if len(values) > 12:
+        return f"{first} and {len(values) - 12} more in the review"
+    return first or "None recorded"
 
 
 def _concept_descriptions(item):
@@ -1311,6 +1433,7 @@ def render_html(snapshot):
         .read_text(encoding="utf-8")
     )
     map_rows, cards = [], []
+    review_links = _craft_review_descriptions(snapshot.get("encodedReview") or {})
     for item, card in zip(snapshot["items"], snapshot["storyboardCards"], strict=True):
         anchor = "item-" + content_hash(item["itemId"])
         map_rows.append(
@@ -1334,6 +1457,8 @@ def render_html(snapshot):
             "Evidence": card["evidence"],
             "Unresolved": card["unresolvedFields"],
         }
+        if item["itemId"] in review_links:
+            fields["Encoded cue review"] = review_links[item["itemId"]]
         descriptions = "".join(
             f"<dt>{escape(key)}</dt><dd>{escape(_text(value))}</dd>"
             for key, value in fields.items()
