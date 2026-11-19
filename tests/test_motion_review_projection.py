@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from avo.timeline.contracts import validate_document
+from avo.timeline.contracts import content_hash, validate_document
 from avo.timeline.motion_review import MotionReviewService, render_html, render_text
 from avo.timeline.store import atomic_write_json
 from avo.timeline.workspace import ARTIFACTS, TimelineWorkspace
@@ -71,6 +71,80 @@ def cue(identifier="mo04", ticks=12, **fields):
         "reviewState": "pending",
         **fields,
     }
+
+
+@pytest.mark.parametrize("stale", [None, "review", "bmap", "tracks"])
+def test_linked_storyboard_uses_only_selected_current_sampled_review(
+    workspace, monkeypatch, stale
+):
+    from avo.timeline.pipeline import TimelinePipeline
+
+    stores = install(
+        workspace, monkeypatch, {"bmap": {"cues": [cue(), cue("mo05", 32)]}}
+    )
+    bmap = stores["bmap"].head_hash()
+    candidate_sha, candidate_identity, materialization = "a" * 64, "b" * 64, "c" * 64
+    report = {
+        "candidateSha256": candidate_sha,
+        "candidateIdentityHash": candidate_identity,
+        "materializationHash": materialization,
+        "bmapRevisionHash": bmap,
+        "canonicalRevisionHashes": {"bmap": bmap, "tracks": None},
+        "cues": [
+            {
+                "cueId": "mo04",
+                "observedFrames": [14, 17],
+                "frameFindings": [{"findingId": "layout-issue"}],
+            },
+            {"cueId": "mo05", "observedFrames": [], "frameFindings": []},
+        ],
+    }
+    review = {
+        "candidate": {"sha256": candidate_sha, "identityHash": candidate_identity},
+        "evidence": [{"kind": "watch", "reviewContext": {"craftChecks": report}}],
+    }
+    path = workspace.review_dir / "motion-proof" / candidate_sha[:12] / "review.json"
+    atomic_write_json(path, review)
+    workspace.pipeline_run_path.touch()
+    reference = {
+        "candidate": {"sha256": candidate_sha},
+        "materialization": {"sha256": materialization},
+        "review": {"artifactId": "motion-proof-review", "sha256": content_hash(review)},
+    }
+    monkeypatch.setattr(
+        TimelinePipeline, "active_candidate_snapshot", lambda _: reference
+    )
+    if stale == "bmap":
+        advance(stores["bmap"])
+    elif stale == "tracks":
+        # The record is exact for the prior absent Tracks state.
+        install(workspace, monkeypatch, {"tracks": {"video": {}, "audio": {}}})
+    elif stale == "review":
+        review["evidence"][0]["reviewContext"]["craftChecks"]["cues"][0][
+            "observedFrames"
+        ] = [23]
+        atomic_write_json(path, review)
+
+    plan = MotionReviewService(workspace).project()
+    if stale:
+        assert "encodedReview" not in plan
+        return
+    assert (
+        plan["encodedReview"]["reviewPath"]
+        == path.relative_to(workspace.raw_dir).as_posix()
+    )
+    assert plan["encodedReview"]["links"] == [
+        {
+            "itemId": "mo04",
+            "cueIds": ["mo04"],
+            "observedFrames": [14, 17],
+            "findingIds": ["layout-issue"],
+        }
+    ]
+    for displayed in (render_text(plan), render_html(plan)):
+        assert "layout-issue" in displayed
+        assert "14, 17" in displayed
+        assert "listen before accepting" in displayed
 
 
 def test_empty_projection_is_read_only_with_explicit_absence(workspace, monkeypatch):
