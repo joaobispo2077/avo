@@ -25,6 +25,7 @@ def _references(value):
                     "budgetSource",
                     "originalBinding",
                     "modelBindings",
+                    "speechDependencies",
                     "tools",
                 }:
                     yield from _references(child)
@@ -65,9 +66,10 @@ class _Evidence:
             raise ValueError("preparation evidence reference changed")
         return document
 
-    def closure(self):
-        ledger = self.journal()
-        queue = list(_references(ledger))
+    def closure(self, references=()):
+        queue = list(references)
+        if self.store.ledger.path.exists():
+            queue.extend(_references(self.journal()))
         visited = set()
         while queue:
             reference = queue.pop()
@@ -126,12 +128,12 @@ class _Evidence:
         queue.append({"locator": relative, "sha256": content_hash(document)})
 
 
-def retained_preparation_files(workspace):
+def retained_preparation_files(workspace, *, references=()):
     evidence = _Evidence(workspace)
-    if not evidence.store.ledger.path.exists():
+    if not references and not evidence.store.ledger.path.exists():
         return {}
     try:
-        return evidence.closure()
+        return evidence.closure(references=references)
     except (OSError, ValueError, KeyError, TypeError, RuntimeError) as error:
         raise ValueError(
             f"Cannot retain preparation recovery evidence: {error}"
