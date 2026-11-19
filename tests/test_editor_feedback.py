@@ -124,3 +124,37 @@ def test_explicit_gain_and_camera_values_follow_independent_three_way_rules():
     result = compare_editor_feedback(base, current, returned)
     assert [row["field"] for row in result["proposals"]] == ["camera"]
     assert [row["field"] for row in result["conflicts"]] == ["gainDb"]
+
+
+def test_divergent_camera_and_markers_preserve_all_three_values_for_review():
+    base = state(occurrence("first", 0, 0))
+    base["tracks"][0]["clips"][0]["camera"] = {"scale": 1}
+    base["markers"] = [{"name": "Keep", "in": 2, "out": -1}]
+    current, returned = deepcopy(base), deepcopy(base)
+    current["tracks"][0]["clips"][0]["camera"] = {"scale": 1.1}
+    returned["tracks"][0]["clips"][0]["camera"] = {"scale": 1.2}
+    current["markers"][0]["in"] = 4
+    returned["markers"][0]["in"] = 6
+
+    result = compare_editor_feedback(base, current, returned)
+
+    assert result["proposals"] == result["unresolved"] == []
+    assert {(row["id"], row["field"]) for row in result["conflicts"]} == {
+        ("first", "camera"),
+        ("sequence", "markers"),
+    }
+    rows = {row["field"]: row for row in result["conflicts"]}
+    assert [
+        rows["camera"][side]["scale"] for side in ("base", "current", "returned")
+    ] == [
+        1,
+        1.1,
+        1.2,
+    ]
+    assert [
+        rows["markers"][side][0]["in"] for side in ("base", "current", "returned")
+    ] == [
+        2,
+        4,
+        6,
+    ]
