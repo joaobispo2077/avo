@@ -9,9 +9,11 @@ from tests.test_sound_application import application
 from tests.test_timeline_animation_service import strategy
 from tests.test_timeline_tracks_service import canonical_tracks
 
+from avo.timeline.bmap_service import BMapService
 from avo.timeline.motion_authoring import MotionAuthoringService
 from avo.timeline.motion_review import MotionReviewService
 from avo.timeline.pipeline import TimelinePipeline
+from avo.timeline.tracks import TracksService
 from avo.timeline.workspace import WorkspaceError
 
 
@@ -32,15 +34,19 @@ def sound_proposal(workspace, service, original, operation_id):
     )
 
 
-def applied_motion_and_sound(tmp_path, *, legacy_cue=False):
+def applied_motion_and_sound(tmp_path, *, legacy_cue=False, later_text=False):
     workspace, _, audio_service, _, audio_request, original = application(tmp_path)
-    if legacy_cue:
-        from avo.timeline.bmap_service import BMapService
-
+    if legacy_cue or later_text:
         visual = deepcopy(workspace.store("bmap").load()["revisions"][-1]["snapshot"])
-        visual["cues"][0]["contentRef"].pop("itemId")
+        if legacy_cue:
+            visual["cues"][0]["contentRef"].pop("itemId")
+        if later_text:
+            later = deepcopy(visual["cues"][0])
+            later.update(cueId="cue-later", contentRef={"text": "Later title"})
+            later["start"]["ticks"], later["end"]["ticks"] = 600, 800
+            visual["cues"].append(later)
         BMapService(workspace).author(
-            visual, actor="fixture", reason="Existing legacy cue identity"
+            visual, actor="fixture", reason="Prepare original visual timeline"
         )
     motion = MotionAuthoringService(workspace)
     concept = motion.propose(
@@ -172,3 +178,36 @@ def test_visual_reuse_requires_current_direction_and_intact_retained_basis(tmp_p
     assert {
         name: workspace.artifact_path(name).read_bytes() for name in before
     } == before
+
+
+def test_revising_a_disjoint_title_preserves_the_other_item_on_restart(tmp_path):
+    workspace, service, _, current, _ = applied_motion_and_sound(
+        tmp_path, later_text=True
+    )
+    bmap, tracks = (
+        deepcopy(workspace.store(name).load()["revisions"][-1]["snapshot"])
+        for name in ("bmap", "tracks")
+    )
+    title = next(cue for cue in bmap["cues"] if cue["cueId"] == "cue-later")
+    title["contentRef"]["text"] = "Revised later title"
+    BMapService(workspace).author(bmap, actor="fixture", reason="Revise later title")
+    TracksService(workspace).author(
+        tracks, actor="fixture", reason="Reconcile tracks to current cue map"
+    )
+    before = {
+        name: workspace.artifact_path(name).read_bytes()
+        for name in ("cmap", "bmap", "tracks", "animation")
+    }
+    snapshot = fresh_map(workspace)
+    item = next(row for row in snapshot["items"] if row["itemId"] == "mo04")
+    assert item["disposition"] == "applied"
+    assert snapshot["readiness"] == "stale"
+    assert {
+        name: workspace.artifact_path(name).read_bytes() for name in before
+    } == before
+    followup = sound_proposal(
+        workspace, service, current["proposal"], "sound-after-title-revision"
+    )
+    assert followup["proposal"]["opportunities"][0]["recommendation"] == "audition"
+    with pytest.raises(WorkspaceError, match="stale"):
+        workspace.require_active("animation")

@@ -90,12 +90,14 @@ def test_frozen_current_view_survives_preference_changes_for_future_requests(tmp
     assert canonical_state(workspace) == before
 
 
-def test_older_report_remains_readable_without_claiming_current_context(tmp_path):
+@pytest.mark.parametrize("version", ["1.8.0", "1.9.0"])
+def test_older_report_remains_readable_without_claiming_current_context(tmp_path, version):
     workspace = blank_workspace(tmp_path)
     review = MotionReviewService(workspace)
     snapshot = review.project()
-    snapshot.pop("contextBasis")
-    snapshot["generator"]["version"] = "1.8.0"
+    if version == "1.8.0":
+        snapshot.pop("contextBasis")
+    snapshot["generator"]["version"] = version
     snapshot["snapshotHash"] = document_hash_excluding(snapshot, "snapshotHash")
     result = review.publish(snapshot, expected_basis=snapshot["basisHeads"])
     assert result["status"] == "stale"

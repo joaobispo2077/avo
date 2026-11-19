@@ -169,3 +169,49 @@ def test_changed_visual_dependency_blocks_reuse_of_the_assembly(change):
     else:
         current["bmap"]["newRenderSetting"] = True
     assert unchanged_visual_items(proposal(), original, current) == []
+
+
+def _span(start, end, denominator=1000):
+    return {
+        name: {
+            "ticks": ticks,
+            "timebase": {"num": 1, "den": denominator},
+            "domain": "cmap-output",
+        }
+        for name, ticks in [("start", start), ("end", end)]
+    }
+
+
+@pytest.mark.parametrize(
+    ("old", "new", "other_item", "kind", "expected"),
+    [
+        ((500, 700), (500, 700), "mo05", "text", ["mo04"]),
+        ((499, 700), (500, 700), "mo05", "text", []),
+        ((500, 700), (499, 700), "mo05", "text", []),
+        ((500, 700), (500, 700), "mo04", "text", []),
+        ((500, 700), (500, 700), "mo05", "animation", []),
+        ((500, 700), (500, 700), "mo05", "component-text", []),
+    ],
+)
+def test_only_disjoint_plain_text_changes_can_keep_another_items_direction(
+    old, new, other_item, kind, expected
+):
+    original = visual_metadata()
+    original["bmap"]["cues"][0].update(_span(0, 12000, 24000))
+    original["bmap"]["cues"].append(
+        {
+            "cueId": "other-cue",
+            "kind": "text" if kind == "component-text" else kind,
+            "targetLayerId": "overlay",
+            "contentRef": {"itemId": other_item, "text": "First version"},
+            **_span(*old),
+        }
+    )
+    if kind == "component-text":
+        original["bmap"]["cues"][1]["componentRef"] = "opening-card"
+    current = deepcopy(original)
+    current["bmap"]["cues"][1].update(_span(*new))
+    current["bmap"]["cues"][1]["contentRef"]["text"] = "Revised version"
+    selected = proposal()
+    selected["items"].append({"itemId": "mo05", "disposition": "applied"})
+    assert unchanged_visual_items(selected, original, current) == expected
