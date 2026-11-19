@@ -96,6 +96,7 @@ HyperFrames is the default, and the current Remotion adapter is unsupported.
 | `/avo.animation-qc` | Motion render QC before composite |
 | `/avo.audit` | Scoped QC window |
 | `/avo.deliver` | Full master QC + delivery manifest |
+| `/avo.exports` | Optional editor handoff and returned XML review |
 
 ### Content
 

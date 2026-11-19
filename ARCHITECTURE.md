@@ -1426,6 +1426,15 @@ context exposes accepted interpretations only to their owning stage and
 rechecks the original source and transcript. Speech exclusion creates a
 normal editorial cutting proposal under the current cutting policy.
 
+The optional editor handoff assembles a bounded, original-source interchange
+example from the current canonical contiguous or placed timeline. The native
+command injects media inventory and the FCP7 XML adapter into the timeline
+service. The immutable manifest retains exact occurrence clocks, audio frame
+quantization, and affected ranges whose treatments stay in AVO. Returned XML
+is saved verbatim and compared with the retained export and current timeline.
+That comparison records separate field proposals and conflicts for review.
+See [editor handoff](docs/editor-handoff.md).
+
 Camera movement, face anchoring, sound matching, reference analysis, spoken
 notes/recovery and editor handoff are selected options resolved through existing
 settings scopes and frozen requests. Preferences seed future work and cannot

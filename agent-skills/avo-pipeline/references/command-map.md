@@ -20,6 +20,7 @@
 | `/avo.chapters` | `commands/avo/chapters.md` | `references/chapters.md` |
 | `/avo.thumbnail` | `commands/avo/thumbnail.md` | `references/thumbnail.md` |
 | `/avo.deliver` | `commands/avo/deliver.md` | `references/deliver.md` |
+| `/avo.exports` | `commands/avo/exports.md` | `references/exports.md` |
 | `/avo.shorts` | `commands/avo/shorts.md` | `references/shorts.md` |
 | `/avo.reframe` | `commands/avo/reframe.md` | `references/reframe.md` |
 | `/avo.podcast-clip` | `commands/avo/podcast-clip.md` | `references/podcast-clip.md` |
