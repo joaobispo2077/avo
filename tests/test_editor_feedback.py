@@ -63,9 +63,25 @@ def test_missing_or_duplicated_ids_do_not_authorize_replacements_or_deletions():
     returned = state(occurrence(None, 0, 0))
     result = compare_editor_feedback(base, base, returned)
     assert result["proposals"] == []
-    assert {row["id"] for row in result["unresolved"]} == {"first", "repeat"}
+    assert {row["id"] for row in result["unresolved"]} == {"first", "repeat", None}
     duplicate = state(occurrence("first", 0, 0), occurrence("first", 24, 0))
     assert compare_editor_feedback(base, base, duplicate)["proposals"] == []
+
+
+def test_new_returned_occurrence_remains_visible_for_manual_review():
+    base = state(occurrence("first", 0, 0))
+    returned = state(occurrence("first", 0, 0), occurrence("new-from-editor", 24, 12))
+    result = compare_editor_feedback(base, base, returned)
+    assert result["proposals"] == []
+    assert result["unresolved"] == [
+        {
+            "id": "new-from-editor",
+            "reason": "unmatched-returned-occurrence",
+            "lane": ["video", 1],
+            "start": 24,
+            "end": 36,
+        }
+    ]
 
 
 def test_unique_fallback_is_reviewable_and_external_finishing_is_preserved():

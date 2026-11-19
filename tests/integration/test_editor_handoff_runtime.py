@@ -8,7 +8,7 @@ import pytest
 from tests.test_timeline_cmap_service import snapshot, workspace
 
 from avo.adapters.media.fcp7_xml import parse_fcp7_xml, write_fcp7_xml
-from avo.adapters.registry import build_editor_handoff
+from avo.adapters.registry import build_cutting_service, build_editor_handoff
 from avo.editing_craft import resolve_editing_craft_selection
 from avo.engine_cli import main
 from avo.timeline.cmap_service import CMapService
@@ -34,6 +34,35 @@ def editor_request(ws):
         "window": {"startFrame": 2, "endFrameExclusive": 21},
         "admittedRoots": [str(ws.raw_dir)],
     }
+
+
+def _feedback_command(ws, request_file, capsys, operation, data, *, expected_code=0):
+    body = {
+        "contractVersion": "1.0.0",
+        "operation": operation,
+        "actor": "creator",
+        "reason": "Review a returned edit",
+        **data,
+    }
+    request_file.write_text(json.dumps(body), encoding="utf-8")
+    assert (
+        main(
+            [
+                "timeline-export",
+                operation,
+                "--project",
+                str(ws.project_path),
+                "--video-id",
+                ws.video_id,
+                "--request",
+                str(request_file),
+                "--json",
+            ]
+        )
+        == expected_code
+    )
+    output = capsys.readouterr()
+    return json.loads(output.out if expected_code == 0 else output.err)
 
 
 @pytest.mark.integration
@@ -120,6 +149,91 @@ def test_native_validation_preserves_original_picture_and_independent_audio(
     assert [row["clips"][0]["sourceTrack"] for row in (left, right)] == [1, 1]
     assert video["clips"][0]["in"] == 2 and video["clips"][0]["out"] == 21
     assert {row["locator"] for row in parsed["sources"].values()} == {source}
+    assert file_fingerprint(source) == original
+
+    from avo.timeline.editor_retention import retained_editor_files
+
+    request["window"] = {"startFrame": 0, "endFrameExclusive": 25}
+    whole = build_editor_handoff(ws).prepare(request)
+    whole_xml = ws.raw_dir / whole["xmlRef"]["locator"]
+    model = parse_fcp7_xml(whole_xml.read_bytes(), roots=[ws.raw_dir])
+    choices = []
+    for lane in model["tracks"]:
+        (clip,) = lane["clips"]
+        for field in ("end", "out"):
+            clip[field] -= 2
+            choices.append({"id": clip["id"], "field": field, "selection": "returned"})
+    returned = tmp_path / "linked-trim.xml"
+    returned.write_bytes(write_fcp7_xml(model))
+    inspection = _feedback_command(
+        ws,
+        payload,
+        capsys,
+        "inspect-feedback",
+        {
+            "handoffRef": whole["handoffRef"],
+            "returnedXml": {
+                "locator": str(returned),
+                "sha256": file_fingerprint(returned)["sha256"],
+            },
+            "admittedRoots": [str(ws.raw_dir)],
+        },
+    )
+    review = _feedback_command(
+        ws,
+        payload,
+        capsys,
+        "propose-feedback",
+        {
+            "inspectionRef": inspection["inspectionRef"],
+            "expectedBasis": request["expectedBasis"],
+        },
+    )
+    route_request = {
+        "proposalRef": review["proposalRef"],
+        "expectedBasis": request["expectedBasis"],
+        "choices": choices,
+    }
+    incomplete = _feedback_command(
+        ws,
+        payload,
+        capsys,
+        "apply-feedback",
+        {**route_request, "choices": choices[:1]},
+    )
+    assert incomplete["status"] == "manual-review"
+    assert incomplete["cuttingProposalRef"] is None
+    retained = _feedback_command(
+        ws,
+        payload,
+        capsys,
+        "apply-feedback",
+        {
+            **route_request,
+            "choices": [{**choice, "selection": "current"} for choice in choices],
+        },
+    )
+    assert retained["status"] == "current-retained"
+    route = _feedback_command(ws, payload, capsys, "apply-feedback", route_request)
+    assert route["status"] == "cutting-review-required" and route["mutated"] is False
+    reference = route["cuttingProposalRef"]
+    owner = build_cutting_service(ws)
+    proposal = owner.store.load_document(reference)["payload"]
+    assert proposal["scope"]["editorFeedbackRef"] == review["proposalRef"]
+    assert len(proposal["edits"]) == 1
+    interval = proposal["edits"][0]["removeRange"]
+    assert (interval["startTicks"], interval["endTicksExclusive"]) == (920, 1000)
+    assert owner.apply(reference)["status"] == "needs-review"
+    assert (
+        _feedback_command(ws, payload, capsys, "apply-feedback", route_request)[
+            "routeRef"
+        ]
+        == route["routeRef"]
+    )
+    assert ws.timeline_dir / "cutting" / reference["locator"] in retained_editor_files(
+        ws
+    )
+    assert MotionReviewService(ws).project()["basisHeads"] == request["expectedBasis"]
     assert file_fingerprint(source) == original
 
 
@@ -224,6 +338,19 @@ def test_returned_edit_stays_a_review_proposal_and_preserves_original_bytes(
     }
     assert not review["changes"]["conflicts"]
     assert run("propose-feedback", proposed)["proposalRef"] == review["proposalRef"]
+    manual = run(
+        "apply-feedback",
+        {
+            "proposalRef": review["proposalRef"],
+            "expectedBasis": request["expectedBasis"],
+            "choices": [
+                {"id": edited["id"], "field": field, "selection": "returned"}
+                for field in ("end", "out")
+            ],
+        },
+    )
+    assert manual["status"] == "manual-review"
+    assert manual["cuttingProposalRef"] is None
     assert MotionReviewService(ws).project()["basisHeads"] == request["expectedBasis"]
     assert file_fingerprint(source) == original
 
@@ -307,6 +434,7 @@ def test_returned_edit_stays_a_review_proposal_and_preserves_original_bytes(
         rejected["inspectionRef"],
         rejected["returnedXmlRef"],
         qualification["qualificationRef"],
+        manual["routeRef"],
     )
     assert all(kept[ws.raw_dir / ref["locator"]] == ref["sha256"] for ref in expected)
     assert orphan not in kept

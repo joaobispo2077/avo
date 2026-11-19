@@ -387,6 +387,7 @@ def test_editor_review_tool_gate_seals_exact_requests(tmp_path: Path) -> None:
         "status",
         "inspect-feedback",
         "propose-feedback",
+        "apply-feedback",
         "qualify-target",
     }
     assert not by_operation["status"].spec.destructive
@@ -397,6 +398,7 @@ def test_editor_review_tool_gate_seals_exact_requests(tmp_path: Path) -> None:
         "prepare",
         "inspect-feedback",
         "propose-feedback",
+        "apply-feedback",
         "qualify-target",
     ):
         definition = by_operation[operation]
