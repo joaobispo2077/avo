@@ -5,6 +5,7 @@ import json
 
 from .contracts import content_hash, validate_document
 from .editor_handoff import SCHEMA, _artifact, _output_root
+from .preparation_retention import retained_preparation_files
 
 MAX_RECORDS = 1000
 MAX_TOTAL_BYTES = 128 * 1024 * 1024
@@ -13,6 +14,7 @@ RECORD_DEFINITIONS = {
     "inspections": "inspection",
     "feedback": "feedbackProposal",
     "qualifications": "qualification",
+    "routes": "feedbackRoute",
 }
 
 
@@ -37,6 +39,8 @@ def _references(body, category):
         return (body["input"]["handoffRef"], body["receipt"])
     if category == "qualifications":
         return body["basisRef"], body["input"]["inspectionRef"], body["returnedXmlRef"]
+    if category == "routes":
+        return (body["input"]["proposalRef"],)
     return (
         body["basisRef"],
         body["input"]["inspectionRef"],
@@ -59,7 +63,7 @@ def _reference_path(workspace, root, reference):
     return path
 
 
-def _report(workspace, root, path, data):
+def _report(workspace, root, path, data, cutting_refs):
     body = json.loads(data)
     category = path.parent.name
     validate_document(body, SCHEMA + RECORD_DEFINITIONS[category])
@@ -70,6 +74,8 @@ def _report(workspace, root, path, data):
         workspace.video_id,
     ):
         raise ValueError("Editor evidence belongs to a different project")
+    if category == "routes" and body["cuttingProposalRef"] is not None:
+        cutting_refs.append(body["cuttingProposalRef"])
     return [
         (_reference_path(workspace, root, ref), ref["sha256"])
         for ref in _references(body, category)
@@ -95,7 +101,7 @@ def retained_editor_files(workspace):
         raise ValueError("Editor evidence directory must be project-owned")
     queue = [(path, None) for path in _selected_records(root)]
     remaining = MAX_TOTAL_BYTES
-    selected = {}
+    selected, cutting_refs = {}, []
     while queue:
         path, expected = queue.pop()
         if path not in selected:
@@ -103,9 +109,11 @@ def retained_editor_files(workspace):
             remaining -= len(data)
             selected[path] = hashlib.sha256(data).hexdigest()
             if path.suffix == ".json":
-                queue.extend(_report(workspace, root, path, data))
+                queue.extend(_report(workspace, root, path, data, cutting_refs))
             elif path.stem != selected[path]:
                 raise ValueError("Editor evidence XML identity changed")
         if expected is not None and selected[path] != expected:
             raise ValueError("Editor evidence reference changed")
+    if cutting_refs:
+        selected.update(retained_preparation_files(workspace, references=cutting_refs))
     return selected

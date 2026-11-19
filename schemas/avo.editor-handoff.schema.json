@@ -113,6 +113,36 @@
     "qualificationCheck": {
       "enum": ["target-opened", "relink", "ranges", "lanes", "audio-channels", "markers", "alpha", "framing", "reviewer-response"]
     },
+    "applyFeedbackRequest": {
+      "type": "object", "additionalProperties": false,
+      "required": ["contractVersion", "operation", "actor", "reason", "proposalRef", "expectedBasis", "choices"],
+      "properties": {
+        "contractVersion": {"const": "1.0.0"}, "operation": {"const": "apply-feedback"},
+        "actor": {"$ref": "#/$defs/text"}, "reason": {"$ref": "#/$defs/text"},
+        "proposalRef": {"$ref": "#/$defs/ref"},
+        "expectedBasis": {"$ref": "avo.motion-review.schema.json#/properties/basisHeads"},
+        "choices": {
+          "type": "array", "minItems": 1, "maxItems": 128, "items": {
+            "type": "object", "additionalProperties": false, "required": ["id", "field", "selection"],
+            "properties": {
+              "id": {"$ref": "#/$defs/text"}, "field": {"$ref": "#/$defs/text"},
+              "selection": {"enum": ["current", "returned"]}
+            }
+          }
+        }
+      }
+    },
+    "feedbackRoute": {
+      "type": "object", "additionalProperties": false,
+      "required": ["provider", "videoId", "input", "status", "cuttingProposalRef"],
+      "properties": {
+        "provider": {"$ref": "#/$defs/text"}, "videoId": {"$ref": "#/$defs/text"},
+        "input": {"$ref": "#/$defs/applyFeedbackRequest"},
+        "status": {"enum": ["current-retained", "manual-review", "cutting-review-required"]},
+        "reason": {"$ref": "#/$defs/text"},
+        "cuttingProposalRef": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/ref"}]}
+      }
+    },
     "qualificationEvidence": {
       "type": "object", "additionalProperties": false,
       "required": ["contractVersion", "application", "applicationVersion", "os", "osVersion", "initialXmlSha256", "returnedXmlSha256", "checks", "maxCutDriftFrames", "reviewerDecision", "reviewer"],

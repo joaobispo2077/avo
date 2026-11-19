@@ -327,6 +327,25 @@ class CuttingService:
         if self.workspace.pipeline_run_path.exists():
             self.run_store.bind_cutting_context(references)
 
+    def _proposal_basis(self, revision, frame_rate):
+        snapshot = revision["snapshot"]
+        return {
+            "baseCMapHash": revision["contentHash"],
+            "baseCMapRevisionId": revision["revisionId"],
+            "frameRate": frame_rate,
+            "syncRef": self._sync_ref(),
+            "policyRef": self.store.save_document(
+                make_document("policy", self.policy.payload())
+            ),
+            "sourceRefs": [
+                {
+                    "locator": source["locator"],
+                    "sha256": source["fingerprint"]["sha256"],
+                }
+                for source in snapshot["sources"]
+            ],
+        }
+
     def _preparation_identity(self):
         snapshot = self.store._snapshot()
         roles = ("preparationRequests", "preparationResults", "preparationDecisions")
@@ -446,10 +465,9 @@ class CuttingService:
         request = _validated_request(request)
         revision = self._current()
         snapshot = revision["snapshot"]
-        sync_ref = self._sync_ref()
-        policy_ref = self.store.save_document(
-            make_document("policy", self.policy.payload())
-        )
+        frame_rate = request.get("frameRate") or {"num": 30, "den": 1}
+        basis = self._proposal_basis(revision, frame_rate)
+        sync_ref = basis["syncRef"]
         scope = request.get("scope") or {}
         occurrences, edits, unobserved, analysis_refs, analyses = self._analyze_units(
             snapshot, scope, sync_ref, request
@@ -481,20 +499,9 @@ class CuttingService:
             snapshot,
             [edit for edit in edits if not edit.get("editorialApprovalRequired")],
         )
-        joins = audit_joins(
-            snapshot, frame_rate=request.get("frameRate") or {"num": 30, "den": 1}
-        )
-        source_refs = [
-            {"locator": source["locator"], "sha256": source["fingerprint"]["sha256"]}
-            for source in snapshot["sources"]
-        ]
+        joins = audit_joins(snapshot, frame_rate=frame_rate)
         payload = {
-            "baseCMapHash": revision["contentHash"],
-            "frameRate": request.get("frameRate") or {"num": 30, "den": 1},
-            "baseCMapRevisionId": revision["revisionId"],
-            "syncRef": sync_ref,
-            "policyRef": policy_ref,
-            "sourceRefs": source_refs,
+            **basis,
             "occurrences": occurrences,
             "contentReduction": _content_reports(request, content),
             "edits": edits,
@@ -533,6 +540,57 @@ class CuttingService:
             },
             "policy": self.policy.payload(),
         }
+
+    @serialized_timeline(lambda self: self.workspace.timeline_dir)
+    def propose_editor_trims(
+        self, selections, *, expected_cmap, frame_rate, editor_ref
+    ):
+        """Submit exact selected removals to the ordinary cutting review workflow."""
+        revision = self._current()
+        if revision["contentHash"] != expected_cmap:
+            raise CuttingServiceError("The current cut changed before editor routing")
+        snapshot = revision["snapshot"]
+        sources = {row["sourceId"]: row for row in snapshot["sources"]}
+        occurrences, edits = [], []
+        for row in selections:
+            interval = row["removeRange"]
+            source = sources[interval["sourceId"]]
+            identity = occurrence_id(
+                source["fingerprint"]["sha256"],
+                source["sourceId"],
+                {"segmentId": row["segmentId"], "editorTrim": interval},
+            )
+            occurrences.append(
+                {
+                    "occurrenceId": identity,
+                    "sourceRange": interval,
+                    "categories": ["content-reduction"],
+                    "disposition": "needs-review",
+                    "reasons": [
+                        "Selected editor trim requires normal editorial review"
+                    ],
+                    "protections": [],
+                    "editorialApprovalRequired": True,
+                }
+            )
+            edits.append(
+                {**row, "occurrenceId": identity, "editorialApprovalRequired": True}
+            )
+        self._revalidate_protections(snapshot, edits)
+        if not edits or not consolidate_removals(snapshot, edits)["segments"]:
+            raise CuttingServiceError("Editor trims require a nonempty retained cut")
+        payload = {
+            **self._proposal_basis(revision, frame_rate),
+            "occurrences": occurrences,
+            "edits": edits,
+            "requiredWindows": audit_joins(snapshot, frame_rate=frame_rate),
+            "scope": {"editorFeedbackRef": editor_ref},
+            "implementationBindings": self._implementation_binding(),
+            "status": "needs-review",
+        }
+        reference = self.store.save_document(make_document("proposal", payload))
+        self._bind(proposal=reference)
+        return reference
 
     @serialized_timeline(lambda self: self.workspace.timeline_dir)
     def propose_spoken_note_exclusion(self, note):

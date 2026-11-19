@@ -3,6 +3,7 @@
 import hashlib
 import json
 
+from .command_registry import authorize
 from .contracts import (
     content_hash,
     file_fingerprint,
@@ -10,6 +11,7 @@ from .contracts import (
     validate_document,
 )
 from .editor_feedback import compare_editor_feedback
+from .editor_feedback_trims import ManualEditorFeedback, selected_editor_trims
 from .editor_handoff import (
     SCHEMA,
     _admitted_path,
@@ -218,3 +220,119 @@ def propose_feedback(service, request):
         }
         reference = _seal(workspace, proposal, "feedback", "feedbackProposal")
     return {"status": "review-required", "proposalRef": reference, **proposal}
+
+
+def _load_feedback_proposal(workspace, reference):
+    relative = reference["locator"]
+    if not relative.startswith(f"{_output_root(workspace)}/feedback/"):
+        raise ValueError("Select an immutable editor feedback proposal")
+    path = _artifact(workspace, relative)
+    proposal = json.loads(_read_bound(path, reference["sha256"], MAX_REPORT_BYTES))
+    validate_document(proposal, SCHEMA + "feedbackProposal")
+    if content_hash(proposal) != path.stem:
+        raise ValueError("Editor feedback proposal identity changed")
+    return proposal
+
+
+def _chosen_editor_fields(changes, choices):
+    by_key = {
+        (row["id"], row["field"]): row
+        for kind in ("proposals", "conflicts")
+        for row in changes[kind]
+    }
+    seen, chosen = set(), {}
+    for choice in choices:
+        key = choice["id"], choice["field"]
+        if key in seen or key not in by_key:
+            raise ValueError(
+                "Choose each proposed or conflicting editor field at most once"
+            )
+        seen.add(key)
+        row = by_key[key]
+        if choice["selection"] == "returned":
+            chosen.setdefault(row["id"], {})[row["field"]] = row
+    return chosen
+
+
+def _verified_feedback(service, request):
+    workspace = service.workspace
+    proposal = _load_feedback_proposal(workspace, request["proposalRef"])
+    if proposal["input"]["expectedBasis"] != request["expectedBasis"]:
+        raise ValueError(
+            "Editor decisions must use the proposal's exact current timeline basis"
+        )
+    inspection = _load_inspection(workspace, proposal["input"]["inspectionRef"])
+    base = load_handoff(workspace, proposal["basisRef"])
+    if (
+        inspection["input"]["handoffRef"] != proposal["basisRef"]
+        or base["profileHash"] != proposal["profileHash"]
+        or base["xmlRef"] != proposal["baseXmlRef"]
+        or inspection["receipt"] != proposal["returnedXmlRef"]
+    ):
+        raise ValueError("Editor proposal inputs changed")
+    changes, current = _comparison(service, base, inspection, request["expectedBasis"])
+    if changes != proposal["changes"] or current != _artifact_bytes(
+        workspace, proposal["currentXmlRef"]
+    ):
+        raise ValueError("Editor proposal no longer matches the exact comparison")
+    return changes, current, base
+
+
+def _route_chosen_fields(service, request, chosen, current_xml, base, cutting_factory):
+    if not chosen:
+        return {"status": "current-retained", "cuttingProposalRef": None}
+    workspace = service.workspace
+    _, snapshots, _ = MotionReviewService(workspace)._metadata()
+    roots = [_admitted_path(value) for value in base["request"]["admittedRoots"]]
+    current = service.read_xml(current_xml, roots=roots)
+    try:
+        if any(
+            row["identity"] != "exact"
+            for fields in chosen.values()
+            for row in fields.values()
+        ):
+            raise ManualEditorFeedback(
+                "A suggested occurrence match requires manual editor review"
+            )
+        values = {
+            identity: {field: row["returned"] for field, row in fields.items()}
+            for identity, fields in chosen.items()
+        }
+        trims = selected_editor_trims(snapshots["cmap"], current, values)
+    except ManualEditorFeedback as error:
+        return {
+            "status": "manual-review",
+            "reason": str(error),
+            "cuttingProposalRef": None,
+        }
+    authorize("trim", mutation="cmap")
+    reference = cutting_factory().propose_editor_trims(
+        trims,
+        expected_cmap=request["expectedBasis"]["cmap"]["sha256"],
+        frame_rate=base["request"]["programRate"],
+        editor_ref=request["proposalRef"],
+    )
+    return {"status": "cutting-review-required", "cuttingProposalRef": reference}
+
+
+def apply_feedback(service, request, *, cutting_factory):
+    """Route explicit choices to their supported owner without bypassing review."""
+    validate_document(request, SCHEMA + "applyFeedbackRequest")
+    workspace = service.workspace
+    owner = MotionAuthoringService(workspace)
+    owner._check_heads(request["expectedBasis"])
+    changes, current, base = _verified_feedback(service, request)
+    chosen = _chosen_editor_fields(changes, request["choices"])
+    with timeline_writer(workspace.timeline_dir):
+        owner._check_heads(request["expectedBasis"])
+        outcome = _route_chosen_fields(
+            service, request, chosen, current, base, cutting_factory
+        )
+        body = {
+            "provider": workspace.project["provider"],
+            "videoId": workspace.video_id,
+            "input": request,
+            **outcome,
+        }
+        reference = _seal(workspace, body, "routes", "feedbackRoute")
+    return {**outcome, "routeRef": reference, "mutated": False}

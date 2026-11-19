@@ -43,12 +43,13 @@ def _signature(row):
 
 def _index(model):
     by_id, by_source = defaultdict(list), defaultdict(list)
-    for row in _rows(model):
+    rows = list(_rows(model))
+    for row in rows:
         if row.get("id"):
             by_id[row["id"]].append(row)
         if row["source"] is not None:
             by_source[_signature(row)].append(row)
-    return {"ids": by_id, "source": by_source}
+    return {"ids": by_id, "source": by_source, "rows": rows}
 
 
 def _by_exact_identity(index, base):
@@ -142,7 +143,7 @@ def _compare_occurrence(result, baseline, indexes):
     issue = strength if returned is None else _row_issue(baseline, current, returned)
     if issue:
         result["unresolved"].append({"id": identity, "reason": issue})
-        return
+        return returned
     optional = tuple(
         field
         for field in OPTIONAL_FIELDS
@@ -151,6 +152,24 @@ def _compare_occurrence(result, baseline, indexes):
     _compare_fields(
         result, identity, strength, baseline, current, returned, FIELDS + optional
     )
+    return returned
+
+
+def _report_unmatched_returns(result, indexes):
+    matched = {
+        id(_compare_occurrence(result, row, indexes)) for row in indexes["base"]["rows"]
+    }
+    for row in indexes["returned"]["rows"]:
+        if id(row) not in matched:
+            result["unresolved"].append(
+                {
+                    "id": row.get("id"),
+                    "reason": "unmatched-returned-occurrence",
+                    "lane": row["lane"],
+                    "start": row["start"],
+                    "end": row["end"],
+                }
+            )
 
 
 def compare_editor_feedback(baseline, current, returned):
@@ -178,8 +197,7 @@ def compare_editor_feedback(baseline, current, returned):
             ("returned", returned),
         )
     }
-    for row in _rows(baseline):
-        _compare_occurrence(result, row, indexes)
+    _report_unmatched_returns(result, indexes)
     _compare_fields(
         result, "sequence", "exact", baseline, current, returned, ("markers",)
     )

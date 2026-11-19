@@ -14,6 +14,7 @@ def configure(subparsers):
         "status",
         "inspect-feedback",
         "propose-feedback",
+        "apply-feedback",
         "qualify-target",
     ):
         parser = subcommands.add_parser(operation)
@@ -25,10 +26,14 @@ def configure(subparsers):
 
 
 def run(args):
-    from avo.adapters.registry import build_editor_handoff
+    from avo.adapters.registry import build_cutting_service, build_editor_handoff
     from avo.editing_craft_requests import read_craft_request
     from avo.timeline.command_registry import authorize
-    from avo.timeline.editor_feedback_service import inspect_feedback, propose_feedback
+    from avo.timeline.editor_feedback_service import (
+        apply_feedback,
+        inspect_feedback,
+        propose_feedback,
+    )
     from avo.timeline.editor_qualification import qualify_target
     from avo.timeline.workspace import TimelineWorkspace
 
@@ -54,6 +59,11 @@ def run(args):
             "status": lambda: service.status(request),
             "inspect-feedback": lambda: inspect_feedback(service, request),
             "propose-feedback": lambda: propose_feedback(service, request),
+            "apply-feedback": lambda: apply_feedback(
+                service,
+                request,
+                cutting_factory=lambda: build_cutting_service(workspace),
+            ),
             "qualify-target": lambda: qualify_target(service, request),
         }[args.export_command]()
     except (OSError, ValueError, RuntimeError, SubprocessError) as error:
