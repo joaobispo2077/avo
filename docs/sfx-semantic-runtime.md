@@ -7,8 +7,10 @@ falls back to descriptor scores when the selected runtime is unavailable.
 
 Provision model artifacts separately from AVO, using the official
 [LAION CLAP model](https://huggingface.co/laion/clap-htsat-unfused) and a fixed
-40-character repository revision. Keep its declared license and notice with the
-files. A source pin uses `kind: "artifact"`, an absolute `artifactPath`, and a
+40-character repository revision. The tested model revision is
+[8fa0f1c6d0433df6e97c127f64b2a1d6c0dcda8a](https://huggingface.co/laion/clap-htsat-unfused/tree/8fa0f1c6d0433df6e97c127f64b2a1d6c0dcda8a).
+Keep the declared Apache-2.0 model notice and the notices shipped with each
+runtime package. A source pin uses `kind: "artifact"`, an absolute `artifactPath`, and a
 `manifestPath` inside that directory, with the manifest's exact SHA-256. Do not
 point at a mutable online model or treat a named directory as readiness.
 
@@ -26,6 +28,14 @@ The selected runtime must declare `offline: true`, `allowDownload: false`,
 entry points are blocked, and model/processor loading uses local files only.
 Installation is separate from inference; a search never provisions tools or
 weights. Saved global defaults and ordinary transcription jobs are independent.
+
+For Windows x64 and CPython 3.11, the tested CPU runtime uses PyTorch
+2.9.1+cpu, Transformers 4.57.6 and NumPy 2.2.6. Install into a separate virtual
+environment using the [hashed wheel requirements](../config/sfx-clap-cpu-windows.requirements.txt).
+The engine and Python distribution include this requirements file for explicit
+provisioning. To provision a chosen interpreter, use
+`uv pip install --require-hashes --only-binary=:all: -r <requirements> --python <interpreter>`.
+Record the actual interpreter and FFmpeg fingerprints in the model manifest.
 
 For repeatable local qualification, save the explicit model pin as a JSON file
 outside tracked configuration. Select that file only for the integration test:
