@@ -120,6 +120,67 @@ def test_explicit_filter_range_can_cover_entire_source_occurrence(tmp_path, star
     assert returned["tracks"][1]["clips"][0]["gainDb"] == pytest.approx(-6.020599913)
 
 
+def _basic_motion(scale, *, rotation=0, center=0, additional=""):
+    def parameter(key, value):
+        return f"<parameter><parameterid>{key}</parameterid><value>{value}</value></parameter>"
+
+    return (
+        "<filter><enabled>TRUE</enabled><start>0</start><end>240</end>"
+        "<effect><name>Basic Motion</name><effectid>basic</effectid>"
+        "<effecttype>motion</effecttype><mediatype>video</mediatype>"
+        + parameter("scale", scale)
+        + parameter("rotation", rotation)
+        + parameter("center", f"<horiz>{center}</horiz><vert>0</vert>")
+        + parameter("centerOffset", "<horiz>0</horiz><vert>0</vert>")
+        + additional
+        + "</effect></filter>"
+    )
+
+
+def _video_motion(tmp_path, effect):
+    source = tmp_path / "original.mov"
+    xml = document(source.as_uri()).replace(
+        "<filter><effect><name>External finishing</name></effect></filter>", effect
+    )
+    return parse_fcp7_xml(xml.encode(), roots=[tmp_path])
+
+
+def test_constant_basic_motion_scale_comparison_preserves_original_filter(tmp_path):
+    from avo.timeline.editor_feedback import compare_editor_feedback
+
+    baseline = _video_motion(tmp_path, _basic_motion(100))
+    returned = _video_motion(tmp_path, _basic_motion(125))
+    assert returned["tracks"][0]["clips"][0]["camera"] == {"scale": 1.25}
+    assert returned["tracks"][0]["clips"][0]["unknown"]["filter"] == 1
+
+    result = compare_editor_feedback(baseline, baseline, returned)
+    assert [(row["id"], row["field"]) for row in result["proposals"]] == [
+        ("take-first", "camera")
+    ]
+
+
+@pytest.mark.parametrize(
+    "effect",
+    [
+        _basic_motion("NaN"),
+        _basic_motion(125, center=0.2),
+        _basic_motion(125, rotation=15),
+        _basic_motion(
+            125, additional="<parameter><parameterid>distort</parameterid></parameter>"
+        ),
+        _basic_motion(
+            125, additional="<keyframe><when>2</when><value>130</value></keyframe>"
+        ),
+        _basic_motion(125).replace("<end>240</end>", "<end>13</end>"),
+    ],
+)
+def test_unverified_motion_remains_manual(tmp_path, effect):
+    returned = _video_motion(tmp_path, effect)
+    clip = returned["tracks"][0]["clips"][0]
+    assert "camera" not in clip
+    assert clip["unknown"]["filter"] == 1
+
+
 @pytest.mark.parametrize(
     "effect",
     [
