@@ -42,6 +42,45 @@ class IterationLedgerError(RuntimeError):
     """Raised when iteration history would become ambiguous or inconsistent."""
 
 
+def pending_stage_notes(workspace, stage):
+    """Reopen retained interpretations for their owning authoring stage."""
+    from .contracts import fingerprint_stage
+    from .preparation_recovery import PreparationService
+
+    owners = {"cmap": "cutting", "bmap": "assets", "motion": "motion", "sound": "sound"}
+    owner = owners.get(stage)
+    if owner is None:
+        return []
+    preparation = PreparationService(workspace)
+    results = []
+    with fingerprint_stage():
+        for reference in preparation.store.active_note_interpretations():
+            record = preparation.store.load_document(reference)["payload"]
+            if (
+                record["interpretationEffect"] != "pending-owner-review"
+                or record["note"]["interpretation"]["stage"] != owner
+            ):
+                continue
+            results.append(_pending_note(preparation, reference, record))
+    return results
+
+
+def _pending_note(preparation, reference, record):
+    from .preparation_note_decisions import _current_note
+
+    row = {"noteId": record["note"]["noteId"], "decisionRef": reference}
+    try:
+        current, _ = _current_note(preparation, record["input"])
+    except (OSError, ValueError, RuntimeError) as error:
+        return {**row, "status": "stale", "reason": str(error)[:256]}
+    return {
+        **row,
+        "status": "pending-owner-review",
+        "sourceRange": current["sourceRange"],
+        "interpretation": current["interpretation"],
+    }
+
+
 def _attach_cutting_refs(request):
     cutting_refs = request.pop("cuttingRefs", None)
     if cutting_refs is None:

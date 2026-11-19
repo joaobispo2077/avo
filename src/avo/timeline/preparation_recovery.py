@@ -124,6 +124,16 @@ def _scope_response(reference, ranges, status, issue):
 
 
 class PreparationService:
+    def notes_detect(self, request):
+        from .preparation_note_service import notes_detect
+
+        return notes_detect(self, request)
+
+    def notes_decide(self, request):
+        from .preparation_note_decisions import notes_decide
+
+        return notes_decide(self, request)
+
     def decide(self, request):
         from .preparation_choices import decide_recovery
 

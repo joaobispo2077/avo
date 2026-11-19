@@ -499,6 +499,8 @@ class TimelinePipeline:
         from avo.direction.brief import BriefService
         from avo.direction.rules import DirectionError
 
+        from .iterations import pending_stage_notes
+
         service = BriefService(self.workspace.project_path)
         result = service.stage_context(
             stage, self.workspace.active_dependency_snapshot(), record=False
@@ -510,6 +512,9 @@ class TimelinePipeline:
             )
         if stage == "motion":
             result = {**result, "motionPlan": self.motion_plan()}
+        notes = pending_stage_notes(self.workspace, stage)
+        if notes:
+            result = {**result, "spokenNotes": notes}
         return result
 
     @property

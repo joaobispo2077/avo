@@ -9,7 +9,13 @@ from pathlib import Path
 def configure(subparsers):
     parser = subparsers.add_parser("preparation")
     operations = parser.add_subparsers(dest="preparation_command", required=True)
-    for operation in ("coverage", "recover", "recover-decide"):
+    for operation in (
+        "coverage",
+        "recover",
+        "recover-decide",
+        "notes-detect",
+        "notes-decide",
+    ):
         item = operations.add_parser(operation)
         item.add_argument("--project", type=Path, required=True)
         item.add_argument("--video-id", default="")
@@ -22,6 +28,7 @@ def configure(subparsers):
 def run(args):
     from avo.adapters.registry import build_preparation_service
     from avo.editing_craft_requests import read_craft_request
+    from avo.timeline.store import StoreError
     from avo.timeline.workspace import TimelineWorkspace
 
     try:
@@ -38,6 +45,8 @@ def run(args):
             "coverage": "coverageRequest",
             "recover": "recoverRequest",
             "recover-decide": "decideRequest",
+            "notes-detect": "notesDetectRequest",
+            "notes-decide": "noteDecisionRequest",
         }[args.preparation_command]
         validate_document(request, "avo.preparation.schema.json#/$defs/" + definition)
         if request.get("operation") != args.preparation_command:
@@ -55,10 +64,10 @@ def run(args):
         operation = (
             "decide"
             if args.preparation_command == "recover-decide"
-            else args.preparation_command
+            else args.preparation_command.replace("-", "_")
         )
         result = getattr(service, operation)(request)
-    except (OSError, ValueError) as error:
+    except (OSError, ValueError, StoreError) as error:
         print(
             json.dumps({"status": "invalid-input", "message": str(error)}),
             file=sys.stderr,

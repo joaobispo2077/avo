@@ -29,7 +29,7 @@ from .cutting_take_proposals import propose_retakes
 from .lifecycle import PipelineRunStore
 from .ports import BoundaryVerificationPort
 from .preparation import coverage_protections, inspect_speech_coverage
-from .store import now_iso
+from .store import now_iso, serialized_timeline
 
 
 class CuttingServiceError(ValueError):
@@ -533,6 +533,47 @@ class CuttingService:
             },
             "policy": self.policy.payload(),
         }
+
+    @serialized_timeline(lambda self: self.workspace.timeline_dir)
+    def propose_spoken_note_exclusion(self, note):
+        """Create a normal editorial proposal for exactly one retained source occurrence."""
+        from .cutting_content_proposals import _owner, _protected
+
+        snapshot = self._current()["snapshot"]
+        interval = note["sourceRange"]
+        containing = [
+            segment
+            for segment in snapshot["segments"]
+            if _owner(interval, [segment]) is not None
+        ]
+        if len(containing) != 1:
+            raise CuttingServiceError(
+                "Spoken note needs one current retained source occurrence"
+            )
+        protections = self.policy.protections + self._canonical_protections(snapshot)
+        if _protected(interval, protections):
+            raise CuttingServiceError(
+                "Protected speech cannot become a note exclusion proposal"
+            )
+        result = self.analyze(
+            {
+                "scope": {"segmentIds": [containing[0]["segmentId"]]},
+                "editorialUnits": [
+                    {
+                        "unitId": note["noteId"],
+                        "sourceRange": interval,
+                        "complete": True,
+                        "tangent": True,
+                        "rationale": "Explicitly selected production note speech",
+                    }
+                ],
+            }
+        )
+        if not result.get("proposalRef"):
+            raise CuttingServiceError(
+                "The selected cutting policy cannot propose note exclusion"
+            )
+        return result["proposalRef"]
 
     @staticmethod
     def _speech_protections(analyses):

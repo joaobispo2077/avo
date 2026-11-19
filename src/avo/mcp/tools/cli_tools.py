@@ -1093,6 +1093,8 @@ def _preparation_bridge_defs() -> list[BridgeToolDef]:
         "coverage": "Inspect retained source speech-coverage facts against current source/routing/Sync metadata. No media decoding, source hashing, model execution or new journal.",
         "recover": "Explicit bounded local retranscription of selected original-source intervals. Confirms exact request bytes and consumes durable attempts before inference. Preserves original/recovered alternatives; no cut or transcript selection approval.",
         "recover-decide": "Explicitly choose original or recovered transcript evidence, reject an alternative or defer its source interval. Confirms exact request bytes and current decisions. Preserves immutable history and unresolved timing protection; no inference or cut approval.",
+        "notes-detect": "Inspect a selected prepared original transcript for the configured literal spoken-note convention. Saves source-bound review evidence without running transcription.",
+        "notes-decide": "Record an exact spoken note interpretation or independent speech decision. An exclusion can create an ordinary cutting proposal for later review.",
     }
     return [
         _tool(
@@ -1246,6 +1248,8 @@ def _decision_gate_args(defn, bridge_args):
     if defn.cli_prefix not in {
         ("preparation", "recover"),
         ("preparation", "recover-decide"),
+        ("preparation", "notes-detect"),
+        ("preparation", "notes-decide"),
         ("direction", "decide"),
         ("briefstart", "decide"),
         ("animation", "plan-apply"),
@@ -1266,6 +1270,8 @@ def _decision_gate_args(defn, bridge_args):
         in {
             ("preparation", "recover"),
             ("preparation", "recover-decide"),
+            ("preparation", "notes-detect"),
+            ("preparation", "notes-decide"),
             ("animation", "plan-apply"),
             ("animation", "plan-select"),
             ("animation", "camera-apply"),

@@ -280,6 +280,66 @@ class CuttingStore:
             expected_head_hash=self.head_hash(),
         )
 
+    def note_decision(self, operation_id):
+        reference = self._snapshot().get("spokenNoteDecisions", {}).get(operation_id)
+        if reference is None:
+            return None
+        return reference, self.load_document(reference)
+
+    def active_note_interpretations(self):
+        choices = self._snapshot().get("spokenNoteChoices", {})
+        return [
+            row["interpretation"]
+            for _, row in sorted(choices.items())
+            if "interpretation" in row
+        ]
+
+    def require_note_choices(self, request, *, snapshot=None):
+        current = self._snapshot() if snapshot is None else snapshot
+        choices = current.get("spokenNoteChoices", {}).get(request["noteId"], {})
+        for kind, expected in (
+            ("interpretation", "expectedInterpretationRef"),
+            ("speech", "expectedSpeechRef"),
+        ):
+            if kind in request and choices.get(kind) != request[expected]:
+                raise CuttingStoreError("Spoken note choice changed before review")
+
+    def record_note_decision(self, document):
+        document = validate_cutting_document(document, "spoken-note-decision")
+        payload = document["payload"]
+        request = payload["input"]
+        with _exclusive_lock(self.directory / ".repair-ledger.lock"):
+            existing = self.note_decision(request["operationId"])
+            if existing is not None:
+                if existing[1]["payload"]["requestHash"] != payload["requestHash"]:
+                    raise CuttingStoreError(
+                        "Spoken note operation ID changes request identity"
+                    )
+                return existing[0]
+            snapshot = self._snapshot()
+            self.require_note_choices(request, snapshot=snapshot)
+            history = snapshot.setdefault("spokenNoteDecisions", {})
+            if len(history) >= 500:
+                raise CuttingStoreError(
+                    "Spoken note decision history exceeds its review budget"
+                )
+            reference = self.save_document(document)
+            history[request["operationId"]] = reference
+            current = snapshot.setdefault("spokenNoteChoices", {}).setdefault(
+                request["noteId"], {}
+            )
+            current.update(
+                {
+                    kind: reference
+                    for kind in ("interpretation", "speech")
+                    if kind in request
+                }
+            )
+            self._append_preparation(
+                snapshot, request["actor"], "record selected spoken note decision"
+            )
+            return reference
+
     def register_recovery(self, document):
         document = validate_cutting_document(document, "speech-recovery-request")
         request = document["payload"]["input"]
