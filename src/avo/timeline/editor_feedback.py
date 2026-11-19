@@ -137,6 +137,24 @@ def _row_issue(baseline, current, returned):
     return None
 
 
+def _comparable_optionals(result, identity, baseline, current, returned):
+    comparable = []
+    for field in OPTIONAL_FIELDS:
+        values = tuple(row.get(field) for row in (baseline, current, returned))
+        if values == (None, None, None):
+            continue
+        if None not in values:
+            comparable.append(field)
+            continue
+        reason = (
+            "returned-field-unobserved"
+            if values[-1] is None
+            else "baseline-or-current-field-unobserved"
+        )
+        result["unresolved"].append({"id": identity, "field": field, "reason": reason})
+    return tuple(comparable)
+
+
 def _compare_occurrence(result, baseline, indexes):
     identity = baseline.get("id")
     current, returned, strength = _occurrence_match(baseline, indexes)
@@ -144,11 +162,7 @@ def _compare_occurrence(result, baseline, indexes):
     if issue:
         result["unresolved"].append({"id": identity, "reason": issue})
         return returned
-    optional = tuple(
-        field
-        for field in OPTIONAL_FIELDS
-        if all(field in row for row in (baseline, current, returned))
-    )
+    optional = _comparable_optionals(result, identity, baseline, current, returned)
     _compare_fields(
         result, identity, strength, baseline, current, returned, FIELDS + optional
     )

@@ -4,6 +4,7 @@ import os
 import re
 from collections import Counter
 from fractions import Fraction
+from math import isfinite, log10
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from urllib.parse import unquote, urlsplit
 from xml.etree.ElementTree import Element, SubElement, TreeBuilder, tostring
@@ -309,7 +310,52 @@ def _clip_frames(element):
     return frame
 
 
-def _clip(element, rate, sources):
+def _full_clip_audio_levels(element):
+    filters = [
+        item
+        for item in element.findall("filter")
+        if _text(item, "effect/effectid", "").casefold()
+        in {"audiolevels", "audio levels"}
+    ]
+    if len(filters) != 1:
+        return None
+    (item,) = filters
+    if _text(item, "enabled", "TRUE").casefold() != "true":
+        return None
+    if any(_text(item, key, "-1") != "-1" for key in ("start", "end")):
+        return None
+    return item.find("effect")
+
+
+def _linear_level(effect):
+    params = [
+        row
+        for row in effect.findall("parameter")
+        if _text(row, "parameterid", "").casefold() == "level"
+    ]
+    if len(params) != 1:
+        return None
+    values = params[0].findall("value")
+    if len(values) != 1 or len(values[0]):
+        return None
+    try:
+        level = float(values[0].text or "")
+    except ValueError:
+        return None
+    if level <= 0 or not isfinite(level):
+        return None
+    return level
+
+
+def _observed_audio_gain(element):
+    effect = _full_clip_audio_levels(element)
+    if effect is None or effect.find(".//keyframe") is not None:
+        return {}
+    level = _linear_level(effect)
+    return {"gainDb": 20 * log10(level)} if level is not None else {}
+
+
+def _clip(element, rate, sources, kind):
     file = element.find("file")
     identity = file.get("id") if file is not None else None
     source = sources.get(identity)
@@ -325,6 +371,7 @@ def _clip(element, rate, sources):
         "enabled": _boolean(element, "enabled", True),
         "markers": _markers(element),
         "unknown": _unknown(element),
+        **(_observed_audio_gain(element) if kind == "audio" else {}),
         "rangeStatus": "external"
         if source is None or min(frame["start"], frame["end"]) < 0
         else "observed",
@@ -340,7 +387,9 @@ def _tracks(sequence, rate, sources):
             "locked": _boolean(track, "locked", False),
             "outputChannel": _integer(track, "outputchannelindex", default=0, minimum=1)
             or None,
-            "clips": [_clip(row, rate, sources) for row in track.findall("clipitem")],
+            "clips": [
+                _clip(row, rate, sources, kind) for row in track.findall("clipitem")
+            ],
         }
         for kind in ("video", "audio")
         for index, track in enumerate(sequence.findall(f"./media/{kind}/track"), 1)
