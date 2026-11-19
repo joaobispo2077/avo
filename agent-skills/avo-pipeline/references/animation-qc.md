@@ -46,6 +46,10 @@ payoff and exit. Record the exact observed times. Use continuous playback
 for motion handoffs, lip sync and audibility. The sampled vision report
 covers the individual frames it observed.
 
+Record a proposed workaround with the exact candidate, reproduction finding,
+program windows, engine and runtime versions, platform and render profile.
+Review the proposed change in that environment through the normal owning stage.
+
 ## Output
 
 Write `<rawDir>/edit/review/animation-qc.md` with PASS/FAIL and blockers.

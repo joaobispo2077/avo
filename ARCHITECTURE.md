@@ -1442,6 +1442,11 @@ identities to the exact app, OS, profile and implementation. Production export
 requires a qualified review reference that still verifies against its sources.
 See [editor handoff](docs/editor-handoff.md).
 
+The iteration ledger ties a proposed render workaround to the exact candidate,
+its matching reproduction evidence, affected program windows and the observed
+engine, runtime, profile and platform. Provider learning retains the summarized
+defect. Workaround details stay in the originating project review.
+
 Camera movement, face anchoring, sound matching, reference analysis, spoken
 notes/recovery and editor handoff are selected options resolved through existing
 settings scopes and frozen requests. Preferences seed future work and cannot
