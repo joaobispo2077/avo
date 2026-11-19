@@ -1056,14 +1056,15 @@ def _preparation_bridge_defs() -> list[BridgeToolDef]:
     descriptions = {
         "coverage": "Inspect retained source speech-coverage facts against current source/routing/Sync metadata. No media decoding, source hashing, model execution or new journal.",
         "recover": "Explicit bounded local retranscription of selected original-source intervals. Confirms exact request bytes and consumes durable attempts before inference. Preserves original/recovered alternatives; no cut or transcript selection approval.",
+        "recover-decide": "Explicitly choose original or recovered transcript evidence, reject an alternative or defer its source interval. Confirms exact request bytes and current decisions. Preserves immutable history and unresolved timing protection; no inference or cut approval.",
     }
     return [
         _tool(
-            "avo_preparation_" + operation,
+            "avo_preparation_" + operation.replace("-", "_"),
             "preparation",
             operation,
             description,
-            destructive=operation == "recover",
+            destructive=operation != "coverage",
             extra_params=(ParamSpec("request", str, required=True),),
         )
         for operation, description in descriptions.items()
@@ -1208,6 +1209,7 @@ def _decision_gate_args(defn, bridge_args):
     normalize_cost_arguments(defn.cli_prefix, bridge_args)
     if defn.cli_prefix not in {
         ("preparation", "recover"),
+        ("preparation", "recover-decide"),
         ("direction", "decide"),
         ("briefstart", "decide"),
         ("animation", "plan-apply"),
@@ -1222,6 +1224,7 @@ def _decision_gate_args(defn, bridge_args):
         if defn.cli_prefix
         in {
             ("preparation", "recover"),
+            ("preparation", "recover-decide"),
             ("animation", "plan-apply"),
             ("animation", "camera-apply"),
             ("sfx", "apply"),

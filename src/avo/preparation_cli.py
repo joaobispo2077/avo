@@ -9,13 +9,13 @@ from pathlib import Path
 def configure(subparsers):
     parser = subparsers.add_parser("preparation")
     operations = parser.add_subparsers(dest="preparation_command", required=True)
-    for operation in ("coverage", "recover"):
+    for operation in ("coverage", "recover", "recover-decide"):
         item = operations.add_parser(operation)
         item.add_argument("--project", type=Path, required=True)
         item.add_argument("--video-id", default="")
         item.add_argument("--request", type=Path, required=True)
         item.add_argument("--json", action="store_true", dest="as_json")
-        if operation == "recover":
+        if operation != "coverage":
             item.add_argument("--request-sha256", help=SUPPRESS)
 
 
@@ -34,11 +34,11 @@ def run(args):
             raise ValueError("Preparation request must be an object")
         from avo.timeline.contracts import validate_document
 
-        definition = (
-            "coverageRequest"
-            if args.preparation_command == "coverage"
-            else "recoverRequest"
-        )
+        definition = {
+            "coverage": "coverageRequest",
+            "recover": "recoverRequest",
+            "recover-decide": "decideRequest",
+        }[args.preparation_command]
         validate_document(request, "avo.preparation.schema.json#/$defs/" + definition)
         if request.get("operation") != args.preparation_command:
             raise ValueError(
@@ -48,9 +48,16 @@ def run(args):
             args.project, video_id=args.video_id or None
         )
         service = build_preparation_service(
-            workspace, recover=args.preparation_command == "recover"
+            workspace,
+            recover=args.preparation_command == "recover"
+            or request.get("choice") == "recovered",
         )
-        result = getattr(service, args.preparation_command)(request)
+        operation = (
+            "decide"
+            if args.preparation_command == "recover-decide"
+            else args.preparation_command
+        )
+        result = getattr(service, operation)(request)
     except (OSError, ValueError) as error:
         print(
             json.dumps({"status": "invalid-input", "message": str(error)}),
