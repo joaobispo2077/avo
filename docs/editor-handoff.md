@@ -38,6 +38,10 @@ absolute JSON request path for each operation that writes review evidence. The
 - `timeline-export prepare` takes the explicitly selected target, current basis,
   program frame rate, a validation window and admitted local roots. Keep the
   initial XML and manifest references together for later review.
+  The measured Resolve validation profile exports an exact centered 125% zoom
+  on an unrotated, square-pixel original that matches the project canvas.
+  Other transforms are listed with their affected program frames for manual
+  finishing.
 - `timeline-export inspect-feedback` takes the handoff reference and returned
   XML path and SHA-256. It retains the exact returned bytes, checks referenced
   originals within the declared roots, and records unfamiliar XML elements.
@@ -87,7 +91,8 @@ sources, so a render measurement alone cannot establish round-trip routing.
 Resolve also composited a linked ProRes 4444 original over a blue plate at
 transparent, half-transparent and opaque sample points. Its returned XML
 omitted the original alpha declaration and a marker that appeared at frame 6
-in the editor. In a 640 by 360 fixture, a static 125% zoom moved the expected
-edge from pixel 160 to 120 and returned a scale value of 125.
+in the editor. Resolve imported the 125% zoom directly from AVO's validation
+XML. The 640 by 360 render moved the expected edge from pixel 160 to 120, and
+the returned XML recorded a scale of 125.
 Production qualification still requires editor evidence for round-trip
 routing, markers, alpha treatment and animated camera finishing.
