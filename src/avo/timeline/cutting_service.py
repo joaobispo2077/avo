@@ -301,6 +301,7 @@ class CuttingService:
                 directory / "preparation_recovery.py",
                 directory / "preparation_choices.py",
                 directory / "preparation_selected.py",
+                directory / "preparation_facts.py",
                 root.parent.parent / "schemas/avo.cutting.schema.json",
                 root.parent.parent / "schemas/avo.preparation.schema.json",
             ]

@@ -6,6 +6,7 @@ from .contracts import content_hash, validate_document
 from .cutting_contracts import source_interval
 from .motion_metadata import METADATA_LIMITS, _check_budget
 from .preparation import _seconds, _source_range, _uncovered, _union
+from .preparation_facts import merge_selected_measurements
 
 
 def _intersection(interval, bounds):
@@ -143,20 +144,21 @@ class _Selection:
                 raise ValueError("Selected recovered evidence has no retained result")
             chosen = result["recovered"]["analysis"]
             eligible = result["wordAnchorsEligible"]
-        self.resolved.append(bounds)
-        if not eligible:
-            self.protected.append(bounds)
         analysis = deepcopy(self.analysis)
         if request["choice"] != "reject":
             analysis["words"] = _selected_words(
                 analysis.get("words", []), chosen.get("words", []), bounds
             )
         if request["choice"] == "recovered":
-            self._apply_recovered(analysis, chosen, bounds)
+            eligible = self._apply_recovered(analysis, chosen, bounds) and eligible
+        self.resolved.append(bounds)
+        if not eligible:
+            self.protected.append(bounds)
         self.analysis = analysis
 
     @staticmethod
     def _apply_recovered(analysis, chosen, bounds):
+        measured = merge_selected_measurements(analysis, chosen, bounds)
         analysis.setdefault("tools", []).extend(deepcopy(chosen.get("tools", [])))
         alignment = analysis.setdefault("alignment", {"status": "missing"})
         alignment["characters"] = _selected_words(
@@ -164,6 +166,8 @@ class _Selection:
             chosen.get("alignment", {}).get("characters", []),
             bounds,
         )
+        if measured and chosen.get("alignment", {}).get("status") == "pass":
+            alignment["status"] = "pass"
         analysis["pauseCandidates"] = [
             row
             for row in analysis.get("pauseCandidates", [])
@@ -173,6 +177,7 @@ class _Selection:
         analysis.setdefault("uncertainty", []).append(
             "Selected transcript evidence does not certify affected pause edges"
         )
+        return measured
 
     def result(self):
         if self.analysis is not None:
