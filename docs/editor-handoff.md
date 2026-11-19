@@ -42,11 +42,15 @@ absolute JSON request path for each operation that writes review evidence. The
   of a clip occurrence is available in decibels for review. The returned file
   retains gain automation, disabled effects, and partial-clip settings for
   manual review. [Apple's XMEML audio level reference](https://developer.apple.com/library/archive/documentation/AppleApplications/Reference/FinalCutPro_XML/Topics/Topics.html)
+  A single full-clip Basic Motion filter can expose its constant scale when
+  center, anchor and rotation are neutral. Animated or compound settings
+  remain in the returned XML for manual review.
 - `timeline-export propose-feedback` takes the inspection reference and current
   timeline heads. It compares the original export, the current AVO edit and the
   returned file. Independent changes become review proposals. Divergent changes
-  become conflicts. Ambiguous matches and omissions remain unresolved. Gain
-  proposals require observations in the original export, current edit and return.
+  become conflicts. Ambiguous matches and omissions remain unresolved. Gain and
+  static scale comparisons require observations in the original export,
+  current edit and return.
 - `timeline-export apply-feedback` records which proposed fields to keep or take
   from the return. A supported inward trim must select both the program and
   source edge for the exact picture clip and each linked audio clip. AVO routes
@@ -78,6 +82,8 @@ at the expected sample. The returned XML still used track index 1 for both
 sources, so a render measurement alone cannot establish round-trip routing.
 Resolve also composited a linked ProRes 4444 original over a blue plate at
 transparent, half-transparent and opaque sample points. Its returned XML
-omitted the original alpha declaration and the synthetic sequence marker.
+omitted the original alpha declaration and a marker that appeared at frame 6
+in the editor. In a 640 by 360 fixture, a static 125% zoom moved the expected
+edge from pixel 160 to 120 and returned a scale value of 125.
 Production qualification still requires editor evidence for round-trip
-routing, markers, alpha treatment and camera finishing.
+routing, markers, alpha treatment and animated camera finishing.
