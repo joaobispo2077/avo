@@ -36,6 +36,9 @@ LOWER_THIRD_COMMANDS = frozenset(
         "timeline.insert_keyframe",
     }
 )
+TEXT_REVISION_COMMANDS = frozenset(
+    {"symbol.edit", "symbol.exit", "element.select", "text.edit"}
+)
 
 __all__ = [
     "LOWER_THIRD_COMMANDS",
@@ -43,16 +46,17 @@ __all__ = [
     "lower_third_steps",
     "observe_command_schema",
     "recover_matte",
+    "revise_lower_third",
     "run_lower_third",
 ]
 
 
-def observe_command_schema(commands):
+def observe_command_schema(commands, *, required=LOWER_THIRD_COMMANDS):
     """Retain only the native command signatures needed for this profile."""
     observed = {}
     for row in commands:
         name = row.get("id")
-        if name not in LOWER_THIRD_COMMANDS:
+        if name not in required:
             continue
         signature = row.get("params")
         if name in observed or not isinstance(signature, str) or not signature.strip():
@@ -60,7 +64,7 @@ def observe_command_schema(commands):
                 "AniCraft command registry has an invalid selected signature"
             )
         observed[name] = signature
-    if missing := sorted(LOWER_THIRD_COMMANDS - observed.keys()):
+    if missing := sorted(required - observed.keys()):
         raise ArtCraftError(
             f"AniCraft is missing required lower-third commands: {', '.join(missing)}",
             code="ARTCRAFT_NOT_READY",
@@ -279,7 +283,10 @@ def _native_source_profile(source, output, parameters):
     symbol = _native_symbol(body)
     _require_symbol_references(body["scenes"], symbol["id"], output["frameCount"])
     text = _inspect_symbol_artwork(symbol)
-    if text["text"] != parameters["primaryText"] or text["font"] != parameters["font"]:
+    _speaker_label({"primaryText": text["text"], "font": text["font"]}, 1, 0)
+    if parameters is not None and (
+        text["text"] != parameters["primaryText"] or text["font"] != parameters["font"]
+    ):
         raise ArtCraftError(
             "AniCraft saved editable text or font differs from the selected parameters"
         )
@@ -433,12 +440,102 @@ def run_lower_third(output, parameters, *, directory, budget, invoke):
     recipe = write_immutable_json(directory / "recipe.json", steps)
     _require_profile_budget(directory, budget)
     _author_document(call, directory, native, recipe, steps, output, parameters["font"])
+    return _verified_export(call, native, recipe, output, parameters, budget, deadline)
+
+
+def revise_lower_third(
+    output, original_parameters, parameters, *, source, directory, budget, invoke
+):
+    """Change the selected editable label in a newly saved native revision."""
+    from avo.artcraft import _copy_native_source
+
+    source, directory = Path(source), Path(directory)
+    original = inspect_lower_third_source(
+        source, output, original_parameters, max_bytes=budget["bytes"]
+    )
+    _speaker_label(parameters, *_lower_third_layout(output))
+    if parameters["font"] != original["fontFamily"]:
+        raise ArtCraftError(
+            "Changing the approved font requires a separately reviewed design"
+        )
+    _require_new_output_directory(directory, budget, output["frameCount"])
+    if source.is_relative_to(directory):
+        raise ArtCraftError("AniCraft revision requires a separate retained source")
+    native = directory / "component.anicraft"
+    directory.mkdir(parents=True)
+    deadline = monotonic() + budget["seconds"]
+    call = _profile_invocation(directory, budget, invoke, deadline)
+    commands = observe_command_schema(
+        json.loads(call("commands")), required=TEXT_REVISION_COMMANDS
+    )
+    working = directory / "original.anicraft"
+    _copy_native_source(working, original["fingerprint"])
+    prior, target = _native_text_target(working)
+    steps = _text_revision_steps(
+        target, parameters["primaryText"], native, output["frameCount"]
+    )
+    recipe = write_immutable_json(directory / "recipe.json", steps)
+    _require_profile_budget(directory, budget)
+    _require_font(call, working, parameters["font"])
+    _run_recipe(call, working, native, recipe, steps)
+    result = _verified_export(
+        call, native, recipe, output, parameters, budget, deadline
+    )
+    if file_fingerprint(source) != original["fingerprint"]:
+        raise ArtCraftError("AniCraft changed the preserved source during revision")
+    revised, _ = _native_text_target(native)
+    if revised != prior:
+        raise ArtCraftError(
+            "AniCraft changed native design outside the selected editable text"
+        )
+    return {**result, "revisionCommandSchemaHash": content_hash(commands)}
+
+
+def _native_text_target(path):
+    source = json.loads(path.read_bytes(), object_pairs_hook=_distinct_native_fields)
+    symbol = _native_symbol(source["document"])
+    element = next(
+        element
+        for layer in symbol["timeline"]["layers"]
+        for frame in layer["keyframes"]
+        for element in frame["elements"]
+        if "Text" in element["kind"]
+    )
+    text = element["kind"]["Text"]
+    for key in ("text", "box_width"):
+        text.pop(key)
+    source["paths"][1] = ""
+    return source, (symbol["id"], element["id"])
+
+
+def _text_revision_steps(target, label, native, count):
+    symbol, element = target
+    return [
+        _step("symbol.edit", symbol=symbol),
+        _step("timeline.goto", frame=0),
+        _step("element.select", ids=[element]),
+        _step("text.edit", text=label),
+        _step("symbol.exit", all=True),
+        _step("file.save_as", path=str(native)),
+        _step(
+            "file.export_png_sequence",
+            dir=str(native.parent / "white"),
+            **{"from": 0, "to": count - 1},
+        ),
+    ]
+
+
+def _verified_export(call, native, recipe, output, parameters, budget, deadline):
+    directory = native.parent
+    white = directory / "white"
     source = inspect_lower_third_source(
         native, output, parameters, max_bytes=budget["bytes"]
     )
     locked_source = source["fingerprint"]
     information = _inspect_document(call, native, output)
-    reopened, black, check = _render_backings(call, directory, native, count)
+    reopened, black, check = _render_backings(
+        call, directory, native, output["frameCount"]
+    )
     matte, maximum = _render_matte(
         (white, reopened, black, check), directory, output, budget, deadline
     )
@@ -509,10 +606,18 @@ def _author_document(call, directory, native, recipe, steps, output, font):
     empty = directory / "empty.anicraft"
     width, height, fps = output["width"], output["height"], _profile_clock(output)
     call("new", "--out", empty, "--width", width, "--height", height, "--fps", fps)
-    installed = json.loads(call("exec", empty, "text.fonts"))
+    _require_font(call, empty, font)
+    _run_recipe(call, empty, native, recipe, steps)
+
+
+def _require_font(call, document, font):
+    installed = json.loads(call("exec", document, "text.fonts"))
     if font not in installed.get("families", []):
         raise ArtCraftError("AniCraft cannot resolve the exact requested font family")
-    responses = json.loads(call("run", empty, recipe))
+
+
+def _run_recipe(call, document, native, recipe, steps):
+    responses = json.loads(call("run", document, recipe))
     if (
         not isinstance(responses, list)
         or len(responses) != len(steps)
