@@ -580,6 +580,17 @@ bind the saved native source, recipe and frame fingerprints. The guided route
 prepares the same native recipe under operator control and retains its returned
 files as references. Proof admission remains a separate decision boundary.
 
+The explicitly selected video export binds the unchanged AniCraft source,
+recipe, app and CLI fingerprints, ordered alpha frames and current approved
+cut and sync to the logical component in Animation, BMap and Tracks. Proof
+composition observes the actual source and packs the frames into a silent
+lossless FFV1/BGRA clip. It checks each decoded frame and timestamp before
+registering the generated asset. The timeline service verifies the retained
+binding and recursively rejects forbidden output ancestry. Compilation and
+execution read the same source lock and use the existing `overlay-video`
+operation, preserving the canonical placement, alpha and local frame phase
+through full and window proofs. Creator review follows the existing gates.
+
 ## Motion engine selection and code-drawn capture (feature 012)
 
 HyperFrames remains the default. The pure shared motion policy resolves invocation, pinned run, project/video, provider/channel and global preferences, in that order. Strict saved IDs are hyperframes, remotion, and code-drawn; Remotion retains its existing unsupported execution adapter. A new default never rewrites a recorded animation revision or creator decision. Explicit new engine/source authoring uses existing revision invalidation. Installed motion and pipeline routers resolve current no-framework intent before loading engine-specific skills.

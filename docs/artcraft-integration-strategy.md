@@ -1,7 +1,7 @@
 # ArtCraft integration strategy
 
-**Status: planned, 2026-11-15.** This documents the requested behavior and proposed
-integration boundaries. It does not announce installed tools or implemented commands.
+This document covers the integration boundaries and the first Windows AniCraft
+lower-third profile. The capability register tracks work on the other profiles.
 
 ArtCraft is specialist authoring for a component that needs it. It is not a new
 default motion engine or a normal prerequisite for AVO.
@@ -75,6 +75,27 @@ actual receipt verification, source descriptors, locks, compiler/preflight and
 execution for those roles. An exported audio/image file is generated material,
 not an original source. Registration must independently validate reproducibility;
 neither a supplied verified flag nor a generator name is evidence.
+
+### Register a verified lower third
+
+Select the video component before authoring. Its Animation component, BMap cue
+and Tracks overlay identify the same component. Set the Tracks generator to
+`{"adapterId": "artcraft.anicraft", "componentId": "speaker-label"}` using
+the selected component ID. Use a full-canvas placement, an explicitly linked
+cue and a frame-aligned interval equal to the exported frame count. The current
+cut and sync must have their existing approvals.
+
+Run `avo cli artcraft register --project PROJECT --job JOB --expected-head HEAD
+--asset-id ASSET --output OUTPUT --json` after the selected job reaches
+`exported`. Use absolute paths and an existing output folder under the video's
+`edit/derived`. Registration saves the exact native source lock next to the
+lossless `.mkv` and records both in generated media. The proof uses the standard
+`overlay-video` operation with the retained asset and input-lock references.
+Window proofs keep the local frame phase of the full composition.
+
+The checked automatic profile requires a host with independently enforced job
+roots. Returned files from the current guided handoff stay available for
+inspection and reference while production qualification continues.
 
 ## Qualification and rollout
 

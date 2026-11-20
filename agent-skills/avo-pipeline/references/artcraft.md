@@ -48,6 +48,16 @@ Use `avo cli artcraft inspect --job <absolute-job-record> --expected-head
 records against the current files. A video job also checks the project and
 canonical revisions. Inspection is read-only and can run in a fresh session.
 
+For a video job with a verified export, select an Animation component, its BMap
+cue and the linked Tracks overlay before authoring. Register the exact exported
+job with `avo cli artcraft register`, the current project and an owned `.mkv`
+path under `<rawDir>/edit/derived`. Use the resulting generated asset and its
+source lock in the standard `overlay-video` operation. Keep the canonical
+canvas, timing, straight alpha and layer order. Check a short proof window across
+the entrance, hold and exit, then verify the context in the original-footage
+proof. Review text at mobile size and check it against faces, captions and other
+graphics. Record the design decision against the exact candidate and context.
+
 Before any native authoring, identify the effective roots, owner of the job's
 document, output contract and bounds. A provider-only component has a declared
 external source workspace. A real video keeps canonical decisions under
