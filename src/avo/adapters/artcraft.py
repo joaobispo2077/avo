@@ -83,6 +83,7 @@ def _release(executable):
             [str(executable), "--version"],
             cwd=executable.parent,
             stdin=subprocess.DEVNULL,
+            env=_runtime_environment(),
             stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL,
             timeout=5,
@@ -102,6 +103,14 @@ def _release(executable):
             _installation_help(),
         )
     return match[1]
+
+
+def _runtime_environment():
+    return {
+        key: value
+        for key, value in os.environ.items()
+        if not key.upper().startswith("ANICRAFT_")
+    }
 
 
 def _installed_anicraft(cli_path, app_path):
@@ -137,20 +146,29 @@ def _installed_anicraft(cli_path, app_path):
 class SelectedArtCraftAdapter:
     """Observe the selected installation and require independently verified confinement."""
 
-    def __init__(self, observe_confinement=None):
+    def __init__(self, observe_confinement=None, run_confined=None):
         self._observe_confinement = observe_confinement
+        self._run_confined = run_confined
 
     def observe(self, *, scope, mode, roots, cli_path, app_path):
         if (
             scope["app"] != "anicraft"
             or scope["operations"] != ["lower-third"]
-            or mode != "cli"
+            or mode not in {"cli", "guided"}
         ):
             raise _not_ready(
                 "The selected ArtCraft operation or mode has no qualified profile",
                 "Use the catalog for documented operations and mode limits.",
             )
         installed = _installed_anicraft(cli_path, app_path)
+        if mode == "guided":
+            return {
+                "app": scope["app"],
+                "operations": scope["operations"],
+                "mode": mode,
+                "authority": "operator",
+                **installed,
+            }
         if self._observe_confinement is None:
             raise _not_ready(
                 "AniCraft CLI file confinement is unverified in this environment",
@@ -164,3 +182,97 @@ class SelectedArtCraftAdapter:
             "effectiveRoots": effective,
             **installed,
         }
+
+    def validate_run(self, job):
+        if self._run_confined is None:
+            raise _not_ready(
+                "The selected AniCraft job requires a confined command runner",
+                "Repeat with a runtime that independently enforces the job's effective roots.",
+            )
+        previous = job["observation"]
+        current = self.observe(
+            scope=job["decision"]["scope"],
+            mode=previous["mode"],
+            roots=job["roots"],
+            cli_path=previous["executable"]["locator"],
+            app_path=previous["application"]["locator"],
+        )
+        if (
+            current != previous
+            or current["release"] != "0.2.1"
+            or current["platform"] != "windows"
+        ):
+            raise _not_ready(
+                "AniCraft needs the exact qualified Windows 0.2.1 profile and current tool files",
+                _installation_help(),
+            )
+
+    def author_lower_third(self, job, directory):
+        from .artcraft_anicraft import run_lower_third
+
+        def invoke(workdir, *arguments, timeout):
+            return self._run_confined(
+                job["observation"]["executable"],
+                job["roots"],
+                workdir,
+                arguments,
+                env=_runtime_environment(),
+                timeout=timeout,
+            )
+
+        return run_lower_third(
+            job["output"],
+            job["authoringParameters"],
+            directory=directory,
+            budget=job["budget"],
+            invoke=invoke,
+        )
+
+    def plan_lower_third(self, job, directory):
+        from .artcraft_anicraft import lower_third_steps
+
+        previous = job["observation"]
+        _require_guided_installation(previous)
+        document = directory / "component.anicraft"
+        empty = directory / "empty.anicraft"
+        recipe = directory / "recipe.json"
+        output = job["output"]
+        steps = lower_third_steps(
+            output, job["authoringParameters"], document, directory / "white"
+        )
+        cli = previous["executable"]["locator"]
+        rate = output["frameRate"]
+        fps = rate["numerator"] // rate["denominator"]
+        return {
+            "steps": steps,
+            "commands": [
+                [
+                    cli,
+                    "new",
+                    "--out",
+                    str(empty),
+                    "--width",
+                    str(output["width"]),
+                    "--height",
+                    str(output["height"]),
+                    "--fps",
+                    str(fps),
+                ],
+                [cli, "run", str(empty), str(recipe)],
+                [cli, "info", str(document)],
+            ],
+        }
+
+
+def _require_guided_installation(previous):
+    if previous["release"] != "0.2.1" or previous["platform"] != "windows":
+        raise _not_ready(
+            "AniCraft needs the qualified Windows 0.2.1 profile", _installation_help()
+        )
+    for kind in ("executable", "application"):
+        observed = previous[kind]
+        if file_fingerprint(Path(observed["locator"])) != observed:
+            raise _not_ready(
+                "AniCraft installation changed after the guided job was prepared",
+                _installation_help(),
+            )

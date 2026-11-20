@@ -32,10 +32,14 @@ def configure(sub):
     prepare.add_argument("--cli")
     prepare.add_argument("--application")
     prepare.add_argument("--json", action="store_true")
-    inspect = operations.add_parser("inspect", help="Reconcile retained job evidence")
-    inspect.add_argument("--job", required=True)
-    inspect.add_argument("--expected-head", required=True)
-    inspect.add_argument("--json", action="store_true")
+    for operation, hint in (
+        ("inspect", "Reconcile retained job evidence"),
+        ("run", "Execute a prepared native job"),
+    ):
+        command = operations.add_parser(operation, help=hint)
+        command.add_argument("--job", required=True)
+        command.add_argument("--expected-head", required=True)
+        command.add_argument("--json", action="store_true")
 
 
 def _distinct_keys(pairs):
@@ -176,6 +180,15 @@ def run(args):
             result = _prepare_job(_decode_request(args.request_json), args)
         elif args.artcraft_operation == "inspect":
             result = inspect_authoring(args.job, expected_head=args.expected_head)
+        elif args.artcraft_operation == "run":
+            from avo.adapters.artcraft import SelectedArtCraftAdapter
+            from avo.artcraft import run_authoring
+
+            result = run_authoring(
+                args.job,
+                expected_head=args.expected_head,
+                adapter=SelectedArtCraftAdapter(),
+            )
         else:
             request = _decode_request(args.request_json)
             result = assess_request(

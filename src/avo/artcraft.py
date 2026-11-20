@@ -38,6 +38,7 @@ __all__ = [
     "inspect_authoring",
     "prepare_authoring",
     "require_eligible",
+    "run_authoring",
     "seal_record",
     "validate_record",
 ]
@@ -568,6 +569,10 @@ def prepare_authoring(
         app_path=spec.get("appPath"),
     )
     _require_preparation_observation(observation, spec, roots)
+    recipe = [scope, spec["document"]["state"], spec["output"]]
+    authoring = spec.get("authoringParameters")
+    if authoring is not None:
+        recipe.append(authoring)
     job = {
         "version": 1,
         "jobId": spec["jobId"],
@@ -579,11 +584,13 @@ def prepare_authoring(
         "document": document.relative_to(store.workspace).as_posix(),
         "documentState": spec["document"]["state"],
         "inputs": [source] if source else [],
-        "recipeHash": content_hash([scope, spec["document"]["state"], spec["output"]]),
+        "recipeHash": content_hash(recipe),
         "output": spec["output"],
         "budget": spec["budget"],
         **project_facts,
     }
+    if authoring is not None:
+        job["authoringParameters"] = authoring
     return _publish_preparation(store, job, document, source)
 
 
@@ -706,10 +713,12 @@ def _require_preparation_capacity(workspace, budget, source):
 
 def _require_preparation_observation(observation, spec, roots):
     validate_document(observation, _schema("observation"))
-    if (
-        observation.get("effectiveRoots") != roots
-        or observation["mode"] != spec["mode"]
-    ):
+    authority = (
+        observation.get("authority") == "operator"
+        if spec["mode"] == "guided"
+        else observation.get("effectiveRoots") == roots
+    )
+    if not authority or observation["mode"] != spec["mode"]:
         raise ArtCraftError(
             "ArtCraft effective roots or working mode were not independently established",
             code="ARTCRAFT_NOT_READY",
@@ -789,12 +798,19 @@ def _require_exact_copy(path, original):
 def inspect_authoring(job_ref, *, expected_head):
     """Reconcile retained job evidence without changing files or starting an app."""
     store, job, head = _open_selected_job(job_ref, expected_head)
+    return _inspection_result(store, job, head)
+
+
+def _inspection_result(store, job, head):
     checks = {
         "project": _inspect_job_project(store, job),
         "inputs": _inspect_job_inputs(job),
         "nativeDocument": _inspect_job_document(store, job, head),
         "outputs": _inspect_job_outputs(job, head),
     }
+    handoff = head.get("handoff")
+    if handoff is not None:
+        checks["handoff"] = _inspect_handoff(store, job, handoff)
     return {
         "status": "stale" if "changed" in checks.values() else "current",
         "state": head["state"],
@@ -802,7 +818,22 @@ def inspect_authoring(job_ref, *, expected_head):
         "jobHash": job["jobHash"],
         "head": head["eventHash"],
         "checks": checks,
+        **({"handoff": handoff} if handoff is not None else {}),
     }
+
+
+def _inspect_handoff(store, job, handoff):
+    directory = (store.workspace / job["document"]).parent
+    roots = job["roots"]["write"]
+    if handoff["locator"] == str(directory / "handoff.json") and _retained_job_file(
+        handoff, roots
+    ):
+        recipe = _read_record(Path(handoff["locator"]))["recipe"]
+        if recipe["locator"] == str(directory / "recipe.json") and _retained_job_file(
+            recipe, roots
+        ):
+            return "current"
+    return "changed"
 
 
 def _open_selected_job(job_ref, expected_head):
@@ -891,6 +922,9 @@ def _inspect_job_outputs(job, head):
     expected = head.get("outputs") or []
     if not expected:
         return "awaiting-output"
+    recipe = head.get("recipe")
+    if recipe is not None:
+        expected = [recipe, *expected]
     return (
         "current"
         if all(_retained_job_file(item, job["roots"]["write"]) for item in expected)
@@ -905,9 +939,173 @@ def _inspect_job_document(store, job, head):
     if saved is None and job.get("documentState") == "saved" and job["inputs"]:
         saved = {**job["inputs"][0], "locator": str(path)}
     if saved is None:
-        return "changed" if path.exists() else "awaiting-document"
+        return _inspect_unrecorded_document(path, head.get("handoff"))
     return (
         "current"
         if saved["locator"] == str(path) and _retained_job_file(saved, roots)
         else "changed"
     )
+
+
+def _inspect_unrecorded_document(path, handoff):
+    if handoff is not None and path.is_file() and path.resolve() == path:
+        return "returned-unverified"
+    return "changed" if path.exists() else "awaiting-document"
+
+
+def run_authoring(job_ref, *, expected_head, adapter):
+    """Reserve the exact job once, then record inspected output or an unknown outcome."""
+    store, _, _ = _open_selected_job(job_ref, expected_head)
+    with store.writer():
+        _, job, head = _open_selected_job(job_ref, expected_head)
+        inspection = _inspection_result(store, job, head)
+        if inspection["status"] != "current":
+            raise ArtCraftError(
+                "ArtCraft prepared job is stale", code="ARTCRAFT_SCOPE_CHANGED"
+            )
+        if head["state"] == "exported":
+            _verify_retained_export(store, job, head)
+            return inspection
+        if job["observation"]["mode"] == "guided":
+            return _run_guided(store, job, head, inspection, adapter)
+        directory = _require_prepared_lower_third(store, job, head)
+        adapter.validate_run(job)
+        running = store.append(
+            job["jobId"],
+            expected_head=expected_head,
+            event={"operationId": "run", "state": "running"},
+        )
+    return _execute_prepared_job(store, job, running, directory, adapter)
+
+
+def _run_guided(store, job, head, inspection, adapter):
+    if head["state"] == "ready" and inspection["checks"].get("handoff") == "current":
+        return inspection
+    directory = _require_prepared_lower_third(store, job, head)
+    plan = adapter.plan_lower_third(job, directory)
+    directory.mkdir(parents=True, exist_ok=True)
+    recipe = _bounded_path(directory, directory / "recipe.json", "guided recipe")
+    write_immutable_json(recipe, plan["steps"])
+    handoff = _bounded_path(directory, directory / "handoff.json", "guided handoff")
+    write_immutable_json(
+        handoff,
+        {
+            "version": 1,
+            "jobHash": job["jobHash"],
+            "mode": "guided",
+            "artifactState": "reference-only",
+            "operatorRoots": job["roots"],
+            "nativeDocument": str(directory / "component.anicraft"),
+            "recipe": file_fingerprint(recipe),
+            "commands": plan["commands"],
+        },
+    )
+    event = store.append(
+        job["jobId"],
+        expected_head=head["eventHash"],
+        event={
+            "operationId": "guide",
+            "state": "ready",
+            "handoff": file_fingerprint(handoff),
+        },
+    )
+    return _inspection_result(store, job, event)
+
+
+def _require_prepared_lower_third(store, job, head):
+    if head["state"] != "prepared":
+        raise ArtCraftError(
+            "ArtCraft job requires reconciliation before another operation",
+            code="ARTCRAFT_OUTCOME_UNKNOWN",
+        )
+    scope = job["decision"]["scope"]
+    if (
+        scope != {"app": "anicraft", "operations": ["lower-third"]}
+        or job.get("documentState") != "empty"
+        or not job.get("authoringParameters")
+    ):
+        raise ArtCraftError(
+            "ArtCraft runner needs an empty AniCraft document and the selected lower-third parameters",
+            code="ARTCRAFT_NOT_ELIGIBLE",
+        )
+    directory = store.workspace / job["document"]
+    if job["roots"]["write"] != [str(directory.parent)]:
+        raise ArtCraftError(
+            "ArtCraft job output does not match the verified write root",
+            code="ARTCRAFT_SCOPE_CHANGED",
+        )
+    return _bounded_path(store.workspace, directory.parent, "job output")
+
+
+def _execute_prepared_job(store, job, running, directory, adapter):
+    try:
+        result = adapter.author_lower_third(job, directory)
+        evidence = _verify_authoring_result(job, directory, result)
+        if (
+            _inspect_job_project(store, job) == "changed"
+            or _inspect_job_inputs(job) != "current"
+        ):
+            raise ArtCraftError(
+                "ArtCraft input or project evidence changed while it was running"
+            )
+    except Exception as exc:
+        pending = store.append(
+            job["jobId"],
+            expected_head=running["eventHash"],
+            event={"operationId": "reconcile-run", "state": "outcome-unknown"},
+        )
+        raise ArtCraftError(
+            "ArtCraft authoring did not produce independently verified job outputs",
+            code="ARTCRAFT_OUTCOME_UNKNOWN",
+            remediation=f"Inspect the retained job at head {pending['eventHash']} before attempting recovery.",
+        ) from exc
+    completed = store.append(
+        job["jobId"],
+        expected_head=running["eventHash"],
+        event={"operationId": "verify-run", "state": "exported", **evidence},
+    )
+    return _inspection_result(store, job, completed)
+
+
+def _verify_authoring_result(job, directory, result):
+    roots = job["roots"]["write"]
+    native = result["nativeSource"]
+    recipe = result["recipe"]
+    frames = result["frames"]
+    if len(frames) != job["output"]["frameCount"]:
+        raise ArtCraftError("ArtCraft output does not contain the selected frame count")
+    references = [
+        (native, directory / "component.anicraft"),
+        (recipe, directory / "recipe.json"),
+    ]
+    references.extend(
+        (frame, directory / "alpha" / f"frame_{index:05d}.png")
+        for index, frame in enumerate(frames, 1)
+    )
+    if any(
+        item["locator"] != str(path) or not _retained_job_file(item, roots)
+        for item, path in references
+    ):
+        raise ArtCraftError(
+            "ArtCraft returned output differs from the exact owned paths and fingerprints"
+        )
+    return {"saved": native, "recipe": recipe, "outputs": frames}
+
+
+def _verify_retained_export(store, job, event):
+    directory = (store.workspace / job["document"]).parent
+    try:
+        _verify_authoring_result(
+            job,
+            directory,
+            {
+                "nativeSource": event["saved"],
+                "recipe": event["recipe"],
+                "frames": event["outputs"],
+            },
+        )
+    except (KeyError, ValueError) as exc:
+        raise ArtCraftError(
+            "ArtCraft retained export evidence is incomplete or stale",
+            code="ARTCRAFT_SCOPE_CHANGED",
+        ) from exc
