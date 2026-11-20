@@ -172,6 +172,10 @@
           "else": { "not": { "required": ["hostTransport"] } }
         },
         {
+          "if": { "properties": { "mode": { "const": "json-lines" } } },
+          "then": { "required": ["effectiveRoots", "commandSchemaHash", "application", "executable"] }
+        },
+        {
           "if": { "properties": { "mode": { "const": "reuse" } } },
           "then": {
             "required": ["reuseSource", "commandSchemaHash", "application", "executable"],

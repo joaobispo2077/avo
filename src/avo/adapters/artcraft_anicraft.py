@@ -427,7 +427,7 @@ def _inspect_symbol_artwork(symbol):
     return native_text
 
 
-def run_lower_third(output, parameters, *, directory, budget, invoke):
+def run_lower_third(output, parameters, *, directory, budget, invoke, open_stream=None):
     """Materialize the selected native recipe through a supplied confined runner."""
     directory = Path(directory)
     native, white = directory / "component.anicraft", directory / "white"
@@ -439,12 +439,22 @@ def run_lower_third(output, parameters, *, directory, budget, invoke):
     call = _profile_invocation(directory, budget, invoke, deadline)
     recipe = write_immutable_json(directory / "recipe.json", steps)
     _require_profile_budget(directory, budget)
-    _author_document(call, directory, native, recipe, steps, output, parameters["font"])
+    empty = directory / "empty.anicraft"
+    _initialize_document(call, empty, output, parameters["font"])
+    _apply_recipe(call, empty, native, recipe, steps, open_stream, budget, deadline)
     return _verified_export(call, native, recipe, output, parameters, budget, deadline)
 
 
 def revise_lower_third(
-    output, original_parameters, parameters, *, source, directory, budget, invoke
+    output,
+    original_parameters,
+    parameters,
+    *,
+    source,
+    directory,
+    budget,
+    invoke,
+    open_stream=None,
 ):
     """Change the selected editable label in a newly saved native revision."""
     from avo.artcraft import _copy_native_source
@@ -477,7 +487,7 @@ def revise_lower_third(
     recipe = write_immutable_json(directory / "recipe.json", steps)
     _require_profile_budget(directory, budget)
     _require_font(call, working, parameters["font"])
-    _run_recipe(call, working, native, recipe, steps)
+    _apply_recipe(call, working, native, recipe, steps, open_stream, budget, deadline)
     result = _verified_export(
         call, native, recipe, output, parameters, budget, deadline
     )
@@ -602,12 +612,10 @@ def _require_profile_budget(directory, budget):
     return size
 
 
-def _author_document(call, directory, native, recipe, steps, output, font):
-    empty = directory / "empty.anicraft"
+def _initialize_document(call, empty, output, font):
     width, height, fps = output["width"], output["height"], _profile_clock(output)
     call("new", "--out", empty, "--width", width, "--height", height, "--fps", fps)
     _require_font(call, empty, font)
-    _run_recipe(call, empty, native, recipe, steps)
 
 
 def _require_font(call, document, font):
@@ -616,7 +624,12 @@ def _require_font(call, document, font):
         raise ArtCraftError("AniCraft cannot resolve the exact requested font family")
 
 
-def _run_recipe(call, document, native, recipe, steps):
+def _apply_recipe(call, document, native, recipe, steps, open_stream, budget, deadline):
+    if open_stream is not None:
+        _run_json_lines(
+            open_stream, document, native, steps, budget=budget, deadline=deadline
+        )
+        return
     responses = json.loads(call("run", document, recipe))
     if (
         not isinstance(responses, list)
@@ -625,6 +638,56 @@ def _run_recipe(call, document, native, recipe, steps):
     ):
         raise ArtCraftError(
             "AniCraft did not report every authoring operation or save its native document"
+        )
+
+
+def _run_json_lines(open_stream, document, native, steps, *, budget, deadline):
+    with open_stream(document, timeout=_remaining(deadline)) as session:
+        ready = _json_lines_record(session, deadline)
+        if (
+            ready != {"app": "AniCraft", "ready": True, "version": "0.2.1"}
+            or ready["ready"] is not True
+        ):
+            raise ArtCraftError(
+                "AniCraft JSON-lines handshake differs from the selected release"
+            )
+        for index, step in enumerate(steps, 1):
+            message = json.dumps({"id": index, **step}, ensure_ascii=False).encode(
+                "utf-8"
+            )
+            session.send_line(message + b"\n", timeout=_remaining(deadline))
+            reply = _json_lines_record(session, deadline)
+            _require_json_lines_reply(reply, index)
+            _require_profile_budget(native.parent, budget)
+    if not native.is_file():
+        raise ArtCraftError(
+            "AniCraft JSON-lines recipe did not save its native document"
+        )
+
+
+def _json_lines_record(session, deadline):
+    limit = 2 * 1024 * 1024
+    raw = session.read_line(max_bytes=limit + 1, timeout=_remaining(deadline))
+    if len(raw) > limit or not raw.endswith(b"\n"):
+        raise ArtCraftError(
+            "AniCraft JSON-lines reply exceeded its frame budget or was incomplete"
+        )
+    try:
+        return json.loads(raw, object_pairs_hook=_distinct_native_fields)
+    except ValueError as exc:
+        raise ArtCraftError("AniCraft JSON-lines returned invalid JSON") from exc
+
+
+def _require_json_lines_reply(reply, index):
+    if (
+        not isinstance(reply, dict)
+        or type(reply.get("id")) is not int
+        or reply["id"] != index
+        or reply.get("ok") is not True
+        or "result" not in reply
+    ):
+        raise ArtCraftError(
+            f"AniCraft JSON-lines command {index} failed or had an invalid receipt"
         )
 
 

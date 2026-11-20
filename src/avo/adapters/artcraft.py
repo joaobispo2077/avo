@@ -152,7 +152,11 @@ def _command_schema_hash(executable):
     return content_hash(observe_command_schema(records))
 
 
-def _require_headless_mcp(executable):
+def _require_headless_transport(executable, mode):
+    usage, label = {
+        "host-mcp": (b"mcp", "headless stdio MCP"),
+        "json-lines": (b"serve", "headless JSON-lines"),
+    }[mode]
     path = Path(executable["locator"])
     try:
         process = subprocess.run(
@@ -168,21 +172,21 @@ def _require_headless_mcp(executable):
         )
     except (OSError, subprocess.SubprocessError) as exc:
         raise _not_ready(
-            "Could not inspect the selected AniCraft MCP transport",
+            f"Could not inspect the selected AniCraft {label} transport",
             _installation_help(),
         ) from exc
     if len(process.stdout) > 65536 or not any(
-        line.strip().startswith(b"anicraft-cli mcp [file|--sample]")
+        line.strip().startswith(b"anicraft-cli " + usage + b" [file|--sample]")
         and b"stdin/stdout" in line
         for line in process.stdout.splitlines()
     ):
         raise _not_ready(
-            "Selected AniCraft CLI does not advertise the headless stdio MCP profile",
+            f"Selected AniCraft CLI does not advertise the {label} profile",
             _installation_help(),
         )
     if file_fingerprint(path) != executable:
         raise _not_ready(
-            "AniCraft CLI changed during MCP inspection", _installation_help()
+            "AniCraft CLI changed during transport inspection", _installation_help()
         )
 
 
@@ -219,9 +223,10 @@ def _installed_anicraft(cli_path, app_path):
 class SelectedArtCraftAdapter:
     """Observe the selected installation and require independently verified confinement."""
 
-    def __init__(self, observe_confinement=None, run_confined=None):
+    def __init__(self, observe_confinement=None, run_confined=None, open_confined=None):
         self._observe_confinement = observe_confinement
         self._run_confined = run_confined
+        self._open_confined = open_confined
         self._registry_observation = None
 
     def _selected_registry(self, installed, scope, mode):
@@ -237,7 +242,7 @@ class SelectedArtCraftAdapter:
         if (
             scope["app"] != "anicraft"
             or scope["operations"] != ["lower-third"]
-            or mode not in {"cli", "guided", "host-mcp"}
+            or mode not in {"cli", "guided", "host-mcp", "json-lines"}
         ):
             raise _not_ready(
                 "The selected ArtCraft operation or mode has no qualified profile",
@@ -246,6 +251,8 @@ class SelectedArtCraftAdapter:
         installed = _installed_anicraft(cli_path, app_path)
         if mode in {"guided", "host-mcp"}:
             return self._operator_observation(installed, scope, mode)
+        if mode == "json-lines":
+            self._require_confined_stream(installed)
         if self._observe_confinement is None:
             raise _not_ready(
                 "AniCraft CLI file confinement is unverified in this environment",
@@ -269,7 +276,7 @@ class SelectedArtCraftAdapter:
                     "AniCraft host MCP requires the qualified Windows 0.2.1 profile",
                     _installation_help(),
                 )
-            _require_headless_mcp(installed["executable"])
+            _require_headless_transport(installed["executable"], mode)
             transport["hostTransport"] = "stdio"
         return {
             "app": scope["app"],
@@ -280,6 +287,21 @@ class SelectedArtCraftAdapter:
             **installed,
             **transport,
         }
+
+    def _require_confined_stream(self, installed):
+        if not all(
+            (self._observe_confinement, self._run_confined, self._open_confined)
+        ):
+            raise _not_ready(
+                "AniCraft JSON-lines requires an independently confined stdio runner",
+                "Select a runtime that enforces roots and time limits for this job.",
+            )
+        if installed["release"] != "0.2.1" or installed["platform"] != "windows":
+            raise _not_ready(
+                "AniCraft JSON-lines requires the qualified Windows 0.2.1 profile",
+                _installation_help(),
+            )
+        _require_headless_transport(installed["executable"], "json-lines")
 
     def validate_run(self, job):
         if self._run_confined is None:
@@ -318,6 +340,17 @@ class SelectedArtCraftAdapter:
                 timeout=timeout,
             )
 
+        def stream(document, *, timeout):
+            return self._open_confined(
+                job["observation"]["executable"],
+                job["roots"],
+                directory,
+                ("serve", document),
+                env=_runtime_environment(),
+                timeout=timeout,
+            )
+
+        open_stream = stream if job["observation"]["mode"] == "json-lines" else None
         if job["documentState"] == "saved":
             return revise_lower_third(
                 job["output"],
@@ -327,6 +360,7 @@ class SelectedArtCraftAdapter:
                 directory=directory,
                 budget=job["budget"],
                 invoke=invoke,
+                open_stream=open_stream,
             )
         return run_lower_third(
             job["output"],
@@ -334,6 +368,7 @@ class SelectedArtCraftAdapter:
             directory=directory,
             budget=job["budget"],
             invoke=invoke,
+            open_stream=open_stream,
         )
 
     def plan_lower_third(self, job, directory):
