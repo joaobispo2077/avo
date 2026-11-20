@@ -9,12 +9,11 @@ import subprocess
 import sys
 from pathlib import Path
 
-from avo.artcraft import ArtCraftError
+from avo.artcraft import _SOUND_CUE_SCOPE, ArtCraftError
 from avo.timeline.contracts import content_hash, file_fingerprint
 
-_ANICRAFT_INSTALL = "https://getartcraft.com/apps/anicraft"
 _VERSION = re.compile(
-    r"(?:anicraft(?:-cli)?\s+)?v?(\d+\.\d+\.\d+(?:[-+][a-z0-9.-]+)?)(?: \(early alpha\))?",
+    r"(?:(?:ani|sound)craft(?:-cli)?\s+)?v?(\d+\.\d+\.\d+(?:[-+][a-z0-9.-]+)?)(?: \((?:early alpha|windows x86_64)\))?",
     re.IGNORECASE,
 )
 
@@ -23,8 +22,9 @@ def _not_ready(message, remediation):
     return ArtCraftError(message, code="ARTCRAFT_NOT_READY", remediation=remediation)
 
 
-def _installation_help():
-    return f"Install the selected AniCraft app and matching CLI separately from {_ANICRAFT_INSTALL} or pass their installed absolute paths."
+def _installation_help(app="anicraft"):
+    product = "SoundCraft" if app == "soundcraft" else "AniCraft"
+    return f"Install the selected {product} app and matching CLI separately from https://getartcraft.com/apps/{app} or pass their installed absolute paths."
 
 
 def _binary_name(name):
@@ -32,7 +32,7 @@ def _binary_name(name):
 
 
 def _path_candidates(name):
-    for directory in _documented_installations():
+    for directory in _documented_installations(_binary_app(name)):
         yield directory / name
     for entry in os.environ.get("PATH", "").split(os.pathsep):
         directory = Path(entry.strip('"'))
@@ -40,27 +40,33 @@ def _path_candidates(name):
             yield directory / name
 
 
-def _documented_installations():
+def _binary_app(name):
+    return "soundcraft" if name.startswith("soundcraft") else "anicraft"
+
+
+def _documented_installations(app):
+    product = "SoundCraft" if app == "soundcraft" else "AniCraft"
     if os.name == "nt":
         for variable, relative in (
-            ("LOCALAPPDATA", "Programs/ArtCraft/AniCraft"),
-            ("ProgramFiles", "ArtCraft/AniCraft"),
-            ("ProgramFiles(x86)", "ArtCraft/AniCraft"),
+            ("LOCALAPPDATA", f"Programs/ArtCraft/{product}"),
+            ("ProgramFiles", f"ArtCraft/{product}"),
+            ("ProgramFiles(x86)", f"ArtCraft/{product}"),
         ):
             base = Path(os.environ.get(variable) or ".")
             if base.is_absolute():
                 yield base / relative
     elif sys.platform == "darwin":
-        yield Path("/Applications/AniCraft.app/Contents/MacOS")
+        yield Path(f"/Applications/{product}.app/Contents/MacOS")
 
 
 def _installed_binary(name, explicit=None, *, adjacent=None):
+    app = _binary_app(name)
     name = _binary_name(name)
     if explicit is not None:
         provided = Path(explicit)
         if not provided.is_absolute() or provided.name.casefold() != name.casefold():
             raise _not_ready(
-                f"Choose an absolute installed {name} path", _installation_help()
+                f"Choose an absolute installed {name} path", _installation_help(app)
             )
         candidates = (provided,)
     else:
@@ -74,17 +80,18 @@ def _installed_binary(name, explicit=None, *, adjacent=None):
                 return resolved
     raise _not_ready(
         f"The selected {name} is unavailable at the requested installation",
-        _installation_help(),
+        _installation_help(app),
     )
 
 
 def _release(executable):
+    app = _binary_app(executable.name)
     try:
         process = subprocess.run(
             [str(executable), "--version"],
             cwd=executable.parent,
             stdin=subprocess.DEVNULL,
-            env=_runtime_environment(),
+            env=_runtime_environment(app),
             stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL,
             timeout=5,
@@ -95,22 +102,22 @@ def _release(executable):
     except (OSError, ValueError, subprocess.SubprocessError) as exc:
         raise _not_ready(
             f"Could not verify the installed release of {executable.name}",
-            _installation_help(),
+            _installation_help(app),
         ) from exc
     match = _VERSION.fullmatch(version)
     if match is None:
         raise _not_ready(
             f"The selected {executable.name} did not report a recognized release",
-            _installation_help(),
+            _installation_help(app),
         )
     return match[1]
 
 
-def _runtime_environment():
+def _runtime_environment(app="anicraft"):
     return {
         key: value
         for key, value in os.environ.items()
-        if not key.upper().startswith("ANICRAFT_")
+        if not key.upper().startswith(app.upper() + "_")
     }
 
 
@@ -191,26 +198,31 @@ def _require_headless_transport(executable, mode):
 
 
 def _installed_anicraft(cli_path, app_path):
-    cli = _installed_binary("anicraft-cli", cli_path)
-    app = _installed_binary("anicraft", app_path, adjacent=cli.parent)
+    return _installed_tools("anicraft", cli_path, app_path)
+
+
+def _installed_tools(product, cli_path, app_path):
+    cli = _installed_binary(f"{product}-cli", cli_path)
+    app = _installed_binary(product, app_path, adjacent=cli.parent)
     platform = {"win32": "windows", "darwin": "macos", "linux": "linux"}.get(
         sys.platform
     )
     if platform is None:
         raise _not_ready(
-            "AniCraft profile is unavailable on this platform", _installation_help()
+            "Selected ArtCraft profile is unavailable on this platform",
+            _installation_help(product),
         )
     lock, app_lock = file_fingerprint(cli), file_fingerprint(app)
     release = _release(cli)
     if release != _release(app):
         raise _not_ready(
-            "The selected AniCraft app and CLI report different releases",
-            _installation_help(),
+            "The selected ArtCraft app and CLI report different releases",
+            _installation_help(product),
         )
     if file_fingerprint(cli) != lock or file_fingerprint(app) != app_lock:
         raise _not_ready(
-            "The selected AniCraft installation changed during inspection",
-            _installation_help(),
+            "The selected ArtCraft installation changed during inspection",
+            _installation_help(product),
         )
     return {
         "executable": lock,
@@ -239,6 +251,8 @@ class SelectedArtCraftAdapter:
         return observed
 
     def observe(self, *, scope, mode, roots, cli_path, app_path):
+        if scope == _SOUND_CUE_SCOPE:
+            return self._observe_soundcraft(mode, roots, cli_path, app_path)
         if (
             scope["app"] != "anicraft"
             or scope["operations"] != ["lower-third"]
@@ -303,6 +317,31 @@ class SelectedArtCraftAdapter:
             )
         _require_headless_transport(installed["executable"], "json-lines")
 
+    def _observe_soundcraft(self, mode, roots, cli_path, app_path):
+        from .artcraft_soundcraft import observe_soundcraft_profile
+
+        if mode != "cli" or not all((self._observe_confinement, self._run_confined)):
+            raise _not_ready(
+                "SoundCraft cue requires a confined CLI runner",
+                "Select a runtime that independently enforces the job's effective roots.",
+            )
+        installed = _installed_tools("soundcraft", cli_path, app_path)
+        if (installed["release"], installed["platform"]) != ("0.20.1", "windows"):
+            raise _not_ready(
+                "SoundCraft cue requires the qualified Windows 0.20.1 profile",
+                _installation_help("soundcraft"),
+            )
+        effective = self._observe_confinement(installed, roots)
+        return {
+            **_SOUND_CUE_SCOPE,
+            **installed,
+            "mode": mode,
+            "effectiveRoots": effective,
+            "commandSchemaHash": observe_soundcraft_profile(
+                installed["executable"], _runtime_environment("soundcraft")
+            ),
+        }
+
     def validate_run(self, job):
         if self._run_confined is None:
             raise _not_ready(
@@ -317,6 +356,13 @@ class SelectedArtCraftAdapter:
             cli_path=previous["executable"]["locator"],
             app_path=previous["application"]["locator"],
         )
+        if previous["app"] == "soundcraft":
+            if current != previous:
+                raise _not_ready(
+                    "SoundCraft requires the exact current tool files and cue scope",
+                    _installation_help("soundcraft"),
+                )
+            return
         if (
             current != previous
             or current["release"] != "0.2.1"
@@ -331,14 +377,7 @@ class SelectedArtCraftAdapter:
         from .artcraft_anicraft import revise_lower_third, run_lower_third
 
         def invoke(workdir, *arguments, timeout):
-            return self._run_confined(
-                job["observation"]["executable"],
-                job["roots"],
-                workdir,
-                arguments,
-                env=_runtime_environment(),
-                timeout=timeout,
-            )
+            return self._invoke_confined(job, workdir, arguments, timeout)
 
         def stream(document, *, timeout):
             return self._open_confined(
@@ -369,6 +408,31 @@ class SelectedArtCraftAdapter:
             budget=job["budget"],
             invoke=invoke,
             open_stream=open_stream,
+        )
+
+    def _invoke_confined(self, job, directory, arguments, timeout):
+        installation = job["observation"]
+        return self._run_confined(
+            installation["executable"],
+            job["roots"],
+            directory,
+            arguments,
+            env=_runtime_environment(installation["app"]),
+            timeout=timeout,
+        )
+
+    def author_isolated_cue(self, job, directory):
+        from .artcraft_soundcraft import run_isolated_cue
+
+        def invoke(workdir, *arguments, timeout):
+            return self._invoke_confined(job, workdir, arguments, timeout)
+
+        return run_isolated_cue(
+            job["output"],
+            job["inputs"][0],
+            directory=directory,
+            budget=job["budget"],
+            invoke=invoke,
         )
 
     def plan_lower_third(self, job, directory):

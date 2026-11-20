@@ -50,7 +50,8 @@ __all__ = [
 ]
 
 _SEALED = frozenset({"decision", "job", "event", "package", "receipt"})
-_NATIVE_SUFFIXES = {"anicraft": ".anicraft"}
+_NATIVE_SUFFIXES = {"anicraft": ".anicraft", "soundcraft": ".scraft"}
+_SOUND_CUE_SCOPE = {"app": "soundcraft", "operations": ["isolated-cue"]}
 _OPERATIONAL_FAILURES = frozenset(
     {"not-installed", "invalid-input", "permission-denied", "transient-error", "defect"}
 )
@@ -354,6 +355,19 @@ def _check_job_identity(job):
         )
     if job["output"]["role"] != request["required"]["outputRole"]:
         raise ContractError("ArtCraft output role does not match the request")
+    if scope == _SOUND_CUE_SCOPE:
+        _check_sound_job(job)
+
+
+def _check_sound_job(job):
+    authored = job.get("soundCue")
+    if authored is None or len(job["inputs"]) != 1 or job.get("authoringParameters"):
+        raise ContractError("SoundCraft cue requires its selected input audio")
+    if job["inputs"][0]["locator"] != authored["source"]:
+        raise ContractError("SoundCraft source differs from the job's input lock")
+    _require_sound_contract(
+        job["request"], job["output"], job["documentState"], job["observation"]["mode"]
+    )
 
 
 def _bounded_path(root: Path, path: Path, label: str) -> Path:
@@ -569,7 +583,8 @@ def prepare_authoring(
     document = _owned_document(store, base, spec["jobId"], scope["app"])
     roots = _preparation_roots(spec, document.parent)
     source = _preparation_source(spec, roots, document)
-    _require_preparation_capacity(store.workspace, spec["budget"], source)
+    cue_input = _preparation_audio(request, spec, scope, roots)
+    _require_preparation_capacity(store.workspace, spec["budget"], source or cue_input)
     observation = adapter.observe(
         scope=scope,
         mode=spec["mode"],
@@ -592,7 +607,7 @@ def prepare_authoring(
         "observation": observation,
         "document": document.relative_to(store.workspace).as_posix(),
         "documentState": spec["document"]["state"],
-        "inputs": [source] if source else [],
+        "inputs": [item for item in (source, cue_input) if item is not None],
         "recipeHash": content_hash(recipe),
         "output": spec["output"],
         "budget": spec["budget"],
@@ -600,6 +615,9 @@ def prepare_authoring(
     }
     if authoring is not None:
         job["authoringParameters"] = authoring
+    if cue_input is not None:
+        job["soundCue"] = spec["soundCue"]
+        job["recipeHash"] = content_hash([*recipe, spec["soundCue"], cue_input])
     return _publish_preparation(store, job, document, source)
 
 
@@ -804,6 +822,55 @@ def _preparation_source(spec, roots, document):
     return file_fingerprint(source)
 
 
+def _preparation_audio(request, spec, scope, roots):
+    selected = spec.get("soundCue")
+    if scope != _SOUND_CUE_SCOPE:
+        if selected is not None:
+            raise ArtCraftError("Select SoundCraft isolated-cue for a sound cue")
+        return None
+    if selected is None:
+        raise ArtCraftError("Select a source WAV and a SoundCraft room reverb")
+    if "authoringParameters" in spec:
+        raise ArtCraftError("Select only the SoundCraft cue parameters")
+    _require_sound_contract(
+        request, spec["output"], spec["document"]["state"], spec["mode"]
+    )
+    path = Path(selected["source"])
+    root = _owning_root(path, roots["read"])
+    path = _bounded_path(root, path, "sound cue source")
+    if path.is_relative_to(roots["write"][0]) or path.suffix != ".wav":
+        raise ArtCraftError("SoundCraft cue needs one external source WAV")
+    if not path.is_file() or path.stat().st_nlink != 1:
+        raise ArtCraftError("SoundCraft cue source must be one regular unshared file")
+    if path.stat().st_size >= spec["budget"]["bytes"]:
+        raise ArtCraftError("SoundCraft cue source exceeds the selected byte budget")
+    return file_fingerprint(path)
+
+
+def _require_sound_contract(request, output, document_state, mode):
+    shape = (
+        output["role"],
+        output["format"],
+        output.get("sampleRate"),
+        output.get("channels"),
+    )
+    if (
+        shape != ("generated-audio", "wav", 48000, 2)
+        or output.get("sampleCount", 0) > 480000
+    ):
+        raise ArtCraftError(
+            "SoundCraft cue needs a 48 kHz stereo WAV of up to ten seconds"
+        )
+    if request["required"]["behavior"] != "editable-isolated-cue":
+        raise ArtCraftError(
+            "SoundCraft cue requires the selected editable cue behavior"
+        )
+    if document_state != "empty" or mode != "cli":
+        raise ArtCraftError(
+            "Select a blank SoundCraft document and the confined CLI mode"
+        )
+
+
 def _require_preparation_capacity(workspace, budget, source):
     if budget["bytes"] > disk_free(workspace):
         raise ArtCraftError(
@@ -953,10 +1020,10 @@ def recover_authoring(job_ref, *, expected_head):
 def _recoverable_job_files(job, directory):
     budget = job["budget"]
     count = min(job["output"].get("frameCount", 0), budget["files"])
-    candidates = [
-        directory / name
-        for name in ("component.anicraft", "recipe.json", "handoff.json")
-    ]
+    names = ("component.anicraft", "recipe.json", "handoff.json")
+    if job["decision"]["scope"] == _SOUND_CUE_SCOPE:
+        names = ("component.scraft", "recipe.json", "cue.wav", "Audio Files/source.wav")
+    candidates = [directory / name for name in names]
     candidates.extend(
         directory / "alpha" / f"frame_{index:05d}.png" for index in range(1, count + 1)
     )
@@ -1096,6 +1163,7 @@ def _inspect_job_outputs(job, head):
     recipe = head.get("recipe")
     if recipe is not None:
         expected = [recipe, *expected]
+    expected = [*expected, *head.get("dependencies", [])]
     return (
         "current"
         if all(_retained_job_file(item, job["roots"]["write"]) for item in expected)
@@ -1145,12 +1213,16 @@ def run_authoring(job_ref, *, expected_head, adapter):
             return inspection
         if job["observation"]["mode"] in {"guided", "host-mcp"}:
             return _run_operator_handoff(store, job, head, inspection, adapter)
-        directory = _require_prepared_lower_third(store, job, head)
+        directory = _require_prepared_authoring(store, job, head)
         if job["observation"]["mode"] == "reuse":
             produce = _copy_reusable_export
         else:
             adapter.validate_run(job)
-            produce = adapter.author_lower_third
+            produce = (
+                adapter.author_isolated_cue
+                if job["decision"]["scope"] == _SOUND_CUE_SCOPE
+                else adapter.author_lower_third
+            )
         running = store.append(
             job["jobId"],
             expected_head=expected_head,
@@ -1210,7 +1282,7 @@ def _run_operator_handoff(store, job, head, inspection, adapter):
         )
     if head["state"] == "ready" and inspection["checks"].get("handoff") == "current":
         return inspection
-    directory = _require_prepared_lower_third(store, job, head)
+    directory = _require_prepared_authoring(store, job, head)
     plan = adapter.plan_lower_third(job, directory)
     directory.mkdir(parents=True, exist_ok=True)
     recipe = _bounded_path(directory, directory / "recipe.json", "operator recipe")
@@ -1246,15 +1318,16 @@ def _run_operator_handoff(store, job, head, inspection, adapter):
     return _inspection_result(store, job, event)
 
 
-def _require_prepared_lower_third(store, job, head):
+def _require_prepared_authoring(store, job, head):
     if head["state"] != "prepared":
         raise ArtCraftError(
             "ArtCraft job requires reconciliation before another operation",
             code="ARTCRAFT_OUTCOME_UNKNOWN",
         )
     scope = job["decision"]["scope"]
-    if scope != {"app": "anicraft", "operations": ["lower-third"]} or not job.get(
-        "authoringParameters"
+    if scope != _SOUND_CUE_SCOPE and (
+        scope != {"app": "anicraft", "operations": ["lower-third"]}
+        or not job.get("authoringParameters")
     ):
         raise ArtCraftError(
             "ArtCraft runner needs the selected AniCraft lower-third parameters",
@@ -1307,6 +1380,8 @@ def _execute_prepared_job(store, job, running, directory, produce):
 
 
 def _verify_authoring_result(job, directory, result):
+    if job["decision"]["scope"] == _SOUND_CUE_SCOPE:
+        return _verify_sound_authoring_result(job, directory, result)
     roots = job["roots"]["write"]
     native = result["nativeSource"]
     recipe = result["recipe"]
@@ -1339,9 +1414,55 @@ def _verify_authoring_result(job, directory, result):
     return evidence
 
 
+def _verify_sound_authoring_result(job, directory, result):
+    native, recipe, media = (result[key] for key in ("nativeSource", "recipe", "media"))
+    dependencies = result["dependencies"]
+    evidence = result["audioEvidence"]
+    validate_document(evidence, _schema("audioEvidence"))
+    expected_clock = tuple(
+        job["output"][key] for key in ("sampleRate", "sampleCount", "channels")
+    )
+    clock = tuple(evidence[key] for key in ("sampleRate", "sampleCount", "channels"))
+    if clock != expected_clock or len(dependencies) != 1:
+        raise ArtCraftError(
+            "SoundCraft output clock or retained audio dependency changed"
+        )
+    paths = (
+        (native, directory / "component.scraft"),
+        (recipe, directory / "recipe.json"),
+        (media, directory / "cue.wav"),
+        (dependencies[0], directory / "Audio Files" / "source.wav"),
+    )
+    roots = job["roots"]["write"]
+    if any(
+        item["locator"] != str(path) or not _retained_job_file(item, roots)
+        for item, path in paths
+    ):
+        raise ArtCraftError("SoundCraft output is outside the owned cue or changed")
+    if media["sha256"] == job["inputs"][0]["sha256"]:
+        raise ArtCraftError(
+            "SoundCraft cannot relabel its original input as a generated cue"
+        )
+    return {
+        "saved": native,
+        "recipe": recipe,
+        "outputs": [media],
+        "dependencies": dependencies,
+        "audioEvidence": evidence,
+    }
+
+
 def _verify_retained_export(store, job, event):
     directory = _authoring_export_directory(store, job)
     try:
+        sound_evidence = {}
+        if job["decision"]["scope"] == _SOUND_CUE_SCOPE:
+            (media,) = event["outputs"]
+            sound_evidence = {
+                "media": media,
+                "dependencies": event["dependencies"],
+                "audioEvidence": event["audioEvidence"],
+            }
         _verify_authoring_result(
             job,
             directory,
@@ -1350,6 +1471,7 @@ def _verify_retained_export(store, job, event):
                 "recipe": event["recipe"],
                 "frames": event["outputs"],
                 "revisionCommandSchemaHash": event.get("revisionCommandSchemaHash"),
+                **sound_evidence,
             },
         )
     except (KeyError, ValueError) as exc:
@@ -1379,6 +1501,21 @@ def read_authoring_export(job_ref, *, expected_head):
 def describe_export_review(job_ref, *, expected_head):
     """Describe the exact standalone candidate for an independent creator review."""
     job, event = read_authoring_export(job_ref, expected_head=expected_head)
+    if job["decision"]["scope"] == _SOUND_CUE_SCOPE:
+        return {
+            "reviewState": "pending-creator",
+            "jobHash": job["jobHash"],
+            "exportHead": event["eventHash"],
+            "componentId": job["request"]["componentId"],
+            "viewerPurpose": job["request"]["purpose"],
+            "nativeSource": event["saved"],
+            "outputContract": job["output"],
+            "standalone": {
+                "audio": event["outputs"][0],
+                "audioEvidence": event["audioEvidence"],
+                "dependencies": event["dependencies"],
+            },
+        }
     if job["decision"]["scope"] != {"app": "anicraft", "operations": ["lower-third"]}:
         raise ArtCraftError("The selected job has no qualified review profile")
     count = job["output"]["frameCount"]

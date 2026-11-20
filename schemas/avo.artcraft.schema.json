@@ -233,6 +233,24 @@
         "font": { "type": "string", "minLength": 1, "maxLength": 128 }
       }
     },
+    "soundCue": {
+      "type": "object", "additionalProperties": false, "required": ["source", "effect"],
+      "properties": {
+        "source": { "$ref": "#/$defs/text" },
+        "effect": { "const": "room-reverb" }
+      }
+    },
+    "audioEvidence": {
+      "type": "object", "additionalProperties": false,
+      "required": ["sampleRate", "sampleCount", "channels", "codec", "pcmSha256"],
+      "properties": {
+        "sampleRate": { "const": 48000 },
+        "sampleCount": { "type": "integer", "minimum": 1, "maximum": 480000 },
+        "channels": { "const": 2 },
+        "codec": { "const": "pcm_s24le" },
+        "pcmSha256": { "$ref": "#/$defs/hash" }
+      }
+    },
     "jobSpec": {
       "type": "object", "additionalProperties": false,
       "required": ["version", "jobId", "provider", "workspace", "mode", "document", "readRoots", "output", "budget"],
@@ -256,6 +274,7 @@
         "cliPath": { "$ref": "#/$defs/text" },
         "appPath": { "$ref": "#/$defs/text" },
         "authoringParameters": { "$ref": "#/$defs/lowerThirdParameters" },
+        "soundCue": { "$ref": "#/$defs/soundCue" },
         "output": { "$ref": "#/$defs/output" },
         "budget": { "$ref": "#/$defs/budget" }
       }
@@ -274,6 +293,7 @@
         "document": { "$ref": "#/$defs/relativePath" },
         "documentState": { "enum": ["empty", "saved"] },
         "authoringParameters": { "$ref": "#/$defs/lowerThirdParameters" },
+        "soundCue": { "$ref": "#/$defs/soundCue" },
         "projectFingerprint": { "$ref": "#/$defs/fingerprint" },
         "canonicalHeads": { "type": "object", "maxProperties": 12, "propertyNames": { "$ref": "#/$defs/id" }, "additionalProperties": { "$ref": "#/$defs/hash" } },
         "inputs": { "type": "array", "maxItems": 16384, "items": { "$ref": "#/$defs/fingerprint" } },
@@ -297,6 +317,8 @@
         "recipe": { "$ref": "#/$defs/fingerprint" },
         "handoff": { "$ref": "#/$defs/fingerprint" },
         "outputs": { "type": "array", "maxItems": 16384, "items": { "$ref": "#/$defs/fingerprint" } },
+        "dependencies": { "type": "array", "maxItems": 16, "items": { "$ref": "#/$defs/fingerprint" } },
+        "audioEvidence": { "$ref": "#/$defs/audioEvidence" },
         "createdBytes": { "$ref": "#/$defs/count" },
         "detail": { "$ref": "#/$defs/text" },
         "eventHash": { "$ref": "#/$defs/hash" }
