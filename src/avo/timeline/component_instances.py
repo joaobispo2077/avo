@@ -167,13 +167,14 @@ class ComponentInstanceService:
         )
         root = Path(self.workspace.raw_dir).resolve()
         target = root / "edit" / "derived" / "provider-components" / instance_id
+        selected_parameters = self._native_instance_parameters(parameters, evidence)
         document = self._seal(
             {
                 "instanceId": instance_id,
                 "kitId": kit_id,
                 "kitVersion": version,
                 "kitManifestHash": manifest_hash,
-                "parameters": parameters,
+                "parameters": selected_parameters,
                 "assetBindings": asset_bindings,
                 "eventBindings": event_bindings,
                 "safeAreaBindings": safe_area_bindings,
@@ -197,18 +198,58 @@ class ComponentInstanceService:
                 ),
             }
         )
-        self._check_parameters(document, evidence["parameterSchema"])
         self._validate(document)
         with timeline_writer(self.workspace.timeline_dir):
             self._check_native_upgrade(document)
-            if instance_path.is_file() and self.load(instance_id) != document:
-                raise ComponentInstanceError(
-                    "The immutable instance already pins different inputs"
-                )
+            retained = self._require_same_native_instance(
+                instance_path, document, evidence
+            )
             retain_native_instance_sources(
                 package, evidence, project_root=root, target=target
             )
-            return self._write_instance(document)
+            return self._write_instance(retained)
+
+    def _native_instance_parameters(self, parameters, evidence):
+        if not isinstance(parameters, dict):
+            raise ComponentInstanceError(
+                "Native component parameters must be an object"
+            )
+        defaults = evidence["fixtureParameters"]
+        schema = evidence["parameterSchema"]
+        declared = schema.get("properties", {})
+        values = {
+            **{key: defaults[key] for key in declared.keys() & defaults.keys()},
+            **parameters,
+        }
+        self._check_parameters({"parameters": values}, schema)
+        resolved = {**defaults, **values}
+        try:
+            validate_document(
+                resolved, "avo.artcraft.schema.json#/$defs/lowerThirdParameters"
+            )
+        except ContractError as exc:
+            raise ComponentInstanceError(
+                f"Invalid AniCraft parameter contract: {exc}"
+            ) from exc
+        if resolved["font"] != defaults.get("font"):
+            raise ComponentInstanceError(
+                "Select a provider design reviewed with this font"
+            )
+        text = resolved["primaryText"]
+        if not text.strip() or any(char in text for char in "\r\n\0—"):
+            raise ComponentInstanceError("Choose one nonempty lower-third label")
+        return resolved
+
+    def _require_same_native_instance(self, path, document, evidence):
+        if not path.is_file():
+            return document
+        retained = self.load(document["instanceId"])
+        previous = self._native_instance_parameters(retained["parameters"], evidence)
+        if self._seal({**retained, "parameters": previous}) != document:
+            raise ComponentInstanceError(
+                "The immutable instance already pins different inputs"
+            )
+        return retained
 
     def _check_native_upgrade(self, document):
         from .provider_animation import _semver

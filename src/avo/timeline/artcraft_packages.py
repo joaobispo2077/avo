@@ -67,14 +67,10 @@ def read_retained_provider_package(
 def _inspect_package_at(package, root, source_observer, file_limit, byte_limit):
     with fingerprint_stage(reuse_current=True, verify_on_exit=True):
         files, roles = _verify_files(package, root, file_limit, byte_limit)
-        provenance, parameter_schema, rights = _observe_package(
-            package, roles, source_observer, byte_limit
-        )
+        observed = _observe_package(package, roles, source_observer, byte_limit)
     return {
         "files": files,
-        "provenance": provenance,
-        "parameterSchema": parameter_schema,
-        "rights": rights,
+        **observed,
         "packageHash": package["packageHash"],
         "sourceRoot": root,
     }
@@ -247,7 +243,12 @@ def _observe_package(package, roles, source_observer, byte_limit):
         "designReviewSha256": design_ref["sha256"],
         "rightsSha256": rights_ref["sha256"],
     }
-    return provenance, parameter_schema, rights
+    return {
+        "provenance": provenance,
+        "parameterSchema": parameter_schema,
+        "fixtureParameters": fixture,
+        "rights": rights,
+    }
 
 
 def _selected_evidence(package, roles, reference_key, role):
