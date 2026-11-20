@@ -8,8 +8,8 @@ install_ffmpeg() {
     -o Acquire::https::Timeout=15
     -o Acquire::http::No-Cache=true
   )
-  sudo apt-get "${apt_options[@]}" update --error-on=any &&
-    sudo apt-get "${apt_options[@]}" install -y --no-install-recommends ffmpeg
+  sudo timeout --kill-after=30s 2m apt-get "${apt_options[@]}" update --error-on=any &&
+    sudo timeout --kill-after=30s 8m apt-get "${apt_options[@]}" install -y --no-install-recommends ffmpeg
 }
 
 if ! command -v ffmpeg >/dev/null || ! command -v ffprobe >/dev/null \

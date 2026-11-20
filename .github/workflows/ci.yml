@@ -114,7 +114,7 @@ jobs:
         run: npm ci
 
       - name: Install ffmpeg
-        timeout-minutes: 12
+        timeout-minutes: 22
         run: bash scripts/ci/ensure-ffmpeg.sh
 
       - name: Run unit tests
@@ -146,7 +146,7 @@ jobs:
     name: Integration tests (AVO repo)
     runs-on: ubuntu-24.04
     needs: prerequisites-gate
-    timeout-minutes: 30
+    timeout-minutes: 45
     # Real capture checks must fail, rather than skip, when this runtime is absent.
     env:
       AVO_REQUIRE_CODE_DRAWN_RUNTIME: '1'
@@ -173,7 +173,7 @@ jobs:
         run: echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
 
       - name: Install ffmpeg
-        timeout-minutes: 12
+        timeout-minutes: 22
         run: bash scripts/ci/ensure-ffmpeg.sh
 
       - name: Install managed Chromium for code-drawn integration
@@ -259,7 +259,8 @@ jobs:
         run: npm ci
 
       - name: Install ffmpeg
-        timeout-minutes: 12
+        # Keep both bounded apt attempts inside this step.
+        timeout-minutes: 22
         run: bash scripts/ci/ensure-ffmpeg.sh
 
       # Spec v1.4 / task-013: Phase-1 fast gates — all fail-immediately (no soft stubs).
