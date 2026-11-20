@@ -78,14 +78,14 @@ def _profile_clock(output):
         rate.denominator != 1
         or not 1 <= rate <= 120
         or output["frameCount"] < max(24, rate)
-        or 9 * width != 16 * height
+        or Fraction(width, height) not in (Fraction(16, 9), Fraction(9, 16))
         or output["role"] != "overlay-video"
         or output["format"] != "png-sequence"
         or output["alpha"] != "straight"
         or output["color"] != "srgb"
     ):
         raise ArtCraftError(
-            "AniCraft lower-third contract requires a 16:9 sRGB straight-alpha PNG sequence, an integral 1–120 fps clock and at least one second",
+            "AniCraft lower-third contract requires 16:9 or 9:16 sRGB straight-alpha PNGs, an integral 1–120 fps clock and at least one second",
             code="ARTCRAFT_NOT_READY",
         )
     return int(rate)
@@ -104,7 +104,7 @@ def _move_key(frame, distance):
     ]
 
 
-def _speaker_label(parameters, scale):
+def _speaker_label(parameters, scale, offset):
     text = parameters.get("primaryText")
     font = parameters.get("font")
     if (
@@ -122,17 +122,23 @@ def _speaker_label(parameters, scale):
         "text.create",
         text=text,
         x=42 * scale,
-        y=280 * scale,
+        y=280 * scale + offset,
         font=font,
         size=24 * scale,
         color="#ffffff",
     )
 
 
+def _lower_third_layout(output):
+    scale = output["width"] / 640
+    offset = (output["height"] - 360 * scale) * (268 / 360)
+    return scale, offset
+
+
 def lower_third_steps(output, parameters, source, white_directory):
     """Build the selected native commands, with frame numbers in the document clock."""
     _profile_clock(output)
-    scale = output["width"] / 640
+    scale, offset = _lower_third_layout(output)
     count = output["frameCount"]
     enter, hold = count // 8, count // 3
     leave, exit_end = 3 * count // 4, 7 * count // 8
@@ -143,13 +149,13 @@ def lower_third_steps(output, parameters, source, white_directory):
         _step(
             "draw.rect",
             x=24 * scale,
-            y=268 * scale,
+            y=268 * scale + offset,
             w=270 * scale,
             h=56 * scale,
             radius=8 * scale,
             fill="#102c48",
         ),
-        _speaker_label(parameters, scale),
+        _speaker_label(parameters, scale, offset),
         _step("edit.select_all"),
         _step("modify.convert_to_symbol", name="Speaker plate", kind="graphic"),
         *_move_key(hold, 24 * scale),
@@ -606,7 +612,7 @@ def _render_matte(backings, directory, output, budget, deadline):
         rendered.append(fingerprint)
         maximum = max(maximum, error)
         boxes.append(matte.getchannel("A").getbbox())
-    _require_motion_observation(boxes, output["width"] / 640)
+    _require_motion_observation(boxes, output)
     return rendered, maximum
 
 
@@ -627,7 +633,7 @@ def _open_matte_frame(backings, name, dimensions):
         return recover_matte(white, dark, check)
 
 
-def _require_motion_observation(boxes, scale):
+def _require_motion_observation(boxes, output):
     count = len(boxes)
     enter, hold, leave, exit_end = (
         count // 8,
@@ -647,11 +653,17 @@ def _require_motion_observation(boxes, scale):
         raise ArtCraftError(
             "AniCraft rendered phases do not match the selected entrance, hold and exit"
         )
-    _require_safe_area(boxes, scale)
+    _require_safe_area(boxes, output)
 
 
-def _require_safe_area(boxes, scale):
-    expected = [round(value * scale) for value in (23, 267, 319, 325)]
+def _require_safe_area(boxes, output):
+    scale, offset = _lower_third_layout(output)
+    expected = (
+        round(23 * scale),
+        round(267 * scale + offset),
+        round(319 * scale),
+        round(325 * scale + offset),
+    )
     for box in filter(None, boxes):
         if (
             box[0] < expected[0] - 2
