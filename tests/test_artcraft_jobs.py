@@ -262,7 +262,10 @@ def test_selected_identity_checks_only_matching_installed_tools(
         assert argv[1:] == ["--version"]
         calls.append(argv[0])
         release = "0.4.1" if argv[0] == str(cli) else app_release
-        return SimpleNamespace(stdout=f"AniCraft {release}\n".encode("ascii"))
+        qualifier = " (early alpha)" if argv[0] == str(app) else ""
+        return SimpleNamespace(
+            stdout=f"AniCraft {release}{qualifier}\n".encode("ascii")
+        )
 
     def confinement(identity, roots):
         boundaries.append(identity)
@@ -282,3 +285,62 @@ def test_selected_identity_checks_only_matching_installed_tools(
             _prepare(api, request(), spec, adapter)
         assert boundaries == [] and not (workspace / "artcraft-jobs").exists()
     assert calls == [str(cli), str(app)]
+
+
+def test_inspect_reconciles_exact_saved_copy_from_a_fresh_entrypoint(authoring):
+    from avo.mcp.bridge import run_cli
+
+    api, workspace, adapter = authoring
+    original = workspace / "original.anicraft"
+    original.write_bytes(b"synthetic independent source")
+    spec = job_spec(
+        workspace,
+        document={"state": "saved", "source": str(original)},
+        readRoots=[str(workspace)],
+    )
+    prepared = _prepare(api, request(), spec, adapter)
+    arguments = [
+        "artcraft",
+        "inspect",
+        "--job",
+        prepared["jobRef"],
+        "--json",
+        "--expected-head",
+    ]
+    current = run_cli([*arguments, prepared["head"]])
+    assert current.ok, current.stderr
+    assert current.parsed_json["status"] == "current"
+    assert current.parsed_json["state"] == "prepared"
+    assert current.parsed_json["checks"]["nativeDocument"] == "current"
+    assert len(adapter.calls) == 1
+
+    source = workspace / prepared["job"]["document"]
+    source.write_bytes(b"changed independent copy")
+    stale = run_cli([*arguments, prepared["head"]])
+    assert stale.ok, stale.stderr
+    assert stale.parsed_json["status"] == "stale"
+    assert stale.parsed_json["checks"]["nativeDocument"] == "changed"
+    assert original.read_bytes() == b"synthetic independent source"
+
+    wrong = run_cli([*arguments, "a" * 64])
+    assert not wrong.ok
+    assert json.loads(wrong.stderr)["code"] == "ARTCRAFT_SCOPE_CHANGED"
+
+
+def test_inspect_marks_video_scope_stale_when_project_identity_changes(authoring):
+    api, workspace, adapter = authoring
+    project = workspace / "avo.project.json"
+    body = {
+        "provider": "neutral-channel",
+        "videoId": "source-episode",
+        "rawDir": str(workspace),
+    }
+    project.write_text(json.dumps(body), encoding="utf-8")
+    brief = request(
+        context={"kind": "video", "project": str(project), "videoId": "source-episode"}
+    )
+    prepared = _prepare(api, brief, job_spec(workspace), adapter)
+    project.write_text(json.dumps({**body, "title": "Changed scope"}), encoding="utf-8")
+    result = api.inspect_authoring(prepared["jobRef"], expected_head=prepared["head"])
+    assert result["status"] == "stale"
+    assert result["checks"]["project"] == "changed"
