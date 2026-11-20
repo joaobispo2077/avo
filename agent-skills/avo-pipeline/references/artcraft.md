@@ -83,6 +83,15 @@ explicit sample count up to ten seconds. Review locates the independently
 decoded cue, native session and retained dry audio dependency at the exact
 exported job head. The existing mix and review workflow own contextual use.
 
+To include that cue in a sound-enabled proof, place the review's `audio`
+fingerprint and `generatedAudioRef` on an SFX layer in Tracks. Use its
+`sourceId` and the same `generatedAudioRef` in the proof's corresponding
+trim operation. Set its source descriptor to the exported WAV, stream zero,
+and `mediaClass: generated-asset`. Use the selected program-frame region and
+48 kHz stereo node. The proof compiler checks the placement and rejects
+overlapping uses of the same cue. The existing gain, fade and mix operations
+control audition level and preserve the original dialogue processing.
+
 For a video job with a verified export, select an Animation component, its BMap
 cue and the linked Tracks overlay before authoring. Register the exact exported
 job with `avo cli artcraft register`, the current project and an owned `.mkv`

@@ -607,6 +607,12 @@ the PCM clock, and compares the saved session's fresh bounce. The export event
 binds the editable session, recipe, retained audio dependency and decoded
 output for standalone review. Canonical proof admission has its own checks.
 
+Generated cue placement binds the export receipt and output fingerprint to an
+explicit SFX region in Tracks. Proof compilation seals both identities and
+verifies the current frame and sample ranges. Materialization and native
+execution recheck the receipt and its closure while resolving the audio.
+The native mixer adds the cue through the existing SFX node and final encode.
+
 The explicitly selected video export binds the unchanged AniCraft source,
 recipe, app and CLI fingerprints, ordered alpha frames and current approved
 cut and sync to the logical component in Animation, BMap and Tracks. Proof
