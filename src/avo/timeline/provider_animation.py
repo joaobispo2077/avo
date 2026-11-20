@@ -15,7 +15,6 @@ from uuid import uuid4
 from .animation import AnimationError, _keys
 from .contracts import (
     content_hash,
-    document_hash_excluding,
     file_fingerprint,
     validate_document,
 )
@@ -238,7 +237,7 @@ class ProviderAnimationService:
         change_type="major",
     ):
         """Propose a verified external native source using the existing catalog."""
-        from .artcraft_packages import verify_provider_package
+        from .artcraft_packages import native_catalog_manifest, verify_provider_package
 
         if not actor or not intent_reference:
             raise AnimationError("explicit creator promotion intent is required")
@@ -253,21 +252,12 @@ class ProviderAnimationService:
             raise AnimationError(
                 "ArtCraft package belongs to another component version"
             )
-        backend = {"app": package["app"], "packageHash": evidence["packageHash"]}
-        manifest = {
-            "schemaVersion": "1.0.0",
-            "kitId": identity[0],
-            "version": identity[1],
-            "nativePackage": backend,
-            "provenance": evidence["provenance"],
-            "parameterSchema": evidence["parameterSchema"],
-        }
-        manifest["manifestSha256"] = content_hash(manifest)
+        manifest = native_catalog_manifest(package, evidence)
         value = self.sanitize(
             {
                 **pattern,
                 "kitId": identity[0],
-                "nativePackage": backend,
+                "nativePackage": manifest["nativePackage"],
                 "provenance": evidence["provenance"],
                 "parameterSchema": evidence["parameterSchema"],
                 "manifest": {
@@ -330,29 +320,27 @@ class ProviderAnimationService:
             )
 
     def _native_proposal_pattern(self, proposal, package, evidence):
+        from .artcraft_packages import native_catalog_manifest
+
         pattern = self.sanitize(proposal["pattern"])
         manifest = (proposal.get("kit") or {}).get("manifest") or {}
-        digest = manifest.get("manifestSha256")
-        facts = {
-            "kitId": package["componentId"],
-            "nativePackage": {
-                "app": package["app"],
-                "packageHash": package["packageHash"],
-            },
-            "version": package["componentVersion"],
-            "provenance": evidence["provenance"],
-            "parameterSchema": evidence["parameterSchema"],
-        }
-        if digest != document_hash_excluding(manifest, "manifestSha256") or any(
-            pattern.get(key) != value or manifest.get(key) != value
-            for key, value in facts.items()
+        expected = native_catalog_manifest(package, evidence)
+        if manifest != expected or any(
+            pattern.get(key) != expected[key]
+            for key in (
+                "kitId",
+                "nativePackage",
+                "version",
+                "provenance",
+                "parameterSchema",
+            )
         ):
             raise AnimationError(
                 "Native proposal differs from the verified ArtCraft package"
             )
-        if pattern.get("patternId") != facts["kitId"] or pattern.get("manifest") != {
+        if pattern.get("patternId") != expected["kitId"] or pattern.get("manifest") != {
             "path": "manifest.json",
-            "sha256": digest,
+            "sha256": expected["manifestSha256"],
         }:
             raise AnimationError(
                 "Native proposal differs from the selected catalog identity"

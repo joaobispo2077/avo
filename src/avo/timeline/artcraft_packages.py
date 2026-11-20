@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import shutil
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -10,7 +11,7 @@ from tempfile import TemporaryDirectory
 from avo.artcraft import ArtCraftError, validate_record
 from avo.paths import repo_root
 
-from .contracts import file_fingerprint, fingerprint_stage
+from .contracts import content_hash, file_fingerprint, fingerprint_stage
 from .store import timeline_writer, write_immutable_json
 
 _ROLES = frozenset(
@@ -39,6 +40,31 @@ def verify_provider_package(
     root = _require_external_root(source_root)
     if package["provider"] != provider or package["sourceRoot"] != str(root):
         raise ArtCraftError("ArtCraft package provider or selected source root differs")
+    return _inspect_package_at(package, root, source_observer, file_limit, byte_limit)
+
+
+def read_retained_provider_package(
+    store_root, *, provider, package_hash, source_observer
+):
+    """Resolve one exact provider package from the separately owned source store."""
+    if not re.fullmatch(r"[a-z0-9][a-z0-9-]*", provider) or not re.fullmatch(
+        r"[a-f0-9]{64}", package_hash
+    ):
+        raise ArtCraftError("ArtCraft retained package has an invalid owner or hash")
+    root = _require_external_root(store_root)
+    target = root / provider / package_hash
+    if target.resolve() != target:
+        raise ArtCraftError("ArtCraft retained package escaped its selected store")
+    package = _read_retained_manifest(target)
+    if (package["provider"], package["packageHash"]) != (provider, package_hash):
+        raise ArtCraftError("ArtCraft retained package identity changed")
+    evidence = _inspect_package_at(
+        package, target / "files", source_observer, 128, 16_000_000
+    )
+    return package, evidence
+
+
+def _inspect_package_at(package, root, source_observer, file_limit, byte_limit):
     with fingerprint_stage(reuse_current=True, verify_on_exit=True):
         files, roles = _verify_files(package, root, file_limit, byte_limit)
         provenance, parameter_schema, rights = _observe_package(
@@ -50,7 +76,23 @@ def verify_provider_package(
         "parameterSchema": parameter_schema,
         "rights": rights,
         "packageHash": package["packageHash"],
+        "sourceRoot": root,
     }
+
+
+def native_catalog_manifest(package, evidence):
+    body = {
+        "schemaVersion": "1.0.0",
+        "kitId": package["componentId"],
+        "version": package["componentVersion"],
+        "nativePackage": {
+            "app": package["app"],
+            "packageHash": evidence["packageHash"],
+        },
+        "provenance": evidence["provenance"],
+        "parameterSchema": evidence["parameterSchema"],
+    }
+    return {**body, "manifestSha256": content_hash(body)}
 
 
 def retain_provider_package(package, evidence, store_root):
@@ -72,16 +114,39 @@ def retain_provider_package(package, evidence, store_root):
 
 
 def _verify_retained_package(package, target):
-    manifest = target / "manifest.json"
-    if manifest.resolve() != manifest or json.loads(manifest.read_bytes()) != package:
+    if _read_retained_manifest(target) != package:
         raise ArtCraftError("Immutable ArtCraft package manifest has changed")
     for item in package["files"]:
         root = target / "files"
         _verify_file(root / item["path"], root, item)
 
 
+def _read_retained_manifest(target):
+    path = target / "manifest.json"
+    if path.resolve() != path or not path.is_file():
+        raise ArtCraftError("ArtCraft retained package manifest is missing or escaped")
+    if path.stat().st_nlink != 1 or path.stat().st_size > 256 * 1024:
+        raise ArtCraftError(
+            "ArtCraft retained package manifest has an alias or exceeds its size limit"
+        )
+    return validate_record("package", _read_json({"locator": str(path)}, dict))
+
+
+def retain_native_instance_sources(package, evidence, *, project_root, target):
+    root = _require_external_root(project_root)
+    if target.resolve() != target or not target.is_relative_to(
+        root / "edit" / "derived" / "provider-components"
+    ):
+        raise ArtCraftError("ArtCraft instance source escaped its owning video")
+    if target.exists():
+        _verify_retained_package(package, target)
+    else:
+        target.parent.mkdir(parents=True, exist_ok=True)
+        _retain_new_package(package, evidence, target)
+
+
 def _retain_new_package(package, evidence, target):
-    source_root = Path(package["sourceRoot"])
+    source_root = evidence["sourceRoot"]
     with TemporaryDirectory(prefix="artcraft-package-", dir=target.parent) as directory:
         stage = Path(directory)
         if stage.resolve() != stage or stage.parent != target.parent:
