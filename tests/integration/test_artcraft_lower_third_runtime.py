@@ -79,6 +79,30 @@ def test_installed_anicraft_saves_reopens_and_reconstructs_a_transparent_label(
     assert result["layers"] == ["Speaker label", "Layer 1"]
     native = Path(result["nativeSource"]["locator"])
     original = file_fingerprint(native)
+    from avo.adapters.artcraft_anicraft import inspect_lower_third_source
+
+    source = inspect_lower_third_source(
+        native,
+        output,
+        {"primaryText": "Clara Caf\u00e9", "font": "Arial"},
+        max_bytes=budget["bytes"],
+    )
+    assert source["fingerprint"] == original
+    assert source["editableText"] == "Clara Caf\u00e9"
+    assert source["fontFamily"] == "Arial"
+    tampered = tmp_path / "external-reference.anicraft"
+    document = json.loads(native.read_bytes())
+    document["paths"][0] = "file:///outside/native-input.svg"
+    tampered.write_text(json.dumps(document), encoding="utf-8")
+    from avo.artcraft import ArtCraftError
+
+    with pytest.raises(ArtCraftError, match="vector paths"):
+        inspect_lower_third_source(
+            tampered,
+            output,
+            {"primaryText": "Clara Caf\u00e9", "font": "Arial"},
+            max_bytes=budget["bytes"],
+        )
 
     with Image.open(result["frames"][0]["locator"]) as beginning:
         assert beginning.getchannel("A").getextrema() == (0, 0)
@@ -202,4 +226,8 @@ def test_installed_anicraft_guided_job_round_trips_through_avo_commands(
     )
     assert inspected.ok, inspected.stderr
     assert inspected.parsed_json["checks"]["nativeDocument"] == "returned-unverified"
+    assert (
+        inspected.parsed_json["sourceObservations"]["editableText"] == "Clara Caf\u00e9"
+    )
+    assert inspected.parsed_json["sourceObservations"]["fontFamily"] == "Arial"
     assert len(list((handoff_ref.parent / "white").glob("*.png"))) == 24
