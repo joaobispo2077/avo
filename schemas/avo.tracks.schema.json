@@ -790,6 +790,9 @@
                   },
                   "generatedSourceRef": {
                     "$ref": "#/$defs/generatedSourceRef"
+                  },
+                  "generatedStillRef": {
+                    "$ref": "https://avo.local/schemas/avo.artcraft.schema.json#/$defs/exportRef"
                   }
                 },
                 "allOf": [

@@ -674,7 +674,7 @@ def _segments(
     operations = [
         item
         for item in execution["videoGraph"]["operations"]
-        if item["kind"] not in {"overlay-video", "camera-transform"}
+        if not _is_auxiliary_picture(item)
     ]
     registry = default_proof_capability_registry()
     refs = {item["implementationId"]: item for item in execution["implementationRefs"]}
@@ -735,7 +735,15 @@ def _segments(
     return cursor, segments
 
 
+def _is_auxiliary_picture(operation):
+    from .proof_generated import is_overlay
+
+    return operation["kind"] == "camera-transform" or is_overlay(operation)
+
+
 def _generated_inputs(execution, spec, fps, validator):
+    from avo.timeline.artcraft_stills import is_generated_still
+
     from . import proof_generated
 
     registry = default_proof_capability_registry()
@@ -745,11 +753,20 @@ def _generated_inputs(execution, spec, fps, validator):
     if observations is None:
         observations = {}
     for operation in execution["videoGraph"]["operations"]:
-        if operation["kind"] not in {"generated-clip", "overlay-video"}:
+        if operation["kind"] != "generated-clip" and not proof_generated.is_overlay(
+            operation
+        ):
             continue
         if operation["operationId"] in generated:
             raise RuntimeError("Duplicate generated operation identity")
         proof_generated.parameters(operation, refs, registry)
+        if is_generated_still(operation):
+            generated[operation["operationId"]] = (
+                proof_generated.inspect_generated_still(
+                    operation, execution["canonicalInputLock"], spec
+                )
+            )
+            continue
         asset = proof_generated.verify_cached(
             operation,
             execution["canonicalInputLock"],
@@ -769,7 +786,13 @@ def _validate_events(execution, generated=None):
     from .proof_rendered_events import bound_visual_event
 
     audio_events = validate_audio_events(execution)
-    visual = {"main-scene", "overlay-video", "authored-graphic", "caption"}
+    visual = {
+        "main-scene",
+        "overlay-video",
+        "overlay-image",
+        "authored-graphic",
+        "caption",
+    }
     ranges = [item["outputRange"] for item in execution["videoGraph"]["operations"]]
     for event in execution["events"]:
         if event.get("eventId") in audio_events:
@@ -796,6 +819,8 @@ def _revalidate_inputs(execution, generated, validator):
 
 
 def _revalidate_fresh_inputs(execution, generated, validator):
+    from avo.timeline.artcraft_stills import is_generated_still
+
     from . import proof_generated
 
     observed_sources = {}
@@ -825,6 +850,11 @@ def _revalidate_fresh_inputs(execution, generated, validator):
                 )
     checked_assets = {}
     for asset in generated.values():
+        if is_generated_still(asset["operation"]):
+            proof_generated.inspect_generated_still(
+                asset["operation"], execution["canonicalInputLock"], execution["output"]
+            )
+            continue
         proof_generated.verify_cached(
             asset["operation"],
             execution["canonicalInputLock"],
@@ -1254,11 +1284,9 @@ def _proof_window(execution, cursor, encodes, fps, rate):
 
 
 def _proof_overlays(generated, cursor):
-    overlays = [
-        asset
-        for asset in generated.values()
-        if asset["operation"]["kind"] == "overlay-video"
-    ]
+    from .proof_generated import is_overlay
+
+    overlays = [asset for asset in generated.values() if is_overlay(asset["operation"])]
     if any(
         asset["operation"]["outputRange"]["endFrameExclusive"] > cursor
         for asset in overlays

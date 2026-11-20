@@ -82,6 +82,8 @@ def parameters(operation, refs, registry):
         raise RuntimeError(
             f"Generated implementation is unsupported or stale: {operation['operationId']}"
         )
+    if _is_still(operation):
+        return operation["parameters"]
     fragment = (
         "overlayVideoParameters"
         if kind == "overlay-video"
@@ -415,12 +417,44 @@ def validate_layers(assets):
     overlays = [
         asset["operation"]["parameters"]
         for asset in assets
-        if asset["operation"]["kind"] == "overlay-video"
+        if is_overlay(asset["operation"])
     ]
     captions = [item["zOrder"] for item in overlays if item["layerRole"] == "caption"]
     graphics = [item["zOrder"] for item in overlays if item["layerRole"] != "caption"]
     if captions and graphics and min(captions) <= max(graphics):
         raise RuntimeError("Frozen caption layers must composite after other graphics")
+
+
+def _is_still(operation):
+    from avo.timeline.artcraft_stills import is_generated_still
+
+    return is_generated_still(operation)
+
+
+def is_overlay(operation):
+    return operation["kind"] == "overlay-video" or _is_still(operation)
+
+
+def inspect_generated_still(operation, lock, output):
+    from avo.adapters.artcraft_vectorcraft import (
+        inspect_vector_card_native,
+        observe_vector_card_png,
+    )
+    from avo.timeline.artcraft_stills import resolve_generated_still_operation
+
+    job, event = resolve_generated_still_operation(operation, lock)
+    native = event["saved"]
+    observed = inspect_vector_card_native(
+        Path(native["locator"]), max_bytes=job["budget"]["bytes"]
+    )
+    path = Path(event["outputs"][0]["locator"])
+    pixels = observe_vector_card_png(path, job["output"])
+    if observed != native or pixels != event["stillEvidence"]:
+        raise RuntimeError(
+            "Generated VectorCraft still differs from its native receipt"
+        )
+    _placement(operation["parameters"]["placement"], output)
+    return {"path": path, "operation": operation}
 
 
 def _placement(placement, spec):
@@ -473,11 +507,10 @@ def overlay_filters(
             continue
         index = len(arguments) // 2 + 1
         arguments += ["-i", str(asset["path"])]
-        local = params["sourceRange"]["startFrame"] + left - region["startFrame"]
         offset = left - wstart
         p = params["placement"]
         filters.append(
-            f"[{index}:v:0]trim=start_frame={local}:end_frame={local + right - left},"
+            f"[{index}:v:0]{_overlay_trim(operation, left, right - left)},"
             f"settb=expr={timebase},setpts=N+{offset},scale={p['width']}:{p['height']},"
             f"format=rgba[alpha{index}]"
         )
@@ -563,12 +596,11 @@ def _precision_canvas_filter(placement, canvas):
 def _precision_overlay_planes(
     operation, index, fps, wstart, wend, left, right, canvas, *, alpha8=True
 ):
-    params, region = operation["parameters"], operation["outputRange"]
-    local = params["sourceRange"]["startFrame"] + left - region["startFrame"]
+    params = operation["parameters"]
     offset, count = left - wstart, right - left
     placement = params["placement"]
     timebase = f"{fps.denominator}/{fps.numerator}"
-    prefix = f"[{index}:v:0]trim=start_frame={local}:end_frame={local + count},settb=expr={timebase},setpts=N"
+    prefix = f"[{index}:v:0]{_overlay_trim(operation, left, count)},settb=expr={timebase},setpts=N"
     if alpha8:
         prefix = _promote_alpha8(prefix + ",format=gbrap", f"promotion{index}")
     geometry = _precision_canvas_filter(placement, canvas)
@@ -584,6 +616,18 @@ def _precision_overlay_planes(
     ]
 
 
+def _overlay_trim(operation, left, count):
+    if _is_still(operation):
+        return f"loop=loop={count - 1}:size=1:start=0,trim=end_frame={count}"
+    region = operation["outputRange"]
+    local = (
+        operation["parameters"]["sourceRange"]["startFrame"]
+        + left
+        - region["startFrame"]
+    )
+    return f"trim=start_frame={local}:end_frame={local + count}"
+
+
 def _overlay_order(asset):
     operation = asset["operation"]
     params = operation["parameters"]
@@ -594,6 +638,7 @@ def operation_metadata(operation):
     params = operation["parameters"]
     keys = (
         "generatedAssetRef",
+        "generatedStillRef",
         "inputLockRef",
         "sourceRange",
         "placement",

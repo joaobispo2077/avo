@@ -192,6 +192,7 @@ def resolve_tracks(
             _validate_breath_layer(layer)
             _validate_generated_track_layer(layer, group, generated_instances)
             _validate_generated_audio_track(layer)
+            _validate_generated_still_track(layer)
             if not layer_id or layer_id in seen:
                 raise TrackError("track layer IDs must be unique and stable")
             seen.add(layer_id)
@@ -237,6 +238,16 @@ def _validate_generated_audio_track(layer):
             require_generated_audio_layer(layer)
         except (ValueError, OSError) as error:
             raise TrackError(f"Invalid generated audio source: {error}") from error
+
+
+def _validate_generated_still_track(layer):
+    if "generatedStillRef" in layer:
+        from .artcraft_stills import require_generated_still_layer
+
+        try:
+            require_generated_still_layer(layer)
+        except (ValueError, OSError) as error:
+            raise TrackError(f"Invalid generated still source: {error}") from error
 
 
 def inspect_audio_hierarchy(layers: list[dict[str, Any]]) -> list[str]:

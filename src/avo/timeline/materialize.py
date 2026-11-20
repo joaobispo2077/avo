@@ -829,7 +829,8 @@ def _generated_proof_input_lock(workspace, record, proof_lock):
 
 def _require_original_only_plan(plan: dict) -> None:
     if any(
-        key.startswith("generated:") for key in plan.get("canonicalInputLock") or {}
+        key.startswith(("generated:", "generated-still:", "generated-audio:"))
+        for key in plan.get("canonicalInputLock") or {}
     ):
         raise ValueError("generated proof inputs require current canonical Tracks")
 

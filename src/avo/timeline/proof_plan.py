@@ -615,9 +615,15 @@ class ProofPlanCompiler:
             raise ValueError("HyperFrames operation differs from canonical binding")
         _require_hyperframes_geometry(binding, parameters, output)
 
-    def _generated_lock(self, graph: dict[str, Any], output=None) -> dict[str, str]:
+    def _generated_lock(
+        self, graph: dict[str, Any], output=None, *, checkpoint=None
+    ) -> dict[str, str]:
         """Bind generated receipts and original locks without rewriting them."""
-        lock = {}
+        from .artcraft_stills import generated_still_locks
+
+        lock = generated_still_locks(
+            self.workspace, graph, output, checkpoint=checkpoint
+        )
         for operation in graph.get("operations") or []:
             parameters = operation.get("parameters") or {}
             reference = parameters.get("generatedAssetRef")
@@ -655,8 +661,17 @@ class ProofPlanCompiler:
     def _generated_preflight(self, plan, readiness):
         blockers = []
         try:
-            current = self._generated_lock(plan["videoGraph"], plan["output"])
+            current = self._generated_lock(
+                plan["videoGraph"], plan["output"], checkpoint=plan.get("checkpoint")
+            )
             frozen = plan["canonicalInputLock"]
+            if any(
+                key.startswith("generated-still:") and key not in current
+                for key in frozen
+            ):
+                raise ValueError(
+                    "Proof generated still receipt has no current operation"
+                )
             if any(frozen.get(key) != value for key, value in current.items()):
                 raise ValueError(
                     "Generated receipt/input-lock differs from the frozen proof plan"
@@ -732,7 +747,9 @@ class ProofPlanCompiler:
         video_graph, resolution, implementation_refs = self._resolve_video_graph(
             dict(request.get("videoGraph") or {})
         )
-        lock.update(self._generated_lock(video_graph, request["output"]))
+        lock.update(
+            self._generated_lock(video_graph, request["output"], checkpoint=checkpoint)
+        )
         body: dict[str, Any] = {
             **_proof_contract_header(camera_operations),
             "proofPlanId": "proof-plan-pending",

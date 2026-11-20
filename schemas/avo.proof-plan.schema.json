@@ -167,6 +167,24 @@
         }
       }
     },
+    "generatedStillParameters": {
+      "type": "object", "additionalProperties": false,
+      "required": ["generatedStillRef", "sourceFingerprint", "layerId", "placement", "zOrder", "layerRole"],
+      "properties": {
+        "generatedStillRef": { "$ref": "https://avo.local/schemas/avo.artcraft.schema.json#/$defs/exportRef" },
+        "sourceFingerprint": { "$ref": "https://avo.local/schemas/avo.artcraft.schema.json#/$defs/fingerprint" },
+        "layerId": { "$ref": "#/$defs/stableId" },
+        "placement": {
+          "type": "object", "additionalProperties": false, "required": ["x", "y", "width", "height"],
+          "properties": {
+            "x": { "type": "integer", "minimum": 0 }, "y": { "type": "integer", "minimum": 0 },
+            "width": { "type": "integer", "minimum": 1 }, "height": { "type": "integer", "minimum": 1 }
+          }
+        },
+        "zOrder": { "type": "integer" },
+        "layerRole": { "const": "overlay" }
+      }
+    },
     "generatedClipParameters": {
       "type": "object",
       "additionalProperties": false,
