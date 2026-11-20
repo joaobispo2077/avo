@@ -50,8 +50,13 @@ __all__ = [
 ]
 
 _SEALED = frozenset({"decision", "job", "event", "package", "receipt"})
-_NATIVE_SUFFIXES = {"anicraft": ".anicraft", "soundcraft": ".scraft"}
+_NATIVE_SUFFIXES = {
+    "anicraft": ".anicraft",
+    "soundcraft": ".scraft",
+    "vectorcraft": ".vectorcraft",
+}
 _SOUND_CUE_SCOPE = {"app": "soundcraft", "operations": ["isolated-cue"]}
+_STILL_CARD_SCOPE = {"app": "vectorcraft", "operations": ["vector-still"]}
 _OPERATIONAL_FAILURES = frozenset(
     {"not-installed", "invalid-input", "permission-denied", "transient-error", "defect"}
 )
@@ -357,6 +362,10 @@ def _check_job_identity(job):
         raise ContractError("ArtCraft output role does not match the request")
     if scope == _SOUND_CUE_SCOPE:
         _check_sound_job(job)
+    if scope == _STILL_CARD_SCOPE:
+        _require_still_contract(
+            request, job, job["documentState"], job["observation"]["mode"]
+        )
 
 
 def _check_sound_job(job):
@@ -580,6 +589,8 @@ def prepare_authoring(
     validate_document(spec, _schema("jobSpec"))
     store, base, project_facts = _preparation_workspace(request, spec)
     scope = selected["scope"]
+    if scope == _STILL_CARD_SCOPE:
+        _require_still_contract(request, spec, spec["document"]["state"], spec["mode"])
     document = _owned_document(store, base, spec["jobId"], scope["app"])
     roots = _preparation_roots(spec, document.parent)
     source = _preparation_source(spec, roots, document)
@@ -871,6 +882,32 @@ def _require_sound_contract(request, output, document_state, mode):
         )
 
 
+def _require_still_contract(request, selected, document_state, mode):
+    if request["required"]["behavior"] != "editable-vector-card":
+        raise ArtCraftError(
+            "VectorCraft card requires the explicit editable-vector-card behavior"
+        )
+    output = selected["output"]
+    shape = {key: output.get(key) for key in ("role", "format", "alpha", "color")}
+    if shape != {
+        "role": "generated-still",
+        "format": "png",
+        "alpha": "straight",
+        "color": "srgb",
+    }:
+        raise ArtCraftError("VectorCraft card requires a straight-alpha sRGB PNG still")
+    if not 240 <= output["width"] <= 1920 or not 160 <= output["height"] <= 1920:
+        raise ArtCraftError("VectorCraft card is outside its supported canvas range")
+    if (
+        document_state != "empty"
+        or mode != "cli"
+        or "authoringParameters" not in selected
+    ):
+        raise ArtCraftError(
+            "Select a blank VectorCraft CLI job and explicit card text and font"
+        )
+
+
 def _require_preparation_capacity(workspace, budget, source):
     if budget["bytes"] > disk_free(workspace):
         raise ArtCraftError(
@@ -1023,6 +1060,8 @@ def _recoverable_job_files(job, directory):
     names = ("component.anicraft", "recipe.json", "handoff.json")
     if job["decision"]["scope"] == _SOUND_CUE_SCOPE:
         names = ("component.scraft", "recipe.json", "cue.wav", "Audio Files/source.wav")
+    if job["decision"]["scope"] == _STILL_CARD_SCOPE:
+        names = ("component.vectorcraft", "recipe.json", "card.png")
     candidates = [directory / name for name in names]
     candidates.extend(
         directory / "alpha" / f"frame_{index:05d}.png" for index in range(1, count + 1)
@@ -1218,17 +1257,21 @@ def run_authoring(job_ref, *, expected_head, adapter):
             produce = _copy_reusable_export
         else:
             adapter.validate_run(job)
-            produce = (
-                adapter.author_isolated_cue
-                if job["decision"]["scope"] == _SOUND_CUE_SCOPE
-                else adapter.author_lower_third
-            )
+            produce = _select_job_author(adapter, job["decision"]["scope"])
         running = store.append(
             job["jobId"],
             expected_head=expected_head,
             event={"operationId": "run", "state": "running"},
         )
     return _execute_prepared_job(store, job, running, directory, produce)
+
+
+def _select_job_author(adapter, scope):
+    if scope == _SOUND_CUE_SCOPE:
+        return adapter.author_isolated_cue
+    if scope == _STILL_CARD_SCOPE:
+        return adapter.author_vector_card
+    return adapter.author_lower_third
 
 
 def _copy_reusable_export(job, directory):
@@ -1325,7 +1368,7 @@ def _require_prepared_authoring(store, job, head):
             code="ARTCRAFT_OUTCOME_UNKNOWN",
         )
     scope = job["decision"]["scope"]
-    if scope != _SOUND_CUE_SCOPE and (
+    if scope not in (_SOUND_CUE_SCOPE, _STILL_CARD_SCOPE) and (
         scope != {"app": "anicraft", "operations": ["lower-third"]}
         or not job.get("authoringParameters")
     ):
@@ -1382,6 +1425,12 @@ def _execute_prepared_job(store, job, running, directory, produce):
 def _verify_authoring_result(job, directory, result):
     if job["decision"]["scope"] == _SOUND_CUE_SCOPE:
         return _verify_sound_authoring_result(job, directory, result)
+    if job["decision"]["scope"] == _STILL_CARD_SCOPE:
+        return _verify_still_authoring_result(job, directory, result)
+    return _verify_sequence_authoring_result(job, directory, result)
+
+
+def _verify_sequence_authoring_result(job, directory, result):
     roots = job["roots"]["write"]
     native = result["nativeSource"]
     recipe = result["recipe"]
@@ -1452,17 +1501,52 @@ def _verify_sound_authoring_result(job, directory, result):
     }
 
 
+def _verify_still_authoring_result(job, directory, result):
+    evidence = result["stillEvidence"]
+    validate_document(evidence, _schema("stillEvidence"))
+    expected = {
+        key: job["output"][key]
+        for key in ("width", "height", "format", "color", "alpha")
+    }
+    if any(evidence[key] != value for key, value in expected.items()):
+        raise ArtCraftError(
+            "VectorCraft still evidence differs from the selected canvas"
+        )
+    target_paths = {
+        "nativeSource": directory / "component.vectorcraft",
+        "recipe": directory / "recipe.json",
+        "media": directory / "card.png",
+    }
+    for key, path in target_paths.items():
+        item = result[key]
+        if item["locator"] != str(path) or not _retained_job_file(
+            item, job["roots"]["write"]
+        ):
+            raise ArtCraftError(
+                "VectorCraft still must use the exact retained output files"
+            )
+    return {
+        "saved": result["nativeSource"],
+        "recipe": result["recipe"],
+        "outputs": [result["media"]],
+        "stillEvidence": evidence,
+    }
+
+
 def _verify_retained_export(store, job, event):
     directory = _authoring_export_directory(store, job)
     try:
-        sound_evidence = {}
+        media_evidence = {}
         if job["decision"]["scope"] == _SOUND_CUE_SCOPE:
             (media,) = event["outputs"]
-            sound_evidence = {
+            media_evidence = {
                 "media": media,
                 "dependencies": event["dependencies"],
                 "audioEvidence": event["audioEvidence"],
             }
+        if job["decision"]["scope"] == _STILL_CARD_SCOPE:
+            (media,) = event["outputs"]
+            media_evidence = {"media": media, "stillEvidence": event["stillEvidence"]}
         _verify_authoring_result(
             job,
             directory,
@@ -1471,7 +1555,7 @@ def _verify_retained_export(store, job, event):
                 "recipe": event["recipe"],
                 "frames": event["outputs"],
                 "revisionCommandSchemaHash": event.get("revisionCommandSchemaHash"),
-                **sound_evidence,
+                **media_evidence,
             },
         )
     except (KeyError, ValueError) as exc:
@@ -1501,6 +1585,25 @@ def read_authoring_export(job_ref, *, expected_head):
 def describe_export_review(job_ref, *, expected_head):
     """Describe the exact standalone candidate for an independent creator review."""
     job, event = read_authoring_export(job_ref, expected_head=expected_head)
+    if job["decision"]["scope"] == _STILL_CARD_SCOPE:
+        reference = {
+            "job": file_fingerprint(Path(job_ref)),
+            "exportHead": expected_head,
+        }
+        return {
+            "reviewState": "pending-creator",
+            "jobHash": job["jobHash"],
+            "exportHead": event["eventHash"],
+            "componentId": job["request"]["componentId"],
+            "viewerPurpose": job["request"]["purpose"],
+            "nativeSource": event["saved"],
+            "outputContract": job["output"],
+            "standalone": {
+                "still": event["outputs"][0],
+                "stillEvidence": event["stillEvidence"],
+                "generatedStillRef": reference,
+            },
+        }
     if job["decision"]["scope"] == _SOUND_CUE_SCOPE:
         reference = {
             "job": file_fingerprint(Path(job_ref)),

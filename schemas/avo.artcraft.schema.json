@@ -252,10 +252,25 @@
       }
     },
     "generatedAudioRef": {
+      "$ref": "#/$defs/exportRef"
+    },
+    "exportRef": {
       "type": "object", "additionalProperties": false, "required": ["job", "exportHead"],
       "properties": {
         "job": { "$ref": "#/$defs/fingerprint" },
         "exportHead": { "$ref": "#/$defs/hash" }
+      }
+    },
+    "stillEvidence": {
+      "type": "object", "additionalProperties": false,
+      "required": ["format", "color", "alpha", "width", "height", "rgbaSha256"],
+      "properties": {
+        "format": { "const": "png" },
+        "color": { "const": "srgb" },
+        "alpha": { "const": "straight" },
+        "width": { "type": "integer", "minimum": 240, "maximum": 1920 },
+        "height": { "type": "integer", "minimum": 160, "maximum": 1920 },
+        "rgbaSha256": { "$ref": "#/$defs/hash" }
       }
     },
     "jobSpec": {
@@ -326,6 +341,7 @@
         "outputs": { "type": "array", "maxItems": 16384, "items": { "$ref": "#/$defs/fingerprint" } },
         "dependencies": { "type": "array", "maxItems": 16, "items": { "$ref": "#/$defs/fingerprint" } },
         "audioEvidence": { "$ref": "#/$defs/audioEvidence" },
+        "stillEvidence": { "$ref": "#/$defs/stillEvidence" },
         "createdBytes": { "$ref": "#/$defs/count" },
         "detail": { "$ref": "#/$defs/text" },
         "eventHash": { "$ref": "#/$defs/hash" }

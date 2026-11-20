@@ -9,13 +9,18 @@ import subprocess
 import sys
 from pathlib import Path
 
-from avo.artcraft import _SOUND_CUE_SCOPE, ArtCraftError
+from avo.artcraft import _SOUND_CUE_SCOPE, _STILL_CARD_SCOPE, ArtCraftError
 from avo.timeline.contracts import content_hash, file_fingerprint
 
 _VERSION = re.compile(
-    r"(?:(?:ani|sound)craft(?:-cli)?\s+)?v?(\d+\.\d+\.\d+(?:[-+][a-z0-9.-]+)?)(?: \((?:early alpha|windows x86_64)\))?",
+    r"(?:(?:ani|sound|vector)craft(?:-cli)?\s+)?v?(\d+\.\d+\.\d+(?:[-+][a-z0-9.-]+)?)(?: \((?:early alpha|windows x86_64)\))?",
     re.IGNORECASE,
 )
+_PRODUCTS = {
+    "anicraft": "AniCraft",
+    "soundcraft": "SoundCraft",
+    "vectorcraft": "VectorCraft",
+}
 
 
 def _not_ready(message, remediation):
@@ -23,7 +28,7 @@ def _not_ready(message, remediation):
 
 
 def _installation_help(app="anicraft"):
-    product = "SoundCraft" if app == "soundcraft" else "AniCraft"
+    product = _PRODUCTS[app]
     return f"Install the selected {product} app and matching CLI separately from https://getartcraft.com/apps/{app} or pass their installed absolute paths."
 
 
@@ -41,11 +46,11 @@ def _path_candidates(name):
 
 
 def _binary_app(name):
-    return "soundcraft" if name.startswith("soundcraft") else "anicraft"
+    return name.casefold().removesuffix(".exe").removesuffix("-cli")
 
 
 def _documented_installations(app):
-    product = "SoundCraft" if app == "soundcraft" else "AniCraft"
+    product = _PRODUCTS[app]
     if os.name == "nt":
         for variable, relative in (
             ("LOCALAPPDATA", f"Programs/ArtCraft/{product}"),
@@ -114,11 +119,14 @@ def _release(executable):
 
 
 def _runtime_environment(app="anicraft"):
-    return {
+    environment = {
         key: value
         for key, value in os.environ.items()
         if not key.upper().startswith(app.upper() + "_")
     }
+    if app == "vectorcraft":
+        environment["VECTORCRAFT_NO_PREFS"] = "1"
+    return environment
 
 
 def _command_schema_hash(executable):
@@ -251,8 +259,8 @@ class SelectedArtCraftAdapter:
         return observed
 
     def observe(self, *, scope, mode, roots, cli_path, app_path):
-        if scope == _SOUND_CUE_SCOPE:
-            return self._observe_soundcraft(mode, roots, cli_path, app_path)
+        if scope in (_SOUND_CUE_SCOPE, _STILL_CARD_SCOPE):
+            return self._observe_specialist(scope, mode, roots, cli_path, app_path)
         if (
             scope["app"] != "anicraft"
             or scope["operations"] != ["lower-third"]
@@ -317,28 +325,28 @@ class SelectedArtCraftAdapter:
             )
         _require_headless_transport(installed["executable"], "json-lines")
 
-    def _observe_soundcraft(self, mode, roots, cli_path, app_path):
-        from .artcraft_soundcraft import observe_soundcraft_profile
-
+    def _observe_specialist(self, scope, mode, roots, cli_path, app_path):
+        product = scope["app"]
+        label, release, observer = _specialist_profile(product)
         if mode != "cli" or not all((self._observe_confinement, self._run_confined)):
             raise _not_ready(
-                "SoundCraft cue requires a confined CLI runner",
+                f"{label} requires a confined CLI runner",
                 "Select a runtime that independently enforces the job's effective roots.",
             )
-        installed = _installed_tools("soundcraft", cli_path, app_path)
-        if (installed["release"], installed["platform"]) != ("0.20.1", "windows"):
+        installed = _installed_tools(product, cli_path, app_path)
+        if (installed["release"], installed["platform"]) != (release, "windows"):
             raise _not_ready(
-                "SoundCraft cue requires the qualified Windows 0.20.1 profile",
-                _installation_help("soundcraft"),
+                f"{label} requires the qualified Windows {release} profile",
+                _installation_help(product),
             )
         effective = self._observe_confinement(installed, roots)
         return {
-            **_SOUND_CUE_SCOPE,
+            **scope,
             **installed,
             "mode": mode,
             "effectiveRoots": effective,
-            "commandSchemaHash": observe_soundcraft_profile(
-                installed["executable"], _runtime_environment("soundcraft")
+            "commandSchemaHash": observer(
+                installed["executable"], _runtime_environment(product)
             ),
         }
 
@@ -356,11 +364,11 @@ class SelectedArtCraftAdapter:
             cli_path=previous["executable"]["locator"],
             app_path=previous["application"]["locator"],
         )
-        if previous["app"] == "soundcraft":
+        if previous["app"] != "anicraft":
             if current != previous:
                 raise _not_ready(
-                    "SoundCraft requires the exact current tool files and cue scope",
-                    _installation_help("soundcraft"),
+                    "Selected ArtCraft profile requires its exact current tool files and scope",
+                    _installation_help(previous["app"]),
                 )
             return
         if (
@@ -430,6 +438,20 @@ class SelectedArtCraftAdapter:
         return run_isolated_cue(
             job["output"],
             job["inputs"][0],
+            directory=directory,
+            budget=job["budget"],
+            invoke=invoke,
+        )
+
+    def author_vector_card(self, job, directory):
+        from .artcraft_vectorcraft import author_vector_card
+
+        def invoke(workdir, *arguments, timeout):
+            return self._invoke_confined(job, workdir, arguments, timeout)
+
+        return author_vector_card(
+            job["output"],
+            job["authoringParameters"],
             directory=directory,
             budget=job["budget"],
             invoke=invoke,
@@ -507,6 +529,16 @@ class SelectedArtCraftAdapter:
             job["authoringParameters"],
             max_bytes=job["budget"]["bytes"],
         )
+
+
+def _specialist_profile(product):
+    if product == "soundcraft":
+        from .artcraft_soundcraft import observe_soundcraft_profile
+
+        return "SoundCraft cue", "0.20.1", observe_soundcraft_profile
+    from .artcraft_vectorcraft import observe_vectorcraft
+
+    return "VectorCraft card", "0.24.1", observe_vectorcraft
 
 
 def _require_guided_installation(previous):
