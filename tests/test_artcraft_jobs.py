@@ -514,3 +514,340 @@ def test_guided_job_returns_replayable_native_steps_without_starting_authoring(
         == handoff
     )
     assert adapter.executions == [("plan", "speaker-label-preview")]
+
+
+def _overlay_snapshots(*, width=1920, height=1080, start_frame=18, frame_count=72):
+    clock = {"num": 1, "den": 24}
+    start = {"ticks": start_frame, "timebase": clock, "domain": "cmap-output"}
+    end_frame = start_frame + frame_count
+    return {
+        "animation": {"components": [{"componentId": "speaker-label"}]},
+        "cmap": {
+            "segments": [],
+            "renderOutput": {
+                "width": width,
+                "height": height,
+                "frameRate": {"num": 24, "den": 1},
+            },
+        },
+        "bmap": {
+            "cues": [
+                {
+                    "cueId": "speaker-cue",
+                    "targetLayerId": "speaker-overlay",
+                    "componentRef": "speaker-label",
+                    "intent": "Identify the speaker",
+                    "reason": "Introduce the speaker",
+                    "start": start,
+                    "end": {**start, "ticks": end_frame},
+                }
+            ]
+        },
+        "tracks": {
+            "videoTracks": {
+                "layers": [
+                    {
+                        "layerId": "speaker-overlay",
+                        "role": "overlay",
+                        "order": 2,
+                        "zOrder": 2,
+                        "animationRef": "speaker-label",
+                        "generator": {
+                            "adapterId": "artcraft.anicraft",
+                            "componentId": "speaker-label",
+                        },
+                        "placement": {"x": 0, "y": 0, "width": width, "height": height},
+                        "regions": [
+                            {
+                                "startTicks": start_frame,
+                                "endTicks": end_frame,
+                                "timebase": clock,
+                                "cueIds": ["speaker-cue"],
+                            }
+                        ],
+                    }
+                ]
+            }
+        },
+    }
+
+
+def test_video_export_binding_freezes_exact_source_parameters_and_current_inputs(
+    authoring, monkeypatch
+):
+    from avo.timeline.artcraft_binding import (
+        build_artcraft_asset_record,
+        freeze_export_binding,
+        verify_artcraft_asset_record,
+    )
+    from avo.timeline.store import write_immutable_json
+    from avo.timeline.workspace import TimelineWorkspace
+
+    api, directory, _ = authoring
+    project = directory / "avo.project.json"
+    project.write_text(
+        json.dumps(
+            {
+                "provider": "neutral-channel",
+                "videoId": "source-episode",
+                "rawDir": str(directory),
+            }
+        ),
+        encoding="utf-8",
+    )
+    active_heads = dict(
+        zip(
+            ("cmap", "tracks", "bmap", "animation", "sync-map"),
+            (letter * 64 for letter in "abcde"),
+            strict=True,
+        )
+    )
+    monkeypatch.setattr(
+        TimelineWorkspace,
+        "active_dependency_snapshot",
+        lambda _self: dict(active_heads),
+    )
+    from avo import motion
+
+    snapshots = _overlay_snapshots()
+    monkeypatch.setattr(
+        motion, "_canonical_drawing_heads", lambda _workspace: (snapshots, active_heads)
+    )
+    cli = directory / "anicraft-cli.exe"
+    app = directory / "anicraft.exe"
+    cli.write_bytes(b"selected cli build")
+    app.write_bytes(b"selected app build")
+
+    class Exporter(AuthoringApp):
+        def observe(self, **arguments):
+            identity = super().observe(**arguments)
+            return {
+                **identity,
+                "executable": file_fingerprint(cli),
+                "application": file_fingerprint(app),
+                "commandSchemaHash": "c" * 64,
+            }
+
+    adapter = Exporter(directory)
+    brief = request(
+        context={"kind": "video", "project": str(project), "videoId": "source-episode"}
+    )
+    prepared = _prepare(
+        api,
+        brief,
+        job_spec(
+            directory, authoringParameters={"primaryText": "Speaker", "font": "Arial"}
+        ),
+        adapter,
+    )
+    rendered = api.run_authoring(
+        prepared["jobRef"], expected_head=prepared["head"], adapter=adapter
+    )
+    workspace = TimelineWorkspace.from_project(project)
+    locked = freeze_export_binding(
+        workspace, job_ref=prepared["jobRef"], expected_head=rendered["head"]
+    )
+    assert locked["canonical"]["heads"] == active_heads
+    assert locked["canonical"]["videoId"] == "source-episode"
+    native = directory / prepared["job"]["document"]
+    assert locked["nativeSource"] == file_fingerprint(native)
+    assert len(locked["frames"]) == prepared["job"]["output"]["frameCount"]
+    assert len(locked["bindingHash"]) == 64
+    assert (
+        freeze_export_binding(
+            workspace, job_ref=prepared["jobRef"], expected_head=rendered["head"]
+        )
+        == locked
+    )
+
+    derived = directory / "edit" / "derived"
+    derived.mkdir()
+    alpha_clip = derived / "artcraft-title.mkv"
+    alpha_clip.write_bytes(b"synthetic packed alpha observations fixture")
+    input_lock = derived / "artcraft-title.source.json"
+    write_immutable_json(input_lock, locked)
+    observations = {
+        "fingerprint": file_fingerprint(alpha_clip),
+        "frameRate": locked["outputContract"]["frameRate"],
+        "rgbaFrameHashes": ["a" * 64] * len(locked["frames"]),
+    }
+    record = build_artcraft_asset_record(
+        locked, file_fingerprint(input_lock), observations, asset_id="artcraft-title"
+    )
+    assert verify_artcraft_asset_record(workspace, record, observations) == record
+    assert (
+        record["parameters"]["artcraft"]["nativeRevisionHash"]
+        == locked["nativeRevisionHash"]
+    )
+    from avo.timeline.generated_assets import GeneratedAssetError, GeneratedAssetService
+
+    service = GeneratedAssetService(workspace)
+    known_outputs = []
+    monkeypatch.setattr(
+        GeneratedAssetService,
+        "_context",
+        lambda _self: {
+            "generated_assets": {},
+            "registered_originals": [],
+            "known_outputs": known_outputs,
+        },
+    )
+    registered = service.register(record, artcraft_observations=observations)
+    assert (
+        service.admit(registered["assetId"], artcraft_observations=observations)
+        == registered
+    )
+    with pytest.raises(GeneratedAssetError, match="independent native observations"):
+        service.admit(registered["assetId"])
+    known_outputs.append({**record["inputs"][0]["fingerprint"], "mediaClass": "proof"})
+    with pytest.raises(GeneratedAssetError, match="PROOF_FORBIDDEN_ANCESTOR"):
+        service.admit(registered["assetId"], artcraft_observations=observations)
+    known_outputs.clear()
+
+    from avo.adapters import artcraft_anicraft
+    from avo.adapters.media import artcraft_alpha
+    from avo.mcp.bridge import run_cli
+    from avo.proof_composition import create_generated_asset_validator
+
+    monkeypatch.setattr(
+        artcraft_anicraft,
+        "inspect_lower_third_source",
+        lambda path, *_args, **_kwargs: {"fingerprint": file_fingerprint(path)},
+    )
+    for name in ("observe_alpha_sequence", "pack_alpha_sequence"):
+        monkeypatch.setattr(
+            artcraft_alpha, name, lambda *_args, **_kwargs: observations
+        )
+    cli_registration = run_cli(
+        [
+            "artcraft",
+            "register",
+            "--project",
+            str(project),
+            "--job",
+            prepared["jobRef"],
+            "--expected-head",
+            rendered["head"],
+            "--asset-id",
+            registered["assetId"],
+            "--output",
+            str(alpha_clip),
+            "--json",
+        ]
+    )
+    assert cli_registration.ok, cli_registration.stderr
+    assert cli_registration.parsed_json == registered
+    validate = create_generated_asset_validator(workspace)
+    reference = {
+        "assetId": registered["assetId"],
+        "recordHash": registered["recordHash"],
+        "locator": str(service.path(registered["assetId"])),
+    }
+    lock_ref = {
+        "path": str(input_lock),
+        "sha256": file_fingerprint(input_lock)["sha256"],
+    }
+    assert validate(reference, lock_ref, active_heads) == registered
+    with pytest.raises(ValueError, match="canonical inputs"):
+        validate(reference, lock_ref, {**active_heads, "tracks": "f" * 64})
+    with pytest.raises(ValueError, match="input-lock reference"):
+        validate(reference, {**lock_ref, "sha256": "f" * 64}, active_heads)
+    _assert_artcraft_proof_binding(
+        workspace, registered, reference, lock_ref, active_heads
+    )
+
+    receipt = record["parameters"]["artcraft"]
+    receipt["parameterHash"] = "f" * 64
+    receipt["receiptHash"] = api.seal_record(
+        "receipt", {k: v for k, v in receipt.items() if k != "receiptHash"}
+    )["receiptHash"]
+    with pytest.raises(ArtCraftError, match="frozen source and output evidence"):
+        verify_artcraft_asset_record(workspace, record, observations)
+
+    cli.write_bytes(b"changed cli build")
+    with pytest.raises(ArtCraftError, match="installation"):
+        freeze_export_binding(
+            workspace, job_ref=prepared["jobRef"], expected_head=rendered["head"]
+        )
+    cli.write_bytes(b"selected cli build")
+    active_heads["cmap"] = "d" * 64
+    with pytest.raises(ArtCraftError, match="stale"):
+        freeze_export_binding(
+            workspace, job_ref=prepared["jobRef"], expected_head=rendered["head"]
+        )
+
+
+def _assert_artcraft_proof_binding(workspace, registered, reference, lock_ref, heads):
+    from avo.adapters.media import proof_generated
+    from avo.proof_composition import create_generated_asset_validator
+    from avo.timeline.proof_plan import ProofPlanCompiler
+
+    compiler = ProofPlanCompiler(workspace)
+    output = {"width": 640, "height": 360, "frameRate": {"num": 24, "den": 1}}
+    operation = {
+        "kind": "overlay-video",
+        "outputRange": {"startFrame": 18, "endFrameExclusive": 90},
+        "parameters": {
+            "generatedAssetRef": reference,
+            "inputLockRef": lock_ref,
+            "sourceFingerprint": registered["output"],
+            "sourceRange": {"startFrame": 0, "endFrameExclusive": 72},
+            "alphaMode": "straight",
+            "layerRole": "overlay",
+            "zOrder": 2,
+            "placement": {"x": 0, "y": 0, "width": 640, "height": 360},
+        },
+    }
+    locks = compiler._generated_lock({"operations": [operation]}, output)
+    assert locks["generated:artcraft-title"] == registered["recordHash"]
+    receipt = registered["parameters"]["artcraft"]
+    assert locks["input-lock:artcraft-title"] == receipt["bindingHash"]
+    from avo.timeline.materialize import _generated_proof_inputs
+
+    inputs = _generated_proof_inputs(workspace, locks)
+    assert inputs["generated:artcraft-title"]["inputLockRef"] == lock_ref
+    validator = create_generated_asset_validator(workspace)
+    assert (
+        proof_generated.verify(
+            operation, {**heads, **locks}, validator, lambda _: None
+        )["record"]
+        == registered
+    )
+    with pytest.raises(RuntimeError, match="requires current admission observations"):
+        proof_generated.verify(operation, {**heads, **locks}, None, lambda _: None)
+    moved = {**operation, "outputRange": {"startFrame": 17, "endFrameExclusive": 89}}
+    with pytest.raises(ValueError, match="canonical overlay and phases"):
+        compiler._generated_lock({"operations": [moved]}, output)
+    with pytest.raises(ValueError, match="canonical overlay and phases"):
+        proof_generated.verify(moved, {**heads, **locks}, validator, lambda _: None)
+    with pytest.raises(ValueError, match="full canvas geometry"):
+        compiler._generated_lock({"operations": [operation]}, {**output, "width": 600})
+
+
+def test_selected_registry_cache_requires_exact_installation_scope_and_mode(
+    monkeypatch,
+):
+    from avo.adapters import artcraft as adapter
+
+    installed = {
+        "executable": {"sha256": "a" * 64},
+        "application": {"sha256": "b" * 64},
+        "release": "0.2.1",
+        "platform": "windows",
+    }
+    calls = []
+
+    def read_registry(executable):
+        calls.append(executable)
+        return str(len(calls))
+
+    monkeypatch.setattr(adapter, "_command_schema_hash", read_registry)
+    selected = adapter.SelectedArtCraftAdapter()
+    scope = {"app": "anicraft", "operations": ["lower-third"]}
+    assert selected._selected_registry(installed, scope, "guided") == "1"
+    assert selected._selected_registry(installed, scope, "guided") == "1"
+    assert selected._selected_registry(installed, scope, "cli") == "2"
+    changed = {**installed, "application": {"sha256": "c" * 64}}
+    assert selected._selected_registry(changed, scope, "cli") == "3"
+    alternate_scope = {**scope, "operations": ["other-operation"]}
+    assert selected._selected_registry(changed, alternate_scope, "cli") == "4"
