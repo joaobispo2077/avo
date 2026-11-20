@@ -155,16 +155,22 @@
         "operations": { "type": "array", "minItems": 1, "maxItems": 16, "uniqueItems": true, "items": { "$ref": "#/$defs/id" } },
         "commandSchemaHash": { "$ref": "#/$defs/hash" },
         "authority": { "const": "operator" },
+        "hostTransport": { "const": "stdio" },
         "effectiveRoots": { "$ref": "#/$defs/roots" },
         "reuseSource": {
           "type": "object", "additionalProperties": false, "required": ["jobRef", "exportHead"],
           "properties": { "jobRef": { "$ref": "#/$defs/fingerprint" }, "exportHead": { "$ref": "#/$defs/hash" } }
         }
       },
-      "if": { "properties": { "mode": { "const": "guided" } } },
+      "if": { "properties": { "mode": { "enum": ["guided", "host-mcp"] } } },
       "then": { "required": ["authority"], "not": { "required": ["effectiveRoots"] } },
       "else": { "not": { "required": ["authority"] } },
       "allOf": [
+        {
+          "if": { "properties": { "mode": { "const": "host-mcp" } } },
+          "then": { "required": ["hostTransport", "commandSchemaHash", "application", "executable"] },
+          "else": { "not": { "required": ["hostTransport"] } }
+        },
         {
           "if": { "properties": { "mode": { "const": "reuse" } } },
           "then": {

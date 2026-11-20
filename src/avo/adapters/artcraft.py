@@ -152,6 +152,40 @@ def _command_schema_hash(executable):
     return content_hash(observe_command_schema(records))
 
 
+def _require_headless_mcp(executable):
+    path = Path(executable["locator"])
+    try:
+        process = subprocess.run(
+            [str(path), "--help"],
+            cwd=path.parent,
+            env=_runtime_environment(),
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            timeout=7,
+            check=True,
+            shell=False,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise _not_ready(
+            "Could not inspect the selected AniCraft MCP transport",
+            _installation_help(),
+        ) from exc
+    if len(process.stdout) > 65536 or not any(
+        line.strip().startswith(b"anicraft-cli mcp [file|--sample]")
+        and b"stdin/stdout" in line
+        for line in process.stdout.splitlines()
+    ):
+        raise _not_ready(
+            "Selected AniCraft CLI does not advertise the headless stdio MCP profile",
+            _installation_help(),
+        )
+    if file_fingerprint(path) != executable:
+        raise _not_ready(
+            "AniCraft CLI changed during MCP inspection", _installation_help()
+        )
+
+
 def _installed_anicraft(cli_path, app_path):
     cli = _installed_binary("anicraft-cli", cli_path)
     app = _installed_binary("anicraft", app_path, adjacent=cli.parent)
@@ -203,22 +237,15 @@ class SelectedArtCraftAdapter:
         if (
             scope["app"] != "anicraft"
             or scope["operations"] != ["lower-third"]
-            or mode not in {"cli", "guided"}
+            or mode not in {"cli", "guided", "host-mcp"}
         ):
             raise _not_ready(
                 "The selected ArtCraft operation or mode has no qualified profile",
                 "Use the catalog for documented operations and mode limits.",
             )
         installed = _installed_anicraft(cli_path, app_path)
-        if mode == "guided":
-            return {
-                "app": scope["app"],
-                "operations": scope["operations"],
-                "mode": mode,
-                "authority": "operator",
-                "commandSchemaHash": self._selected_registry(installed, scope, mode),
-                **installed,
-            }
+        if mode in {"guided", "host-mcp"}:
+            return self._operator_observation(installed, scope, mode)
         if self._observe_confinement is None:
             raise _not_ready(
                 "AniCraft CLI file confinement is unverified in this environment",
@@ -232,6 +259,26 @@ class SelectedArtCraftAdapter:
             "effectiveRoots": effective,
             "commandSchemaHash": self._selected_registry(installed, scope, mode),
             **installed,
+        }
+
+    def _operator_observation(self, installed, scope, mode):
+        transport = {}
+        if mode == "host-mcp":
+            if installed["release"] != "0.2.1" or installed["platform"] != "windows":
+                raise _not_ready(
+                    "AniCraft host MCP requires the qualified Windows 0.2.1 profile",
+                    _installation_help(),
+                )
+            _require_headless_mcp(installed["executable"])
+            transport["hostTransport"] = "stdio"
+        return {
+            "app": scope["app"],
+            "operations": scope["operations"],
+            "mode": mode,
+            "authority": "operator",
+            "commandSchemaHash": self._selected_registry(installed, scope, mode),
+            **installed,
+            **transport,
         }
 
     def validate_run(self, job):
@@ -304,21 +351,40 @@ class SelectedArtCraftAdapter:
         cli = previous["executable"]["locator"]
         rate = output["frameRate"]
         fps = rate["numerator"] // rate["denominator"]
+        initialize = [
+            cli,
+            "new",
+            "--out",
+            str(empty),
+            "--width",
+            str(output["width"]),
+            "--height",
+            str(output["height"]),
+            "--fps",
+            str(fps),
+        ]
+        if previous["mode"] == "host-mcp":
+            return {
+                "steps": [
+                    {"command": step["cmd"], "params": step["params"]} for step in steps
+                ],
+                "commands": [initialize],
+                "host": {
+                    "transport": previous["hostTransport"],
+                    "argv": [cli, "mcp", str(empty)],
+                    "cwd": str(directory),
+                    "unsetEnvironmentPrefixes": ["ANICRAFT_"],
+                    "enforceOperatorRoots": True,
+                    "scriptTool": "anicraft_run_script",
+                    "allowedCommandIds": list(
+                        dict.fromkeys(step["cmd"] for step in steps)
+                    ),
+                },
+            }
         return {
             "steps": steps,
             "commands": [
-                [
-                    cli,
-                    "new",
-                    "--out",
-                    str(empty),
-                    "--width",
-                    str(output["width"]),
-                    "--height",
-                    str(output["height"]),
-                    "--fps",
-                    str(fps),
-                ],
+                initialize,
                 [cli, "run", str(empty), str(recipe)],
                 [cli, "info", str(document)],
             ],

@@ -821,7 +821,7 @@ def _require_preparation_observation(observation, spec, roots):
     validate_document(observation, _schema("observation"))
     if spec["mode"] == "reuse":
         authority = bool(observation.get("reuseSource"))
-    elif spec["mode"] == "guided":
+    elif spec["mode"] in {"guided", "host-mcp"}:
         authority = observation.get("authority") == "operator"
     else:
         authority = observation.get("effectiveRoots") == roots
@@ -1143,8 +1143,8 @@ def run_authoring(job_ref, *, expected_head, adapter):
         if head["state"] == "exported":
             _verify_retained_export(store, job, head)
             return inspection
-        if job["observation"]["mode"] == "guided":
-            return _run_guided(store, job, head, inspection, adapter)
+        if job["observation"]["mode"] in {"guided", "host-mcp"}:
+            return _run_operator_handoff(store, job, head, inspection, adapter)
         directory = _require_prepared_lower_third(store, job, head)
         if job["observation"]["mode"] == "reuse":
             produce = _copy_reusable_export
@@ -1202,7 +1202,7 @@ def _copy_reusable_export(job, directory):
     }
 
 
-def _run_guided(store, job, head, inspection, adapter):
+def _run_operator_handoff(store, job, head, inspection, adapter):
     if job["documentState"] == "saved":
         raise ArtCraftError(
             "Selected saved-source revisions require a qualified confined CLI runner",
@@ -1213,20 +1213,25 @@ def _run_guided(store, job, head, inspection, adapter):
     directory = _require_prepared_lower_third(store, job, head)
     plan = adapter.plan_lower_third(job, directory)
     directory.mkdir(parents=True, exist_ok=True)
-    recipe = _bounded_path(directory, directory / "recipe.json", "guided recipe")
+    recipe = _bounded_path(directory, directory / "recipe.json", "operator recipe")
     write_immutable_json(recipe, plan["steps"])
-    handoff = _bounded_path(directory, directory / "handoff.json", "guided handoff")
+    handoff = _bounded_path(directory, directory / "handoff.json", "operator handoff")
     write_immutable_json(
         handoff,
         {
             "version": 1,
             "jobHash": job["jobHash"],
-            "mode": "guided",
+            "mode": job["observation"]["mode"],
             "artifactState": "reference-only",
             "operatorRoots": job["roots"],
             "nativeDocument": str(directory / "component.anicraft"),
             "recipe": file_fingerprint(recipe),
             "commands": plan["commands"],
+            **(
+                {"host": plan["host"], "operatorBudget": job["budget"]}
+                if "host" in plan
+                else {}
+            ),
         },
     )
     event = store.append(
