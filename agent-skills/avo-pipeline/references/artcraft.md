@@ -33,6 +33,10 @@ contract and resource limits. Choose explicit installed paths through `--cli`
 and `--application` when needed. The selected app and CLI must match releases,
 and readiness requires verified file confinement for the requested roots.
 Missing or unqualified prerequisites produce a specific readiness result.
+Use `avo cli artcraft inspect --job <absolute-job-record> --expected-head
+<event-hash> --json` to compare the retained job document, inputs and output
+records against the current files. A video job also checks the project and
+canonical revisions. Inspection is read-only and can run in a fresh session.
 
 Before any native authoring, identify the effective roots, owner of the job's
 document, output contract and bounds. A provider-only component has a declared
