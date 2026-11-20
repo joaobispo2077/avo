@@ -132,3 +132,65 @@ def test_missing_headless_mcp_capability_does_not_fall_back(tmp_path, operator_p
     assert failure.value.code == "ARTCRAFT_NOT_READY"
     assert len(observed) == 1
     assert not list(tmp_path.glob("**/job.json"))
+
+
+def test_json_lines_requires_its_own_confined_stream(tmp_path, operator_profile):
+    _, observed, advertise = operator_profile
+    advertise(b"anicraft-cli serve [file|--sample] on stdin/stdout")
+    adapter = native.SelectedArtCraftAdapter(
+        observe_confinement=lambda _, roots: roots,
+        run_confined=lambda *_: pytest.fail("batch is not the selected transport"),
+    )
+    with pytest.raises(
+        artcraft.ArtCraftError, match="confined stdio runner"
+    ) as failure:
+        _prepare(artcraft, request(), job_spec(tmp_path, mode="json-lines"), adapter)
+    assert failure.value.code == "ARTCRAFT_NOT_READY"
+    assert observed == []
+
+
+@pytest.mark.parametrize(
+    "reply",
+    [
+        b'{"id":1,"ok":false,"error":"failed command"}\n',
+        b'{"id":2,"ok":true,"result":{}}\n',
+        b'{"id":1,"ok":true,"ok":false,"result":{}}\n',
+        b'{"id":1,"ok":true}\n',
+    ],
+)
+def test_native_json_lines_stops_before_sending_next_command(tmp_path, reply):
+    from contextlib import contextmanager
+    from time import monotonic
+
+    from avo.adapters.artcraft_anicraft import _run_json_lines
+
+    source = tmp_path / "empty.anicraft"
+    target = tmp_path / "component.anicraft"
+    source.write_bytes(b"native fixture")
+    responses = iter([b'{"app":"AniCraft","ready":true,"version":"0.2.1"}\n', reply])
+    sent = []
+
+    @contextmanager
+    def open_stream(document, *, timeout):
+        assert document == source
+        assert 0 < timeout <= 5
+        yield SimpleNamespace(
+            read_line=lambda **_: next(responses),
+            send_line=lambda message, **_: sent.append(json.loads(message)),
+        )
+
+    steps = [
+        {"cmd": "layer.new", "params": {"name": "Label"}},
+        {"cmd": "file.save_as", "params": {"path": str(target)}},
+    ]
+    with pytest.raises(artcraft.ArtCraftError, match="AniCraft JSON-lines"):
+        _run_json_lines(
+            open_stream,
+            source,
+            target,
+            steps,
+            budget={"files": 12, "bytes": 4096},
+            deadline=monotonic() + 5,
+        )
+    assert sent == [{"id": 1, **steps[0]}]
+    assert not target.exists()
