@@ -33,6 +33,59 @@ def _busy_background():
     return canvas
 
 
+def test_installed_anicraft_portrait_lower_third_uses_safe_mobile_placement(tmp_path):
+    from avo.adapters.artcraft_anicraft import (
+        inspect_lower_third_source,
+        run_lower_third,
+    )
+
+    entry = os.environ.get("AVO_ARTCRAFT_ANICRAFT_TEST_CLI")
+    if not entry:
+        pytest.skip(
+            "set AVO_ARTCRAFT_ANICRAFT_TEST_CLI to the installed AniCraft 0.2.1 CLI"
+        )
+    cli = Path(entry).resolve(strict=True)
+    environment = {
+        key: value
+        for key, value in os.environ.items()
+        if not key.upper().startswith("ANICRAFT_")
+    }
+
+    def invoke(directory, *argv, timeout):
+        return subprocess.run(
+            [str(cli), *map(str, argv)],
+            cwd=directory,
+            env=environment,
+            timeout=timeout,
+            capture_output=True,
+            check=True,
+        ).stdout
+
+    output = {**_job_contract(), "width": 360, "height": 640}
+    params = {"primaryText": "Jo\u00e3o", "font": "Arial"}
+    budget = {"seconds": 60, "files": 128, "bytes": 16_000_000}
+    result = run_lower_third(
+        output, params, directory=tmp_path / "portrait", budget=budget, invoke=invoke
+    )
+    observed = inspect_lower_third_source(
+        Path(result["nativeSource"]["locator"]),
+        output,
+        params,
+        max_bytes=budget["bytes"],
+    )
+    assert observed["editableText"] == "Jo\u00e3o"
+    assert result["freshSessionDecodedRgbaMatched"]
+    assert result["maxMatteError"] <= 1
+    with Image.open(result["frames"][8]["locator"]) as hold:
+        assert hold.size == (360, 640)
+        left, top, right, bottom = hold.getchannel("A").getbbox()
+        assert 23 <= left < right < 185
+        assert 472 <= top < bottom <= 512
+    for index in (0, 23):
+        with Image.open(result["frames"][index]["locator"]) as blank:
+            assert blank.getchannel("A").getbbox() is None
+
+
 def test_installed_anicraft_saves_reopens_and_reconstructs_a_transparent_label(
     tmp_path,
 ):
