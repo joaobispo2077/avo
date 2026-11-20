@@ -64,6 +64,14 @@ Run `avo cli artcraft review --job <absolute-job-record> --expected-head
 original-footage proof and the current project logs. Use the existing human
 review workflow to record the decision.
 
+For an explicitly reviewed provider lower third, prepare a native package with
+the original editable source, recipe, typed local parameter schema, source
+review, exact design decision and rights. Use `avo cli artcraft provider-propose`
+with that package, the selected provider and the external source root. An
+explicit `provider-publish` applies the decision against the current catalog
+hash and retains the package under the selected external library root. Keep
+the approving actor and reason tied to the exact source version.
+
 Before any native authoring, identify the effective roots, owner of the job's
 document, output contract and bounds. A provider-only component has a declared
 external source workspace. A real video keeps canonical decisions under

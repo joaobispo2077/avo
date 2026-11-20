@@ -100,6 +100,22 @@ the current proof, placement and available source and edit logs. A changed
 candidate or timeline requires current review evidence. Use the existing
 creator approval workflow to record the decision.
 
+### Publish a reusable native source
+
+For the qualified AniCraft lower-third profile, `avo cli artcraft
+provider-propose` reads a sealed package and a general provider pattern. The
+package identifies the editable native source, recipe, parameter schema,
+source review, design approval and rights. Every file has its exact size and
+SHA-256. Use the selected provider, absolute catalog and package paths, and
+the explicit external `--source-root` for the proposal.
+
+`avo cli artcraft provider-publish` applies the creator decision to that
+proposal and its same source package. Pass `--expected-catalog` with the
+current catalog hash and `--native-store` with the existing external library
+folder. AVO preserves the verified bytes under the selected provider and
+package hash. The catalog records the native app, exact package identity and
+the source, design and rights fingerprints.
+
 The checked automatic profile requires a host with independently enforced job
 roots. Returned files from the current guided handoff stay available for
 inspection and reference while production qualification continues.

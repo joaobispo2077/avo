@@ -597,6 +597,14 @@ review reader verifies the immutable plan, materialization, source binding
 and current candidate bytes, and links available source and edit logs. It
 reports the review as pending for the existing creator approval workflow.
 
+Native provider publication extends the existing animation catalog. The package
+reader checks its external root, byte fingerprints, declared source roles,
+review references, rights and local parameter schema before independent source
+inspection. An explicit approval against the current catalog version retains
+the verified bytes in a provider-scoped external store and publishes hash-only
+source provenance. An identical retry verifies the retained package and returns
+the existing promotion without adding an event.
+
 ## Motion engine selection and code-drawn capture (feature 012)
 
 HyperFrames remains the default. The pure shared motion policy resolves invocation, pinned run, project/video, provider/channel and global preferences, in that order. Strict saved IDs are hyperframes, remotion, and code-drawn; Remotion retains its existing unsupported execution adapter. A new default never rewrites a recorded animation revision or creator decision. Explicit new engine/source authoring uses existing revision invalidation. Installed motion and pipeline routers resolve current no-framework intent before loading engine-specific skills.
