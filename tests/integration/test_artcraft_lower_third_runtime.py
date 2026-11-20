@@ -89,7 +89,7 @@ def test_installed_anicraft_portrait_lower_third_uses_safe_mobile_placement(tmp_
 def test_installed_anicraft_saves_reopens_and_reconstructs_a_transparent_label(
     tmp_path,
 ):
-    from avo.adapters.artcraft_anicraft import run_lower_third
+    from avo.adapters.artcraft_anicraft import revise_lower_third, run_lower_third
 
     entry = os.environ.get("AVO_ARTCRAFT_ANICRAFT_TEST_CLI")
     if not entry:
@@ -184,15 +184,18 @@ def test_installed_anicraft_saves_reopens_and_reconstructs_a_transparent_label(
             assert composite.getpixel((0, 0)) == background.getpixel((0, 0))
             assert composite.getpixel((60, 285)) == (16, 44, 72, 255)
 
-    next_result = run_lower_third(
+    next_result = revise_lower_third(
         output,
+        {"primaryText": "Clara Caf\u00e9", "font": "Arial"},
         {"primaryText": "Mar\u00eda", "font": "Arial"},
+        source=native,
         directory=tmp_path / "second",
         budget=budget,
         invoke=invoke,
     )
     assert file_fingerprint(native) == original
     assert next_result["nativeSource"]["locator"] != str(native)
+    assert next_result["sourceObservations"]["editableText"] == "Mar\u00eda"
     assert next_result["frames"][8]["sha256"] != result["frames"][8]["sha256"]
 
 
@@ -493,6 +496,36 @@ def _register_native_overlay(tmp_path, monkeypatch, cli):
     rendered = artcraft.run_authoring(
         job["jobRef"], expected_head=job["head"], adapter=adapter
     )
+    preserved = tmp_path / job["job"]["document"]
+    expected = file_fingerprint(preserved)
+    specification = {
+        **specification,
+        "jobId": "speaker-label-revision",
+        "document": {"state": "saved", "source": str(preserved)},
+        "readRoots": [str(preserved.parent)],
+        "authoringParameters": {"primaryText": "Mar\u00eda", "font": "Arial"},
+    }
+    job = artcraft.prepare_authoring(
+        brief,
+        specification,
+        decision=artcraft.assess_request(brief, intent=intent),
+        intent=intent,
+        adapter=adapter,
+    )
+    rendered = artcraft.run_authoring(
+        job["jobRef"], expected_head=job["head"], adapter=adapter
+    )
+    _, export = artcraft.read_authoring_export(
+        job["jobRef"], expected_head=rendered["head"]
+    )
+    assert export["revisionCommandSchemaHash"]
+    assert file_fingerprint(preserved) == expected
+    assert (
+        artcraft.run_authoring(
+            job["jobRef"], expected_head=rendered["head"], adapter=adapter
+        )
+        == rendered
+    )
     workspace = TimelineWorkspace.from_project(project)
     record = register_artcraft_export(
         workspace,
@@ -501,6 +534,7 @@ def _register_native_overlay(tmp_path, monkeypatch, cli):
         output=derived / "speaker.mkv",
         asset_id="artcraft-speaker",
     )
+    assert expected in [item["fingerprint"] for item in record["inputs"]]
     return workspace, heads, record, job["jobRef"], rendered["head"]
 
 
