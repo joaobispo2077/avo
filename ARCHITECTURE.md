@@ -571,6 +571,15 @@ commands reserve ArtCraft declarations for its qualified admission path.
 Packages include the AVO-owned catalog and schema. Users manage the selected
 app installation separately. The distribution smoke reads bundled metadata.
 
+The first AniCraft profile authors a Windows 0.2.1 lower third from a job-owned
+empty document. A supplied confined command runner executes the fixed native
+recipe and checks the exact saved stage and clock, installed font family and
+fresh-session pixels. The renderer reconstructs straight alpha from two native
+backings and verifies every channel against an independent third. Job events
+bind the saved native source, recipe and frame fingerprints. The guided route
+prepares the same native recipe under operator control and retains its returned
+files as references. Proof admission remains a separate decision boundary.
+
 ## Motion engine selection and code-drawn capture (feature 012)
 
 HyperFrames remains the default. The pure shared motion policy resolves invocation, pinned run, project/video, provider/channel and global preferences, in that order. Strict saved IDs are hyperframes, remotion, and code-drawn; Remotion retains its existing unsupported execution adapter. A new default never rewrites a recorded animation revision or creator decision. Explicit new engine/source authoring uses existing revision invalidation. Installed motion and pipeline routers resolve current no-framework intent before loading engine-specific skills.

@@ -30,9 +30,16 @@ accepts `--request-json`, `--job-spec-json`, `--provider`, `--workspace`,
 `--app anicraft`, `--operation lower-third` and `--mode cli`. The job options
 declare an empty or saved native document, permitted source roots, an output
 contract and resource limits. Choose explicit installed paths through `--cli`
-and `--application` when needed. The selected app and CLI must match releases,
-and readiness requires verified file confinement for the requested roots.
+and `--application` when needed. The selected app and CLI must match releases.
+Automated readiness requires verified file confinement for the requested roots.
 Missing or unqualified prerequisites produce a specific readiness result.
+Windows AniCraft 0.2.1 supports an explicit `--mode guided` job. Set
+`authoringParameters.primaryText` and `authoringParameters.font` in the job
+options and start from an empty document. `artcraft run` returns the staged
+recipe and runnable native steps for an operator. The returned native document
+and opaque PNG sequence stay reference-only until separately qualified.
+Automated authoring uses a confined runner and verifies the saved document's
+fresh-session frames and transparent export against a third native backing.
 Use `avo cli artcraft inspect --job <absolute-job-record> --expected-head
 <event-hash> --json` to compare the retained job document, inputs and output
 records against the current files. A video job also checks the project and
