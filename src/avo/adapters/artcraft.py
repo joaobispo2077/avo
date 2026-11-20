@@ -13,7 +13,8 @@ from avo.timeline.contracts import file_fingerprint
 
 _ANICRAFT_INSTALL = "https://getartcraft.com/apps/anicraft"
 _VERSION = re.compile(
-    r"(?:anicraft(?:-cli)?\s+)?v?(\d+\.\d+\.\d+(?:[-+][a-z0-9.-]+)?)", re.IGNORECASE
+    r"(?:anicraft(?:-cli)?\s+)?v?(\d+\.\d+\.\d+(?:[-+][a-z0-9.-]+)?)(?: \(early alpha\))?",
+    re.IGNORECASE,
 )
 
 
@@ -30,10 +31,26 @@ def _binary_name(name):
 
 
 def _path_candidates(name):
+    for directory in _documented_installations():
+        yield directory / name
     for entry in os.environ.get("PATH", "").split(os.pathsep):
         directory = Path(entry.strip('"'))
         if directory.is_absolute():
             yield directory / name
+
+
+def _documented_installations():
+    if os.name == "nt":
+        for variable, relative in (
+            ("LOCALAPPDATA", "Programs/ArtCraft/AniCraft"),
+            ("ProgramFiles", "ArtCraft/AniCraft"),
+            ("ProgramFiles(x86)", "ArtCraft/AniCraft"),
+        ):
+            base = Path(os.environ.get(variable) or ".")
+            if base.is_absolute():
+                yield base / relative
+    elif sys.platform == "darwin":
+        yield Path("/Applications/AniCraft.app/Contents/MacOS")
 
 
 def _installed_binary(name, explicit=None, *, adjacent=None):
