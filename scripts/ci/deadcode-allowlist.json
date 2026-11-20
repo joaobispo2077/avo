@@ -396,14 +396,6 @@
       "reason": "Feature 006 public/dynamic contract covered by focused tests and runtime registration"
     },
     {
-      "path": "src/avo/timeline/event_clock.py",
-      "name": "frame_range_to_samples",
-      "kind": "function",
-      "lineno": 59,
-      "confidence": 60,
-      "reason": "Feature 006 public/dynamic contract covered by focused tests and runtime registration"
-    },
-    {
       "path": "src/avo/timeline/iterations.py",
       "name": "fingerprint_candidate",
       "kind": "method",
