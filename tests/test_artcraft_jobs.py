@@ -248,6 +248,7 @@ def test_selected_identity_checks_only_matching_installed_tools(
     authoring, monkeypatch, app_release
 ):
     from avo.adapters.artcraft import SelectedArtCraftAdapter
+    from avo.adapters.artcraft_anicraft import LOWER_THIRD_COMMANDS
 
     api, workspace, _ = authoring
     suffix = ".exe" if os.name == "nt" else ""
@@ -258,9 +259,19 @@ def test_selected_identity_checks_only_matching_installed_tools(
     calls, boundaries = [], []
 
     def run(argv, **kwargs):
-        assert kwargs["shell"] is False and kwargs["timeout"] == 5
-        assert argv[1:] == ["--version"]
-        calls.append(argv[0])
+        assert kwargs["shell"] is False
+        calls.append((argv[0], argv[1]))
+        if argv[1:] == ["commands"]:
+            assert kwargs["timeout"] == 7
+            return SimpleNamespace(
+                stdout=json.dumps(
+                    [
+                        {"id": name, "params": "{}"}
+                        for name in sorted(LOWER_THIRD_COMMANDS)
+                    ]
+                ).encode()
+            )
+        assert argv[1:] == ["--version"] and kwargs["timeout"] == 5
         release = "0.4.1" if argv[0] == str(cli) else app_release
         qualifier = " (early alpha)" if argv[0] == str(app) else ""
         return SimpleNamespace(
@@ -280,11 +291,15 @@ def test_selected_identity_checks_only_matching_installed_tools(
         assert observation["executable"] == file_fingerprint(cli)
         assert observation["application"] == file_fingerprint(app)
         assert observation["release"] == app_release and len(boundaries) == 1
+        assert len(observation["commandSchemaHash"]) == 64
     else:
         with pytest.raises(ArtCraftError, match="different releases"):
             _prepare(api, request(), spec, adapter)
         assert boundaries == [] and not (workspace / "artcraft-jobs").exists()
-    assert calls == [str(cli), str(app)]
+    expected = [(str(cli), "--version"), (str(app), "--version")]
+    if app_release == "0.4.1":
+        expected.append((str(cli), "commands"))
+    assert calls == expected
 
 
 def test_inspect_reconciles_exact_saved_copy_from_a_fresh_entrypoint(authoring):

@@ -121,3 +121,28 @@ def test_unknown_installed_font_blocks_before_the_native_authoring_batch(tmp_pat
             invoke=invoke,
         )
     assert calls == ["new", "exec"]
+
+
+def test_command_evidence_binds_only_the_current_lower_third_surface(tmp_path):
+    from avo.adapters.artcraft_anicraft import lower_third_steps, observe_command_schema
+
+    steps = lower_third_steps(
+        _contract(),
+        {"primaryText": "Name", "font": "Arial"},
+        tmp_path / "component.anicraft",
+        tmp_path / "white",
+    )
+    expected = {step["cmd"] for step in steps} | {"doc.set_stage", "text.fonts"}
+    commands = [{"id": name, "params": "{}"} for name in sorted(expected)]
+    first = observe_command_schema(commands)
+    assert set(first) == expected
+    assert (
+        observe_command_schema([*commands, {"id": "file.open", "params": "{path}"}])
+        == first
+    )
+    with pytest.raises(ArtCraftError, match="required lower-third commands"):
+        observe_command_schema(
+            [row for row in commands if row["id"] != "modify.convert_to_symbol"]
+        )
+    with pytest.raises(ArtCraftError, match="command registry"):
+        observe_command_schema([*commands, commands[0]])
