@@ -344,3 +344,158 @@ def test_inspect_marks_video_scope_stale_when_project_identity_changes(authoring
     result = api.inspect_authoring(prepared["jobRef"], expected_head=prepared["head"])
     assert result["status"] == "stale"
     assert result["checks"]["project"] == "changed"
+
+
+class AuthoringApp(SelectedApp):
+    def __init__(self, workspace):
+        super().__init__(workspace)
+        self.executions = []
+
+    def validate_run(self, job):
+        self.executions.append(("validate", job["jobId"]))
+
+    def author_lower_third(self, job, directory):
+        self.executions.append(("author", job["jobId"]))
+        directory.mkdir(parents=True)
+        native = directory / "component.anicraft"
+        recipe = directory / "recipe.json"
+        native.write_bytes(b"synthetic editable source")
+        recipe.write_bytes(b"synthetic recipe")
+        alpha = directory / "alpha"
+        alpha.mkdir()
+        frames = []
+        for index in range(1, job["output"]["frameCount"] + 1):
+            target = alpha / f"frame_{index:05d}.png"
+            target.write_bytes(f"fixture alpha frame {index}".encode("ascii"))
+            frames.append(file_fingerprint(target))
+        return {
+            "nativeSource": file_fingerprint(native),
+            "recipe": file_fingerprint(recipe),
+            "frames": frames,
+        }
+
+
+def test_run_commits_current_native_source_and_stops_exact_repeat(authoring):
+    api, workspace, _ = authoring
+    adapter = AuthoringApp(workspace)
+    spec = job_spec(
+        workspace, authoringParameters={"primaryText": "Speaker", "font": "Arial"}
+    )
+    before = _prepare(api, request(), spec, adapter)
+    performed = api.run_authoring(
+        before["jobRef"], expected_head=before["head"], adapter=adapter
+    )
+    assert performed["state"] == "exported"
+    assert performed["checks"]["nativeDocument"] == "current"
+    assert performed["checks"]["outputs"] == "current"
+    assert performed["head"] != before["head"]
+    assert adapter.executions == [
+        ("validate", "speaker-label-preview"),
+        ("author", "speaker-label-preview"),
+    ]
+    assert (
+        api.run_authoring(
+            before["jobRef"], expected_head=performed["head"], adapter=adapter
+        )
+        == performed
+    )
+    assert len(adapter.executions) == 2
+
+
+def test_run_refuses_changed_document_before_any_selected_tool_work(authoring):
+    api, workspace, _ = authoring
+    adapter = AuthoringApp(workspace)
+    spec = job_spec(
+        workspace, authoringParameters={"primaryText": "Speaker", "font": "Arial"}
+    )
+    prepared = _prepare(api, request(), spec, adapter)
+    document = workspace / prepared["job"]["document"]
+    document.parent.mkdir(parents=True)
+    document.write_bytes(b"external edit")
+    with pytest.raises(ArtCraftError, match="stale"):
+        api.run_authoring(
+            prepared["jobRef"], expected_head=prepared["head"], adapter=adapter
+        )
+    assert adapter.executions == []
+    assert document.read_bytes() == b"external edit"
+
+
+def test_run_records_unknown_outcome_and_refuses_to_repeat_a_partial_write(authoring):
+    api, workspace, _ = authoring
+
+    class Interrupted(AuthoringApp):
+        def author_lower_third(self, job, directory):
+            super().author_lower_third(job, directory)
+            raise RuntimeError("fixture process stopped after writing")
+
+    adapter = Interrupted(workspace)
+    spec = job_spec(
+        workspace, authoringParameters={"primaryText": "Speaker", "font": "Arial"}
+    )
+    prepared = _prepare(api, request(), spec, adapter)
+    with pytest.raises(ArtCraftError) as failure:
+        api.run_authoring(
+            prepared["jobRef"], expected_head=prepared["head"], adapter=adapter
+        )
+    assert failure.value.code == "ARTCRAFT_OUTCOME_UNKNOWN"
+    event = api.ArtCraftJobStore(workspace).head(spec["jobId"])
+    assert event["state"] == "outcome-unknown"
+    assert event["eventHash"] in failure.value.remediation
+    assert (
+        workspace / prepared["job"]["document"]
+    ).read_bytes() == b"synthetic editable source"
+    with pytest.raises(ArtCraftError):
+        api.run_authoring(
+            prepared["jobRef"], expected_head=event["eventHash"], adapter=adapter
+        )
+    assert len(adapter.executions) == 2
+
+
+def test_guided_job_returns_replayable_native_steps_without_starting_authoring(
+    authoring,
+):
+    api, workspace, _ = authoring
+
+    class Guided(AuthoringApp):
+        def observe(self, **arguments):
+            observed = super().observe(**arguments)
+            observed.pop("effectiveRoots")
+            return {**observed, "mode": "guided", "authority": "operator"}
+
+        def plan_lower_third(self, job, directory):
+            self.executions.append(("plan", job["jobId"]))
+            return {
+                "steps": [
+                    {
+                        "cmd": "file.save_as",
+                        "params": {"path": str(directory / "component.anicraft")},
+                    }
+                ],
+                "commands": [["gui-managed"]],
+            }
+
+    adapter = Guided(workspace)
+    spec = job_spec(
+        workspace,
+        mode="guided",
+        authoringParameters={"primaryText": "Speaker", "font": "Arial"},
+    )
+    prepared = _prepare(api, request(), spec, adapter)
+    handoff = api.run_authoring(
+        prepared["jobRef"], expected_head=prepared["head"], adapter=adapter
+    )
+    assert handoff["state"] == "ready"
+    assert handoff["status"] == "current"
+    details = json.loads(
+        Path(handoff["handoff"]["locator"]).read_text(encoding="utf-8")
+    )
+    assert details["mode"] == "guided"
+    assert details["artifactState"] == "reference-only"
+    assert adapter.executions == [("plan", "speaker-label-preview")]
+    assert (
+        api.run_authoring(
+            prepared["jobRef"], expected_head=handoff["head"], adapter=adapter
+        )
+        == handoff
+    )
+    assert adapter.executions == [("plan", "speaker-label-preview")]
