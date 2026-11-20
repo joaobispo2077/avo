@@ -76,6 +76,22 @@ def _provider_commands(operations):
     )
     for field in ("proposal", "native-store", "expected-catalog", "reason"):
         publish.add_argument(f"--{field}", required=True)
+    instantiate = operations.add_parser(
+        "provider-instantiate", help="Pin an exact native package for a video"
+    )
+    for field in (
+        "project",
+        "catalog",
+        "native-store",
+        "kit-id",
+        "version",
+        "manifest-hash",
+        "instance-id",
+        "bindings-json",
+    ):
+        instantiate.add_argument(f"--{field}", required=True)
+    instantiate.add_argument("--json", action="store_true")
+    instantiate.add_argument("--supersedes", help="Explicitly upgrade a prior instance")
 
 
 def _distinct_keys(pairs):
@@ -242,6 +258,8 @@ def _provider_package_action(args):
     from avo.timeline.provider_animation import ProviderAnimationService
     from avo.timeline.store import StoreError
 
+    if args.artcraft_operation == "provider-instantiate":
+        return _instantiate_native_provider(args, inspect_lower_third_source)
     catalog_path, package_path = Path(args.catalog), Path(args.package)
     if catalog_path.resolve() != catalog_path or package_path.resolve() != package_path:
         raise ArtCraftError("Choose exact absolute ArtCraft catalog and package paths")
@@ -272,6 +290,43 @@ def _provider_package_action(args):
         )
     except (AnimationError, ContractError, StoreError) as exc:
         raise ArtCraftError(str(exc), code="ARTCRAFT_PACKAGE_UNAVAILABLE") from exc
+
+
+def _instantiate_native_provider(args, source_observer):
+    from avo.artcraft import ArtCraftError
+    from avo.timeline.component_instances import (
+        ComponentInstanceError,
+        ComponentInstanceService,
+    )
+    from avo.timeline.store import StoreError
+    from avo.timeline.workspace import TimelineWorkspace, WorkspaceError
+
+    bindings = _decode_object(args.bindings_json)
+    if set(bindings) != {
+        "parameters",
+        "assetBindings",
+        "eventBindings",
+        "safeAreaBindings",
+    }:
+        raise ArtCraftError("Select parameters and the exact native instance bindings")
+    try:
+        service = ComponentInstanceService(TimelineWorkspace.from_project(args.project))
+        return service.resolve_native_provider_kit(
+            catalog_path=args.catalog,
+            native_store=args.native_store,
+            kit_id=args.kit_id,
+            version=args.version,
+            manifest_hash=args.manifest_hash,
+            instance_id=args.instance_id,
+            parameters=bindings["parameters"],
+            asset_bindings=bindings["assetBindings"],
+            event_bindings=bindings["eventBindings"],
+            safe_area_bindings=bindings["safeAreaBindings"],
+            source_observer=source_observer,
+            supersedes_instance_id=args.supersedes,
+        )
+    except (ComponentInstanceError, StoreError, WorkspaceError) as exc:
+        raise ArtCraftError(str(exc), code="ARTCRAFT_INSTANCE_UNAVAILABLE") from exc
 
 
 def _register_export(args):
@@ -322,7 +377,11 @@ def run(args):
             result = _register_export(args)
         elif args.artcraft_operation == "review":
             result = _review_export(args)
-        elif args.artcraft_operation in {"provider-propose", "provider-publish"}:
+        elif args.artcraft_operation in {
+            "provider-propose",
+            "provider-publish",
+            "provider-instantiate",
+        }:
             result = _provider_package_action(args)
         else:
             request = _decode_request(args.request_json)

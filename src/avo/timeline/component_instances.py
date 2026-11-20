@@ -14,7 +14,7 @@ from .contracts import (
     file_fingerprint,
     validate_document,
 )
-from .store import StoreError, write_immutable_json
+from .store import StoreError, timeline_writer, write_immutable_json
 
 
 class ComponentInstanceError(RuntimeError):
@@ -67,15 +67,7 @@ class ComponentInstanceService:
                 "Native packages require a verified ArtCraft instantiation"
             )
         value = self._seal(instance)
-        if parameter_schema is not None:
-            try:
-                import jsonschema
-
-                jsonschema.validate(value["parameters"], parameter_schema)
-            except Exception as exc:
-                raise ComponentInstanceError(
-                    f"component parameter contract failed: {exc}"
-                ) from exc
+        self._check_parameters(value, parameter_schema)
         self._validate(value)
         for generated in value["generatedFiles"]:
             path = Path(generated["path"])
@@ -85,6 +77,21 @@ class ComponentInstanceService:
                 raise ComponentInstanceError(
                     f"component output fingerprint mismatch: {path}"
                 )
+        return self._write_instance(value)
+
+    @staticmethod
+    def _check_parameters(value, parameter_schema):
+        if parameter_schema is not None:
+            try:
+                import jsonschema
+
+                jsonschema.validate(value["parameters"], parameter_schema)
+            except Exception as exc:
+                raise ComponentInstanceError(
+                    f"component parameter contract failed: {exc}"
+                ) from exc
+
+    def _write_instance(self, value):
         try:
             write_immutable_json(self.path(value["instanceId"]), value)
         except StoreError as exc:
@@ -111,6 +118,10 @@ class ComponentInstanceService:
         kind: str = "project-component",
     ) -> dict[str, Any]:
         instance = self.load(instance_id)
+        if "nativePackage" in instance:
+            raise ComponentInstanceError(
+                "Native source requires the qualified ArtCraft proof path"
+            )
         for item in instance["generatedFiles"]:
             path = Path(item["path"])
             if not path.is_file() or file_fingerprint(path)["sha256"] != item["sha256"]:
@@ -125,6 +136,157 @@ class ComponentInstanceService:
             "sha256": instance["instanceHash"],
             "componentInstanceId": instance_id,
         }
+
+    def resolve_native_provider_kit(
+        self,
+        *,
+        catalog_path,
+        native_store,
+        kit_id,
+        version,
+        manifest_hash,
+        instance_id,
+        parameters,
+        asset_bindings,
+        event_bindings,
+        safe_area_bindings,
+        source_observer,
+        supersedes_instance_id=None,
+    ):
+        """Pin and copy a provider-authored native source for this video only."""
+        from .artcraft_packages import retain_native_instance_sources
+
+        instance_path = self.path(instance_id)
+        package, evidence = self._selected_native_package(
+            catalog_path,
+            native_store,
+            kit_id,
+            version,
+            manifest_hash,
+            source_observer,
+        )
+        root = Path(self.workspace.raw_dir).resolve()
+        target = root / "edit" / "derived" / "provider-components" / instance_id
+        document = self._seal(
+            {
+                "instanceId": instance_id,
+                "kitId": kit_id,
+                "kitVersion": version,
+                "kitManifestHash": manifest_hash,
+                "parameters": parameters,
+                "assetBindings": asset_bindings,
+                "eventBindings": event_bindings,
+                "safeAreaBindings": safe_area_bindings,
+                "nativePackage": {
+                    "provider": package["provider"],
+                    "app": package["app"],
+                    "packageHash": package["packageHash"],
+                },
+                "generatedFiles": [
+                    {
+                        "path": str(target / "files" / item["path"]),
+                        "sha256": item["sha256"],
+                    }
+                    for item in package["files"]
+                ],
+                "reviewRefs": [],
+                **(
+                    {"supersedesInstanceId": supersedes_instance_id}
+                    if supersedes_instance_id
+                    else {}
+                ),
+            }
+        )
+        self._check_parameters(document, evidence["parameterSchema"])
+        self._validate(document)
+        with timeline_writer(self.workspace.timeline_dir):
+            self._check_native_upgrade(document)
+            if instance_path.is_file() and self.load(instance_id) != document:
+                raise ComponentInstanceError(
+                    "The immutable instance already pins different inputs"
+                )
+            retain_native_instance_sources(
+                package, evidence, project_root=root, target=target
+            )
+            return self._write_instance(document)
+
+    def _check_native_upgrade(self, document):
+        from .provider_animation import _semver
+
+        previous = document.get("supersedesInstanceId")
+        if previous is None:
+            return
+        if previous == document["instanceId"]:
+            raise ComponentInstanceError("A native upgrade requires a new instance ID")
+        original = self.load(previous)
+        origin = original.get("nativePackage") or {}
+        selected = document["nativePackage"]
+        if original["kitId"] != document["kitId"] or any(
+            origin.get(key) != selected[key] for key in ("provider", "app")
+        ):
+            raise ComponentInstanceError(
+                "A native upgrade requires the same provider, app and component"
+            )
+        if _semver(document["kitVersion"]) <= _semver(original["kitVersion"]):
+            raise ComponentInstanceError(
+                "A native upgrade requires a newer pinned version"
+            )
+
+    def _selected_native_package(
+        self,
+        catalog_path,
+        native_store,
+        kit_id,
+        version,
+        manifest_hash,
+        source_observer,
+    ):
+        from avo.artcraft import ArtCraftError
+
+        from .animation import AnimationError
+        from .artcraft_packages import (
+            native_catalog_manifest,
+            read_retained_provider_package,
+        )
+        from .provider_animation import ProviderAnimationService
+
+        provider = self.workspace.project.get("provider")
+        if not provider:
+            raise ComponentInstanceError(
+                "A current video provider is required for native reuse"
+            )
+        path = Path(catalog_path)
+        if path.resolve() != path:
+            raise ComponentInstanceError("Choose the exact absolute provider catalog")
+        service = ProviderAnimationService(path, provider=provider)
+        try:
+            pattern = service.resolve_version(kit_id, version)
+            if (pattern.get("manifest") or {}).get("sha256") != manifest_hash:
+                raise ComponentInstanceError("provider kit manifest hash mismatch")
+            metadata = pattern.get("nativePackage")
+            if not metadata:
+                raise ComponentInstanceError("Select a published native provider kit")
+            package, evidence = read_retained_provider_package(
+                native_store,
+                provider=provider,
+                package_hash=metadata["packageHash"],
+                source_observer=source_observer,
+            )
+        except (ArtCraftError, AnimationError, ContractError, OSError) as exc:
+            raise ComponentInstanceError(str(exc)) from exc
+        manifest = native_catalog_manifest(package, evidence)
+        if (manifest["kitId"], manifest["version"], manifest["manifestSha256"]) != (
+            kit_id,
+            version,
+            manifest_hash,
+        ) or any(
+            pattern.get(key) != manifest[key]
+            for key in ("nativePackage", "provenance", "parameterSchema")
+        ):
+            raise ComponentInstanceError(
+                "Retained native package differs from the selected catalog version"
+            )
+        return package, evidence
 
     def resolve_provider_kit(
         self,
