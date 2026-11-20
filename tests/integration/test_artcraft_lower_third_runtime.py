@@ -90,6 +90,7 @@ def test_installed_anicraft_saves_reopens_and_reconstructs_a_transparent_label(
     assert source["fingerprint"] == original
     assert source["editableText"] == "Clara Caf\u00e9"
     assert source["fontFamily"] == "Arial"
+    _publish_fixture_package(tmp_path, native, output, inspect_lower_third_source)
     from avo.adapters.media.artcraft_alpha import pack_alpha_sequence
 
     packed_path = tmp_path / "component.mkv"
@@ -140,6 +141,55 @@ def test_installed_anicraft_saves_reopens_and_reconstructs_a_transparent_label(
     assert file_fingerprint(native) == original
     assert next_result["nativeSource"]["locator"] != str(native)
     assert next_result["frames"][8]["sha256"] != result["frames"][8]["sha256"]
+
+
+def _publish_fixture_package(tmp_path, native, output, inspect_source):
+    from tests.test_artcraft_provider_packages import (
+        _native_pattern,
+        _package_from_retained_source,
+    )
+
+    from avo.timeline.contracts import content_hash
+    from avo.timeline.provider_animation import ProviderAnimationService
+
+    package = _package_from_retained_source(
+        native, output, {"primaryText": "Clara Caf\u00e9", "font": "Arial"}
+    )
+    store = tmp_path / "native-store"
+    store.mkdir()
+    service = ProviderAnimationService(
+        tmp_path / "provider" / "animation-library.json", provider="first-channel"
+    )
+    pattern = _native_pattern()
+    for key in ("nativePackage", "provenance", "promotionEventId"):
+        del pattern[key]
+    options = {
+        "package": package,
+        "source_root": native.parent,
+        "source_observer": inspect_source,
+    }
+    proposal = service.propose_native_package(
+        pattern,
+        actor="creator-fixture",
+        intent_reference="design-fixture",
+        **options,
+    )
+    event = service.publish_native_package(
+        proposal["path"],
+        native_store=store,
+        actor="creator-fixture",
+        reason="fixture verified",
+        expected_catalog_sha256=content_hash(service.initialize()),
+        **options,
+    )
+    published = store / event["publishedPath"] / "files" / native.name
+    assert published.read_bytes() == native.read_bytes()
+    assert (
+        service.resolve_version("speaker-label", "1.0.0")["nativePackage"][
+            "packageHash"
+        ]
+        == package["packageHash"]
+    )
 
 
 def test_installed_anicraft_guided_job_round_trips_through_avo_commands(
