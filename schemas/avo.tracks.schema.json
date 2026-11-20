@@ -457,6 +457,9 @@
                       "source-audio"
                     ]
                   },
+                  "generatedAudioRef": {
+                    "$ref": "https://avo.local/schemas/avo.artcraft.schema.json#/$defs/generatedAudioRef"
+                  },
                   "source": {
                     "type": "object",
                     "additionalProperties": false,

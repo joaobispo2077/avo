@@ -156,7 +156,7 @@ def _source(
     audio_node: dict | None = None,
     literal_still: bool = False,
 ) -> tuple[Path, int]:
-    source, path, expected = _source_identity(parameters, lock)
+    source, path, expected = _proof_source_identity(parameters, lock, audio_node)
     key = str(path.resolve())
     if key not in cache:
         actual_hash = _observed_source_fingerprint(path, observe=file_fingerprint)[
@@ -192,6 +192,17 @@ def _source(
     if cache[key]["sha256"] != expected:
         raise RuntimeError(f"ProofPlan source bytes changed: {path}")
     return _selected_stream(source, path, cache[key]["streams"], audio_node)
+
+
+def _proof_source_identity(parameters, lock, audio_node):
+    if parameters.get("generatedAudioRef") is None:
+        return _source_identity(parameters, lock)
+    if audio_node is None:
+        raise RuntimeError("Generated audio is available only to an audio mix node")
+    from avo.timeline.artcraft_audio import resolve_generated_audio_trim
+
+    fingerprint = resolve_generated_audio_trim(parameters, lock, audio_node)
+    return parameters["source"], Path(fingerprint["locator"]), fingerprint["sha256"]
 
 
 def _clock_header_integer(value):
@@ -788,10 +799,19 @@ def _revalidate_fresh_inputs(execution, generated, validator):
     from . import proof_generated
 
     observed_sources = {}
+    audio_nodes = {
+        node["nodeId"]: node for node in execution["audioGraph"].get("nodes", [])
+    }
     for operation in (
         execution["videoGraph"]["operations"] + execution["audioGraph"]["operations"]
     ):
         parameters = operation.get("parameters", {})
+        if parameters.get("generatedAudioRef") is not None:
+            _proof_source_identity(
+                parameters,
+                execution["canonicalInputLock"],
+                audio_nodes.get(parameters.get("nodeId")),
+            )
         if "source" in parameters:
             source = parameters["source"]
             path = Path(source["locator"]).resolve()

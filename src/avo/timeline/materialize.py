@@ -947,6 +947,31 @@ def _resolve_tracks_audio_inputs(workspace, proof_plan, snapshot, required, inpu
             inputs[source_id] = origin
 
 
+def _resolve_generated_audio_inputs(proof_plan, inputs):
+    from .artcraft_audio import resolve_generated_audio_trim
+
+    graph = proof_plan.get("audioGraph") or {}
+    nodes = {node["nodeId"]: node for node in graph.get("nodes", [])}
+    for operation in graph.get("operations", []):
+        parameters = operation["parameters"]
+        if operation["kind"] != "trim" or parameters.get("generatedAudioRef") is None:
+            continue
+        source_id = parameters["sourceId"]
+        audio = resolve_generated_audio_trim(
+            parameters, proof_plan["canonicalInputLock"], nodes[parameters["nodeId"]]
+        )
+        origin = {
+            "path": Path(audio["locator"]),
+            "mediaClass": "generated-asset",
+            "ancestry": [],
+        }
+        if source_id in inputs and inputs[source_id] != origin:
+            raise ValueError(
+                f"Generated audio conflicts with a canonical source: {source_id}"
+            )
+        inputs[source_id] = origin
+
+
 def canonical_proof_media_inputs(
     workspace: Any, proof_plan: dict[str, Any]
 ) -> dict[str, dict[str, Any]]:
@@ -994,6 +1019,7 @@ def canonical_proof_media_inputs(
                     ),
                     "ancestry": deepcopy(source.get("ancestry") or []),
                 }
+    _resolve_generated_audio_inputs(proof_plan, inputs)
     _resolve_tracks_audio_inputs(workspace, proof_plan, snapshot, required, inputs)
     inputs.update(
         _generated_proof_inputs(workspace, proof_plan.get("canonicalInputLock") or {})

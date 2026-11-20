@@ -1502,6 +1502,10 @@ def describe_export_review(job_ref, *, expected_head):
     """Describe the exact standalone candidate for an independent creator review."""
     job, event = read_authoring_export(job_ref, expected_head=expected_head)
     if job["decision"]["scope"] == _SOUND_CUE_SCOPE:
+        reference = {
+            "job": file_fingerprint(Path(job_ref)),
+            "exportHead": expected_head,
+        }
         return {
             "reviewState": "pending-creator",
             "jobHash": job["jobHash"],
@@ -1514,6 +1518,8 @@ def describe_export_review(job_ref, *, expected_head):
                 "audio": event["outputs"][0],
                 "audioEvidence": event["audioEvidence"],
                 "dependencies": event["dependencies"],
+                "generatedAudioRef": reference,
+                "sourceId": "artcraft-audio-" + content_hash(reference)[:24],
             },
         }
     if job["decision"]["scope"] != {"app": "anicraft", "operations": ["lower-third"]}:

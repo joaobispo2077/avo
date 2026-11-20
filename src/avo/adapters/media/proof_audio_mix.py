@@ -224,6 +224,7 @@ def _trim_fades(graph, effects, lead_ids):
         "nodeId",
         "sourceId",
         "source",
+        "generatedAudioRef",
         "fadeInSamples",
         "fadeOutSamples",
         "dialogueNoiseReductionPolicy",

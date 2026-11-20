@@ -191,6 +191,7 @@ def resolve_tracks(
             layer_id = str(layer.get("layerId") or "")
             _validate_breath_layer(layer)
             _validate_generated_track_layer(layer, group, generated_instances)
+            _validate_generated_audio_track(layer)
             if not layer_id or layer_id in seen:
                 raise TrackError("track layer IDs must be unique and stable")
             seen.add(layer_id)
@@ -226,6 +227,16 @@ def resolve_tracks(
             layers, key=lambda item: (item.get("order", 0), item.get("layerId", ""))
         )
     return result
+
+
+def _validate_generated_audio_track(layer):
+    if "generatedAudioRef" in layer:
+        from .artcraft_audio import require_generated_audio_layer
+
+        try:
+            require_generated_audio_layer(layer)
+        except (ValueError, OSError) as error:
+            raise TrackError(f"Invalid generated audio source: {error}") from error
 
 
 def inspect_audio_hierarchy(layers: list[dict[str, Any]]) -> list[str]:

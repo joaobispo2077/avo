@@ -251,6 +251,13 @@
         "pcmSha256": { "$ref": "#/$defs/hash" }
       }
     },
+    "generatedAudioRef": {
+      "type": "object", "additionalProperties": false, "required": ["job", "exportHead"],
+      "properties": {
+        "job": { "$ref": "#/$defs/fingerprint" },
+        "exportHead": { "$ref": "#/$defs/hash" }
+      }
+    },
     "jobSpec": {
       "type": "object", "additionalProperties": false,
       "required": ["version", "jobId", "provider", "workspace", "mode", "document", "readRoots", "output", "budget"],

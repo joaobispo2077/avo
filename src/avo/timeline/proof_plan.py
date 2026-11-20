@@ -280,11 +280,15 @@ class ProofPlanCompiler:
         return []
 
     def _sound_execution(self, execution, *, require_applied=False):
+        from .artcraft_audio import lock_generated_audio
         from .sound_proof import compile_canonical_sound
 
         try:
-            return compile_canonical_sound(
+            composed = compile_canonical_sound(
                 self.workspace, execution, require_applied=require_applied
+            )
+            return lock_generated_audio(
+                self.workspace, composed, require_applied=require_applied
             )
         except (ValueError, RuntimeError, OSError, KeyError, TypeError) as error:
             raise ProofPlanError(
