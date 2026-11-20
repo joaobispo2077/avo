@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import stat
 from dataclasses import dataclass
 from importlib.resources import files
 from pathlib import Path
@@ -34,6 +35,7 @@ __all__ = [
     "assess_request",
     "catalog",
     "guard_legacy_component_request",
+    "inspect_authoring",
     "prepare_authoring",
     "require_eligible",
     "seal_record",
@@ -355,7 +357,8 @@ def _bounded_path(root: Path, path: Path, label: str) -> Path:
 
 
 def _read_record(path: Path) -> dict:
-    if path.stat().st_nlink != 1:
+    metadata = path.stat()
+    if not stat.S_ISREG(metadata.st_mode) or metadata.st_nlink != 1:
         raise ArtCraftError(f"ArtCraft record has an external file alias: {path.name}")
     return json.loads(path.read_text(encoding="utf-8"))
 
@@ -781,3 +784,130 @@ def _require_exact_copy(path, original):
             "ArtCraft retained job copy differs from the source fingerprint",
             code="ARTCRAFT_SCOPE_CHANGED",
         )
+
+
+def inspect_authoring(job_ref, *, expected_head):
+    """Reconcile retained job evidence without changing files or starting an app."""
+    store, job, head = _open_selected_job(job_ref, expected_head)
+    checks = {
+        "project": _inspect_job_project(store, job),
+        "inputs": _inspect_job_inputs(job),
+        "nativeDocument": _inspect_job_document(store, job, head),
+        "outputs": _inspect_job_outputs(job, head),
+    }
+    return {
+        "status": "stale" if "changed" in checks.values() else "current",
+        "state": head["state"],
+        "jobRef": str(store.reference(job["jobId"])),
+        "jobHash": job["jobHash"],
+        "head": head["eventHash"],
+        "checks": checks,
+    }
+
+
+def _open_selected_job(job_ref, expected_head):
+    path = Path(job_ref)
+    if (
+        not path.is_absolute()
+        or path.name != "job.json"
+        or path.resolve(strict=True) != path
+    ):
+        raise ArtCraftError("Choose the exact absolute ArtCraft job record")
+    record = validate_record("job", _read_record(path))
+    workspace = Path(record["workspace"])
+    metadata = _selected_job_metadata(path, workspace, record["request"]["context"])
+    store = ArtCraftJobStore(workspace, metadata_root=metadata)
+    if store.reference(record["jobId"]) != path:
+        raise ArtCraftError(
+            "ArtCraft job reference differs from its recorded workspace"
+        )
+    stored = store.load(record["jobId"])
+    head = store.head(record["jobId"])
+    if stored != record or head is None or head["eventHash"] != expected_head:
+        raise ArtCraftError(
+            "ArtCraft expected job event head changed or is missing",
+            code="ARTCRAFT_SCOPE_CHANGED",
+        )
+    return store, stored, head
+
+
+def _selected_job_metadata(path, workspace, context):
+    if context["kind"] == "provider-only":
+        return workspace / "artcraft-jobs"
+    metadata = path.parent.parent
+    if metadata.name != "artcraft-jobs":
+        raise ArtCraftError(
+            "Video ArtCraft jobs require a dedicated metadata directory"
+        )
+    return _bounded_path(workspace / "edit", metadata, "video job metadata")
+
+
+def _inspect_job_project(store, job):
+    request = job["request"]
+    if request["context"]["kind"] == "provider-only":
+        return "not-applicable"
+    try:
+        current_store, _, current = _video_preparation_workspace(
+            store.workspace, request
+        )
+    except (OSError, ValueError, RuntimeError):
+        return "changed"
+    if current_store.directory != store.directory or any(
+        job.get(key) != value for key, value in current.items()
+    ):
+        return "changed"
+    return "current"
+
+
+def _retained_job_file(expected, roots):
+    path = Path(expected["locator"])
+    try:
+        path = _bounded_path(_owning_root(path, roots), path, "retained file")
+        return (
+            path.is_file()
+            and path.stat().st_nlink == 1
+            and file_fingerprint(path) == expected
+        )
+    except (OSError, ValueError, RuntimeError):
+        return False
+
+
+def _owning_root(path, roots):
+    for root in map(Path, roots):
+        if root.is_absolute() and path.is_relative_to(root):
+            return root
+    raise ArtCraftError("ArtCraft evidence falls outside the approved roots")
+
+
+def _inspect_job_inputs(job):
+    return (
+        "current"
+        if all(_retained_job_file(item, job["roots"]["read"]) for item in job["inputs"])
+        else "changed"
+    )
+
+
+def _inspect_job_outputs(job, head):
+    expected = head.get("outputs") or []
+    if not expected:
+        return "awaiting-output"
+    return (
+        "current"
+        if all(_retained_job_file(item, job["roots"]["write"]) for item in expected)
+        else "changed"
+    )
+
+
+def _inspect_job_document(store, job, head):
+    path = store.workspace / job["document"]
+    roots = job["roots"]["write"]
+    saved = head.get("saved")
+    if saved is None and job.get("documentState") == "saved" and job["inputs"]:
+        saved = {**job["inputs"][0], "locator": str(path)}
+    if saved is None:
+        return "changed" if path.exists() else "awaiting-document"
+    return (
+        "current"
+        if saved["locator"] == str(path) and _retained_job_file(saved, roots)
+        else "changed"
+    )

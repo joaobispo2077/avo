@@ -32,6 +32,10 @@ def configure(sub):
     prepare.add_argument("--cli")
     prepare.add_argument("--application")
     prepare.add_argument("--json", action="store_true")
+    inspect = operations.add_parser("inspect", help="Reconcile retained job evidence")
+    inspect.add_argument("--job", required=True)
+    inspect.add_argument("--expected-head", required=True)
+    inspect.add_argument("--json", action="store_true")
 
 
 def _distinct_keys(pairs):
@@ -163,13 +167,15 @@ def _prepare_job(request, args):
 
 
 def run(args):
-    from avo.artcraft import ArtCraftError, assess_request, catalog
+    from avo.artcraft import ArtCraftError, assess_request, catalog, inspect_authoring
 
     try:
         if args.artcraft_operation == "catalog":
             result = catalog(app=args.app, behavior=args.behavior)
         elif args.artcraft_operation == "prepare":
             result = _prepare_job(_decode_request(args.request_json), args)
+        elif args.artcraft_operation == "inspect":
+            result = inspect_authoring(args.job, expected_head=args.expected_head)
         else:
             request = _decode_request(args.request_json)
             result = assess_request(
