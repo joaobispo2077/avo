@@ -611,6 +611,11 @@ component instance records its parameters and project-owned source copies.
 An explicit upgrade creates a new version-pinned instance linked to the
 previous record. Its contextual review follows the existing video gates.
 
+The AniCraft lower-third profile authors 16:9 and 9:16 on their declared
+canvases. Both use the same phase clock and width-scaled typography. The
+portrait layout anchors the plate near three quarters of the canvas height
+and checks every visible alpha frame against its independently measured bounds.
+
 ## Motion engine selection and code-drawn capture (feature 012)
 
 HyperFrames remains the default. The pure shared motion policy resolves invocation, pinned run, project/video, provider/channel and global preferences, in that order. Strict saved IDs are hyperframes, remotion, and code-drawn; Remotion retains its existing unsupported execution adapter. A new default never rewrites a recorded animation revision or creator decision. Explicit new engine/source authoring uses existing revision invalidation. Installed motion and pipeline routers resolve current no-framework intent before loading engine-specific skills.

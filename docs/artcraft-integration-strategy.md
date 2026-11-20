@@ -85,6 +85,11 @@ the selected component ID. Use a full-canvas placement, an explicitly linked
 cue and a frame-aligned interval equal to the exported frame count. The current
 cut and sync must have their existing approvals.
 
+Choose a 16:9 or 9:16 output contract when preparing the AniCraft job. Each
+format is authored at its own canvas size. The portrait plate sits near three
+quarters of the picture height, with the entrance, readable hold and exit
+inspected on that canvas.
+
 Run `avo cli artcraft register --project PROJECT --job JOB --expected-head HEAD
 --asset-id ASSET --output OUTPUT --json` after the selected job reaches
 `exported`. Use absolute paths and an existing output folder under the video's

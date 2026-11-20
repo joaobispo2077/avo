@@ -41,6 +41,8 @@ and opaque PNG sequence stay reference-only until separately qualified. For the
 initial lower third, inspection validates the editable label, font family,
 timings, selected graphic and inline paths directly from the native document.
 The selected app's installed command signatures are captured at preparation.
+The current lower-third profile supports declared 16:9 and 9:16 canvases.
+Review the text size, face and caption clearance within the selected format.
 Automated authoring uses a confined runner and verifies the saved document's
 fresh-session frames and transparent export against a third native backing.
 Use `avo cli artcraft inspect --job <absolute-job-record> --expected-head
