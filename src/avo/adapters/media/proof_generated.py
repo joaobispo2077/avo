@@ -140,6 +140,7 @@ def _current_admission(record, reference, input_lock_ref, canonical_lock, valida
     if (
         record["generator"]["adapterId"] == "code-drawn"
         or (record.get("parameters") or {}).get("hyperframes")
+        or (record.get("parameters") or {}).get("artcraft")
     ) and validator is None:
         raise RuntimeError(
             "Canonical generated asset requires current admission observations"
@@ -157,6 +158,16 @@ def _input_lock(operation, record, canonical_lock):
     reference = params["inputLockRef"]
     _fingerprint(reference["path"], reference)
     lock = _json(reference["path"])
+    if (record.get("parameters") or {}).get("artcraft"):
+        from avo.timeline.artcraft_binding import require_artcraft_operation_binding
+
+        return require_artcraft_operation_binding(
+            operation, record, lock, canonical_lock
+        )
+    return _drawing_input_lock(operation, record, canonical_lock, lock, reference)
+
+
+def _drawing_input_lock(operation, record, canonical_lock, lock, reference):
     if lock.get("inputLockHash") != document_hash_excluding(lock, "inputLockHash"):
         raise RuntimeError(f"Generated input lock hash mismatch: {reference['path']}")
     declared = record["parameters"].get("codeDrawn", record["parameters"])
@@ -255,6 +266,7 @@ def verify_cached(
     if (
         observations is not None
         and asset["record"]["generator"]["adapterId"] != "code-drawn"
+        and not (asset["record"].get("parameters") or {}).get("artcraft")
     ):
         observations[key] = {
             "canonicalLock": deepcopy(canonical_lock),
@@ -354,6 +366,15 @@ def _pixel_observation(asset, observations):
 def inspect(asset, spec, fps, *, observations=None):
     operation = asset["operation"]
     params = operation["parameters"]
+    artcraft = (asset["record"].get("parameters") or {}).get("artcraft")
+    if artcraft:
+        from avo.timeline.artcraft_binding import require_artcraft_output_geometry
+
+        require_artcraft_output_geometry(
+            operation,
+            artcraft["output"],
+            {**spec, "frameRate": {"num": fps.numerator, "den": fps.denominator}},
+        )
     video, opaque = _pixel_observation(asset, observations)
     if Fraction(video["r_frame_rate"]) != fps:
         raise RuntimeError("Generated asset frame rate differs from ProofPlan")

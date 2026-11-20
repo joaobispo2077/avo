@@ -804,12 +804,27 @@ def _generated_proof_inputs(workspace: Any, proof_lock: dict) -> dict[str, dict]
             },
             "ancestry": deepcopy(record["inputs"]),
         }
-        extension = (record.get("parameters") or {}).get("codeDrawn")
-        if extension:
-            _require_generated_proof_binding(workspace, extension, proof_lock, asset_id)
-            value["inputLockRef"] = deepcopy(extension["inputLockRef"])
+        input_lock = _generated_proof_input_lock(workspace, record, proof_lock)
+        if input_lock is not None:
+            value["inputLockRef"] = input_lock
         inputs[key] = value
     return inputs
+
+
+def _generated_proof_input_lock(workspace, record, proof_lock):
+    asset_id = record["assetId"]
+    parameters = record.get("parameters") or {}
+    code_drawn = parameters.get("codeDrawn")
+    if code_drawn:
+        _require_generated_proof_binding(workspace, code_drawn, proof_lock, asset_id)
+        return deepcopy(code_drawn["inputLockRef"])
+    artcraft = parameters.get("artcraft")
+    if artcraft is None:
+        return None
+    if proof_lock.get("input-lock:" + asset_id) != artcraft["bindingHash"]:
+        raise ValueError(f"ArtCraft input lock differs from proof lock: {asset_id}")
+    reference = artcraft["bindingRef"]
+    return {"path": reference["locator"], "sha256": reference["sha256"]}
 
 
 def _require_original_only_plan(plan: dict) -> None:

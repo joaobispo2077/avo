@@ -62,6 +62,10 @@ def create_generated_asset_validator(workspace):
         record = service.load(reference["assetId"])
         if record["recordHash"] != reference["recordHash"]:
             raise ValueError("generated asset record identity changed")
+        if record.get("parameters", {}).get("artcraft"):
+            return _admit_artcraft(
+                workspace, service, record, input_lock_ref, canonical_lock
+            )
         hyperframes = record.get("parameters", {}).get("hyperframes")
         if hyperframes:
             return _admit_hyperframes(
@@ -90,6 +94,88 @@ def create_generated_asset_validator(workspace):
         return service.admit(reference["assetId"], code_drawn_environment=environment)
 
     return validator
+
+
+def register_artcraft_export(workspace, *, job_ref, expected_head, output, asset_id):
+    """Register one explicitly selected native export after observing source and alpha."""
+    from avo.adapters.media.artcraft_alpha import pack_alpha_sequence
+    from avo.timeline.artcraft_binding import (
+        build_artcraft_asset_record,
+        freeze_export_binding,
+    )
+    from avo.timeline.contracts import file_fingerprint
+    from avo.timeline.generated_assets import GeneratedAssetService
+    from avo.timeline.store import write_immutable_json
+
+    service = GeneratedAssetService(workspace)
+    service.path(asset_id)
+    binding = freeze_export_binding(
+        workspace, job_ref=job_ref, expected_head=expected_head
+    )
+    _observe_artcraft_source(binding)
+    output_root = workspace.raw_dir.resolve() / "edit" / "derived"
+    output = Path(output)
+    lock_path = output.with_suffix(".source.json")
+    if lock_path.resolve() != lock_path or (
+        lock_path.exists() and lock_path.stat().st_nlink != 1
+    ):
+        raise ValueError("ArtCraft source lock needs an owned derived path")
+    observed = pack_alpha_sequence(
+        binding["frames"], binding["outputContract"], output, output_root=output_root
+    )
+    write_immutable_json(lock_path, binding)
+    record = build_artcraft_asset_record(
+        binding, file_fingerprint(lock_path), observed, asset_id=asset_id
+    )
+    return service.register(record, artcraft_observations=observed)
+
+
+def _observe_artcraft_source(binding):
+    from avo.adapters.artcraft_anicraft import inspect_lower_third_source
+
+    if binding["environment"]["app"] != "anicraft":
+        raise ValueError(
+            "No verified ArtCraft source profile is available for this app"
+        )
+    source = binding["nativeSource"]
+    observed = inspect_lower_third_source(
+        Path(source["locator"]),
+        binding["outputContract"],
+        binding["parameters"],
+        max_bytes=binding["nativeByteBudget"],
+    )
+    if observed["fingerprint"] != source:
+        raise ValueError("ArtCraft native source changed during observation")
+
+
+def _admit_artcraft(workspace, service, record, input_lock_ref, canonical_lock):
+    from avo.adapters.media.artcraft_alpha import observe_alpha_sequence
+    from avo.timeline.artcraft_binding import read_artcraft_binding
+
+    receipt = record["parameters"]["artcraft"]
+    ref = receipt["bindingRef"]
+    if input_lock_ref != {"path": ref["locator"], "sha256": ref["sha256"]}:
+        raise ValueError(
+            "ArtCraft input-lock reference differs from its frozen receipt"
+        )
+    binding = read_artcraft_binding(workspace, ref)
+    required = ("cmap", "bmap", "tracks", "animation", "sync-map")
+    heads = binding["canonical"]["heads"]
+    if any(
+        key not in heads or canonical_lock.get(key) != heads[key] for key in required
+    ):
+        raise ValueError("ArtCraft canonical inputs differ from the frozen proof plan")
+    _observe_artcraft_source(binding)
+    observed = observe_alpha_sequence(
+        binding["frames"],
+        binding["outputContract"],
+        Path(record["output"]["locator"]),
+        output_root=workspace.raw_dir.resolve() / "edit" / "derived",
+    )
+    admitted = service.admit(record["assetId"], artcraft_observations=observed)
+    if admitted != record:
+        raise ValueError("ArtCraft generated asset changed during admission")
+    return admitted
 
 
 def _guard_hyperframes_dependencies(service, record):

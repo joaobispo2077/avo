@@ -620,15 +620,33 @@ class ProofPlanCompiler:
             if not reference:
                 continue
             record = self._generated_receipt(reference)
-            original = self._generated_original_lock(parameters)
             self._require_generated_output(record, parameters)
+            lock["generated:" + record["assetId"]] = record["recordHash"]
+            if record.get("parameters", {}).get("artcraft"):
+                lock["input-lock:" + record["assetId"]] = (
+                    self._require_artcraft_generated(operation, record, output)
+                )
+                continue
+            original = self._generated_original_lock(parameters)
             if record.get("parameters", {}).get("codeDrawn"):
                 self._require_canonical_generated(operation, record, original)
             if record.get("parameters", {}).get("hyperframes"):
                 self._require_hyperframes_generated(operation, record, original, output)
-            lock["generated:" + record["assetId"]] = record["recordHash"]
             lock["input-lock:" + original["instanceId"]] = original["inputLockHash"]
         return lock
+
+    def _require_artcraft_generated(self, operation, record, output):
+        from .artcraft_binding import (
+            read_artcraft_binding,
+            require_artcraft_operation_binding,
+            require_artcraft_output_geometry,
+        )
+
+        receipt = record["parameters"]["artcraft"]
+        binding = read_artcraft_binding(self.workspace, receipt["bindingRef"])
+        require_artcraft_operation_binding(operation, record, binding)
+        require_artcraft_output_geometry(operation, receipt["output"], output)
+        return binding["bindingHash"]
 
     def _generated_preflight(self, plan, readiness):
         blockers = []

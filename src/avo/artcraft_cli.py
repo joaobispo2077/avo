@@ -40,6 +40,12 @@ def configure(sub):
         command.add_argument("--job", required=True)
         command.add_argument("--expected-head", required=True)
         command.add_argument("--json", action="store_true")
+    register = operations.add_parser(
+        "register", help="Register a verified ArtCraft export for one video"
+    )
+    for field in ("project", "job", "expected-head", "asset-id", "output"):
+        register.add_argument(f"--{field}", required=True)
+    register.add_argument("--json", action="store_true")
 
 
 def _distinct_keys(pairs):
@@ -195,6 +201,24 @@ def run(args):
                 expected_head=args.expected_head,
                 adapter=SelectedArtCraftAdapter(),
             )
+        elif args.artcraft_operation == "register":
+            from avo.proof_composition import register_artcraft_export
+            from avo.timeline.generated_assets import GeneratedAssetError
+            from avo.timeline.store import StoreError
+            from avo.timeline.workspace import TimelineWorkspace, WorkspaceError
+
+            try:
+                result = register_artcraft_export(
+                    TimelineWorkspace.from_project(args.project),
+                    job_ref=args.job,
+                    expected_head=args.expected_head,
+                    output=args.output,
+                    asset_id=args.asset_id,
+                )
+            except (GeneratedAssetError, StoreError, WorkspaceError) as exc:
+                raise ArtCraftError(
+                    str(exc), code="ARTCRAFT_ADMISSION_REQUIRED"
+                ) from exc
         else:
             request = _decode_request(args.request_json)
             result = assess_request(
