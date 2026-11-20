@@ -620,6 +620,137 @@ def test_installed_anicraft_overlay_contributes_to_full_and_window_proofs(
             plan, stale, window={"startFrame": 25, "endFrameExclusive": 39}
         )
     assert not stale.exists()
+    _assert_reused_native_export(tmp_path, monkeypatch, job_ref, event_head, record)
+
+
+def _assert_reused_native_export(
+    tmp_path, monkeypatch, job_ref, event_head, original_record
+):
+    from tests.test_artcraft_jobs import job_spec
+
+    from avo.adapters.artcraft import SelectedArtCraftAdapter
+    from avo.artcraft import read_authoring_export
+    from avo.mcp.bridge import run_cli
+    from avo.proof_composition import register_artcraft_export
+    from avo.timeline.workspace import TimelineWorkspace
+
+    def unexpected(*_args, **_kwargs):
+        pytest.fail("Reuse launched or queried the native authoring application")
+
+    for method in ("observe", "validate_run", "author_lower_third"):
+        monkeypatch.setattr(SelectedArtCraftAdapter, method, unexpected)
+    original = json.loads(Path(job_ref).read_bytes())
+    native_input = Path(original["inputs"][0]["locator"])
+    raw = tmp_path / "reuse-video"
+    derived = raw / "edit" / "derived"
+    derived.mkdir(parents=True)
+    project = raw / "avo.project.json"
+    project.write_text(
+        json.dumps(
+            {
+                "provider": "neutral-channel",
+                "rawDir": str(raw),
+                "videoId": "reuse-episode",
+            }
+        ),
+        encoding="utf-8",
+    )
+    brief = request(
+        context={"kind": "video", "project": str(project), "videoId": "reuse-episode"}
+    )
+    spec = job_spec(
+        raw,
+        mode="reuse",
+        jobId="reused-native-export",
+        output=original["output"],
+        budget=original["budget"],
+        document={"state": "saved", "source": str(native_input)},
+        readRoots=[str(native_input.parent)],
+        authoringParameters=original["authoringParameters"],
+    )
+    command = [
+        "artcraft",
+        "prepare",
+        "--request-json",
+        json.dumps(brief),
+        "--provider",
+        "neutral-channel",
+        "--workspace",
+        str(raw),
+        "--mode",
+        "reuse",
+        "--app",
+        "anicraft",
+        "--operation",
+        "lower-third",
+        "--reuse-job",
+        job_ref,
+        "--reuse-head",
+        event_head,
+        "--json",
+        "--job-spec-json",
+    ]
+    changed = {
+        **spec,
+        "authoringParameters": {
+            **spec["authoringParameters"],
+            "primaryText": "Different",
+        },
+    }
+    blocked = run_cli([*command, json.dumps(changed)])
+    assert not blocked.ok and "needs rendering" in blocked.stderr
+    different_source = raw / "different.anicraft"
+    different_source.write_bytes(b"different retained design")
+    foreign = {
+        **spec,
+        "document": {"state": "saved", "source": str(different_source)},
+        "readRoots": [str(raw)],
+    }
+    blocked = run_cli([*command, json.dumps(foreign)])
+    assert not blocked.ok and "differs from the selected source" in blocked.stderr
+    prepared = run_cli([*command, json.dumps(spec)])
+    assert prepared.ok, prepared.stderr
+    selected = prepared.parsed_json
+    copied = run_cli(
+        [
+            "artcraft",
+            "run",
+            "--job",
+            selected["jobRef"],
+            "--expected-head",
+            selected["head"],
+            "--json",
+        ]
+    )
+    assert copied.ok, copied.stderr
+    rerun = run_cli(
+        [
+            "artcraft",
+            "run",
+            "--job",
+            selected["jobRef"],
+            "--expected-head",
+            copied.parsed_json["head"],
+            "--json",
+        ]
+    )
+    assert rerun.parsed_json == copied.parsed_json
+    _, event = read_authoring_export(
+        selected["jobRef"], expected_head=copied.parsed_json["head"]
+    )
+    assert all(Path(frame["locator"]).is_relative_to(raw) for frame in event["outputs"])
+    registered = register_artcraft_export(
+        TimelineWorkspace.from_project(project),
+        job_ref=selected["jobRef"],
+        expected_head=copied.parsed_json["head"],
+        output=derived / "speaker-reused.mkv",
+        asset_id="artcraft-speaker-reused",
+    )
+    left, right = (
+        value["parameters"]["artcraft"] for value in (original_record, registered)
+    )
+    assert left["rebuildEvidenceHash"] == right["rebuildEvidenceHash"]
+    assert left["bindingHash"] != right["bindingHash"]
 
 
 def _assert_actual_proof_review(

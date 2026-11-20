@@ -1,5 +1,6 @@
 """Native provider copies retain their exact source and version per video."""
 
+import json
 from copy import deepcopy
 from pathlib import Path
 from types import SimpleNamespace
@@ -28,7 +29,7 @@ def native_library(tmp_path):
     native.write_bytes(b"\x00\xffeditable-provider-file")
     (source / "recipe.json").write_text("{}", encoding="utf-8")
     package = _package_from_retained_source(
-        native, picture_output(), {"primaryText": "Fixture"}
+        native, picture_output(), {"primaryText": "Fixture", "font": "Arial"}
     )
     store = tmp_path / "native-store"
     store.mkdir()
@@ -108,7 +109,7 @@ def test_pinned_native_instances_copy_owned_source_and_keep_parameter_revisions_
     two = _resolve(second, native_library, text="Mar\u00eda")
     assert one["nativePackage"] == two["nativePackage"]
     assert one["instanceHash"] != two["instanceHash"]
-    assert one["parameters"] == {"primaryText": "Clara"}
+    assert one["parameters"] == {"primaryText": "Clara", "font": "Arial"}
     for item in (one, two):
         native = next(
             Path(ref["path"])
@@ -136,6 +137,12 @@ def test_reuse_refuses_wrong_provider_manifest_and_unbounded_parameters(
     bounds = {"primaryText": "speaking" * 90}
     with pytest.raises(ComponentInstanceError, match="parameter contract"):
         _resolve(own, native_library, parameters=deepcopy(bounds))
+    with pytest.raises(ComponentInstanceError, match="reviewed with this font"):
+        _resolve(
+            own, native_library, parameters={"primaryText": "Sample", "font": "Other"}
+        )
+    with pytest.raises(ComponentInstanceError, match="nonempty lower-third label"):
+        _resolve(own, native_library, parameters={"primaryText": " "})
     assert not own.path("speaker-first-use").exists()
 
 
@@ -156,7 +163,7 @@ def test_native_upgrade_is_explicit_and_keeps_the_original_pin(
 
     catalog, store, _, native = native_library
     original = _package_from_retained_source(
-        native, picture_output(), {"primaryText": "Fixture"}
+        native, picture_output(), {"primaryText": "Fixture", "font": "Arial"}
     )
     package = seal_record(
         "package",
@@ -202,3 +209,20 @@ def test_native_upgrade_is_explicit_and_keeps_the_original_pin(
     assert second["reviewRefs"] == []
     assert video.load(first["instanceId"]) == first
     assert _resolve(video, native_library) == first
+
+
+def test_native_retry_preserves_an_earlier_pin_with_an_implicit_font(
+    tmp_path, native_library
+):
+    video = _video_components(tmp_path / "earlier-provider-pin")
+    current = _resolve(video, native_library, text="Clara")
+    earlier = video._seal({**current, "parameters": {"primaryText": "Clara"}})
+    path = video.path(current["instanceId"])
+    path.write_text(
+        json.dumps(earlier, ensure_ascii=False, sort_keys=True, indent=2) + "\n",
+        encoding="utf-8",
+        newline="\n",
+    )
+    before = path.read_bytes()
+    assert _resolve(video, native_library, text="Clara") == earlier
+    assert path.read_bytes() == before
