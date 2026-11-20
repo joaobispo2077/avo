@@ -42,6 +42,7 @@ __all__ = [
     "prepare_authoring",
     "prepare_authoring_reuse",
     "read_authoring_export",
+    "recover_authoring",
     "require_eligible",
     "run_authoring",
     "seal_record",
@@ -913,6 +914,62 @@ def inspect_authoring(job_ref, *, expected_head, source_inspector=None):
         native = store.workspace / job["document"]
         result["sourceObservations"] = source_inspector(job, native)
     return result
+
+
+def recover_authoring(job_ref, *, expected_head):
+    """Locate bounded retained evidence after an interrupted native operation."""
+    store, job, head = _open_selected_job(job_ref, expected_head)
+    result = _inspection_result(store, job, head)
+    state = head["state"]
+    if state == "exported" and result["status"] == "current":
+        _verify_retained_export(store, job, head)
+        return {
+            **result,
+            "recovery": {
+                "nextAction": "use-verified-export",
+                "outputs": head["outputs"],
+            },
+        }
+    actions = {
+        "prepared": "run-prepared-job",
+        "ready": "inspect-operator-return",
+        "running": "inspect-current-owner",
+    }
+    action = actions.get(state, "prepare-fresh-job")
+    if result["status"] == "stale" and state in {"prepared", "ready", "exported"}:
+        action = "restore-selected-inputs"
+    return {
+        **result,
+        "recovery": {
+            "nextAction": action,
+            "artifactState": "reference-only",
+            "retainedFiles": _recoverable_job_files(
+                job, _authoring_export_directory(store, job)
+            ),
+        },
+    }
+
+
+def _recoverable_job_files(job, directory):
+    budget = job["budget"]
+    count = min(job["output"].get("frameCount", 0), budget["files"])
+    candidates = [
+        directory / name
+        for name in ("component.anicraft", "recipe.json", "handoff.json")
+    ]
+    candidates.extend(
+        directory / "alpha" / f"frame_{index:05d}.png" for index in range(1, count + 1)
+    )
+    observed, used = [], 0
+    for path in candidates[: budget["files"]]:
+        if path.resolve() != path or not path.is_file():
+            continue
+        info = path.stat()
+        if info.st_nlink != 1 or used + info.st_size > budget["bytes"]:
+            continue
+        observed.append(file_fingerprint(path))
+        used += info.st_size
+    return observed
 
 
 def _inspection_result(store, job, head):
