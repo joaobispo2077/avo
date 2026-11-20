@@ -92,6 +92,16 @@ and `mediaClass: generated-asset`. Use the selected program-frame region and
 overlapping uses of the same cue. The existing gain, fade and mix operations
 control audition level and preserve the original dialogue processing.
 
+For an editable static card, explicitly select `--app vectorcraft --operation
+vector-still --mode cli` with the selected Windows 0.24.1 tools and a confined
+runner. Use the `editable-vector-card` behavior, `authoringParameters` with its
+label and font, and a `generated-still` contract for straight-alpha sRGB PNG.
+The job retains editable text, vector paths and the independently measured PNG.
+Use the review's `still` fingerprint and `generatedStillRef` on a Tracks overlay
+layer. The proof's `overlay-image` operation uses the same receipt, layer,
+native dimensions, placement and frame range. It holds the image on those
+frames and preserves the original audio.
+
 For a video job with a verified export, select an Animation component, its BMap
 cue and the linked Tracks overlay before authoring. Register the exact exported
 job with `avo cli artcraft register`, the current project and an owned `.mkv`

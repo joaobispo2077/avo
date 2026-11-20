@@ -613,6 +613,13 @@ verifies the current frame and sample ranges. Materialization and native
 execution recheck the receipt and its closure while resolving the audio.
 The native mixer adds the cue through the existing SFX node and final encode.
 
+The selected VectorCraft Windows 0.24.1 profile stages a fixed card recipe
+under a confined runner with plug-ins and preferences disabled. It retains
+the editable native source, its bounded inline resource envelope and the
+verified sRGB RGBA still. Tracks selects that exact static asset and its
+placement. Proof execution verifies the source, dimensions and decoded pixels
+before using the existing overlay layers for the exact requested frames.
+
 The explicitly selected video export binds the unchanged AniCraft source,
 recipe, app and CLI fingerprints, ordered alpha frames and current approved
 cut and sync to the logical component in Animation, BMap and Tracks. Proof
