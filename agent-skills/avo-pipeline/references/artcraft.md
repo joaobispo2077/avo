@@ -37,7 +37,10 @@ Windows AniCraft 0.2.1 supports an explicit `--mode guided` job. Set
 `authoringParameters.primaryText` and `authoringParameters.font` in the job
 options and start from an empty document. `artcraft run` returns the staged
 recipe and runnable native steps for an operator. The returned native document
-and opaque PNG sequence stay reference-only until separately qualified.
+and opaque PNG sequence stay reference-only until separately qualified. For the
+initial lower third, inspection validates the editable label, font family,
+timings, selected graphic and inline paths directly from the native document.
+The selected app's installed command signatures are captured at preparation.
 Automated authoring uses a confined runner and verifies the saved document's
 fresh-session frames and transparent export against a third native backing.
 Use `avo cli artcraft inspect --job <absolute-job-record> --expected-head
