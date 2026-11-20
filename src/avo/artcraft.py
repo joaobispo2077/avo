@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from importlib.resources import files
 from pathlib import Path
 from tempfile import NamedTemporaryFile
+from time import monotonic
 from typing import Any
 
 from avo.paths import repo_root
@@ -39,6 +40,7 @@ __all__ = [
     "guard_legacy_component_request",
     "inspect_authoring",
     "prepare_authoring",
+    "prepare_authoring_reuse",
     "read_authoring_export",
     "require_eligible",
     "run_authoring",
@@ -600,6 +602,103 @@ def prepare_authoring(
     return _publish_preparation(store, job, document, source)
 
 
+def prepare_authoring_reuse(request, spec, *, from_job, from_head, decision, intent):
+    """Prepare a new video use of an exact previously rendered isolated component."""
+    from types import SimpleNamespace
+
+    require_eligible(request, decision, intent=intent)
+    validate_document(spec, _schema("jobSpec"))
+    if (
+        spec["mode"] != "reuse"
+        or spec["document"]["state"] != "saved"
+        or {"cliPath", "appPath"}.intersection(spec)
+    ):
+        raise ArtCraftError(
+            "ArtCraft reuse needs the saved source and the retained tool identity"
+        )
+    original, exported = _reusable_native_export(from_job, from_head)
+    _require_reuse_match(request, spec, original)
+    selected = {**original["inputs"][0], "locator": spec["document"]["source"]}
+    if not _retained_job_file(selected, spec["readRoots"]):
+        raise ArtCraftError(
+            "ArtCraft reusable editable source differs from the selected source"
+        )
+    prior = original["observation"]
+    observed = {
+        **{
+            key: prior[key]
+            for key in (
+                "app",
+                "platform",
+                "release",
+                "operations",
+                "executable",
+                "application",
+                "commandSchemaHash",
+            )
+        },
+        "mode": "reuse",
+        "reuseSource": {
+            "jobRef": file_fingerprint(Path(from_job)),
+            "exportHead": exported["eventHash"],
+        },
+    }
+    return prepare_authoring(
+        request,
+        spec,
+        decision=decision,
+        intent=intent,
+        adapter=SimpleNamespace(observe=lambda **_selection: observed),
+    )
+
+
+def _require_reuse_match(request, spec, original):
+    if any(
+        request.get(key) != original["request"][key]
+        for key in ("provider", "componentId")
+    ):
+        raise ArtCraftError(
+            "ArtCraft reusable export belongs to a different provider component"
+        )
+    if any(spec.get(key) != original[key] for key in ("output", "authoringParameters")):
+        raise ArtCraftError(
+            "ArtCraft selected parameters or output contract changed and needs rendering"
+        )
+
+
+def _reusable_native_export(job_ref, expected_head):
+    store, job, event = _open_selected_job(job_ref, expected_head)
+    observation = job["observation"]
+    profile = (
+        event["state"],
+        job["documentState"],
+        job["decision"]["scope"],
+        observation["mode"],
+    )
+    expected = (
+        "exported",
+        "saved",
+        {"app": "anicraft", "operations": ["lower-third"]},
+        "cli",
+    )
+    if (
+        profile != expected
+        or not {"application", "executable", "commandSchemaHash"} <= observation.keys()
+    ):
+        raise ArtCraftError("Select a qualified native saved-source export for reuse")
+    if (
+        _inspect_job_inputs(job) != "current"
+        or _inspect_job_document(store, job, event) != "current"
+    ):
+        raise ArtCraftError("ArtCraft reusable source or export changed")
+    _verify_retained_export(store, job, event)
+    for key in ("application", "executable"):
+        expected = observation[key]
+        if not _retained_job_file(expected, [str(Path(expected["locator"]).parent)]):
+            raise ArtCraftError("ArtCraft reusable tool environment changed")
+    return job, event
+
+
 def _preparation_workspace(request, spec):
     from avo.init_project import load_provider
 
@@ -719,11 +818,12 @@ def _require_preparation_capacity(workspace, budget, source):
 
 def _require_preparation_observation(observation, spec, roots):
     validate_document(observation, _schema("observation"))
-    authority = (
-        observation.get("authority") == "operator"
-        if spec["mode"] == "guided"
-        else observation.get("effectiveRoots") == roots
-    )
+    if spec["mode"] == "reuse":
+        authority = bool(observation.get("reuseSource"))
+    elif spec["mode"] == "guided":
+        authority = observation.get("authority") == "operator"
+    else:
+        authority = observation.get("effectiveRoots") == roots
     if not authority or observation["mode"] != spec["mode"]:
         raise ArtCraftError(
             "ArtCraft effective roots or working mode were not independently established",
@@ -989,13 +1089,60 @@ def run_authoring(job_ref, *, expected_head, adapter):
         if job["observation"]["mode"] == "guided":
             return _run_guided(store, job, head, inspection, adapter)
         directory = _require_prepared_lower_third(store, job, head)
-        adapter.validate_run(job)
+        if job["observation"]["mode"] == "reuse":
+            produce = _copy_reusable_export
+        else:
+            adapter.validate_run(job)
+            produce = adapter.author_lower_third
         running = store.append(
             job["jobId"],
             expected_head=expected_head,
             event={"operationId": "run", "state": "running"},
         )
-    return _execute_prepared_job(store, job, running, directory, adapter)
+    return _execute_prepared_job(store, job, running, directory, produce)
+
+
+def _copy_reusable_export(job, directory):
+    selected = job["observation"]["reuseSource"]
+    prior_ref = Path(selected["jobRef"]["locator"])
+    if file_fingerprint(prior_ref) != selected["jobRef"]:
+        raise ArtCraftError("ArtCraft retained reuse receipt changed")
+    prior, exported = _reusable_native_export(prior_ref, selected["exportHead"])
+    _require_reuse_match(job["request"], job, prior)
+    expected = {**prior["inputs"][0], "locator": job["inputs"][0]["locator"]}
+    if job["inputs"][0] != expected:
+        raise ArtCraftError(
+            "ArtCraft prepared editable source differs from the reusable source"
+        )
+    native = directory / "component.anicraft"
+    recipe = directory / "recipe.json"
+    frames = [
+        directory / "alpha" / f"frame_{number:05d}.png"
+        for number in range(1, len(exported["outputs"]) + 1)
+    ]
+    sources = [exported["saved"], exported["recipe"], *exported["outputs"]]
+    budget = job["budget"]
+    if (
+        len(sources) > budget["files"]
+        or sum(item["sizeBytes"] for item in sources) > budget["bytes"]
+    ):
+        raise ArtCraftError(
+            "ArtCraft retained output exceeds the selected reuse budget"
+        )
+    directory.mkdir()
+    deadline = monotonic() + budget["seconds"]
+    for target, fingerprint in zip([native, recipe, *frames], sources, strict=True):
+        if monotonic() >= deadline:
+            raise ArtCraftError(
+                "ArtCraft retained output exceeded its reuse time budget"
+            )
+        _copy_native_source(target, fingerprint)
+    return {
+        "nativeSource": file_fingerprint(native),
+        "recipe": file_fingerprint(recipe),
+        "frames": [file_fingerprint(path) for path in frames],
+        "revisionCommandSchemaHash": exported["revisionCommandSchemaHash"],
+    }
 
 
 def _run_guided(store, job, head, inspection, adapter):
@@ -1067,9 +1214,9 @@ def _authoring_export_directory(store, job):
     return directory / "revision" if job["documentState"] == "saved" else directory
 
 
-def _execute_prepared_job(store, job, running, directory, adapter):
+def _execute_prepared_job(store, job, running, directory, produce):
     try:
-        result = adapter.author_lower_third(job, directory)
+        result = produce(job, directory)
         evidence = _verify_authoring_result(job, directory, result)
         if (
             _inspect_job_project(store, job) == "changed"

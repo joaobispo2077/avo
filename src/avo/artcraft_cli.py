@@ -32,6 +32,8 @@ def configure(sub):
     prepare.add_argument("--operation", action="append", required=True)
     prepare.add_argument("--cli")
     prepare.add_argument("--application")
+    prepare.add_argument("--reuse-job")
+    prepare.add_argument("--reuse-head")
     prepare.add_argument("--json", action="store_true")
     for operation, hint in (
         ("inspect", "Reconcile retained job evidence"),
@@ -213,6 +215,19 @@ def _prepare_job(request, args):
             spec[key] = selected
     intent = ArtCraftIntent("explicit", args.app, tuple(args.operation))
     decision = assess_request(request, intent=intent)
+    if any((args.reuse_job, args.reuse_head, args.mode == "reuse")):
+        from avo.artcraft import prepare_authoring_reuse
+
+        if not all((args.reuse_job, args.reuse_head)):
+            raise ArtCraftError("Select both the retained job and its export head")
+        return prepare_authoring_reuse(
+            request,
+            spec,
+            from_job=args.reuse_job,
+            from_head=args.reuse_head,
+            intent=intent,
+            decision=decision,
+        )
     return prepare_authoring(
         request,
         spec,

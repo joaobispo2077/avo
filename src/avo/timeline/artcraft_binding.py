@@ -48,6 +48,8 @@ def freeze_export_binding(workspace, *, job_ref, expected_head):
         if job["documentState"] == "saved":
             source["inputSources"] = job["inputs"]
             source["revisionCommandSchemaHash"] = event["revisionCommandSchemaHash"]
+        if job["observation"]["mode"] == "reuse":
+            source["reusedExport"] = job["observation"]["reuseSource"]
         components = {
             "version": 1,
             "jobRef": file_fingerprint(Path(job_ref)),
@@ -177,7 +179,9 @@ def _canonical_export_scope(workspace, job):
 
 
 def _verified_export_environment(observation):
-    if observation["mode"] != "cli" or not observation.get("commandSchemaHash"):
+    if observation["mode"] not in {"cli", "reuse"} or not observation.get(
+        "commandSchemaHash"
+    ):
         raise ArtCraftError(
             "ArtCraft export needs independent native command observations",
             code="ARTCRAFT_ADMISSION_REQUIRED",
