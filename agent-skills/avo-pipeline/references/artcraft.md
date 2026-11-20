@@ -74,6 +74,15 @@ native document and verifies reopened frames and alpha against the same
 contract as CLI batching. When the confined runner is unavailable, use the
 explicit guided route for an operator-owned handoff.
 
+For an editable isolated SoundCraft cue, use `--app soundcraft --operation
+isolated-cue --mode cli` with the selected Windows 0.20.1 tools and a confined
+runner. Select a source WAV using `soundCue.source` and choose the built-in
+`room-reverb` with `soundCue.effect`. Use the `editable-isolated-cue`
+requirement and a `generated-audio` WAV output with 48 kHz stereo and an
+explicit sample count up to ten seconds. Review locates the independently
+decoded cue, native session and retained dry audio dependency at the exact
+exported job head. The existing mix and review workflow own contextual use.
+
 For a video job with a verified export, select an Animation component, its BMap
 cue and the linked Tracks overlay before authoring. Register the exact exported
 job with `avo cli artcraft register`, the current project and an owned `.mkv`

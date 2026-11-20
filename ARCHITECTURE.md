@@ -599,6 +599,14 @@ record and waits for the exact successful receipt at each step before sending
 the next command. The first failed or incomplete receipt leaves a recoverable
 job outcome and prevents subsequent commands.
 
+The explicitly selected SoundCraft cue profile accepts one external WAV and
+an exact 48 kHz stereo output contract. A confined Windows 0.20.1 CLI builds
+an owned session with one track and the built-in room reverb. The media
+adapter independently decodes the retained source and both bounces, checks
+the PCM clock, and compares the saved session's fresh bounce. The export event
+binds the editable session, recipe, retained audio dependency and decoded
+output for standalone review. Canonical proof admission has its own checks.
+
 The explicitly selected video export binds the unchanged AniCraft source,
 recipe, app and CLI fingerprints, ordered alpha frames and current approved
 cut and sync to the logical component in Animation, BMap and Tracks. Proof
