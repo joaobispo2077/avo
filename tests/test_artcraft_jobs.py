@@ -522,14 +522,7 @@ def _overlay_snapshots(*, width=1920, height=1080, start_frame=18, frame_count=7
     end_frame = start_frame + frame_count
     return {
         "animation": {"components": [{"componentId": "speaker-label"}]},
-        "cmap": {
-            "segments": [],
-            "renderOutput": {
-                "width": width,
-                "height": height,
-                "frameRate": {"num": 24, "den": 1},
-            },
-        },
+        "cmap": {"segments": []},
         "bmap": {
             "cues": [
                 {
