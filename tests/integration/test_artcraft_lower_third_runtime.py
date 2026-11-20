@@ -190,6 +190,70 @@ def _publish_fixture_package(tmp_path, native, output, inspect_source):
         ]
         == package["packageHash"]
     )
+    _assert_pinned_native_source(tmp_path, service.path, store, event, native)
+
+
+def _assert_pinned_native_source(tmp_path, catalog_path, store, event, native):
+    from avo.mcp.bridge import run_cli
+
+    raw = tmp_path / "video-for-native-component"
+    raw.mkdir()
+    project = raw / "avo.project.json"
+    project.write_text(
+        json.dumps(
+            {
+                "rawDir": str(raw),
+                "videoId": "provider-instance-fixture",
+                "provider": "first-channel",
+            }
+        ),
+        encoding="utf-8",
+    )
+    instance = run_cli(
+        [
+            "artcraft",
+            "provider-instantiate",
+            "--project",
+            str(project),
+            "--catalog",
+            str(catalog_path),
+            "--native-store",
+            str(store),
+            "--kit-id",
+            "speaker-label",
+            "--version",
+            "1.0.0",
+            "--manifest-hash",
+            event["manifestSha256"],
+            "--instance-id",
+            "speaker-label-first-use",
+            "--bindings-json",
+            json.dumps(
+                {
+                    "parameters": {"primaryText": "Mar\u00eda", "font": "Arial"},
+                    "assetBindings": [],
+                    "eventBindings": [],
+                    "safeAreaBindings": {
+                        "faces": [],
+                        "captions": [],
+                        "evidence": [],
+                        "ui": [],
+                    },
+                }
+            ),
+            "--json",
+        ]
+    )
+    assert instance.ok, instance.stderr
+    selected = instance.parsed_json
+    copy = next(
+        Path(item["path"])
+        for item in selected["generatedFiles"]
+        if item["path"].endswith(".anicraft")
+    )
+    assert copy.is_relative_to(raw)
+    assert copy.read_bytes() == native.read_bytes()
+    assert selected["parameters"]["primaryText"] == "Mar\u00eda"
 
 
 def test_installed_anicraft_guided_job_round_trips_through_avo_commands(
