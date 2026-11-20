@@ -34,6 +34,7 @@ __all__ = [
     "PinnedArtCraftComponent",
     "assess_request",
     "catalog",
+    "describe_export_review",
     "guard_legacy_component_request",
     "inspect_authoring",
     "prepare_authoring",
@@ -1135,3 +1136,40 @@ def read_authoring_export(job_ref, *, expected_head):
         )
     _verify_retained_export(store, job, event)
     return job, event
+
+
+def describe_export_review(job_ref, *, expected_head):
+    """Describe the exact standalone candidate for an independent creator review."""
+    job, event = read_authoring_export(job_ref, expected_head=expected_head)
+    if job["decision"]["scope"] != {"app": "anicraft", "operations": ["lower-third"]}:
+        raise ArtCraftError("The selected job has no qualified review profile")
+    count = job["output"]["frameCount"]
+    phases = {
+        "before": 0,
+        "entrance": count // 8,
+        "hold": count // 3,
+        "exit": 7 * count // 8,
+        "after": count - 1,
+    }
+    return {
+        "reviewState": "pending-creator",
+        "jobHash": job["jobHash"],
+        "exportHead": event["eventHash"],
+        "componentId": job["request"]["componentId"],
+        "viewerPurpose": job["request"]["purpose"],
+        "editableBehavior": job["request"]["required"]["behavior"],
+        "nativeSource": event["saved"],
+        "outputContract": job["output"],
+        "standalone": {
+            "frames": [
+                {"phase": phase, "localFrame": frame, "output": event["outputs"][frame]}
+                for phase, frame in phases.items()
+            ],
+            "checks": [
+                "initial and final transparency",
+                "entrance and exit timing",
+                "readable hold at mobile size",
+                "contrast on light, dark and busy footage",
+            ],
+        },
+    }

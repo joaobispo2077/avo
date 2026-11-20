@@ -178,6 +178,154 @@ def _admit_artcraft(workspace, service, record, input_lock_ref, canonical_lock):
     return admitted
 
 
+def review_artcraft_proof(workspace, standalone, *, asset_id, materialization_path):
+    """Connect the standalone review to a current original-footage proof candidate."""
+    from avo.timeline.artcraft_binding import (
+        read_artcraft_binding,
+        require_artcraft_operation_binding,
+        require_artcraft_output_geometry,
+    )
+    from avo.timeline.generated_assets import GeneratedAssetService
+    from avo.timeline.review import candidate_identity
+
+    service = GeneratedAssetService(workspace)
+    record = service.load(asset_id)
+    receipt = record["parameters"].get("artcraft")
+    if not receipt:
+        raise ValueError("Select an ArtCraft generated asset for this review")
+    binding = read_artcraft_binding(workspace, receipt["bindingRef"])
+    if any(binding[key] != standalone[key] for key in ("jobHash", "exportHead")):
+        raise ValueError("The proof uses a different ArtCraft export")
+    materialization, plan = _load_artcraft_proof_candidate(
+        workspace, materialization_path
+    )
+    lock = plan["canonicalInputLock"]
+    operation = _artcraft_review_operation(plan, record)
+    require_artcraft_operation_binding(operation, record, binding, lock)
+    require_artcraft_output_geometry(operation, receipt["output"], plan["output"])
+    if not _artcraft_has_original_footage(plan, operation["outputRange"]):
+        raise ValueError(
+            "The ArtCraft overlay needs original footage for context review"
+        )
+    _admit_artcraft(
+        workspace, service, record, operation["parameters"]["inputLockRef"], lock
+    )
+    candidate = candidate_identity(
+        Path(plan["output"]["path"]), lock, plan["renderProfile"]
+    )
+    expected = materialization["output"]
+    if (candidate["path"], candidate["sha256"], candidate["byteSize"]) != (
+        expected["locator"],
+        expected["sha256"],
+        expected["sizeBytes"],
+    ):
+        raise ValueError("The original-footage proof changed after materialization")
+    context = {
+        "candidate": candidate,
+        "materializationHash": materialization["materializationHash"],
+        "proofPlanHash": plan["proofPlanHash"],
+        "placement": binding["placement"],
+        "logs": _artcraft_review_logs(workspace.raw_dir),
+        "checks": [
+            "readability on the actual footage",
+            "face and caption clearance",
+            "fit with the section purpose",
+            "source and edit log evidence",
+        ],
+    }
+    return {**standalone, "originalFootage": context}
+
+
+def _load_artcraft_proof_candidate(workspace, materialization_path):
+    from avo.timeline.migration import _historical_record_output
+    from avo.timeline.proof_plan import ProofPlanCompiler
+
+    directory = (
+        Path(workspace.timeline_dir).resolve() / "materializations" / "proof-plan"
+    )
+    path = Path(materialization_path)
+    _require_owned_review_record(path, directory)
+    value = json.loads(path.read_text(encoding="utf-8"))
+    output = _historical_record_output(path, value)
+    if output is None:
+        raise ValueError("The contextual proof materialization is incomplete")
+    compiler = ProofPlanCompiler(workspace)
+    plan_path = compiler.path(value["proofPlanId"])
+    _require_owned_review_record(plan_path, compiler.directory.resolve())
+    plan = compiler.load(plan_path)
+    if any(
+        value[key] != plan[key]
+        for key in ("canonicalInputLock", "proofPlanHash", "renderProfile")
+    ):
+        raise ValueError("The contextual proof differs from its frozen plan")
+    return {**value, "output": output}, plan
+
+
+def _require_owned_review_record(path, directory):
+    if (
+        path.resolve() != path
+        or path.parent != directory
+        or not path.is_file()
+        or path.stat().st_nlink != 1
+    ):
+        raise ValueError("Choose an exact retained proof record from the current video")
+
+
+def _artcraft_review_operation(plan, record):
+    asset_id = record["assetId"]
+    matches = [
+        operation
+        for operation in plan["videoGraph"]["operations"]
+        if operation["parameters"].get("generatedAssetRef", {}).get("assetId")
+        == asset_id
+    ]
+    if (
+        len(matches) != 1
+        or plan["canonicalInputLock"].get("generated:" + asset_id)
+        != record["recordHash"]
+    ):
+        raise ValueError("The proof does not bind the selected ArtCraft asset")
+    if (
+        matches[0]["parameters"]["generatedAssetRef"]["recordHash"]
+        != record["recordHash"]
+    ):
+        raise ValueError("The proof operation uses another ArtCraft receipt")
+    return matches[0]
+
+
+def _artcraft_has_original_footage(plan, visible):
+    lock = plan["canonicalInputLock"]
+    for operation in plan["videoGraph"]["operations"]:
+        if operation["kind"] != "trim":
+            continue
+        params, region = operation["parameters"], operation["outputRange"]
+        digest = params.get("source", {}).get("sha256")
+        if (
+            digest
+            and lock.get("source:" + params.get("sourceId", "")) == digest
+            and region["startFrame"] < visible["endFrameExclusive"]
+            and visible["startFrame"] < region["endFrameExclusive"]
+        ):
+            return True
+    return False
+
+
+def _artcraft_review_logs(raw_dir):
+    from avo.timeline.contracts import file_fingerprint
+
+    root = raw_dir.resolve()
+    candidates = (
+        root / "EDITLOG.md",
+        root / "SOURCE-LOG.md",
+        root / "edit" / "SOURCE-LOG.md",
+    )
+    return [
+        file_fingerprint(path)
+        for path in candidates
+        if path.is_file() and path.resolve() == path
+    ]
+
+
 def _guard_hyperframes_dependencies(service, record):
     from avo.timeline.contracts import file_fingerprint
 

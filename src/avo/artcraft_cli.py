@@ -46,6 +46,14 @@ def configure(sub):
     for field in ("project", "job", "expected-head", "asset-id", "output"):
         register.add_argument(f"--{field}", required=True)
     register.add_argument("--json", action="store_true")
+    review = operations.add_parser(
+        "review", help="Inspect standalone and contextual ArtCraft review evidence"
+    )
+    review.add_argument("--job", required=True)
+    review.add_argument("--expected-head", required=True)
+    for field in ("project", "asset-id", "materialization"):
+        review.add_argument(f"--{field}")
+    review.add_argument("--json", action="store_true")
 
 
 def _distinct_keys(pairs):
@@ -176,6 +184,34 @@ def _prepare_job(request, args):
     )
 
 
+def _review_export(args):
+    from avo.artcraft import ArtCraftError, describe_export_review
+
+    context = (args.project, args.asset_id, args.materialization)
+    if any(context) and not all(context):
+        raise ArtCraftError(
+            "Contextual review requires the project, asset ID and proof materialization"
+        )
+    standalone = describe_export_review(args.job, expected_head=args.expected_head)
+    if not args.project:
+        return standalone
+
+    from avo.proof_composition import review_artcraft_proof
+    from avo.timeline.generated_assets import GeneratedAssetError
+    from avo.timeline.proof_plan import ProofPlanError
+    from avo.timeline.workspace import TimelineWorkspace, WorkspaceError
+
+    try:
+        return review_artcraft_proof(
+            TimelineWorkspace.from_project(args.project),
+            standalone,
+            asset_id=args.asset_id,
+            materialization_path=args.materialization,
+        )
+    except (GeneratedAssetError, ProofPlanError, WorkspaceError) as exc:
+        raise ArtCraftError(str(exc), code="ARTCRAFT_REVIEW_UNAVAILABLE") from exc
+
+
 def run(args):
     from avo.artcraft import ArtCraftError, assess_request, catalog, inspect_authoring
 
@@ -219,6 +255,8 @@ def run(args):
                 raise ArtCraftError(
                     str(exc), code="ARTCRAFT_ADMISSION_REQUIRED"
                 ) from exc
+        elif args.artcraft_operation == "review":
+            result = _review_export(args)
         else:
             request = _decode_request(args.request_json)
             result = assess_request(
