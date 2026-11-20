@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import subprocess
@@ -9,7 +10,7 @@ import sys
 from pathlib import Path
 
 from avo.artcraft import ArtCraftError
-from avo.timeline.contracts import file_fingerprint
+from avo.timeline.contracts import content_hash, file_fingerprint
 
 _ANICRAFT_INSTALL = "https://getartcraft.com/apps/anicraft"
 _VERSION = re.compile(
@@ -113,6 +114,44 @@ def _runtime_environment():
     }
 
 
+def _command_schema_hash(executable):
+    from .artcraft_anicraft import observe_command_schema
+
+    path = Path(executable["locator"])
+    try:
+        process = subprocess.run(
+            [str(path), "commands"],
+            cwd=path.parent,
+            env=_runtime_environment(),
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            timeout=7,
+            check=True,
+            shell=False,
+        )
+        if len(process.stdout) > 2 * 1024 * 1024:
+            raise ValueError("registry response exceeded its budget")
+        records = json.loads(process.stdout)
+    except (OSError, ValueError, subprocess.SubprocessError) as exc:
+        raise _not_ready(
+            "Could not inspect the selected AniCraft command registry",
+            _installation_help(),
+        ) from exc
+    if not isinstance(records, list) or any(
+        not isinstance(record, dict) for record in records
+    ):
+        raise _not_ready(
+            "The selected AniCraft command registry format is unsupported",
+            _installation_help(),
+        )
+    if file_fingerprint(path) != executable:
+        raise _not_ready(
+            "AniCraft CLI changed during command inspection", _installation_help()
+        )
+    return content_hash(observe_command_schema(records))
+
+
 def _installed_anicraft(cli_path, app_path):
     cli = _installed_binary("anicraft-cli", cli_path)
     app = _installed_binary("anicraft", app_path, adjacent=cli.parent)
@@ -167,6 +206,7 @@ class SelectedArtCraftAdapter:
                 "operations": scope["operations"],
                 "mode": mode,
                 "authority": "operator",
+                "commandSchemaHash": _command_schema_hash(installed["executable"]),
                 **installed,
             }
         if self._observe_confinement is None:
@@ -180,6 +220,7 @@ class SelectedArtCraftAdapter:
             "operations": scope["operations"],
             "mode": mode,
             "effectiveRoots": effective,
+            "commandSchemaHash": _command_schema_hash(installed["executable"]),
             **installed,
         }
 
@@ -263,11 +304,35 @@ class SelectedArtCraftAdapter:
             ],
         }
 
+    @staticmethod
+    def inspect_returned_source(job, native):
+        from .artcraft_anicraft import inspect_lower_third_source
+
+        if job["decision"]["scope"] != {
+            "app": "anicraft",
+            "operations": ["lower-third"],
+        }:
+            raise _not_ready(
+                "The returned document has no checked ArtCraft source profile",
+                "Inspect the selected task against its app-specific native contract.",
+            )
+        return inspect_lower_third_source(
+            native,
+            job["output"],
+            job["authoringParameters"],
+            max_bytes=job["budget"]["bytes"],
+        )
+
 
 def _require_guided_installation(previous):
     if previous["release"] != "0.2.1" or previous["platform"] != "windows":
         raise _not_ready(
             "AniCraft needs the qualified Windows 0.2.1 profile", _installation_help()
+        )
+    if "commandSchemaHash" not in previous:
+        raise _not_ready(
+            "The guided job predates selected command verification",
+            "Prepare a new guided job from the installed AniCraft profile.",
         )
     for kind in ("executable", "application"):
         observed = previous[kind]

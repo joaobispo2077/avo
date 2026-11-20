@@ -795,10 +795,18 @@ def _require_exact_copy(path, original):
         )
 
 
-def inspect_authoring(job_ref, *, expected_head):
+def inspect_authoring(job_ref, *, expected_head, source_inspector=None):
     """Reconcile retained job evidence without changing files or starting an app."""
     store, job, head = _open_selected_job(job_ref, expected_head)
-    return _inspection_result(store, job, head)
+    result = _inspection_result(store, job, head)
+    if (
+        source_inspector is not None
+        and result["status"] == "current"
+        and result["checks"]["nativeDocument"] == "returned-unverified"
+    ):
+        native = store.workspace / job["document"]
+        result["sourceObservations"] = source_inspector(job, native)
+    return result
 
 
 def _inspection_result(store, job, head):

@@ -2,19 +2,70 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
+import re
 from contextlib import ExitStack
 from fractions import Fraction
+from itertools import pairwise
 from pathlib import Path
 from time import monotonic
 
 from avo.artcraft import ArtCraftError
-from avo.timeline.contracts import file_fingerprint
+from avo.timeline.contracts import content_hash, file_fingerprint
 from avo.timeline.store import write_immutable_json
 
 MATTE_CHECK_RGB = (55, 113, 174)
+_VECTOR_PATH = re.compile(r"[MmZzLlHhVvCcSsQqTtAaEe0-9+.,\s-]+\Z", re.ASCII)
 
-__all__ = ["MATTE_CHECK_RGB", "lower_third_steps", "recover_matte", "run_lower_third"]
+LOWER_THIRD_COMMANDS = frozenset(
+    {
+        "doc.set_stage",
+        "draw.rect",
+        "edit.select_all",
+        "element.translate",
+        "file.export_png_sequence",
+        "file.save_as",
+        "layer.new",
+        "modify.convert_to_symbol",
+        "text.create",
+        "text.fonts",
+        "timeline.create_tween",
+        "timeline.goto",
+        "timeline.insert_blank_keyframe",
+        "timeline.insert_keyframe",
+    }
+)
+
+__all__ = [
+    "LOWER_THIRD_COMMANDS",
+    "MATTE_CHECK_RGB",
+    "lower_third_steps",
+    "observe_command_schema",
+    "recover_matte",
+    "run_lower_third",
+]
+
+
+def observe_command_schema(commands):
+    """Retain only the native command signatures needed for this profile."""
+    observed = {}
+    for row in commands:
+        name = row.get("id")
+        if name not in LOWER_THIRD_COMMANDS:
+            continue
+        signature = row.get("params")
+        if name in observed or not isinstance(signature, str) or not signature.strip():
+            raise ArtCraftError(
+                "AniCraft command registry has an invalid selected signature"
+            )
+        observed[name] = signature
+    if missing := sorted(LOWER_THIRD_COMMANDS - observed.keys()):
+        raise ArtCraftError(
+            f"AniCraft is missing required lower-third commands: {', '.join(missing)}",
+            code="ARTCRAFT_NOT_READY",
+        )
+    return observed
 
 
 def _profile_clock(output):
@@ -149,6 +200,220 @@ def _opaque(image):
     return image.convert("RGBA").getchannel("A").getextrema() == (255, 255)
 
 
+def inspect_lower_third_source(native, output, parameters, *, max_bytes):
+    """Inspect the selected native JSON without asking AniCraft to load it."""
+    native = Path(native)
+    if not native.is_absolute() or native.resolve() != native or not native.is_file():
+        raise ArtCraftError("AniCraft source must be one exact regular native file")
+    max_bytes = min(max_bytes, 2 * 1024 * 1024)
+    metadata = native.stat()
+    if metadata.st_nlink != 1 or metadata.st_size > max_bytes:
+        raise ArtCraftError(
+            "AniCraft source exceeds the byte budget or has a file alias"
+        )
+    with native.open("rb") as stream:
+        raw = stream.read(max_bytes + 1)
+    if len(raw) > max_bytes:
+        raise ArtCraftError("AniCraft source exceeds the byte budget")
+    try:
+        source = json.loads(raw, object_pairs_hook=_distinct_native_fields)
+        details = _native_source_profile(source, output, parameters)
+    except (
+        KeyError,
+        TypeError,
+        AttributeError,
+        IndexError,
+        RecursionError,
+        json.JSONDecodeError,
+        UnicodeError,
+    ) as exc:
+        raise ArtCraftError(
+            "AniCraft source does not match the selected native document structure"
+        ) from exc
+    return {
+        **details,
+        "fingerprint": {
+            "locator": str(native),
+            "sizeBytes": len(raw),
+            "sha256": hashlib.sha256(raw).hexdigest(),
+        },
+    }
+
+
+def _distinct_native_fields(pairs):
+    result = dict(pairs)
+    if len(result) != len(pairs):
+        raise ArtCraftError("AniCraft source contains duplicate native fields")
+    return result
+
+
+def _native_source_profile(source, output, parameters):
+    _native_shape(source, "format version generator paths document")
+    if (source["format"], source["version"], source["generator"]) != (
+        "anicraft",
+        3,
+        "AniCraft 0.2.1",
+    ):
+        raise ArtCraftError(
+            "AniCraft saved format or source release differs from the checked profile"
+        )
+    paths = source["paths"]
+    if (
+        not isinstance(paths, list)
+        or len(paths) != 2
+        or any(
+            not isinstance(path, str) or not _VECTOR_PATH.fullmatch(path)
+            for path in paths
+        )
+    ):
+        raise ArtCraftError("AniCraft source must contain only inline vector paths")
+    body = source["document"]
+    _native_shape(body, "stage scenes library next_id")
+    _require_native_canvas(body["stage"], output)
+    symbol = _native_symbol(body)
+    _require_symbol_references(body["scenes"], symbol["id"], output["frameCount"])
+    text = _inspect_symbol_artwork(symbol)
+    if text["text"] != parameters["primaryText"] or text["font"] != parameters["font"]:
+        raise ArtCraftError(
+            "AniCraft saved editable text or font differs from the selected parameters"
+        )
+    return {
+        "editableText": text["text"],
+        "fontFamily": text["font"],
+        "inlineVectorHash": content_hash(paths),
+    }
+
+
+def _native_shape(value, names):
+    if not isinstance(value, dict) or set(value) != set(names.split()):
+        raise ArtCraftError(
+            "AniCraft source contains unexpected native document fields"
+        )
+
+
+def _require_native_canvas(stage, output):
+    expected = {
+        "width": output["width"],
+        "height": output["height"],
+        "fps": _profile_clock(output),
+        "background": dict.fromkeys("rgba", 1.0),
+    }
+    if stage != expected:
+        raise ArtCraftError(
+            "AniCraft native source canvas differs from the selected contract"
+        )
+
+
+def _native_symbol(body):
+    if len(body["library"]) != 1:
+        raise ArtCraftError("AniCraft source has unexpected library dependencies")
+    symbol = body["library"][0]
+    _native_shape(symbol, "id kind name timeline")
+    if symbol["name"] != "Speaker plate" or symbol["kind"] != "Graphic":
+        raise ArtCraftError(
+            "AniCraft source library lacks the selected editable graphic symbol"
+        )
+    return symbol
+
+
+def _native_elements(timeline):
+    _native_shape(timeline, "layers")
+    for layer in timeline["layers"]:
+        _native_shape(layer, "color id keyframes kind locked name outline visible")
+        if layer["kind"] != "Normal":
+            raise ArtCraftError("AniCraft source contains an unsupported layer kind")
+        for frame in layer["keyframes"]:
+            _native_shape(frame, "start duration elements tween label")
+            if frame["tween"] not in (None, {"easing": "Linear"}):
+                raise ArtCraftError(
+                    "AniCraft source contains unsupported animation behavior"
+                )
+            for element in frame["elements"]:
+                _native_shape(element, "color id kind name transform")
+                _native_shape(element["transform"], "m")
+                _native_numbers(element["transform"]["m"], 6)
+                _native_shape(element["color"], "alpha tint tint_amount")
+                _native_rgba(element["color"]["tint"])
+                yield element["kind"]
+
+
+def _native_numbers(values, count):
+    if (
+        not isinstance(values, (list, tuple))
+        or len(values) != count
+        or any(
+            type(value) not in (int, float) or not -1_000_000 <= value <= 1_000_000
+            for value in values
+        )
+    ):
+        raise ArtCraftError("AniCraft source contains invalid numeric geometry")
+
+
+def _native_rgba(color):
+    _native_shape(color, "r g b a")
+    _native_numbers(list(color.values()), 4)
+
+
+def _require_symbol_references(scenes, expected_id, count):
+    if len(scenes) != 1:
+        raise ArtCraftError("AniCraft source must contain one selected scene")
+    _native_shape(scenes[0], "name timeline")
+    _require_native_keyframes(scenes[0]["timeline"], count)
+    for reference in _native_elements(scenes[0]["timeline"]):
+        _native_shape(reference, "Symbol")
+        _native_shape(reference["Symbol"], "first_frame loop_mode symbol")
+        if reference["Symbol"]["symbol"] != expected_id:
+            raise ArtCraftError(
+                "AniCraft source contains an unselected symbol reference"
+            )
+
+
+def _require_native_keyframes(timeline, count):
+    layers = timeline["layers"]
+    if [layer["name"] for layer in layers] != ["Speaker label", "Layer 1"]:
+        raise ArtCraftError("AniCraft source has unexpected scene layers")
+    starts = [
+        0,
+        count // 8,
+        count // 3,
+        3 * count // 4,
+        7 * count // 8,
+        count - 1,
+        count,
+    ]
+    expected = [(start, end - start) for start, end in pairwise(starts)]
+    actual = [(frame["start"], frame["duration"]) for frame in layers[0]["keyframes"]]
+    if actual != expected or any(frame["elements"] for frame in layers[1]["keyframes"]):
+        raise ArtCraftError(
+            "AniCraft source keyframes differ from the selected lower-third profile"
+        )
+
+
+def _inspect_symbol_artwork(symbol):
+    elements = list(_native_elements(symbol["timeline"]))
+    if len(elements) != 2:
+        raise ArtCraftError("AniCraft source contains unexpected symbol artwork")
+    shape, text = elements
+    _native_shape(shape, "Shape")
+    _native_shape(shape["Shape"], "fill fill_rule path stroke")
+    _native_shape(shape["Shape"]["fill"], "Solid")
+    _native_rgba(shape["Shape"]["fill"]["Solid"])
+    _native_shape(shape["Shape"]["stroke"], "color width")
+    _native_rgba(shape["Shape"]["stroke"]["color"])
+    _native_shape(text, "Text")
+    native_text = text["Text"]
+    _native_shape(
+        native_text,
+        "align bold box_height box_width color font italic letter_spacing line_spacing outline size text width",
+    )
+    _native_rgba(native_text["color"])
+    if (shape["Shape"]["path"], native_text["outline"]) != (0, 1):
+        raise ArtCraftError(
+            "AniCraft source refers outside its retained shape and text outlines"
+        )
+    return native_text
+
+
 def run_lower_third(output, parameters, *, directory, budget, invoke):
     """Materialize the selected native recipe through a supplied confined runner."""
     directory = Path(directory)
@@ -162,7 +427,10 @@ def run_lower_third(output, parameters, *, directory, budget, invoke):
     recipe = write_immutable_json(directory / "recipe.json", steps)
     _require_profile_budget(directory, budget)
     _author_document(call, directory, native, recipe, steps, output, parameters["font"])
-    locked_source = file_fingerprint(native)
+    source = inspect_lower_third_source(
+        native, output, parameters, max_bytes=budget["bytes"]
+    )
+    locked_source = source["fingerprint"]
     information = _inspect_document(call, native, output)
     reopened, black, check = _render_backings(call, directory, native, count)
     matte, maximum = _render_matte(
@@ -173,6 +441,7 @@ def run_lower_third(output, parameters, *, directory, budget, invoke):
         raise ArtCraftError("AniCraft saved document changed after reopening")
     return {
         "nativeSource": locked_source,
+        "sourceObservations": source,
         "recipe": file_fingerprint(recipe),
         "frames": matte,
         "layers": [layer["name"] for layer in information["layers"]],
@@ -270,7 +539,18 @@ def _inspect_document(call, native, output):
         raise ArtCraftError(
             "AniCraft saved document contains unsupported scripts or sounds"
         )
+    _require_native_library(document)
     return document
+
+
+def _require_native_library(document):
+    library = [
+        (item["name"], item["kind"], item["frames"]) for item in document["library"]
+    ]
+    if library != [("Speaker plate", "Graphic", 1)]:
+        raise ArtCraftError(
+            "AniCraft saved document has unexpected library dependencies"
+        )
 
 
 def _render_backings(call, directory, native, count):

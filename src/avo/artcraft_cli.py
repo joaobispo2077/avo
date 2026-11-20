@@ -179,7 +179,13 @@ def run(args):
         elif args.artcraft_operation == "prepare":
             result = _prepare_job(_decode_request(args.request_json), args)
         elif args.artcraft_operation == "inspect":
-            result = inspect_authoring(args.job, expected_head=args.expected_head)
+            from avo.adapters.artcraft import SelectedArtCraftAdapter
+
+            result = inspect_authoring(
+                args.job,
+                expected_head=args.expected_head,
+                source_inspector=SelectedArtCraftAdapter.inspect_returned_source,
+            )
         elif args.artcraft_operation == "run":
             from avo.adapters.artcraft import SelectedArtCraftAdapter
             from avo.artcraft import run_authoring
