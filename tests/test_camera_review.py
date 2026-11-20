@@ -4,6 +4,7 @@ from copy import deepcopy
 
 import pytest
 
+from avo.editing_craft import resolve_editing_craft_selection
 from avo.timeline.contracts import content_hash
 from avo.timeline.motion_authoring import MotionAuthoringService
 from avo.timeline.motion_review import MotionReviewService
@@ -48,6 +49,27 @@ def test_camera_concept_has_path_states_without_media_inspection(
     assert {
         p: p.read_bytes() for p in workspace.raw_dir.rglob("*") if p.is_file()
     } == before
+
+
+@pytest.mark.parametrize("available", [True, False])
+def test_pending_face_intent_shows_preparation_in_linked_views(
+    workspace, monkeypatch, available
+):
+    monkeypatch.setattr(
+        "avo.timeline.face_analysis._face_pin_present", lambda workspace: available
+    )
+    selection = resolve_editing_craft_selection(
+        invocation={"camera": {"enabled": True, "faceAnchor": "selected-subject"}}
+    )
+    item = {"itemId": "presenter", "cameraIntent": "Hold framing on this speaker"}
+    result = MotionReviewService(workspace).project(
+        {"proposal": {"items": [item], "options": selection}}
+    )
+    view = result["items"][0]["camera"]["during"]["faceAnchor"]
+    assert result["storyboardCards"][0]["camera"]["during"]["faceAnchor"] == view
+    assert view["status"] == (
+        "subject-selection-required" if available else "capability-unavailable"
+    )
 
 
 @pytest.mark.parametrize("link", ["content", "explicit", "single", "ambiguous"])

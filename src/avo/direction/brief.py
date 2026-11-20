@@ -20,7 +20,7 @@ from avo.direction.rules import (
 from avo.direction.sources import read_reference
 from avo.direction.store import DirectionStore
 from avo.paths import providers_dir
-from avo.timeline.contracts import content_hash
+from avo.timeline.contracts import content_hash, file_fingerprint
 from avo.timeline.workspace import resolve_project_raw_dir
 
 _SCHEMA = "avo.briefstart.schema.json#/$defs/"
@@ -183,14 +183,43 @@ class BriefService:
             )
         return existing
 
-    @staticmethod
-    def _reference_sources(references):
+    def _require_reference_scope(self, document):
+        scope = document.get("projectScope")
+        if scope is None:
+            return
+        if scope != {"provider": self.provider, "videoId": self.video_id}:
+            raise DirectionError(
+                "DIR_INVALID_REFERENCE",
+                "Selected inspection belongs to another project.",
+            )
+        reference = document.get("inspectionRef")
+        if not reference:
+            raise DirectionError(
+                "DIR_INVALID_REFERENCE",
+                "Project-scoped reference lacks its inspection record.",
+            )
+        root = self.raw_dir.resolve()
+        target = (root / reference["path"]).resolve()
+        if not target.is_relative_to(root) or not target.is_file():
+            raise DirectionError(
+                "DIR_INVALID_REFERENCE",
+                "Selected inspection is unavailable within its project.",
+            )
+        if file_fingerprint(target)["sha256"] != reference["documentHash"]:
+            raise DirectionError(
+                "DIR_SOURCE_CHANGED",
+                "Selected inspection bytes changed.",
+                status="stale",
+            )
+
+    def _reference_sources(self, references):
         result = []
         for value in references:
             document = (
                 _input(value) if isinstance(value, dict) else read_reference(value)
             )
             validate("ReferenceDescriptor", document)
+            self._require_reference_scope(document)
             result.append(
                 {
                     "id": document["referenceId"],

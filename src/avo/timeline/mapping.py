@@ -33,13 +33,19 @@ def _output_base(snapshot: dict[str, Any]) -> Fraction:
     return Fraction(int(base["num"]), int(base["den"]))
 
 
-def _check_raw_clock(items, source_id, raw_timebase):
+def _source_match(item, source_id, segment_id):
+    return item["sourceId"] == source_id and (
+        segment_id is None or item.get("segmentId") == segment_id
+    )
+
+
+def _check_raw_clock(items, source_id, raw_timebase, *, segment_id=None):
     if raw_timebase is not None:
         return
     clocks = {
         Fraction(item["in"]["timebase"]["num"], item["in"]["timebase"]["den"])
         for item in items
-        if item["sourceId"] == source_id
+        if _source_match(item, source_id, segment_id)
     }
     if len(clocks) > 1:
         raise MappingError(
@@ -75,18 +81,28 @@ def cmap_raw_to_output(
     raw_timebase: dict[str, int] | None = None,
     placement_id: str | None = None,
     track_id: str | None = None,
+    segment_id: str | None = None,
 ) -> int | None:
     if snapshot.get("layoutMode") == "placed":
+        if segment_id is not None:
+            raise MappingError(
+                "A contiguous segment selector cannot address a placed CMap"
+            )
         return _placed_raw_to_output(
             snapshot, source_id, raw_ticks, raw_timebase, placement_id, track_id
         )
     base = _output_base(snapshot)
-    _check_raw_clock(snapshot.get("segments") or [], source_id, raw_timebase)
+    _check_raw_clock(
+        snapshot.get("segments") or [],
+        source_id,
+        raw_timebase,
+        segment_id=segment_id,
+    )
     offset = Fraction()
     for segment in snapshot.get("segments") or []:
         start = _time(segment["in"])
         end = _time(segment["out"])
-        if segment["sourceId"] == source_id:
+        if _source_match(segment, source_id, segment_id):
             source_base = raw_timebase or segment["in"]["timebase"]
             point = Fraction(
                 raw_ticks * int(source_base["num"]), int(source_base["den"])

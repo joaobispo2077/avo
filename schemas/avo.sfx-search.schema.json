@@ -29,6 +29,7 @@
     "filters": {"type": "object", "additionalProperties": false, "properties": {
       "libraryIds": {"$ref": "#/$defs/strings"}, "rights": {"type": "array", "maxItems": 4, "uniqueItems": true, "items": {"enum": ["licensed", "unknown", "restricted", "stale"]}},
       "favorite": {"type": "boolean"}, "material": {"type": "string", "minLength": 1, "maxLength": 512}, "tags": {"$ref": "#/$defs/strings"},
+      "category": {"type": "string", "minLength": 1, "maxLength": 512},
       "minDurationSeconds": {"$ref": "#/$defs/number"}, "maxDurationSeconds": {"$ref": "#/$defs/number"}, "minCentroidHz": {"$ref": "#/$defs/number"}, "maxCentroidHz": {"$ref": "#/$defs/number"}, "maxAttackSeconds": {"$ref": "#/$defs/number"}
     }},
     "result": {
@@ -39,6 +40,7 @@
         "libraryId": {"type": "string", "minLength": 1, "maxLength": 64}, "relativePath": {"type": "string", "minLength": 1, "maxLength": 4096},
         "sourceSha256": {"$ref": "avo.sfx-catalog.schema.json#/$defs/sha"}, "sourceState": {"const": "available"}, "rightsState": {"enum": ["licensed", "unknown", "restricted", "stale"]},
         "rights": {"$ref": "avo.sfx-catalog.schema.json#/$defs/rights"}, "curation": {"$ref": "avo.sfx-catalog.schema.json#/$defs/curation"},
+        "curationOrigin": {"$ref": "avo.sfx-provider.schema.json#/$defs/origin"},
         "marker": {"oneOf": [{"type": "null"}, {"$ref": "avo.sfx-catalog.schema.json#/$defs/marker"}]},
         "score": {"type": "number", "minimum": -1, "maximum": 1}, "reasons": {"type": "array", "maxItems": 512, "items": {"type": "string", "maxLength": 1024}},
         "usefulDurationSeconds": {"type": "number", "minimum": 0}, "level": {"type": "object", "additionalProperties": false, "required": ["rms", "peak"], "properties": {"rms": {"type": "number", "minimum": 0}, "peak": {"type": "number", "minimum": 0}}},

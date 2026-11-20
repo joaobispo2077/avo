@@ -280,11 +280,15 @@ class ProofPlanCompiler:
         return []
 
     def _sound_execution(self, execution, *, require_applied=False):
+        from .artcraft_audio import lock_generated_audio
         from .sound_proof import compile_canonical_sound
 
         try:
-            return compile_canonical_sound(
+            composed = compile_canonical_sound(
                 self.workspace, execution, require_applied=require_applied
+            )
+            return lock_generated_audio(
+                self.workspace, composed, require_applied=require_applied
             )
         except (ValueError, RuntimeError, OSError, KeyError, TypeError) as error:
             raise ProofPlanError(
@@ -385,6 +389,27 @@ class ProofPlanCompiler:
                 )
         return operations
 
+    def _face_preflight(self, plan):
+        from .face_analysis import read_face_anchor
+
+        blockers = []
+        for operation in (plan.get("videoGraph") or {}).get("operations", []):
+            binding = (operation.get("parameters") or {}).get("faceAnchor")
+            if operation.get("kind") != "camera-transform" or not binding:
+                continue
+            try:
+                read_face_anchor(self.workspace, binding)
+            except ValueError as error:
+                blockers.append(
+                    self._blocker(
+                        "PROOF_FACE_EVIDENCE_INVALID",
+                        str(error),
+                        "Restore the selected face observation or compile a new camera proof",
+                        entity_ref=operation.get("operationId"),
+                    )
+                )
+        return blockers
+
     @staticmethod
     def _camera_basis(snapshot, lock):
         for name in ("cmap", "bmap", "tracks"):
@@ -397,6 +422,7 @@ class ProofPlanCompiler:
 
     def _compile_camera_operations(self, snapshot, request):
         from .camera_plan import compile_camera_operations
+        from .face_analysis import read_face_treatment
 
         def current(name):
             store = self.workspace.store(name)
@@ -413,6 +439,9 @@ class ProofPlanCompiler:
                 video_graph=request.get("videoGraph", {}),
                 output=request["output"],
                 selection=None,
+                read_face=lambda treatment: read_face_treatment(
+                    self.workspace, treatment
+                ),
             )
         except ValueError as error:
             raise ProofPlanError(
@@ -586,30 +615,63 @@ class ProofPlanCompiler:
             raise ValueError("HyperFrames operation differs from canonical binding")
         _require_hyperframes_geometry(binding, parameters, output)
 
-    def _generated_lock(self, graph: dict[str, Any], output=None) -> dict[str, str]:
+    def _generated_lock(
+        self, graph: dict[str, Any], output=None, *, checkpoint=None
+    ) -> dict[str, str]:
         """Bind generated receipts and original locks without rewriting them."""
-        lock = {}
+        from .artcraft_stills import generated_still_locks
+
+        lock = generated_still_locks(
+            self.workspace, graph, output, checkpoint=checkpoint
+        )
         for operation in graph.get("operations") or []:
             parameters = operation.get("parameters") or {}
             reference = parameters.get("generatedAssetRef")
             if not reference:
                 continue
             record = self._generated_receipt(reference)
-            original = self._generated_original_lock(parameters)
             self._require_generated_output(record, parameters)
+            lock["generated:" + record["assetId"]] = record["recordHash"]
+            if record.get("parameters", {}).get("artcraft"):
+                lock["input-lock:" + record["assetId"]] = (
+                    self._require_artcraft_generated(operation, record, output)
+                )
+                continue
+            original = self._generated_original_lock(parameters)
             if record.get("parameters", {}).get("codeDrawn"):
                 self._require_canonical_generated(operation, record, original)
             if record.get("parameters", {}).get("hyperframes"):
                 self._require_hyperframes_generated(operation, record, original, output)
-            lock["generated:" + record["assetId"]] = record["recordHash"]
             lock["input-lock:" + original["instanceId"]] = original["inputLockHash"]
         return lock
+
+    def _require_artcraft_generated(self, operation, record, output):
+        from .artcraft_binding import (
+            read_artcraft_binding,
+            require_artcraft_operation_binding,
+            require_artcraft_output_geometry,
+        )
+
+        receipt = record["parameters"]["artcraft"]
+        binding = read_artcraft_binding(self.workspace, receipt["bindingRef"])
+        require_artcraft_operation_binding(operation, record, binding)
+        require_artcraft_output_geometry(operation, receipt["output"], output)
+        return binding["bindingHash"]
 
     def _generated_preflight(self, plan, readiness):
         blockers = []
         try:
-            current = self._generated_lock(plan["videoGraph"], plan["output"])
+            current = self._generated_lock(
+                plan["videoGraph"], plan["output"], checkpoint=plan.get("checkpoint")
+            )
             frozen = plan["canonicalInputLock"]
+            if any(
+                key.startswith("generated-still:") and key not in current
+                for key in frozen
+            ):
+                raise ValueError(
+                    "Proof generated still receipt has no current operation"
+                )
             if any(frozen.get(key) != value for key, value in current.items()):
                 raise ValueError(
                     "Generated receipt/input-lock differs from the frozen proof plan"
@@ -685,7 +747,9 @@ class ProofPlanCompiler:
         video_graph, resolution, implementation_refs = self._resolve_video_graph(
             dict(request.get("videoGraph") or {})
         )
-        lock.update(self._generated_lock(video_graph, request["output"]))
+        lock.update(
+            self._generated_lock(video_graph, request["output"], checkpoint=checkpoint)
+        )
         body: dict[str, Any] = {
             **_proof_contract_header(camera_operations),
             "proofPlanId": "proof-plan-pending",
@@ -923,6 +987,7 @@ class ProofPlanCompiler:
         blockers.extend(self._import_preflight(plan))
         blockers.extend(self._source_mix_preflight(plan))
         blockers.extend(self._sound_preflight(plan))
+        blockers.extend(self._face_preflight(plan))
         blockers.extend(self._generated_preflight(plan, tool_readiness))
         lock = plan.get("canonicalInputLock") or {}
         resolved_paths: dict[str, Path] = {}

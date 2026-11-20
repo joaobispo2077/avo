@@ -214,6 +214,9 @@
         },
         "sourceSha256": {"$ref": "#/$defs/sha256"},
         "entryPolicy": {"enum": ["continuous", "source-cut"]},
+        "faceAnchor": {
+          "$ref": "https://avo.local/avo.visual-motion-analysis.schema.json#/$defs/faceAnchor"
+        },
         "options": {
           "$ref": "https://avo.local/avo.editing-craft.schema.json#/$defs/selection"
         },

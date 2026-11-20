@@ -344,9 +344,10 @@ def _validate_window(operations, first, end):
 
 
 def _eased(curve, phase):
+    if curve == "linear":
+        return phase
     formulas = {
         "hold": "0",
-        "linear": phase,
         "quadratic-in": f"pow({phase},2)",
         "quadratic-out": f"1-pow(1-({phase}),2)",
         "quadratic-in-out": f"if(lt({phase},0.5),2*pow({phase},2),1-2*pow(1-({phase}),2))",
@@ -360,6 +361,33 @@ def _node_value(node, field):
     return node["scale"] if field == "scale" else node["center"][field]
 
 
+def _path_segment(left, right, phase, field):
+    start, stop = Fraction(str(left["phase"])), Fraction(str(right["phase"]))
+    beginning = _node_value(left, field)
+    terminal = _node_value(right, field)
+    if left["curve"] == "hold":
+        return (
+            stop,
+            f"if(gte({phase},{_number(stop)}),{_number(terminal)},{_number(beginning)})",
+        )
+    local = f"clip((({phase})-{_number(start)})/{_number(stop - start)},0,1)"
+    delta = terminal - beginning
+    value = (
+        f"({_number(beginning)}+({_number(delta)})*({_eased(left['curve'], local)}))"
+    )
+    return stop, value
+
+
+def _path_branches(segments, phase):
+    if len(segments) == 1:
+        return segments[0][1]
+    middle = len(segments) // 2
+    boundary = _number(segments[middle - 1][0])
+    left = _path_branches(segments[:middle], phase)
+    right = _path_branches(segments[middle:], phase)
+    return f"if(lte({phase},{boundary}),{left},{right})"
+
+
 def _path_value(parameters, field):
     interval = parameters["originalFrameRange"]
     count = interval["endFrameExclusive"] - interval["firstFrame"]
@@ -367,15 +395,10 @@ def _path_value(parameters, field):
     if count == 1:
         return _number(_node_value(nodes[0], field))
     phase = f"clip((ld(0)-{interval['firstFrame']})/{count - 1},0,1)"
-    result = _number(_node_value(nodes[-1], field))
-    for left, right in reversed(list(pairwise(nodes))):
-        start, stop = Fraction(str(left["phase"])), Fraction(str(right["phase"]))
-        local = f"clip((({phase})-{_number(start)})/{_number(stop - start)},0,1)"
-        beginning = _node_value(left, field)
-        delta = _node_value(right, field) - beginning
-        value = f"({_number(beginning)}+({_number(delta)})*({_eased(left['curve'], local)}))"
-        result = f"if(lte({phase},{_number(stop)}),{value},{result})"
-    return result
+    segments = [
+        _path_segment(left, right, phase, field) for left, right in pairwise(nodes)
+    ]
+    return _path_branches(segments, phase)
 
 
 def _selected_value(operations, field):

@@ -167,6 +167,24 @@
         }
       }
     },
+    "generatedStillParameters": {
+      "type": "object", "additionalProperties": false,
+      "required": ["generatedStillRef", "sourceFingerprint", "layerId", "placement", "zOrder", "layerRole"],
+      "properties": {
+        "generatedStillRef": { "$ref": "https://avo.local/schemas/avo.artcraft.schema.json#/$defs/exportRef" },
+        "sourceFingerprint": { "$ref": "https://avo.local/schemas/avo.artcraft.schema.json#/$defs/fingerprint" },
+        "layerId": { "$ref": "#/$defs/stableId" },
+        "placement": {
+          "type": "object", "additionalProperties": false, "required": ["x", "y", "width", "height"],
+          "properties": {
+            "x": { "type": "integer", "minimum": 0 }, "y": { "type": "integer", "minimum": 0 },
+            "width": { "type": "integer", "minimum": 1 }, "height": { "type": "integer", "minimum": 1 }
+          }
+        },
+        "zOrder": { "type": "integer" },
+        "layerRole": { "const": "overlay" }
+      }
+    },
     "generatedClipParameters": {
       "type": "object",
       "additionalProperties": false,
@@ -389,7 +407,7 @@
     },
     "operationGraph": { "type": "object", "additionalProperties": false, "required": ["operations"], "properties": { "operations": { "type": "array", "items": { "$ref": "#/$defs/operation" } } } },
     "audioNode": { "type": "object", "additionalProperties": false, "required": ["nodeId", "kind", "sourceSampleRate", "targetSampleRate", "sourceRange", "outputRange", "sourceLayout", "targetLayout", "channelMap", "latencyCompensationSamples"], "properties": { "nodeId": { "$ref": "#/$defs/stableId" }, "kind": { "enum": ["source", "silence", "music", "sfx", "ambience", "mix", "crossfade", "output"] }, "sourceSampleRate": { "type": "integer", "minimum": 1 }, "targetSampleRate": { "type": "integer", "minimum": 1 }, "sourceRange": { "$ref": "#/$defs/sampleRange" }, "outputRange": { "$ref": "#/$defs/sampleRange" }, "sourceLayout": { "type": "string", "minLength": 1 }, "targetLayout": { "type": "string", "minLength": 1 }, "channelMap": { "type": "array", "items": { "type": "integer", "minimum": 0 } }, "latencyCompensationSamples": { "type": "integer" } } },
-    "audioGraph": { "type": "object", "additionalProperties": false, "required": ["sampleRate", "nodes", "operations", "singleFinalEncode"], "properties": { "sampleRate": { "type": "integer", "minimum": 1 }, "nodes": { "type": "array", "items": { "$ref": "#/$defs/audioNode" } }, "operations": { "type": "array", "items": { "type": "object", "additionalProperties": false, "required": ["operationId", "kind", "range", "parameters"], "properties": { "operationId": { "$ref": "#/$defs/stableId" }, "kind": { "enum": ["trim", "mix", "crossfade", "gain", "fade", "duck", "filter", "resample", "encode"] }, "range": { "$ref": "#/$defs/sampleRange" }, "parameters": { "type": "object", "additionalProperties": true } } } }, "singleFinalEncode": { "const": true } } },
+    "audioGraph": { "type": "object", "additionalProperties": false, "required": ["sampleRate", "nodes", "operations", "singleFinalEncode"], "properties": { "sampleRate": { "type": "integer", "minimum": 1 }, "nodes": { "type": "array", "items": { "$ref": "#/$defs/audioNode" } }, "operations": { "type": "array", "items": { "type": "object", "additionalProperties": false, "required": ["operationId", "kind", "range", "parameters"], "properties": { "operationId": { "$ref": "#/$defs/stableId" }, "kind": { "enum": ["trim", "mix", "crossfade", "gain", "fade", "duck", "filter", "resample", "encode"] }, "range": { "$ref": "#/$defs/sampleRange" }, "parameters": { "type": "object", "additionalProperties": true, "properties": { "generatedAudioRef": { "$ref": "https://avo.local/schemas/avo.artcraft.schema.json#/$defs/generatedAudioRef" } } } }, "if": { "properties": { "parameters": { "required": ["generatedAudioRef"] } } }, "then": { "properties": { "kind": { "const": "trim" } } } } }, "singleFinalEncode": { "const": true } } },
     "timedEvent": { "type": "object", "additionalProperties": false, "required": ["eventId", "role", "programFrame", "visibleRange", "sourceRange", "audio", "transientOffset", "resolvedImpactSample", "entryEffectIds", "validation"], "properties": { "eventId": { "$ref": "#/$defs/stableId" }, "role": { "enum": ["main-scene", "overlay-image", "overlay-video", "authored-graphic", "caption", "source-audio", "music", "sfx", "ambience", "comparison-only"] }, "programFrame": { "type": "integer", "minimum": 0 }, "visibleRange": { "oneOf": [{ "$ref": "#/$defs/frameRange" }, { "type": "null" }] }, "sourceRange": { "type": ["object", "null"] }, "audio": { "type": ["object", "null"] }, "transientOffset": { "type": ["object", "null"] }, "resolvedImpactSample": { "type": "integer", "minimum": 0 }, "entryEffectIds": { "type": "array", "items": { "$ref": "#/$defs/stableId" } }, "validation": { "type": "object", "minProperties": 1, "additionalProperties": true } } }
   }
 }

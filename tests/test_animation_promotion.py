@@ -86,3 +86,26 @@ class PromotionTests(unittest.TestCase):
             )
             self.assertEqual(event["type"], "promotion-rejected")
             self.assertEqual(service.load()["patterns"], [])
+
+    def test_another_provider_cannot_decide_a_proposal(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            owner = ProviderAnimationService(
+                root / "owner/animation.json", provider="owner"
+            )
+            other = ProviderAnimationService(
+                root / "other/animation.json", provider="other"
+            )
+            proposal = owner.propose(
+                pattern(), actor="creator", intent_reference="reuse in owner channel"
+            )
+
+            with self.assertRaisesRegex(AnimationError, "belongs to another provider"):
+                other.decide(
+                    Path(proposal["path"]),
+                    decision="approved",
+                    actor="creator",
+                    reason="approve",
+                )
+
+            self.assertFalse(other.path.exists())

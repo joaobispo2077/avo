@@ -32,13 +32,26 @@ def test_sound_apply_confirmation_binds_request_bytes_and_uses_the_native_budget
         _decision_gate_args(tool, {"request": str(path)})
 
 
+@pytest.mark.parametrize("selected_scope", [False, True])
 def test_native_and_bridged_sound_apply_share_exact_publication_without_analysis(
-    tmp_path, monkeypatch
+    tmp_path, monkeypatch, selected_scope
 ):
     from avo import sfx_cli
     from avo.adapters import registry
 
-    workspace, catalogue, _, probe, request, _ = application(tmp_path)
+    workspace, catalogue, _, probe, request, shown = application(tmp_path)
+    if selected_scope:
+        request["productionScope"] = {
+            "clock": {
+                key: shown["proposal"]["clock"][key]
+                for key in ("frameRate", "programEndFrame")
+            },
+            "chunks": [
+                {"chunkId": "opening", "startFrame": 0, "endFrameExclusive": 12},
+                {"chunkId": "answer", "startFrame": 12, "endFrameExclusive": 24},
+            ],
+            "selectedChunkIds": ["opening"],
+        }
 
     def build(selected_workspace, *, roots, analyze, semantic):
         assert selected_workspace.video_id == workspace.video_id
@@ -77,6 +90,10 @@ def test_native_and_bridged_sound_apply_share_exact_publication_without_analysis
     assert native.parsed_json == bridged.parsed_json
     assert native.parsed_json["effect"] == "canonical-write"
     assert native.parsed_json["acceptance"] == "pending-listening"
+    if selected_scope:
+        report = native.parsed_json["receipt"]["productionScope"]
+        assert report["request"] == request["productionScope"]
+        assert report["contributions"][0]["ownerChunkId"] == "opening"
     assert len(probe.calls) == 1
     from dataclasses import replace
 

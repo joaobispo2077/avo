@@ -102,6 +102,21 @@ def _transient_disposition(onsets, manual_marker, reviewed):
     return "pass"
 
 
+def find_transient_onsets(
+    samples, start, end, *, threshold, window_samples, hop_samples, dc_removal
+):
+    """Find energy onset candidates without deriving or hashing trimmed PCM."""
+    energy = _energy(samples, dc_removal=dc_removal)
+    return _onset_clusters(
+        energy,
+        start,
+        end,
+        threshold,
+        window_samples=window_samples,
+        hop_samples=hop_samples,
+    )
+
+
 def analyze_transient(
     samples: list[list[float]],
     *,
@@ -127,14 +142,14 @@ def analyze_transient(
     length = len(samples[0]) if samples else 0
     if start < 0 or end <= start or end > length:
         raise WaveformError("invalid transient search range")
-    energy = _energy(samples, dc_removal=dc_removal)
-    onsets = _onset_clusters(
-        energy,
+    onsets = find_transient_onsets(
+        samples,
         start,
         end,
-        threshold,
+        threshold=threshold,
         window_samples=window_samples,
         hop_samples=hop_samples,
+        dc_removal=dc_removal,
     )
     marker = (
         manual_marker if manual_marker is not None else (onsets[0] if onsets else None)

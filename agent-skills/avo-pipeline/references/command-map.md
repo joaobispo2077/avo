@@ -20,6 +20,7 @@
 | `/avo.chapters` | `commands/avo/chapters.md` | `references/chapters.md` |
 | `/avo.thumbnail` | `commands/avo/thumbnail.md` | `references/thumbnail.md` |
 | `/avo.deliver` | `commands/avo/deliver.md` | `references/deliver.md` |
+| `/avo.exports` | `commands/avo/exports.md` | `references/exports.md` |
 | `/avo.shorts` | `commands/avo/shorts.md` | `references/shorts.md` |
 | `/avo.reframe` | `commands/avo/reframe.md` | `references/reframe.md` |
 | `/avo.podcast-clip` | `commands/avo/podcast-clip.md` | `references/podcast-clip.md` |
@@ -67,3 +68,10 @@ Shared args: [`arguments.md`](arguments.md)
 - `/avo.direction`: [direction.md](direction.md), native `direction catalog|prepare|propose|decide|show`; provider-scope decisions only.
 - `/avo.briefstart`: [briefstart.md](briefstart.md), native `briefstart prepare|propose|decide|show`; project-scope decisions only.
 - `pipeline status`: derived `briefing.stageContexts` for structure, cmap, bmap, motion and sound; consume before style-dependent proposals, with no duplicate selection state.
+
+## Editing craft
+
+- `animation plan-show` reads the built-in motion map and linked storyboard with their current picture and audio lanes.
+- `sfx search` reads descriptor matches. Select `sfx search-semantic` explicitly to use the configured local model.
+- `sfx apply` publishes selected sound changes and reports the listening scope for an explicit chunk selection.
+- `timeline-export status` shows editor validation targets and qualification. The optional handoff and returned-edit commands are documented in [Editor exports](exports.md).

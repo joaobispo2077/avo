@@ -3394,6 +3394,15 @@
         "priorProjectId": {
           "type": "string"
         },
+        "projectScope": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["provider", "videoId"],
+          "properties": {
+            "provider": {"type": "string", "minLength": 1},
+            "videoId": {"type": "string", "minLength": 1}
+          }
+        },
         "inspectionRef": {
           "anyOf": [
             {
@@ -3425,6 +3434,19 @@
           ]
         }
       },
+      "allOf": [{
+        "if": {"properties": {"referenceId": {"pattern": "^measured-reference-"}}},
+        "then": {
+          "required": ["projectScope", "inspectionRef"],
+          "properties": {
+            "locator": {"type": "null"},
+            "observationKind": {"const": "frozen-inspection"},
+            "inspectionRef": {"type": "object", "properties": {
+              "path": {"pattern": "^edit/motion/references/[a-f0-9]{64}\\.json$"}
+            }}
+          }
+        }
+      }],
       "required": [
         "schemaVersion",
         "referenceId",

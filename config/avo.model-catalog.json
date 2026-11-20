@@ -2,6 +2,17 @@
   "$comment": "Model catalog for AVO transparency — options per job with resource/quality labels. Resolved via helpers/models.py.",
   "version": 1,
   "jobs": {
+    "face_detect": {
+      "adapter": "local-yunet",
+      "optional": true,
+      "default": "yunet-2023mar",
+      "options": [{
+        "id": "yunet-2023mar", "label": "Local YuNet 2023 face detector (optional)",
+        "speed": "unknown", "quality": "unknown",
+        "capabilities": ["face-observations"],
+        "notes": "Explicit prepared CPU environment and exact local model bytes required. Face boxes support geometric tracking."
+      }]
+    },
     "audio_embed": {
       "adapter": "local-clap",
       "optional": true,

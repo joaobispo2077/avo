@@ -1,0 +1,38 @@
+[
+  {
+    "id": "premiere-pro-25-0-windows-11-24h2",
+    "application": "premiere-pro",
+    "applicationVersion": "25.0",
+    "os": "windows",
+    "osVersion": "11 24H2",
+    "format": "fcp7-xmeml",
+    "xmlVersion": 5,
+    "status": "unqualified",
+    "representedFields": ["original-media", "picture-range", "track-order", "audio-channel", "markers"],
+    "evidenceRequirements": ["target-opened", "relink", "ranges", "lanes", "audio-channels", "markers", "alpha", "framing", "reviewer-response"]
+  },
+  {
+    "id": "davinci-resolve-19-1-windows-11-24h2",
+    "application": "davinci-resolve",
+    "applicationVersion": "19.1",
+    "os": "windows",
+    "osVersion": "11 24H2",
+    "format": "fcp7-xmeml",
+    "xmlVersion": 5,
+    "status": "unqualified",
+    "representedFields": ["original-media", "picture-range", "track-order", "audio-channel", "markers"],
+    "evidenceRequirements": ["target-opened", "relink", "ranges", "lanes", "audio-channels", "markers", "alpha", "framing", "reviewer-response"]
+  },
+  {
+    "id": "davinci-resolve-21-0-0-47-windows-11-25h2",
+    "application": "davinci-resolve",
+    "applicationVersion": "21.0.0.47",
+    "os": "windows",
+    "osVersion": "11 25H2",
+    "format": "fcp7-xmeml",
+    "xmlVersion": 5,
+    "status": "unqualified",
+    "representedFields": ["original-media", "picture-range", "track-order", "audio-channel", "markers", "display-origin"],
+    "evidenceRequirements": ["target-opened", "relink", "ranges", "lanes", "audio-channels", "markers", "alpha", "framing", "reviewer-response"]
+  }
+]

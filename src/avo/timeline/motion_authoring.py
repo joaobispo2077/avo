@@ -116,6 +116,7 @@ def _recipe_treatment(recipe, selection):
             target_scale=recipe.get("targetScale"),
             target_center=recipe.get("targetCenter"),
             safe_regions=recipe.get("safeRegions", []),
+            face_anchor=recipe.get("faceAnchor"),
         )
     except CameraError as error:
         raise MotionAuthoringError("MOTION_CAMERA_INVALID", str(error)) from error
@@ -534,7 +535,22 @@ class MotionAuthoringService:
         )
         _check_item_identities(items, previous, retired)
         items = _camera_concepts(items, previous, selection)
+        self._check_face_treatments(items)
         return items, retired, _changes(previous, items)
+
+    def _check_face_treatments(self, items):
+        from .face_analysis import read_face_treatment
+
+        for item in items:
+            treatment = item.get("cameraTreatment") or {}
+            if "faceAnchor" not in treatment:
+                continue
+            try:
+                read_face_treatment(self.workspace, treatment)
+            except ValueError as error:
+                raise MotionAuthoringError(
+                    "MOTION_FACE_EVIDENCE_INVALID", str(error)
+                ) from error
 
     def _proposal_result(self, digest):
         proposal, reference = self._load("proposals", digest, "proposal")
@@ -661,7 +677,7 @@ class MotionAuthoringService:
             "cameraEnvironmentHash": self._camera_runtime_hash(),
         }
 
-    def _dispositions(self, proposal, requested):
+    def _dispositions(self, proposal, requested, previous):
         ids = {item["itemId"] for item in proposal["items"]}
         supplied = [item["itemId"] for item in requested]
         if len(supplied) != len(set(supplied)) or not set(supplied) <= ids:
@@ -669,12 +685,12 @@ class MotionAuthoringService:
                 "MOTION_IDENTITY_AMBIGUOUS",
                 "Disposition must name unique existing items",
             )
-        inherited = self._inherited_dispositions(proposal)
+        inherited = self._inherited_dispositions(proposal, previous)
         inherited.update({item["itemId"]: deepcopy(item) for item in requested})
         return [inherited[key] for key in sorted(inherited)]
 
-    def _inherited_dispositions(self, proposal):
-        shown = self.show()
+    @staticmethod
+    def _inherited_dispositions(proposal, shown):
         if (
             not shown.get("decision")
             or shown["proposal"]["requestId"] != proposal["requestId"]
@@ -708,6 +724,8 @@ class MotionAuthoringService:
         return selector
 
     def select(self, request):
+        from .asset_selection import resolve_asset_choices
+
         request = self._request(request, "plan-select")
         with timeline_writer(self.workspace.timeline_dir):
             known = self._known_operation(request)
@@ -720,7 +738,9 @@ class MotionAuthoringService:
                     "decisions", known["sha256"], "decision"
                 )
             else:
+                previous = self.show()
                 decision = {
+                    **resolve_asset_choices(self, request, previous),
                     "contractVersion": "1.0.0",
                     "operationId": request["operationId"],
                     "requestHash": content_hash(request),
@@ -729,7 +749,7 @@ class MotionAuthoringService:
                     "requestId": proposal["requestId"],
                     "proposalHash": proposal_ref["sha256"],
                     "dispositions": self._dispositions(
-                        proposal, request["selection"]["dispositions"]
+                        proposal, request["selection"]["dispositions"], previous
                     ),
                     "actor": request["actor"],
                     "reason": request["reason"],
@@ -812,6 +832,8 @@ class MotionAuthoringService:
         ]
 
     def _verify_receipt_intent(self, request, receipt):
+        from .motion_scope_application import verify_receipt_scope
+
         saved, reference = self._load(
             "requests", receipt["requestRef"]["sha256"], "applyRequest"
         )
@@ -833,6 +855,7 @@ class MotionAuthoringService:
                 "MOTION_OPERATION_CONFLICT",
                 "Receipt does not bind the actual application request",
             )
+        verify_receipt_scope(self, request, receipt)
         self._camera_receipt_environment(request, receipt)
         expected = self._application_evidence(
             receipt["proposalRef"], receipt["decisionRef"], reference
@@ -861,6 +884,9 @@ class MotionAuthoringService:
         ]
         _camera_authoring(items, authoring)
         allowed = _scope_ids(items)
+        allowed["bmap"].update(shown.get("_scopeOwnedCueIds", []))
+        for name, identities in (shown.get("_scopeProtectedIds") or {}).items():
+            allowed[name] -= identities
         for name, snapshot in authoring.items():
             index = self.workspace.store(name).load_index()
             previous = (
@@ -894,6 +920,9 @@ class MotionAuthoringService:
             )
 
     def _prepare(self, request, shown):
+        from .asset_selection import verify_application_assets
+        from .motion_scope_application import prepare_scope
+
         if self.workspace.authority != "canonical":
             raise MotionAuthoringError(
                 "MOTION_BASIS_REQUIRED",
@@ -911,8 +940,10 @@ class MotionAuthoringService:
                 "MOTION_DEPENDENCY_REQUIRED",
                 "Changed BMap requires current prepared Tracks before Animation",
             )
-        scoped, camera = self._camera_application(request, shown)
+        scoped, scope_fields = prepare_scope(self, request, shown)
+        scoped, camera = self._camera_application(request, scoped)
         self._scope(scoped, request["authoring"])
+        verify_application_assets(self, scoped)
         request_ref = self._put("requests", request, "applyRequest")
         evidence = self._application_evidence(
             shown["proposalRef"], shown["decisionRef"], request_ref
@@ -931,6 +962,7 @@ class MotionAuthoringService:
             )
         return {
             **camera,
+            **scope_fields,
             "contractVersion": "1.0.0",
             "operationId": request["operationId"],
             "requestHash": content_hash(request),
@@ -959,6 +991,7 @@ class MotionAuthoringService:
                 "Camera application requires its selected Animation components",
             )
         scoped = self._camera_scope(shown)
+        self._check_face_treatments(scoped["proposal"]["items"])
         environment = self._camera_runtime_hash()
         if environment != shown["proposal"].get("cameraEnvironmentHash"):
             raise MotionAuthoringError(
@@ -1119,13 +1152,16 @@ class MotionAuthoringService:
             )
 
     def _finish(self, request, receipt, shown):
+        from .motion_scope_application import remember_application, shown_applied_ids
+
         receipt["state"] = "committed"
         reference = self._save_receipt(request, receipt)
         store = PipelineRunStore(self.workspace.pipeline_run_path)
         run = store.load()
         selector = run["extensions"]["motionProposalSelection"]
-        selector["receiptRef"] = reference
+        remember_application(run, reference, request)
         store._write(run, expected_updated_at=run["updatedAt"])
+        applied_ids = shown_applied_ids(self, run, selector, shown["decision"], True)
         self._pending.unlink(missing_ok=True)
         return self._with_review(
             {
@@ -1135,6 +1171,11 @@ class MotionAuthoringService:
                 "receipt": receipt,
                 "receiptRef": reference,
                 "committedHeads": receipt["committedHeads"],
+                "appliedItemIds": applied_ids,
+                "applied": all(
+                    item["status"] != "selected" or item["itemId"] in applied_ids
+                    for item in shown["decision"]["dispositions"]
+                ),
             }
         )
 
@@ -1212,7 +1253,9 @@ class MotionAuthoringService:
                 "MOTION_RECOVERY_REQUIRED", str(error)
             ) from error
 
-    def _show_selected(self, selector, proposal_hash):
+    def _show_selected(self, selector, proposal_hash, run):
+        from .motion_scope_application import shown_applied_ids
+
         reference = selector["proposalRef"]
         digest = proposal_hash or reference["sha256"]
         result = self._proposal_result(digest)
@@ -1225,6 +1268,12 @@ class MotionAuthoringService:
             )
         decision, decision_ref = self._selected_decision(selector, digest)
         expected, applied, committed = self._receipt_basis(result, selector)
+        applied_ids = shown_applied_ids(self, run, selector, decision, applied)
+        selected_ids = {
+            item["itemId"]
+            for item in decision["dispositions"]
+            if item["status"] == "selected"
+        }
         direction_current = result["proposal"]["directionRef"] == self._direction_ref()
         stale = not _basis_matches(expected, self._heads()) or not direction_current
         return {
@@ -1233,7 +1282,8 @@ class MotionAuthoringService:
             "decision": decision,
             "decisionRef": decision_ref,
             "selectionRef": deepcopy(selector),
-            "applied": applied,
+            "applied": applied and selected_ids <= set(applied_ids),
+            "appliedItemIds": applied_ids,
             "committedHeads": committed,
             "directionCurrent": direction_current,
             "warnings": ["Selected proposal basis changed"] if stale else [],
@@ -1305,21 +1355,24 @@ class MotionAuthoringService:
                 }
             )
         _validate(selector, "selectionRef")
-        return self._show_selected(selector, proposal_hash)
+        return self._show_selected(selector, proposal_hash, run)
 
     @staticmethod
     def review_context(shown):
+        from .asset_selection import attach_asset_choices
+        from .motion_scope_application import item_was_applied
+
         proposal = deepcopy(shown.get("proposal") or {})
         choices = {
             item["itemId"]: item["status"]
             for item in (shown.get("decision") or {}).get("dispositions", [])
         }
+        attach_asset_choices(proposal, shown.get("decision") or {})
         for item in proposal.get("items", []):
             state = choices.get(item["itemId"], "proposed")
             item["disposition"] = (
                 "applied"
-                if state == "selected"
-                and (shown["status"] == "committed" or shown.get("applied"))
+                if state == "selected" and item_was_applied(shown, item["itemId"])
                 else state
             )
         return {
@@ -1337,7 +1390,11 @@ class MotionAuthoringService:
     def _with_review(self, result):
         try:
             service = MotionReviewService(self.workspace)
-            snapshot = service.project(self.review_context(result))
+            scope_request = (
+                (result.get("receipt") or {}).get("productionScope") or {}
+            ).get("request")
+            options = {} if scope_request is None else {"scope_request": scope_request}
+            snapshot = service.project(self.review_context(result), **options)
             result["review"] = service.publish(
                 snapshot, expected_basis=snapshot["basisHeads"]
             )

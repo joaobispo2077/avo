@@ -188,3 +188,165 @@ def test_restart_distinguishes_pending_recovery_from_actual_completed_sound(
     assert workspace.raw_dir / shown["proposalRef"]["path"] in retained_motion_paths(
         workspace
     )
+
+
+def unchanged_fresh_map(workspace):
+    before = {p: p.read_bytes() for p in workspace.raw_dir.rglob("*") if p.is_file()}
+    snapshot = fresh_map(workspace)
+    assert {
+        p: p.read_bytes() for p in workspace.raw_dir.rglob("*") if p.is_file()
+    } == before
+    return snapshot
+
+
+def partial_motion(tmp_path):
+    from tests.integration.test_craft_scope_publication import (
+        apply_chunk,
+        selected_world,
+    )
+
+    workspace, service, proposed, selected, first, _ = selected_world(tmp_path)
+    service.apply(
+        apply_chunk(
+            workspace, proposed, selected, "restart-opening", ["opening"], [first]
+        )
+    )
+    return workspace, proposed
+
+
+def motion_work(snapshot, identity="scoped-concepts"):
+    return next(
+        row for row in snapshot["pendingRevisions"] if row["operationId"] == identity
+    )
+
+
+@pytest.mark.parametrize("changed", ["source", "asset"])
+def test_changed_canonical_dependency_retains_exact_partial_work_after_restart(
+    tmp_path, changed
+):
+    from tests.test_timeline_cmap_service import snapshot as cut_snapshot
+
+    from avo.timeline.bmap_service import BMapService
+    from avo.timeline.cmap_service import CMapService
+    from avo.timeline.contracts import file_fingerprint
+
+    workspace, proposed = partial_motion(tmp_path)
+    if changed == "source":
+        source = workspace.raw_dir / "raw.bin"
+        source.write_bytes(b"changed synthetic source")
+        CMapService(workspace).author(
+            cut_snapshot(source), actor="fixture", reason="Changed source identity"
+        )
+    else:
+        source = workspace.raw_dir / "changed-asset.bin"
+        source.write_bytes(b"different synthetic asset")
+        bmap = deepcopy(workspace.store("bmap").load()["revisions"][-1]["snapshot"])
+        bmap["cues"][0]["assetRef"] = {
+            "locator": str(source),
+            **file_fingerprint(source),
+        }
+        BMapService(workspace).author(
+            bmap, actor="fixture", reason="Changed asset identity"
+        )
+    snapshot = unchanged_fresh_map(workspace)
+    work = motion_work(snapshot)
+    assert work["status"] == "partial" and work["basisStatus"] == "stale"
+    assert work["scope"]["itemIds"] == ["mo04", "mo05"]
+    assert work["completedIds"] == ["mo04"] and work["pendingIds"] == ["mo05"]
+    assert work["proposalRef"] == proposed["proposalRef"]
+    assert snapshot["readiness"] == "stale"
+
+
+def test_future_preferences_do_not_retarget_frozen_partial_work_after_restart(tmp_path):
+    workspace, proposed = partial_motion(tmp_path)
+    project = json.loads(workspace.project_path.read_text(encoding="utf-8"))
+    project["editingCraft"] = {"soundMatching": {"enabled": True}}
+    workspace.project_path.write_text(json.dumps(project), encoding="utf-8")
+    snapshot = unchanged_fresh_map(workspace)
+    work = motion_work(snapshot)
+    assert work["status"] == "partial" and work["basisStatus"] == "current"
+    assert snapshot["options"] == proposed["proposal"]["options"]
+    assert snapshot["options"]["effective"]["soundMatching"]["enabled"] is False
+    assert work["completedIds"] == ["mo04"] and work["pendingIds"] == ["mo05"]
+
+
+def test_changed_direction_keeps_the_original_pending_request_after_restart(tmp_path):
+    from tests.test_briefstart_context import selected_project
+    from tests.test_motion_authoring import select
+
+    project, brief, reference, _ = selected_project(tmp_path)
+    workspace = TimelineWorkspace.from_project(project)
+    proposed, _ = propose(workspace)
+    select(workspace, proposed)
+    brief.decide(
+        {
+            "requestId": "restart-select-compare",
+            "targetRef": reference,
+            "expectedIndexHash": brief.show()["expectedIndexHash"],
+            "action": "select",
+            "scope": "project",
+            "actor": {"type": "human", "id": "fixture-creator"},
+            "reason": "Changed fixture direction",
+            "humanInstruction": {
+                "source": "session:fixture",
+                "text": "Select compare for this synthetic test.",
+            },
+            "optionId": "compare",
+        }
+    )
+    snapshot = unchanged_fresh_map(workspace)
+    work = motion_work(snapshot, proposed["proposal"]["operationId"])
+    assert work["basisStatus"] == "stale"
+    assert work["pendingIds"] == ["mo04"] and work["completedIds"] == []
+    assert work["proposalRef"] == proposed["proposalRef"]
+    assert (
+        MotionAuthoringService(workspace).show()["proposal"]["direction"]["optionId"]
+        == "quiet"
+    )
+
+
+def test_changed_camera_keeps_historical_completion_separate_from_currentness(tmp_path):
+    from tests.integration.test_camera_authoring_flow import camera_application
+
+    from avo.timeline.animation import AnimationService
+
+    workspace, service, request, _, _ = camera_application(tmp_path)
+    applied = service.apply(request)
+    animation = deepcopy(
+        workspace.store("animation").load()["revisions"][-1]["snapshot"]
+    )
+    camera = next(
+        c
+        for c in animation["components"]
+        if "editingCraft" in (c.get("extensions") or {})
+    )
+    camera["extensions"]["editingCraft"]["camera"]["nodes"][-1]["scale"] += 0.01
+    AnimationService(workspace).author(
+        animation, actor="fixture", reason="Changed camera path"
+    )
+    snapshot = unchanged_fresh_map(workspace)
+    work = next(row for row in snapshot["pendingRevisions"] if row["kind"] == "motion")
+    assert work["status"] == "completed" and work["basisStatus"] == "stale"
+    assert (
+        work["pendingIds"] == [] and work["completedIds"] == applied["appliedItemIds"]
+    )
+    assert snapshot["readiness"] == "stale"
+
+
+def test_changed_sound_catalogue_keeps_original_completion_and_pending_listening(
+    tmp_path,
+):
+    workspace, catalogue, service, _, request, _ = application(tmp_path)
+    applied = service.apply(request)
+    generation = catalogue.show()
+    annotate(
+        catalogue,
+        generation["generationId"],
+        generation["entries"][0]["entryId"],
+        {"curation": {"favorite": True}},
+    )
+    work = unchanged_fresh_map(workspace)["pendingRevisions"][0]
+    assert work["status"] == "completed" and work["basisStatus"] == "stale"
+    assert work["completedIds"] == [request["choices"][0]["eventId"]]
+    assert work["pendingIds"] == []
+    assert applied["acceptance"] == "pending-listening"

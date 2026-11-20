@@ -17,6 +17,7 @@ __all__ = [
     "CapabilityRegistryError",
     "adapter_for_routing_suffix",
     "build_cutting_service",
+    "build_preparation_service",
     "build_sfx_catalog",
     "build_sound_source_probe",
     "default_proof_capability_registry",
@@ -57,7 +58,9 @@ JOB_REGISTRIES: dict[str, dict[str, str]] = {
 }
 
 
-def build_sfx_catalog(workspace, *, roots, analyze=False, semantic=False, root=None):
+def build_sfx_catalog(
+    workspace, *, roots, analyze=False, semantic=False, root=None, favorites=None
+):
     """Compose only the explicitly selected sound-analysis or matching boundary."""
     from avo.sfx_catalog import SfxCatalogService
 
@@ -70,8 +73,9 @@ def build_sfx_catalog(workspace, *, roots, analyze=False, semantic=False, root=N
         from avo.sfx_semantic import build_semantic_backend
 
         backend = build_semantic_backend(workspace, roots, root=root)
+    preferences = {} if favorites is None else {"favorites": favorites}
     return SfxCatalogService(
-        workspace, roots=roots, analyzer=analyzer, semantic=backend
+        workspace, roots=roots, analyzer=analyzer, semantic=backend, **preferences
     )
 
 
@@ -117,6 +121,77 @@ def build_sound_source_probe():
         }
 
     return probe
+
+
+def build_face_analyzer(workspace):
+    """Construct the optional adapter only when the source request is admitted."""
+
+    def analyze(source, request):
+        from avo.adapters.understand.visual_motion import observe_selected_face
+        from avo.model_sources import resolve_job
+
+        resolved = resolve_job(
+            "face_detect", project=workspace.project, video_key=workspace.video_id
+        )
+        return observe_selected_face(resolved, source, request)
+
+    return analyze
+
+
+def build_reference_analyzer():
+    from avo.adapters.understand.visual_motion import observe_reference_clip
+
+    return observe_reference_clip
+
+
+def build_editor_handoff(workspace):
+    from avo.adapters.media.fcp7_xml import parse_fcp7_xml, write_fcp7_xml
+    from avo.adapters.media.ffprobe import FfprobeMediaAdapter
+    from avo.timeline.editor_handoff import EditorHandoffService
+
+    def inspect_generated(plan, fps):
+        from avo.adapters.media.editor_alpha import editor_alpha_copy
+        from avo.adapters.media.proof_executor import _generated_inputs
+        from avo.proof_composition import create_generated_asset_validator
+        from avo.timeline.editor_generated import is_full_canvas_alpha
+
+        sources = _generated_inputs(
+            plan, plan["output"], fps, create_generated_asset_validator(workspace)
+        )
+        for asset in sources.values():
+            if is_full_canvas_alpha(asset, plan["output"]):
+                asset["editorSource"] = editor_alpha_copy(asset, fps)
+        return sources
+
+    return EditorHandoffService(
+        workspace,
+        inventory=FfprobeMediaAdapter(include_display_rotation=True).inventory,
+        write_xml=write_fcp7_xml,
+        read_xml=parse_fcp7_xml,
+        inspect_generated=inspect_generated,
+    )
+
+
+def build_preparation_service(workspace, *, recover=False):
+    """Read-only construction imports no speech adapter or model readiness checks."""
+    from avo.timeline.preparation_recovery import PreparationService
+
+    port = None
+    if recover:
+        from avo.adapters.media.cutting_analysis import CuttingAnalysisAdapter
+        from avo.video_context import VideoContext, resolve_context_cutting_policy
+
+        context = VideoContext(
+            provider=workspace.project["provider"],
+            video_id=workspace.video_id,
+            raw_dir=workspace.raw_dir,
+            video_key=None,
+            project=workspace.project,
+        )
+        port = CuttingAnalysisAdapter(
+            workspace, resolve_context_cutting_policy(context)
+        )
+    return PreparationService(workspace, recovery_port=port)
 
 
 def build_cutting_service(workspace, *, invocation=None):

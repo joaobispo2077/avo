@@ -13,8 +13,12 @@ from typing import Any
 from uuid import uuid4
 
 from .animation import AnimationError, _keys
-from .contracts import content_hash, file_fingerprint, validate_document
-from .store import atomic_write_json, now_iso
+from .contracts import (
+    content_hash,
+    file_fingerprint,
+    validate_document,
+)
+from .store import atomic_write_json, now_iso, timeline_writer
 
 FORBIDDEN_FIELDS = {
     "text",
@@ -29,6 +33,10 @@ FORBIDDEN_FIELDS = {
     "assetPath",
     "locator",
     "absolutePath",
+    "approvalEvidence",
+    "approvalRef",
+    "reviewRefs",
+    "sourceRights",
 }
 _SEMVER = re.compile(r"^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$")
 _MEDIA = re.compile(
@@ -107,6 +115,8 @@ class ProviderAnimationService:
             "avo.animation-library.schema.json",
             root=Path(__file__).resolve().parents[3] / "providers",
         )
+        if value["provider"] != self.provider:
+            raise AnimationError("animation catalogue belongs to another provider")
         return value
 
     @staticmethod
@@ -191,9 +201,17 @@ class ProviderAnimationService:
             "aiDisclosures": sorted({str(i["aiDisclosure"]) for i in entries}),
         }
 
+    @staticmethod
+    def _require_legacy_pattern(pattern):
+        if "nativePackage" in pattern:
+            raise AnimationError(
+                "Native packages require verified ArtCraft publication"
+            )
+
     def propose(
         self, pattern: dict[str, Any], *, actor: str, intent_reference: str
     ) -> dict[str, Any]:
+        self._require_legacy_pattern(pattern)
         if not actor or not intent_reference:
             raise AnimationError("explicit creator promotion intent is required")
         return self._write_proposal(
@@ -206,6 +224,195 @@ class ProviderAnimationService:
                 "createdAt": self.clock(),
             }
         )
+
+    def propose_native_package(
+        self,
+        pattern,
+        *,
+        package,
+        source_root,
+        source_observer,
+        actor,
+        intent_reference,
+        change_type="major",
+    ):
+        """Propose a verified external native source using the existing catalog."""
+        from .artcraft_packages import native_catalog_manifest, verify_provider_package
+
+        if not actor or not intent_reference:
+            raise AnimationError("explicit creator promotion intent is required")
+        evidence = verify_provider_package(
+            package,
+            source_root,
+            provider=self.provider,
+            source_observer=source_observer,
+        )
+        identity = (pattern.get("patternId"), pattern.get("version"))
+        if identity != (package["componentId"], package["componentVersion"]):
+            raise AnimationError(
+                "ArtCraft package belongs to another component version"
+            )
+        manifest = native_catalog_manifest(package, evidence)
+        value = self.sanitize(
+            {
+                **pattern,
+                "kitId": identity[0],
+                "nativePackage": manifest["nativePackage"],
+                "provenance": evidence["provenance"],
+                "parameterSchema": evidence["parameterSchema"],
+                "manifest": {
+                    "path": "manifest.json",
+                    "sha256": manifest["manifestSha256"],
+                },
+                "status": "active",
+            }
+        )
+        return self._write_proposal(
+            {
+                "schemaVersion": "1.0.0",
+                "provider": self.provider,
+                "pattern": value,
+                "kit": {"manifest": manifest},
+                "actor": actor,
+                "intentReference": intent_reference,
+                "createdAt": self.clock(),
+                "changeType": change_type,
+            }
+        )
+
+    def publish_native_package(
+        self,
+        proposal_path,
+        *,
+        package,
+        source_root,
+        native_store,
+        source_observer,
+        actor,
+        reason,
+        expected_catalog_sha256,
+    ):
+        """Apply an explicit creator decision to the exact reviewed native bytes."""
+        from .artcraft_packages import verify_provider_package
+
+        if not actor or not reason or not isinstance(expected_catalog_sha256, str):
+            raise AnimationError(
+                "ArtCraft publication requires a creator decision and expected catalog"
+            )
+        proposal = self._read_promotion(proposal_path)
+        evidence = verify_provider_package(
+            package,
+            source_root,
+            provider=self.provider,
+            source_observer=source_observer,
+        )
+        pattern = self._native_proposal_pattern(proposal, package, evidence)
+        with timeline_writer(self.path.parent):
+            return self._publish_verified_native(
+                proposal,
+                pattern,
+                package,
+                evidence,
+                native_store,
+                actor,
+                reason,
+                expected_catalog_sha256,
+            )
+
+    def _native_proposal_pattern(self, proposal, package, evidence):
+        from .artcraft_packages import native_catalog_manifest
+
+        pattern = self.sanitize(proposal["pattern"])
+        manifest = (proposal.get("kit") or {}).get("manifest") or {}
+        expected = native_catalog_manifest(package, evidence)
+        if manifest != expected or any(
+            pattern.get(key) != expected[key]
+            for key in (
+                "kitId",
+                "nativePackage",
+                "version",
+                "provenance",
+                "parameterSchema",
+            )
+        ):
+            raise AnimationError(
+                "Native proposal differs from the verified ArtCraft package"
+            )
+        if pattern.get("patternId") != expected["kitId"] or pattern.get("manifest") != {
+            "path": "manifest.json",
+            "sha256": expected["manifestSha256"],
+        }:
+            raise AnimationError(
+                "Native proposal differs from the selected catalog identity"
+            )
+        return pattern
+
+    def _publish_verified_native(
+        self,
+        proposal,
+        pattern,
+        package,
+        evidence,
+        native_store,
+        actor,
+        reason,
+        expected_catalog_sha256,
+    ):
+        from .artcraft_packages import retain_provider_package
+
+        catalog = self.initialize()
+        self._check_cas(catalog, expected_catalog_sha256)
+        manifest_hash = pattern["manifest"]["sha256"]
+        existing = next(
+            (
+                item
+                for item in catalog["patterns"]
+                if (
+                    item["patternId"],
+                    item["version"],
+                )
+                == (pattern["patternId"], pattern["version"])
+            ),
+            None,
+        )
+        if existing is not None:
+            if (existing.get("manifest") or {}).get("sha256") != manifest_hash:
+                raise AnimationError(
+                    "immutable semantic version already exists with different bytes"
+                )
+            target = retain_provider_package(package, evidence, native_store)
+            return {
+                "type": "promotion-approved",
+                "idempotent": True,
+                "patternId": pattern["patternId"],
+                "publishedPath": target.as_posix(),
+                "manifestSha256": manifest_hash,
+            }
+        self._validate_semver(catalog, pattern, proposal["changeType"])
+        event_id = f"animation-event-{len(catalog['events']) + 1:04d}"
+        published_pattern = {**pattern, "promotionEventId": event_id}
+        validate_document(
+            published_pattern,
+            "avo.animation-library.schema.json#/$defs/pattern",
+            root=Path(__file__).resolve().parents[3] / "providers",
+        )
+        target = retain_provider_package(package, evidence, native_store)
+        event = {
+            "eventId": event_id,
+            "type": "promotion-approved",
+            "patternId": pattern["patternId"],
+            "proposalSha256": proposal["proposalSha256"],
+            "actor": actor,
+            "reason": reason,
+            "occurredAt": self.clock(),
+            "manifestSha256": manifest_hash,
+            "publishedPath": target.as_posix(),
+        }
+        current = content_hash(catalog)
+        catalog["patterns"].append(published_pattern)
+        catalog["events"].append(event)
+        self._write_catalog_cas(catalog, current)
+        return event
 
     def propose_from_project(
         self,
@@ -224,6 +431,7 @@ class ProviderAnimationService:
         change_type: str = "major",
         learning_ref: str | None = None,
     ) -> dict[str, Any]:
+        self._require_legacy_pattern(pattern)
         if not actor or not intent_reference:
             raise AnimationError("explicit creator promotion intent is required")
         sanitized = self.sanitize(pattern)
@@ -399,6 +607,21 @@ class ProviderAnimationService:
         atomic_write_json(path, proposal)
         return {**proposal, "path": str(path)}
 
+    def _read_promotion(self, proposal_path: Path) -> dict[str, Any]:
+        proposal = json.loads(Path(proposal_path).read_text(encoding="utf-8"))
+        expected = content_hash(
+            {
+                key: value
+                for key, value in proposal.items()
+                if key not in {"proposalSha256", "path"}
+            }
+        )
+        if proposal.get("proposalSha256") != expected:
+            raise AnimationError("animation proposal hash mismatch")
+        if proposal.get("provider") != self.provider:
+            raise AnimationError("animation proposal belongs to another provider")
+        return proposal
+
     def decide(
         self,
         proposal_path: Path,
@@ -410,17 +633,9 @@ class ProviderAnimationService:
     ) -> dict[str, Any]:
         if decision not in {"approved", "rejected"}:
             raise AnimationError("promotion decision must be approved or rejected")
-        proposal = json.loads(Path(proposal_path).read_text(encoding="utf-8"))
-        expected = content_hash(
-            {
-                key: value
-                for key, value in proposal.items()
-                if key not in {"proposalSha256", "path"}
-            }
-        )
-        if proposal.get("proposalSha256") != expected:
-            raise AnimationError("animation proposal hash mismatch")
+        proposal = self._read_promotion(proposal_path)
         pattern = self.sanitize(proposal["pattern"])
+        self._require_legacy_pattern(pattern)
         catalog = self.initialize()
         base_catalog_hash = content_hash(catalog)
         self._check_cas(catalog, expected_catalog_sha256)

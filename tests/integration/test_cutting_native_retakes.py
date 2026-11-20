@@ -23,6 +23,10 @@ class SuppliedCompleteRetakes(RepeatedTakeAnalysis):
             {"text": "Uma", "start": 2.25, "end": 2.4, "eligibleEdge": True},
             {"text": "ideia.", "start": 2.4, "end": 2.65, "eligibleEdge": True},
         ]
+        for word in result["words"]:
+            word["alignmentStatus"] = "aligned"
+        result["coverage"].update(start=0, end=3)
+        result["vad"] = [{"start": 0.25, "end": 0.65}, {"start": 2.25, "end": 2.65}]
         return result
 
 

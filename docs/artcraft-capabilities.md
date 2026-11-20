@@ -1,9 +1,10 @@
 # ArtCraft capability coverage for provider components
 
-This is the evidence and scope register for the proposed ArtCraft integration.
-It records what AVO should know and qualify; it does not announce implemented
-adapters. References were inspected on **2026-11-15**. No local ArtCraft binary,
-MCP connection, live session or output was tested in this specification task.
+This is the evidence and scope register for ArtCraft in AVO. Run
+`avo cli artcraft catalog --json` to read the bundled knowledge and filter it by
+app or behavior. The baseline references were inspected on **2026-11-15**.
+The AniCraft bridge documentation was also reviewed on **2026-11-19**.
+Local application, connection and output qualification are tracked separately.
 
 ArtCraft apps and their compatible CLIs are separately user-installed tools.
 AVO distributes its own integration logic, knowledge metadata and guides only;
@@ -58,7 +59,7 @@ protocols. Common naming does not imply common switches or permissions.
 | Application | MCP/background entry | Standalone/batch surfaces documented | Live-session entry or limitation |
 | --- | --- | --- | --- |
 | SoundCraft | `soundcraft-cli mcp`; background operation without an audio device | `commands`, `--help`, `run --demo --cmd ... --bounce ...` | `soundcraft --control 7801`, then `soundcraft-cli mcp --connect 7801` |
-| AniCraft | `anicraft-cli mcp` | `new`, `info`, `render`, `render-seq`, `gif`; overview also advertises JSON-lines, whose exact protocol needs release-specific inspection | Supplied agent guide does not establish a live-bridge recipe; do not invent one |
+| AniCraft | `anicraft-cli mcp` | `new`, `info`, `render`, `render-seq`, `gif`; verify the selected release's JSON-lines schema | App `--control`, CLI `mcp --bridge`; the documented bridge finds the running app's token. Local qualification remains pending. [MCP guide](https://github.com/storytold/anicraft/blob/main/docs/mcp.md) |
 | EffectCraft | `effectcraft-cli mcp`; separate background instance | `--help`, `render main.ecproj --comp Main --out main.mp4` | App `--control 9877`, CLI `mcp --bridge 9877` |
 | FilmCraft | `filmcraft-cli mcp --project <project.fcproj>` or empty/demo project | `commands` discovery; no standalone render syntax inferred from its MCP guide | App `--control 9876`, CLI `mcp --bridge 127.0.0.1:9876`; shared per-session control token |
 | VectorCraft | `vectorcraft-cli mcp`; startup discovers an already running control session or uses background documents | Command-step files accept JSON arrays or JSON Lines; command listing/batching, document inspection and export | Start app with `--control 7979` before MCP startup; restart connection discovery if app started later |

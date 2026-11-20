@@ -13,8 +13,15 @@ from .event_clock import (
     sample_rate_boundary,
 )
 from .motion_authoring import MotionAuthoringService
+from .sound_anchors import qualified_source_anchor, sound_phase, source_anchor_time
 from .sound_choices import _sound_document, freeze_sound_choices
-from .sound_fitting import SCHEMA, SoundPlanningError, _clock, fit_sound_candidate
+from .sound_fitting import (
+    SCHEMA,
+    SoundPlanningError,
+    _clock,
+    audition_timing,
+    fit_sound_candidate,
+)
 from .store import timeline_writer, write_immutable_json
 
 _previous_sound_choices = _sound_choices._previous_sound_choices
@@ -35,13 +42,26 @@ def _sound_part(item, intent):
     return parts[0] if len(parts) == 1 else None
 
 
-def _sound_opportunity(item, part, intent, fps):
+def _sound_opportunity(
+    item, part, intent, fps, *, animation=None, cmap=None, spoken=None
+):
     first = _cue_frame(part["timing"]["start"], fps)
     end = _cue_frame(part["timing"]["end"], fps)
-    phase = Fraction(str(intent.get("phase", 0))) * max(0, end - first - 1)
-    impact = first + sample_rate_boundary(
-        phase.numerator, source_rate=phase.denominator, target_rate=1
-    )
+    anchors = {
+        key: deepcopy(intent[key])
+        for key in ("cameraAnchor", "sourceAnchor")
+        if key in intent
+    }
+    if "sourceAnchor" in anchors:
+        anchors["sourceAnchor"] = qualified_source_anchor(
+            anchors["sourceAnchor"], spoken
+        )
+        impact = _cue_frame(source_anchor_time(anchors["sourceAnchor"], cmap), fps)
+    else:
+        phase = sound_phase(intent, part, animation) * max(0, end - first - 1)
+        impact = first + sample_rate_boundary(
+            phase.numerator, source_rate=phase.denominator, target_rate=1
+        )
     return {
         "eventId": intent["eventId"],
         "itemId": item["itemId"],
@@ -54,6 +74,7 @@ def _sound_opportunity(item, part, intent, fps):
         "visibleRange": {"startFrame": first, "endFrameExclusive": end},
         "material": intent.get("material"),
         "strength": intent.get("strength", "unknown"),
+        **anchors,
     }
 
 
@@ -79,7 +100,9 @@ def _sound_recommendation(intent):
     return "audition"
 
 
-def _derive_sound_record(item, intent, fps, program_end_frame):
+def _derive_sound_record(
+    item, intent, fps, program_end_frame, animation=None, cmap=None, spoken=None
+):
     record = {
         "eventId": intent["eventId"],
         "itemId": intent["itemId"],
@@ -107,8 +130,10 @@ def _derive_sound_record(item, intent, fps, program_end_frame):
             "ambiguous-cue" if item["parts"] else "canonical-timing-required"
         ]
         return record
-    opportunity = _sound_opportunity(item, part, intent, fps)
     try:
+        opportunity = _sound_opportunity(
+            item, part, intent, fps, animation=animation, cmap=cmap, spoken=spoken
+        )
         _clock(opportunity, fps, program_end_frame, 48000)
     except (ValueError, TypeError, KeyError) as error:
         record["issues"] = ["outside-program-or-empty-cue: " + str(error)[:300]]
@@ -121,7 +146,16 @@ def _derive_sound_record(item, intent, fps, program_end_frame):
     return record
 
 
-def derive_sound_opportunities(snapshot, intents, *, frame_rate, program_end_frame):
+def derive_sound_opportunities(
+    snapshot,
+    intents,
+    *,
+    frame_rate,
+    program_end_frame,
+    animation=None,
+    cmap=None,
+    spoken=None,
+):
     """Derive only requested sound events from current metadata, with silence valid.
 
     Visibility, material and strength remain declared editorial intent. This does
@@ -151,7 +185,13 @@ def derive_sound_opportunities(snapshot, intents, *, frame_rate, program_end_fra
         items = {item["itemId"]: item for item in snapshot["items"]}
         records = [
             _derive_sound_record(
-                items.get(intent["itemId"]), intent, frame_rate, program_end_frame
+                items.get(intent["itemId"]),
+                intent,
+                frame_rate,
+                program_end_frame,
+                animation,
+                cmap,
+                spoken,
             )
             for intent in intents
         ]
@@ -160,6 +200,24 @@ def derive_sound_opportunities(snapshot, intents, *, frame_rate, program_end_fra
         return records
     except (ValueError, TypeError, KeyError, OverflowError) as error:
         raise SoundPlanningError(str(error)) from error
+
+
+def _review_timing(record, entries, clock):
+    timing = []
+    for result in record["search"]["results"]:
+        entry = entries.get(result["entryId"])
+        if entry is None or (entry["entryRevision"], entry["source"]["sha256"]) != (
+            result["entryRevision"],
+            result["sourceSha256"],
+        ):
+            raise SoundPlanningError(
+                "Sound candidate differs from the selected catalogue"
+            )
+        timing.append(audition_timing(record["opportunity"], entry, clock))
+    record["candidateTiming"] = timing
+    if timing and all(candidate["status"] != "fit" for candidate in timing):
+        record["issues"].append("no-returned-candidate-fits-timing")
+    return len(timing)
 
 
 class SoundPlanningService:
@@ -254,36 +312,15 @@ class SoundPlanningService:
         return result
 
     def _program_clock(self, clock):
-        from .bmap_service import BMapService
-        from .initial_cut import _clock_boundary, _precise_clock_mode
-        from .mapping import cmap_output_duration, cmap_output_timebase
+        from .program_clock import ProgramClockError, require_program_clock
 
-        if self.workspace.authority != "canonical":
-            raise SoundPlanningError("Sound proposals require a canonical approved cut")
-        _, cmap, _ = BMapService(self.workspace).current_basis()
-        snapshot = cmap["snapshot"]
-        base = cmap_output_timebase(snapshot)
-        fps = Fraction(clock["frameRate"]["num"], clock["frameRate"]["den"])
-        extent = (
-            Fraction(cmap_output_duration(snapshot) * base["num"], base["den"]) * fps
-        )
-        if snapshot.get("layoutMode") == "placed":
-            canonical_rate = snapshot["layout"]["programClock"]["frameRate"]
-            if fps != Fraction(canonical_rate["num"], canonical_rate["den"]):
-                raise SoundPlanningError(
-                    "Sound clock differs from the placed picture clock"
-                )
-        else:
-            extent = _clock_boundary(
-                extent, _precise_clock_mode(self.workspace, snapshot)
-            )
-        if extent != clock["programEndFrame"]:
-            raise SoundPlanningError(
-                "Sound clock differs from the approved program extent"
-            )
-        return fps
+        try:
+            return require_program_clock(self.workspace, clock, subject="Sound")
+        except ProgramClockError as error:
+            raise SoundPlanningError(str(error)) from error
 
-    def _match(self, records, generation, mode, budget, filters):
+    def _match(self, records, catalogue, mode, budget, filters, clock):
+        entries = {entry["entryId"]: entry for entry in catalogue["entries"]}
         used = 0
         for record in records:
             record["search"] = None
@@ -298,10 +335,10 @@ class SoundPlanningService:
                     record["query"],
                     filters=filters,
                     limit=min(20, budget - used),
-                    generation=generation,
+                    generation=catalogue["generationId"],
                     mode=mode,
                 )
-                used += len(record["search"]["results"])
+                used += _review_timing(record, entries, clock)
         return used
 
     def _direction(self, request):
@@ -346,6 +383,29 @@ class SoundPlanningService:
             or "craft-" + content_hash(request["operationId"])[:24]
         )
 
+    def _camera_animation(self, intents):
+        if not any("cameraAnchor" in intent for intent in intents):
+            return None
+        from .motion_review import MotionReviewService
+
+        return MotionReviewService(self.workspace)._metadata()[1].get("animation")
+
+    def _source_cmap(self, intents):
+        if not any("sourceAnchor" in intent for intent in intents):
+            return None
+        from .motion_review import MotionReviewService
+
+        return MotionReviewService(self.workspace)._metadata()[1].get("cmap")
+
+    def _spoken_anchors(self, intents, fps):
+        if not any(
+            "spokenEvidence" in (intent.get("sourceAnchor") or {}) for intent in intents
+        ):
+            return None
+        from .sound_word_evidence import load_word_anchors
+
+        return load_word_anchors(self.workspace, intents, fps)
+
     def _propose(self, request):
         from .pipeline import TimelinePipeline
 
@@ -358,7 +418,8 @@ class SoundPlanningService:
                 "Sound matching requires explicitly selected options"
             )
         fps = self._program_clock(request["clock"])
-        generation = self.catalogue.show()["generationId"]
+        catalogue = self.catalogue.show()
+        generation = catalogue["generationId"]
         if request["expectedGeneration"] != generation:
             raise SoundPlanningError("Sound catalogue generation changed")
         direction_ref, direction = self._direction(request)
@@ -367,14 +428,18 @@ class SoundPlanningService:
             request["intents"],
             frame_rate=fps,
             program_end_frame=request["clock"]["programEndFrame"],
+            animation=self._camera_animation(request["intents"]),
+            cmap=self._source_cmap(request["intents"]),
+            spoken=self._spoken_anchors(request["intents"], fps),
         )
         budget = request.get("maxCandidates", 100)
         used = self._match(
             records,
-            generation,
+            catalogue,
             matching["mode"],
             budget,
             request.get("filters", {"rights": ["licensed"]}),
+            request["clock"],
         )
         if (
             self.catalogue.show()["generationId"] != generation

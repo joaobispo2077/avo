@@ -39,6 +39,32 @@
       "type": "object", "additionalProperties": false, "required": ["windowId", "startFrame", "endFrameExclusive", "reason"],
       "properties": { "windowId": { "$ref": "#/$defs/stableId" }, "startFrame": { "type": "integer", "minimum": 0 }, "endFrameExclusive": { "type": "integer", "minimum": 1 }, "reason": { "type": "string", "minLength": 1 } }
     },
+    "workaroundProposal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["candidateSha256", "environment", "reproductionRef", "proposal"],
+      "properties": {
+        "candidateSha256": { "$ref": "#/$defs/sha256" },
+        "environment": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["engine", "engineVersion", "runtime", "runtimeVersion", "renderProfile", "platform"],
+          "properties": {
+            "engine": { "$ref": "#/$defs/environmentText" },
+            "engineVersion": { "$ref": "#/$defs/environmentText" },
+            "runtime": { "$ref": "#/$defs/environmentText" },
+            "runtimeVersion": { "$ref": "#/$defs/environmentText" },
+            "renderProfile": { "$ref": "#/$defs/environmentText" },
+            "platform": { "$ref": "#/$defs/environmentText" }
+          }
+        },
+        "reproductionRef": { "$ref": "#/$defs/evidenceRef" },
+        "proposal": { "type": "string", "minLength": 1, "maxLength": 2048, "pattern": "\\S" }
+      }
+    },
+    "environmentText": {
+      "type": "string", "minLength": 1, "maxLength": 128, "pattern": "\\S"
+    },
     "decisionLedgerEntry": {
       "type": "object", "additionalProperties": false,
       "required": ["decisionId", "kind", "scope", "statement", "rationale", "originIterationId", "evidenceRefs", "status", "supersededBy", "riskWindows", "updatedAt"],
@@ -65,6 +91,7 @@
         "summary": { "type": "string", "minLength": 1 },
         "impact": { "type": "object", "additionalProperties": false, "required": ["affectedArtifacts", "programWindows"], "properties": { "affectedArtifacts": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true }, "programWindows": { "type": "array", "items": { "$ref": "#/$defs/programWindow" } }, "renderCost": { "type": "number", "minimum": 0 }, "reviewCost": { "type": "number", "minimum": 0 } } },
         "evidenceRefs": { "type": "array", "items": { "$ref": "#/$defs/evidenceRef" } },
+        "workaround": { "$ref": "#/$defs/workaroundProposal" },
         "confidence": { "type": "number", "minimum": 0, "maximum": 1 },
         "capabilityGap": { "oneOf": [{ "type": "object", "additionalProperties": false, "required": ["operation", "desiredBehavior"], "properties": { "operation": { "type": "string", "minLength": 1 }, "desiredBehavior": { "type": "string", "minLength": 1 } } }, { "type": "null" }] },
         "supersedes": { "oneOf": [{ "$ref": "#/$defs/stableId" }, { "type": "null" }] },

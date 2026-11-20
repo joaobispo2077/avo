@@ -7,7 +7,7 @@ import pytest
 from avo.editing_craft import resolve_editing_craft_selection
 from avo.timeline.contracts import file_fingerprint
 from avo.timeline.sound_planning import SoundPlanningError, SoundPlanningService
-from tests.test_sfx_catalog import annotate
+from tests.test_sfx_catalog import annotate, scan
 from tests.test_sound_proposals import prepared
 
 
@@ -175,7 +175,7 @@ def test_interrupted_sound_publication_resumes_in_a_new_service_without_duplicat
     assert not service.authoring._pending.exists()
 
 
-def repropose(service, request, *, identity="sound-next"):
+def repropose(service, request, *, identity="sound-next", intents=None):
     from avo.timeline.motion_review import MotionReviewService
     from tests.test_sound_opportunities import intent
 
@@ -196,7 +196,7 @@ def repropose(service, request, *, identity="sound-next"):
                 "sampleRate": 48000,
                 "programEndFrame": 24,
             },
-            "intents": [intent()],
+            "intents": [intent()] if intents is None else intents,
         }
     )
     result = deepcopy(request)
@@ -244,6 +244,100 @@ def test_per_event_level_then_silence_preserves_the_visual_and_original_cmap(tmp
     replay = service.apply(request)
     assert replay["committedHeads"] == first["committedHeads"]
     assert replay["headsCurrent"] is False
+
+
+def test_replacing_and_retiming_a_sound_reports_both_listening_ranges(tmp_path):
+    from tests.test_sound_opportunities import intent
+
+    workspace, catalogue, service, _, request, _ = application(tmp_path)
+    first = service.apply(request)
+    (catalogue.roots["test"] / "alternate.wav").write_bytes(b"alternate sound fixture")
+    generation = scan(catalogue, expected=request["expectedGeneration"])
+    replacement = next(
+        entry
+        for entry in generation["entries"]
+        if entry["relativePath"] == "alternate.wav"
+    )
+    generation = annotate(
+        catalogue,
+        generation["generationId"],
+        replacement["entryId"],
+        {
+            "rights": {
+                "status": "licensed",
+                "license": "fixture",
+                "evidenceRef": "rights-fixture",
+            },
+            "marker": {"sample": 2400, "reviewerRef": "fixture-review"},
+        },
+    )
+    current = repropose(
+        service,
+        {**request, "expectedGeneration": generation["generationId"]},
+        intents=[intent(phase=0.75)],
+    )
+    current["choices"][0]["entryId"] = replacement["entryId"]
+    result = service.apply(current)
+    (change,) = result["changes"]
+    assert change["before"]["entryId"] == request["choices"][0]["entryId"]
+    assert change["after"]["entryId"] == replacement["entryId"]
+    assert change["listeningRanges"] == {
+        "before": {
+            "sampleRate": 48000,
+            "startSample": 10800,
+            "endSampleExclusive": 34800,
+        },
+        "after": {
+            "sampleRate": 48000,
+            "startSample": 11600,
+            "endSampleExclusive": 35600,
+        },
+    }
+    old_bmap = first["receipt"]["prepared"]["bmap"]["snapshot"]["cues"]
+    new_bmap = result["receipt"]["prepared"]["bmap"]["snapshot"]["cues"]
+    old_visual, old_sound = old_bmap
+    new_visual, new_sound = new_bmap
+    assert new_visual == old_visual
+    assert new_sound["cueId"] == old_sound["cueId"]
+    assert new_sound["targetLayerId"] == old_sound["targetLayerId"]
+    assert result["acceptance"] == "pending-listening"
+    assert (
+        workspace.store("tracks").head_hash()
+        == result["committedHeads"]["tracks"]["sha256"]
+    )
+    assert service.apply(current)["changes"] == result["changes"]
+
+
+@pytest.mark.parametrize(
+    ("amount", "message"),
+    [
+        (21, "Selected ducking exceeds native mix support"),
+        (8, "Sound ducking requires a current unmuted dialogue layer"),
+    ],
+)
+def test_unsupported_ducking_fails_before_sources_or_timeline_writes(
+    tmp_path, amount, message
+):
+    workspace, _, service, probe, request, _ = application(tmp_path)
+    request["choices"][0]["mix"]["ducking"] = {
+        "sidechainLayerId": "missing-dialogue",
+        "amountDb": amount,
+        "attackMs": 20,
+        "releaseMs": 250,
+    }
+    before = {
+        path: path.read_bytes()
+        for path in workspace.raw_dir.rglob("*")
+        if path.is_file()
+    }
+    with pytest.raises(SoundPlanningError, match=message):
+        service.apply(request)
+    assert probe.calls == []
+    assert {
+        path: path.read_bytes()
+        for path in workspace.raw_dir.rglob("*")
+        if path.is_file()
+    } == before
 
 
 def test_partial_sound_recovery_rejects_changed_rights(tmp_path, monkeypatch):

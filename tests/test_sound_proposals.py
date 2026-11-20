@@ -14,9 +14,11 @@ from tests.test_sound_opportunities import intent
 from tests.test_timeline_bmap_service import approved_workspace, cue
 
 
-def prepared(tmp_path):
+def prepared(tmp_path, *, window=None):
     workspace, _, _ = approved_workspace(tmp_path)
     visual = cue()
+    if window is not None:
+        visual["start"]["ticks"], visual["end"]["ticks"] = window
     visual["contentRef"]["itemId"] = "mo04"
     BMapService(workspace).author(
         {"cues": [visual]}, actor="fixture", reason="Current visible comparison"
@@ -87,6 +89,51 @@ def test_proposal_freezes_audition_results_and_replays_without_new_work(
         ]
         == result["proposalRef"]
     )
+
+
+@pytest.mark.parametrize(
+    ("window", "marker", "issue"),
+    [
+        (None, 2400, None),
+        (None, None, "source-bound-reviewed-marker-required"),
+        ((0, 100), 24000, "effect transient requires undeclared pre-roll"),
+        ((800, 1000), 1200, "insufficient-program-tail-space"),
+    ],
+)
+def test_ranked_candidates_show_exact_event_timing_fit(tmp_path, window, marker, issue):
+    workspace, catalogue, request = prepared(tmp_path, window=window)
+    generation = catalogue.show()
+    (entry,) = generation["entries"]
+    if marker is not None:
+        generation = annotate(
+            catalogue,
+            generation["generationId"],
+            entry["entryId"],
+            {"marker": {"sample": marker, "reviewerRef": "fixture-listening"}},
+        )
+        request["expectedGeneration"] = generation["generationId"]
+    proposal = SoundPlanningService(workspace, catalogue=catalogue).propose(request)[
+        "proposal"
+    ]
+    (event,) = proposal["opportunities"]
+    (timing,) = event["candidateTiming"]
+    assert timing["entryId"] == entry["entryId"]
+    assert event["recommendation"] == "audition"
+    assert event["silenceAllowed"] is True
+    if issue is None:
+        assert timing == {
+            "entryId": entry["entryId"],
+            "status": "fit",
+            "issues": [],
+            "trimRange": {"startSample": 1200, "endSampleExclusive": 24000},
+            "scheduledAudioStartSample": 10800,
+            "scheduledAudioEndSample": 33600,
+        }
+    else:
+        assert timing["status"] == "unresolved"
+        assert timing["issues"] == [issue]
+        assert timing["trimRange"] is None
+        assert "no-returned-candidate-fits-timing" in event["issues"]
 
 
 @pytest.mark.parametrize(

@@ -57,14 +57,27 @@ immutable generation and exposes incomplete coverage/resume. It never renames,
 moves, trims or normalizes library sources and never calls footage organization.
 `show --offset <n> --limit <1..100>` returns an excerpt plus complete local link.
 
-Record tags/material/favorites/variant groups, rights evidence and reviewed markers
+Record descriptions/categories/tags/material/favorites/variant groups, rights evidence and reviewed markers
 with `sfx annotate` against the exact generation. Favorites stay project-scoped;
-provider promotion is unavailable in this increment and requires the later scoped
-promotion route. Identical audio bytes can share
+explicit `sfx favorite-promote` can share selected portable descriptors and the
+sound identity with the current provider. Identical audio bytes can share
 measurements while separate locators retain different rights/notes. Unknown or
 stale rights remain unresolved; search inclusion is not permission to publish.
 Present result reasons, native sample audition range, source identity and coverage
 before selection. Do not treat a detected attack as a reviewed perceptual marker.
+
+Curated descriptions and categories also contribute descriptor query tokens.
+Use an exact `category` filter to narrow a selected sound family. Both optional
+annotation fields are limited to 512 characters and can be cleared with `null`.
+They remain creator labels; they do not establish measured material, rights or
+listening acceptance. Existing entries without those labels need no migration.
+
+Inspect shared preferences with `sfx favorites-show`; removal uses
+`sfx favorite-remove`. Mutation requests bind the exact provider document and
+confirm their bytes. A selected scan may set `useProviderFavorites: true` to seed
+new matching entries, leaving existing project choices intact. Rights, markers,
+media and approvals never follow a favorite. See the
+[provider-favorites guide](../../../docs/sfx-provider-favorites.md).
 
 Descriptor `sfx search` reads saved metadata only and may correctly return no-match
 or silence. Use explicit `sfx search-semantic` only for selected model execution
@@ -74,6 +87,19 @@ Neither search operation publishes sound into the edit. See the
 [catalogue guide](../../../docs/editing-craft.md#discover-and-curate-local-sounds).
 
 Inspect videoTracks before render: source/generator fingerprint, regions, z-order, fit/crop, compositing, captions/evidence safe zones, and face avoidance. Every contribution links to BMap intent; unresolved or changed sources block.
+
+The motion plan shows named production audio and picture tracks with the exact
+declared order, enabled or muted state, levels, channels and program intervals.
+Follow a cue link to its storyboard card and check any missing links in the text
+or HTML report. Review picture order apart from the stored lane order and check
+playback in the encoded proof. Locale delivery audio has its own workflow.
+
+For a declared motion asset need, list existing local options before sourcing
+anything new. Use `animation asset-review` to compare numbered candidates against
+their intended background and review the supplier, subject and rights evidence.
+Record the chosen, rejected or supplied option in `animation plan-select` using
+the exact round reference. Keep the placeholder visible until normal canonical
+application links the chosen source to the item.
 
 ## Selected artistic guidance
 

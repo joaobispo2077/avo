@@ -1,0 +1,275 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://avo.local/avo.preparation.schema.json",
+  "title": "Source-bound preparation evidence",
+  "$ref": "#/$defs/coverage",
+  "$defs": {
+    "noteTarget": {
+      "type": "object", "additionalProperties": false, "required": ["phrase", "stage", "targetId"],
+      "properties": {
+        "phrase": {"type": "string", "minLength": 1, "maxLength": 256, "pattern": "\\S"},
+        "stage": {"enum": ["cutting", "motion", "sound", "assets"]},
+        "targetId": {"type": "string", "minLength": 1, "maxLength": 128, "pattern": "\\S"}
+      }
+    },
+    "notesDetectRequest": {
+      "type": "object", "additionalProperties": false,
+      "required": ["contractVersion", "operation", "analysisRef", "selection", "targets"],
+      "properties": {
+        "contractVersion": {"const": "1.0.0"}, "operation": {"const": "notes-detect"},
+        "analysisRef": {"$ref": "#/$defs/ref"},
+        "selection": {"$ref": "avo.editing-craft.schema.json#/$defs/selection"},
+        "targets": {"type": "array", "maxItems": 64, "items": {"$ref": "#/$defs/noteTarget"}}
+      }
+    },
+    "noteId": {"type": "string", "pattern": "^note-[a-f0-9]{24}$"},
+    "spokenNote": {
+      "type": "object", "additionalProperties": false,
+      "required": ["noteId", "literal", "body", "sourceRange", "interpretation", "issues", "status", "review"],
+      "properties": {
+        "noteId": {"$ref": "#/$defs/noteId"},
+        "literal": {"type": "string", "minLength": 1, "maxLength": 8192},
+        "body": {"type": "string", "maxLength": 8192},
+        "sourceRange": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/range"}]},
+        "interpretation": {
+          "type": "object", "additionalProperties": false, "required": ["intent", "stage", "targetId", "confidence"],
+          "properties": {
+            "intent": {"type": "string", "maxLength": 8192},
+            "stage": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/noteTarget/properties/stage"}]},
+            "targetId": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/noteTarget/properties/targetId"}]},
+            "confidence": {"enum": ["matched-convention", "unresolved"]}
+          }
+        },
+        "issues": {"type": "array", "maxItems": 16, "uniqueItems": true, "items": {"type": "string", "maxLength": 128}},
+        "status": {"enum": ["candidate", "unresolved"]},
+        "review": {"const": "required"}
+      }
+    },
+    "noteBinding": {
+      "type": "object", "additionalProperties": false,
+      "required": ["sourceRef", "sourceRange", "routingHash", "syncRef", "transcriptSelectionHash", "wordsHash"],
+      "properties": {
+        "sourceRef": {"$ref": "#/$defs/ref"}, "sourceRange": {"$ref": "#/$defs/range"},
+        "routingHash": {"$ref": "#/$defs/sha"}, "syncRef": {"$ref": "#/$defs/ref"},
+        "transcriptSelectionHash": {"$ref": "#/$defs/sha"}, "wordsHash": {"$ref": "#/$defs/sha"}
+      }
+    },
+    "spokenNoteReport": {
+      "type": "object", "additionalProperties": false,
+      "required": ["input", "provider", "videoId", "binding", "status", "notes", "issues", "truncated"],
+      "properties": {
+        "input": {"$ref": "#/$defs/notesDetectRequest"},
+        "provider": {"type": "string", "minLength": 1, "maxLength": 256},
+        "videoId": {"type": "string", "minLength": 1, "maxLength": 256},
+        "binding": {"$ref": "#/$defs/noteBinding"},
+        "status": {"enum": ["observed", "unavailable"]},
+        "notes": {"type": "array", "maxItems": 100, "items": {"$ref": "#/$defs/spokenNote"}},
+        "issues": {"type": "array", "maxItems": 16, "items": {"type": "string", "maxLength": 128}},
+        "truncated": {"type": "boolean"}
+      }
+    },
+    "noteDecisionRequest": {
+      "type": "object", "additionalProperties": false,
+      "required": ["contractVersion", "operation", "operationId", "actor", "reason", "reportRef", "noteId"],
+      "anyOf": [{"required": ["interpretation"]}, {"required": ["speech"]}],
+      "dependentRequired": {"interpretation": ["expectedInterpretationRef"], "speech": ["expectedSpeechRef"]},
+      "properties": {
+        "contractVersion": {"const": "1.0.0"}, "operation": {"const": "notes-decide"},
+        "operationId": {"type": "string", "minLength": 1, "maxLength": 128, "pattern": "\\S"},
+        "actor": {"type": "string", "minLength": 1, "maxLength": 256, "pattern": "\\S"},
+        "reason": {"type": "string", "minLength": 1, "maxLength": 2048, "pattern": "\\S"},
+        "reportRef": {"$ref": "#/$defs/ref"}, "noteId": {"$ref": "#/$defs/noteId"},
+        "interpretation": {"enum": ["accept", "reject", "defer"]},
+        "speech": {"enum": ["propose-exclusion", "keep", "defer"]},
+        "expectedInterpretationRef": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/ref"}]},
+        "expectedSpeechRef": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/ref"}]},
+        "currentInstructions": {
+          "type": "object", "additionalProperties": false,
+          "properties": {
+            "keepSpeech": {"type": "boolean"},
+            "blockedTargets": {"type": "array", "maxItems": 64, "items": {
+              "type": "object", "additionalProperties": false, "required": ["stage", "targetId"],
+              "properties": {"stage": {"$ref": "#/$defs/noteTarget/properties/stage"}, "targetId": {"$ref": "#/$defs/noteTarget/properties/targetId"}}
+            }}
+          }
+        }
+      }
+    },
+    "spokenNoteDecision": {
+      "type": "object", "additionalProperties": false,
+      "required": ["input", "requestHash", "note", "interpretationEffect", "speechEffect", "cuttingProposalRef"],
+      "properties": {
+        "input": {"$ref": "#/$defs/noteDecisionRequest"},
+        "requestHash": {"$ref": "#/$defs/sha"},
+        "note": {"$ref": "#/$defs/spokenNote"},
+        "interpretationEffect": {"enum": ["pending-owner-review", "reject", "defer", null]},
+        "speechEffect": {"enum": ["cutting-review-required", "keep", "defer", null]},
+        "cuttingProposalRef": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/ref"}]}
+      }
+    },
+    "selectedEvidence": {
+      "type": "object", "additionalProperties": false,
+      "required": ["contractVersion", "status", "originalAnalysisRef", "requestRefs", "resultRefs", "decisionRefs", "protectedRanges", "issues", "selectionHash"],
+      "properties": {
+        "contractVersion": {"const": "1.0.0"},
+        "status": {"enum": ["absent", "pending", "partial", "selected", "rejected", "deferred", "stale"]},
+        "originalAnalysisRef": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/ref"}]},
+        "requestRefs": {"type": "array", "maxItems": 2000, "uniqueItems": true, "items": {"$ref": "#/$defs/ref"}},
+        "resultRefs": {"type": "array", "maxItems": 2000, "uniqueItems": true, "items": {"$ref": "#/$defs/ref"}},
+        "decisionRefs": {"type": "array", "maxItems": 2000, "uniqueItems": true, "items": {"$ref": "#/$defs/ref"}},
+        "protectedRanges": {"type": "array", "maxItems": 20000, "items": {"$ref": "#/$defs/range"}},
+        "issues": {"type": "array", "maxItems": 256, "items": {"type": "string", "minLength": 1, "maxLength": 1000}},
+        "selectionHash": {"$ref": "#/$defs/sha"}
+      }
+    },
+    "recoveryDecision": {
+      "type": "object", "additionalProperties": false,
+      "required": ["input", "requestHash", "sourceRange", "knownResultRefs", "decidedAt"],
+      "properties": {
+        "input": {"$ref": "#/$defs/decideRequest"}, "requestHash": {"$ref": "#/$defs/sha"},
+        "sourceRange": {"$ref": "#/$defs/range"},
+        "knownResultRefs": {"type": "array", "maxItems": 128, "uniqueItems": true, "items": {"$ref": "#/$defs/ref"}},
+        "decidedAt": {"type": "string", "minLength": 1, "maxLength": 100}
+      }
+    },
+    "decideRequest": {
+      "type": "object", "additionalProperties": false,
+      "allOf": [{"if": {"properties": {"choice": {"const": "recovered"}}}, "then": {"properties": {"resultRef": {"$ref": "#/$defs/ref"}}}}],
+      "required": ["contractVersion", "operation", "operationId", "actor", "reason", "requestRef", "intervalIndex", "resultRef", "choice", "expectedLedgerHash", "expectedDecisionRefs"],
+      "properties": {
+        "contractVersion": {"const": "1.0.0"}, "operation": {"const": "recover-decide"},
+        "operationId": {"type": "string", "minLength": 1, "maxLength": 128, "pattern": "\\S"},
+        "actor": {"type": "string", "minLength": 1, "maxLength": 200, "pattern": "\\S"},
+        "reason": {"type": "string", "minLength": 1, "maxLength": 4096, "pattern": "\\S"},
+        "requestRef": {"$ref": "#/$defs/ref"}, "intervalIndex": {"type": "integer", "minimum": 0, "maximum": 127},
+        "resultRef": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/ref"}]},
+        "choice": {"enum": ["original", "recovered", "reject", "defer"]},
+        "expectedLedgerHash": {"$ref": "#/$defs/sha"},
+        "expectedDecisionRefs": {"type": "array", "maxItems": 128, "uniqueItems": true, "items": {"$ref": "#/$defs/ref"}}
+      }
+    },
+    "coverageRequest": {
+      "type": "object", "additionalProperties": false,
+      "required": ["contractVersion", "operation", "analysisRef"],
+      "properties": {
+        "contractVersion": {"const": "1.0.0"}, "operation": {"const": "coverage"},
+        "analysisRef": {"$ref": "#/$defs/ref"}
+      }
+    },
+    "recoveryContext": {
+      "type": "object", "additionalProperties": false,
+      "required": ["scope", "previousText", "initialPrompt", "vadFilter", "wordTimestamps", "sourceStart", "observedDuration"],
+      "properties": {
+        "scope": {"const": "selected-interval-only"}, "previousText": {"const": false},
+        "initialPrompt": {"type": "null"}, "vadFilter": {"const": false}, "wordTimestamps": {"const": true},
+        "sourceStart": {"type": "number", "minimum": 0}, "observedDuration": {"type": "number", "exclusiveMinimum": 0}
+      }
+    },
+    "recoverRequest": {
+      "type": "object", "additionalProperties": false,
+      "required": ["contractVersion", "operation", "operationId", "actor", "reason", "analysisRef", "ranges", "selection", "language"],
+      "properties": {
+        "contractVersion": {"const": "1.0.0"}, "operation": {"const": "recover"},
+        "operationId": {"type": "string", "minLength": 1, "maxLength": 128, "pattern": "\\S"},
+        "actor": {"type": "string", "minLength": 1, "maxLength": 200, "pattern": "\\S"},
+        "reason": {"type": "string", "minLength": 1, "maxLength": 4096, "pattern": "\\S"},
+        "analysisRef": {"$ref": "#/$defs/ref"},
+        "ranges": {"type": "array", "minItems": 1, "maxItems": 128, "items": {"$ref": "#/$defs/range"}},
+        "selection": {"$ref": "avo.editing-craft.schema.json#/$defs/selection"},
+        "language": {"type": "string", "minLength": 1, "maxLength": 40, "pattern": "^[A-Za-z][A-Za-z0-9-]*$"}
+      }
+    },
+    "recoveryRequest": {
+      "type": "object", "additionalProperties": false,
+      "required": ["input", "requestHash", "binding", "modelBindings", "modelHash", "executionHash"],
+      "properties": {
+        "input": {"$ref": "#/$defs/recoverRequest"}, "requestHash": {"$ref": "#/$defs/sha"},
+        "binding": {"$ref": "#/$defs/coverageBinding"}, "modelBindings": {"type": "object"},
+        "modelHash": {"$ref": "#/$defs/sha"}, "executionHash": {"$ref": "#/$defs/sha"}
+      }
+    },
+    "recoveryAttempt": {
+      "type": "object", "additionalProperties": false,
+      "required": ["requestRef", "intervalIndex", "sourceRange", "sourceRef", "budgetSource", "ordinal", "actor", "reservedAt"],
+      "properties": {
+        "requestRef": {"$ref": "#/$defs/ref"}, "intervalIndex": {"type": "integer", "minimum": 0, "maximum": 127},
+        "sourceRange": {"$ref": "#/$defs/range"}, "sourceRef": {"$ref": "#/$defs/ref"},
+        "budgetSource": {
+          "type": "object", "additionalProperties": false, "required": ["sha256", "streamIndex", "channels"],
+          "properties": {
+            "sha256": {"$ref": "#/$defs/sha"}, "streamIndex": {"type": "integer", "minimum": 0},
+            "channels": {"type": "array", "minItems": 1, "maxItems": 2, "uniqueItems": true, "items": {"type": "integer", "minimum": 0}}
+          }
+        },
+        "ordinal": {"type": "integer", "minimum": 1, "maximum": 5},
+        "actor": {"type": "string", "minLength": 1, "maxLength": 200},
+        "reservedAt": {"type": "string", "minLength": 1, "maxLength": 100}
+      }
+    },
+    "recoveredData": {
+      "type": "object", "additionalProperties": false, "required": ["transcript", "transcriptHash", "analysis"],
+      "properties": {
+        "transcript": {"type": "object"}, "transcriptHash": {"$ref": "#/$defs/sha"},
+        "analysis": {"$ref": "avo.cutting.schema.json#/$defs/source-analysis"}
+      }
+    },
+    "recoveryResult": {
+      "type": "object", "additionalProperties": false,
+      "required": ["attemptRef", "requestRef", "intervalIndex", "sourceRange", "status", "originalAnalysisRef", "recovered", "wordAnchorsEligible", "selection", "issues", "capturedAt"],
+      "properties": {
+        "attemptRef": {"$ref": "#/$defs/ref"}, "requestRef": {"$ref": "#/$defs/ref"},
+        "intervalIndex": {"type": "integer", "minimum": 0, "maximum": 127}, "sourceRange": {"$ref": "#/$defs/range"},
+        "status": {"enum": ["pending-review", "failed", "stale", "unresolved"]},
+        "originalAnalysisRef": {"$ref": "#/$defs/ref"},
+        "recovered": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/recoveredData"}]},
+        "wordAnchorsEligible": {"type": "boolean"}, "selection": {"const": "pending"},
+        "issues": {"type": "array", "maxItems": 100, "items": {"type": "string", "minLength": 1, "maxLength": 1000}},
+        "capturedAt": {"type": "string", "minLength": 1, "maxLength": 100}
+      }
+    },
+    "sha": {"$ref": "avo.cutting.schema.json#/$defs/sha256"},
+    "range": {"$ref": "avo.cutting.schema.json#/$defs/sourceRange"},
+    "ref": {"$ref": "avo.cutting.schema.json#/$defs/artifactRef"},
+    "coverageBinding": {
+      "type": "object", "additionalProperties": false,
+      "required": ["sourceRef", "sourceRange", "routing", "routingHash", "syncRef", "analysisFactsHash", "transcriptHash", "modelOptionsHash"],
+      "properties": {
+        "sourceRef": {"$ref": "#/$defs/ref"}, "sourceRange": {"$ref": "#/$defs/range"},
+        "routing": {
+          "type": "object", "additionalProperties": false, "required": ["streamIndex", "channels"],
+          "properties": {
+            "streamIndex": {"type": ["integer", "null"], "minimum": 0},
+            "channels": {"type": "array", "maxItems": 2, "uniqueItems": true, "items": {"type": "integer", "minimum": 0}}
+          }
+        },
+        "routingHash": {"$ref": "#/$defs/sha"}, "syncRef": {"$ref": "#/$defs/ref"},
+        "analysisFactsHash": {"$ref": "#/$defs/sha"}, "transcriptHash": {"$ref": "#/$defs/sha"},
+        "modelOptionsHash": {"$ref": "#/$defs/sha"}
+      }
+    },
+    "coverageObservation": {
+      "type": "object", "additionalProperties": false,
+      "required": ["observationId", "kind", "sourceRange", "speechConfirmed", "disposition"],
+      "properties": {
+        "observationId": {"type": "string", "pattern": "^speech-gap-[a-f0-9]{24}$"},
+        "kind": {"enum": ["possible-speech-without-reliable-words", "unmeasured"]},
+        "sourceRange": {"$ref": "#/$defs/range"}, "speechConfirmed": {"const": false},
+        "disposition": {"const": "unresolved"}
+      }
+    },
+    "coverage": {
+      "type": "object", "additionalProperties": false,
+      "required": ["contractVersion", "binding", "status", "observations", "protectedRanges", "issues", "authorization", "automaticRecovery", "assessment", "protectionRounding", "coverageHash"],
+      "properties": {
+        "contractVersion": {"const": "1.0.0"}, "binding": {"$ref": "#/$defs/coverageBinding"},
+        "status": {"enum": ["unavailable", "stale", "needs-review", "no-observed-gaps"]},
+        "observations": {"type": "array", "maxItems": 20000, "items": {"$ref": "#/$defs/coverageObservation"}},
+        "protectedRanges": {"type": "array", "maxItems": 20000, "items": {"$ref": "#/$defs/range"}},
+        "issues": {"type": "array", "maxItems": 100, "uniqueItems": true, "items": {"type": "string", "minLength": 1, "maxLength": 400}},
+        "authorization": {"const": "none"}, "automaticRecovery": {"const": false},
+        "assessment": {"const": "available-evidence-only"}, "protectionRounding": {"const": "outward-to-source-ticks"},
+        "coverageHash": {"$ref": "#/$defs/sha"}
+      }
+    }
+  }
+}

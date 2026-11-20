@@ -55,6 +55,14 @@ def build_parser() -> argparse.ArgumentParser:
 
     configure_sfx(sub)
 
+    from avo.preparation_cli import configure as configure_preparation
+
+    configure_preparation(sub)
+
+    from avo.timeline_export_cli import configure as configure_timeline_export
+
+    configure_timeline_export(sub)
+
     from avo.costs_cli import configure as configure_costs
     from avo.costs_cli import cost_context_argument
 
@@ -71,6 +79,10 @@ def build_parser() -> argparse.ArgumentParser:
     from avo.timeline_import_cli import configure as configure_timeline_import
 
     configure_timeline_import(sub)
+
+    from avo.artcraft_cli import configure as configure_artcraft
+
+    configure_artcraft(sub)
 
     _trim_parser(sub)
 
@@ -1310,6 +1322,10 @@ def _animation(args: argparse.Namespace) -> int:
         "plan-apply",
         "camera-propose",
         "camera-apply",
+        "face-analyze",
+        "reference-analyze",
+        "reference-decide",
+        "asset-review",
     }:
         from avo.motion_plan_cli import run_craft_command
 
@@ -2377,7 +2393,10 @@ def _proof(args: argparse.Namespace) -> int:
         )
         return 0
     if operation == "component-scaffold":
+        from avo.artcraft import guard_legacy_component_request
+
         request = _request(args.request)
+        guard_legacy_component_request(request)
         gap = request.get("capabilityGap") or {}
         if gap.get("status") != "unsupported":
             raise ProofPlanError(
@@ -2388,7 +2407,10 @@ def _proof(args: argparse.Namespace) -> int:
         _emit(ComponentInstanceService(workspace).scaffold(str(request["componentId"])))
         return 0
     if operation == "component-register":
+        from avo.artcraft import guard_legacy_component_request
+
         request = _request(args.request)
+        guard_legacy_component_request(request)
         if request.get("recordType") == "generated-asset":
             result = GeneratedAssetService(workspace).register(request["record"])
         else:
@@ -2564,6 +2586,14 @@ def _trim(args: argparse.Namespace) -> int:
 
 
 def _run_cli(args: argparse.Namespace) -> int:
+    if args.command == "timeline-export":
+        from avo.timeline_export_cli import run as timeline_export_run
+
+        return timeline_export_run(args)
+    if args.command == "preparation":
+        from avo.preparation_cli import run as preparation_run
+
+        return preparation_run(args)
     if args.command == "sfx":
         from avo.sfx_cli import run as sfx_run
 
@@ -2588,7 +2618,10 @@ def _run_cli(args: argparse.Namespace) -> int:
         from avo.breathing import run as breathing_run
 
         return breathing_run(args)
+    from avo.artcraft_cli import run as artcraft_run
+
     handlers = {
+        "artcraft": artcraft_run,
         "trim": _trim,
         "pipeline": _pipeline,
         "timeline": _timeline,

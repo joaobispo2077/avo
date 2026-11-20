@@ -16,7 +16,11 @@ from .contracts import (
     fingerprint_stage,
     validate_document,
 )
-from .media_admission import is_code_drawn_asset, require_media_admission
+from .media_admission import (
+    is_artcraft_asset,
+    is_code_drawn_asset,
+    require_media_admission,
+)
 from .store import StoreError, write_immutable_json
 
 
@@ -351,7 +355,11 @@ class GeneratedAssetService:
         record: dict[str, Any],
         environment: dict[str, Any] | None,
         hyperframes_environment: dict[str, Any] | None = None,
+        artcraft_observations: dict[str, Any] | None = None,
     ) -> None:
+        if is_artcraft_asset(record):
+            self._verify_artcraft_admission(record, artcraft_observations)
+            return
         if (record.get("parameters") or {}).get("hyperframes"):
             if hyperframes_environment is None:
                 raise GeneratedAssetError(
@@ -394,12 +402,43 @@ class GeneratedAssetService:
                 f"code-drawn admission failed: {error}"
             ) from error
 
+    def _verify_artcraft_admission(
+        self, record: dict[str, Any], observations: dict[str, Any] | None
+    ) -> None:
+        if observations is None:
+            raise GeneratedAssetError(
+                "ArtCraft admission requires independent native observations"
+            )
+        from .artcraft_binding import verify_artcraft_asset_record
+
+        try:
+            context = self._context()
+            asset_id = record["assetId"]
+            context["generated_assets"][asset_id] = record
+            require_media_admission(
+                [
+                    {
+                        **record["output"],
+                        "nodeId": asset_id,
+                        "kind": "generated",
+                        "assetId": asset_id,
+                    }
+                ],
+                **context,
+                artcraft_verifier=lambda candidate: verify_artcraft_asset_record(
+                    self.workspace, candidate, observations
+                ),
+            )
+        except (KeyError, ValueError, RuntimeError, OSError) as error:
+            raise GeneratedAssetError(f"ArtCraft admission failed: {error}") from error
+
     def register(
         self,
         record: dict[str, Any],
         *,
         code_drawn_environment: dict[str, Any] | None = None,
         hyperframes_environment: dict[str, Any] | None = None,
+        artcraft_observations: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         value = self._seal(record)
         if is_code_drawn_asset(value) and code_drawn_environment is None:
@@ -408,7 +447,12 @@ class GeneratedAssetService:
             )
         self._validate(value)
         self._output(value)
-        self._freshness(value, code_drawn_environment, hyperframes_environment)
+        self._freshness(
+            value,
+            code_drawn_environment,
+            hyperframes_environment,
+            artcraft_observations,
+        )
         try:
             write_immutable_json(self.path(value["assetId"]), value)
         except StoreError as error:
@@ -436,6 +480,7 @@ class GeneratedAssetService:
         *,
         code_drawn_environment: dict[str, Any] | None = None,
         hyperframes_environment: dict[str, Any] | None = None,
+        artcraft_observations: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         value = self.load(asset_id)
         if value["reproducibility"] == "unverified":
@@ -443,5 +488,10 @@ class GeneratedAssetService:
                 f"generated asset {asset_id} is reference-only until reproducibility is verified"
             )
         self._output(value)
-        self._freshness(value, code_drawn_environment, hyperframes_environment)
+        self._freshness(
+            value,
+            code_drawn_environment,
+            hyperframes_environment,
+            artcraft_observations,
+        )
         return deepcopy(value)

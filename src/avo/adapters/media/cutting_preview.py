@@ -12,7 +12,7 @@ from avo.adapters.media.proof_executor import PROOF_AUDIO_BITRATE
 from avo.timeline.contracts import content_hash, file_fingerprint
 from avo.timeline.cutting_audit import audit_joins
 from avo.timeline.cutting_contracts import selection_graph_hash, source_interval
-from avo.timeline.cutting_previews import group_preview_windows
+from avo.timeline.cutting_previews import editor_terminal_trims, group_preview_windows
 from avo.timeline.cutting_store import CuttingStore
 from avo.timeline.event_clock import frame_to_sample, sample_rate_boundary
 from avo.timeline.initial_cut import initial_cut_proof_request
@@ -196,24 +196,7 @@ def _alternative_review_refs(snapshot, proposal):
     return records
 
 
-def _group_windows(request, joins, occurrences, edits=()):
-    fps = Fraction(
-        request["output"]["frameRate"]["num"], request["output"]["frameRate"]["den"]
-    )
-    total = max(
-        operation["outputRange"]["endFrameExclusive"]
-        for operation in request["videoGraph"]["operations"]
-    )
-    radius = max(1, int(8 * fps))
-    windows = [
-        {
-            "startFrame": max(0, join["programFrame"] - radius),
-            "endFrameExclusive": min(total, join["programFrame"] + radius),
-            "occurrenceIds": [join["joinId"]],
-        }
-        for join in joins
-    ]
-    _assign_edit_windows(windows, joins, edits)
+def _assign_occurrence_windows(windows, joins, occurrences):
     for occurrence in occurrences:
         interval = occurrence.get("sourceRange")
         if interval is None:
@@ -237,7 +220,36 @@ def _group_windows(request, joins, occurrences, edits=()):
                 )
                 if before <= middle <= after:
                     windows[index]["occurrenceIds"].append(occurrence["occurrenceId"])
+
+
+def _group_windows(request, joins, occurrences, edits=(), *, terminal_trims=()):
+    fps = Fraction(
+        request["output"]["frameRate"]["num"], request["output"]["frameRate"]["den"]
+    )
+    total = max(
+        operation["outputRange"]["endFrameExclusive"]
+        for operation in request["videoGraph"]["operations"]
+    )
+    radius = max(1, int(8 * fps))
+    windows = [
+        {
+            "startFrame": max(0, join["programFrame"] - radius),
+            "endFrameExclusive": min(total, join["programFrame"] + radius),
+            "occurrenceIds": [join["joinId"]],
+        }
+        for join in joins
+    ]
+    _assign_edit_windows(windows, joins, edits)
+    _assign_occurrence_windows(windows, joins, occurrences)
     windows.extend(_complete_take_windows(request, occurrences, edits))
+    windows.extend(
+        {
+            "startFrame": 0 if beginning else max(0, total - radius),
+            "endFrameExclusive": min(total, radius) if beginning else total,
+            "occurrenceIds": [identity],
+        }
+        for beginning, identity in terminal_trims
+    )
     windows.extend(
         {**window, "occurrenceIds": []}
         for window in request["validationPlan"]["microproof"]
@@ -278,9 +290,10 @@ class CuttingPreviewAdapter:
                 raise ValueError("cutting preview cannot use derived media")
             if file_fingerprint(path)["sha256"] != source["fingerprint"]["sha256"]:
                 raise ValueError("cutting preview original fingerprint changed")
+        return revision["snapshot"]
 
     def render(self, snapshot, *, proposal_ref, proposal):
-        self._require_basis(snapshot, proposal)
+        original = self._require_basis(snapshot, proposal)
         selection_hash = selection_graph_hash(snapshot)
         identity = content_hash(
             {"selection": selection_hash, "proposal": proposal_ref}
@@ -295,8 +308,17 @@ class CuttingPreviewAdapter:
             frame_rate=proposal.get("frameRate") or {"num": 30, "den": 1},
         )
         joins = audit_joins(snapshot, request["output"]["frameRate"])
+        terminal_trims = (
+            editor_terminal_trims(original, snapshot, proposal["edits"])
+            if (proposal.get("scope") or {}).get("editorFeedbackRef")
+            else ()
+        )
         windows = _group_windows(
-            request, joins, proposal["occurrences"], proposal["edits"]
+            request,
+            joins,
+            proposal["occurrences"],
+            proposal["edits"],
+            terminal_trims=terminal_trims,
         )
         request["previewOnly"] = True
         request["validationPlan"]["microproof"] = [

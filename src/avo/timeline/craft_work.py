@@ -121,7 +121,7 @@ def _motion_decision(retained, work, run):
         ]
         if value and value["proposalRef"] == work["proposalRef"]
     ]
-    states, committed, applied = {}, {}, False
+    states, committed, applied = {}, {}, set()
     if selected:
         choice = selected[-1]
         retained.selection(choice)
@@ -130,8 +130,21 @@ def _motion_decision(retained, work, run):
         if choice.get("receiptRef"):
             receipt = retained.receipt(choice["receiptRef"])
             committed = receipt["committedHeads"]
-            applied = receipt["state"] == "committed"
+            if receipt["state"] == "committed":
+                from .motion_scope_application import completed_item_ids
+
+                applied = completed_item_ids(retained, run, choice, decision)
     return states, committed, applied
+
+
+def _motion_work_status(states, completed, pending):
+    if not pending:
+        return "completed"
+    if completed:
+        return "partial"
+    return (
+        "selected-unapplied" if "selected" in states.values() else "awaiting-selection"
+    )
 
 
 def _motion_progress(retained, work, proposal, run):
@@ -141,14 +154,11 @@ def _motion_progress(retained, work, proposal, run):
         identity
         for identity in ids
         if states.get(identity) == "rejected"
-        or (applied and states.get(identity) == "selected")
+        or (identity in applied and states.get(identity) == "selected")
     ]
     pending = [identity for identity in ids if identity not in completed]
-    state = (
-        "selected-unapplied" if "selected" in states.values() else "awaiting-selection"
-    )
     return {
-        "status": state if pending else "completed",
+        "status": _motion_work_status(states, completed, pending),
         "itemIds": ids,
         "pendingIds": pending,
         "completedIds": completed,
