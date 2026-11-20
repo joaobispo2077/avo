@@ -50,6 +50,22 @@ Use `avo cli artcraft inspect --job <absolute-job-record> --expected-head
 records against the current files. A video job also checks the project and
 canonical revisions. Inspection is read-only and can run in a fresh session.
 
+Use `avo cli artcraft recover --job <absolute-job-record> --expected-head
+<event-hash> --json` after an interrupted run. Recovery reports the next action
+and identifies any partial job files as references. Prepare a fresh job when
+the previous run's outcome is unknown. The AVO MCP tools
+`avo_artcraft_prepare`, `avo_artcraft_run`, `avo_artcraft_inspect` and
+`avo_artcraft_recover` use the same job controls and exact event heads.
+Pass the request and job specification as structured objects in MCP.
+
+Choose `--mode host-mcp` to stage the selected AniCraft Windows 0.2.1
+headless stdio handoff for an independently confined host. Use the returned
+initializer, launch arguments and fingerprinted recipe under the listed
+operator roots and budgets. The native MCP script uses `command` and `params`
+for each step. Check its step results and saved document, then run AVO
+`artcraft inspect` at the handoff head. Operator-returned source and PNG files
+are reference material until separately qualified.
+
 For a video job with a verified export, select an Animation component, its BMap
 cue and the linked Tracks overlay before authoring. Register the exact exported
 job with `avo cli artcraft register`, the current project and an owned `.mkv`

@@ -571,6 +571,13 @@ commands reserve ArtCraft declarations for its qualified admission path.
 Packages include the AVO-owned catalog and schema. Users manage the selected
 app installation separately. The distribution smoke reads bundled metadata.
 
+Structured ArtCraft job tools invoke the same prepare, run, inspect and recover
+commands as the CLI. Inspection and recovery compare the selected event head
+with current evidence and read only the artifacts owned by the job. Recovery
+reports a next action and fingerprints bounded partial files for reference.
+An interrupted write retains its event and requires a fresh job before another
+attempt at authoring.
+
 The first AniCraft profile authors a Windows 0.2.1 lower third from a job-owned
 empty document. A supplied confined command runner executes the fixed native
 recipe and checks the exact saved stage and clock, installed font family and
@@ -579,6 +586,12 @@ backings and verifies every channel against an independent third. Job events
 bind the saved native source, recipe and frame fingerprints. The guided route
 prepares the same native recipe under operator control and retains its returned
 files as references. Proof admission remains a separate decision boundary.
+
+An explicit host-MCP job stages a headless AniCraft launch descriptor and a
+version-specific operator recipe. It binds the installed files, owned empty
+document, command IDs, permitted roots and resource limits. The selected host
+enforces those limits for the documented stdio transport. AVO stages and
+inspects the handoff without connecting to the host or starting a server.
 
 The explicitly selected video export binds the unchanged AniCraft source,
 recipe, app and CLI fingerprints, ordered alpha frames and current approved
