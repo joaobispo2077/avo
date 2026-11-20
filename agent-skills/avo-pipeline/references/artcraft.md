@@ -79,12 +79,19 @@ kit version and manifest hash, the external native store, a fresh instance ID
 and the typed parameter and binding object. AVO preserves project-owned copies
 of the native source and its evidence. For a deliberate upgrade, select the
 newer version and pass `--supersedes` with the earlier instance ID.
+Use the reviewed template's font. Omitted fields inherit its approved values.
 
 For a saved-source text revision, set `document.state` to `saved` and
 `document.source` to the selected project-owned `.anicraft` copy. Include
 the source directory in `readRoots` and choose the instance's text and approved
 font. Run the selected qualified confined CLI profile. AVO keeps the original
 and saves a separate revision with its recipe and edit-command evidence.
+
+For a byte-identical repeat, use `--mode reuse` with `--reuse-job` and
+`--reuse-head` from the verified saved-source run. Keep the same provider,
+editable source, parameters and output contract. The new run copies the
+verified component frames and native revision. Use the new video's canonical
+placement and review before adopting the result.
 
 Before any native authoring, identify the effective roots, owner of the job's
 document, output contract and bounds. A provider-only component has a declared

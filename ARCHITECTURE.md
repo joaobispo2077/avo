@@ -621,6 +621,14 @@ into a separate revision folder. The native adapter observes the selected edit
 command signatures and compares the new document with the preserved design.
 The receipt retains the original source, revision recipe and decoded output.
 
+Copy-only reuse binds a selected native export to a new project's exact
+provider, editable source bytes, parameters, render contract and installed
+tool fingerprints. It copies the verified component frames, native revision
+and recipe into the new job without an application session. The new proof
+receives its own canonical placement and source binding. Native label
+instances resolve omitted settings from the reviewed template and retain its
+qualified font.
+
 ## Motion engine selection and code-drawn capture (feature 012)
 
 HyperFrames remains the default. The pure shared motion policy resolves invocation, pinned run, project/video, provider/channel and global preferences, in that order. Strict saved IDs are hyperframes, remotion, and code-drawn; Remotion retains its existing unsupported execution adapter. A new default never rewrites a recorded animation revision or creator decision. Explicit new engine/source authoring uses existing revision invalidation. Installed motion and pipeline routers resolve current no-framework intent before loading engine-specific skills.

@@ -127,6 +127,8 @@ version, manifest hash and a fresh instance ID. The `--bindings-json` object
 contains `parameters`, `assetBindings`, `eventBindings` and `safeAreaBindings`.
 The selected parameters must match the published template contract. AVO copies
 the source into the selected footage project for subsequent qualified authoring.
+Omitted fields inherit the reviewed template parameters, including its font.
+Choose a separately reviewed source design to change that font.
 
 Select a newer version with a fresh instance ID and `--supersedes` to link the
 upgrade explicitly. Review the new instance in the video's own context.
@@ -139,6 +141,14 @@ confined CLI run saves a separate native revision and records the original as
 a dependency. The verified profile edits the label using the approved font,
 then verifies the saved design and alpha frames. Register the resulting
 export and review it against the current video proof.
+
+For an exact repeat of an already verified saved-source label, use
+`artcraft prepare` with `--mode reuse`, `--reuse-job` and `--reuse-head`.
+Select the same provider, editable source bytes, label parameters and output
+contract in the new video. `artcraft run` copies the retained native revision,
+recipe and ordered alpha frames to the new job without launching AniCraft.
+Register the copy for its new timeline independently. Changed inputs select
+the corresponding new authored job.
 
 The checked automatic profile requires a host with independently enforced job
 roots. Returned files from the current guided handoff stay available for
