@@ -259,7 +259,7 @@ class SelectedArtCraftAdapter:
             )
 
     def author_lower_third(self, job, directory):
-        from .artcraft_anicraft import run_lower_third
+        from .artcraft_anicraft import revise_lower_third, run_lower_third
 
         def invoke(workdir, *arguments, timeout):
             return self._run_confined(
@@ -271,6 +271,16 @@ class SelectedArtCraftAdapter:
                 timeout=timeout,
             )
 
+        if job["documentState"] == "saved":
+            return revise_lower_third(
+                job["output"],
+                None,
+                job["authoringParameters"],
+                source=Path(job["workspace"]) / job["document"],
+                directory=directory,
+                budget=job["budget"],
+                invoke=invoke,
+            )
         return run_lower_third(
             job["output"],
             job["authoringParameters"],

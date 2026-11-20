@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import stat
 from dataclasses import dataclass
 from importlib.resources import files
@@ -949,8 +950,14 @@ def _inspect_job_document(store, job, head):
     path = store.workspace / job["document"]
     roots = job["roots"]["write"]
     saved = head.get("saved")
-    if saved is None and job.get("documentState") == "saved" and job["inputs"]:
-        saved = {**job["inputs"][0], "locator": str(path)}
+    if job.get("documentState") == "saved":
+        if not job["inputs"] or not _retained_job_file(
+            {**job["inputs"][0], "locator": str(path)}, roots
+        ):
+            return "changed"
+        if saved is None:
+            return "current"
+        path = _authoring_export_directory(store, job) / "component.anicraft"
     if saved is None:
         return _inspect_unrecorded_document(path, head.get("handoff"))
     return (
@@ -992,6 +999,11 @@ def run_authoring(job_ref, *, expected_head, adapter):
 
 
 def _run_guided(store, job, head, inspection, adapter):
+    if job["documentState"] == "saved":
+        raise ArtCraftError(
+            "Selected saved-source revisions require a qualified confined CLI runner",
+            code="ARTCRAFT_NOT_READY",
+        )
     if head["state"] == "ready" and inspection["checks"].get("handoff") == "current":
         return inspection
     directory = _require_prepared_lower_third(store, job, head)
@@ -1032,13 +1044,11 @@ def _require_prepared_lower_third(store, job, head):
             code="ARTCRAFT_OUTCOME_UNKNOWN",
         )
     scope = job["decision"]["scope"]
-    if (
-        scope != {"app": "anicraft", "operations": ["lower-third"]}
-        or job.get("documentState") != "empty"
-        or not job.get("authoringParameters")
+    if scope != {"app": "anicraft", "operations": ["lower-third"]} or not job.get(
+        "authoringParameters"
     ):
         raise ArtCraftError(
-            "ArtCraft runner needs an empty AniCraft document and the selected lower-third parameters",
+            "ArtCraft runner needs the selected AniCraft lower-third parameters",
             code="ARTCRAFT_NOT_ELIGIBLE",
         )
     directory = store.workspace / job["document"]
@@ -1047,7 +1057,14 @@ def _require_prepared_lower_third(store, job, head):
             "ArtCraft job output does not match the verified write root",
             code="ARTCRAFT_SCOPE_CHANGED",
         )
-    return _bounded_path(store.workspace, directory.parent, "job output")
+    return _bounded_path(
+        store.workspace, _authoring_export_directory(store, job), "job output"
+    )
+
+
+def _authoring_export_directory(store, job):
+    directory = (store.workspace / job["document"]).parent
+    return directory / "revision" if job["documentState"] == "saved" else directory
 
 
 def _execute_prepared_job(store, job, running, directory, adapter):
@@ -1102,11 +1119,19 @@ def _verify_authoring_result(job, directory, result):
         raise ArtCraftError(
             "ArtCraft returned output differs from the exact owned paths and fingerprints"
         )
-    return {"saved": native, "recipe": recipe, "outputs": frames}
+    evidence = {"saved": native, "recipe": recipe, "outputs": frames}
+    if job["documentState"] == "saved":
+        digest = result.get("revisionCommandSchemaHash")
+        if not isinstance(digest, str) or not re.fullmatch(r"[a-f0-9]{64}", digest):
+            raise ArtCraftError(
+                "ArtCraft saved revision needs observed native edit commands"
+            )
+        evidence["revisionCommandSchemaHash"] = digest
+    return evidence
 
 
 def _verify_retained_export(store, job, event):
-    directory = (store.workspace / job["document"]).parent
+    directory = _authoring_export_directory(store, job)
     try:
         _verify_authoring_result(
             job,
@@ -1115,6 +1140,7 @@ def _verify_retained_export(store, job, event):
                 "nativeSource": event["saved"],
                 "recipe": event["recipe"],
                 "frames": event["outputs"],
+                "revisionCommandSchemaHash": event.get("revisionCommandSchemaHash"),
             },
         )
     except (KeyError, ValueError) as exc:

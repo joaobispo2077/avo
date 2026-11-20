@@ -269,6 +269,7 @@
         "jobHash": { "$ref": "#/$defs/hash" },
         "predecessorHash": { "anyOf": [{ "$ref": "#/$defs/hash" }, { "type": "null" }] },
         "saved": { "$ref": "#/$defs/fingerprint" },
+        "revisionCommandSchemaHash": { "$ref": "#/$defs/hash" },
         "recipe": { "$ref": "#/$defs/fingerprint" },
         "handoff": { "$ref": "#/$defs/fingerprint" },
         "outputs": { "type": "array", "maxItems": 16384, "items": { "$ref": "#/$defs/fingerprint" } },

@@ -45,6 +45,9 @@ def freeze_export_binding(workspace, *, job_ref, expected_head):
             "requestHash": job["decision"]["requestHash"],
             "environmentHash": content_hash(environment),
         }
+        if job["documentState"] == "saved":
+            source["inputSources"] = job["inputs"]
+            source["revisionCommandSchemaHash"] = event["revisionCommandSchemaHash"]
         components = {
             "version": 1,
             "jobRef": file_fingerprint(Path(job_ref)),
@@ -210,6 +213,7 @@ def build_artcraft_asset_record(binding, binding_ref, observed, *, asset_id):
         binding["recipe"],
         binding["jobRef"],
         binding_ref,
+        *binding.get("inputSources", []),
         *binding["frames"],
     ]
     environment = binding["environment"]
