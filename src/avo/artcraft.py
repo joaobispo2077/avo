@@ -37,6 +37,7 @@ __all__ = [
     "guard_legacy_component_request",
     "inspect_authoring",
     "prepare_authoring",
+    "read_authoring_export",
     "require_eligible",
     "run_authoring",
     "seal_record",
@@ -1117,3 +1118,20 @@ def _verify_retained_export(store, job, event):
             "ArtCraft retained export evidence is incomplete or stale",
             code="ARTCRAFT_SCOPE_CHANGED",
         ) from exc
+
+
+def read_authoring_export(job_ref, *, expected_head):
+    """Read the exact exported native job after rechecking its retained files."""
+    store, job, event = _open_selected_job(job_ref, expected_head)
+    if event["state"] != "exported":
+        raise ArtCraftError(
+            "ArtCraft needs a verified rendered export",
+            code="ARTCRAFT_ADMISSION_REQUIRED",
+        )
+    current = _inspection_result(store, job, event)
+    if current["status"] != "current":
+        raise ArtCraftError(
+            "ArtCraft export evidence is stale", code="ARTCRAFT_SCOPE_CHANGED"
+        )
+    _verify_retained_export(store, job, event)
+    return job, event

@@ -307,13 +307,15 @@
     },
     "receipt": {
       "type": "object", "additionalProperties": false,
-      "required": ["version", "artifactState", "app", "requestHash", "packageHash", "parameterHash", "recipeHash", "environmentHash", "inputs", "output", "observed", "receiptHash"],
+      "required": ["version", "artifactState", "app", "requestHash", "parameterHash", "recipeHash", "environmentHash", "inputs", "output", "observed", "receiptHash"],
       "properties": {
         "version": { "const": 1 },
         "artifactState": { "enum": ["reference-only", "reproducibility-qualified", "admitted"] },
         "app": { "$ref": "#/$defs/app" },
         "requestHash": { "$ref": "#/$defs/hash" },
         "packageHash": { "$ref": "#/$defs/hash" },
+        "nativeRevisionHash": { "$ref": "#/$defs/hash" },
+        "bindingRef": { "$ref": "#/$defs/fingerprint" },
         "parameterHash": { "$ref": "#/$defs/hash" },
         "recipeHash": { "$ref": "#/$defs/hash" },
         "environmentHash": { "$ref": "#/$defs/hash" },
@@ -324,6 +326,10 @@
         "bindingHash": { "$ref": "#/$defs/hash" },
         "receiptHash": { "$ref": "#/$defs/hash" }
       },
+      "oneOf": [
+        { "required": ["packageHash"], "not": { "required": ["nativeRevisionHash"] } },
+        { "required": ["nativeRevisionHash", "bindingRef"], "not": { "required": ["packageHash"] } }
+      ],
       "allOf": [
         {
           "if": { "properties": { "artifactState": { "enum": ["reproducibility-qualified", "admitted"] } } },
