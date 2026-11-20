@@ -605,6 +605,12 @@ the verified bytes in a provider-scoped external store and publishes hash-only
 source provenance. An identical retry verifies the retained package and returns
 the existing promotion without adding an event.
 
+Native kit instantiation verifies the exact catalog version and rechecks the
+provider store's retained source, reviews and rights. The selected video's
+component instance records its parameters and project-owned source copies.
+An explicit upgrade creates a new version-pinned instance linked to the
+previous record. Its contextual review follows the existing video gates.
+
 ## Motion engine selection and code-drawn capture (feature 012)
 
 HyperFrames remains the default. The pure shared motion policy resolves invocation, pinned run, project/video, provider/channel and global preferences, in that order. Strict saved IDs are hyperframes, remotion, and code-drawn; Remotion retains its existing unsupported execution adapter. A new default never rewrites a recorded animation revision or creator decision. Explicit new engine/source authoring uses existing revision invalidation. Installed motion and pipeline routers resolve current no-framework intent before loading engine-specific skills.

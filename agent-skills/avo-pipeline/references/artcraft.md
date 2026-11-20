@@ -72,6 +72,12 @@ explicit `provider-publish` applies the decision against the current catalog
 hash and retains the package under the selected external library root. Keep
 the approving actor and reason tied to the exact source version.
 
+Use `avo cli artcraft provider-instantiate` for a selected video. Pass the exact
+kit version and manifest hash, the external native store, a fresh instance ID
+and the typed parameter and binding object. AVO preserves project-owned copies
+of the native source and its evidence. For a deliberate upgrade, select the
+newer version and pass `--supersedes` with the earlier instance ID.
+
 Before any native authoring, identify the effective roots, owner of the job's
 document, output contract and bounds. A provider-only component has a declared
 external source workspace. A real video keeps canonical decisions under
