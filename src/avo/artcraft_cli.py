@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Mapping
+from pathlib import Path
 
 _MAX_REQUEST_BYTES = 256 * 1024
 
@@ -54,6 +55,27 @@ def configure(sub):
     for field in ("project", "asset-id", "materialization"):
         review.add_argument(f"--{field}")
     review.add_argument("--json", action="store_true")
+    _provider_commands(operations)
+
+
+def _provider_commands(operations):
+    propose = operations.add_parser(
+        "provider-propose", help="Propose a verified native provider package"
+    )
+    publish = operations.add_parser(
+        "provider-publish", help="Publish a reviewed native provider package"
+    )
+    for command in (propose, publish):
+        for field in ("provider", "catalog", "package", "source-root", "actor"):
+            command.add_argument(f"--{field}", required=True)
+        command.add_argument("--json", action="store_true")
+    propose.add_argument("--pattern-json", required=True)
+    propose.add_argument("--intent-reference", required=True)
+    propose.add_argument(
+        "--change-type", choices=("major", "minor", "patch"), default="major"
+    )
+    for field in ("proposal", "native-store", "expected-catalog", "reason"):
+        publish.add_argument(f"--{field}", required=True)
 
 
 def _distinct_keys(pairs):
@@ -212,6 +234,65 @@ def _review_export(args):
         raise ArtCraftError(str(exc), code="ARTCRAFT_REVIEW_UNAVAILABLE") from exc
 
 
+def _provider_package_action(args):
+    from avo.adapters.artcraft_anicraft import inspect_lower_third_source
+    from avo.artcraft import ArtCraftError
+    from avo.timeline.animation import AnimationError
+    from avo.timeline.contracts import ContractError
+    from avo.timeline.provider_animation import ProviderAnimationService
+    from avo.timeline.store import StoreError
+
+    catalog_path, package_path = Path(args.catalog), Path(args.package)
+    if catalog_path.resolve() != catalog_path or package_path.resolve() != package_path:
+        raise ArtCraftError("Choose exact absolute ArtCraft catalog and package paths")
+    if package_path.stat().st_size > _MAX_REQUEST_BYTES:
+        raise ArtCraftError("ArtCraft package manifest exceeds 256 KiB")
+    package = _decode_object(package_path.read_text(encoding="utf-8"))
+    service = ProviderAnimationService(catalog_path, provider=args.provider)
+    options = {
+        "package": package,
+        "source_root": args.source_root,
+        "source_observer": inspect_lower_third_source,
+        "actor": args.actor,
+    }
+    try:
+        if args.artcraft_operation == "provider-propose":
+            return service.propose_native_package(
+                _decode_object(args.pattern_json),
+                intent_reference=args.intent_reference,
+                change_type=args.change_type,
+                **options,
+            )
+        return service.publish_native_package(
+            args.proposal,
+            native_store=args.native_store,
+            reason=args.reason,
+            expected_catalog_sha256=args.expected_catalog,
+            **options,
+        )
+    except (AnimationError, ContractError, StoreError) as exc:
+        raise ArtCraftError(str(exc), code="ARTCRAFT_PACKAGE_UNAVAILABLE") from exc
+
+
+def _register_export(args):
+    from avo.artcraft import ArtCraftError
+    from avo.proof_composition import register_artcraft_export
+    from avo.timeline.generated_assets import GeneratedAssetError
+    from avo.timeline.store import StoreError
+    from avo.timeline.workspace import TimelineWorkspace, WorkspaceError
+
+    try:
+        return register_artcraft_export(
+            TimelineWorkspace.from_project(args.project),
+            job_ref=args.job,
+            expected_head=args.expected_head,
+            output=args.output,
+            asset_id=args.asset_id,
+        )
+    except (GeneratedAssetError, StoreError, WorkspaceError) as exc:
+        raise ArtCraftError(str(exc), code="ARTCRAFT_ADMISSION_REQUIRED") from exc
+
+
 def run(args):
     from avo.artcraft import ArtCraftError, assess_request, catalog, inspect_authoring
 
@@ -238,25 +319,11 @@ def run(args):
                 adapter=SelectedArtCraftAdapter(),
             )
         elif args.artcraft_operation == "register":
-            from avo.proof_composition import register_artcraft_export
-            from avo.timeline.generated_assets import GeneratedAssetError
-            from avo.timeline.store import StoreError
-            from avo.timeline.workspace import TimelineWorkspace, WorkspaceError
-
-            try:
-                result = register_artcraft_export(
-                    TimelineWorkspace.from_project(args.project),
-                    job_ref=args.job,
-                    expected_head=args.expected_head,
-                    output=args.output,
-                    asset_id=args.asset_id,
-                )
-            except (GeneratedAssetError, StoreError, WorkspaceError) as exc:
-                raise ArtCraftError(
-                    str(exc), code="ARTCRAFT_ADMISSION_REQUIRED"
-                ) from exc
+            result = _register_export(args)
         elif args.artcraft_operation == "review":
             result = _review_export(args)
+        elif args.artcraft_operation in {"provider-propose", "provider-publish"}:
+            result = _provider_package_action(args)
         else:
             request = _decode_request(args.request_json)
             result = assess_request(
