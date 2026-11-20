@@ -286,6 +286,18 @@ def test_destructive_flags_and_warnings() -> None:
     assert "DESTRUCTIVE" in migrate_rollback.description
 
 
+@pytest.mark.parametrize("operation", ["prepare", "run", "inspect", "recover"])
+def test_artcraft_job_tools_discover_their_exact_cli_scope(operation) -> None:
+    definition = next(
+        item
+        for item in all_bridge_defs()
+        if item.spec.name == f"avo_artcraft_{operation}"
+    )
+    assert definition.cli_prefix == ("artcraft", operation)
+    assert definition.spec.destructive is False
+    assert definition.spec.group == "artcraft"
+
+
 def test_kwargs_to_argv_omits_false_bools() -> None:
     argv = kwargs_to_argv(
         ("migrate-timeline", "activate"),

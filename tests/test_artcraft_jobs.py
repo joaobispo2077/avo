@@ -459,6 +459,15 @@ def test_run_records_unknown_outcome_and_refuses_to_repeat_a_partial_write(autho
     assert (
         workspace / prepared["job"]["document"]
     ).read_bytes() == b"synthetic editable source"
+    recovery = api.recover_authoring(
+        prepared["jobRef"], expected_head=event["eventHash"]
+    )
+    assert recovery["recovery"]["artifactState"] == "reference-only"
+    assert recovery["recovery"]["nextAction"] == "prepare-fresh-job"
+    assert recovery["recovery"]["retainedFiles"][0] == file_fingerprint(
+        workspace / prepared["job"]["document"]
+    )
+    assert api.ArtCraftJobStore(workspace).head(spec["jobId"]) == event
     with pytest.raises(ArtCraftError):
         api.run_authoring(
             prepared["jobRef"], expected_head=event["eventHash"], adapter=adapter
