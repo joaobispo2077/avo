@@ -591,6 +591,12 @@ execution read the same source lock and use the existing `overlay-video`
 operation, preserving the canonical placement, alpha and local frame phase
 through full and window proofs. Creator review follows the existing gates.
 
+ArtCraft review pairs the retained standalone phase frames with an exact
+original-footage candidate when the caller selects its proof record. The
+review reader verifies the immutable plan, materialization, source binding
+and current candidate bytes, and links available source and edit logs. It
+reports the review as pending for the existing creator approval workflow.
+
 ## Motion engine selection and code-drawn capture (feature 012)
 
 HyperFrames remains the default. The pure shared motion policy resolves invocation, pinned run, project/video, provider/channel and global preferences, in that order. Strict saved IDs are hyperframes, remotion, and code-drawn; Remotion retains its existing unsupported execution adapter. A new default never rewrites a recorded animation revision or creator decision. Explicit new engine/source authoring uses existing revision invalidation. Installed motion and pipeline routers resolve current no-framework intent before loading engine-specific skills.

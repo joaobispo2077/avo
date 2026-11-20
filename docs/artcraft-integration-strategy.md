@@ -93,6 +93,13 @@ lossless `.mkv` and records both in generated media. The proof uses the standard
 `overlay-video` operation with the retained asset and input-lock references.
 Window proofs keep the local frame phase of the full composition.
 
+Use `avo cli artcraft review --job JOB --expected-head HEAD --json` to inspect
+the standalone before, entrance, hold, exit and after frames. Add `--project
+PROJECT --asset-id ASSET --materialization RECORD` to pair the same export with
+the current proof, placement and available source and edit logs. A changed
+candidate or timeline requires current review evidence. Use the existing
+creator approval workflow to record the decision.
+
 The checked automatic profile requires a host with independently enforced job
 roots. Returned files from the current guided handoff stay available for
 inspection and reference while production qualification continues.

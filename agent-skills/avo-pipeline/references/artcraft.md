@@ -58,6 +58,12 @@ the entrance, hold and exit, then verify the context in the original-footage
 proof. Review text at mobile size and check it against faces, captions and other
 graphics. Record the design decision against the exact candidate and context.
 
+Run `avo cli artcraft review --job <absolute-job-record> --expected-head
+<export-event-hash> --json` to locate the exact standalone phase frames. Add
+`--project`, `--asset-id` and `--materialization` to include the matching
+original-footage proof and the current project logs. Use the existing human
+review workflow to record the decision.
+
 Before any native authoring, identify the effective roots, owner of the job's
 document, output contract and bounds. A provider-only component has a declared
 external source workspace. A real video keeps canonical decisions under
