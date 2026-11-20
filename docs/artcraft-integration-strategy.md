@@ -131,6 +131,15 @@ the source into the selected footage project for subsequent qualified authoring.
 Select a newer version with a fresh instance ID and `--supersedes` to link the
 upgrade explicitly. Review the new instance in the video's own context.
 
+To render a pinned video's label, select its copied `.anicraft` file as
+`document.source` with `document.state` set to `saved` in `artcraft prepare`.
+Include its owning source directory in `readRoots`, the instance's selected
+`authoringParameters`, and its matching native output contract. A qualified
+confined CLI run saves a separate native revision and records the original as
+a dependency. The verified profile edits the label using the approved font,
+then verifies the saved design and alpha frames. Register the resulting
+export and review it against the current video proof.
+
 The checked automatic profile requires a host with independently enforced job
 roots. Returned files from the current guided handoff stay available for
 inspection and reference while production qualification continues.
