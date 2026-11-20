@@ -334,7 +334,7 @@ def _register_native_overlay(tmp_path, monkeypatch, cli):
         output=derived / "speaker.mkv",
         asset_id="artcraft-speaker",
     )
-    return workspace, heads, record
+    return workspace, heads, record, job["jobRef"], rendered["head"]
 
 
 def test_installed_anicraft_overlay_contributes_to_full_and_window_proofs(
@@ -362,7 +362,9 @@ def test_installed_anicraft_overlay_contributes_to_full_and_window_proofs(
             "set AVO_ARTCRAFT_ANICRAFT_TEST_CLI to the installed AniCraft 0.2.1 CLI"
         )
     cli = Path(entry).resolve(strict=True)
-    workspace, heads, record = _register_native_overlay(tmp_path, monkeypatch, cli)
+    workspace, heads, record, job_ref, event_head = _register_native_overlay(
+        tmp_path, monkeypatch, cli
+    )
     execution = _conformance(_execution(tmp_path, fps=Fraction(24)))
     native_output = tmp_path / "native-source-test.mkv"
     baseline = _frozen_plan(execution, native_output)
@@ -394,7 +396,7 @@ def test_installed_anicraft_overlay_contributes_to_full_and_window_proofs(
     full = tmp_path / "full.mkv"
     plan = _frozen_plan(execution, full)
     assert port.proof_tool_readiness(plan)["generated:artcraft-speaker"]
-    port.render_proof_plan(plan, full, window=None)
+    rendered = port.render_proof_plan(plan, full, window=None)
     short = tmp_path / "short.mkv"
     port.render_proof_plan(
         plan, short, window={"startFrame": 25, "endFrameExclusive": 39}
@@ -406,6 +408,9 @@ def test_installed_anicraft_overlay_contributes_to_full_and_window_proofs(
     np.testing.assert_array_equal(_pcm(full), _pcm(native_output))
     assert not np.array_equal(full_frames[28, 285, 65], baseline_frames[28, 285, 65])
     assert not np.array_equal(full_frames[33, 285, 65], baseline_frames[33, 285, 65])
+    _assert_actual_proof_review(
+        workspace, compiler, plan, rendered, job_ref, event_head
+    )
     heads["bmap"] = "f" * 64
     assert not port.proof_tool_readiness(plan)["generated:artcraft-speaker"]
     stale = tmp_path / "stale.mkv"
@@ -414,3 +419,88 @@ def test_installed_anicraft_overlay_contributes_to_full_and_window_proofs(
             plan, stale, window={"startFrame": 25, "endFrameExclusive": 39}
         )
     assert not stale.exists()
+
+
+def _assert_actual_proof_review(
+    workspace, compiler, plan, rendered, job_ref, event_head
+):
+    from avo.mcp.bridge import run_cli
+    from avo.timeline.contracts import content_hash
+    from avo.timeline.store import now_iso, write_immutable_json
+
+    request = [
+        "artcraft",
+        "review",
+        "--job",
+        job_ref,
+        "--expected-head",
+        event_head,
+        "--json",
+    ]
+    standalone = run_cli(request)
+    assert standalone.ok, standalone.stderr
+    summary = standalone.parsed_json
+    assert summary["reviewState"] == "pending-creator"
+    assert [frame["localFrame"] for frame in summary["standalone"]["frames"]] == [
+        0,
+        3,
+        8,
+        21,
+        23,
+    ]
+
+    write_immutable_json(compiler.path(plan["proofPlanId"]), plan)
+    receipt = {
+        key: plan[key]
+        for key in (
+            "proofPlanId",
+            "proofPlanHash",
+            "renderProfile",
+            "canonicalInputLock",
+        )
+    }
+    receipt.update(
+        schemaVersion="1.0.0",
+        kind="proof-plan",
+        checkpoint="motion-proof",
+        materializationId="proof-build-artcraft-fixture",
+        output=rendered["output"],
+        preflightHash=content_hash("preflight"),
+        microproofGateHash=content_hash("microproof"),
+        producer=rendered["producer"],
+        createdAt=now_iso(),
+        soundMixReview={"sampleRate": 48000, "events": []},
+    )
+    receipt["materializationHash"] = content_hash(receipt)
+    materialization = (
+        workspace.timeline_dir
+        / "materializations"
+        / "proof-plan"
+        / f"{receipt['materializationId']}.json"
+    )
+    write_immutable_json(materialization, receipt)
+    source_log = workspace.raw_dir / "SOURCE-LOG.md"
+    source_log.write_text("Synthetic fixture source.", encoding="utf-8")
+    request.extend(
+        [
+            "--project",
+            str(workspace.project_path),
+            "--asset-id",
+            "artcraft-speaker",
+            "--materialization",
+            str(materialization),
+        ]
+    )
+    contextual = run_cli(request)
+    assert contextual.ok, contextual.stderr
+    assert contextual.parsed_json["reviewState"] == "pending-creator"
+    original = contextual.parsed_json["originalFootage"]
+    assert original["candidate"]["sha256"] == rendered["output"]["sha256"]
+    assert original["placement"]["range"] == {"startFrame": 18, "endFrameExclusive": 42}
+    assert original["logs"] == [file_fingerprint(source_log)]
+
+    with Path(rendered["output"]["locator"]).open("ab") as stream:
+        stream.write(b"changed candidate")
+    stale = run_cli(request)
+    assert not stale.ok
+    assert "proof changed after materialization" in stale.stderr

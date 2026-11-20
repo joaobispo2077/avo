@@ -643,6 +643,18 @@ def test_video_export_binding_freezes_exact_source_parameters_and_current_inputs
     rendered = api.run_authoring(
         prepared["jobRef"], expected_head=prepared["head"], adapter=adapter
     )
+    review = api.describe_export_review(
+        prepared["jobRef"], expected_head=rendered["head"]
+    )
+    assert review["reviewState"] == "pending-creator"
+    assert review["viewerPurpose"] == brief["purpose"]
+    assert [frame["localFrame"] for frame in review["standalone"]["frames"]] == [
+        0,
+        9,
+        24,
+        63,
+        71,
+    ]
     workspace = TimelineWorkspace.from_project(project)
     locked = freeze_export_binding(
         workspace, job_ref=prepared["jobRef"], expected_head=rendered["head"]
