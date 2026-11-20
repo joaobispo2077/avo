@@ -177,7 +177,8 @@ jobs:
         run: bash scripts/ci/ensure-ffmpeg.sh
 
       - name: Install managed Chromium for code-drawn integration
-        timeout-minutes: 8
+        # The Ubuntu mirror was still downloading the required fonts at 8 minutes.
+        timeout-minutes: 15
         run: python -m playwright install --with-deps --no-shell chromium
 
       - name: Provision pinned standalone brush dependency
