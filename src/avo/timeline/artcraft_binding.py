@@ -67,7 +67,7 @@ def freeze_export_binding(workspace, *, job_ref, expected_head):
 def _canonical_overlay(workspace, job, expected_heads):
     from avo.motion import _canonical_drawing_heads
 
-    from .hyperframes_binding import _canonical_canvas, _canonical_cue
+    from .hyperframes_binding import _canonical_cue
 
     snapshots, heads = _canonical_drawing_heads(workspace)
     if any(expected_heads.get(key) != value for key, value in heads.items()):
@@ -80,7 +80,7 @@ def _canonical_overlay(workspace, job, expected_heads):
         **output,
         "frameRate": {"num": rate["numerator"], "den": rate["denominator"]},
     }
-    canvas = _canonical_canvas(snapshots, contract)
+    canvas = _artcraft_canvas(snapshots["cmap"], layer, contract)
     region, cue = _canonical_cue(snapshots, component, layer, contract)
     if layer.get("placement") != {"x": 0, "y": 0, **canvas}:
         raise ArtCraftError("ArtCraft lower third must cover the canonical canvas")
@@ -92,6 +92,23 @@ def _canonical_overlay(workspace, job, expected_heads):
         "canvas": canvas,
         "zOrder": layer["zOrder"],
     }
+
+
+def _artcraft_canvas(cmap, layer, contract):
+    """Use the declared program canvas, or the complete Tracks canvas for raw cuts."""
+    selected = (
+        cmap.get("importOutput")
+        or cmap.get("renderOutput")
+        or layer.get("placement", {})
+    )
+    width, height = selected.get("width"), selected.get("height")
+    if not all(type(value) is int and value > 0 for value in (width, height)):
+        raise ArtCraftError("ArtCraft needs exact positive canonical canvas dimensions")
+    if selected.get("frameRate", contract["frameRate"]) != contract["frameRate"]:
+        raise ArtCraftError("ArtCraft needs the exact canonical canvas frame rate")
+    if width * contract["height"] != height * contract["width"]:
+        raise ArtCraftError("ArtCraft must preserve the canonical canvas aspect ratio")
+    return {"width": width, "height": height}
 
 
 def _selected_overlay(snapshots, component_id):
