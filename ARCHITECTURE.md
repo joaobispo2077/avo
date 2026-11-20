@@ -589,9 +589,15 @@ files as references. Proof admission remains a separate decision boundary.
 
 An explicit host-MCP job stages a headless AniCraft launch descriptor and a
 version-specific operator recipe. It binds the installed files, owned empty
-document, command IDs, permitted roots and resource limits. The selected host
-enforces those limits for the documented stdio transport. AVO stages and
-inspects the handoff without connecting to the host or starting a server.
+document, command IDs, permitted roots and resource limits. The handoff requires
+the selected host to enforce those limits. AVO stages and inspects the handoff
+without connecting to the host or starting a server.
+
+AniCraft JSON-lines authoring uses an independently confined stdio runner and
+the same fixed recipe and verification as CLI batching. It checks the startup
+record and waits for the exact successful receipt at each step before sending
+the next command. The first failed or incomplete receipt leaves a recoverable
+job outcome and prevents subsequent commands.
 
 The explicitly selected video export binds the unchanged AniCraft source,
 recipe, app and CLI fingerprints, ordered alpha frames and current approved

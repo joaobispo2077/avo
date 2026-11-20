@@ -66,6 +66,14 @@ for each step. Check its step results and saved document, then run AVO
 `artcraft inspect` at the handoff head. Operator-returned source and PNG files
 are reference material until separately qualified.
 
+For the selected Windows 0.2.1 runtime, `--mode json-lines` uses `serve` through
+a runner that independently confines the chosen roots and supports bounded
+stdin/stdout. AVO sends one fixed native command at a time, checks its reply,
+and stops before the next command on failure. The run explicitly saves a fresh
+native document and verifies reopened frames and alpha against the same
+contract as CLI batching. When the confined runner is unavailable, use the
+explicit guided route for an operator-owned handoff.
+
 For a video job with a verified export, select an Animation component, its BMap
 cue and the linked Tracks overlay before authoring. Register the exact exported
 job with `avo cli artcraft register`, the current project and an owned `.mkv`
