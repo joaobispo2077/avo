@@ -188,6 +188,16 @@ class SelectedArtCraftAdapter:
     def __init__(self, observe_confinement=None, run_confined=None):
         self._observe_confinement = observe_confinement
         self._run_confined = run_confined
+        self._registry_observation = None
+
+    def _selected_registry(self, installed, scope, mode):
+        key = content_hash({"installation": installed, "scope": scope, "mode": mode})
+        previous = self._registry_observation
+        if previous is not None and previous[0] == key:
+            return previous[1]
+        observed = _command_schema_hash(installed["executable"])
+        self._registry_observation = key, observed
+        return observed
 
     def observe(self, *, scope, mode, roots, cli_path, app_path):
         if (
@@ -206,7 +216,7 @@ class SelectedArtCraftAdapter:
                 "operations": scope["operations"],
                 "mode": mode,
                 "authority": "operator",
-                "commandSchemaHash": _command_schema_hash(installed["executable"]),
+                "commandSchemaHash": self._selected_registry(installed, scope, mode),
                 **installed,
             }
         if self._observe_confinement is None:
@@ -220,7 +230,7 @@ class SelectedArtCraftAdapter:
             "operations": scope["operations"],
             "mode": mode,
             "effectiveRoots": effective,
-            "commandSchemaHash": _command_schema_hash(installed["executable"]),
+            "commandSchemaHash": self._selected_registry(installed, scope, mode),
             **installed,
         }
 
