@@ -6,6 +6,15 @@
   "properties": {
     "schemaVersion": { "const": "1.0.0" }, "instanceId": { "$ref": "#/$defs/stableId" }, "kitId": { "$ref": "#/$defs/stableId" }, "kitVersion": { "type": "string", "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(?:-[0-9A-Za-z.-]+)?$" }, "kitManifestHash": { "$ref": "#/$defs/sha256" },
     "parameters": { "type": "object", "additionalProperties": true },
+    "nativePackage": {
+      "type": "object", "additionalProperties": false,
+      "required": ["provider", "app", "packageHash"],
+      "properties": {
+        "provider": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
+        "app": { "$ref": "https://avo.local/schemas/avo.artcraft.schema.json#/$defs/app" },
+        "packageHash": { "$ref": "#/$defs/sha256" }
+      }
+    },
     "assetBindings": { "type": "array", "items": { "type": "object", "additionalProperties": false, "required": ["slot", "sha256", "rightsRef"], "properties": { "slot": { "type": "string", "minLength": 1 }, "sha256": { "$ref": "#/$defs/sha256" }, "rightsRef": { "type": "string", "minLength": 1 } } } },
     "eventBindings": { "type": "array", "items": { "type": "object", "additionalProperties": false, "required": ["slot", "eventId", "revisionHash"], "properties": { "slot": { "type": "string", "minLength": 1 }, "eventId": { "$ref": "#/$defs/stableId" }, "revisionHash": { "$ref": "#/$defs/sha256" } } } },
     "safeAreaBindings": { "type": "object", "additionalProperties": false, "required": ["faces", "captions", "evidence", "ui"], "properties": { "faces": { "type": "array" }, "captions": { "type": "array" }, "evidence": { "type": "array" }, "ui": { "type": "array" } } },

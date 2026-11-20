@@ -264,7 +264,10 @@ def guard_legacy_component_request(payload):
 
 
 def _declares_artcraft(record):
-    if record.get("backend") == "artcraft" or "artcraft" in record:
+    if record.get("backend") == "artcraft" or {
+        "artcraft",
+        "nativePackage",
+    }.intersection(record):
         return True
     parameters = record.get("parameters")
     if isinstance(parameters, dict) and "artcraft" in parameters:

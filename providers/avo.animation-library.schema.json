@@ -42,16 +42,8 @@
             "flashingSafe": {"type": "boolean"}
           }
         },
-        "provenance": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["sourceVideoId", "candidateSha256", "sectionRefs"],
-          "properties": {
-            "sourceVideoId": {"type": "string"},
-            "candidateSha256": {"$ref": "#/$defs/sha256"},
-            "sectionRefs": {"type": "array", "items": {"type": "string"}}
-          }
-        },
+        "provenance": {"type": "object"},
+        "nativePackage": {"$ref": "#/$defs/nativePackage"},
         "promotionEventId": {"type": "string"},
         "kitId": {"type": "string", "pattern": "^[a-z][a-z0-9-]{2,63}$"},
         "parameterSchema": {"type": "object"},
@@ -74,6 +66,40 @@
           }
         },
         "status": {"enum": ["active", "deprecated"]}
+      },
+      "allOf": [
+        {
+          "if": {"required": ["nativePackage"]},
+          "then": {"properties": {"provenance": {"$ref": "#/$defs/providerAuthoredProvenance"}}},
+          "else": {"properties": {"provenance": {"$ref": "#/$defs/projectProvenance"}}}
+        }
+      ]
+    },
+    "nativePackage": {
+      "type": "object", "additionalProperties": false,
+      "required": ["app", "packageHash"],
+      "properties": {
+        "app": {"type": "string", "pattern": "^[a-z]{1,15}craft$"},
+        "packageHash": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "providerAuthoredProvenance": {
+      "type": "object", "additionalProperties": false,
+      "required": ["origin", "sourceReviewSha256", "designReviewSha256", "rightsSha256"],
+      "properties": {
+        "origin": {"const": "provider-authored"},
+        "sourceReviewSha256": {"$ref": "#/$defs/sha256"},
+        "designReviewSha256": {"$ref": "#/$defs/sha256"},
+        "rightsSha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "projectProvenance": {
+      "type": "object", "additionalProperties": false,
+      "required": ["sourceVideoId", "candidateSha256", "sectionRefs"],
+      "properties": {
+        "sourceVideoId": {"type": "string"},
+        "candidateSha256": {"$ref": "#/$defs/sha256"},
+        "sectionRefs": {"type": "array", "items": {"type": "string"}}
       }
     },
     "dependency": {

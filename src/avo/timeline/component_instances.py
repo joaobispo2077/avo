@@ -62,6 +62,10 @@ class ComponentInstanceService:
         *,
         parameter_schema: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
+        if "nativePackage" in instance:
+            raise ComponentInstanceError(
+                "Native packages require a verified ArtCraft instantiation"
+            )
         value = self._seal(instance)
         if parameter_schema is not None:
             try:

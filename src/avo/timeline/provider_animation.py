@@ -197,9 +197,17 @@ class ProviderAnimationService:
             "aiDisclosures": sorted({str(i["aiDisclosure"]) for i in entries}),
         }
 
+    @staticmethod
+    def _require_legacy_pattern(pattern):
+        if "nativePackage" in pattern:
+            raise AnimationError(
+                "Native packages require verified ArtCraft publication"
+            )
+
     def propose(
         self, pattern: dict[str, Any], *, actor: str, intent_reference: str
     ) -> dict[str, Any]:
+        self._require_legacy_pattern(pattern)
         if not actor or not intent_reference:
             raise AnimationError("explicit creator promotion intent is required")
         return self._write_proposal(
@@ -230,6 +238,7 @@ class ProviderAnimationService:
         change_type: str = "major",
         learning_ref: str | None = None,
     ) -> dict[str, Any]:
+        self._require_legacy_pattern(pattern)
         if not actor or not intent_reference:
             raise AnimationError("explicit creator promotion intent is required")
         sanitized = self.sanitize(pattern)
@@ -433,6 +442,7 @@ class ProviderAnimationService:
             raise AnimationError("promotion decision must be approved or rejected")
         proposal = self._read_promotion(proposal_path)
         pattern = self.sanitize(proposal["pattern"])
+        self._require_legacy_pattern(pattern)
         catalog = self.initialize()
         base_catalog_hash = content_hash(catalog)
         self._check_cas(catalog, expected_catalog_sha256)
