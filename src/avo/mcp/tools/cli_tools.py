@@ -1109,6 +1109,55 @@ def _artcraft_bridge_defs():
             include_project=False,
             extra_params=(*scope, ParamSpec("behavior", str | None)),
         ),
+        *_artcraft_job_bridge_defs(),
+    ]
+
+
+def _artcraft_job_bridge_defs():
+    prepare = _tool(
+        "avo_artcraft_prepare",
+        "artcraft",
+        "prepare",
+        "Prepare one explicitly selected authoring job in its declared external workspace.",
+        include_project=False,
+        extra_params=(
+            ParamSpec("request", dict[str, Any], required=True),
+            ParamSpec("job_spec", dict[str, Any], required=True),
+            *(
+                ParamSpec(name, str, required=True)
+                for name in ("provider", "workspace", "app", "mode")
+            ),
+            ParamSpec("operation", list[str], required=True),
+            *(
+                ParamSpec(name, str | None)
+                for name in ("cli", "application", "reuse_job", "reuse_head")
+            ),
+            ParamSpec("as_json", bool, default=True),
+        ),
+    )
+    descriptions = {
+        "run": "Run the selected job at its exact head and write only its owned output.",
+        "inspect": "Read current or stale evidence for the selected job and expected head.",
+        "recover": "Inspect retained files and the next supported action after a job interruption.",
+    }
+    selected_job = (
+        ParamSpec("job", str, required=True),
+        ParamSpec("expected_head", str, required=True),
+        ParamSpec("as_json", bool, default=True),
+    )
+    return [
+        prepare,
+        *(
+            _tool(
+                f"avo_artcraft_{operation}",
+                "artcraft",
+                operation,
+                description,
+                include_project=False,
+                extra_params=selected_job,
+            )
+            for operation, description in descriptions.items()
+        ),
     ]
 
 

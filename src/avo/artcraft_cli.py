@@ -38,6 +38,7 @@ def configure(sub):
     for operation, hint in (
         ("inspect", "Reconcile retained job evidence"),
         ("run", "Execute a prepared native job"),
+        ("recover", "Read retained evidence for an interrupted job"),
     ):
         command = operations.add_parser(operation, help=hint)
         command.add_argument("--job", required=True)
@@ -124,14 +125,30 @@ def _decode_request(raw):
 
 def encode_request(value):
     """Serialize an actual tool argument, never interpret it as a client path."""
+    return _encode_argument(value, "request", _decode_request)
+
+
+def encode_job_spec(value):
+    from avo.timeline.contracts import validate_document
+
+    return _encode_argument(
+        value,
+        "job specification",
+        lambda raw: validate_document(
+            _decode_object(raw), "avo.artcraft.schema.json#/$defs/jobSpec"
+        ),
+    )
+
+
+def _encode_argument(value, label, validate):
     from avo.artcraft import ArtCraftError
     from avo.timeline.contracts import canonical_json_bytes
 
     if not isinstance(value, Mapping):
-        raise ArtCraftError("ArtCraft request must be a structured object")
+        raise ArtCraftError(f"ArtCraft {label} must be a structured object")
     try:
         raw = canonical_json_bytes(dict(value)).decode("utf-8")
-        _decode_request(raw)
+        validate(raw)
     except ValueError as exc:
         raise ArtCraftError(str(exc)) from exc
     return raw
@@ -363,22 +380,31 @@ def _register_export(args):
         raise ArtCraftError(str(exc), code="ARTCRAFT_ADMISSION_REQUIRED") from exc
 
 
+def _read_job(args):
+    if args.artcraft_operation == "recover":
+        from avo.artcraft import recover_authoring
+
+        return recover_authoring(args.job, expected_head=args.expected_head)
+    from avo.adapters.artcraft import SelectedArtCraftAdapter
+    from avo.artcraft import inspect_authoring
+
+    return inspect_authoring(
+        args.job,
+        expected_head=args.expected_head,
+        source_inspector=SelectedArtCraftAdapter.inspect_returned_source,
+    )
+
+
 def run(args):
-    from avo.artcraft import ArtCraftError, assess_request, catalog, inspect_authoring
+    from avo.artcraft import ArtCraftError, assess_request, catalog
 
     try:
         if args.artcraft_operation == "catalog":
             result = catalog(app=args.app, behavior=args.behavior)
         elif args.artcraft_operation == "prepare":
             result = _prepare_job(_decode_request(args.request_json), args)
-        elif args.artcraft_operation == "inspect":
-            from avo.adapters.artcraft import SelectedArtCraftAdapter
-
-            result = inspect_authoring(
-                args.job,
-                expected_head=args.expected_head,
-                source_inspector=SelectedArtCraftAdapter.inspect_returned_source,
-            )
+        elif args.artcraft_operation in {"inspect", "recover"}:
+            result = _read_job(args)
         elif args.artcraft_operation == "run":
             from avo.adapters.artcraft import SelectedArtCraftAdapter
             from avo.artcraft import run_authoring

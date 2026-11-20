@@ -95,10 +95,14 @@ def kwargs_to_argv(
 
 def _normalize_structured_arguments(prefix, kwargs):
     result = normalize_cost_arguments(prefix, kwargs)
-    if tuple(prefix) == ("artcraft", "assess") and "request" in result:
-        from avo.artcraft_cli import encode_request
+    operation = tuple(prefix)
+    if operation in {("artcraft", "assess"), ("artcraft", "prepare")}:
+        from avo.artcraft_cli import encode_job_spec, encode_request
 
-        result["request_json"] = encode_request(result.pop("request"))
+        if "request" in result:
+            result["request_json"] = encode_request(result.pop("request"))
+        if operation == ("artcraft", "prepare") and "job_spec" in result:
+            result["job_spec_json"] = encode_job_spec(result.pop("job_spec"))
     return result
 
 
