@@ -258,8 +258,8 @@ jobs:
       - name: Install Node dependencies
         run: npm ci
 
+      # Keep both bounded apt attempts inside this step.
       - name: Install ffmpeg
-        # Keep both bounded apt attempts inside this step.
         timeout-minutes: 22
         run: bash scripts/ci/ensure-ffmpeg.sh
 
