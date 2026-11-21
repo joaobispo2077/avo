@@ -84,6 +84,35 @@ def _sanitized_record(
     return record
 
 
+def _learning_applicability(item: dict[str, Any]) -> dict[str, Any]:
+    if item["learningScope"] == "project-only":
+        return {}
+    declared = item.get("applicability") or {}
+    return {
+        key: _sanitize_learning_value(declared[key])
+        for key in ("formats", "sections", "conditions", "exclusions")
+        if key in declared
+    }
+
+
+def _curated_learning_record(item: dict[str, Any], fallback_id: str) -> dict[str, Any]:
+    scope = item.get("learningScope")
+    record = _sanitized_record(
+        record_id=str(item.get("id") or fallback_id),
+        summary="Project-specific learning retained in the source ledger"
+        if scope == "project-only"
+        else item.get("summary"),
+        status="candidate" if scope else str(item.get("status") or "candidate"),
+        evidence_classes=list(item.get("evidenceClasses") or []),
+        impact={} if scope else dict(item.get("impact") or {}),
+        recurrence=int(item.get("recurrence") or 0),
+    )
+    if scope:
+        record["learningScope"] = scope
+        record["applicability"] = _learning_applicability(item)
+    return record
+
+
 def build_timeline_learning_snapshot(
     *,
     ledger: dict[str, Any],
@@ -102,16 +131,19 @@ def build_timeline_learning_snapshot(
         raise ValueError("final timeline learning requires the approved master")
     report = build_rework_report(ledger)
     decisions = [
-        _sanitized_record(
-            record_id=str(item["decisionId"]),
-            summary=item.get("statement"),
-            status=str(item.get("status") or "unknown"),
-            evidence_classes=[
-                str(ref.get("kind") or "unspecified")
-                for ref in item.get("evidenceRefs") or []
-            ],
-            impact={"scope": item.get("scope") or {}},
-        )
+        {
+            **_sanitized_record(
+                record_id=str(item["decisionId"]),
+                summary=item.get("statement"),
+                status=str(item.get("status") or "unknown"),
+                evidence_classes=[
+                    str(ref.get("kind") or "unspecified")
+                    for ref in item.get("evidenceRefs") or []
+                ],
+                impact={"scope": item.get("scope") or {}},
+            ),
+            "learningScope": "project-only",
+        }
         for item in ledger.get("decisions") or []
     ]
     grouped: dict[str, list[dict[str, Any]]] = {}
@@ -165,30 +197,21 @@ def build_timeline_learning_snapshot(
     for decision in ledger.get("decisions") or []:
         if decision.get("status") == "awaiting-human":
             uncertainties.append(
-                _sanitized_record(
-                    record_id=str(decision["decisionId"]),
-                    summary=decision.get("statement"),
-                    status="awaiting-human",
-                )
+                {
+                    **_sanitized_record(
+                        record_id=str(decision["decisionId"]),
+                        summary=decision.get("statement"),
+                        status="awaiting-human",
+                    ),
+                    "learningScope": "project-only",
+                }
             )
     rules = [
-        _sanitized_record(
-            record_id=str(item.get("id") or f"rule-{index:04d}"),
-            summary=item.get("summary"),
-            status=str(item.get("status") or "candidate"),
-            evidence_classes=list(item.get("evidenceClasses") or []),
-            impact=dict(item.get("impact") or {}),
-            recurrence=int(item.get("recurrence") or 0),
-        )
+        _curated_learning_record(item, f"rule-{index:04d}")
         for index, item in enumerate(prevention_rules or [], start=1)
     ]
     techniques = [
-        _sanitized_record(
-            record_id=str(item.get("id") or f"technique-{index:04d}"),
-            summary=item.get("summary"),
-            status=str(item.get("status") or "candidate"),
-            impact=dict(item.get("impact") or {}),
-        )
+        _curated_learning_record(item, f"technique-{index:04d}")
         for index, item in enumerate(technique_candidates or [], start=1)
     ]
     master = None
@@ -204,6 +227,9 @@ def build_timeline_learning_snapshot(
             "candidateSnapshotHash": candidate_snapshot_hash,
             "status": status,
             "master": master,
+            "decisionOutcomes": decisions,
+            "preventionRules": rules,
+            "techniqueCandidates": techniques,
         }
     )
     snapshot = {
@@ -292,7 +318,10 @@ def load_active_timeline_learning(entry_dir: Path) -> dict[str, Any] | None:
         (index_path.parent / reference["path"]).read_text(encoding="utf-8")
     )
     validate_document(snapshot, "avo.timeline-learning.schema.json")
-    if snapshot["snapshotHash"] != reference["snapshotHash"]:
+    if (
+        snapshot["snapshotHash"] != reference["snapshotHash"]
+        or document_hash_excluding(snapshot, "snapshotHash") != snapshot["snapshotHash"]
+    ):
         raise ValueError("timeline learning active snapshot hash mismatch")
     return snapshot
 
@@ -473,6 +502,77 @@ def _copy_editlog_lock_once(raw_dir: Path, entry_dir: Path) -> bool:
     return True
 
 
+def _approved_master_for_learning(
+    delivery: dict[str, Any], master_basename: str
+) -> bool:
+    from avo.timeline.review import approval_is_current
+
+    master = delivery.get("master") or {}
+    return (
+        delivery.get("state") == "delivered"
+        and Path(master.get("path") or "").stem == master_basename
+        and bool(master.get("sha256"))
+        and approval_is_current(
+            delivery.get("approval"),
+            checkpoint="deliver",
+            candidate_identity_hash=delivery["review"]["candidateIdentityHash"],
+            candidate_sha256=master["sha256"],
+            dependency_lock_sha256=delivery["dependencyLockSha256"],
+        )
+    )
+
+
+def _current_delivery_for_learning(service, master_basename: str) -> dict | None:
+    declared = json.loads(service.manifest_path.read_text(encoding="utf-8"))
+    if not _approved_master_for_learning(declared, master_basename):
+        return None
+    delivery = service.validate_current()
+    if delivery.get("candidateSnapshot") and _approved_master_for_learning(
+        delivery, master_basename
+    ):
+        return delivery
+    return None
+
+
+def _bound_timeline_learning(raw_dir: Path, payload: dict[str, Any]) -> dict | None:
+    from avo.timeline.delivery import DeliveryService
+    from avo.timeline.iterations import IterationLedgerService
+    from avo.timeline.workspace import TimelineWorkspace
+
+    project = raw_dir / "avo.project.json"
+    if not project.is_file() or not (raw_dir / "edit/delivery-manifest.json").is_file():
+        return None
+    workspace = TimelineWorkspace.from_project(project)
+    if (
+        workspace.raw_dir.resolve() != raw_dir
+        or workspace.project.get("provider") != payload["provider"]
+    ):
+        return None
+    if not (workspace.timeline_dir / "iteration-ledger.json").is_file():
+        return None
+    delivery = _current_delivery_for_learning(
+        DeliveryService(workspace), payload["masterBasename"]
+    )
+    if delivery is None:
+        return None
+    ledger = IterationLedgerService(workspace).current()
+    if not ledger["iterations"]:
+        return None
+    if (ledger["provider"], ledger["videoId"]) != (
+        payload["provider"],
+        workspace.video_id,
+    ):
+        raise ValueError(
+            "timeline learning ledger belongs to another project or provider"
+        )
+    return build_timeline_learning_snapshot(
+        ledger=ledger,
+        candidate_snapshot_hash=delivery["candidateSnapshot"]["sha256"],
+        master_fingerprint=delivery["master"],
+        status=payload["status"],
+    )
+
+
 def export_provider_learndown(
     wrap_payload: dict[str, Any],
     *,
@@ -490,9 +590,10 @@ def export_provider_learndown(
 
     base = provider_learndowns_dir(provider, root=root)
     entry_dir = base / payload["entryId"]
+    raw_dir = Path(payload["rawDir"])
+    timeline_learning = _bound_timeline_learning(raw_dir, payload)
     entry_dir.mkdir(parents=True, exist_ok=True)
 
-    raw_dir = Path(payload["rawDir"])
     from avo.cost_store import CostStore
 
     CostStore(raw_dir).export(entry_dir / "costs")
@@ -515,6 +616,8 @@ def export_provider_learndown(
     if status == "final":
         _copy_if_exists(raw_dir / "avo.wrap.json", entry_dir / WRAP_FINAL_JSON)
         _copy_if_exists(raw_dir / "avo.wrap.md", entry_dir / WRAP_FINAL_MD)
+    if timeline_learning is not None:
+        export_timeline_learning_snapshot(entry_dir, timeline_learning)
 
     index_path = base / INDEX_NAME
     index = _load_index(index_path, provider)

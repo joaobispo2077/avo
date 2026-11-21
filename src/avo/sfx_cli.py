@@ -16,6 +16,9 @@ OPERATIONS = (
     "search-semantic",
     "propose",
     "apply",
+    "favorites-show",
+    "favorite-promote",
+    "favorite-remove",
 )
 
 
@@ -31,9 +34,9 @@ def configure(subparsers):
             item.add_argument("--generation")
             item.add_argument("--offset", type=int, default=0)
             item.add_argument("--limit", type=int, default=20)
-        else:
+        elif operation != "favorites-show":
             item.add_argument("--request", type=Path, required=True)
-        if operation == "apply":
+        if operation in {"apply", "favorite-promote", "favorite-remove"}:
             item.add_argument("--request-sha256", help=SUPPRESS)
 
 
@@ -84,6 +87,8 @@ def _request(path, operation, *, expected_sha256=None):
         if operation in definitions
         else "avo.sfx-request.schema.json"
     )
+    if operation in {"favorite-promote", "favorite-remove"}:
+        schema = "avo.sfx-provider.schema.json#/$defs/request"
     validate_document(value, schema)
     if value["operation"] != operation:
         raise ValueError("Sound request operation does not match the selected command.")
@@ -117,6 +122,18 @@ def _excerpt(document, *, offset=0, limit=20):
 
 def _execute(service, args, request):
     operation = args.sfx_command
+    if operation in {"favorites-show", "favorite-promote", "favorite-remove"}:
+        from avo.sfx_preferences import (
+            inspect_sfx_favorites,
+            promote_sfx_favorite,
+            remove_sfx_favorite,
+        )
+
+        if operation == "favorite-promote":
+            return promote_sfx_favorite(service, request)
+        if operation == "favorite-remove":
+            return remove_sfx_favorite(service.workspace, request)
+        return inspect_sfx_favorites(service.workspace)
     if operation in {"propose", "apply"}:
         from avo.timeline.sound_planning import SoundPlanningService
 
@@ -163,8 +180,29 @@ def _execute(service, args, request):
     )
 
 
-def run(args):
+def _catalogue(workspace, operation, request):
     from avo.adapters.registry import build_sfx_catalog
+
+    roots = (
+        {}
+        if operation in {"favorites-show", "favorite-promote", "favorite-remove"}
+        else resolve_sfx_roots(workspace)
+    )
+    preferences = {}
+    if operation == "scan" and request.get("useProviderFavorites", False):
+        from avo.sfx_preferences import inspect_sfx_favorites
+
+        preferences["favorites"] = inspect_sfx_favorites(workspace)
+    return build_sfx_catalog(
+        workspace,
+        roots=roots,
+        analyze=operation == "scan",
+        semantic=operation == "search-semantic",
+        **preferences,
+    )
+
+
+def run(args):
     from avo.timeline.command_registry import CommandPermissionError
     from avo.timeline.workspace import TimelineWorkspace
 
@@ -173,7 +211,7 @@ def run(args):
             raise ValueError("Project manifest path must be absolute.")
         request = (
             None
-            if args.sfx_command == "show"
+            if args.sfx_command in {"show", "favorites-show"}
             else _request(
                 args.request,
                 args.sfx_command,
@@ -183,13 +221,7 @@ def run(args):
         workspace = TimelineWorkspace.from_project(
             args.project, video_id=args.video_id or None
         )
-        roots = resolve_sfx_roots(workspace)
-        service = build_sfx_catalog(
-            workspace,
-            roots=roots,
-            analyze=args.sfx_command == "scan",
-            semantic=args.sfx_command == "search-semantic",
-        )
+        service = _catalogue(workspace, args.sfx_command, request)
         result = _execute(service, args, request)
         if result.get("generationId"):
             result["catalogueRef"] = {
@@ -222,6 +254,9 @@ def run(args):
         "propose": "metadata-write",
         "apply": "canonical-write",
         "search-semantic": "model-execution",
+        "favorites-show": "metadata-read",
+        "favorite-promote": "provider-metadata-write",
+        "favorite-remove": "provider-metadata-write",
     }.get(args.sfx_command, "metadata-read")
     result.update(contractVersion="1.0.0", operation=args.sfx_command, effect=effect)
     if request:

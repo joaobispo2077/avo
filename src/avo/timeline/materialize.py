@@ -804,17 +804,33 @@ def _generated_proof_inputs(workspace: Any, proof_lock: dict) -> dict[str, dict]
             },
             "ancestry": deepcopy(record["inputs"]),
         }
-        extension = (record.get("parameters") or {}).get("codeDrawn")
-        if extension:
-            _require_generated_proof_binding(workspace, extension, proof_lock, asset_id)
-            value["inputLockRef"] = deepcopy(extension["inputLockRef"])
+        input_lock = _generated_proof_input_lock(workspace, record, proof_lock)
+        if input_lock is not None:
+            value["inputLockRef"] = input_lock
         inputs[key] = value
     return inputs
 
 
+def _generated_proof_input_lock(workspace, record, proof_lock):
+    asset_id = record["assetId"]
+    parameters = record.get("parameters") or {}
+    code_drawn = parameters.get("codeDrawn")
+    if code_drawn:
+        _require_generated_proof_binding(workspace, code_drawn, proof_lock, asset_id)
+        return deepcopy(code_drawn["inputLockRef"])
+    artcraft = parameters.get("artcraft")
+    if artcraft is None:
+        return None
+    if proof_lock.get("input-lock:" + asset_id) != artcraft["bindingHash"]:
+        raise ValueError(f"ArtCraft input lock differs from proof lock: {asset_id}")
+    reference = artcraft["bindingRef"]
+    return {"path": reference["locator"], "sha256": reference["sha256"]}
+
+
 def _require_original_only_plan(plan: dict) -> None:
     if any(
-        key.startswith("generated:") for key in plan.get("canonicalInputLock") or {}
+        key.startswith(("generated:", "generated-still:", "generated-audio:"))
+        for key in plan.get("canonicalInputLock") or {}
     ):
         raise ValueError("generated proof inputs require current canonical Tracks")
 
@@ -932,6 +948,31 @@ def _resolve_tracks_audio_inputs(workspace, proof_plan, snapshot, required, inpu
             inputs[source_id] = origin
 
 
+def _resolve_generated_audio_inputs(proof_plan, inputs):
+    from .artcraft_audio import resolve_generated_audio_trim
+
+    graph = proof_plan.get("audioGraph") or {}
+    nodes = {node["nodeId"]: node for node in graph.get("nodes", [])}
+    for operation in graph.get("operations", []):
+        parameters = operation["parameters"]
+        if operation["kind"] != "trim" or parameters.get("generatedAudioRef") is None:
+            continue
+        source_id = parameters["sourceId"]
+        audio = resolve_generated_audio_trim(
+            parameters, proof_plan["canonicalInputLock"], nodes[parameters["nodeId"]]
+        )
+        origin = {
+            "path": Path(audio["locator"]),
+            "mediaClass": "generated-asset",
+            "ancestry": [],
+        }
+        if source_id in inputs and inputs[source_id] != origin:
+            raise ValueError(
+                f"Generated audio conflicts with a canonical source: {source_id}"
+            )
+        inputs[source_id] = origin
+
+
 def canonical_proof_media_inputs(
     workspace: Any, proof_plan: dict[str, Any]
 ) -> dict[str, dict[str, Any]]:
@@ -979,6 +1020,7 @@ def canonical_proof_media_inputs(
                     ),
                     "ancestry": deepcopy(source.get("ancestry") or []),
                 }
+    _resolve_generated_audio_inputs(proof_plan, inputs)
     _resolve_tracks_audio_inputs(workspace, proof_plan, snapshot, required, inputs)
     inputs.update(
         _generated_proof_inputs(workspace, proof_plan.get("canonicalInputLock") or {})
@@ -1082,7 +1124,13 @@ def _proof_render(
             "renderer output identity differs from the produced bytes",
             "repair the renderer output record before review",
         )
-    return {**rendered, "output": actual}
+    result = {**rendered, "output": actual}
+    from .sound_mix_review import summarize_sound_mix
+
+    sound_review = summarize_sound_mix(plan, result, window)
+    if sound_review is not None:
+        result["soundMixReview"] = sound_review
+    return result
 
 
 def _cutting_window_verification(port, plan, output, window):
@@ -1198,6 +1246,8 @@ def _render_required_microproofs(port, plan, windows, directory, suffix):
             camera = (rendered.get("producer") or {}).get("camera")
             if camera is not None:
                 result["cameraProvenance"] = deepcopy(camera)
+            if "soundMixReview" in rendered:
+                result["soundMixReview"] = rendered["soundMixReview"]
             _attach_cutting_verification(port, plan, result, frame_range)
         except Exception as exc:
             result = {
@@ -1283,7 +1333,7 @@ def _require_cutting_gate(plan, gate):
 
 
 def _require_current_microproof_gate(
-    plan: dict[str, Any], gate: dict[str, Any], *, preflight_hash: str
+    plan: dict[str, Any], gate: dict[str, Any], *, preflight_hash: str, workspace=None
 ) -> None:
     from .contracts import content_hash
     from .review_runner import select_microproof_windows
@@ -1320,6 +1370,12 @@ def _require_current_microproof_gate(
             "rerun every changed-operation and historical-risk window",
         )
     _require_cutting_gate(plan, gate)
+    _require_window_statuses(gate, required)
+    if workspace is not None:
+        _require_encoded_windows(workspace, plan, gate)
+
+
+def _require_window_statuses(gate, required):
     statuses = [str(item.get("status")) for item in gate.get("results") or []]
     if any(
         status in {"needs-human", "needs-human-judgment", "ambiguous"}
@@ -1341,6 +1397,35 @@ def _require_current_microproof_gate(
             "PROOF_MICROPROOF_FAILED",
             "one or more required microproofs failed",
             "repair the defect and rerun the gate",
+        )
+
+
+def _require_encoded_windows(workspace, plan, gate):
+    from .contracts import file_fingerprint
+
+    directory = (
+        Path(workspace.timeline_dir).resolve() / "microproofs" / plan["proofPlanId"]
+    )
+    suffix = Path(plan["output"]["path"]).suffix or ".mp4"
+    for index, (window, result) in enumerate(
+        zip(gate["requiredWindows"], gate["results"], strict=True), 1
+    ):
+        expected = directory / f"window-{index:04d}{suffix}"
+        try:
+            recorded = result["output"]
+            if (
+                result["window"] == window
+                and expected.resolve() == expected
+                and Path(recorded["locator"]).resolve() == expected
+                and file_fingerprint(expected) == recorded
+            ):
+                continue
+        except (OSError, KeyError, TypeError, ValueError):
+            pass
+        raise ProofMaterializationError(
+            "PROOF_MICROPROOF_OUTPUT_STALE",
+            f"encoded evidence changed for frames {window['startFrame']} to {window['endFrameExclusive'] - 1}",
+            "rerender the required microproof windows from the current canonical plan",
         )
 
 
@@ -1384,6 +1469,7 @@ def materialize_proof_plan(
             plan,
             gate,
             preflight_hash=preflight["reportHash"],
+            workspace=workspace,
         )
         output = Path(plan["output"]["path"])
         rendered = _proof_render(port, plan, output, window=None)
@@ -1406,6 +1492,8 @@ def materialize_proof_plan(
         "createdAt": now_iso(),
         "materializationHash": "",
     }
+    if "soundMixReview" in rendered:
+        record["soundMixReview"] = rendered["soundMixReview"]
     record["materializationHash"] = content_hash(
         {key: value for key, value in record.items() if key != "materializationHash"}
     )
@@ -1446,6 +1534,7 @@ def proof_build_status(
                 plan,
                 gate,
                 preflight_hash=preflight["reportHash"],
+                workspace=workspace,
             )
             gate_state = "pass"
             gate_hash = gate["gateHash"]

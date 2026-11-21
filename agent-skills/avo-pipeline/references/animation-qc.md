@@ -41,6 +41,29 @@ Selected-engine motion **render QC** — after motion slots, before final compos
 - [ ] Preview vs render parity spot-checked
 - [ ] Source attribution and factual labels preserved
 
+Use the linked storyboard to check the intended entrance, readable hold,
+payoff and exit. Record the exact observed times. Use continuous playback
+for motion handoffs, lip sync and audibility. The sampled vision report
+covers the individual frames it observed.
+
+For a full canonical proof, the approval gate lists current BMap cues,
+their program times and the count of observed frames. Open the craft checks
+in `review.json` for the planned states, exact frame numbers and findings
+that cite frames inside each cue. Inspect glyphs, alignment, visual focus,
+caption and source safety, and alpha at the relevant states. Play through
+the entrances, holds, payoffs and exits, and check that local and program-wide
+treatments have a single owner before changing their settings.
+
+Once the current candidate snapshot retains the exact review, the motion map
+and storyboard show the linked frame numbers and finding IDs for each cue.
+Use the cited intervals to propose changes through their owning motion or
+sound command. Repeat the applicable playback and listening review for the
+resulting candidate.
+
+Record a proposed workaround with the exact candidate, reproduction finding,
+program windows, engine and runtime versions, platform and render profile.
+Review the proposed change in that environment through the normal owning stage.
+
 ## Output
 
 Write `<rawDir>/edit/review/animation-qc.md` with PASS/FAIL and blockers.

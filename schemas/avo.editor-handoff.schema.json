@@ -1,0 +1,242 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://avo.local/avo.editor-handoff.schema.json",
+  "title": "Source-preserving editor interchange evidence",
+  "$ref": "#/$defs/profile",
+  "$defs": {
+    "id": {"type": "string", "pattern": "^[a-z][a-z0-9-]{2,79}$"},
+    "text": {"type": "string", "minLength": 1, "maxLength": 4096, "pattern": "\\S"},
+    "sha": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "rate": {
+      "type": "object", "additionalProperties": false, "required": ["num", "den"],
+      "properties": {"num": {"type": "integer", "minimum": 1, "maximum": 240000}, "den": {"type": "integer", "minimum": 1, "maximum": 1001}}
+    },
+    "frames": {
+      "type": "object", "additionalProperties": false, "required": ["startFrame", "endFrameExclusive"],
+      "properties": {"startFrame": {"type": "integer", "minimum": 0}, "endFrameExclusive": {"type": "integer", "minimum": 1}}
+    },
+    "ref": {"$ref": "avo.cutting.schema.json#/$defs/artifactRef"},
+    "profile": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "application", "applicationVersion", "os", "osVersion", "format", "xmlVersion", "status", "representedFields", "evidenceRequirements"],
+      "properties": {
+        "id": {"$ref": "#/$defs/id"}, "application": {"enum": ["premiere-pro", "davinci-resolve"]},
+        "applicationVersion": {"type": "string", "pattern": "^[0-9]+(?:\\.[0-9]+){1,3}$"},
+        "os": {"enum": ["windows", "macos"]}, "osVersion": {"$ref": "#/$defs/text"},
+        "format": {"const": "fcp7-xmeml"}, "xmlVersion": {"const": 5}, "status": {"const": "unqualified"},
+        "representedFields": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"enum": ["original-media", "picture-range", "track-order", "audio-channel", "markers", "display-origin"]}},
+        "evidenceRequirements": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"$ref": "#/$defs/qualificationCheck"}}
+      }
+    },
+    "prepareRequest": {
+      "type": "object", "additionalProperties": false,
+      "required": ["contractVersion", "operation", "actor", "reason", "profileId", "mode", "expectedBasis", "selection", "programRate", "window", "admittedRoots"],
+      "properties": {
+        "contractVersion": {"const": "1.0.0"}, "operation": {"const": "prepare"},
+        "actor": {"$ref": "#/$defs/text"}, "reason": {"$ref": "#/$defs/text"}, "profileId": {"$ref": "#/$defs/id"},
+        "mode": {"enum": ["validation", "production"]},
+        "qualificationRef": {"$ref": "#/$defs/ref"},
+        "generatedAlphaPlan": {
+          "type": "object", "additionalProperties": false, "required": ["id", "sha256"],
+          "properties": {"id": {"type": "string", "pattern": "^proof-plan-[a-f0-9]{12}$"}, "sha256": {"$ref": "#/$defs/sha"}}
+        },
+        "expectedBasis": {"$ref": "avo.motion-review.schema.json#/properties/basisHeads"},
+        "selection": {"$ref": "avo.editing-craft.schema.json#/$defs/selection"},
+        "programRate": {"$ref": "#/$defs/rate"}, "window": {"$ref": "#/$defs/frames"},
+        "admittedRoots": {"type": "array", "minItems": 1, "maxItems": 16, "uniqueItems": true, "items": {"$ref": "#/$defs/text"}}
+      },
+      "allOf": [{"if": {"properties": {"mode": {"const": "validation"}}}, "then": {"not": {"required": ["qualificationRef"]}}}]
+    },
+    "statusRequest": {
+      "type": "object", "additionalProperties": false, "required": ["contractVersion", "operation"],
+      "properties": {"contractVersion": {"const": "1.0.0"}, "operation": {"const": "status"}, "handoffRef": {"$ref": "#/$defs/ref"}}
+    },
+    "inspectRequest": {
+      "type": "object", "additionalProperties": false,
+      "required": ["contractVersion", "operation", "actor", "reason", "handoffRef", "returnedXml", "admittedRoots"],
+      "properties": {
+        "contractVersion": {"const": "1.0.0"}, "operation": {"const": "inspect-feedback"},
+        "actor": {"$ref": "#/$defs/text"}, "reason": {"$ref": "#/$defs/text"}, "handoffRef": {"$ref": "#/$defs/ref"},
+        "returnedXml": {"$ref": "#/$defs/ref"}, "sequenceId": {"$ref": "#/$defs/text"},
+        "admittedRoots": {"$ref": "#/$defs/prepareRequest/properties/admittedRoots"},
+        "relink": {"type": "object", "maxProperties": 128, "propertyNames": {"$ref": "#/$defs/text"}, "additionalProperties": {"$ref": "#/$defs/text"}}
+      }
+    },
+    "inspection": {
+      "type": "object", "additionalProperties": false,
+      "required": ["provider", "videoId", "input", "receipt", "status", "sourceFacts", "unknownElements"],
+      "properties": {
+        "provider": {"$ref": "#/$defs/text"}, "videoId": {"$ref": "#/$defs/text"},
+        "input": {"$ref": "#/$defs/inspectRequest"}, "receipt": {"$ref": "#/$defs/ref"},
+        "status": {"enum": ["inspected", "unsupported"]},
+        "reason": {"$ref": "#/$defs/text"},
+        "sourceFacts": {"type": "array", "maxItems": 128, "items": {
+          "type": "object", "additionalProperties": false, "required": ["fileId", "locator", "sha256", "status"],
+          "properties": {"fileId": {"$ref": "#/$defs/text"}, "locator": {"$ref": "#/$defs/text"},
+            "sha256": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/sha"}]}, "status": {"enum": ["matches-original", "unadmitted-source", "unavailable"]}
+          }
+        }},
+        "unknownElements": {"type": "object", "additionalProperties": {"type": "integer", "minimum": 1}}
+      }
+    },
+    "feedbackRequest": {
+      "type": "object", "additionalProperties": false,
+      "required": ["contractVersion", "operation", "actor", "reason", "inspectionRef", "expectedBasis"],
+      "properties": {
+        "contractVersion": {"const": "1.0.0"}, "operation": {"const": "propose-feedback"},
+        "actor": {"$ref": "#/$defs/text"}, "reason": {"$ref": "#/$defs/text"}, "inspectionRef": {"$ref": "#/$defs/ref"},
+        "expectedBasis": {"$ref": "avo.motion-review.schema.json#/properties/basisHeads"}
+      }
+    },
+    "fieldDecision": {
+      "type": "object", "additionalProperties": false, "required": ["id", "field", "identity", "base", "current", "returned"],
+      "properties": {
+        "id": {"$ref": "#/$defs/text"}, "field": {"$ref": "#/$defs/text"}, "identity": {"enum": ["exact", "suggested"]},
+        "base": {}, "current": {}, "returned": {}
+      }
+    },
+    "feedbackProposal": {
+      "type": "object", "additionalProperties": false,
+      "required": ["input", "basisRef", "baseXmlRef", "currentXmlRef", "returnedXmlRef", "profileHash", "changes"],
+      "properties": {
+        "input": {"$ref": "#/$defs/feedbackRequest"}, "basisRef": {"$ref": "#/$defs/ref"},
+        "baseXmlRef": {"$ref": "#/$defs/ref"}, "currentXmlRef": {"$ref": "#/$defs/ref"}, "returnedXmlRef": {"$ref": "#/$defs/ref"},
+        "profileHash": {"$ref": "#/$defs/sha"},
+        "changes": {
+          "type": "object", "additionalProperties": false, "required": ["proposals", "conflicts", "preserved", "unresolved", "external"],
+          "properties": {
+            "proposals": {"type": "array", "items": {"$ref": "#/$defs/fieldDecision"}},
+            "conflicts": {"type": "array", "items": {"$ref": "#/$defs/fieldDecision"}},
+            "preserved": {"type": "array", "items": {"$ref": "#/$defs/fieldDecision"}},
+            "unresolved": {"type": "array", "items": {"type": "object"}},
+            "external": {"type": "object", "additionalProperties": {"type": "integer", "minimum": 1}}
+          }
+        }
+      }
+    },
+    "qualificationCheck": {
+      "enum": ["target-opened", "relink", "ranges", "lanes", "audio-channels", "markers", "alpha", "framing", "reviewer-response"]
+    },
+    "applyFeedbackRequest": {
+      "type": "object", "additionalProperties": false,
+      "required": ["contractVersion", "operation", "actor", "reason", "proposalRef", "expectedBasis", "choices"],
+      "properties": {
+        "contractVersion": {"const": "1.0.0"}, "operation": {"const": "apply-feedback"},
+        "actor": {"$ref": "#/$defs/text"}, "reason": {"$ref": "#/$defs/text"},
+        "proposalRef": {"$ref": "#/$defs/ref"},
+        "expectedBasis": {"$ref": "avo.motion-review.schema.json#/properties/basisHeads"},
+        "choices": {
+          "type": "array", "minItems": 1, "maxItems": 128, "items": {
+            "type": "object", "additionalProperties": false, "required": ["id", "field", "selection"],
+            "properties": {
+              "id": {"$ref": "#/$defs/text"}, "field": {"$ref": "#/$defs/text"},
+              "selection": {"enum": ["current", "returned"]}
+            }
+          }
+        }
+      }
+    },
+    "feedbackRoute": {
+      "type": "object", "additionalProperties": false,
+      "required": ["provider", "videoId", "input", "status", "cuttingProposalRef"],
+      "properties": {
+        "provider": {"$ref": "#/$defs/text"}, "videoId": {"$ref": "#/$defs/text"},
+        "input": {"$ref": "#/$defs/applyFeedbackRequest"},
+        "status": {"enum": ["current-retained", "manual-review", "cutting-review-required"]},
+        "reason": {"$ref": "#/$defs/text"},
+        "cuttingProposalRef": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/ref"}]}
+      }
+    },
+    "qualificationEvidence": {
+      "type": "object", "additionalProperties": false,
+      "required": ["contractVersion", "application", "applicationVersion", "os", "osVersion", "initialXmlSha256", "returnedXmlSha256", "checks", "maxCutDriftFrames", "reviewerDecision", "reviewer"],
+      "properties": {
+        "contractVersion": {"const": "1.0.0"},
+        "application": {"$ref": "#/$defs/profile/properties/application"}, "applicationVersion": {"$ref": "#/$defs/profile/properties/applicationVersion"},
+        "os": {"$ref": "#/$defs/profile/properties/os"}, "osVersion": {"$ref": "#/$defs/text"},
+        "initialXmlSha256": {"$ref": "#/$defs/sha"}, "returnedXmlSha256": {"$ref": "#/$defs/sha"},
+        "checks": {
+          "type": "array", "maxItems": 9, "items": {
+            "type": "object", "additionalProperties": false, "required": ["check", "result", "observation"],
+            "properties": {"check": {"$ref": "#/$defs/qualificationCheck"}, "result": {"enum": ["verified", "failed", "unobserved"]}, "observation": {"$ref": "#/$defs/text"}}
+          }
+        },
+        "maxCutDriftFrames": {"type": ["number", "null"], "minimum": 0},
+        "reviewerDecision": {"enum": ["accept-scope", "needs-work"]},
+        "reviewer": {"$ref": "#/$defs/text"}
+      }
+    },
+    "qualificationRequest": {
+      "type": "object", "additionalProperties": false,
+      "required": ["contractVersion", "operation", "actor", "reason", "profileId", "inspectionRef", "evidence"],
+      "properties": {
+        "contractVersion": {"const": "1.0.0"}, "operation": {"const": "qualify-target"},
+        "actor": {"$ref": "#/$defs/text"}, "reason": {"$ref": "#/$defs/text"}, "profileId": {"$ref": "#/$defs/id"},
+        "inspectionRef": {"$ref": "#/$defs/ref"}, "evidence": {"$ref": "#/$defs/qualificationEvidence"}
+      }
+    },
+    "qualification": {
+      "type": "object", "additionalProperties": false,
+      "required": ["provider", "videoId", "input", "basisRef", "returnedXmlRef", "profileHash", "implementation", "status", "blockers"],
+      "properties": {
+        "provider": {"$ref": "#/$defs/text"}, "videoId": {"$ref": "#/$defs/text"},
+        "input": {"$ref": "#/$defs/qualificationRequest"}, "basisRef": {"$ref": "#/$defs/ref"}, "returnedXmlRef": {"$ref": "#/$defs/ref"},
+        "profileHash": {"$ref": "#/$defs/sha"}, "implementation": {"const": "fcp7-xmeml-source-v1"},
+        "status": {"enum": ["unqualified", "qualified"]},
+        "blockers": {"type": "array", "maxItems": 20, "items": {"$ref": "#/$defs/text"}}
+      }
+    },
+    "source": {
+      "type": "object", "additionalProperties": false,
+      "required": ["sourceId", "locator", "sha256", "sizeBytes", "kind"],
+      "properties": {
+        "sourceId": {"$ref": "#/$defs/text"}, "locator": {"$ref": "#/$defs/text"}, "sha256": {"$ref": "#/$defs/sha"},
+        "sizeBytes": {"type": "integer", "minimum": 1}, "kind": {"$ref": "#/$defs/text"},
+        "generatedAsset": {
+          "type": "object", "additionalProperties": false, "required": ["id", "sha256", "original"],
+          "properties": {
+            "id": {"$ref": "#/$defs/id"}, "sha256": {"$ref": "#/$defs/sha"},
+            "original": {
+              "type": "object", "additionalProperties": false, "required": ["locator", "sizeBytes", "sha256"],
+              "properties": {"locator": {"$ref": "#/$defs/text"}, "sizeBytes": {"type": "integer", "minimum": 1}, "sha256": {"$ref": "#/$defs/sha"}}
+            }
+          }
+        }
+      },
+      "if": {"properties": {"kind": {"const": "generated-alpha"}}},
+      "then": {"required": ["generatedAsset"]},
+      "else": {"not": {"required": ["generatedAsset"]}}
+    },
+    "loss": {
+      "type": "object", "additionalProperties": false, "required": ["field", "scope", "reason"],
+      "properties": {"field": {"$ref": "#/$defs/text"}, "scope": {"$ref": "#/$defs/frames"}, "reason": {"$ref": "#/$defs/text"}}
+    },
+    "clockPoint": {
+      "type": "object", "additionalProperties": false, "required": ["num", "den"],
+      "properties": {"num": {"type": "integer", "minimum": 0}, "den": {"type": "integer", "minimum": 1}}
+    },
+    "occurrence": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "placementId", "sourceId", "streamIndex", "sourceOriginTicks", "laneId", "exactFrames", "serializedFrames"],
+      "properties": {
+        "id": {"$ref": "#/$defs/text"}, "placementId": {"$ref": "#/$defs/text"}, "sourceId": {"$ref": "#/$defs/text"}, "laneId": {"$ref": "#/$defs/text"},
+        "streamIndex": {"type": "integer", "minimum": 0}, "sourceOriginTicks": {"type": ["integer", "null"]},
+        "exactFrames": {"type": "object", "required": ["start", "end", "in", "out"], "maxProperties": 4, "additionalProperties": {"$ref": "#/$defs/clockPoint"}},
+        "serializedFrames": {"type": "object", "required": ["start", "end", "in", "out"], "maxProperties": 4, "additionalProperties": {"type": "integer", "minimum": 0}}
+      }
+    },
+    "manifest": {
+      "type": "object", "additionalProperties": false,
+      "required": ["contractVersion", "provider", "videoId", "status", "request", "profile", "profileHash", "implementation", "sources", "occurrences", "losses", "xmlRef"],
+      "properties": {
+        "contractVersion": {"const": "1.0.0"}, "provider": {"$ref": "#/$defs/text"}, "videoId": {"$ref": "#/$defs/text"}, "status": {"enum": ["validation-only", "production"]},
+        "request": {"$ref": "#/$defs/prepareRequest"}, "profile": {"$ref": "#/$defs/profile"}, "profileHash": {"$ref": "#/$defs/sha"},
+        "implementation": {"const": "fcp7-xmeml-source-v1"},
+        "sources": {"type": "array", "minItems": 1, "maxItems": 128, "items": {"$ref": "#/$defs/source"}},
+        "occurrences": {"type": "array", "minItems": 1, "maxItems": 10000, "items": {"$ref": "#/$defs/occurrence"}},
+        "losses": {"type": "array", "maxItems": 10000, "items": {"$ref": "#/$defs/loss"}},
+        "xmlRef": {"$ref": "#/$defs/ref"}
+      }
+    }
+  }
+}

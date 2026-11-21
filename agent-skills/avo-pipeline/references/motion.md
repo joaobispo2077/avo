@@ -169,3 +169,19 @@ judgment.
 ## Selected artistic guidance
 
 Before style-dependent authoring, run the shared native pipeline status for this project (checkout: `python -m avo.cli pipeline status --project <project> --json`; installed: `avo cli pipeline status --project <project> --json`). Read `briefing.stageContexts.motion` and its exact selected brief, treatment, constraints, exclusions and current canonical-head identities. Treat this context as offered guidance, never proof that a choice was applied, an approval, or permission to change protected content. Current creator instructions and integrity/accessibility/rights rules take precedence. A bypassed or unselected brief adds no creative gate. Do not discover provider history or select a latest profile independently. See [briefstart](briefstart.md).
+## Measured reference clips
+
+Use `avo cli animation reference-analyze --project <absolute-project>`
+`--request <request.json> --json` only for explicitly selected local ranges
+and desired aspects. Read the labeled contact sheet alongside the exact
+source ticks, tracking coverage and uncertainty. Interpret a partial-affine
+estimate as display-wide movement and inspect residual movement separately.
+Review candidate cuts between sampled frames and separate brightness changes,
+approximate easing and available audio/word evidence. Keep measured artifacts
+within the project until a reviewed reference is selected for direction.
+To inspect sound and reveal timing, select `audio-word-timing` and name the
+original audio stream, channel and energy threshold. Reuse current prepared word
+anchors from that same route when a word matters. Compare ranges and their
+uncertainty before using the observations in direction. Keep source rights and
+creator decisions with the project evidence. Provider reuse requires its own
+creator decision.

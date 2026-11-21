@@ -84,8 +84,13 @@ def _proof_plan_record_shape(record):
         "createdAt",
         "materializationHash",
     }
-    if set(record) != required or record["schemaVersion"] != "1.0.0":
+    if (
+        set(record) - {"soundMixReview"} != required
+        or record["schemaVersion"] != "1.0.0"
+    ):
         raise ValueError("unsupported native proof materialization shape/version")
+    if "soundMixReview" in record and not isinstance(record["soundMixReview"], dict):
+        raise ValueError("invalid native proof sound review")
     if record["checkpoint"] not in {
         "cut-proof",
         "motion-proof",

@@ -112,5 +112,65 @@ class SfxFactoryTests(unittest.TestCase):
                     self.assertFalse(service.directory.exists())
 
 
+class PreparationFactoryTests(unittest.TestCase):
+    def boundaries(self):
+        preparation = ModuleType("avo.timeline.preparation_recovery")
+        preparation.PreparationService = Mock(
+            side_effect=lambda workspace, **kwargs: SimpleNamespace(
+                workspace=workspace, **kwargs
+            )
+        )
+        analysis = ModuleType("avo.adapters.media.cutting_analysis")
+        analysis.CuttingAnalysisAdapter = Mock(return_value=object())
+        context = ModuleType("avo.video_context")
+        context.VideoContext = Mock(return_value=object())
+        context.resolve_context_cutting_policy = Mock(return_value=object())
+        return preparation, analysis, context
+
+    def test_metadata_default_never_constructs_speech_or_resolves_model_policy(self):
+        from avo.adapters.registry import build_preparation_service
+
+        preparation, analysis, context = self.boundaries()
+        workspace = SimpleNamespace(
+            project={"provider": "channel"}, video_id="video", raw_dir=Path("footage")
+        )
+        with patch.dict(
+            sys.modules,
+            {module.__name__: module for module in (preparation, analysis, context)},
+        ):
+            service = build_preparation_service(workspace)
+        self.assertIs(service.workspace, workspace)
+        self.assertIsNone(service.recovery_port)
+        analysis.CuttingAnalysisAdapter.assert_not_called()
+        context.VideoContext.assert_not_called()
+        context.resolve_context_cutting_policy.assert_not_called()
+
+    def test_explicit_recovery_constructs_only_the_selected_speech_boundary(self):
+        from avo.adapters.registry import build_preparation_service
+
+        preparation, analysis, context = self.boundaries()
+        workspace = SimpleNamespace(
+            project={"provider": "channel"}, video_id="video", raw_dir=Path("footage")
+        )
+        with patch.dict(
+            sys.modules,
+            {module.__name__: module for module in (preparation, analysis, context)},
+        ):
+            service = build_preparation_service(workspace, recover=True)
+        self.assertIs(
+            service.recovery_port, analysis.CuttingAnalysisAdapter.return_value
+        )
+        context.VideoContext.assert_called_once_with(
+            provider="channel",
+            video_id="video",
+            raw_dir=workspace.raw_dir,
+            video_key=None,
+            project=workspace.project,
+        )
+        context.resolve_context_cutting_policy.assert_called_once_with(
+            context.VideoContext.return_value
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

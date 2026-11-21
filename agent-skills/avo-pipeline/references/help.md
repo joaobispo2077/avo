@@ -47,8 +47,8 @@ Spoken alias: **`/avo --help`**. Cursor file: `commands/avo/help.md` → `/avo.h
 | `/avo.voiceover` | Lite concat + external VO (no motion) |
 | `/avo.transcribe` | Transcribe only |
 | `/avo.sync` | Audio sync diagnosis (before long/external cuts) |
-| `/avo.sound` | Mix, NR, SFX |
-| `/avo.motion` | Selected-engine overlays (HyperFrames default) |
+| `/avo.sound` | Mix, noise reduction and optional local SFX matching |
+| `/avo.motion` | Built-in motion map and linked storyboard, plus selected-engine overlays |
 | `/avo.captions` | Embedded captions (after overlays) |
 | `/avo.watch` | watch-skill LOOP |
 
@@ -96,6 +96,7 @@ HyperFrames is the default, and the current Remotion adapter is unsupported.
 | `/avo.animation-qc` | Motion render QC before composite |
 | `/avo.audit` | Scoped QC window |
 | `/avo.deliver` | Full master QC + delivery manifest |
+| `/avo.exports` | Optional editor handoff, returned XML review and selected trim proposals |
 
 ### Content
 

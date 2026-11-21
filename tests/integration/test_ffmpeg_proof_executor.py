@@ -5,6 +5,7 @@ from __future__ import annotations
 import shutil
 import subprocess
 from copy import deepcopy
+from fractions import Fraction
 from pathlib import Path
 
 import numpy as np
@@ -21,7 +22,13 @@ pytestmark = pytest.mark.skipif(
 )
 
 
-def _recording(path: Path, *, external: bool = False, rate: int = 48000) -> None:
+def _recording(
+    path: Path,
+    *,
+    external: bool = False,
+    rate: int = 48000,
+    fps: Fraction = Fraction(30000, 1001),
+) -> None:
     color = "blue" if external else "red"
     audio = (
         f"aevalsrc=0.1*sin(880*2*PI*t)|0.1*sin(1320*2*PI*t):s={rate}:d=2"
@@ -36,7 +43,7 @@ def _recording(path: Path, *, external: bool = False, rate: int = 48000) -> None
         "-f",
         "lavfi",
         "-i",
-        f"color={color}:s=128x72:r=30000/1001:d=2",
+        f"color={color}:s=128x72:r={fps}:d=2",
         "-f",
         "lavfi",
         "-i",
@@ -66,15 +73,17 @@ def _recording(path: Path, *, external: bool = False, rate: int = 48000) -> None
     )
 
 
-def _execution(tmp_path: Path) -> dict:
+def _execution(tmp_path: Path, *, fps: Fraction = Fraction(30000, 1001)) -> dict:
     sources = [tmp_path / "raw.mkv", tmp_path / "external.mkv"]
     for index, path in enumerate(sources):
-        _recording(path, external=bool(index))
+        _recording(path, external=bool(index), fps=fps)
+    segment_seconds = Fraction(30, fps)
+    segment_samples = int(segment_seconds * 48000)
     execution = {
         "output": {
             "width": 640,
             "height": 360,
-            "frameRate": {"num": 30000, "den": 1001},
+            "frameRate": {"num": fps.numerator, "den": fps.denominator},
             "audioSampleRate": 48000,
             "channelLayout": "stereo",
             "videoCodec": "libx264",
@@ -117,13 +126,16 @@ def _execution(tmp_path: Path) -> dict:
                     "source": {**source, "streamIndex": 0},
                     "sourceRange": {
                         "startTicks": 0,
-                        "endTicks": 1001,
+                        "endTicks": int(segment_seconds * 1000),
                         "timebase": {"num": 1, "den": 1000},
                     },
                 },
             }
         )
-        region = {"startSample": i * 48048, "endSampleExclusive": (i + 1) * 48048}
+        region = {
+            "startSample": i * segment_samples,
+            "endSampleExclusive": (i + 1) * segment_samples,
+        }
         execution["audioGraph"]["nodes"].append(
             {
                 "nodeId": f"audio-{i}",
@@ -134,7 +146,10 @@ def _execution(tmp_path: Path) -> dict:
                 "targetLayout": "stereo",
                 "channelMap": [0, 1] if i else [0, 0],
                 "latencyCompensationSamples": 0,
-                "sourceRange": {"startSample": 0, "endSampleExclusive": 48048},
+                "sourceRange": {
+                    "startSample": 0,
+                    "endSampleExclusive": segment_samples,
+                },
                 "outputRange": region,
             }
         )
@@ -156,7 +171,7 @@ def _execution(tmp_path: Path) -> dict:
         {
             "operationId": "final-encode",
             "kind": "encode",
-            "range": {"startSample": 0, "endSampleExclusive": 96096},
+            "range": {"startSample": 0, "endSampleExclusive": 2 * segment_samples},
             "parameters": {},
         }
     )

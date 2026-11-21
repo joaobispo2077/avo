@@ -18,6 +18,34 @@ selected source must still match its indexed bytes, measured sample rate and
 channel count. An explicitly injected probe records the actual first audio
 stream index; metadata proposals never construct or execute that probe.
 
+For an explicit camera-node anchor, proposal and proof admission reopen the
+canonical Animation component and verify the selected source, path and node.
+The frozen opportunity retains that anchor alongside its derived frame. A later
+camera revision cannot silently retime a published sound; revise its explicit
+selection against the current camera before rendering. Source-only cut proofs
+retain their existing behavior.
+
+For an explicit original-source anchor, proposals map its selected segment or
+placement through current CMap metadata. Publication binds the unchanged CMap
+head and verifies the original bytes; final proof admission checks the source
+fingerprint, retained occurrence and derived cue frame again. An altered source
+or mapping requires a new current selection. The anchor never supplies picture
+or audio media to the render and does not confer listening approval.
+
+For a selected spoken word, publication reopens its immutable analysis and
+current source-evidence selection before preparing canonical writes, then
+rechecks those dependencies before staging. Native proof admission and approval
+of an existing rendered plan repeat the current word check. A changed model,
+transcript choice or retained word cannot reuse an older plan's approval.
+Removing an effect or choosing silence does not require a ready speech model.
+
+Qualified pinned word analyses join the bounded preparation retention closure even when
+there was no recovery journal. Sound reconstruction retains their exact metadata
+and referenced alternatives/choices. Model packages, source media and temporary
+PCM do not become preparation documents or new bundled prerequisites.
+Unresolved requests retain their requested references and issues without
+requiring an invented missing input file.
+
 The service freezes the reviewed asset, rights, marker, source trim, output
 sample schedule, channel routing and mix settings. Each contribution has one
 Tracks layer and an exactly bound BMap cue, with `tracks-native` playback
@@ -30,8 +58,53 @@ Changes address stable event IDs. Replacing a sound or changing its level keeps
 its layer/cue identities; selecting silence removes that contribution without
 probing an asset. Other sound selections and unrelated picture/audio layers
 remain intact. Multi-effect groups require the exact ordered event list.
+
+Each new change receipt includes `listeningRanges.before` and
+`listeningRanges.after`. They identify the old and new playback intervals,
+including lead-in and tail, in samples at their recorded rates. Additions
+have an empty old interval and removals have an empty new interval. Use both
+ranges when listening to a retimed effect. Earlier receipts remain readable.
+Whole-program sound approval still requires listening to the current encode.
 Adding a second effect cannot borrow approval from a preserved ordinary single
 effect: changing that effect's context requires explicit reselection.
+
+Selection reports compare every retained fitted sound's scheduled audio range,
+including its pre-roll and complete selected tail. `overlapping-sounds` names
+both event IDs and their selected main/bass/support/detail/tail roles, with an
+exact rational interval in seconds. Different output sample rates are converted
+to their own time bases before comparing ranges or impact collisions. Touching
+half-open ranges, silence and unresolved fits do not count as overlaps.
+
+Set optional `soundMatching.repetitionWindowMs` in the selected craft options
+to flag uses of the same source bytes whose adjacent impacts are within that
+many milliseconds. AVO compares the exact impact time at each choice's output
+sample rate. The advisory lists each involved event and the selected limit,
+including retained events outside the current update. With the option omitted,
+the report lists all repeated uses of the same source as before.
+
+Overlap reporting is bounded to 64 pairs with an explicit shown/total count when
+truncated. Its `timing-only` assessment is a prompt for review; it does not claim
+audible masking, clipping or unsuitable layering. Source gain, fades, routing,
+ducking and approval stay unchanged. Combined peak, dialogue masking and
+contextual listening remain required, including for a per-ID update that retains
+other selected sounds.
+
+Proof receipts include `soundMixReview` for windows with selected sound events.
+AVO retains the combined pre-encode PCM sample peak and RMS from the native
+mixer, linked to the exact sample window, mix graph and rendered candidate.
+Positive peaks flag signal above digital full scale. The receipt records
+unavailable measurements when the renderer cannot provide matching evidence.
+True peak, dialogue masking and contextual listening require their own checks.
+
+For an effect with selected dialogue ducking, set optional
+`mix.ducking.minimumDialogueMarginDb` to review a specific dialogue-to-effect
+level difference. A separate measurement pass compares the exact sidechain and
+post-duck effect over their selected output samples, using 300–4,000 Hz band
+RMS. The receipt reports the observed margin and the additional attenuation
+needed under the chosen policy. Silent stems and unavailable measurements have
+their own statuses. Up to 16 comparisons run per review window of 30 seconds
+or less. The result guides listening and keeps the selected gains and render
+unchanged. [FFmpeg audio statistics](https://ffmpeg.org/ffmpeg-filters.html#astats)
 
 An explicit silence choice can also retire a previously owned event whose visual
 anchor is now absent or unresolved. The receipt retains its historical timing
@@ -77,8 +150,10 @@ do not require their unused library source to preview.
 Optional ducking follows a current unmuted dialogue layer's source and selected
 channels, including a single selected microphone duplicated to stereo. Missing,
 wrong-channel or ambiguous stream routing fails rather than choosing another
-microphone. Proof planning performs metadata validation; physical source checks,
-native execution and contextual listening remain separate requirements.
+microphone. Application checks native gain and ducking limits plus the presence
+of the selected active dialogue layer before probing a source or publishing a
+timeline revision. Proof planning verifies the exact rendered dialogue nodes
+and channel mapping. Contextual listening uses the current encode.
 
 Successful propose/apply operations automatically publish the current motion map
 and linked storyboard. Opportunities link to their exact saved proposal; selected

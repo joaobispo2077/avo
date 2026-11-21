@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://avo.local/schemas/avo.sfx-provider.schema.json",
+  "title": "Explicit portable provider sound favorites",
+  "$defs": {
+    "sha": {"$ref": "avo.sfx-catalog.schema.json#/$defs/sha"},
+    "id": {"type": "string", "minLength": 1, "maxLength": 128, "pattern": "\\S"},
+    "provider": {"type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$", "maxLength": 128},
+    "fields": {"type": "array", "maxItems": 5, "uniqueItems": true, "items": {"enum": ["description", "category", "material", "tags", "variantGroup"]}},
+    "favorite": {
+      "type": "object", "additionalProperties": false,
+      "required": ["favoriteId", "libraryId", "sourceSha256", "curation", "provenance", "actor", "reason", "operationId"],
+      "properties": {
+        "favoriteId": {"$ref": "#/$defs/sha"}, "libraryId": {"type": "string", "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$"},
+        "sourceSha256": {"$ref": "#/$defs/sha"},
+        "curation": {"allOf": [{"$ref": "avo.sfx-catalog.schema.json#/$defs/curation"}], "required": ["favorite"], "properties": {"favorite": {"const": true}}},
+        "provenance": {"type": "object", "additionalProperties": false, "required": ["generationId", "entryId", "entryRevision"], "properties": {"generationId": {"$ref": "#/$defs/sha"}, "entryId": {"$ref": "#/$defs/sha"}, "entryRevision": {"$ref": "#/$defs/sha"}}},
+        "actor": {"$ref": "#/$defs/id"}, "reason": {"$ref": "avo.sfx-catalog.schema.json#/$defs/text"}, "operationId": {"$ref": "#/$defs/id"}
+      }
+    },
+    "favorites": {"type": "array", "maxItems": 500, "items": {"$ref": "#/$defs/favorite"}},
+    "inspection": {"type": "object", "additionalProperties": false, "required": ["contractVersion", "provider", "documentSha256", "favorites"], "properties": {
+      "contractVersion": {"const": "1.0.0"}, "provider": {"$ref": "#/$defs/provider"}, "documentSha256": {"oneOf": [{"const": "absent"}, {"$ref": "#/$defs/sha"}]}, "favorites": {"$ref": "#/$defs/favorites"}
+    }},
+    "origin": {"type": "object", "additionalProperties": false, "required": ["provider", "documentSha256", "favoriteId"], "properties": {"provider": {"$ref": "#/$defs/provider"}, "documentSha256": {"$ref": "#/$defs/sha"}, "favoriteId": {"$ref": "#/$defs/sha"}}},
+    "request": {
+      "type": "object", "additionalProperties": false,
+      "required": ["contractVersion", "operation", "operationId", "provider", "expectedProviderDocument", "actor", "reason"],
+      "properties": {
+        "contractVersion": {"const": "1.0.0"}, "operation": {"enum": ["favorite-promote", "favorite-remove"]},
+        "operationId": {"$ref": "#/$defs/id"}, "provider": {"$ref": "#/$defs/provider"}, "expectedProviderDocument": {"$ref": "#/$defs/sha"},
+        "actor": {"$ref": "#/$defs/id"}, "reason": {"$ref": "avo.sfx-catalog.schema.json#/$defs/text"},
+        "expectedGeneration": {"$ref": "#/$defs/sha"},
+        "selection": {"type": "object", "additionalProperties": false, "required": ["entryId", "entryRevision"], "properties": {"entryId": {"$ref": "#/$defs/sha"}, "entryRevision": {"$ref": "#/$defs/sha"}}},
+        "fields": {"$ref": "#/$defs/fields"}, "favoriteId": {"$ref": "#/$defs/sha"}
+      },
+      "allOf": [
+        {"if": {"properties": {"operation": {"const": "favorite-promote"}}}, "then": {"required": ["expectedGeneration", "selection", "fields"], "not": {"required": ["favoriteId"]}}},
+        {"if": {"properties": {"operation": {"const": "favorite-remove"}}}, "then": {"required": ["favoriteId"], "not": {"anyOf": [{"required": ["expectedGeneration"]}, {"required": ["selection"]}, {"required": ["fields"]}]}}}
+      ]
+    }
+  }
+}

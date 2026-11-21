@@ -25,14 +25,16 @@ def opportunity(**changes):
     }
 
 
-def candidate(tmp_path, rate=48000, *, partial=False):
+def candidate(tmp_path, rate=48000, *, partial=False, useful_end=None):
     class NativeFacts(Facts):
         def __call__(self, *args, **kwargs):
             facts = super().__call__(*args, **kwargs)
             facts.update(sampleRate=rate, sourceSamples=rate, analyzedSamples=rate)
             facts["usefulRange"] = {
                 "startSample": rate // 10,
-                "endSampleExclusive": 3 * rate // 4,
+                "endSampleExclusive": 3 * rate // 4
+                if useful_end is None
+                else useful_end,
             }
             if partial:
                 facts.update(
@@ -162,6 +164,21 @@ def test_silence_is_an_explicit_choice_without_a_candidate_or_analysis():
     )
     assert result["status"] == "silence"
     assert result["source"] is None and result["event"] is None
+
+
+def test_trim_that_rounds_to_no_output_samples_remains_unresolved(tmp_path):
+    trim = {"startSample": 19200, "endSampleExclusive": 19201}
+    entry = candidate(tmp_path, rate=192000, useful_end=trim["endSampleExclusive"])
+    result = fit_sound_candidate(
+        opportunity(),
+        entry,
+        trim_range=trim,
+        frame_rate=Fraction(24),
+        program_end_frame=90,
+    )
+    assert result["status"] == "unresolved"
+    assert result["issues"] == ["trim-has-no-output-samples"]
+    assert result["event"] is None
 
 
 def test_fit_identity_binds_program_clock_and_current_marker_review(tmp_path):

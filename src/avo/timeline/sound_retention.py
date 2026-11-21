@@ -73,6 +73,28 @@ class SoundRetention:
         self.generation(value["generationId"])
         if value["directionRef"]:
             self.retained.direction(value["directionRef"])
+        self.spoken_evidence(value)
+
+    def spoken_evidence(self, proposal):
+        from .preparation_retention import retained_preparation_files
+
+        references = [
+            spoken["analysisRef"]
+            for record in proposal["opportunities"]
+            if record["opportunity"] is not None
+            if (
+                spoken := (record["opportunity"].get("sourceAnchor") or {}).get(
+                    "spokenEvidence"
+                )
+            )
+        ]
+        if not references:
+            return
+        for path, expected in retained_preparation_files(
+            self.workspace, references=references
+        ).items():
+            _, digest = self.retained.read(path)
+            _require(digest == expected, "retained spoken-word evidence changed")
 
     def application(self, reference, *, request_hash=None):
         request = self.reference(reference, "applyRequest")

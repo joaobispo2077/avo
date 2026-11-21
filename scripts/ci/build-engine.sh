@@ -69,6 +69,14 @@ if [[ "$GOT" != "$VERSION" ]]; then
   exit 1
 fi
 
+echo "smoke: bundled ArtCraft capability metadata"
+"$LAUNCHER" cli artcraft catalog --app anicraft --json | "$PYTHON" -c '
+import json, sys
+profiles = json.load(sys.stdin)["profiles"]
+if len(profiles) != 1 or profiles[0]["claimedState"] != "documented-only":
+    raise SystemExit("error: bundled ArtCraft metadata smoke failed")
+'
+
 echo "smoke: avo --help (cold + warm; warm target ≤ 3s)"
 "$PYTHON" -c "
 import subprocess, sys, time

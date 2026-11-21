@@ -1,7 +1,7 @@
 # ArtCraft integration strategy
 
-**Status: planned, 2026-11-15.** This documents the requested behavior and proposed
-integration boundaries. It does not announce installed tools or implemented commands.
+This document covers the integration boundaries and the first Windows AniCraft
+lower-third profile. The capability register tracks work on the other profiles.
 
 ArtCraft is specialist authoring for a component that needs it. It is not a new
 default motion engine or a normal prerequisite for AVO.
@@ -75,6 +75,84 @@ actual receipt verification, source descriptors, locks, compiler/preflight and
 execution for those roles. An exported audio/image file is generated material,
 not an original source. Registration must independently validate reproducibility;
 neither a supplied verified flag nor a generator name is evidence.
+
+### Register a verified lower third
+
+Select the video component before authoring. Its Animation component, BMap cue
+and Tracks overlay identify the same component. Set the Tracks generator to
+`{"adapterId": "artcraft.anicraft", "componentId": "speaker-label"}` using
+the selected component ID. Use a full-canvas placement, an explicitly linked
+cue and a frame-aligned interval equal to the exported frame count. The current
+cut and sync must have their existing approvals.
+
+Choose a 16:9 or 9:16 output contract when preparing the AniCraft job. Each
+format is authored at its own canvas size. The portrait plate sits near three
+quarters of the picture height, with the entrance, readable hold and exit
+inspected on that canvas.
+
+Run `avo cli artcraft register --project PROJECT --job JOB --expected-head HEAD
+--asset-id ASSET --output OUTPUT --json` after the selected job reaches
+`exported`. Use absolute paths and an existing output folder under the video's
+`edit/derived`. Registration saves the exact native source lock next to the
+lossless `.mkv` and records both in generated media. The proof uses the standard
+`overlay-video` operation with the retained asset and input-lock references.
+Window proofs keep the local frame phase of the full composition.
+
+Use `avo cli artcraft review --job JOB --expected-head HEAD --json` to inspect
+the standalone before, entrance, hold, exit and after frames. Add `--project
+PROJECT --asset-id ASSET --materialization RECORD` to pair the same export with
+the current proof, placement and available source and edit logs. A changed
+candidate or timeline requires current review evidence. Use the existing
+creator approval workflow to record the decision.
+
+### Publish a reusable native source
+
+For the qualified AniCraft lower-third profile, `avo cli artcraft
+provider-propose` reads a sealed package and a general provider pattern. The
+package identifies the editable native source, recipe, parameter schema,
+source review, design approval and rights. Every file has its exact size and
+SHA-256. Use the selected provider, absolute catalog and package paths, and
+the explicit external `--source-root` for the proposal.
+
+`avo cli artcraft provider-publish` applies the creator decision to that
+proposal and its same source package. Pass `--expected-catalog` with the
+current catalog hash and `--native-store` with the existing external library
+folder. AVO preserves the verified bytes under the selected provider and
+package hash. The catalog records the native app, exact package identity and
+the source, design and rights fingerprints.
+
+`avo cli artcraft provider-instantiate` pins an exact catalog version for a
+particular video. Supply its project, approved catalog and native store, kit ID,
+version, manifest hash and a fresh instance ID. The `--bindings-json` object
+contains `parameters`, `assetBindings`, `eventBindings` and `safeAreaBindings`.
+The selected parameters must match the published template contract. AVO copies
+the source into the selected footage project for subsequent qualified authoring.
+Omitted fields inherit the reviewed template parameters, including its font.
+Choose a separately reviewed source design to change that font.
+
+Select a newer version with a fresh instance ID and `--supersedes` to link the
+upgrade explicitly. Review the new instance in the video's own context.
+
+To render a pinned video's label, select its copied `.anicraft` file as
+`document.source` with `document.state` set to `saved` in `artcraft prepare`.
+Include its owning source directory in `readRoots`, the instance's selected
+`authoringParameters`, and its matching native output contract. A qualified
+confined CLI run saves a separate native revision and records the original as
+a dependency. The verified profile edits the label using the approved font,
+then verifies the saved design and alpha frames. Register the resulting
+export and review it against the current video proof.
+
+For an exact repeat of an already verified saved-source label, use
+`artcraft prepare` with `--mode reuse`, `--reuse-job` and `--reuse-head`.
+Select the same provider, editable source bytes, label parameters and output
+contract in the new video. `artcraft run` copies the retained native revision,
+recipe and ordered alpha frames to the new job without launching AniCraft.
+Register the copy for its new timeline independently. Changed inputs select
+the corresponding new authored job.
+
+The checked automatic profile requires a host with independently enforced job
+roots. Returned files from the current guided handoff stay available for
+inspection and reference while production qualification continues.
 
 ## Qualification and rollout
 

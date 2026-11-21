@@ -12,7 +12,7 @@ import numpy as np
 import pytest
 from tests.editing_craft_fixtures import channel_impulses, labeled_video
 
-from avo.timeline.camera import evaluate_camera
+from avo.timeline.camera import evaluate_camera, reframe_face_camera
 from avo.timeline.contracts import content_hash
 
 pytestmark = pytest.mark.integration
@@ -120,6 +120,7 @@ def operation(
 
 def render(path, destination, selected, *, first=0, last=24, width=160, height=90):
     from avo.adapters.media.camera import camera_filter, camera_input_arguments
+    from avo.adapters.media.proof_executor import _run
 
     metadata = probe(path)
     specification = {"width": width, "height": height, "pixelFormat": "gbrp16le"}
@@ -132,7 +133,7 @@ def render(path, destination, selected, *, first=0, last=24, width=160, height=9
         end_frame=last,
     )
     assert isinstance(chain, str)
-    result = subprocess.run(
+    _run(
         [
             "ffmpeg",
             "-v",
@@ -154,10 +155,8 @@ def render(path, destination, selected, *, first=0, last=24, width=160, height=9
             "-pix_fmt",
             "+gbrp16le",
             str(destination),
-        ],
-        capture_output=True,
+        ]
     )
-    assert result.returncode == 0, result.stderr.decode(errors="replace")
     return pixels(destination, width, height)
 
 
@@ -189,6 +188,41 @@ def test_boundary_zoom_preserves_the_final_original_pixel_without_a_dark_border(
     np.testing.assert_array_equal(full[-1, -1, -1], pixels(source, 160, 90)[-1, -1, -1])
     window = render(source, tmp_path / "last-frame.mkv", selected, first=23, last=24)
     np.testing.assert_array_equal(window, full[23:24])
+
+
+def test_encoded_face_path_preserves_entry_release_and_arbitrary_preview_window(
+    tmp_path,
+):
+    from tests.test_camera_planning import detected_face
+
+    source = labeled_video(tmp_path / "original.mkv", bit_depth=16)
+    original = source.read_bytes()
+    baseline = operation(source)
+    selected = deepcopy(baseline)
+    parameters = selected["parameters"]
+    parameters["behavior"] = reframe_face_camera(
+        parameters["behavior"],
+        frame_range=parameters["originalFrameRange"],
+        geometry=parameters["geometry"],
+        points=[detected_face(100, 0.51), detected_face(123, 0.55)],
+        source_ticks=range(100, 124),
+        transition_frames=4,
+        fallback="review",
+    )
+    parameters["pathHash"] = content_hash(
+        {key: parameters[key] for key in ("behavior", "geometry")}
+    )
+    plain = render(source, tmp_path / "plain.mkv", baseline)
+    full = render(source, tmp_path / "anchored.mkv", selected)
+    window = render(
+        source, tmp_path / "anchored-window.mkv", selected, first=11, last=16
+    )
+    np.testing.assert_array_equal(full[0], plain[0])
+    np.testing.assert_array_equal(full[-1], plain[-1])
+    assert not np.array_equal(full[12], plain[12])
+    np.testing.assert_array_equal(window, full[11:16])
+    assert np.any(full % 257 != 0)
+    assert source.read_bytes() == original
 
 
 @pytest.mark.parametrize(
@@ -885,6 +919,47 @@ def test_placed_foreground_retains_original_rgb_detail_and_independent_source_al
     window = tmp_path / "source-layer-window.mkv"
     execute_ffmpeg_proof(execution, window)
     np.testing.assert_array_equal(pixels(window, 160, 90), actual[9:17])
+
+
+def test_precision_placement_clips_zoom_and_keeps_disjoint_layers_out_of_frame(
+    tmp_path,
+):
+    from avo.adapters.media.proof_placed import _compose_picture
+
+    width, height, count = 160, 96, 6
+    spec = {"width": width, "height": height, "pixelFormat": "gbrp16le"}
+    interval = {"outputRange": {"startFrame": 0, "endFrameExclusive": count}}
+    base = labeled_video(
+        tmp_path / "base.mkv", size=(width, height), frame_count=count, bit_depth=16
+    )
+    alpha = labeled_video(
+        tmp_path / "alpha.mkv", size=(width, height), frame_count=count, alpha=True
+    )
+    zoom = {
+        "canvasWidth": width,
+        "canvasHeight": height,
+        "width": 200,
+        "height": 120,
+        "x": -20,
+        "y": -12,
+    }
+    visible = ({**interval, "pictureTransform": zoom}, alpha)
+    outside = ({**interval, "pictureTransform": {**zoom, "x": width}}, alpha)
+    full, retained, plain = (
+        tmp_path / f"{name}.mkv" for name in ("full", "kept", "plain")
+    )
+    for overlay, output in (
+        ([outside, visible], full),
+        ([visible], retained),
+        ([], plain),
+    ):
+        _compose_picture(
+            [(interval, base), *overlay], output, spec, Fraction(24), (0, count)
+        )
+    composed = pixels(full, width, height)
+    assert composed.shape[0] == count
+    np.testing.assert_array_equal(composed, pixels(retained, width, height))
+    assert np.any(composed != pixels(plain, width, height))
 
 
 def test_placed_camera_keeps_the_closed_original_input_policy_after_admission(

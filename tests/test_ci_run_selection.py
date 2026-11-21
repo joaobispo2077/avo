@@ -420,6 +420,45 @@ def test_full_unit_lane_has_a_bounded_budget_for_its_measured_population():
     assert "run: python scripts/ci/check_ci_readiness.py" in workflow
 
 
+def test_coverage_lane_retains_its_measured_workload_and_bounded_workers():
+    root = Path(__file__).resolve().parents[1]
+    workflow = (root / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+    quality = workflow.split("  software-quality:\n", 1)[1].split(
+        "  mutation-light:\n", 1
+    )[0]
+    budget = int(re.search(r"^    timeout-minutes: (\d+)$", quality, re.MULTILINE)[1])
+    # Run44246128502: coverage advanced to84% in48m33s before its50m job limit.
+    # Keep four minutes for setup, remaining gates and evidence, at most65m total.
+    assert (48 * 60 + 33) / 0.84 + 4 * 60 <= budget * 60 <= 65 * 60
+    coverage = quality.split("id: q-coverage\n", 1)[1].split("      - name:", 1)[0]
+    assert shlex.split(re.search(r"PYTEST_ADDOPTS: (.+)", coverage)[1]) == [
+        "-n",
+        "2",
+        "--dist=worksteal",
+    ]
+    invocation = re.search(
+        r"run: (python scripts/ci/run_quality_gate.py[^\n]+)", coverage
+    )[1]
+    assert shlex.split(invocation) == [
+        "python",
+        "scripts/ci/run_quality_gate.py",
+        "--gate",
+        "coverage",
+        "--artifact",
+        "reports/quality/coverage.json",
+        "--",
+        "bash",
+        "scripts/ci/run-coverage.sh",
+    ]
+    runner = (root / "scripts/ci/run-coverage.sh").read_text(encoding="utf-8")
+    assert "--ignore=tests/projects" in runner
+    assert "--ignore=tests/integration" in runner
+    assert '"not project and not integration"' in runner
+    assert "--cov=avo" in runner
+    assert "--cov-report=json:reports/quality/coverage.json" in runner
+    assert 'exec "${ARGS[@]}" "$@"' in runner
+
+
 def test_engine_workflow_selects_pr_and_push_without_gating_release_builds():
     root = Path(__file__).resolve().parents[1]
     workflow = (root / ".github/workflows/engine-binary.yml").read_text(

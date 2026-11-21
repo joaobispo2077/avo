@@ -69,14 +69,25 @@ The budget regression uses that unit observation and retains a 60-minute ceiling
 Test scope, coverage requirements, mandatory readiness, evidence, worker count
 and quality thresholds remain unchanged.
 
-The Software quality job has a bounded 50-minute budget for setup, instrumented
+The Software quality job has a bounded 65-minute budget for setup, instrumented
 unit coverage, the remaining gates and evidence upload.
-[Run 44170109995](https://github.com/joaobispo2077/avo/actions/runs/44170109995)
-at head `6502736` hit its former 35-minute limit with coverage still advancing at
-99%. GitHub's job annotation confirms the timeout; the separate unit, integration
-and mutation lanes passed. Coverage itself ran for 33 minutes 17 seconds before
-cancellation, after roughly two minutes of setup. The larger job budget leaves
-room to finish that measured workload and run the other quality gates.
+[Run 44246128502](https://github.com/joaobispo2077/avo/actions/runs/44246128502)
+at `ea62c04` passed 6,834 unit tests with 19 skips in 31 minutes 7.78 seconds;
+integration and mutation also passed. Its separately instrumented coverage lane
+still advanced at 84% after 48 minutes 33 seconds before the 50-minute job limit.
+Projecting that measured pace plus four minutes for setup, remaining gates and
+evidence fits the bounded 65-minute budget. Coverage completion remains required;
+the incomplete run does not establish a coverage percentage or an all-green result.
+The two workers, work-stealing schedule, selected tests, 68% floor and other
+quality gates remain unchanged.
+
+Contract validation rereads current schema bytes on every call and reuses only
+the parsed registry for identical content, with at most four entries retained.
+A local warmed 50-cue validation profile took 1.98 seconds before this change
+and 1.26 seconds afterward. This measures that validation sample, not overall
+CI runtime. Same-size edits with restored timestamps, deleted/malformed refs
+and distinct roots remain covered by contract tests; document validation and
+the coverage/readiness gates still execute normally.
 
 Gate 1 also validates all GitHub Actions workflows with actionlint 1.7.12,
 including expression context availability. ShellCheck and Pyflakes are disabled

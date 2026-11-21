@@ -11,7 +11,7 @@ from typing import Any
 
 from avo.paths import repo_root
 
-from .contracts import file_fingerprint, validate_document
+from .contracts import document_hash_excluding, file_fingerprint, validate_document
 from .store import (
     ArtifactStore,
     atomic_write_json,
@@ -342,11 +342,20 @@ class TimelineWorkspace:
                 (index_path.parent / reference["path"]).read_text(encoding="utf-8")
             )
             validate_document(snapshot, "avo.timeline-learning.schema.json")
-            if snapshot.get("snapshotHash") != reference.get("snapshotHash"):
+            if (
+                snapshot["snapshotHash"] != reference.get("snapshotHash")
+                or document_hash_excluding(snapshot, "snapshotHash")
+                != snapshot["snapshotHash"]
+                or snapshot["snapshotId"] != reference["snapshotId"]
+            ):
                 raise WorkspaceError(
                     f"provider learning snapshot hash mismatch: {index_path}"
                 )
-            if snapshot is None or snapshot.get("status") != "final":
+            if snapshot["provider"] != provider:
+                raise WorkspaceError(
+                    f"provider learning snapshot belongs to another provider: {index_path}"
+                )
+            if snapshot["status"] != "final":
                 continue
             loaded.append(snapshot)
         return loaded

@@ -51,10 +51,58 @@ def test_spec_bundles_direction_resources_and_new_schema_contracts() -> None:
         assert (ROOT / "schemas" / name).is_file()
 
 
+def test_bundled_editor_profiles_are_discoverable_and_unqualified():
+    import tomllib
+
+    from avo.engine_cli import PUBLIC_VERBS
+    from avo.timeline.editor_handoff import target_profiles
+
+    configuration = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    assert configuration["tool"]["setuptools"]["package-data"][
+        "avo.resources.interchange"
+    ] == ["*.json"]
+    assert 'collect_data_files("avo.resources.interchange")' in SPEC
+    assert (ROOT / "schemas" / "avo.editor-handoff.schema.json").is_file()
+    assert "timeline-export" in PUBLIC_VERBS
+    profiles = target_profiles()
+    assert {item["application"] for item in profiles} == {
+        "premiere-pro",
+        "davinci-resolve",
+    }
+    assert all(item["status"] == "unqualified" for item in profiles)
+
+
 def test_python_distribution_declares_runtime_schema_data() -> None:
     configuration = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
     assert "[tool.setuptools.data-files]" in configuration
     assert '"share/avo/schemas" = ["schemas/*.json"]' in configuration
+
+
+def test_optional_craft_workers_are_package_files_and_models_stay_external():
+    import tomllib
+    from importlib.resources import files
+
+    configuration = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    worker_package = "avo.adapters.understand"
+    workers = configuration["tool"]["setuptools"]["package-data"][worker_package]
+    for worker in ("clap_embeddings_worker.py", "visual_motion_worker.py"):
+        assert worker in workers
+        assert files(worker_package).joinpath(worker).is_file()
+    dependencies = configuration["project"]["dependencies"]
+    assert not any(
+        item.startswith(("opencv", "torch", "transformers")) for item in dependencies
+    )
+    collected = {
+        value for operation, value in _packaging_calls() if operation == "_collect"
+    }
+    assert collected.isdisjoint({"cv2", "torch", "transformers"})
+    for schema in (
+        "avo.clap-manifest.schema.json",
+        "avo.motion-review.schema.json",
+        "avo.editor-handoff.schema.json",
+        "avo.timeline-learning.schema.json",
+    ):
+        assert (ROOT / "schemas" / schema).is_file()
 
 
 def test_library_review_resources_are_packaged_and_available():
@@ -305,7 +353,11 @@ def test_binary_capture_lane_provisions_encoder_and_only_browser_system_dependen
     workflow = (ROOT / ".github/workflows/engine-binary.yml").read_text(
         encoding="utf-8"
     )
-    for install in ("apt-get install", "brew install ffmpeg", "choco install ffmpeg"):
+    for install in (
+        "bash scripts/ci/ensure-ffmpeg.sh",
+        "brew install ffmpeg",
+        "choco install ffmpeg",
+    ):
         assert install in workflow, install
     assert "python -m playwright install-deps chromium" in workflow
     assert "python -m playwright install --with-deps" not in workflow

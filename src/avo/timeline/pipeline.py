@@ -419,14 +419,15 @@ class TimelinePipeline:
             motion_plan = self.motion_plan()
         return {**shown, "stageContexts": contexts, "motionPlan": motion_plan}
 
-    def motion_plan(
-        self, *, proposal_hash: str | None = None, sound_proposal=None
+    def _motion_context(
+        self,
+        *,
+        proposal_hash: str | None = None,
+        sound_proposal=None,
     ) -> dict[str, Any]:
-        """Project current motion metadata without initializing an editorial record."""
+        """Read live or frozen review inputs without publishing a report."""
         from avo.direction.brief import BriefService
         from avo.editing_craft import EditingCraftError, inspect_editing_craft
-
-        from .motion_review import MotionReviewService
 
         context = {
             "direction": BriefService(self.workspace.project_path)
@@ -460,13 +461,35 @@ class TimelinePipeline:
                 context.setdefault("gaps", []).append(
                     {"kind": "motion-proposal-unavailable", "detail": str(error)}
                 )
-        return MotionReviewService(self.workspace).project(context)
+        return context
 
-    def publish_motion_plan(self) -> dict[str, Any]:
+    def motion_plan(
+        self,
+        *,
+        proposal_hash: str | None = None,
+        sound_proposal=None,
+        scope_request=None,
+    ) -> dict[str, Any]:
+        """Project current motion metadata without initializing an editorial record."""
+        from .motion_review import MotionReviewService
+
+        context = self._motion_context(
+            proposal_hash=proposal_hash, sound_proposal=sound_proposal
+        )
+        context["projectionSource"] = {
+            "kind": "pipeline",
+            "proposalHash": proposal_hash,
+            "soundProposalRef": None,
+        }
+        options = {} if scope_request is None else {"scope_request": scope_request}
+        return MotionReviewService(self.workspace).project(context, **options)
+
+    def publish_motion_plan(self, *, scope_request=None) -> dict[str, Any]:
         """Explicitly publish derived views; this never selects or approves an edit."""
         from .motion_review import MotionReviewService
 
-        snapshot = self.motion_plan()
+        options = {} if scope_request is None else {"scope_request": scope_request}
+        snapshot = self.motion_plan(**options)
         return MotionReviewService(self.workspace).publish(
             snapshot, expected_basis=snapshot["basisHeads"]
         )
@@ -475,6 +498,8 @@ class TimelinePipeline:
         """Offer selected guidance, never edit/render approval or timeline changes."""
         from avo.direction.brief import BriefService
         from avo.direction.rules import DirectionError
+
+        from .iterations import pending_stage_notes
 
         service = BriefService(self.workspace.project_path)
         result = service.stage_context(
@@ -487,6 +512,9 @@ class TimelinePipeline:
             )
         if stage == "motion":
             result = {**result, "motionPlan": self.motion_plan()}
+        notes = pending_stage_notes(self.workspace, stage)
+        if notes:
+            result = {**result, "spokenNotes": notes}
         return result
 
     @property

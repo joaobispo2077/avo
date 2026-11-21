@@ -44,7 +44,7 @@ build-backend = "setuptools.build_meta"
 where = ["src"]
 
 [tool.setuptools.package-data]
-"avo.adapters.understand" = ["clap_embeddings_worker.py"]
+"avo.adapters.understand" = ["clap_embeddings_worker.py", "visual_motion_worker.py"]
 "avo.templates.shorts_hyperframes" = ["*.html", "*.css", "*.js", "*.json"]
 "avo.templates.library_review" = ["*.html", "*.css", "*.js"]
 "avo.templates.motion_review" = ["*.html", "*.css"]
@@ -56,9 +56,12 @@ where = ["src"]
     "**/*.md",
 ]
 "avo.resources.directions" = ["*.json"]
+"avo.resources.interchange" = ["*.json"]
+"avo.resources.artcraft" = ["catalog.json"]
 
 [tool.setuptools.data-files]
 "share/avo/schemas" = ["schemas/*.json"]
+"share/avo/config" = ["config/*-cpu-windows.requirements.txt"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

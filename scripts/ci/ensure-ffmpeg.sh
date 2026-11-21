@@ -1,17 +1,28 @@
 #!/usr/bin/env bash
-# The workflow allows eight minutes for package downloads and codec checks.
 set -euo pipefail
+
+install_ffmpeg() {
+  local apt_options=(
+    -o Acquire::Retries=1
+    -o Acquire::http::Timeout=15
+    -o Acquire::https::Timeout=15
+    -o Acquire::http::No-Cache=true
+  )
+  sudo timeout --kill-after=30s 2m apt-get "${apt_options[@]}" update --error-on=any &&
+    sudo timeout --kill-after=30s 8m apt-get "${apt_options[@]}" install -y --no-install-recommends ffmpeg
+}
+
 if ! command -v ffmpeg >/dev/null || ! command -v ffprobe >/dev/null \
   || ! ffmpeg -version >/dev/null 2>&1 || ! ffprobe -version >/dev/null 2>&1; then
-  # Regional mirrors can stream packages too slowly for bounded CI setup.
-  if [[ -f /etc/apt/apt-mirrors.txt ]]; then
-    sudo sed -i 's#https\?://\([[:alnum:]-]\+\.\)*archive\.ubuntu\.com/ubuntu#https://archive.ubuntu.com/ubuntu#g' \
-      /etc/apt/apt-mirrors.txt
+  if ! install_ffmpeg; then
+    printf '%s\n' 'FFmpeg setup failed. Refreshing package indexes and retrying once.' >&2
+    # Retry via the canonical archive when a hosted regional mirror fails.
+    if [[ -f /etc/apt/apt-mirrors.txt ]]; then
+      sudo sed -i 's#https\?://\([[:alnum:]-]\+\.\)*archive\.ubuntu\.com/ubuntu#https://archive.ubuntu.com/ubuntu#g' \
+        /etc/apt/apt-mirrors.txt
+    fi
+    install_ffmpeg
   fi
-  sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=15 \
-    -o Acquire::https::Timeout=15 update
-  sudo apt-get -o Acquire::Retries=2 -o Acquire::http::Timeout=15 \
-    -o Acquire::https::Timeout=15 install -y --no-install-recommends ffmpeg
 fi
 ffmpeg -version
 ffprobe -version

@@ -10,7 +10,7 @@ from avo.adapters.media.ffprobe import INVENTORY_ENTRIES, FfprobeMediaAdapter
 from avo.adapters.media.local_source import local_source_arguments
 
 
-def _inventory(monkeypatch, tmp_path, probe):
+def _inventory(monkeypatch, tmp_path, probe, **options):
     path = tmp_path / "source.mkv"
     path.write_bytes(b"source")
     calls = []
@@ -20,8 +20,29 @@ def _inventory(monkeypatch, tmp_path, probe):
         return SimpleNamespace(stdout=json.dumps(probe))
 
     monkeypatch.setattr(subprocess, "run", run)
-    source = FfprobeMediaAdapter().inventory([path])["sources"][0]
+    source = FfprobeMediaAdapter(**options).inventory([path])["sources"][0]
     return source, calls
+
+
+@pytest.mark.parametrize(
+    ("metadata", "expected"),
+    [
+        ({}, False),
+        ({"side_data_list": [{"rotation": -90}]}, True),
+        ({"tags": {"rotate": "90"}}, True),
+        ({"tags": {"rotate": "unknown"}}, True),
+    ],
+)
+def test_editor_inventory_preserves_rotation_guard(
+    monkeypatch, tmp_path, metadata, expected
+):
+    source, _ = _inventory(
+        monkeypatch,
+        tmp_path,
+        {"streams": [{"codec_type": "video", **metadata}]},
+        include_display_rotation=True,
+    )
+    assert source["streams"]["video"][0]["hasDisplayRotation"] is expected
 
 
 @pytest.mark.parametrize(

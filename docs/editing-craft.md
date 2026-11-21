@@ -108,21 +108,32 @@ avo cli sfx search --project <absolute avo.project.json> --request <absolute sea
 ```
 
 Scans and annotations require the expected catalogue generation and actor/reason.
-Source measurements stay separate from curated tags, favorites, variant groups,
-rights evidence and reviewed perceptual markers. A measured peak is an anchor
+Source measurements stay separate from curated descriptions, categories, tags,
+favorites, variant groups, rights evidence and reviewed perceptual markers.
+A measured peak is an anchor
 candidate, not a listening decision. Changed source bytes leave existing manual
 decisions visibly stale instead of silently carrying them forward.
 
 RMS and peak are normalized linear PCM amplitudes, not loudness measurements.
 Spectral centroid uses Hz; attack/decay use seconds; audition ranges and marker
 candidates use native source samples. Curation and favorites stay project-local;
-shared provider promotion remains pending its explicit scoped route.
+[provider favorites](sfx-provider-favorites.md) require explicit promotion and an
+opt-in scan before they seed new matching entries in another project.
 
-Descriptor search uses saved names, tags and measured filters, explains matches,
+Descriptor search uses saved names, descriptions, categories, material and tags
+alongside measured filters, explains matches,
 and returns bounded audition ranges, source/entry identities, rights and analysis
 coverage. It does not decode sources or load a model. `show` returns paginated
 excerpts and a complete local catalogue link; search cursors bind the exact query,
 filters, mode and generation. No-match is a normal result.
+
+Optional `curation.description` and `curation.category` accept up to 512 characters
+each through the existing annotation request. Set either to `null` to clear it.
+The optional search filter `{"category":"interface"}` selects that exact curated
+category in descriptor or semantic mode. Older entries without these fields
+remain searchable. Annotation creates a new catalogue generation while retaining
+the unchanged audio measurements and rights. These labels express creator intent;
+they are not acoustic measurements or permission to use an asset.
 
 `sfx search-semantic` is an explicit separate model-execution operation with its
 own MCP tool. It requires separately provisioned paired local audio/text model
@@ -131,7 +142,49 @@ descriptor scores are never presented as semantic similarity. Actual provisioned
 model and human sound-suitability acceptance remains separate from automated
 contract and isolation checks.
 
+See [offline semantic SFX qualification](sfx-semantic-runtime.md) for the pinned
+artifact/runtime contract and the explicitly selected real-model test. Camera
+sound accents can optionally select an actual path node rather than entering a
+separate cue fraction; see [sound candidate fitting](sound-candidate-fitting.md).
+
+When a sound choice uses selected production chunks, the result lists all chunks
+containing its current or previous audible contribution. A tail that crosses a
+chunk boundary remains a listening obligation even when that chunk was outside
+the production selection. Removing a sound includes its former range. Review
+and approval still belong to the current encoded candidate. An identical audio
+choice with only new proposal and application references records the request and
+keeps the current BMap and Tracks revisions. It adds no listening sections.
+
 ## Compatibility and validation
+
+The default motion map and linked storyboard also show the current audio and
+picture lanes, their roles, and the source or cue for each contribution.
+For editor review, the optional [editor handoff](editor-handoff.md) prepares a
+short original-source XMEML example and compares returned changes. Selected exact
+trims on the original picture and audio can enter normal cutting review. The
+target profiles are validation-only while production qualification is pending.
+
+Watch reports the exact observed intervals and leaves missing intervals visible.
+The approval gate shows the planned cue states, exact sampled frames and linked
+visual findings for a current canonical proof. Playback review covers continuous
+motion, lip sync and reading time. Listening covers audibility and masking.
+The motion map and storyboard link those sampled findings when the selected
+candidate and its declared timeline dependencies are current and valid.
+Full build readiness checks the exact frame ranges and encoded bytes of saved
+preview windows. A changed window requires fresh evidence from the current
+plan.
+A safe repair routed to its owning stage rechecks the inspected candidate bytes
+and canonical timeline before it runs.
+
+The wrap exports scoped learning from the approved master and retained iteration
+ledger when both are available. Curated lessons record where to use or exclude a
+technique. Animation promotion still requires the current provider's explicit
+decision.
+
+Cleanup and reconstruction follow the retained preparation journal and
+selected sound evidence. An interrupted recovery result remains available when
+its attempt is already journaled. Unselected generated result files are eligible
+for cleanup.
 
 Existing CMap, BMap, Tracks, Animation and Sync ownership remains unchanged.
 Before an approved cut, concepts stay provisional. BMap owns executable cue timing;
@@ -142,8 +195,9 @@ index capability guard. Legacy edits keep their existing format. The pure camera
 planner joins BMap intervals to exact original source occurrences, retains frozen
 options and evaluates each frame independently, including windowed and backward
 seeks. Camera-aware proof plans use version 2; ordinary proofs remain version 1.
-A missing qualified renderer returns an explicit unavailable result. These
-contracts and evaluator checks do not establish encoded camera readiness.
+A missing qualified renderer returns an explicit unavailable result. Encoded
+camera fixtures cover native frame and window behavior. Creator suitability and
+format-specific playback review are separate checks.
 
 Focused automated checks cover read-only defaults, partial/static plans,
 selection provenance/freezing, schema compatibility, native/MCP parity and

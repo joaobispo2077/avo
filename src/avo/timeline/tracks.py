@@ -191,6 +191,8 @@ def resolve_tracks(
             layer_id = str(layer.get("layerId") or "")
             _validate_breath_layer(layer)
             _validate_generated_track_layer(layer, group, generated_instances)
+            _validate_generated_audio_track(layer)
+            _validate_generated_still_track(layer)
             if not layer_id or layer_id in seen:
                 raise TrackError("track layer IDs must be unique and stable")
             seen.add(layer_id)
@@ -228,6 +230,26 @@ def resolve_tracks(
     return result
 
 
+def _validate_generated_audio_track(layer):
+    if "generatedAudioRef" in layer:
+        from .artcraft_audio import require_generated_audio_layer
+
+        try:
+            require_generated_audio_layer(layer)
+        except (ValueError, OSError) as error:
+            raise TrackError(f"Invalid generated audio source: {error}") from error
+
+
+def _validate_generated_still_track(layer):
+    if "generatedStillRef" in layer:
+        from .artcraft_stills import require_generated_still_layer
+
+        try:
+            require_generated_still_layer(layer)
+        except (ValueError, OSError) as error:
+            raise TrackError(f"Invalid generated still source: {error}") from error
+
+
 def inspect_audio_hierarchy(layers: list[dict[str, Any]]) -> list[str]:
     findings = []
     dialogue = next((item for item in layers if item.get("role") == "dialogue"), None)
@@ -259,6 +281,18 @@ def inspect_visual_hierarchy(layers: list[dict[str, Any]]) -> list[str]:
         } and not layer.get("faceAvoidance", False):
             findings.append("face-avoidance")
     return sorted(set(findings))
+
+
+def inspect_track_snapshot(snapshot):
+    """Summarize the selected Tracks revision without opening source media."""
+    audio = snapshot.get("audioTracks", {}).get("layers", [])
+    video = snapshot.get("videoTracks", {}).get("layers", [])
+    return {
+        "audioLayers": audio,
+        "videoLayers": video,
+        "audioFindings": inspect_audio_hierarchy(audio),
+        "visualFindings": inspect_visual_hierarchy(video),
+    }
 
 
 class TracksService:
@@ -383,7 +417,7 @@ class TracksService:
             "revisionId": revision["revisionId"],
             "revisionHash": revision["contentHash"],
             "basis": snapshot["basis"],
-            "audioLayers": snapshot["audioTracks"]["layers"],
+            **inspect_track_snapshot(snapshot),
             **(
                 {
                     "sourceMixAdjustments": deepcopy(
@@ -392,11 +426,6 @@ class TracksService:
                 }
                 if "sourceMixAdjustments" in snapshot["audioTracks"]
                 else {}
-            ),
-            "videoLayers": snapshot["videoTracks"]["layers"],
-            "audioFindings": inspect_audio_hierarchy(snapshot["audioTracks"]["layers"]),
-            "visualFindings": inspect_visual_hierarchy(
-                snapshot["videoTracks"]["layers"]
             ),
         }
 

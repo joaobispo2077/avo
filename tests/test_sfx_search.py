@@ -56,6 +56,90 @@ def test_descriptor_explanations_rights_audition_and_stable_ties(tmp_path):
     assert result["counts"]["unknownRights"] == 1
 
 
+@pytest.mark.parametrize("field", ["description", "category"])
+def test_curated_meaning_is_searchable_without_reanalyzing_or_changing_rights(
+    tmp_path, monkeypatch, field
+):
+    service, _ = make_service(tmp_path, {"001.wav": b"same"})
+    original = scan(service)
+    entry = original["entries"][0]
+    calls = len(service.analyzer.calls)
+    changed = annotate(
+        service,
+        original["generationId"],
+        entry["entryId"],
+        {"curation": {field: "gentle interface confirmation"}},
+    )
+    current = changed["entries"][0]
+    assert current["annotationRevision"] == entry["annotationRevision"] + 1
+    assert current["entryRevision"] == entry["entryRevision"]
+    assert current["measurement"] == entry["measurement"]
+    assert current["rights"] == entry["rights"]
+
+    def forbidden(*args, **kwargs):
+        pytest.fail("Curated descriptor search started source analysis")
+
+    monkeypatch.setattr(type(service.analyzer), "__call__", forbidden)
+    monkeypatch.setattr("avo.sfx_catalog.file_fingerprint", forbidden)
+    result = service.search("gentle confirmation")
+    assert [row["entryId"] for row in result["results"]] == [entry["entryId"]]
+    assert result["results"][0]["score"] == 1
+    assert result["results"][0]["rightsState"] == "unknown"
+    assert "descriptor token: gentle" in result["results"][0]["reasons"]
+    assert (
+        service.search("gentle", generation=original["generationId"])["status"]
+        == "no-match"
+    )
+    assert len(service.analyzer.calls) == calls
+
+
+def test_category_filter_is_generation_bound_and_can_be_explicitly_cleared(tmp_path):
+    service, original = searchable(tmp_path)
+    entry = original["entries"][0]
+    changed = annotate(
+        service,
+        original["generationId"],
+        entry["entryId"],
+        {"curation": {"category": "interface"}},
+    )
+    result = service.search("whoosh", filters={"category": "interface"})
+    assert [row["entryId"] for row in result["results"]] == [entry["entryId"]]
+    assert (
+        service.search(
+            "whoosh",
+            generation=original["generationId"],
+            filters={"category": "interface"},
+        )["status"]
+        == "no-match"
+    )
+    annotate(
+        service,
+        changed["generationId"],
+        entry["entryId"],
+        {"curation": {"category": None}},
+    )
+    assert (
+        service.search("whoosh", filters={"category": "interface"})["status"]
+        == "no-match"
+    )
+    assert service.search("whoosh")["status"] == "ok"
+
+
+@pytest.mark.parametrize("field", ["description", "category"])
+@pytest.mark.parametrize("value", ["", "x" * 513, 42])
+def test_invalid_curated_meaning_cannot_replace_catalogue(tmp_path, field, value):
+    service, _ = make_service(tmp_path)
+    original = scan(service)
+    with pytest.raises(SfxCatalogError):
+        annotate(
+            service,
+            original["generationId"],
+            original["entries"][0]["entryId"],
+            {"curation": {field: value}},
+        )
+    assert service.show() == original
+
+
 def test_warm_search_does_not_analyze_hash_scan_or_load_models(tmp_path, monkeypatch):
     service, _ = searchable(tmp_path)
 
@@ -177,6 +261,22 @@ def test_explicit_semantic_injection_is_filtered_bound_and_disclosed(tmp_path):
     assert len(result["results"]) == 2
     assert len(ranker.calls[0]["entryIds"]) == 2
     assert result["generationId"] == document["generationId"]
+
+    entry = document["entries"][0]
+    annotated = annotate(
+        service,
+        document["generationId"],
+        entry["entryId"],
+        {"curation": {"category": "interface"}},
+    )
+    scoped = selected.search(
+        "sound of bright fast movement",
+        mode="semantic",
+        filters={"category": "interface"},
+    )
+    assert scoped["generationId"] == annotated["generationId"]
+    assert [row["entryId"] for row in scoped["results"]] == [entry["entryId"]]
+    assert ranker.calls[-1]["entryIds"] == [entry["entryId"]]
 
 
 def test_semantic_ranker_cannot_inject_stale_revisions_or_nonfinite_scores(tmp_path):

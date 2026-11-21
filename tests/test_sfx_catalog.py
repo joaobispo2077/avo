@@ -121,6 +121,8 @@ def test_duplicate_bytes_keep_locator_specific_rights_and_annotations(tmp_path):
                 "evidenceRef": "fixture",
             },
             "curation": {
+                "description": "A bright metallic accent",
+                "category": "transition",
                 "material": "metallic",
                 "tags": ["bright", "whoosh"],
                 "favorite": True,

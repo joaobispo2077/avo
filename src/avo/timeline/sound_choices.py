@@ -4,6 +4,7 @@ import json
 import math
 from copy import deepcopy
 from fractions import Fraction
+from itertools import pairwise
 
 from avo.sfx_contracts import _validate_entries
 
@@ -23,6 +24,22 @@ def _unique_sound_ids(values, key):
     if len(result) != len(values):
         raise SoundPlanningError("Sound identities must be unique: " + key)
     return result
+
+
+def require_native_mix_support(mix):
+    """Use the same numeric bounds for publication and proof compilation."""
+    if mix["gainDb"] > 30:
+        raise SoundPlanningError("Selected gain exceeds native mix support")
+    ducking = mix["ducking"]
+    if ducking is not None and not all(
+        first <= ducking[key] <= last
+        for key, first, last in (
+            ("amountDb", 1, 20),
+            ("attackMs", 0.01, 2000),
+            ("releaseMs", 0.01, 9000),
+        )
+    ):
+        raise SoundPlanningError("Selected ducking exceeds native mix support")
 
 
 def _check_choice_mix(entry, fit, mix):
@@ -112,24 +129,108 @@ def _check_sound_roles(choices, contexts):
             raise SoundPlanningError("Comparison-only references cannot publish sound")
 
 
-def _sound_choice_advisories(choices):
-    groups = {"repeated-source": {}, "colliding-attacks": {}}
+def _nearby_impacts(impacts, max_gap):
+    ordered = sorted(impacts)
+    nearby = set()
+    for before, after in pairwise(ordered):
+        if after[0] - before[0] <= max_gap:
+            nearby.update((before[1], after[1]))
+    return [identity for _, identity in ordered if identity in nearby]
+
+
+def _repetition_advisories(sources, window_ms):
+    results = []
+    for impacts in sources.values():
+        if len(impacts) < 2:
+            continue
+        if window_ms is None:
+            event_ids = [identity for _, identity in impacts]
+        else:
+            event_ids = _nearby_impacts(impacts, Fraction(window_ms, 1000))
+        if event_ids:
+            advisory = {"code": "repeated-source", "eventIds": event_ids}
+            if window_ms is not None:
+                advisory["maxGapMs"] = window_ms
+            results.append(advisory)
+    return results
+
+
+def _sound_choice_advisories(choices, *, repetition_window_ms=None):
+    sources, attacks = {}, {}
     for choice in choices:
         fit = choice["fit"]
         if fit["status"] != "fit":
             continue
-        values = {
-            "repeated-source": fit["source"]["sourceSha256"],
-            "colliding-attacks": fit["event"]["resolvedImpactSample"],
-        }
-        for code, key in values.items():
-            groups[code].setdefault(key, []).append(choice["eventId"])
-    return [
-        {"code": code, "eventIds": identities}
-        for code, grouped in groups.items()
-        for identities in grouped.values()
+        impact = Fraction(
+            fit["event"]["resolvedImpactSample"], fit["clock"]["sampleRate"]
+        )
+        sources.setdefault(fit["source"]["sourceSha256"], []).append(
+            (impact, choice["eventId"])
+        )
+        attacks.setdefault(impact, []).append(choice["eventId"])
+    collisions = [
+        {"code": "colliding-attacks", "eventIds": identities}
+        for identities in attacks.values()
         if len(identities) > 1
     ]
+    return (
+        _repetition_advisories(sources, repetition_window_ms)
+        + collisions
+        + _sound_overlap_advisories(choices)
+    )
+
+
+def _sound_intervals(choices):
+    intervals = []
+    for choice in choices:
+        fit = choice["fit"]
+        if fit["status"] != "fit":
+            continue
+        rate = fit["clock"]["sampleRate"]
+        intervals.append(
+            (
+                Fraction(fit["event"]["scheduledAudioStartSample"], rate),
+                Fraction(fit["scheduledAudioEndSample"], rate),
+                choice["eventId"],
+                fit["opportunity"]["role"],
+            )
+        )
+    return sorted(intervals)
+
+
+def _sound_overlap_advisories(choices):
+    # A timing overlap needs listening; it is not a measured masking or peak claim.
+    active, reports, total = [], [], 0
+    limit = 64
+    for interval in _sound_intervals(choices):
+        first, end, identity, role = interval
+        active = [previous for previous in active if previous[1] > first]
+        total += len(active)
+        for previous in active[: max(0, limit - len(reports))]:
+            finish = min(end, previous[1])
+            reports.append(
+                {
+                    "code": "overlapping-sounds",
+                    "eventIds": [previous[2], identity],
+                    "roles": [previous[3], role],
+                    "range": {
+                        "unit": "seconds",
+                        "start": {"num": first.numerator, "den": first.denominator},
+                        "end": {"num": finish.numerator, "den": finish.denominator},
+                    },
+                    "assessment": "timing-only",
+                }
+            )
+        active.append(interval)
+    if total > len(reports):
+        reports.append(
+            {
+                "code": "overlap-report-truncated",
+                "shownPairs": len(reports),
+                "totalPairs": total,
+            }
+        )
+    return reports
 
 
 def _sound_choice_summary(choice):
@@ -145,6 +246,29 @@ def _sound_choice_summary(choice):
         "gainDb": None if mix is None else mix["gainDb"],
         "schedule": fit["event"],
         "endSampleExclusive": fit["scheduledAudioEndSample"],
+    }
+
+
+def _listening_range(choice):
+    if choice is None or choice["fit"]["status"] != "fit":
+        return None
+    fit = choice["fit"]
+    return {
+        "sampleRate": fit["clock"]["sampleRate"],
+        "startSample": fit["event"]["scheduledAudioStartSample"],
+        "endSampleExclusive": fit["scheduledAudioEndSample"],
+    }
+
+
+def _sound_change(before, after):
+    return {
+        "eventId": after["eventId"],
+        "before": _sound_choice_summary(before),
+        "after": _sound_choice_summary(after),
+        "listeningRanges": {
+            "before": _listening_range(before),
+            "after": _listening_range(after),
+        },
     }
 
 
@@ -202,14 +326,7 @@ def freeze_sound_choices(
         _check_sound_roles(prepared, context_map)
         return {
             "choices": prepared,
-            "changes": [
-                {
-                    "eventId": c["eventId"],
-                    "before": _sound_choice_summary(before.get(c["eventId"])),
-                    "after": _sound_choice_summary(c),
-                }
-                for c in prepared
-            ],
+            "changes": [_sound_change(before.get(c["eventId"]), c) for c in prepared],
             "advisories": _sound_choice_advisories(prepared),
             "reviewObligations": [
                 "current-source-and-catalogue",

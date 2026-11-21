@@ -49,6 +49,50 @@ SNAPSHOT = {
 
 
 class TimelineMappingTests(unittest.TestCase):
+    @staticmethod
+    def _with_repeated_take():
+        snapshot = deepcopy(SNAPSHOT)
+        repeated = deepcopy(snapshot["segments"][0])
+        repeated["segmentId"] = "repeat-a"
+        snapshot["segments"].append(repeated)
+        return snapshot
+
+    def test_source_point_can_select_its_exact_repeated_occurrence(self):
+        snapshot = self._with_repeated_take()
+        before = deepcopy(snapshot)
+        self.assertEqual(cmap_raw_to_output(snapshot, "cam1", 2000), 1000)
+        self.assertEqual(
+            cmap_raw_to_output(snapshot, "cam1", 2000, segment_id="a"), 1000
+        )
+        self.assertEqual(
+            cmap_raw_to_output(snapshot, "cam1", 2000, segment_id="repeat-a"), 5000
+        )
+        self.assertEqual(snapshot, before)
+
+    def test_unknown_or_wrong_source_occurrence_never_falls_back_to_the_first(self):
+        snapshot = self._with_repeated_take()
+        self.assertIsNone(
+            cmap_raw_to_output(snapshot, "cam1", 2000, segment_id="missing")
+        )
+        self.assertIsNone(
+            cmap_raw_to_output(snapshot, "cam2", 1000, segment_id="repeat-a")
+        )
+
+    def test_explicit_occurrence_resolves_its_own_native_source_clock(self):
+        snapshot = self._with_repeated_take()
+        for endpoint in ("in", "out"):
+            snapshot["segments"][-1][endpoint]["ticks"] *= 2
+            snapshot["segments"][-1][endpoint]["timebase"] = {"num": 1, "den": 2000}
+        with self.assertRaisesRegex(MappingError, "ambiguous raw source clock"):
+            cmap_raw_to_output(snapshot, "cam1", 2000)
+        self.assertEqual(
+            cmap_raw_to_output(snapshot, "cam1", 4000, segment_id="repeat-a"), 5000
+        )
+
+    def test_contiguous_segment_selection_cannot_be_ignored_for_a_placed_timeline(self):
+        with self.assertRaisesRegex(MappingError, "segment|placed"):
+            cmap_raw_to_output({"layoutMode": "placed"}, "cam1", 2000, segment_id="a")
+
     def test_multisource_reorder_round_trip(self) -> None:
         self.assertEqual(cmap_raw_to_output(SNAPSHOT, "cam2", 1000), 2500)
         self.assertEqual(cmap_output_to_raw(SNAPSHOT, 2500), ("cam2", 1000))

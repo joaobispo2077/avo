@@ -11,5 +11,10 @@ article:target { outline: 3px solid #9dc9ff; outline-offset: 3px; }
 dt { font-weight: bold; }
 dd { margin: 0 0 0.75rem; white-space: pre-wrap; }
 .motion-plan { white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; border: 1px solid #62728a; border-radius: 0.5rem; padding: 1.5rem; background: #202631; }
+.track-table { overflow-x: auto; }
+.track-table table { width: 100%; border-collapse: collapse; text-align: left; }
+.track-table th, .track-table td { padding: 0.55rem 0.7rem; vertical-align: top; border-bottom: 1px solid #62728a; overflow-wrap: anywhere; }
+.track-table tbody th { min-width: 10rem; }
+.track-table ul { margin: 0; padding-left: 1.2rem; }
 @media (max-width: 40rem) { main { padding: 1rem; } .motion-plan { padding: 0.75rem; } }
 @media print { body, .motion-plan { background: white; color: black; } }

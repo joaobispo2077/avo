@@ -38,3 +38,14 @@ for long-form vs Shorts — see
 ## Animation library integration
 
 Provider animation catalogs contain only explicitly creator-approved generalized behavior. Strip project text, timestamps, claims, screenshots, footage, and restricted media. Store contexts, exclusions, required assets, accessibility, compatible formats, exemplar hashes, and promotion provenance. Diagnose the new video first; recommend but never force. Every reuse gets fresh timing, layout, face/caption/evidence, rights, and accessibility review.
+
+## Sound discovery preferences
+
+Use `sfx favorites-show` for the current provider's bounded sound preferences.
+Explicit `sfx favorite-promote` and `sfx favorite-remove` confirm request bytes and
+the exact provider document. Promotion shares chosen portable descriptors and
+library/source identities only. A later `sfx scan` must opt in with
+`useProviderFavorites: true`; only new matching entries receive those defaults.
+Existing project choices remain authoritative, and rights, media, markers and
+approvals are never inherited. See
+[provider sound favorites](../../../docs/sfx-provider-favorites.md).

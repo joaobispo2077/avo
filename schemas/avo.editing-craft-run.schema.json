@@ -34,6 +34,68 @@
     "reason": {"type": "string", "pattern": "\\S", "maxLength": 4096}
   },
   "$defs": {
+    "productionScopePlan": {
+      "type": "object", "additionalProperties": false,
+      "required": ["contractVersion", "requestHash", "request", "basisHeads", "production", "context", "outsideItemIds", "unresolvedItemIds", "approval", "complete", "scopeHash"],
+      "properties": {
+        "contractVersion": {"const": "1.0.0"},
+        "requestHash": {"$ref": "#/$defs/sha256"},
+        "scopeHash": {"$ref": "#/$defs/sha256"},
+        "request": {"$ref": "#/$defs/productionScope"},
+        "basisHeads": {"$ref": "avo.motion-review.schema.json#/properties/basisHeads"},
+        "production": {"type": "array", "maxItems": 500, "items": {"$ref": "#/$defs/productionScopeMember"}},
+        "context": {"type": "array", "maxItems": 500, "items": {"$ref": "#/$defs/productionScopeMember"}},
+        "outsideItemIds": {"$ref": "#/$defs/workIds"},
+        "unresolvedItemIds": {"$ref": "#/$defs/workIds"},
+        "approval": {"const": "not-granted"},
+        "complete": {"type": "boolean"}
+      }
+    },
+    "productionScopeMember": {
+      "type": "object", "additionalProperties": false,
+      "required": ["itemId", "ownerChunkId", "canonicalStartFrame", "consumerChunkIds", "parts"],
+      "properties": {
+        "itemId": {"type": "string", "pattern": "\\S", "maxLength": 128},
+        "ownerChunkId": {"type": "string", "pattern": "\\S", "maxLength": 128},
+        "canonicalStartFrame": {
+          "type": "object", "additionalProperties": false, "required": ["num", "den"],
+          "properties": {"num": {"type": "integer", "minimum": 0}, "den": {"type": "integer", "minimum": 1}}
+        },
+        "consumerChunkIds": {"allOf": [{"$ref": "#/$defs/workIds"}], "minItems": 1},
+        "parts": {"type": "array", "minItems": 1, "maxItems": 20000, "items": {"$ref": "avo.motion-review.schema.json#/$defs/part"}}
+      }
+    },
+    "productionScope": {
+      "type": "object", "additionalProperties": false,
+      "required": ["clock", "chunks", "selectedChunkIds"],
+      "properties": {
+        "clock": {
+          "type": "object", "additionalProperties": false,
+          "required": ["frameRate", "programEndFrame"],
+          "properties": {
+            "frameRate": {
+              "type": "object", "additionalProperties": false,
+              "required": ["num", "den"],
+              "properties": {"num": {"type": "integer", "minimum": 1}, "den": {"type": "integer", "minimum": 1}}
+            },
+            "programEndFrame": {"type": "integer", "minimum": 1}
+          }
+        },
+        "chunks": {
+          "type": "array", "minItems": 1, "maxItems": 500,
+          "items": {
+            "type": "object", "additionalProperties": false,
+            "required": ["chunkId", "startFrame", "endFrameExclusive"],
+            "properties": {
+              "chunkId": {"type": "string", "pattern": "\\S", "maxLength": 128},
+              "startFrame": {"type": "integer", "minimum": 0},
+              "endFrameExclusive": {"type": "integer", "minimum": 1}
+            }
+          }
+        },
+        "selectedChunkIds": {"allOf": [{"$ref": "#/$defs/workIds"}], "minItems": 1}
+      }
+    },
     "workDecisionRequest": {
       "type": "object", "additionalProperties": false,
       "required": ["contractVersion", "operation", "operationId", "actor", "reason", "work", "ids", "status", "expectedDecisionHash"],

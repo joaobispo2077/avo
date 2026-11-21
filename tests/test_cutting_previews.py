@@ -1,6 +1,44 @@
 import pytest
 
-from avo.timeline.cutting_previews import group_preview_windows
+from avo.timeline.cutting_previews import editor_terminal_trims, group_preview_windows
+
+
+def test_editor_terminal_trims_require_the_exact_retained_source_occurrence():
+    from avo.timeline.cutting_service import consolidate_removals
+
+    clock = {"num": 1, "den": 1000}
+    original = {
+        "segments": [
+            {
+                "segmentId": "original-take",
+                "sourceId": "raw",
+                "in": {"ticks": 0, "timebase": clock},
+                "out": {"ticks": 1000, "timebase": clock},
+            }
+        ]
+    }
+    edits = [
+        {
+            "segmentId": "original-take",
+            "occurrenceId": identity,
+            "removeRange": {
+                "sourceId": "raw",
+                "startTicks": first,
+                "endTicksExclusive": last,
+                "timebase": clock,
+            },
+        }
+        for identity, first, last in (("opening", 0, 80), ("ending", 920, 1000))
+    ]
+    candidate = consolidate_removals(original, edits)
+    assert editor_terminal_trims(original, candidate, edits) == [
+        (True, "opening"),
+        (False, "ending"),
+    ]
+    candidate["segments"][0]["out"]["ticks"] = 921
+    assert editor_terminal_trims(original, candidate, edits) == [(True, "opening")]
+    candidate["segments"][0]["segmentId"] = "another-take-cut-1"
+    assert editor_terminal_trims(original, candidate, edits) == []
 
 
 def test_physical_speech_clock_maps_exclude_mix_beds_but_keep_raw_endpoints():

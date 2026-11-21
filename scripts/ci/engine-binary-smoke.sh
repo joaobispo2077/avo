@@ -124,6 +124,14 @@ done
 echo "smoke: avo runtime --help"
 "$LAUNCHER" runtime --help >/dev/null
 
+if [[ -f "$ROOT/schemas/avo.preparation.schema.json" ]]; then
+  echo "smoke: source preparation commands and bundled contracts (no model)"
+  "$LAUNCHER" preparation --help >/dev/null
+  "$LAUNCHER" preparation coverage --help >/dev/null
+  "$LAUNCHER" preparation recover --help >/dev/null
+  "$LAUNCHER" preparation recover-decide --help >/dev/null
+fi
+
 echo "smoke: native OTIO reader, public staging, plugin isolation and licenses"
 OTIO_ENGINE="$LAUNCHER"
 OTIO_WORK="$SMOKE_WORK/otio"
@@ -165,6 +173,128 @@ assert json.load(open(sys.argv[1], encoding='utf-8'))['status'] == 'bypassed'
 assert not (Path(sys.argv[2]).parent / 'edit' / 'briefstart').exists()
 print('briefstart raw/no-reference read-only smoke ok')
 " "$BRIEF_JSON" "$BRIEF_PROJECT"
+
+if [[ -f "$ROOT/schemas/avo.sfx-provider.schema.json" ]]; then
+  echo "smoke: provider sound favorites and bundled request schema (metadata only)"
+  SFX_VIEW="$UNPACK/sfx-favorites.json"
+  SFX_REQUEST="$UNPACK/sfx-favorite-request.json"
+  SFX_ERROR="$UNPACK/sfx-favorite-error.json"
+  AVO_ROOT= "$LAUNCHER" cli sfx favorites-show --project "$BRIEF_PROJECT" --json >"$SFX_VIEW"
+  "$PYTHON" - "$SFX_VIEW" "$SFX_REQUEST" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+view = json.loads(Path(sys.argv[1]).read_text(encoding='utf-8'))
+assert view['effect'] == 'metadata-read' and view['favorites'] == [], view
+assert view['provider'] == 'neutral' and view['documentSha256'] == 'absent', view
+Path(sys.argv[2]).write_text(json.dumps({
+    'contractVersion': '1.0.0', 'operation': 'favorite-promote',
+    'operationId': 'frozen-smoke', 'actor': 'fixture', 'reason': 'Verify bundled metadata guards',
+    'provider': 'neutral', 'expectedProviderDocument': '0' * 64,
+    'expectedGeneration': '0' * 64,
+    'selection': {'entryId': '0' * 64, 'entryRevision': '0' * 64}, 'fields': []
+}), encoding='utf-8')
+PY
+  if AVO_ROOT= "$LAUNCHER" cli sfx favorite-promote --project "$BRIEF_PROJECT" --request "$SFX_REQUEST" --json >"$UNPACK/sfx-unexpected.json" 2>"$SFX_ERROR"; then
+    echo "error: provider favorite promotion accepted an absent target" >&2
+    exit 1
+  fi
+  "$PYTHON" - "$SFX_ERROR" "$BRIEF_PROJECT" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+error = json.loads(Path(sys.argv[1]).read_text(encoding='utf-8'))
+assert 'Provider preferences changed' in error['message'], error
+assert not (Path(sys.argv[2]).parent / 'edit').exists()
+print('provider favorite frozen module/schema/read-only guards ok')
+PY
+fi
+
+echo "smoke: default craft views and bundled optional worker scripts"
+AVO_ROOT= "$LAUNCHER" cli animation plan-show --project "$BRIEF_PROJECT" --json >"$UNPACK/motion-plan.json"
+AVO_ROOT= "$LAUNCHER" cli timeline-export status --project "$BRIEF_PROJECT" --json >"$UNPACK/editor-targets.json"
+AVO_ROOT= "$LAUNCHER" cli sfx show --project "$BRIEF_PROJECT" --json >"$UNPACK/sound-catalogue.json"
+"$PYTHON" - "$UNPACK" "$BRIEF_PROJECT" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+root = Path(sys.argv[1])
+motion = json.loads((root / 'motion-plan.json').read_text(encoding='utf-8'))
+editor = json.loads((root / 'editor-targets.json').read_text(encoding='utf-8'))
+sound = json.loads((root / 'sound-catalogue.json').read_text(encoding='utf-8'))
+assert motion['effect'] == 'metadata-read', motion
+assert motion['snapshot']['items'] == motion['snapshot']['storyboardCards'] == [], motion
+assert editor['profiles'] and all(row['status'] == 'unqualified' for row in editor['profiles']), editor
+assert sound['effect'] == 'metadata-read' and sound['coverage']['total'] == 0, sound
+assert not (Path(sys.argv[2]).parent / 'edit').exists()
+for worker in ('clap_embeddings_worker.py', 'visual_motion_worker.py'):
+    assert any(root.rglob(worker)), f'missing bundled optional worker {worker}'
+for lock in ('sfx-clap-cpu-windows.requirements.txt', 'visual-motion-cpu-windows.requirements.txt'):
+    assert any(root.rglob(lock)), f'missing bundled optional runtime lock {lock}'
+print('default craft views verify without initialized media or model runtimes')
+PY
+
+if [[ -f "$ROOT/schemas/avo.preparation.schema.json" ]]; then
+  echo "smoke: source preparation command and bundled schema (no model execution)"
+  "$LAUNCHER" preparation --help >/dev/null
+  PREPARATION_REQUEST="$UNPACK/preparation-coverage-request.json"
+  PREPARATION_ERROR="$UNPACK/preparation-coverage-error.json"
+  "$PYTHON" - "$PREPARATION_REQUEST" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+Path(sys.argv[1]).write_text(json.dumps({
+    'contractVersion': '1.0.0', 'operation': 'coverage',
+    'analysisRef': {'locator': 'documents/source-analysis/absent.json', 'sha256': '0' * 64},
+}), encoding='utf-8')
+PY
+  if AVO_ROOT= "$LAUNCHER" preparation coverage --project "$BRIEF_PROJECT" --request "$PREPARATION_REQUEST" --json >"$UNPACK/preparation-unexpected.json" 2>"$PREPARATION_ERROR"; then
+    echo "error: preparation coverage accepted missing source evidence" >&2
+    exit 1
+  fi
+  "$PYTHON" - "$PREPARATION_ERROR" "$BRIEF_PROJECT" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+error = json.loads(Path(sys.argv[1]).read_text(encoding='utf-8'))
+assert error['status'] == 'invalid-input', error
+assert not (Path(sys.argv[2]).parent / 'edit').exists()
+print('preparation frozen module/schema/read-only guards ok')
+PY
+  PREPARATION_CHOICE="$UNPACK/preparation-choice-request.json"
+  "$PYTHON" - "$PREPARATION_CHOICE" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+Path(sys.argv[1]).write_text(json.dumps({
+    'contractVersion': '1.0.0', 'operation': 'recover-decide',
+    'operationId': 'package-choice', 'actor': 'smoke', 'reason': 'defer missing evidence',
+    'requestRef': {'locator': 'documents/speech-recovery-request/absent.json', 'sha256': '0' * 64},
+    'intervalIndex': 0, 'resultRef': None, 'choice': 'defer',
+    'expectedLedgerHash': '0' * 64, 'expectedDecisionRefs': [],
+}), encoding='utf-8')
+PY
+  if AVO_ROOT= "$LAUNCHER" preparation recover-decide --project "$BRIEF_PROJECT" --request "$PREPARATION_CHOICE" --json >"$UNPACK/preparation-choice-unexpected.json" 2>"$PREPARATION_ERROR"; then
+    echo "error: preparation choice accepted missing source evidence" >&2
+    exit 1
+  fi
+  "$PYTHON" - "$PREPARATION_ERROR" "$BRIEF_PROJECT" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+error = json.loads(Path(sys.argv[1]).read_text(encoding='utf-8'))
+assert error['status'] == 'invalid-input', error
+assert not (Path(sys.argv[2]).parent / 'edit').exists()
+print('preparation choice frozen module/schema/no-model guards ok')
+PY
+fi
 
 FIXTURE="$ROOT/tests/fixtures/engine/stub.wav"
 if [[ ! -f "$FIXTURE" ]]; then

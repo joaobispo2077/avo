@@ -17,13 +17,26 @@ class RepeatedTakeAnalysis:
             "routing": request["selection"],
             "preprocessing": {"sourceRange": request["source_range"]},
             "status": "pass",
-            "coverage": {"observed": True},
+            "coverage": {"observed": True, "start": 0, "end": 1},
+            "alignment": {"status": "pass", "characters": []},
+            "tools": [{"modelId": "declared-completeness-fixture"}],
+            "vad": [{"start": 0.1, "end": 0.3}, {"start": 0.5, "end": 0.7}],
             "pauseCandidates": [],
             "words": [
-                {"text": "Uma", "start": 0.1, "end": 0.2},
-                {"text": "ideia.", "start": 0.2, "end": 0.3},
-                {"text": "Uma", "start": 0.5, "end": 0.6},
-                {"text": "ideia.", "start": 0.6, "end": 0.7},
+                {"text": "Uma", "start": 0.1, "end": 0.2, "alignmentStatus": "aligned"},
+                {
+                    "text": "ideia.",
+                    "start": 0.2,
+                    "end": 0.3,
+                    "alignmentStatus": "aligned",
+                },
+                {"text": "Uma", "start": 0.5, "end": 0.6, "alignmentStatus": "aligned"},
+                {
+                    "text": "ideia.",
+                    "start": 0.6,
+                    "end": 0.7,
+                    "alignmentStatus": "aligned",
+                },
             ],
         }
 

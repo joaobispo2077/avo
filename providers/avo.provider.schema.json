@@ -119,7 +119,8 @@
         "plan": { "$ref": "https://github.com/joaobispo2077/avo/avo.model-source.schema.json#/$defs/modelPin" },
         "transcribe_paid": { "$ref": "https://github.com/joaobispo2077/avo/avo.model-source.schema.json#/$defs/modelPin" },
         "audio_embed": { "$ref": "https://github.com/joaobispo2077/avo/avo.model-source.schema.json#/$defs/modelPin" },
-        "text_embed": { "$ref": "https://github.com/joaobispo2077/avo/avo.model-source.schema.json#/$defs/modelPin" }
+        "text_embed": { "$ref": "https://github.com/joaobispo2077/avo/avo.model-source.schema.json#/$defs/modelPin" },
+        "face_detect": { "$ref": "https://github.com/joaobispo2077/avo/avo.model-source.schema.json#/$defs/modelPin" }
       }
     },
     "restoration_default_pct": {
@@ -189,6 +190,7 @@
       "properties": {
         "motion": {"$ref": "https://avo.local/avo.motion.schema.json#/$defs/config"},
         "editingCraft": {"$ref": "https://avo.local/avo.editing-craft.schema.json#/$defs/config"},
+        "sfxFavorites": {"$ref": "https://avo.local/schemas/avo.sfx-provider.schema.json#/$defs/favorites"},
         "watch": {
           "type": "object",
           "additionalProperties": false,

@@ -228,6 +228,10 @@ def render_human_review_package(package: dict[str, Any]) -> str:
             f"- Requested samples: {coverage.get('requestedSamples', 0)}",
             f"- Observed samples: {coverage.get('observedSamples', 0)}",
             f"- Failed samples: {coverage.get('failedSamples', 0)}",
+            (
+                "- The vision pass observes individual frames. Review playback for "
+                "continuous motion, lip sync and audibility."
+            ),
         ]
     )
     for hole in coverage.get("coverageHoles") or []:
@@ -825,6 +829,8 @@ def run_fix_loop(
 def write_review_package(
     directory: Path, manifest: dict[str, Any]
 ) -> tuple[Path, Path | None]:
+    from .editing_craft_qc import craft_review_markdown
+
     directory.mkdir(parents=True, exist_ok=True)
     validate_document(manifest, "avo.review-evidence.schema.json")
     json_path = atomic_write_json(directory / "review.json", manifest)
@@ -887,6 +893,7 @@ def write_review_package(
             f"- {item['kind']}: {item['status']} "
             f"(scope={scope.get('mode')}; candidate={item['candidateHash'][:12]})"
         )
+    lines.extend(craft_review_markdown(manifest))
     lines.extend(["", "## Stale dependencies", ""])
     stale = list(change_summary.get("staleDependencies") or [])
     for item in manifest.get("evidence") or []:

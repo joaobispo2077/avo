@@ -28,7 +28,8 @@ from .cutting_store import CuttingStore, CuttingStoreError
 from .cutting_take_proposals import propose_retakes
 from .lifecycle import PipelineRunStore
 from .ports import BoundaryVerificationPort
-from .store import now_iso
+from .preparation import coverage_protections, inspect_speech_coverage
+from .store import now_iso, serialized_timeline
 
 
 class CuttingServiceError(ValueError):
@@ -296,7 +297,14 @@ class CuttingService:
                 root / "adapters/understand/watch_skill.py",
                 root / "adapters/media/timeline_render.py",
                 root / "transcribe.py",
+                root / "speech_dependencies.py",
+                directory / "preparation.py",
+                directory / "preparation_recovery.py",
+                directory / "preparation_choices.py",
+                directory / "preparation_selected.py",
+                directory / "preparation_facts.py",
                 root.parent.parent / "schemas/avo.cutting.schema.json",
+                root.parent.parent / "schemas/avo.preparation.schema.json",
             ]
         )
         return {
@@ -311,12 +319,58 @@ class CuttingService:
                 "analysis": self.analysis_port.dependency_bindings()
                 if hasattr(self.analysis_port, "dependency_bindings")
                 else None,
+                "preparation": self._preparation_identity(),
             },
         }
 
     def _bind(self, **references):
         if self.workspace.pipeline_run_path.exists():
             self.run_store.bind_cutting_context(references)
+
+    def _proposal_basis(self, revision, frame_rate):
+        snapshot = revision["snapshot"]
+        return {
+            "baseCMapHash": revision["contentHash"],
+            "baseCMapRevisionId": revision["revisionId"],
+            "frameRate": frame_rate,
+            "syncRef": self._sync_ref(),
+            "policyRef": self.store.save_document(
+                make_document("policy", self.policy.payload())
+            ),
+            "sourceRefs": [
+                {
+                    "locator": source["locator"],
+                    "sha256": source["fingerprint"]["sha256"],
+                }
+                for source in snapshot["sources"]
+            ],
+        }
+
+    def _preparation_identity(self):
+        snapshot = self.store._snapshot()
+        roles = ("preparationRequests", "preparationResults", "preparationDecisions")
+        references = {role: snapshot.get(role, []) for role in roles}
+        return content_hash(references) if any(references.values()) else None
+
+    def _prepared_source(self, source, source_range, routing, sync_ref):
+        if not self.store.ledger.path.exists() or not routing:
+            return None
+        from .preparation_recovery import PreparationService
+
+        result = PreparationService(
+            self.workspace, recovery_port=self.analysis_port
+        ).source_evidence(
+            source, source_range=source_range, routing=routing, sync_ref=sync_ref
+        )
+        return result if result["status"] != "absent" else None
+
+    @staticmethod
+    def _preparation_context(analysis, prepared):
+        if prepared is not None:
+            analysis["preparationEvidence"] = {
+                key: value for key, value in prepared.items() if key != "analysis"
+            }
+        return analysis
 
     def _analysis(self, source, segment, sync_ref):
         source_ref = {
@@ -325,14 +379,23 @@ class CuttingService:
         }
         source_range = segment_range(segment)
         routing = source.get("streamMetadata", {}).get("audioSelection")
+        prepared = self._prepared_source(source, source_range, routing, sync_ref)
+        if prepared is not None and prepared["analysis"] is not None:
+            return prepared["analysis"]
         if self.analysis_port is None or not routing:
-            return {
-                "sourceRef": source_ref,
-                "status": "blocked",
-                "uncertainty": ["routed analysis unavailable"],
-                "coverage": {"observed": False},
-                "pauseCandidates": [],
-            }
+            return self._preparation_context(
+                {
+                    "sourceRef": source_ref,
+                    "routing": deepcopy(routing),
+                    "syncRef": deepcopy(sync_ref),
+                    "preprocessing": {"sourceRange": deepcopy(source_range)},
+                    "status": "blocked",
+                    "uncertainty": ["routed analysis unavailable"],
+                    "coverage": {"observed": False},
+                    "pauseCandidates": [],
+                },
+                prepared,
+            )
         result = self.analysis_port.analyze(
             Path(source["locator"]),
             selection=routing,
@@ -353,7 +416,9 @@ class CuttingService:
             raise CuttingServiceError(
                 "analysis selection or source-clock coverage differs"
             )
-        return self._contextual_analysis(source, result, sync_ref)
+        return self._preparation_context(
+            self._contextual_analysis(source, result, sync_ref), prepared
+        )
 
     def _contextual_analysis(self, source, analysis, sync_ref):
         if self.context_port is None:
@@ -400,10 +465,9 @@ class CuttingService:
         request = _validated_request(request)
         revision = self._current()
         snapshot = revision["snapshot"]
-        sync_ref = self._sync_ref()
-        policy_ref = self.store.save_document(
-            make_document("policy", self.policy.payload())
-        )
+        frame_rate = request.get("frameRate") or {"num": 30, "den": 1}
+        basis = self._proposal_basis(revision, frame_rate)
+        sync_ref = basis["syncRef"]
         scope = request.get("scope") or {}
         occurrences, edits, unobserved, analysis_refs, analyses = self._analyze_units(
             snapshot, scope, sync_ref, request
@@ -412,12 +476,17 @@ class CuttingService:
             self.policy,
             protections=self.policy.protections + self._canonical_protections(snapshot),
         )
+        retake_policy = replace(
+            protected_policy,
+            protections=protected_policy.protections
+            + self._speech_protections(analyses),
+        )
         retakes, retake_edits = propose_retakes(
             snapshot,
             analyses,
             analysis_refs=analysis_refs,
             evidence_port=self.retake_port,
-            policy=protected_policy,
+            policy=retake_policy,
         )
         occurrences.extend(retakes)
         edits.extend(retake_edits)
@@ -430,20 +499,9 @@ class CuttingService:
             snapshot,
             [edit for edit in edits if not edit.get("editorialApprovalRequired")],
         )
-        joins = audit_joins(
-            snapshot, frame_rate=request.get("frameRate") or {"num": 30, "den": 1}
-        )
-        source_refs = [
-            {"locator": source["locator"], "sha256": source["fingerprint"]["sha256"]}
-            for source in snapshot["sources"]
-        ]
+        joins = audit_joins(snapshot, frame_rate=frame_rate)
         payload = {
-            "baseCMapHash": revision["contentHash"],
-            "frameRate": request.get("frameRate") or {"num": 30, "den": 1},
-            "baseCMapRevisionId": revision["revisionId"],
-            "syncRef": sync_ref,
-            "policyRef": policy_ref,
-            "sourceRefs": source_refs,
+            **basis,
             "occurrences": occurrences,
             "contentReduction": _content_reports(request, content),
             "edits": edits,
@@ -465,9 +523,157 @@ class CuttingService:
                 "unobservedSources": sorted(set(unobserved)),
                 "joinCount": len(joins),
                 "scope": scope,
+                "speech": [
+                    {
+                        "sourceId": analysis["speechCoverage"]["binding"][
+                            "sourceRange"
+                        ]["sourceId"],
+                        "status": analysis["speechCoverage"]["status"],
+                        "coverageHash": analysis["speechCoverage"]["coverageHash"],
+                        "protectedRangeCount": len(
+                            analysis["speechCoverage"]["protectedRanges"]
+                        ),
+                        "analysisRef": analysis_refs[segment_id],
+                    }
+                    for segment_id, analysis in analyses.items()
+                ],
             },
             "policy": self.policy.payload(),
         }
+
+    @serialized_timeline(lambda self: self.workspace.timeline_dir)
+    def propose_editor_trims(
+        self, selections, *, expected_cmap, frame_rate, editor_ref
+    ):
+        """Submit exact selected removals to the ordinary cutting review workflow."""
+        revision = self._current()
+        if revision["contentHash"] != expected_cmap:
+            raise CuttingServiceError("The current cut changed before editor routing")
+        snapshot = revision["snapshot"]
+        sources = {row["sourceId"]: row for row in snapshot["sources"]}
+        occurrences, edits = [], []
+        for row in selections:
+            interval = row["removeRange"]
+            source = sources[interval["sourceId"]]
+            identity = occurrence_id(
+                source["fingerprint"]["sha256"],
+                source["sourceId"],
+                {"segmentId": row["segmentId"], "editorTrim": interval},
+            )
+            occurrences.append(
+                {
+                    "occurrenceId": identity,
+                    "sourceRange": interval,
+                    "categories": ["content-reduction"],
+                    "disposition": "needs-review",
+                    "reasons": [
+                        "Selected editor trim requires normal editorial review"
+                    ],
+                    "protections": [],
+                    "editorialApprovalRequired": True,
+                }
+            )
+            edits.append(
+                {**row, "occurrenceId": identity, "editorialApprovalRequired": True}
+            )
+        self._revalidate_protections(snapshot, edits)
+        if not edits or not consolidate_removals(snapshot, edits)["segments"]:
+            raise CuttingServiceError("Editor trims require a nonempty retained cut")
+        basis = self._proposal_basis(revision, frame_rate)
+        implementation = self._implementation_binding()
+        payload = {
+            **basis,
+            "occurrences": occurrences,
+            "edits": edits,
+            "requiredWindows": audit_joins(snapshot, frame_rate=frame_rate),
+            "scope": {"editorFeedbackRef": editor_ref},
+            "implementationBindings": {
+                **implementation,
+                "sourceAnalysisRefs": self._editor_analysis_refs(basis, implementation),
+            },
+            "status": "needs-review",
+        }
+        reference = self.store.save_document(make_document("proposal", payload))
+        self._bind(proposal=reference)
+        return reference
+
+    def _editor_analysis_refs(self, basis, implementation):
+        if not self.workspace.pipeline_run_path.exists():
+            return []
+        current = self.run_store.load()["activeRefs"].get("cutting") or {}
+        reference = current.get("proposal")
+        if reference is None:
+            return []
+        previous = self.store.load_document(reference)
+        if previous["documentType"] != "proposal":
+            raise CuttingServiceError(
+                "Active cutting analysis must belong to a proposal"
+            )
+        payload = previous["payload"]
+        bindings = payload.get("implementationBindings") or {}
+        if (
+            any(
+                payload.get(key) != basis[key]
+                for key in ("baseCMapHash", "baseCMapRevisionId", "syncRef")
+            )
+            or bindings.get("dependencies") != implementation["dependencies"]
+        ):
+            return []
+        return bindings.get("sourceAnalysisRefs", [])
+
+    @serialized_timeline(lambda self: self.workspace.timeline_dir)
+    def propose_spoken_note_exclusion(self, note):
+        """Create a normal editorial proposal for exactly one retained source occurrence."""
+        from .cutting_content_proposals import _owner, _protected
+
+        snapshot = self._current()["snapshot"]
+        interval = note["sourceRange"]
+        containing = [
+            segment
+            for segment in snapshot["segments"]
+            if _owner(interval, [segment]) is not None
+        ]
+        if len(containing) != 1:
+            raise CuttingServiceError(
+                "Spoken note needs one current retained source occurrence"
+            )
+        protections = self.policy.protections + self._canonical_protections(snapshot)
+        if _protected(interval, protections):
+            raise CuttingServiceError(
+                "Protected speech cannot become a note exclusion proposal"
+            )
+        result = self.analyze(
+            {
+                "scope": {"segmentIds": [containing[0]["segmentId"]]},
+                "editorialUnits": [
+                    {
+                        "unitId": note["noteId"],
+                        "sourceRange": interval,
+                        "complete": True,
+                        "tangent": True,
+                        "rationale": "Explicitly selected production note speech",
+                    }
+                ],
+            }
+        )
+        if not result.get("proposalRef"):
+            raise CuttingServiceError(
+                "The selected cutting policy cannot propose note exclusion"
+            )
+        return result["proposalRef"]
+
+    @staticmethod
+    def _speech_protections(analyses):
+        from .preparation_selected import selected_evidence_protections
+
+        return tuple(
+            protection
+            for analysis in analyses.values()
+            for protection in (
+                *coverage_protections(analysis["speechCoverage"]),
+                *selected_evidence_protections(analysis),
+            )
+        )
 
     def _analyze_units(self, snapshot, scope, sync_ref, request):
         sources = {source["sourceId"]: source for source in snapshot["sources"]}
@@ -484,6 +690,16 @@ class CuttingService:
                 continue
             source = sources[segment["sourceId"]]
             analysis = self._analysis(source, segment, sync_ref)
+            analysis["speechCoverage"] = inspect_speech_coverage(
+                analysis,
+                source_ref={
+                    "locator": source["locator"],
+                    "sha256": source["fingerprint"]["sha256"],
+                },
+                source_range=segment_range(segment),
+                routing=source.get("streamMetadata", {}).get("audioSelection") or {},
+                sync_ref=sync_ref,
+            )
             analysis_ref = self.store.save_document(
                 make_document("source-analysis", analysis)
             )

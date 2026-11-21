@@ -66,6 +66,14 @@ def _video_stream(stream):
     }
 
 
+def _has_display_rotation(stream):
+    values = [entry.get("rotation") for entry in stream.get("side_data_list") or []]
+    values.append((stream.get("tags") or {}).get("rotate"))
+    return any(
+        value is not None and _number_or_none(value, float) != 0 for value in values
+    )
+
+
 def _audio_stream(stream):
     return {
         "index": int(stream.get("index", 0)),
@@ -82,6 +90,9 @@ def _audio_stream(stream):
 
 
 class FfprobeMediaAdapter:
+    def __init__(self, *, include_display_rotation=False):
+        self.include_display_rotation = include_display_rotation
+
     @staticmethod
     def verify_audio_sample_count(path, stream_index, *, expected_sha256):
         from .audio_clock import verify_audio_sample_count
@@ -190,7 +201,10 @@ class FfprobeMediaAdapter:
         for stream in probe.get("streams") or []:
             codec = stream.get("codec_type")
             if codec == "video":
-                video.append(_video_stream(stream))
+                measured = _video_stream(stream)
+                if self.include_display_rotation:
+                    measured["hasDisplayRotation"] = _has_display_rotation(stream)
+                video.append(measured)
             elif codec == "audio":
                 audio.append(_audio_stream(stream))
         duration = float((probe.get("format") or {}).get("duration") or 0)

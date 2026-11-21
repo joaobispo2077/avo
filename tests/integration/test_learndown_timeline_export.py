@@ -1,7 +1,13 @@
 from __future__ import annotations
 
+import json
+
+import pytest
+from tests.test_iteration_ledger import _iteration
+
 from avo.learndown_export import (
     build_timeline_learning_snapshot,
+    export_provider_learndown,
     export_timeline_learning_snapshot,
     load_active_timeline_learning,
 )
@@ -96,3 +102,64 @@ def test_final_learning_loads_for_new_project_without_inheriting_approval(
     assert guidance["binding"] is False
     assert guidance["inheritedApprovals"] is False
     assert guidance["snapshots"][0]["preventionRules"][0]["id"] == "source-only"
+
+
+@pytest.mark.parametrize("matches_approval", [True, False])
+def test_wrap_export_publishes_learning_only_for_approved_current_master(
+    tmp_path, monkeypatch, matches_approval
+):
+    from avo.timeline.delivery import DeliveryService
+    from avo.timeline.iterations import IterationLedgerService
+
+    raw = tmp_path / "raw"
+    raw.mkdir()
+    project = raw / "avo.project.json"
+    project.write_text(
+        json.dumps({"provider": "bishop", "videoId": "approved-video"}),
+        encoding="utf-8",
+    )
+    workspace = TimelineWorkspace.from_project(project)
+    result = IterationLedgerService(workspace).record_iteration(
+        _iteration(), actor="agent", reason="record current review"
+    )
+    delivery = DeliveryService(workspace)
+    delivery.manifest_path.parent.mkdir(exist_ok=True)
+    manifest = {
+        "state": "delivered",
+        "master": {
+            "path": str(raw / "master-v001.mp4"),
+            "sha256": "a" * 64,
+            "sizeBytes": 42,
+        },
+        "candidateSnapshot": {"sha256": "b" * 64},
+        "dependencyLockSha256": "c" * 64,
+        "review": {"candidateIdentityHash": "d" * 64},
+        "approval": {
+            "decision": "approved",
+            "checkpoint": "deliver",
+            "candidateIdentityHash": "d" * 64,
+            "candidateSha256": ("a" if matches_approval else "f") * 64,
+            "dependencyLockSha256": "c" * 64,
+        },
+    }
+    delivery.manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    monkeypatch.setattr(DeliveryService, "validate_current", lambda _self: manifest)
+    payload = {
+        "provider": "bishop",
+        "rawDir": str(raw),
+        "masterBasename": "master-v001",
+        "status": "final",
+        "generatedAt": "2026-11-19T00:00:00Z",
+    }
+
+    entry = export_provider_learndown(payload, root=tmp_path)
+    assert entry is not None
+    learning = load_active_timeline_learning(entry)
+    if matches_approval:
+        assert learning["masterFingerprint"] == {"sha256": "a" * 64, "sizeBytes": 42}
+        assert learning["candidateSnapshotHash"] == "b" * 64
+        assert learning["iterationLedgerHash"] == result["ledger"]["ledgerHash"]
+        assert learning["decisionOutcomes"][0]["learningScope"] == "project-only"
+        assert export_provider_learndown(payload, root=tmp_path) == entry
+    else:
+        assert learning is None

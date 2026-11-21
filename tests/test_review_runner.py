@@ -214,6 +214,48 @@ def test_actual_coverage_accepts_observed_frame_ranges() -> None:
     ]
 
 
+def test_explicitly_empty_watch_observations_leave_the_entire_program_unobserved():
+    result = actual_coverage(
+        {
+            "mode": "full",
+            "durationSeconds": 10,
+            "windows": [{"start": 1, "end": 4}],
+            "observedWindows": [],
+            "inspectedRanges": [],
+        },
+        required_windows=[{"start": 1, "end": 4}],
+    )
+    assert result["reviewedSeconds"] == 0
+    assert result["reviewedWindows"] == 0
+    assert result["uninspectedRanges"] == [{"start": 0.0, "end": 10.0}]
+
+
+def test_watch_coverage_checks_exact_required_intervals():
+    import pytest
+
+    from avo.timeline.ports import ToolError
+    from avo.timeline.review_runner import _validate_watch_coverage
+
+    required = [{"start": 1.0, "end": 4.0}, {"start": 5.0, "end": 6.0}]
+    matching = {
+        "mode": "full",
+        "observedWindows": [
+            {"start": 0.0, "end": 2.0},
+            {"start": 2.0, "end": 4.0},
+            {"start": 5.0, "end": 6.0},
+        ],
+    }
+    _validate_watch_coverage(matching, required)
+    with pytest.raises(ToolError, match="did not cover every required"):
+        _validate_watch_coverage(
+            {**matching, "observedWindows": [{"start": 7, "end": 8}] * 2}, required
+        )
+    with pytest.raises(ToolError, match="did not cover every required"):
+        _validate_watch_coverage(
+            {**matching, "windows": required, "observedWindows": []}, required
+        )
+
+
 def test_evidence_fusion_routes_conflicts_to_exact_human_windows() -> None:
     fused = fuse_review_evidence(
         watch_findings=[

@@ -21,6 +21,21 @@ def is_code_drawn_asset(record: dict[str, Any]) -> bool:
     ) or (isinstance(parameters, Mapping) and "codeDrawn" in parameters)
 
 
+def is_artcraft_adapter(value: object) -> bool:
+    return isinstance(value, str) and (
+        value == "artcraft" or value.startswith(("artcraft.", "artcraft-"))
+    )
+
+
+def is_artcraft_asset(record: dict[str, Any]) -> bool:
+    generator = record.get("generator")
+    parameters = record.get("parameters")
+    return (
+        isinstance(generator, Mapping)
+        and is_artcraft_adapter(generator.get("adapterId"))
+    ) or (isinstance(parameters, Mapping) and "artcraft" in parameters)
+
+
 class MediaAdmissionError(ValueError):
     def __init__(self, code: str, finding: dict[str, Any]):
         self.code = code
@@ -85,6 +100,26 @@ def _fingerprint_matches(actual: dict, expected: dict) -> bool:
     return actual["sha256"] == expected["sha256"] and (
         "sizeBytes" not in expected or actual["sizeBytes"] == expected["sizeBytes"]
     )
+
+
+def _require_generator_verification(record, verifier, label):
+    if verifier is None:
+        raise MediaAdmissionError(
+            "PROOF_MEDIA_QUARANTINED",
+            _finding(record, f"{label}-freshness-verifier-required"),
+        )
+    try:
+        verified = verifier(record)
+    except (ValueError, RuntimeError, OSError) as error:
+        raise MediaAdmissionError(
+            "PROOF_MEDIA_QUARANTINED",
+            _finding(record, f"{label}-input-stale", detail=str(error)),
+        ) from error
+    if verified != record:
+        raise MediaAdmissionError(
+            "PROOF_MEDIA_QUARANTINED",
+            _finding(record, f"{label}-verifier-record-mismatch"),
+        )
 
 
 def _verify_locator(value: dict[str, Any], *, required: bool = False) -> None:
@@ -162,6 +197,7 @@ def require_media_admission(
     known_outputs: Iterable[dict[str, Any]]
     | Callable[..., Iterable[dict[str, Any]]] = (),
     code_drawn_verifier: Callable[[dict[str, Any]], dict[str, Any]] | None = None,
+    artcraft_verifier: Callable[[dict[str, Any]], dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Admit only exact originals or recursively complete generated assets."""
     contributors = list(contributors)
@@ -237,23 +273,9 @@ def require_media_admission(
             )
         _verify_locator(record, required=True)
         if is_code_drawn_asset(record):
-            if code_drawn_verifier is None:
-                raise MediaAdmissionError(
-                    "PROOF_MEDIA_QUARANTINED",
-                    _finding(record, "code-drawn-freshness-verifier-required"),
-                )
-            try:
-                verified = code_drawn_verifier(record)
-            except (ValueError, RuntimeError, OSError) as error:
-                raise MediaAdmissionError(
-                    "PROOF_MEDIA_QUARANTINED",
-                    _finding(record, "code-drawn-input-stale", detail=str(error)),
-                ) from error
-            if verified != record:
-                raise MediaAdmissionError(
-                    "PROOF_MEDIA_QUARANTINED",
-                    _finding(record, "code-drawn-verifier-record-mismatch"),
-                )
+            _require_generator_verification(record, code_drawn_verifier, "code-drawn")
+        if is_artcraft_asset(record):
+            _require_generator_verification(record, artcraft_verifier, "artcraft")
         inputs = list(record.get("inputs") or [])
         if not inputs and not record.get("sourceFree", False):
             raise MediaAdmissionError(
