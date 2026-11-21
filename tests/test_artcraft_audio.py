@@ -168,11 +168,20 @@ def test_generated_cue_proof_locks_exact_selected_placement_once(tmp_path, monke
     workspace = SimpleNamespace(
         store=lambda _: tracks,
         raw_dir=tmp_path,
+        project_path=tmp_path / "avo.project.json",
+        video_id="current-video",
         timeline_dir=tmp_path / "edit" / "timeline",
         project={"provider": "neutral-channel"},
     )
     event = {"outputs": [source], "audioEvidence": {"sampleCount": 48000}}
-    job = {"request": {"provider": "neutral-channel"}, "inputs": [source]}
+    job = {
+        "request": {
+            "provider": "neutral-channel",
+            "context": {"kind": "provider-only"},
+        },
+        "workspace": str(tmp_path),
+        "inputs": [source],
+    }
     monkeypatch.setattr(
         artcraft_audio, "resolve_generated_audio", lambda _: (job, event)
     )
@@ -191,6 +200,26 @@ def test_generated_cue_proof_locks_exact_selected_placement_once(tmp_path, monke
         artcraft_audio.lock_generated_audio(workspace, frozen, require_applied=True)
         == frozen
     )
+    request_context = {
+        "kind": "video",
+        "videoId": workspace.video_id,
+        "project": str(workspace.project_path),
+    }
+    job["request"]["context"] = request_context
+    assert (
+        artcraft_audio.lock_generated_audio(workspace, frozen, require_applied=True)
+        == frozen
+    )
+    for change in (
+        {"videoId": "other-video"},
+        {"project": str(tmp_path / "other.project.json")},
+    ):
+        job["request"]["context"] = {**request_context, **change}
+        with pytest.raises(ValueError, match="different video"):
+            artcraft_audio.lock_generated_audio(
+                workspace, frozen, require_applied=False
+            )
+    job["request"]["context"] = {"kind": "provider-only"}
     unlocked = deepcopy(frozen)
     unlocked["canonicalInputLock"].pop("generated-audio:" + source_id)
     with pytest.raises(ValueError, match="receipt lock changed"):
