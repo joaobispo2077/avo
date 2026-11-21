@@ -682,6 +682,11 @@ manifest, rights and review files. A bundle records the fingerprints of selected
 ArtCraft inputs outside the raw workspace. The installed editor can rebuild from
 the retained native source after the temporary render backing is discarded.
 
+Cleanup verifies shared ArtCraft package versions within the selected edit tree
+and includes their manifests and declared files in the preservation set. The
+same cleanup check protects a package owned by a different provider. Native
+publication staging stays protected while the package writer owns it.
+
 Native provider publication extends the existing animation catalog. The package
 reader checks its external root, byte fingerprints, declared source roles,
 review references, rights and local parameter schema before independent source
