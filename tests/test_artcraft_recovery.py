@@ -1,5 +1,8 @@
 """An acknowledged or interrupted native operation must never run twice."""
 
+from concurrent.futures import ThreadPoolExecutor
+from threading import Event
+
 import pytest
 
 from avo import artcraft, init_project
@@ -158,6 +161,155 @@ def test_cancel_preserves_active_and_external_ownership(
         )
     assert failure.value.code == code
     assert store.head(spec["jobId"]) == active and adapter.executions == []
+
+
+def test_owned_render_cancellation_wins_without_publishing_partial_files(native_job):
+    original, spec, prepared = native_job
+    entered = Event()
+    cancel_requested = Event()
+    stop_calls = []
+
+    class OwnedApp(AuthoringApp):
+        def author_lower_third(self, job, directory):
+            directory.mkdir(parents=True)
+            (directory / "component.anicraft").write_bytes(b"partial native source")
+            entered.set()
+            assert cancel_requested.wait(5)
+            raise RuntimeError("owned render stopped")
+
+        def claim_cancellation(self, job, running, directory):
+            assert job["jobId"] == spec["jobId"]
+            assert running["operationId"] == "run"
+            assert (
+                directory
+                == original.workspace / prepared["job"]["document"].rsplit("/", 1)[0]
+            )
+
+            def stop(timeout):
+                stop_calls.append(timeout)
+                cancel_requested.set()
+                return "settled"
+
+            return stop
+
+    adapter = OwnedApp(original.workspace)
+    store = artcraft.ArtCraftJobStore(adapter.workspace)
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        rendering = executor.submit(
+            artcraft.run_authoring,
+            prepared["jobRef"],
+            expected_head=prepared["head"],
+            adapter=adapter,
+        )
+        try:
+            assert entered.wait(5)
+            running = store.head(spec["jobId"])
+            canceled = artcraft.recover_authoring(
+                prepared["jobRef"],
+                expected_head=running["eventHash"],
+                action="cancel",
+                adapter=adapter,
+            )
+            assert rendering.result(timeout=5)["state"] in {
+                "cancel-requested",
+                "cancelled",
+            }
+        finally:
+            cancel_requested.set()
+
+    assert canceled["state"] == "cancelled"
+    assert len(stop_calls) == 1 and 0 < stop_calls[0] <= 5
+    assert (
+        artcraft.recover_authoring(
+            prepared["jobRef"],
+            expected_head=running["eventHash"],
+            action="cancel",
+            adapter=adapter,
+        )
+        == canceled
+    )
+    assert len(stop_calls) == 1
+    current = store.head(spec["jobId"])
+    assert "outputs" not in current
+    assert current["partialFiles"][0]["locator"].endswith("component.anicraft")
+
+
+def test_unsettled_cancellation_records_only_a_reference_and_does_not_resend(
+    native_job,
+):
+    adapter, spec, prepared = native_job
+    store = artcraft.ArtCraftJobStore(adapter.workspace)
+    running = store.append(
+        spec["jobId"],
+        expected_head=prepared["head"],
+        event={"operationId": "run", "state": "running"},
+    )
+    calls = []
+
+    def claim(job, event, directory):
+        assert event == running
+        return lambda timeout: calls.append(timeout)
+
+    adapter.claim_cancellation = claim
+    result = artcraft.recover_authoring(
+        prepared["jobRef"],
+        expected_head=running["eventHash"],
+        action="cancel",
+        adapter=adapter,
+    )
+    assert result["state"] == "outcome-unknown"
+    assert (
+        artcraft.recover_authoring(
+            prepared["jobRef"],
+            expected_head=running["eventHash"],
+            action="cancel",
+            adapter=adapter,
+        )
+        == result
+    )
+    assert len(calls) == 1
+
+
+def test_concurrent_cancel_returns_the_pending_event_without_sending_again(native_job):
+    adapter, spec, prepared = native_job
+    store = artcraft.ArtCraftJobStore(adapter.workspace)
+    running = store.append(
+        spec["jobId"],
+        expected_head=prepared["head"],
+        event={"operationId": "run", "state": "running"},
+    )
+    sending, release = Event(), Event()
+    claims = []
+
+    def claim(job, event, directory):
+        claims.append(event["eventHash"])
+
+        def stop(timeout):
+            sending.set()
+            assert release.wait(timeout)
+            return "settled"
+
+        return stop
+
+    adapter.claim_cancellation = claim
+
+    def cancel():
+        return artcraft.recover_authoring(
+            prepared["jobRef"],
+            expected_head=running["eventHash"],
+            action="cancel",
+            adapter=adapter,
+        )
+
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        first = executor.submit(cancel)
+        try:
+            assert sending.wait(5)
+            assert cancel()["state"] == "cancel-requested"
+        finally:
+            release.set()
+        assert first.result(timeout=5)["state"] == "cancelled"
+    assert claims == [running["eventHash"]]
 
 
 def test_inspection_names_the_edited_native_parameters_and_recipe(native_job):

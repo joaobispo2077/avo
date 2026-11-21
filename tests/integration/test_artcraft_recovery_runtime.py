@@ -3,8 +3,11 @@
 import json
 import os
 import subprocess
+from concurrent.futures import ThreadPoolExecutor
 from hashlib import sha256
 from pathlib import Path
+from threading import Event, Lock
+from time import monotonic, sleep
 
 import pytest
 from PIL import Image
@@ -12,6 +15,7 @@ from tests.artcraft_fixtures import request
 from tests.integration.test_artcraft_lower_third_runtime import _job_contract
 from tests.integration.test_artcraft_modes_runtime import _fixture_command
 from tests.test_artcraft_jobs import _prepare, job_spec
+from tests.test_artcraft_profiles import effect_spec, prepare_effect
 from tests.test_reconstruction_bundle import canonical_project
 
 from avo import artcraft, init_project
@@ -228,3 +232,183 @@ def test_reconstruction_retains_native_source_for_a_fresh_installed_render(
 def _rgba_hash(path):
     with Image.open(path) as image:
         return sha256(image.convert("RGBA").tobytes()).hexdigest()
+
+
+def test_owned_effectcraft_render_stops_with_partial_evidence(tmp_path, monkeypatch):
+    entry = os.environ.get("AVO_ARTCRAFT_EFFECTCRAFT_TEST_CLI")
+    if not entry:
+        pytest.skip("Select the installed EffectCraft 0.24.1 CLI")
+    executable = Path(entry).resolve(strict=True)
+    font = (Path(os.environ["SystemRoot"]) / "Fonts" / "arial.ttf").resolve(strict=True)
+    monkeypatch.setattr(init_project, "load_provider", lambda slug: {"slug": slug})
+    runner = _OwnedEffectRunner(executable, tmp_path)
+    adapter = SelectedArtCraftAdapter(
+        observe_confinement=lambda _installed, roots: roots,
+        run_confined=runner.run,
+        claim_confined_cancellation=runner.claim,
+    )
+    defaults = {
+        "cliPath": str(executable),
+        "effectFont": str(font),
+        "readRoots": [str(font.parent)],
+    }
+    baseline = prepare_effect(
+        effect_spec(tmp_path, jobId="effect-predecessor", **defaults), adapter
+    )
+    verified = artcraft.run_authoring(
+        baseline["jobRef"], expected_head=baseline["head"], adapter=adapter
+    )
+    _, previous = artcraft.read_authoring_export(
+        baseline["jobRef"], expected_head=verified["head"]
+    )
+    interrupted = prepare_effect(
+        effect_spec(
+            tmp_path,
+            jobId="effect-interrupted",
+            budget={"seconds": 25, "files": 1024, "bytes": 32_000_000},
+            **defaults,
+        ),
+        adapter,
+    )
+    store = artcraft.ArtCraftJobStore(tmp_path)
+    with ThreadPoolExecutor(max_workers=1) as executor:
+        rendering = executor.submit(
+            artcraft.run_authoring,
+            interrupted["jobRef"],
+            expected_head=interrupted["head"],
+            adapter=adapter,
+        )
+        try:
+            runner.wait_for_partial_frame()
+            running = store.head("effect-interrupted")
+            stopped = artcraft.recover_authoring(
+                interrupted["jobRef"],
+                expected_head=running["eventHash"],
+                action="cancel",
+                adapter=adapter,
+            )
+            assert stopped["state"] == "cancelled"
+            assert rendering.result(timeout=5)["state"] in {
+                "cancel-requested",
+                "cancelled",
+            }
+        finally:
+            runner.stop_if_running()
+    canceled = store.head("effect-interrupted")
+    assert "outputs" not in canceled
+    retained = {Path(item["locator"]).name for item in canceled["partialFiles"]}
+    assert "component.ecproj" in retained and any(
+        name.startswith("partial_") for name in retained
+    )
+    assert runner.signals == 1
+    assert (
+        artcraft.read_authoring_export(
+            baseline["jobRef"], expected_head=verified["head"]
+        )[1]
+        == previous
+    )
+
+
+class _OwnedEffectRunner:
+    def __init__(self, executable, workspace):
+        self.executable = executable
+        self.workspace = workspace
+        self.started = Event()
+        self.lock = Lock()
+        self.active = None
+        self.cancelled = False
+        self.signals = 0
+
+    def run(self, binary, roots, directory, arguments, *, env, timeout):
+        assert Path(binary["locator"]) == self.executable
+        assert roots["write"] == [str(directory)] and directory.is_relative_to(
+            self.workspace
+        )
+        args = [str(self.executable), *map(str, arguments)]
+        options = {
+            "cwd": directory,
+            "env": env,
+            "stdin": subprocess.DEVNULL,
+            "stdout": subprocess.PIPE,
+            "stderr": subprocess.PIPE,
+        }
+        if self.cancelled:
+            raise RuntimeError("The test writer is already stopped")
+        if directory.name != "job-effect-interrupted" or arguments[2] != "render":
+            return subprocess.run(args, timeout=timeout, check=True, **options).stdout
+        # Widen only the synthetic source so an owned process is still writing
+        # after the test has observed a frame and reached the cancellation CAS.
+        expanded = directory / "interruption-fixture.ecproj"
+        subprocess.run(
+            [
+                str(self.executable),
+                "--project",
+                str(arguments[1]),
+                "run",
+                "comp.settings",
+                '{"width":1920,"height":1080,"duration":20}',
+                "--save-as",
+                str(expanded),
+            ],
+            timeout=5,
+            check=True,
+            **options,
+        )
+        args[args.index("--project") + 1] = str(expanded)
+        for option, value in (("--start", "0.05"), ("--end", "20"), ("--fps", "60")):
+            args[args.index(option) + 1] = value
+        with self.lock:
+            process = subprocess.Popen(args, **options)
+            self.active = process, directory, binary
+            self.started.set()
+        try:
+            stdout, stderr = process.communicate(timeout=timeout)
+            if process.returncode:
+                raise subprocess.CalledProcessError(
+                    process.returncode, args, stdout, stderr
+                )
+            return stdout
+        finally:
+            if process.poll() is None:
+                process.kill()
+                process.communicate(timeout=5)
+
+    def wait_for_partial_frame(self):
+        assert self.started.wait(10)
+        process, directory, _ = self.active
+        deadline = monotonic() + 5
+        while monotonic() < deadline and process.poll() is None:
+            if any((directory / "alpha").glob("partial_*.png")):
+                return
+            sleep(0.02)
+        pytest.fail(
+            "The installed renderer did not leave an observable active partial write"
+        )
+
+    def claim(self, job, running, directory):
+        with self.lock:
+            if self.active is None or running["jobHash"] != job["jobHash"]:
+                return None
+            process, workdir, binary = self.active
+            if (workdir, binary) != (
+                directory,
+                job["observation"]["executable"],
+            ) or process.poll() is not None:
+                return None
+
+        def stop(timeout):
+            with self.lock:
+                self.cancelled = True
+                self.signals += 1
+                process.terminate()
+            process.wait(timeout=timeout)
+            return "settled"
+
+        return stop
+
+    def stop_if_running(self):
+        if self.active is not None:
+            process, _, _ = self.active
+            if process.poll() is None:
+                process.kill()
+                process.wait(timeout=5)
