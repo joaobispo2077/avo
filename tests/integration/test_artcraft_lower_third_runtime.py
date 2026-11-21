@@ -86,9 +86,11 @@ def test_installed_anicraft_portrait_lower_third_uses_safe_mobile_placement(tmp_
             assert blank.getchannel("A").getbbox() is None
 
 
-@pytest.mark.parametrize("width,height", [(640, 360), (360, 640)])
+@pytest.mark.parametrize(
+    "width,height,reduced", [(640, 360, False), (360, 640, False), (360, 640, True)]
+)
 def test_installed_anicraft_revises_both_selected_text_slots(
-    tmp_path, monkeypatch, width, height
+    tmp_path, monkeypatch, width, height, reduced
 ):
     from tests.test_artcraft_jobs import _prepare, job_spec
 
@@ -119,7 +121,13 @@ def test_installed_anicraft_revises_both_selected_text_slots(
         observe_confinement=lambda _tool, roots: roots, run_confined=invoke
     )
     output = {**_job_contract(), "width": width, "height": height}
-    original = {"primaryText": "Clara", "secondaryText": "Producer", "font": "Arial"}
+    motion = {"motion": "hold"} if reduced else {}
+    original = {
+        "primaryText": "Clara",
+        "secondaryText": "Producer",
+        "font": "Arial",
+        **motion,
+    }
     first = _prepare(
         artcraft,
         request(),
@@ -147,7 +155,12 @@ def test_installed_anicraft_revises_both_selected_text_slots(
         == "Producer"
     )
 
-    revised = {"primaryText": "Carlos", "secondaryText": "Editor", "font": "Arial"}
+    revised = {
+        "primaryText": "Carlos",
+        "secondaryText": "Editor",
+        "font": "Arial",
+        **motion,
+    }
     second = _prepare(
         artcraft,
         request(),
@@ -176,6 +189,20 @@ def test_installed_anicraft_revises_both_selected_text_slots(
         "Editor",
     )
     assert event["outputs"][8]["sha256"] != returned["outputs"][8]["sha256"]
+    if reduced:
+        assert inspection["motion"] == "hold"
+        with pytest.raises(artcraft.ArtCraftError, match="motion differs"):
+            inspect_lower_third_source(
+                Path(returned["saved"]["locator"]),
+                output,
+                {key: value for key, value in revised.items() if key != "motion"},
+                max_bytes=4_000_000,
+            )
+        assert len({item["sha256"] for item in returned["outputs"][3:23]}) == 1
+        with Image.open(returned["outputs"][2]["locator"]) as before:
+            assert before.getchannel("A").getbbox() is None
+        with Image.open(returned["outputs"][23]["locator"]) as after:
+            assert after.getchannel("A").getbbox() is None
     assert file_fingerprint(source) == fingerprint
 
 

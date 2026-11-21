@@ -61,6 +61,27 @@ def test_lower_third_adds_a_distinct_optional_native_secondary_line(tmp_path):
     assert primary["y"] < secondary["y"] and primary["size"] > secondary["size"]
 
 
+def test_lower_third_can_hold_at_a_fixed_position_without_tweens(tmp_path):
+    from avo.adapters.artcraft_anicraft import lower_third_steps
+
+    steps = lower_third_steps(
+        _contract(),
+        {"primaryText": "Clara", "font": "Arial", "motion": "hold"},
+        tmp_path / "native.anicraft",
+        tmp_path / "white",
+    )
+    commands = {step["cmd"] for step in steps}
+    assert "timeline.create_tween" not in commands
+    assert "timeline.insert_keyframe" not in commands
+    assert [
+        step["params"]["frame"]
+        for step in steps
+        if step["cmd"] == "timeline.insert_blank_keyframe"
+    ] == [3, 23]
+    plate = next(step["params"] for step in steps if step["cmd"] == "draw.rect")
+    assert plate["x"] == 48
+
+
 def test_lower_third_rejects_blank_or_multiline_secondary_text(tmp_path):
     from avo.adapters.artcraft_anicraft import lower_third_steps
 

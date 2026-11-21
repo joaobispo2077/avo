@@ -227,6 +227,31 @@ def test_native_instance_applies_an_approved_secondary_slot_default(tmp_path):
         service._native_instance_parameters({"secondaryText": " "}, evidence)
 
 
+def test_provider_pin_uses_the_reviewed_motion_variant(tmp_path):
+    service = _video_components(tmp_path / "fixed-hold")
+    evidence = {
+        "fixtureParameters": {"primaryText": "Host", "font": "Arial", "motion": "hold"},
+        "parameterSchema": {
+            "type": "object",
+            "properties": {
+                "primaryText": {"type": "string"},
+                "motion": {"type": "string"},
+            },
+        },
+    }
+    assert service._native_instance_parameters({"primaryText": "Clara"}, evidence) == {
+        "primaryText": "Clara",
+        "font": "Arial",
+        "motion": "hold",
+    }
+    slide_review = {
+        **evidence,
+        "fixtureParameters": {"primaryText": "Host", "font": "Arial"},
+    }
+    with pytest.raises(ComponentInstanceError, match="reviewed with this motion"):
+        service._native_instance_parameters({"motion": "hold"}, slide_review)
+
+
 def test_native_upgrade_is_explicit_and_keeps_the_original_pin(
     tmp_path, native_library
 ):
