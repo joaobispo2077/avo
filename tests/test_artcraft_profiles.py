@@ -15,6 +15,7 @@ PHOTO_OPERATION = "layered-image-card"
 FIG_OPERATION = "editable-design-variant"
 DECK_OPERATION = "editable-explanation-slide"
 LIGHT_OPERATION = "reusable-photo-treatment"
+EFFECT_OPERATION = "editable-masked-lower-third"
 
 
 def photo_request(provider="fixture-provider"):
@@ -74,6 +75,44 @@ def prepare_deck(spec, adapter):
 
 def prepare_light(spec, adapter):
     return _prepare_static_profile(spec, adapter, "lightcraft", LIGHT_OPERATION)
+
+
+def effect_spec(workspace, **overrides):
+    return job_spec(
+        workspace,
+        **{
+            "authoringParameters": {"primaryText": "AVO", "font": "Arial"},
+            "output": {
+                "role": "overlay-video",
+                "format": "png-sequence",
+                "width": 320,
+                "height": 180,
+                "alpha": "straight",
+                "color": "srgb",
+                "frameRate": {"numerator": 24, "denominator": 1},
+                "frameCount": 6,
+            },
+            **overrides,
+        },
+    )
+
+
+def prepare_effect(spec, adapter):
+    brief = request(
+        provider=spec["provider"],
+        required={
+            "behavior": EFFECT_OPERATION,
+            "outputRole": "overlay-video",
+            "editable": True,
+        },
+    )
+    return _prepare(
+        artcraft,
+        brief,
+        spec,
+        adapter,
+        intent=artcraft.ArtCraftIntent("explicit", "effectcraft", (EFFECT_OPERATION,)),
+    )
 
 
 def _prepare_static_profile(spec, adapter, app, operation):
@@ -190,3 +229,9 @@ def test_lightcraft_rejects_unqualified_raw_input(tmp_path, monkeypatch):
     source.write_bytes(b"unqualified fixture RAW")
     with pytest.raises(artcraft.ArtCraftError, match="LightCraft.*original JPEG"):
         prepare_light(photo_spec(tmp_path, source), None)
+
+
+def test_effectcraft_requires_a_selected_font_source(tmp_path, monkeypatch):
+    monkeypatch.setattr(init_project, "load_provider", lambda slug: {"slug": slug})
+    with pytest.raises(artcraft.ArtCraftError, match="EffectCraft.*Arial font source"):
+        prepare_effect(effect_spec(tmp_path), None)

@@ -7,8 +7,10 @@ from pathlib import Path
 import pytest
 from PIL import Image, ImageCms
 from tests.test_artcraft_profiles import (
+    effect_spec,
     photo_spec,
     prepare_deck,
+    prepare_effect,
     prepare_fig,
     prepare_light,
     prepare_photo,
@@ -51,7 +53,23 @@ def lightcraft_adapter(tmp_path):
     )
 
 
-def _installed_adapter(tmp_path, variable, product):
+@pytest.fixture
+def effectcraft_adapter(tmp_path):
+    if not os.environ.get("AVO_ARTCRAFT_EFFECTCRAFT_TEST_CLI"):
+        pytest.skip(
+            "set AVO_ARTCRAFT_EFFECTCRAFT_TEST_CLI to the installed Windows EffectCraft 0.24.1 CLI"
+        )
+    font = (Path(os.environ["SystemRoot"]) / "Fonts" / "arial.ttf").resolve(strict=True)
+    executable, adapter = _installed_adapter(
+        tmp_path,
+        "AVO_ARTCRAFT_EFFECTCRAFT_TEST_CLI",
+        "EffectCraft 0.24.1",
+        permitted_read=(font.parent,),
+    )
+    return executable, adapter, font
+
+
+def _installed_adapter(tmp_path, variable, product, *, permitted_read=()):
     entry = os.environ.get(variable)
     if not entry:
         pytest.skip(f"set {variable} to the installed Windows {product} CLI")
@@ -59,9 +77,10 @@ def _installed_adapter(tmp_path, variable, product):
 
     def observe(_installed, roots):
         assert all(
-            Path(root).is_relative_to(tmp_path)
-            for root in roots["read"] + roots["write"]
+            Path(root).is_relative_to(tmp_path) or Path(root) in permitted_read
+            for root in roots["read"]
         )
+        assert all(Path(root).is_relative_to(tmp_path) for root in roots["write"])
         return roots
 
     def run(binary, roots, directory, arguments, *, env, timeout):
@@ -261,3 +280,44 @@ def test_native_lightcraft_recovers_isolated_treatment_from_snapshot(
     assert review["standalone"]["nativeLibrary"]["restoreAs"] == "catalog.snap"
     assert review["standalone"]["nativeLibrary"]["original"] == original
     assert "generatedStillRef" not in review["standalone"]
+
+
+def test_native_effectcraft_reopens_mask_and_renders_exact_partial_span(
+    tmp_path, monkeypatch, effectcraft_adapter
+):
+    executable, adapter, font = effectcraft_adapter
+    monkeypatch.setattr(init_project, "load_provider", lambda slug: {"slug": slug})
+    prepared = prepare_effect(
+        effect_spec(
+            tmp_path,
+            cliPath=str(executable),
+            effectFont=str(font),
+            readRoots=[str(font.parent)],
+        ),
+        adapter,
+    )
+    exported = artcraft.run_authoring(
+        prepared["jobRef"], expected_head=prepared["head"], adapter=adapter
+    )
+    job, event = artcraft.read_authoring_export(
+        prepared["jobRef"], expected_head=exported["head"]
+    )
+    assert job["observation"]["release"] == "0.24.1"
+    assert job["inputs"] == [file_fingerprint(font)]
+    assert Path(event["saved"]["locator"]).name == "component.ecproj"
+    assert len(event["outputs"]) == 6
+    for frame in event["outputs"]:
+        with Image.open(frame["locator"]) as image:
+            assert image.getpixel((10, 10)) == (0, 0, 0, 0)
+            assert image.getpixel((270, 154)) == (22, 78, 99, 255)
+            assert any(
+                pixel == (255, 255, 255, 255) for _, pixel in image.getcolors(57600)
+            )
+    review = artcraft.describe_export_review(
+        prepared["jobRef"], expected_head=exported["head"]
+    )
+    assert review["standalone"]["admission"] == "standalone-review"
+    assert review["standalone"]["sourceWindow"] == {
+        "startFrame": 3,
+        "endFrameExclusive": 9,
+    }
