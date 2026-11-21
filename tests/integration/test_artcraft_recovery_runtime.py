@@ -1,5 +1,6 @@
 """Retain real installed-editor outputs after a lost authoring response."""
 
+import json
 import os
 import subprocess
 from pathlib import Path
@@ -7,22 +8,28 @@ from pathlib import Path
 import pytest
 from tests.artcraft_fixtures import request
 from tests.integration.test_artcraft_lower_third_runtime import _job_contract
+from tests.integration.test_artcraft_modes_runtime import _fixture_command
 from tests.test_artcraft_jobs import _prepare, job_spec
 
 from avo import artcraft, init_project
 from avo.adapters.artcraft import SelectedArtCraftAdapter
 from avo.adapters.artcraft_anicraft import inspect_lower_third_source
+from avo.mcp.bridge import run_cli
 
 pytestmark = pytest.mark.integration
+
+
+def _installed_cli():
+    executable = os.environ.get("AVO_ARTCRAFT_ANICRAFT_TEST_CLI")
+    if not executable:
+        pytest.skip("Select the installed AniCraft 0.2.1 CLI")
+    return Path(executable).resolve(strict=True)
 
 
 def test_installed_anicraft_save_is_retained_when_the_runner_loses_its_reply(
     tmp_path, monkeypatch
 ):
-    executable = os.environ.get("AVO_ARTCRAFT_ANICRAFT_TEST_CLI")
-    if not executable:
-        pytest.skip("Select the installed AniCraft 0.2.1 CLI")
-    cli = Path(executable).resolve(strict=True)
+    cli = _installed_cli()
     monkeypatch.setattr(init_project, "load_provider", lambda slug: {"slug": slug})
     calls = []
 
@@ -80,3 +87,59 @@ def test_installed_anicraft_save_is_retained_when_the_runner_loses_its_reply(
             adapter=None,
         )
     assert calls == ["new", "exec", "run"]
+
+
+def test_installed_anicraft_stale_source_reports_the_edited_title_through_cli(
+    tmp_path, monkeypatch
+):
+    cli = _installed_cli()
+    monkeypatch.setattr(init_project, "load_provider", lambda slug: {"slug": slug})
+    adapter = SelectedArtCraftAdapter(
+        observe_confinement=lambda _tool, roots: roots, run_confined=_fixture_command
+    )
+    spec = job_spec(
+        tmp_path,
+        cliPath=str(cli),
+        output=_job_contract(),
+        authoringParameters={"primaryText": "Original speaker", "font": "Arial"},
+    )
+    selection = _prepare(artcraft, request(), spec, adapter)
+    rendered = artcraft.run_authoring(
+        selection["jobRef"], expected_head=selection["head"], adapter=adapter
+    )
+    store = artcraft.ArtCraftJobStore(tmp_path)
+    exported = store.head(spec["jobId"])
+    native = Path(exported["saved"]["locator"])
+    editable = json.loads(native.read_bytes())
+    artwork = editable["document"]["library"][0]["timeline"]["layers"][0]["keyframes"][
+        0
+    ]["elements"]
+    label = next(
+        element["kind"]["Text"] for element in artwork if "Text" in element["kind"]
+    )
+    label["text"] = "Edited speaker"
+    native.write_text(json.dumps(editable), encoding="utf-8")
+
+    inspected = run_cli(
+        [
+            "artcraft",
+            "inspect",
+            "--job",
+            rendered["jobRef"],
+            "--expected-head",
+            rendered["head"],
+            "--json",
+        ]
+    )
+    assert inspected.ok, inspected.stderr
+    assert inspected.parsed_json["status"] == "stale"
+    (change,) = inspected.parsed_json["changes"]
+    assert change["recordedFiles"] == [exported["saved"]]
+    assert change["parameterChanges"] == [
+        {
+            "name": "primaryText",
+            "recorded": "Original speaker",
+            "observed": "Edited speaker",
+        }
+    ]
+    assert store.head(spec["jobId"]) == exported

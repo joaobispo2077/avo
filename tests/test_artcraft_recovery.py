@@ -158,3 +158,46 @@ def test_cancel_preserves_active_and_external_ownership(
         )
     assert failure.value.code == code
     assert store.head(spec["jobId"]) == active and adapter.executions == []
+
+
+def test_inspection_names_the_edited_native_parameters_and_recipe(native_job):
+    adapter, spec, prepared = native_job
+    rendered = artcraft.run_authoring(
+        prepared["jobRef"], expected_head=prepared["head"], adapter=adapter
+    )
+    store = artcraft.ArtCraftJobStore(adapter.workspace)
+    exported = store.head(spec["jobId"])
+    native = adapter.workspace / prepared["job"]["document"]
+    native.write_bytes(b"operator edited title")
+    native.with_name("recipe.json").write_bytes(b"operator edited recipe")
+
+    def inspect_edit(job, path):
+        assert job["authoringParameters"] is None and path == native
+        return {"editableText": "Revised speaker", "fontFamily": "Arial"}
+
+    inspected = artcraft.inspect_authoring(
+        rendered["jobRef"],
+        expected_head=rendered["head"],
+        source_inspector=inspect_edit,
+    )
+    assert inspected["status"] == "stale"
+    assert inspected["changes"] == [
+        {
+            "area": "nativeDocument",
+            "recordedFiles": [exported["saved"]],
+            "actions": ["author-new-revision", "review-native-design"],
+            "parameterChanges": [
+                {
+                    "name": "primaryText",
+                    "recorded": "Speaker",
+                    "observed": "Revised speaker",
+                }
+            ],
+        },
+        {
+            "area": "outputs",
+            "recordedFiles": [exported["recipe"]],
+            "actions": ["rebuild-export", "review-export"],
+        },
+    ]
+    assert store.head(spec["jobId"]) == exported and len(adapter.executions) == 2
