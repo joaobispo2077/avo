@@ -79,3 +79,33 @@ def test_selected_wheel_contains_only_packaged_artcraft_knowledge_and_integratio
             Path(name).suffix.casefold() in _NATIVE_EXECUTABLE_SUFFIXES
             for name in names
         )
+
+
+@pytest.mark.integration
+def test_selected_portable_engine_reads_catalog_without_vendor_programs(tmp_path):
+    selected = os.environ.get("AVO_ARTCRAFT_ENGINE_DIR")
+    if not selected:
+        pytest.skip(
+            "Select the unpacked local AVO engine using AVO_ARTCRAFT_ENGINE_DIR"
+        )
+    directory = Path(selected).resolve(strict=True)
+    launcher = directory / ("avo.exe" if os.name == "nt" else "avo")
+    vendors = {item["app"] for item in catalog()["profiles"]}
+    files = [item for item in directory.rglob("*") if item.is_file()]
+    assert not any(
+        path.suffix.casefold() in _NATIVE_EXECUTABLE_SUFFIXES
+        and path.stem.casefold().removesuffix("-cli") in vendors
+        for path in files
+    )
+    assert sum(path.name == "avo.artcraft.schema.json" for path in files) == 1
+    result = subprocess.run(
+        [str(launcher), "cli", "artcraft", "catalog", "--app", "figcraft", "--json"],
+        cwd=tmp_path,
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        encoding="utf-8",
+        check=True,
+        timeout=20,
+    )
+    assert json.loads(result.stdout) == catalog(app="figcraft")
+    assert list(tmp_path.iterdir()) == []
