@@ -281,11 +281,32 @@ def _application_release(product, app):
 class SelectedArtCraftAdapter:
     """Observe the selected installation and require independently verified confinement."""
 
-    def __init__(self, observe_confinement=None, run_confined=None, open_confined=None):
+    def __init__(
+        self,
+        observe_confinement=None,
+        run_confined=None,
+        open_confined=None,
+        claim_confined_cancellation=None,
+    ):
         self._observe_confinement = observe_confinement
         self._run_confined = run_confined
         self._open_confined = open_confined
+        self._claim_confined_cancellation = claim_confined_cancellation
         self._registry_observation = None
+
+    def claim_cancellation(self, job, running, directory):
+        """Obtain a stop callback for this exact supervised run without stopping it yet.
+
+        A callback returns "settled" only after the reserved run can no longer
+        start a command, its owned processes are gone, and its writes have stopped.
+        """
+        if (
+            self._run_confined is None
+            or self._claim_confined_cancellation is None
+            or job["observation"]["mode"] != "cli"
+        ):
+            return None
+        return self._claim_confined_cancellation(job, running, directory)
 
     def _selected_registry(self, installed, scope, mode):
         key = content_hash({"installation": installed, "scope": scope, "mode": mode})

@@ -75,6 +75,13 @@ _FIG_VARIANT_SCOPE = {"app": "figcraft", "operations": ["editable-design-variant
 _DECK_SLIDE_SCOPE = {"app": "deckcraft", "operations": ["editable-explanation-slide"]}
 _FIXED_STILL_SCOPES = (_FIG_VARIANT_SCOPE, _DECK_SLIDE_SCOPE)
 _STILL_SCOPES = (_STILL_CARD_SCOPE, *_PHOTO_SCOPES, *_FIXED_STILL_SCOPES)
+_STILL_OUTPUT_NAMES = {
+    "vectorcraft": "card.png",
+    "photocraft": "photo.png",
+    "lightcraft": "photo.png",
+    "figcraft": "design.png",
+    "deckcraft": "slide.png",
+}
 _VECTOR_EMBLEM_SCOPE = {"app": "vectorcraft", "operations": ["vector-emblem"]}
 _ANIMATED_EMBLEM_SCOPE = {"app": "anicraft", "operations": ["animate-vector-emblem"]}
 _EFFECT_MASK_SCOPE = {
@@ -1613,16 +1620,89 @@ def _inspect_edited_parameters(job, reference, source_inspector):
 
 
 def recover_authoring(job_ref, *, expected_head, action="inspect", adapter=None):
-    """Inspect retained evidence or explicitly retry or cancel an unstarted job."""
+    """Inspect retained evidence, retry exactly, or cancel known owned work."""
     if action == "retry":
         return run_authoring(job_ref, expected_head=expected_head, adapter=adapter)
     if action == "cancel":
-        return _cancel_prepared_authoring(job_ref, expected_head)
+        return _cancel_authoring(job_ref, expected_head, adapter)
     if action != "inspect":
         raise ArtCraftError(
             "Select inspect, retry, or cancel to recover the ArtCraft job"
         )
     return _summarize_recovery(job_ref, expected_head)
+
+
+def _cancel_authoring(job_ref, expected_head, adapter):
+    store, job, head = _selected_job(job_ref)
+    if _active_cancel_replay(store, job, head, expected_head):
+        return _inspection_result(store, job, head)
+    if head["state"] != "running":
+        return _cancel_prepared_authoring(job_ref, expected_head)
+    return _cancel_active_authoring(store, job, expected_head, adapter)
+
+
+def _cancel_active_authoring(store, job, expected_head, adapter):
+    with store.writer():
+        head = store.head(job["jobId"])
+        if _active_cancel_replay(store, job, head, expected_head):
+            return _inspection_result(store, job, head)
+        if head["eventHash"] != expected_head:
+            raise _changed_job_head()
+        stop, directory = _claim_active_writer(store, job, head, adapter)
+        requested = store.append(
+            job["jobId"],
+            expected_head=expected_head,
+            event={"operationId": "request-cancel", "state": "cancel-requested"},
+        )
+    return _settle_active_cancellation(store, job, requested, directory, stop)
+
+
+def _claim_active_writer(store, job, head, adapter):
+    directory = _bounded_path(
+        store.workspace, _authoring_export_directory(store, job), "active job output"
+    )
+    claim = getattr(adapter, "claim_cancellation", None)
+    stop = None
+    if job["observation"]["mode"] == "cli" and callable(claim):
+        stop = claim(job, head, directory)
+    if not callable(stop):
+        _require_cancel_head(head, head["eventHash"])
+    return stop, directory
+
+
+def _active_cancel_replay(store, job, head, expected_head):
+    if head["operationId"] not in {"request-cancel", "cancel", "reconcile-cancel"}:
+        return False
+    request = store._committed_operation(job, "request-cancel")
+    return (
+        request is not None
+        and request["state"] == "cancel-requested"
+        and request["eventHash"] in {head["eventHash"], head["predecessorHash"]}
+        and expected_head
+        in {head["eventHash"], request["eventHash"], request["predecessorHash"]}
+    )
+
+
+def _settle_active_cancellation(store, job, request, directory, stop):
+    try:
+        outcome = stop(min(job["budget"]["seconds"], 5))
+    except Exception:
+        outcome = None
+    operation, state = (
+        ("cancel", "cancelled")
+        if outcome == "settled"
+        else ("reconcile-cancel", "outcome-unknown")
+    )
+    head = store.append(
+        job["jobId"],
+        expected_head=request["eventHash"],
+        event={
+            "operationId": operation,
+            "state": state,
+            "partialFiles": _recoverable_job_files(job, directory),
+        },
+    )
+    return _inspection_result(store, job, head)
 
 
 def _cancel_prepared_authoring(job_ref, expected_head):
@@ -1686,6 +1766,7 @@ def _summarize_recovery(job_ref, expected_head):
         "prepared": "run-prepared-job",
         "ready": "inspect-operator-return",
         "running": "inspect-current-owner",
+        "cancel-requested": "inspect-current-owner",
         "cancelled": "keep-cancelled",
     }
     action = actions.get(state, "prepare-fresh-job")
@@ -1717,36 +1798,34 @@ def _recovery_files(job, directory, head):
 def _recoverable_job_files(job, directory):
     budget = job["budget"]
     count = min(job["output"].get("frameCount", 0), budget["files"])
-    names = {
-        "soundcraft": (
-            "component.scraft",
-            "recipe.json",
-            "cue.wav",
-            "Audio Files/source.wav",
-        ),
-        "vectorcraft": (
-            "component.vectorcraft",
-            "recipe.json",
-            "card.png",
-            "emblem.svg",
-        ),
-        "filmcraft": ("component.fcproj", "recipe.json", "component.otio"),
-    }.get(
-        job["decision"]["scope"]["app"],
-        ("component.anicraft", "recipe.json", "handoff.json"),
-    )
-    candidates = [directory / name for name in names]
-    candidates.extend(
-        directory / "alpha" / f"frame_{index:05d}.png" for index in range(1, count + 1)
-    )
     observed, used = [], 0
-    for path in candidates[: budget["files"]]:
-        fingerprint = _recoverable_file(path, budget["bytes"] - used)
+    for relative in _recoverable_output_paths(job["decision"]["scope"], count):
+        if len(observed) >= budget["files"]:
+            break
+        fingerprint = _recoverable_file(directory / relative, budget["bytes"] - used)
         if fingerprint is None:
             continue
         observed.append(fingerprint)
         used += fingerprint["sizeBytes"]
     return observed
+
+
+def _recoverable_output_paths(scope, frame_count):
+    app = scope["app"]
+    yield "component" + _NATIVE_SUFFIXES.get(app, ".anicraft")
+    yield "recipe.json"
+    yield from {
+        "anicraft": ("handoff.json",),
+        "soundcraft": ("cue.wav", "Audio Files/source.wav"),
+        "filmcraft": ("component.otio",),
+        "vectorcraft": (_STILL_OUTPUT_NAMES["vectorcraft"], "emblem.svg"),
+    }.get(app, [_STILL_OUTPUT_NAMES[app]] if app in _STILL_OUTPUT_NAMES else [])
+    if scope == _EFFECT_MASK_SCOPE:
+        source_start = _EFFECT_SOURCE_WINDOW["startFrame"]
+        for index in range(source_start, source_start + frame_count):
+            yield f"alpha/partial_{index:05d}.png"
+    for index in range(1, frame_count + 1):
+        yield f"alpha/frame_{index:05d}.png"
 
 
 def _recoverable_file(path, remaining):
@@ -2210,26 +2289,44 @@ def _execute_prepared_job(store, job, running, directory, produce):
                 "ArtCraft input or project evidence changed while it was running"
             )
     except Exception as exc:
-        pending = store.append(
-            job["jobId"],
-            expected_head=running["eventHash"],
-            event={
-                "operationId": "reconcile-run",
-                "state": "outcome-unknown",
-                "partialFiles": _recoverable_job_files(job, directory),
-            },
+        pending, applied = _finish_authoring_run(
+            store,
+            job,
+            running,
+            directory,
+            {"operationId": "reconcile-run", "state": "outcome-unknown"},
         )
+        if not applied:
+            return _inspection_result(store, job, pending)
         raise ArtCraftError(
             "ArtCraft authoring did not produce independently verified job outputs",
             code="ARTCRAFT_OUTCOME_UNKNOWN",
             remediation=f"Inspect the retained job at head {pending['eventHash']} before attempting recovery.",
         ) from exc
-    completed = store.append(
-        job["jobId"],
-        expected_head=running["eventHash"],
-        event={"operationId": "verify-run", "state": "exported", **evidence},
+    completed, _ = _finish_authoring_run(
+        store,
+        job,
+        running,
+        directory,
+        {"operationId": "verify-run", "state": "exported", **evidence},
     )
     return _inspection_result(store, job, completed)
+
+
+def _finish_authoring_run(store, job, running, directory, event):
+    expected = running["eventHash"]
+    current = store.head(job["jobId"])
+    if _active_cancel_replay(store, job, current, expected):
+        return current, False
+    with store.writer():
+        current = store.head(job["jobId"])
+        if current["eventHash"] != expected:
+            if _active_cancel_replay(store, job, current, expected):
+                return current, False
+            raise _changed_job_head()
+        if event["state"] == "outcome-unknown":
+            event = {**event, "partialFiles": _recoverable_job_files(job, directory)}
+        return store.append(job["jobId"], expected_head=expected, event=event), True
 
 
 def _verify_authoring_result(job, directory, result):
@@ -2348,17 +2445,10 @@ def _verify_still_authoring_result(job, directory, result):
     if any(evidence[key] != value for key, value in expected.items()):
         raise ArtCraftError("ArtCraft still evidence differs from the selected canvas")
     app = job["decision"]["scope"]["app"]
-    still_name = {
-        "vectorcraft": "card.png",
-        "photocraft": "photo.png",
-        "lightcraft": "photo.png",
-        "figcraft": "design.png",
-        "deckcraft": "slide.png",
-    }[app]
     target_paths = {
         "nativeSource": directory / ("component" + _NATIVE_SUFFIXES[app]),
         "recipe": directory / "recipe.json",
-        "media": directory / still_name,
+        "media": directory / _STILL_OUTPUT_NAMES[app],
     }
     for key, path in target_paths.items():
         item = result[key]

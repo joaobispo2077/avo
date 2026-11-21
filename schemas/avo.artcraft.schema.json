@@ -378,7 +378,7 @@
         "eventHash": { "$ref": "#/$defs/hash" }
       },
       "if": { "required": ["partialFiles"] },
-      "then": { "properties": { "state": { "const": "outcome-unknown" } } }
+      "then": { "properties": { "state": { "enum": ["outcome-unknown", "cancelled"] } } }
     },
     "eventIndex": {
       "type": "object", "additionalProperties": false,
