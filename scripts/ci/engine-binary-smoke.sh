@@ -75,10 +75,19 @@ SMOKE_WORK="$SMOKE/work"
 mkdir -p "$UNPACK" "$SMOKE_WORK"
 echo "unpack: $ZIP_PATH -> $UNPACK"
 "$PYTHON" -c "
-import os, sys, zipfile
+import json, os, sys, zipfile
 from pathlib import Path
+from scripts.ci.artcraft_distribution import native_artcraft_paths
+
 destination = Path(sys.argv[2]).resolve()
+catalog = json.loads(Path(sys.argv[3]).read_text(encoding='utf-8'))
+vendors = {profile['app'] for profile in catalog['profiles']}
 with zipfile.ZipFile(sys.argv[1]) as archive:
+    unexpected = native_artcraft_paths(
+        (member.filename for member in archive.infolist() if not member.is_dir()), vendors
+    )
+    if unexpected:
+        raise SystemExit(f'error: zip contains native ArtCraft software: {unexpected}')
     for member in archive.infolist():
         target = (destination / member.filename).resolve()
         if not target.is_relative_to(destination):
@@ -89,7 +98,7 @@ with zipfile.ZipFile(sys.argv[1]) as archive:
             mode = (member.external_attr >> 16) & 0o777
             if mode:
                 (destination / member.filename).chmod(mode)
-" "$ZIP_PATH" "$UNPACK"
+" "$ZIP_PATH" "$UNPACK" "$ROOT/src/avo/resources/artcraft/catalog.json"
 
 if [[ -f "$UNPACK/avo/avo.exe" ]]; then
   LAUNCHER="$UNPACK/avo/avo.exe"
