@@ -200,6 +200,12 @@ native evidence in the job's read roots. The mark stays editable beside the
 label. Carry the same `artworkRef` through saved-source text edits and exact
 copy-only reuse.
 
+A provider kit can retain the corresponding SVG as `identity-artwork` in
+its file manifest. Add the SVG fingerprint as `identityArtworkSha256` in the
+design review and include a rights entry for each of the native document and
+SVG. When granting reuse to another provider, both rights entries must name
+that recipient. The kit and each selected video instance keep byte-exact copies.
+
 For a saved-source text revision, set `document.state` to `saved` and
 `document.source` to the selected project-owned `.anicraft` copy. Include
 the source directory in `readRoots` and choose the instance's text and approved
