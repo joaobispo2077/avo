@@ -315,6 +315,7 @@
         "authoringParameters": { "$ref": "#/$defs/lowerThirdParameters" },
         "soundCue": { "$ref": "#/$defs/soundCue" },
         "interchangeSource": { "$ref": "#/$defs/interchangeSource" },
+        "artworkRef": { "$ref": "#/$defs/exportRef" },
         "output": { "$ref": "#/$defs/output" },
         "budget": { "$ref": "#/$defs/budget" }
       }
@@ -335,6 +336,7 @@
         "authoringParameters": { "$ref": "#/$defs/lowerThirdParameters" },
         "soundCue": { "$ref": "#/$defs/soundCue" },
         "interchangeSource": { "$ref": "#/$defs/interchangeSource" },
+        "artworkRef": { "$ref": "#/$defs/exportRef" },
         "projectFingerprint": { "$ref": "#/$defs/fingerprint" },
         "canonicalHeads": { "type": "object", "maxProperties": 12, "propertyNames": { "$ref": "#/$defs/id" }, "additionalProperties": { "$ref": "#/$defs/hash" } },
         "inputs": { "type": "array", "maxItems": 16384, "items": { "$ref": "#/$defs/fingerprint" } },

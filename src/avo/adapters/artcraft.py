@@ -10,9 +10,11 @@ import sys
 from pathlib import Path
 
 from avo.artcraft import (
+    _ANIMATED_EMBLEM_SCOPE,
     _FILM_RETURN_SCOPE,
     _SOUND_CUE_SCOPE,
     _STILL_CARD_SCOPE,
+    _VECTOR_EMBLEM_SCOPE,
     ArtCraftError,
 )
 from avo.timeline.contracts import content_hash, file_fingerprint
@@ -135,8 +137,12 @@ def _runtime_environment(app="anicraft"):
     return environment
 
 
-def _command_schema_hash(executable):
-    from .artcraft_anicraft import observe_command_schema
+def _command_schema_hash(executable, *, emblem=False):
+    from .artcraft_anicraft import (
+        EMBLEM_COMMANDS,
+        LOWER_THIRD_COMMANDS,
+        observe_command_schema,
+    )
 
     path = Path(executable["locator"])
     try:
@@ -170,7 +176,8 @@ def _command_schema_hash(executable):
         raise _not_ready(
             "AniCraft CLI changed during command inspection", _installation_help()
         )
-    return content_hash(observe_command_schema(records))
+    required = EMBLEM_COMMANDS if emblem else LOWER_THIRD_COMMANDS
+    return content_hash(observe_command_schema(records, required=required))
 
 
 def _require_headless_transport(executable, mode):
@@ -268,18 +275,23 @@ class SelectedArtCraftAdapter:
         previous = self._registry_observation
         if previous is not None and previous[0] == key:
             return previous[1]
-        observed = _command_schema_hash(installed["executable"])
+        observe = _command_schema_hash
+        if scope == _ANIMATED_EMBLEM_SCOPE:
+            observed = observe(installed["executable"], emblem=True)
+        else:
+            observed = observe(installed["executable"])
         self._registry_observation = key, observed
         return observed
 
     def observe(self, *, scope, mode, roots, cli_path, app_path):
-        if scope in (_SOUND_CUE_SCOPE, _STILL_CARD_SCOPE, _FILM_RETURN_SCOPE):
-            return self._observe_specialist(scope, mode, roots, cli_path, app_path)
-        if (
-            scope["app"] != "anicraft"
-            or scope["operations"] != ["lower-third"]
-            or mode not in {"cli", "guided", "host-mcp", "json-lines"}
+        if scope in (
+            _SOUND_CUE_SCOPE,
+            _STILL_CARD_SCOPE,
+            _FILM_RETURN_SCOPE,
+            _VECTOR_EMBLEM_SCOPE,
         ):
+            return self._observe_specialist(scope, mode, roots, cli_path, app_path)
+        if not _supports_anicraft(scope, mode):
             raise _not_ready(
                 "The selected ArtCraft operation or mode has no qualified profile",
                 "Use the catalog for documented operations and mode limits.",
@@ -341,7 +353,7 @@ class SelectedArtCraftAdapter:
 
     def _observe_specialist(self, scope, mode, roots, cli_path, app_path):
         product = scope["app"]
-        label, release, observer = _specialist_profile(product)
+        label, release, observer = _specialist_profile(scope)
         if mode != "cli" or not all((self._observe_confinement, self._run_confined)):
             raise _not_ready(
                 f"{label} requires a confined CLI runner",
@@ -479,6 +491,30 @@ class SelectedArtCraftAdapter:
             invoke=invoke,
         )
 
+    def author_vector_emblem(self, job, directory):
+        from .artcraft_vectorcraft import author_vector_emblem
+
+        def invoke(workdir, *arguments, timeout):
+            return self._invoke_confined(job, workdir, arguments, timeout)
+
+        return author_vector_emblem(
+            job["output"], directory=directory, budget=job["budget"], invoke=invoke
+        )
+
+    def author_animated_emblem(self, job, directory):
+        from .artcraft_anicraft import run_animated_emblem
+
+        def invoke(workdir, *arguments, timeout):
+            return self._invoke_confined(job, workdir, arguments, timeout)
+
+        return run_animated_emblem(
+            job["output"],
+            job["inputs"][0],
+            directory=directory,
+            budget=job["budget"],
+            invoke=invoke,
+        )
+
     def plan_lower_third(self, job, directory):
         from .artcraft_anicraft import lower_third_steps
 
@@ -553,7 +589,19 @@ class SelectedArtCraftAdapter:
         )
 
 
-def _specialist_profile(product):
+def _supports_anicraft(scope, mode):
+    if scope == _ANIMATED_EMBLEM_SCOPE:
+        return mode == "cli"
+    return scope == {"app": "anicraft", "operations": ["lower-third"]} and mode in {
+        "cli",
+        "guided",
+        "host-mcp",
+        "json-lines",
+    }
+
+
+def _specialist_profile(scope):
+    product = scope["app"]
     if product == "filmcraft":
         from .artcraft_filmcraft import observe_filmcraft
 
@@ -562,6 +610,10 @@ def _specialist_profile(product):
         from .artcraft_soundcraft import observe_soundcraft_profile
 
         return "SoundCraft cue", "0.20.1", observe_soundcraft_profile
+    if scope == _VECTOR_EMBLEM_SCOPE:
+        from .artcraft_vectorcraft import observe_vector_emblem
+
+        return "VectorCraft emblem", "0.24.1", observe_vector_emblem
     from .artcraft_vectorcraft import observe_vectorcraft
 
     return "VectorCraft card", "0.24.1", observe_vectorcraft
