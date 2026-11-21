@@ -23,18 +23,36 @@ from tests.test_artcraft_provider_packages import (
 
 @pytest.fixture
 def native_library(tmp_path):
+    return _published_native_library(
+        tmp_path, "first-channel", b"\x00\xffeditable-provider-file"
+    )
+
+
+def _published_native_library(tmp_path, provider, source_bytes):
+    from avo.artcraft import seal_record
+
     source = tmp_path / "native-source"
-    source.mkdir()
+    source.mkdir(parents=True)
     native = source / "component.anicraft"
-    native.write_bytes(b"\x00\xffeditable-provider-file")
+    native.write_bytes(source_bytes)
     (source / "recipe.json").write_text("{}", encoding="utf-8")
     package = _package_from_retained_source(
         native, picture_output(), {"primaryText": "Fixture", "font": "Arial"}
     )
+    if package["provider"] != provider:
+        package = seal_record(
+            "package",
+            {
+                **{
+                    key: value for key, value in package.items() if key != "packageHash"
+                },
+                "provider": provider,
+            },
+        )
     store = tmp_path / "native-store"
     store.mkdir()
     service = ProviderAnimationService(
-        tmp_path / "catalog" / "library.json", provider="first-channel"
+        tmp_path / "catalog" / "library.json", provider=provider
     )
     pattern = _native_pattern()
     for key in ("nativePackage", "provenance", "promotionEventId"):
@@ -123,6 +141,41 @@ def test_pinned_native_instances_copy_owned_source_and_keep_parameter_revisions_
     assert first.load(one["instanceId"]) == one
     with pytest.raises(ComponentInstanceError, match="ArtCraft proof"):
         first.implementation_reference(one["instanceId"], adapter_id="hyperframes")
+
+
+def test_same_named_native_kits_resolve_within_their_approved_provider(
+    tmp_path, native_library
+):
+    first = _video_components(tmp_path / "first-channel-video")
+    other = _video_components(
+        tmp_path / "second-channel-video", provider="other-channel"
+    )
+    other_library = _published_native_library(
+        tmp_path / "other-library", "other-channel", b"\x00\xffanother-author-native"
+    )
+    first_pin = _resolve(first, native_library)
+    other_pin = _resolve(other, other_library)
+    assert (first_pin["kitId"], first_pin["kitVersion"]) == (
+        other_pin["kitId"],
+        other_pin["kitVersion"],
+    )
+    assert first_pin["nativePackage"]["provider"] == "first-channel"
+    assert other_pin["nativePackage"]["provider"] == "other-channel"
+    assert (
+        first_pin["nativePackage"]["packageHash"]
+        != other_pin["nativePackage"]["packageHash"]
+    )
+    with pytest.raises(ComponentInstanceError, match="another provider"):
+        _resolve(first, other_library, instance_id="foreign-version")
+    with pytest.raises(ComponentInstanceError, match="manifest hash"):
+        _resolve(
+            first,
+            native_library,
+            instance_id="foreign-hash",
+            manifest_hash=other_library[2],
+        )
+    assert not first.path("foreign-version").exists()
+    assert not first.path("foreign-hash").exists()
 
 
 def test_reuse_refuses_wrong_provider_manifest_and_unbounded_parameters(
