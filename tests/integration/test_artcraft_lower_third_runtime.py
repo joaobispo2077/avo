@@ -549,7 +549,8 @@ def test_installed_anicraft_guided_job_round_trips_through_avo_commands(
     assert len(list((handoff_ref.parent / "white").glob("*.png"))) == 24
 
 
-def _register_native_overlay(tmp_path, monkeypatch, cli):
+def _register_native_overlay(tmp_path, monkeypatch, cli, *, mode="cli"):
+    from tests.integration.test_artcraft_modes_runtime import _fixture_stream
     from tests.test_artcraft_jobs import _overlay_snapshots, job_spec
 
     from avo import artcraft, init_project, motion
@@ -602,6 +603,7 @@ def _register_native_overlay(tmp_path, monkeypatch, cli):
     adapter = SelectedArtCraftAdapter(
         observe_confinement=lambda _installed, roots: roots,
         run_confined=fixture_runner,
+        open_confined=_fixture_stream,
     )
     brief = request(
         context={
@@ -613,6 +615,7 @@ def _register_native_overlay(tmp_path, monkeypatch, cli):
     intent = artcraft.ArtCraftIntent("explicit", "anicraft", ("lower-third",))
     specification = job_spec(
         tmp_path,
+        mode=mode,
         output=_job_contract(),
         cliPath=str(cli),
         appPath=str(cli.with_name("anicraft.exe")),
@@ -671,8 +674,9 @@ def _register_native_overlay(tmp_path, monkeypatch, cli):
     return workspace, heads, record, job["jobRef"], rendered["head"]
 
 
+@pytest.mark.parametrize("mode", ["cli", "json-lines"])
 def test_installed_anicraft_overlay_contributes_to_full_and_window_proofs(
-    tmp_path, monkeypatch
+    tmp_path, monkeypatch, mode
 ):
     from fractions import Fraction
 
@@ -697,7 +701,7 @@ def test_installed_anicraft_overlay_contributes_to_full_and_window_proofs(
         )
     cli = Path(entry).resolve(strict=True)
     workspace, heads, record, job_ref, event_head = _register_native_overlay(
-        tmp_path, monkeypatch, cli
+        tmp_path, monkeypatch, cli, mode=mode
     )
     execution = _conformance(_execution(tmp_path, fps=Fraction(24)))
     native_output = tmp_path / "native-source-test.mkv"
