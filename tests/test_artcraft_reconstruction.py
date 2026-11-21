@@ -298,3 +298,31 @@ def test_cleanup_rechecks_shared_package_published_after_candidate_scan(
             raw, master, rimraf_runner=attempted.append, purge_session=False
         )
     assert not attempted
+
+
+@pytest.mark.parametrize("damage", ["missing", "blank"])
+def test_cleanup_refuses_damaged_shared_library_manifest(tmp_path, damage):
+    raw = tmp_path / "library-host-video"
+    raw.mkdir()
+    workspace, master = canonical_project(raw)
+    package, evidence = _approved_package(
+        tmp_path / "approved-source", "other-provider"
+    )
+    store = raw / "edit" / "shared-native-library"
+    store.mkdir()
+    target = store / retain_provider_package(package, evidence, store)
+    manifest = target / "manifest.json"
+    if damage == "missing":
+        manifest.unlink()
+    else:
+        manifest.write_text("{}", encoding="utf-8")
+    build_reconstruction_bundle(workspace, master_basename=master, actor="fixture")
+    attempted = []
+    with pytest.raises(
+        project_inventory.PreservedSetViolation, match="shared ArtCraft library"
+    ):
+        project_inventory.run_cleanup(
+            raw, master, rimraf_runner=attempted.append, purge_session=False
+        )
+    assert not attempted
+    assert (target / "files" / "component.anicraft").is_file()
