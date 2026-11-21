@@ -619,6 +619,11 @@ the exact project, video identity and raw workspace. Provider-level receipts
 can serve multiple videos within that provider. Static-card admission verifies
 the PNG representation of the selected source.
 
+ArtCraft proof admission and vector handoff recheck the exact installed
+application and CLI fingerprints from the selected job. This file validation
+is independent of command registry discovery and follows the retained artwork
+dependency when an animation uses it.
+
 The selected VectorCraft Windows 0.24.1 profile stages a fixed card recipe
 under a confined runner with plug-ins and preferences disabled. It retains
 the editable native source, its bounded inline resource envelope and the
