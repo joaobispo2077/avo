@@ -270,3 +270,31 @@ def test_cleanup_preserves_shared_native_provider_library_below_another_videos_e
         project_inventory.PreservedSetViolation, match="shared ArtCraft library"
     ):
         project_inventory.run_cleanup(raw, master, dry_run=True, purge_session=False)
+
+
+def test_cleanup_rechecks_shared_package_published_after_candidate_scan(
+    tmp_path, monkeypatch
+):
+    raw = tmp_path / "library-host-video"
+    raw.mkdir()
+    workspace, master = canonical_project(raw)
+    package, evidence = _approved_package(
+        tmp_path / "approved-source", "other-provider"
+    )
+    store = raw / "edit" / "shared-native-library"
+    store.mkdir()
+    build_reconstruction_bundle(workspace, master_basename=master, actor="fixture")
+    scan = project_inventory.scan_delete_candidates
+
+    def scan_with_arrival(raw_dir, preserved):
+        candidates, leftover = scan(raw_dir, preserved)
+        published = store / retain_provider_package(package, evidence, store)
+        return [*candidates, published / "manifest.json"], leftover
+
+    monkeypatch.setattr(project_inventory, "scan_delete_candidates", scan_with_arrival)
+    attempted = []
+    with pytest.raises(project_inventory.PreservedSetViolation, match="preserved file"):
+        project_inventory.run_cleanup(
+            raw, master, rimraf_runner=attempted.append, purge_session=False
+        )
+    assert not attempted
