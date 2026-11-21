@@ -236,7 +236,10 @@ def test_installed_anicraft_saves_reopens_and_reconstructs_a_transparent_label(
     assert source["fingerprint"] == original
     assert source["editableText"] == "Clara Caf\u00e9"
     assert source["fontFamily"] == "Arial"
-    _publish_fixture_package(tmp_path, native, output, inspect_lower_third_source)
+    provider, store, event = _publish_fixture_package(
+        tmp_path, native, output, inspect_lower_third_source
+    )
+    _assert_pinned_native_source(tmp_path, provider.path, store, event, native)
     from avo.adapters.media.artcraft_alpha import pack_alpha_sequence
 
     packed_path = tmp_path / "component.mkv"
@@ -292,24 +295,34 @@ def test_installed_anicraft_saves_reopens_and_reconstructs_a_transparent_label(
     assert next_result["frames"][8]["sha256"] != result["frames"][8]["sha256"]
 
 
-def _publish_fixture_package(tmp_path, native, output, inspect_source):
+def _publish_fixture_package(
+    tmp_path, native, output, inspect_source, *, version="1.0.0", parameters=None
+):
     from tests.test_artcraft_provider_packages import (
         _native_pattern,
         _package_from_retained_source,
     )
 
+    from avo.artcraft import seal_record
     from avo.timeline.contracts import content_hash
     from avo.timeline.provider_animation import ProviderAnimationService
 
     package = _package_from_retained_source(
-        native, output, {"primaryText": "Clara Caf\u00e9", "font": "Arial"}
+        native,
+        output,
+        parameters or {"primaryText": "Clara Caf\u00e9", "font": "Arial"},
     )
+    if version != package["componentVersion"]:
+        del package["packageHash"]
+        package["componentVersion"] = version
+        package = seal_record("package", package)
     store = tmp_path / "native-store"
-    store.mkdir()
+    store.mkdir(exist_ok=True)
     service = ProviderAnimationService(
         tmp_path / "provider" / "animation-library.json", provider="first-channel"
     )
     pattern = _native_pattern()
+    pattern["version"] = version
     for key in ("nativePackage", "provenance", "promotionEventId"):
         del pattern[key]
     options = {
@@ -334,12 +347,12 @@ def _publish_fixture_package(tmp_path, native, output, inspect_source):
     published = store / event["publishedPath"] / "files" / native.name
     assert published.read_bytes() == native.read_bytes()
     assert (
-        service.resolve_version("speaker-label", "1.0.0")["nativePackage"][
+        service.resolve_version("speaker-label", version)["nativePackage"][
             "packageHash"
         ]
         == package["packageHash"]
     )
-    _assert_pinned_native_source(tmp_path, service.path, store, event, native)
+    return service, store, event
 
 
 def _assert_pinned_native_source(tmp_path, catalog_path, store, event, native):
