@@ -3,18 +3,25 @@
 import json
 import os
 import subprocess
+from hashlib import sha256
 from pathlib import Path
 
 import pytest
+from PIL import Image
 from tests.artcraft_fixtures import request
 from tests.integration.test_artcraft_lower_third_runtime import _job_contract
 from tests.integration.test_artcraft_modes_runtime import _fixture_command
 from tests.test_artcraft_jobs import _prepare, job_spec
+from tests.test_reconstruction_bundle import canonical_project
 
 from avo import artcraft, init_project
 from avo.adapters.artcraft import SelectedArtCraftAdapter
 from avo.adapters.artcraft_anicraft import inspect_lower_third_source
 from avo.mcp.bridge import run_cli
+from avo.timeline.reconstruction import (
+    build_reconstruction_bundle,
+    verify_reconstruction_bundle,
+)
 
 pytestmark = pytest.mark.integration
 
@@ -143,3 +150,81 @@ def test_installed_anicraft_stale_source_reports_the_edited_title_through_cli(
         }
     ]
     assert store.head(spec["jobId"]) == exported
+
+
+def test_reconstruction_retains_native_source_for_a_fresh_installed_render(
+    tmp_path, monkeypatch
+):
+    cli = _installed_cli()
+    workspace, master = canonical_project(tmp_path)
+    monkeypatch.setattr(init_project, "load_provider", lambda slug: {"slug": slug})
+    adapter = SelectedArtCraftAdapter(
+        observe_confinement=lambda _tool, roots: roots, run_confined=_fixture_command
+    )
+    context = {
+        "kind": "video",
+        "project": str(workspace.project_path),
+        "videoId": workspace.video_id,
+    }
+    spec = job_spec(
+        tmp_path,
+        provider=workspace.project["provider"],
+        cliPath=str(cli),
+        output=_job_contract(),
+        authoringParameters={"primaryText": "Retained speaker", "font": "Arial"},
+    )
+    selection = _prepare(
+        artcraft, request(provider=spec["provider"], context=context), spec, adapter
+    )
+    rendered = artcraft.run_authoring(
+        selection["jobRef"], expected_head=selection["head"], adapter=adapter
+    )
+    _, event = artcraft.read_authoring_export(
+        rendered["jobRef"], expected_head=rendered["head"]
+    )
+    native = Path(event["saved"]["locator"])
+    white = native.parent / "white"
+    first = sorted(white.glob("frame_*.png"))
+    bundle = build_reconstruction_bundle(
+        workspace, master_basename=master, actor="fixture"
+    )
+    assert native.relative_to(tmp_path).as_posix() in {
+        item["path"] for item in bundle["files"]
+    }
+    assert all(
+        not item["path"].startswith(white.relative_to(tmp_path).as_posix())
+        for item in bundle["files"]
+    )
+
+    expected = [_rgba_hash(path) for path in first]
+    assert len(expected) == 24
+    for path in first:
+        path.unlink()
+    white.rmdir()
+    assert (
+        verify_reconstruction_bundle(tmp_path)["bundleSha256"] == bundle["bundleSha256"]
+    )
+    fresh = native.parent / "fresh-render"
+    subprocess.run(
+        [
+            str(cli),
+            "render-seq",
+            str(native),
+            "--out-dir",
+            str(fresh),
+            "--from",
+            "1",
+            "--to",
+            "24",
+        ],
+        cwd=native.parent,
+        capture_output=True,
+        check=True,
+        timeout=25,
+    )
+    assert [_rgba_hash(path) for path in sorted(fresh.glob("frame_*.png"))] == expected
+
+
+def _rgba_hash(path):
+    with Image.open(path) as image:
+        return sha256(image.convert("RGBA").tobytes()).hexdigest()
