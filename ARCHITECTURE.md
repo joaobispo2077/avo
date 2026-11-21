@@ -743,6 +743,11 @@ canvases. Both use the same phase clock and width-scaled typography. The
 portrait layout anchors the plate near three quarters of the canvas height
 and checks every visible alpha frame against its independently measured bounds.
 
+The optional AniCraft secondary label is a second native text element in
+the same animated symbol. Source inspection checks its outline, font and
+measured width. An approved revision can change either recorded label while
+preserving the source and the selected design's text slots.
+
 A saved-source text revision starts from an immutable job-owned copy and saves
 into a separate revision folder. The native adapter observes the selected edit
 command signatures and compares the new document with the preserved design.

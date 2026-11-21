@@ -47,6 +47,12 @@ and opaque PNG sequence stay reference-only until separately qualified. For the
 initial lower third, inspection validates the editable label, font family,
 timings, selected graphic and inline paths directly from the native document.
 The selected app's installed command signatures are captured at preparation.
+
+Set `authoringParameters.secondaryText` to add an optional editable second
+line to a new AniCraft lower third. Use one line of up to 48 characters.
+Both lines use the selected installed font, and the adapter checks that the
+secondary line fits the plate. A saved-source revision can change the text in
+the approved design's existing slots.
 The current lower-third profile supports declared 16:9 and 9:16 canvases.
 Review the text size, face and caption clearance within the selected format.
 Automated authoring uses a confined runner and verifies the saved document's
