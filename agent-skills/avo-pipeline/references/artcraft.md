@@ -98,8 +98,10 @@ a runner that independently confines the chosen roots and supports bounded
 stdin/stdout. AVO sends one fixed native command at a time, checks its reply,
 and stops before the next command on failure. The run explicitly saves a fresh
 native document and verifies reopened frames and alpha against the same
-contract as CLI batching. When the confined runner is unavailable, use the
-explicit guided route for an operator-owned handoff.
+contract as CLI batching. A verified lower-third export from this profile can
+enter the ordinary proof admission and saved-source reuse paths. When the
+confined runner is unavailable, use the explicit guided route for an
+operator-owned handoff.
 
 For an editable isolated SoundCraft cue, use `--app soundcraft --operation
 isolated-cue --mode cli` with the selected Windows 0.20.1 tools and a confined

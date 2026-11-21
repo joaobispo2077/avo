@@ -599,6 +599,11 @@ record and waits for the exact successful receipt at each step before sending
 the next command. The first failed or incomplete receipt leaves a recoverable
 job outcome and prevents subsequent commands.
 
+The qualified Windows AniCraft 0.2.1 JSON-lines lower-third export can enter
+the same proof binding and exact copy-only reuse paths as CLI batching. The
+binding still requires current app and CLI fingerprints, the retained recipe,
+and the exact video placement and timeline revisions.
+
 The explicitly selected SoundCraft cue profile accepts one external WAV and
 an exact 48 kHz stereo output contract. A confined Windows 0.20.1 CLI builds
 an owned session with one track and the built-in room reverb. The media
