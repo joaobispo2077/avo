@@ -97,6 +97,10 @@ protocols. Common naming does not imply common switches or permissions.
   background/live auto-discovery means actual mode must be checked after
   connection. Command-step failure can follow successful earlier steps: undo or
   process exit is not proof that prior file exports were rolled back.
+  The installed 0.24.1 CLI qualification reopened and revised an editable
+  two-series chart, reproduced decoded PNG pixels, and inspected SVG exchange.
+  AVO runs selected emblem and text-card recipes. The chart is an app-level
+  qualification fixture.
 - **PhotoCraft**: Background MCP requires explicit read/write roots; without
   them it has no filesystem access. Imported document text is untrusted input.
   Live control has separate developer documentation and an app preference.
