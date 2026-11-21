@@ -488,6 +488,8 @@ def _require_effect_label(spec, document_state, mode):
         )
     if "secondaryText" in parameters:
         raise ArtCraftError("The selected EffectCraft mask recipe supports one label")
+    if "motion" in parameters:
+        raise ArtCraftError("The selected EffectCraft mask recipe has fixed motion")
     text = parameters.get("primaryText", "")
     if (document_state, mode) != ("empty", "cli") or not 1 <= len(text) <= 32:
         raise ArtCraftError(
@@ -1344,8 +1346,10 @@ def _require_still_contract(request, selected, document_state, mode):
         raise ArtCraftError(
             "VectorCraft card requires the explicit editable-vector-card behavior"
         )
-    if "secondaryText" in selected.get("authoringParameters", {}):
-        raise ArtCraftError("The selected VectorCraft card supports one editable label")
+    if {"secondaryText", "motion"} & selected.get("authoringParameters", {}).keys():
+        raise ArtCraftError(
+            "The selected VectorCraft card supports one editable label with fixed placement"
+        )
     output = selected["output"]
     shape = {key: output.get(key) for key in ("role", "format", "alpha", "color")}
     if shape != {
@@ -1616,17 +1620,22 @@ def _inspect_edited_parameters(job, reference, source_inspector):
         observed = source_inspector({**job, "authoringParameters": None}, path)
     except (OSError, ValueError, RuntimeError):
         return []
-    changes = [
-        {"name": field, "recorded": parameters[field], "observed": observed[name]}
-        for field, name in (("primaryText", "editableText"), ("font", "fontFamily"))
-        if observed.get(name) is not None and observed[name] != parameters[field]
-    ]
-    recorded = parameters.get("secondaryText")
-    edited = observed.get("editableSecondaryText")
-    if recorded != edited:
-        changes.append(
-            {"name": "secondaryText", "recorded": recorded, "observed": edited}
-        )
+    return _changed_label_parameters(parameters, observed)
+
+
+def _changed_label_parameters(parameters, observed):
+    changes = []
+    for field, name in (
+        ("primaryText", "editableText"),
+        ("font", "fontFamily"),
+        ("secondaryText", "editableSecondaryText"),
+        ("motion", "motion"),
+    ):
+        recorded, edited = parameters.get(field), observed.get(name)
+        if field in {"primaryText", "font"} and edited is None:
+            continue
+        if recorded != edited:
+            changes.append({"name": field, "recorded": recorded, "observed": edited})
     return changes
 
 

@@ -172,6 +172,10 @@ def lower_third_steps(output, parameters, source, white_directory):
     """Build the selected native commands, with frame numbers in the document clock."""
     _profile_clock(output)
     scale, offset = _lower_third_layout(output)
+    hold = "motion" in parameters
+    if hold and parameters["motion"] != "hold":
+        raise ArtCraftError("AniCraft lower-third motion must select a fixed hold")
+    distance = 24 * scale
     artwork = [
         _step(
             "draw.rect",
@@ -184,6 +188,9 @@ def lower_third_steps(output, parameters, source, white_directory):
         ),
         *_lower_third_labels(parameters, scale, offset),
     ]
+    if hold:
+        for step in artwork:
+            step["params"]["x"] += distance
     return _slide_steps(
         output,
         artwork,
@@ -191,14 +198,26 @@ def lower_third_steps(output, parameters, source, white_directory):
         white_directory,
         "Speaker label",
         "Speaker plate",
-        24 * scale,
+        distance,
+        hold=hold,
     )
 
 
-def _slide_steps(output, artwork, source, white_directory, layer, symbol, distance):
+def _slide_steps(
+    output, artwork, source, white_directory, layer, symbol, distance, *, hold=False
+):
     count = output["frameCount"]
-    enter, hold = count // 8, count // 3
+    enter, visible = count // 8, count // 3
     leave, exit_end = 3 * count // 4, 7 * count // 8
+    motion_steps = []
+    if not hold:
+        motion_steps = [
+            *_move_key(visible, distance),
+            _step("timeline.create_tween", frame=enter),
+            _step("timeline.insert_keyframe", frame=leave),
+            *_move_key(exit_end, -distance),
+            _step("timeline.create_tween", frame=leave),
+        ]
     return [
         _step("layer.new", name=layer),
         _step("timeline.insert_blank_keyframe", frame=enter),
@@ -206,11 +225,7 @@ def _slide_steps(output, artwork, source, white_directory, layer, symbol, distan
         *artwork,
         _step("edit.select_all"),
         _step("modify.convert_to_symbol", name=symbol, kind="graphic"),
-        *_move_key(hold, distance),
-        _step("timeline.create_tween", frame=enter),
-        _step("timeline.insert_keyframe", frame=leave),
-        *_move_key(exit_end, -distance),
-        _step("timeline.create_tween", frame=leave),
+        *motion_steps,
         _step("timeline.insert_blank_keyframe", frame=count - 1),
         _step("file.save_as", path=str(source)),
         _step(
@@ -325,17 +340,22 @@ def _native_source_profile(source, output, parameters, *, emblem_path=None):
     if emblem_path is not None:
         return _inspect_emblem_source(paths, body, output, emblem_path)
     symbol = _native_symbol(body)
-    _require_symbol_references(body["scenes"], symbol["id"], output["frameCount"])
+    hold = _require_symbol_references(
+        body["scenes"], symbol["id"], output["frameCount"], allow_hold=True
+    )
     facts = _observed_lower_third(
         _inspect_symbol_artwork(symbol, labels=len(paths) - 1), output
     )
+    if hold:
+        facts["motion"] = "hold"
     if parameters is not None and facts != parameters:
         raise ArtCraftError(
-            "AniCraft saved editable text or font differs from the selected parameters"
+            "AniCraft saved editable text, font or motion differs from the selected parameters"
         )
     return {
         "editableText": facts["primaryText"],
         "fontFamily": facts["font"],
+        **({"motion": "hold"} if hold else {}),
         **(
             {"editableSecondaryText": facts["secondaryText"]}
             if "secondaryText" in facts
@@ -481,11 +501,15 @@ def _native_rgba(color):
     _native_numbers(list(color.values()), 4)
 
 
-def _require_symbol_references(scenes, expected_id, count, *, layer="Speaker label"):
+def _require_symbol_references(
+    scenes, expected_id, count, *, layer="Speaker label", allow_hold=False
+):
     if len(scenes) != 1:
         raise ArtCraftError("AniCraft source must contain one selected scene")
     _native_shape(scenes[0], "name timeline")
-    _require_native_keyframes(scenes[0]["timeline"], count, layer)
+    hold = _require_native_keyframes(
+        scenes[0]["timeline"], count, layer, allow_hold=allow_hold
+    )
     for reference in _native_elements(scenes[0]["timeline"]):
         _native_shape(reference, "Symbol")
         _native_shape(reference["Symbol"], "first_frame loop_mode symbol")
@@ -493,13 +517,14 @@ def _require_symbol_references(scenes, expected_id, count, *, layer="Speaker lab
             raise ArtCraftError(
                 "AniCraft source contains an unselected symbol reference"
             )
+    return hold
 
 
-def _require_native_keyframes(timeline, count, layer_name):
+def _require_native_keyframes(timeline, count, layer_name, *, allow_hold=False):
     layers = timeline["layers"]
     if [layer["name"] for layer in layers] != [layer_name, "Layer 1"]:
         raise ArtCraftError("AniCraft source has unexpected scene layers")
-    starts = [
+    starts = (
         0,
         count // 8,
         count // 3,
@@ -507,13 +532,31 @@ def _require_native_keyframes(timeline, count, layer_name):
         7 * count // 8,
         count - 1,
         count,
-    ]
-    expected = [(start, end - start) for start, end in pairwise(starts)]
-    actual = [(frame["start"], frame["duration"]) for frame in layers[0]["keyframes"]]
-    if actual != expected or any(frame["elements"] for frame in layers[1]["keyframes"]):
+    )
+    frames = layers[0]["keyframes"]
+    actual = [(frame["start"], frame["duration"]) for frame in frames]
+    held_starts = (0, count // 8, count - 1, count)
+    if any(frame["elements"] for frame in layers[1]["keyframes"]):
+        raise ArtCraftError("AniCraft source has unexpected content in the blank layer")
+    if allow_hold and actual == _keyframe_spans(held_starts):
+        _require_fixed_keyframe_contents(frames)
+        return True
+    if actual != _keyframe_spans(starts):
         raise ArtCraftError(
             "AniCraft source keyframes differ from the selected lower-third profile"
         )
+    return False
+
+
+def _keyframe_spans(starts):
+    return [(start, end - start) for start, end in pairwise(starts)]
+
+
+def _require_fixed_keyframe_contents(frames):
+    if [len(frame["elements"]) for frame in frames] != [0, 1, 0] or any(
+        frame["tween"] is not None for frame in frames
+    ):
+        raise ArtCraftError("AniCraft fixed hold contains unexpected keyframe content")
 
 
 def _inspect_symbol_artwork(symbol, *, labels):
@@ -634,6 +677,10 @@ def revise_lower_third(
         raise ArtCraftError(
             "Changing the approved font requires a separately reviewed design"
         )
+    if parameters.get("motion") != original.get("motion"):
+        raise ArtCraftError(
+            "Changing approved motion requires a separately reviewed design"
+        )
     if ("secondaryText" in parameters) != ("editableSecondaryText" in original):
         raise ArtCraftError(
             "Changing available text slots requires a separately reviewed design"
@@ -736,6 +783,7 @@ def _verified_export(
         budget,
         deadline,
         safe_bounds=safe_bounds,
+        hold=source.get("motion") == "hold",
     )
     _require_profile_budget(directory, budget)
     if file_fingerprint(native) != locked_source:
@@ -943,7 +991,9 @@ def _render_backing(call, directory, native, count, name, color):
     return frames
 
 
-def _render_matte(backings, directory, output, budget, deadline, *, safe_bounds=None):
+def _render_matte(
+    backings, directory, output, budget, deadline, *, safe_bounds=None, hold=False
+):
     target = directory / "alpha"
     names = [f"frame_{frame:05d}.png" for frame in range(1, output["frameCount"] + 1)]
     expected_names = set(names)
@@ -970,8 +1020,25 @@ def _render_matte(backings, directory, output, budget, deadline, *, safe_bounds=
         rendered.append(fingerprint)
         maximum = max(maximum, error)
         boxes.append(matte.getchannel("A").getbbox())
-    _require_motion_observation(boxes, output, safe_bounds=safe_bounds)
+    if hold:
+        _require_fixed_hold(boxes, rendered, output)
+    else:
+        _require_motion_observation(boxes, output, safe_bounds=safe_bounds)
     return rendered, maximum
+
+
+def _require_fixed_hold(boxes, rendered, output):
+    enter = len(boxes) // 8
+    if (
+        any(boxes[:enter])
+        or boxes[-1]
+        or not all(boxes[enter:-1])
+        or len({frame["sha256"] for frame in rendered[enter:-1]}) != 1
+    ):
+        raise ArtCraftError(
+            "AniCraft fixed hold differs from its clear and static phases"
+        )
+    _require_safe_area(boxes, output, None)
 
 
 def _open_matte_frame(backings, name, dimensions):

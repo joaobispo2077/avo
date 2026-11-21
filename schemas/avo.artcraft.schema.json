@@ -231,7 +231,8 @@
       "properties": {
         "primaryText": { "type": "string", "minLength": 1, "maxLength": 64 },
         "font": { "type": "string", "minLength": 1, "maxLength": 128 },
-        "secondaryText": { "type": "string", "minLength": 1, "maxLength": 48 }
+        "secondaryText": { "type": "string", "minLength": 1, "maxLength": 48 },
+        "motion": { "const": "hold" }
       }
     },
     "soundCue": {

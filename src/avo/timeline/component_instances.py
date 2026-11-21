@@ -235,6 +235,10 @@ class ComponentInstanceService:
             raise ComponentInstanceError(
                 "Select a provider design reviewed with this font"
             )
+        if resolved.get("motion") != defaults.get("motion"):
+            raise ComponentInstanceError(
+                "Select a provider design reviewed with this motion"
+            )
         self._require_native_label_lines(resolved)
         return resolved
 
