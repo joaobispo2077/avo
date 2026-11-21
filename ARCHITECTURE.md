@@ -687,6 +687,13 @@ and includes their manifests and declared files in the preservation set. The
 same cleanup check protects a package owned by a different provider. Native
 publication staging stays protected while the package writer owns it.
 
+PhotoCraft's selected layered image card uses a separately installed Windows
+0.23.1 CLI through the confined-runner port. The native package embeds the
+original raster and ICC profile separately from its editable Curves layer. The
+adapter checks the embedded asset inventory, original pixels with the
+adjustment hidden, and two independent PNG exports. Its flattened PNG is a
+standalone review artifact.
+
 Native provider publication extends the existing animation catalog. The package
 reader checks its external root, byte fingerprints, declared source roles,
 review references, rights and local parameter schema before independent source

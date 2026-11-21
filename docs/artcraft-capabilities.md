@@ -42,7 +42,7 @@ Each family's individual operations must acquire an explicit support disposition
 | EffectCraft | Layered compositions/parenting/mattes/blending; animated properties/expressions; shape/mask/text treatment; effects/styles; cameras/lights/3D; tracking/stabilization/roto; render queue | Editable masked lower third with declared easing and qualified transparent export | [Overview](https://craft.wiki/apps/effectcraft/overview/), [agents](https://craft.wiki/apps/effectcraft/ai-agents/) |
 | FilmCraft | Timeline editing, nesting and multicam; color/scopes; clip effects/motion; audio effects/mix/automation; titles/captions; export; timeline interchange | Save/reopen a bounded edited segment; inspect exchange fidelity and return through existing AVO import rules | [Overview](https://craft.wiki/apps/filmcraft/overview/), [agents](https://craft.wiki/apps/filmcraft/ai-agents/) |
 | VectorCraft | Drawing/brushes/width; path reshape/edit/combine; paint/color/materials; live/3D effects; type/spelling; artboards/layout/perspective; reusable symbols; data/graphs/variables; slices/tracing; screen/print/package output; commands/scripts | Parameterized brand emblem or label artwork with editable paths and inspected SVG/PNG exchange | [Agents](https://craft.wiki/apps/vectorcraft/ai-agents/), [command steps](https://craft.wiki/apps/vectorcraft/write-command-steps/) |
-| PhotoCraft | Layers/masks/smart objects; nondestructive adjustments; selection; layer styles; type/shapes/paths; painting/retouching; filters; color/depth/profile handling | Layered branded image card: change copy, save/reopen and inspect composited output | [Overview](https://craft.wiki/apps/photocraft/overview/), [automation](https://craft.wiki/apps/photocraft/automation/) |
+| PhotoCraft | Layers/masks/smart objects; nondestructive adjustments; selection; layer styles; type/shapes/paths; painting/retouching; filters; color/depth/profile handling | Layered image card with an editable Curves adjustment and a verified composite for review | [Overview](https://craft.wiki/apps/photocraft/overview/), [automation](https://craft.wiki/apps/photocraft/automation/) |
 | LightCraft | Photo organization/search; culling; development/color/detail; masking; retouching; crop/geometry; presets/profiles; merge; photo/contact-sheet/print/slideshow output | Apply a reusable provider photo treatment in an isolated library and inspect the exported image | [Overview](https://craft.wiki/apps/lightcraft/overview/), [agents](https://craft.wiki/apps/lightcraft/ai-agents/) |
 | FigCraft | Frames/layout/constraints; components/variants/properties; styles/variables; vectors; paints/effects; rich text; prototype behavior; developer handoff; boards | Brand card with editable layout, content variants and inspected static output; record interactivity lost in export | [Overview](https://craft.wiki/apps/figcraft/overview/), [agents](https://craft.wiki/apps/figcraft/ai-agents/) |
 | TextureCraft | 3D/UV painting; per-channel layers/masks; reusable materials; mesh-map baking; texture/channel-packed exports; preview rendering | Reusable textured object/material with native project, dependency mesh and inspected texture/preview output | [Overview](https://craft.wiki/apps/texturecraft/overview/), [agents](https://craft.wiki/apps/texturecraft/ai-agents/) |
@@ -97,6 +97,12 @@ protocols. Common naming does not imply common switches or permissions.
   them it has no filesystem access. Imported document text is untrusted input.
   Live control has separate developer documentation and an app preference.
   Preserve native layers and validate color/depth conversion for each export.
+  The selected `layered-image-card` profile was exercised on Windows 0.23.1
+  through the CLI with synthetic files. It retains the original pixel layer
+  and an editable fixed Curves adjustment in `.pcraft`. Its standalone PNG
+  preserves the source's 8-bit RGBA geometry, alpha and embedded sRGB profile.
+  The reviewed PNG flattens layers. Automatic execution requires an
+  independently confined runner.
 - **LightCraft**: App and CLI should match releases. A library cannot be open
   in both background and desktop processes. Live control is local but has no
   password per the guide, so a loopback address alone does not prove exclusive

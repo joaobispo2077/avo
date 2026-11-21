@@ -96,6 +96,7 @@
     {
       "app": "photocraft",
       "name": "PhotoCraft",
+      "retrievedOn": "2026-11-21",
       "claimedState": "documented-only",
       "release": "not-pinned",
       "platform": "not-pinned",
@@ -109,7 +110,7 @@
       "limitations": "Background MCP requires read and write roots. Live control has its own protocol and enabled app setting. Verify export color and bit depth.",
       "cli": "photocraft-cli",
       "prerequisites": "Separately installed matching app and CLI, a permitted selected mode, and task-specific inputs.",
-      "verification": "No local operation qualification recorded."
+      "verification": "Windows 0.23.1 fixture verified the layered-image-card CLI recipe with independently confined execution required. This scope produces standalone review PNGs. Other operations and modes remain documented or unverified."
     },
     {
       "app": "lightcraft",
