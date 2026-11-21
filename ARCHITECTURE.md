@@ -675,6 +675,13 @@ actions for each affected area. A checked AniCraft lower-third document also
 reports differences in its editable text and font. These observations leave
 the existing job and creator decision records intact.
 
+Reconstruction retains native job journals, declared editable sources, recipes,
+and selected ArtCraft exports. It follows generated Track references and the
+selected artwork dependency. Video-local provider packages retain their exact
+manifest, rights and review files. A bundle records the fingerprints of selected
+ArtCraft inputs outside the raw workspace. The installed editor can rebuild from
+the retained native source after the temporary render backing is discarded.
+
 Native provider publication extends the existing animation catalog. The package
 reader checks its external root, byte fingerprints, declared source roles,
 review references, rights and local parameter schema before independent source
