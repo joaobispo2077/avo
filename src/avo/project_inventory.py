@@ -1546,13 +1546,12 @@ def _run_guarded_cleanup(
     preserved = _cleanup_preserved_set(
         raw_dir, master_basename, initial_transcript, project_path=project_path
     )
-    preserved = _with_shared_artcraft(raw_dir, preserved)
-
     dests = promote_legacy_reconstruction(
         raw_dir, apply=not dry_run, project_path=project_path
     )
     preserved = _merge_reconstruction_metadata(preserved, dests)
-    delete_list, leftover = _scan_delete_candidates(raw_dir, preserved)
+    delete_list, leftover = scan_delete_candidates(raw_dir, preserved)
+    preserved = _with_shared_artcraft(raw_dir, preserved)
     if not known_target:
         _refuse_unknown_canonical_candidates(raw_dir, delete_list)
     assert_no_preserved_in_delete_list(preserved, delete_list)
