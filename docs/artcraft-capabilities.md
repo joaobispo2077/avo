@@ -10,6 +10,8 @@ ArtCraft apps and their compatible CLIs are separately user-installed tools.
 AVO distributes its own integration logic, knowledge metadata and guides only;
 it does not bundle, download, install or update ArtCraft runtimes, CLI binaries,
 installers or third-party plugins. Only the selected task's app/CLI is required.
+The release smoke check inspects each engine ZIP for known vendor apps, CLIs,
+macOS bundles and installers before unpacking it.
 If absent, readiness reports official separate-installation guidance rather
 than performing setup or asking for the whole suite.
 
