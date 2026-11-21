@@ -11,7 +11,7 @@ from avo.timeline.component_instances import (
     ComponentInstanceError,
     ComponentInstanceService,
 )
-from avo.timeline.contracts import content_hash
+from avo.timeline.contracts import content_hash, file_fingerprint
 from avo.timeline.provider_animation import ProviderAnimationService
 from tests.artcraft_fixtures import picture_output
 from tests.test_artcraft_provider_packages import (
@@ -28,7 +28,7 @@ def native_library(tmp_path):
     )
 
 
-def _published_native_library(tmp_path, provider, source_bytes):
+def _published_native_library(tmp_path, provider, source_bytes, *, share_with=()):
     from avo.artcraft import seal_record
 
     source = tmp_path / "native-source"
@@ -39,7 +39,22 @@ def _published_native_library(tmp_path, provider, source_bytes):
     package = _package_from_retained_source(
         native, picture_output(), {"primaryText": "Fixture", "font": "Arial"}
     )
-    if package["provider"] != provider:
+    if share_with:
+        rights = source / package["rightsRef"]
+        entries = json.loads(rights.read_text(encoding="utf-8"))
+        entries[0]["sharing"] = {
+            "providers": list(share_with),
+            "evidenceRef": "fixture-license",
+        }
+        rights.write_text(json.dumps(entries), encoding="utf-8")
+        fingerprint = file_fingerprint(rights)
+        manifest_entry = next(
+            item for item in package["files"] if item["path"] == rights.name
+        )
+        manifest_entry.update(
+            {key: fingerprint[key] for key in ("sha256", "sizeBytes")}
+        )
+    if package["provider"] != provider or share_with:
         package = seal_record(
             "package",
             {
@@ -176,6 +191,67 @@ def test_same_named_native_kits_resolve_within_their_approved_provider(
         )
     assert not first.path("foreign-version").exists()
     assert not first.path("foreign-hash").exists()
+
+
+def test_cross_provider_pin_requires_explicit_origin_and_fingerprinted_rights(tmp_path):
+    from avo.artcraft import ArtCraftError
+    from avo.timeline.artcraft_packages import retained_native_instance_files
+
+    shared = _published_native_library(
+        tmp_path / "original",
+        "first-channel",
+        b"published native bytes",
+        share_with=("second-channel",),
+    )
+    recipient = _video_components(tmp_path / "recipient", provider="second-channel")
+    outsider = _video_components(tmp_path / "outsider", provider="third-channel")
+    with pytest.raises(ComponentInstanceError, match="provider"):
+        _resolve(recipient, shared)
+    with pytest.raises(ComponentInstanceError, match="sharing rights"):
+        _resolve(outsider, shared, source_provider="first-channel")
+    assert not outsider.directory.exists()
+
+    instance = _resolve(recipient, shared, source_provider="first-channel")
+    assert instance["nativePackage"]["provider"] == "first-channel"
+    assert instance["nativePackage"]["sharedWith"] == "second-channel"
+    assert instance["reviewRefs"] == []
+    assert _resolve(recipient, shared, source_provider="first-channel") == instance
+    retained = retained_native_instance_files(
+        instance, recipient.workspace.raw_dir, "second-channel"
+    )
+    rights = next(
+        Path(item["locator"])
+        for item in retained
+        if item["locator"].endswith("rights.json")
+    )
+    assert json.loads(rights.read_bytes())[0]["sharing"]["providers"] == [
+        "second-channel"
+    ]
+    assert _resolve(_video_components(tmp_path / "original-project"), shared)[
+        "nativePackage"
+    ] == {
+        key: value
+        for key, value in instance["nativePackage"].items()
+        if key != "sharedWith"
+    }
+    with pytest.raises(ArtCraftError, match="pinned video instance"):
+        retained_native_instance_files(
+            instance, recipient.workspace.raw_dir, "third-channel"
+        )
+    rights.write_bytes(rights.read_bytes() + b"\n")
+    with pytest.raises(ArtCraftError, match="source has changed"):
+        retained_native_instance_files(
+            instance, recipient.workspace.raw_dir, "second-channel"
+        )
+
+
+def test_provider_package_rejects_wildcard_sharing(tmp_path):
+    from avo.artcraft import ArtCraftError
+
+    with pytest.raises(ArtCraftError, match="exact provider names"):
+        _published_native_library(
+            tmp_path, "first-channel", b"test fixture", share_with=("*",)
+        )
 
 
 def test_reuse_refuses_wrong_provider_manifest_and_unbounded_parameters(
