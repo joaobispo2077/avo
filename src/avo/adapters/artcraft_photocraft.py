@@ -4,17 +4,20 @@ import io
 import json
 import re
 import stat
-import subprocess
 from hashlib import sha256
 from pathlib import Path
-from time import monotonic
 from zipfile import BadZipFile, ZipFile
 
 from PIL import Image, ImageCms
 
 from avo.artcraft import ArtCraftError
-from avo.timeline.contracts import content_hash, file_fingerprint
+from avo.timeline.contracts import file_fingerprint
 from avo.timeline.store import write_immutable_json
+
+from .artcraft_native_cli import (
+    bounded_native_invocation,
+    observe_native_command_schema,
+)
 
 _ADD_CURVES = "layer.newAdjustmentLayer.curves"
 _HIDE_LAYERS = "layer.hideLayers"
@@ -24,41 +27,9 @@ _DIGEST = re.compile("[a-f0-9]{64}")
 
 
 def observe_photocraft(executable, environment):
-    path = Path(executable["locator"])
-    try:
-        result = subprocess.run(
-            [str(path), "commands", "--json"],
-            cwd=path.parent,
-            env=environment,
-            stdin=subprocess.DEVNULL,
-            capture_output=True,
-            check=True,
-            timeout=7,
-        )
-        if len(result.stdout) > 4 * 1024 * 1024:
-            raise ValueError("command registry exceeds its byte limit")
-        commands = {
-            item["id"]: item["params"]
-            for item in json.loads(result.stdout)
-            if item["id"] in {_ADD_CURVES, _HIDE_LAYERS}
-        }
-    except (
-        OSError,
-        subprocess.SubprocessError,
-        ValueError,
-        KeyError,
-        TypeError,
-    ) as exc:
-        raise ArtCraftError(
-            "Could not inspect the selected PhotoCraft commands",
-            code="ARTCRAFT_NOT_READY",
-        ) from exc
-    if len(commands) != 2 or file_fingerprint(path) != executable:
-        raise ArtCraftError(
-            "The selected PhotoCraft command scope or executable changed",
-            code="ARTCRAFT_NOT_READY",
-        )
-    return content_hash(commands)
+    return observe_native_command_schema(
+        executable, environment, needed={_ADD_CURVES, _HIDE_LAYERS}, label="PhotoCraft"
+    )
 
 
 def author_photo_card(job, *, directory, invoke):
@@ -78,7 +49,7 @@ def author_photo_card(job, *, directory, invoke):
         directory / "recipe.json",
         {"original": job["inputs"][0], "adjustment": _ADD_CURVES, "points": _POINTS},
     )
-    call = _photo_runner(directory, budget, invoke)
+    call = bounded_native_invocation(directory, budget, invoke, label="PhotoCraft card")
     adjustment = _create_editable_photo(call, source, native)
     _require_package(native, budget["bytes"])
     native_fingerprint = file_fingerprint(native)
@@ -150,37 +121,6 @@ def _export_photo(call, native, output, *operation):
     return call(
         "run", native, "--no-gpu", *operation, "--metadata", "none", "--out", output
     )
-
-
-def _photo_runner(directory, budget, invoke):
-    deadline = monotonic() + budget["seconds"]
-
-    def call(*arguments):
-        remaining = deadline - monotonic()
-        if remaining <= 0:
-            raise ArtCraftError("PhotoCraft card exhausted its time budget")
-        result = invoke(directory, *arguments, timeout=remaining)
-        files = tuple(directory.iterdir())
-        _require_owned_outputs(files)
-        if (
-            len(result) > 1024 * 1024
-            or len(files) > budget["files"]
-            or sum(item.stat().st_size for item in files) > budget["bytes"]
-        ):
-            raise ArtCraftError(
-                "PhotoCraft card exceeded its receipt, file or byte budget"
-            )
-        return result
-
-    return call
-
-
-def _require_owned_outputs(files):
-    if any(
-        item.resolve() != item or not item.is_file() or item.stat().st_nlink != 1
-        for item in files
-    ):
-        raise ArtCraftError("PhotoCraft created a linked or external file")
 
 
 def _require_package(path, max_bytes):
