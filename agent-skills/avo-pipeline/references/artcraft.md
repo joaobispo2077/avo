@@ -3,6 +3,12 @@
 Begin with the requested component's purpose, required editable behavior, media
 output, provider and project context. For a capability question, inspect the
 focused bundled catalog with `avo cli artcraft catalog --app <app> --json`.
+
+Open the guide for the selected operation when it is needed.
+
+- PhotoCraft, LightCraft, FigCraft and DeckCraft standalone reviews. [Still review profiles](artcraft/still-review.md)
+- EffectCraft masked lower third with a bounded transparent span. [EffectCraft review profile](artcraft/effectcraft-mask.md)
+- TextureCraft material and packed-texture exchange when qualification is requested. [TextureCraft prerequisites and file handling](artcraft/texturecraft.md)
 Catalog entries report documented behavior and the scope of its evidence.
 
 ## Assess one request

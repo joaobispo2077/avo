@@ -140,6 +140,13 @@ protocols. Common naming does not imply common switches or permissions.
 
 ## Qualification model and bounded scope
 
+The bundled catalog lists `qualifiedProfiles` for the exact operation,
+release, platform and mode tested against an installed application. A
+profile also states which execution authority must enforce its file boundary.
+The catalog reads this evidence without probing the machine. An empty list
+means local qualification is pending. Wider capability families describe
+what the vendor documents.
+
 The required operation dispositions are **documented-only**, **locally verified**,
 **unavailable** and **unsupported**. Availability and trust remain distinct from
 artifact status: authoring/exported, reproducibility-qualified, canonically
