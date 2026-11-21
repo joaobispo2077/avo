@@ -102,6 +102,18 @@ layer. The proof's `overlay-image` operation uses the same receipt, layer,
 native dimensions, placement and frame range. It holds the image on those
 frames and preserves the original audio.
 
+For a source-linked FilmCraft return, explicitly select `--app filmcraft
+--operation source-linked-timeline-return --mode cli` using the selected
+Windows 0.20.1 tools and a confined runner. Use a blank document, an
+`interchangeSource` containing one original MP4 or MOV with its canvas size,
+and a `timeline-interchange` OTIO output with the frame rate and frame count.
+The selected profile retains a native project, recipe and one picture and
+stereo audio clip linked to that original. Run `artcraft import-timeline` with
+the exact job head, target project, actor and reason to prepare and validate the
+import for review. Reported losses, unsupported treatments or a former proof
+leave the return reference-only. Activation follows the existing sync and
+creator gates.
+
 For a video job with a verified export, select an Animation component, its BMap
 cue and the linked Tracks overlay before authoring. Register the exact exported
 job with `avo cli artcraft register`, the current project and an owned `.mkv`

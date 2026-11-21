@@ -620,6 +620,14 @@ verified sRGB RGBA still. Tracks selects that exact static asset and its
 placement. Proof execution verifies the source, dimensions and decoded pixels
 before using the existing overlay layers for the exact requested frames.
 
+The selected FilmCraft Windows 0.20.1 profile saves and reopens a native
+project and exports an OTIO timeline linked to the exact original. AVO checks
+the application version resource without starting the desktop editor. The
+import service verifies the retained exchange and original fingerprint before
+mapping relative references. The existing import, sync and approval workflow
+owns any later activation. Declared exchange losses, unsupported treatments
+and prohibited original ancestry leave the return as reference material.
+
 The explicitly selected video export binds the unchanged AniCraft source,
 recipe, app and CLI fingerprints, ordered alpha frames and current approved
 cut and sync to the logical component in Animation, BMap and Tracks. Proof
