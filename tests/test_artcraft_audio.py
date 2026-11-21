@@ -6,6 +6,7 @@ from types import SimpleNamespace
 import pytest
 
 from avo import artcraft, init_project
+from avo.breath_control import resolve_control
 from avo.timeline import artcraft_audio
 from avo.timeline.contracts import content_hash, file_fingerprint
 from tests.artcraft_fixtures import request
@@ -131,6 +132,54 @@ def proof_cue_operation(review, *, start=0, count=48000):
     return node, trim
 
 
+def _existing_mix(tmp_path, cue_node, cue_trim):
+    layers, nodes, operations = [], [], []
+    region = cue_node["outputRange"]
+    for index, role in enumerate(("dialogue", "music", "sfx", "ambience"), start=4):
+        name = "existing-" + role
+        source = {"locator": str(tmp_path / f"{name}.wav"), "sha256": str(index) * 64}
+        layer = {"layerId": name, "role": role, "source": source, "gainDb": -index}
+        if role == "dialogue":
+            layer["breathControl"] = {"enabled": False}
+        layers.append(layer)
+        nodes.append(
+            {
+                **deepcopy(cue_node),
+                "nodeId": name,
+                "kind": "source" if role == "dialogue" else role,
+            }
+        )
+        operations.extend(
+            [
+                {
+                    "operationId": name + "-trim",
+                    "kind": "trim",
+                    "range": region,
+                    "parameters": {"nodeId": name, "sourceId": name, "source": source},
+                },
+                {
+                    "operationId": name + "-gain",
+                    "kind": "gain",
+                    "range": region,
+                    "parameters": {"nodeId": name, "gainDb": layer["gainDb"]},
+                },
+            ]
+        )
+    nodes.append(cue_node)
+    operations.extend(
+        [
+            cue_trim,
+            {
+                "operationId": "program-mix",
+                "kind": "mix",
+                "range": region,
+                "parameters": {"nodeIds": [node["nodeId"] for node in nodes]},
+            },
+        ]
+    )
+    return layers, {"nodes": nodes, "operations": operations}
+
+
 def test_generated_cue_proof_locks_exact_selected_placement_once(tmp_path, monkeypatch):
     source = {
         "locator": str(tmp_path / "cue.wav"),
@@ -161,9 +210,12 @@ def test_generated_cue_proof_locks_exact_selected_placement_once(tmp_path, monke
         "role": "sfx",
         "regions": [{"startTicks": 0, "endTicks": 24}],
     }
+    unrelated, graph = _existing_mix(tmp_path, node, trim)
+    snapshot = {"audioTracks": {"layers": [*unrelated, layer]}}
+    original_tracks = deepcopy(snapshot)
     tracks = SimpleNamespace(
         load_index=lambda: {"headRevisionId": "tracks-one"},
-        revision=lambda _: {"snapshot": {"audioTracks": {"layers": [layer]}}},
+        revision=lambda _: {"snapshot": snapshot},
     )
     workspace = SimpleNamespace(
         store=lambda _: tracks,
@@ -187,12 +239,18 @@ def test_generated_cue_proof_locks_exact_selected_placement_once(tmp_path, monke
     )
     plan = {
         "canonicalInputLock": {"tracks": "a" * 64},
-        "audioGraph": {"nodes": [node], "operations": [trim]},
+        "audioGraph": graph,
         "output": {"frameRate": {"num": 24, "den": 1}},
     }
+    original_graph = deepcopy(graph)
     frozen = artcraft_audio.lock_generated_audio(workspace, plan, require_applied=False)
     assert frozen["canonicalInputLock"]["source:" + source_id] == source["sha256"]
-    assert frozen["audioGraph"] == {"nodes": [node], "operations": [trim]}
+    assert frozen["audioGraph"] == original_graph
+    assert snapshot == original_tracks
+    assert all(
+        resolve_control(item.get("breathControl"), role=item["role"]) is None
+        for item in unrelated
+    )
     assert frozen["canonicalInputLock"]["generated-audio:" + source_id] == content_hash(
         reference
     )
@@ -229,11 +287,23 @@ def test_generated_cue_proof_locks_exact_selected_placement_once(tmp_path, monke
     with pytest.raises(ValueError, match="duplicated"):
         artcraft_audio.lock_generated_audio(workspace, doubled, require_applied=False)
     relabelled = deepcopy(frozen)
-    del relabelled["audioGraph"]["operations"][0]["parameters"]["generatedAudioRef"]
+    relabelled_cue = next(
+        op
+        for op in relabelled["audioGraph"]["operations"]
+        if op["operationId"] == trim["operationId"]
+    )
+    del relabelled_cue["parameters"]["generatedAudioRef"]
     with pytest.raises(ValueError, match="relabel"):
         artcraft_audio.lock_generated_audio(
             workspace, relabelled, require_applied=False
         )
+    for item in unrelated:
+        if item["role"] == "sfx":
+            continue
+        with pytest.raises(ValueError, match="own SFX layer"):
+            artcraft_audio.require_generated_audio_layer(
+                {**layer, "role": item["role"]}
+            )
     layer["regions"].append({"startTicks": 1, "endTicks": 12})
     with pytest.raises(ValueError, match="overlapping"):
         artcraft_audio.lock_generated_audio(workspace, frozen, require_applied=False)
