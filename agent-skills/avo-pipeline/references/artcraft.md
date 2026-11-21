@@ -186,6 +186,13 @@ of the native source and its evidence. For a deliberate upgrade, select the
 newer version and pass `--supersedes` with the earlier instance ID.
 Use the reviewed template's font. Omitted fields inherit its approved values.
 
+For an explicitly shared kit, the origin provider publishes a version whose
+native-source rights entry names the recipient and references the rights evidence.
+Add a `sharing` object with `providers`, a list of exact provider slugs, and
+`evidenceRef`, the reference covering that permission. Select the published kit
+from the recipient's project using `--source-provider` with the origin slug.
+The project instance retains the origin, recipient and fingerprinted rights.
+
 For a saved-source text revision, set `document.state` to `saved` and
 `document.source` to the selected project-owned `.anicraft` copy. Include
 the source directory in `readRoots` and choose the instance's text and approved

@@ -743,6 +743,11 @@ component instance records its parameters and project-owned source copies.
 An explicit upgrade creates a new version-pinned instance linked to the
 previous record. Its contextual review follows the existing video gates.
 
+Native kit sharing requires explicit selection of the origin provider and exact
+recipient names in the published source rights. The project copy records both
+identities. Reconstruction verifies the copied rights, their package hashes
+and the current project provider before accepting the shared source closure.
+
 The AniCraft lower-third profile authors 16:9 and 9:16 on their declared
 canvases. Both use the same phase clock and width-scaled typography. The
 portrait layout anchors the plate near three quarters of the canvas height
