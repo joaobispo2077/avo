@@ -111,6 +111,11 @@ protocols. Common naming does not imply common switches or permissions.
   mode, equivalent limits must instead be supplied when starting the app; they
   are not compatible CLI `--attach` options. Imports and live collaboration have
   early-alpha limitations. A prototype export must declare lost behavior.
+  The selected Windows 0.18.1 CLI recipe uses a blank document to build a
+  two-variant component set with auto layout and a prototype click-to-switch.
+  The editable native file retains both variants and the interaction. The
+  standalone PNG contains the compact variant. Batches also use the native
+  root flags observed in that release.
 - **TextureCraft**: Background roots use `--read-root`/`--write-root`, unlike
   the automation-prefixed switches elsewhere; without them filesystem work is
   unavailable. Live app file handling is separate and the bridge uses a token.

@@ -133,6 +133,7 @@
     {
       "app": "figcraft",
       "name": "FigCraft",
+      "retrievedOn": "2026-11-21",
       "claimedState": "documented-only",
       "release": "not-pinned",
       "platform": "not-pinned",
@@ -146,7 +147,7 @@
       "limitations": "Attached file limits are configured on application startup. Inspect the loss of interaction in static exchange and verify import fidelity.",
       "cli": "figcraft-cli",
       "prerequisites": "Separately installed matching app and CLI, a permitted selected mode, and task-specific inputs.",
-      "verification": "No local operation qualification recorded."
+      "verification": "Windows 0.18.1 fixture verified editable-design-variant through CLI with owned batch roots. Independent confinement is required for automatic execution. Static review exposes the compact variant and declares the prototype loss."
     },
     {
       "app": "texturecraft",

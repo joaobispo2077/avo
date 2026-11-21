@@ -694,6 +694,12 @@ adapter checks the embedded asset inventory, original pixels with the
 adjustment hidden, and two independent PNG exports. Its flattened PNG is a
 standalone review artifact.
 
+FigCraft's selected Windows 0.18.1 layout recipe builds and reopens an editable
+component set with auto layout and a variant-switch interaction. The batch
+commands use the owned directory as their permitted read and write root. Static
+export runs through the confined-runner port. The standalone review carries
+the compact sRGB PNG and declares the interaction retained in its native file.
+
 Native provider publication extends the existing animation catalog. The package
 reader checks its external root, byte fingerprints, declared source roles,
 review references, rights and local parameter schema before independent source
