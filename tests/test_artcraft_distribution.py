@@ -9,11 +9,31 @@ from pathlib import Path
 from zipfile import ZipFile
 
 import pytest
+from scripts.ci.artcraft_distribution import native_artcraft_paths
 
 from avo.artcraft import catalog
 
 ROOT = Path(__file__).resolve().parents[1]
 _NATIVE_EXECUTABLE_SUFFIXES = {".exe", ".dll", ".msi", ".appimage", ".dylib", ".so"}
+
+
+def test_release_inventory_identifies_vendor_apps_clis_installers_and_bundles():
+    vendors = {item["app"] for item in catalog()["profiles"]}
+    native = [
+        "avo/anicraft-cli",
+        "avo/VectorCraft.EXE",
+        "avo/bundled/FigCraft.app/Contents/MacOS/FigCraft Helper",
+        "avo/installers/FilmCraft-Setup.msi",
+        "avo/installers/TextureCraft.pkg",
+        "avo/addons/effectcraft-renderer.dll",
+    ]
+    knowledge = [
+        "avo/_internal/avo/resources/artcraft/catalog.json",
+        "avo/_internal/avo/adapters/artcraft_anicraft.py",
+        "avo/_internal/schemas/avo.artcraft.schema.json",
+        "avo/references/artcraft/texturecraft.md",
+    ]
+    assert native_artcraft_paths(native + knowledge, vendors) == native
 
 
 def test_focused_artcraft_guides_are_inside_the_existing_skill():
@@ -92,11 +112,10 @@ def test_selected_portable_engine_reads_catalog_without_vendor_programs(tmp_path
     launcher = directory / ("avo.exe" if os.name == "nt" else "avo")
     vendors = {item["app"] for item in catalog()["profiles"]}
     files = [item for item in directory.rglob("*") if item.is_file()]
-    assert not any(
-        path.suffix.casefold() in _NATIVE_EXECUTABLE_SUFFIXES
-        and path.stem.casefold().removesuffix("-cli") in vendors
-        for path in files
+    native = native_artcraft_paths(
+        (path.relative_to(directory).as_posix() for path in files), vendors
     )
+    assert not native, native
     assert sum(path.name == "avo.artcraft.schema.json" for path in files) == 1
     result = subprocess.run(
         [str(launcher), "cli", "artcraft", "catalog", "--app", "figcraft", "--json"],
