@@ -14,6 +14,7 @@ from tests.test_artcraft_jobs import _prepare, job_spec
 PHOTO_OPERATION = "layered-image-card"
 FIG_OPERATION = "editable-design-variant"
 DECK_OPERATION = "editable-explanation-slide"
+LIGHT_OPERATION = "reusable-photo-treatment"
 
 
 def photo_request(provider="fixture-provider"):
@@ -69,6 +70,10 @@ def prepare_fig(spec, adapter):
 
 def prepare_deck(spec, adapter):
     return _prepare_static_profile(spec, adapter, "deckcraft", DECK_OPERATION)
+
+
+def prepare_light(spec, adapter):
+    return _prepare_static_profile(spec, adapter, "lightcraft", LIGHT_OPERATION)
 
 
 def _prepare_static_profile(spec, adapter, app, operation):
@@ -177,3 +182,11 @@ def test_deckcraft_rejects_live_control_for_cli_recipe(tmp_path, monkeypatch):
     monkeypatch.setattr(init_project, "load_provider", lambda slug: {"slug": slug})
     with pytest.raises(artcraft.ArtCraftError, match="DeckCraft.*confined CLI"):
         prepare_deck(static_review_spec(tmp_path, mode="live"), None)
+
+
+def test_lightcraft_rejects_unqualified_raw_input(tmp_path, monkeypatch):
+    monkeypatch.setattr(init_project, "load_provider", lambda slug: {"slug": slug})
+    source = tmp_path / "camera.dng"
+    source.write_bytes(b"unqualified fixture RAW")
+    with pytest.raises(artcraft.ArtCraftError, match="LightCraft.*original JPEG"):
+        prepare_light(photo_spec(tmp_path, source), None)

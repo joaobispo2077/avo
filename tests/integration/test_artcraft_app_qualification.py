@@ -10,6 +10,7 @@ from tests.test_artcraft_profiles import (
     photo_spec,
     prepare_deck,
     prepare_fig,
+    prepare_light,
     prepare_photo,
     static_review_spec,
 )
@@ -40,6 +41,13 @@ def figcraft_adapter(tmp_path):
 def deckcraft_adapter(tmp_path):
     return _installed_adapter(
         tmp_path, "AVO_ARTCRAFT_DECKCRAFT_TEST_CLI", "DeckCraft 0.18.1"
+    )
+
+
+@pytest.fixture
+def lightcraft_adapter(tmp_path):
+    return _installed_adapter(
+        tmp_path, "AVO_ARTCRAFT_LIGHTCRAFT_TEST_CLI", "LightCraft 0.21.1"
     )
 
 
@@ -220,4 +228,36 @@ def test_native_deckcraft_retains_master_and_transition_for_static_review(
     )
     assert review["standalone"]["admission"] == "standalone-review"
     assert "midpoint of the selected fade" in review["standalone"]["losses"][0]
+    assert "generatedStillRef" not in review["standalone"]
+
+
+def test_native_lightcraft_recovers_isolated_treatment_from_snapshot(
+    tmp_path, monkeypatch, lightcraft_adapter
+):
+    executable, adapter = lightcraft_adapter
+    monkeypatch.setattr(init_project, "load_provider", lambda slug: {"slug": slug})
+    source = tmp_path / "photo.jpg"
+    Image.new("RGB", (320, 180), (65, 107, 144)).save(source, quality=100)
+    original = file_fingerprint(source)
+    prepared = prepare_light(
+        photo_spec(tmp_path, source, cliPath=str(executable)), adapter
+    )
+    exported = artcraft.run_authoring(
+        prepared["jobRef"], expected_head=prepared["head"], adapter=adapter
+    )
+    job, event = artcraft.read_authoring_export(
+        prepared["jobRef"], expected_head=exported["head"]
+    )
+    assert job["observation"]["release"] == "0.21.1"
+    assert job["inputs"] == [original] == [file_fingerprint(source)]
+    assert Path(event["saved"]["locator"]).name == "component.snap"
+    with Image.open(event["outputs"][0]["locator"]) as image:
+        assert image.info["icc_profile"]
+        assert image.mode == "RGBA"
+        assert image.getpixel((160, 90)) == (81, 132, 178, 255)
+    review = artcraft.describe_export_review(
+        prepared["jobRef"], expected_head=exported["head"]
+    )
+    assert review["standalone"]["nativeLibrary"]["restoreAs"] == "catalog.snap"
+    assert review["standalone"]["nativeLibrary"]["original"] == original
     assert "generatedStillRef" not in review["standalone"]
