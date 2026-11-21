@@ -158,6 +158,13 @@ def require_native_sharing(owner, recipient, rights):
 
 def retained_native_instance_files(instance, project_root, provider):
     """Verify the video-local copy of the exact pinned native package."""
+    _, manifest, sources = _retained_native_instance_package(
+        instance, project_root, provider
+    )
+    return [manifest, *sources]
+
+
+def _retained_native_instance_package(instance, project_root, provider):
     raw = _require_external_root(project_root)
     base = raw / "edit" / "derived" / "provider-components"
     target = base / instance["instanceId"]
@@ -174,18 +181,20 @@ def retained_native_instance_files(instance, project_root, provider):
         raise ArtCraftError("ArtCraft package differs from the pinned video instance")
     with fingerprint_stage(reuse_current=True, verify_on_exit=True):
         sources = _verify_retained_package(package, target)
-        if "sharedWith" in identity:
-            _verify_retained_sharing(package, sources, provider)
+        if "sharedWith" in identity or any(
+            entry["role"] == _IDENTITY_ARTWORK for entry in package["files"]
+        ):
+            _verify_retained_rights(package, sources, provider)
         manifest = file_fingerprint(target / "manifest.json")
     declared = [{"path": item["locator"], "sha256": item["sha256"]} for item in sources]
     if declared != instance["generatedFiles"]:
         raise ArtCraftError(
             "ArtCraft package file list differs from the pinned video instance"
         )
-    return [manifest, *sources]
+    return package, manifest, sources
 
 
-def _verify_retained_sharing(package, sources, recipient):
+def _verify_retained_rights(package, sources, recipient):
     roles = {
         entry["role"]: (entry, fingerprint)
         for entry, fingerprint in zip(package["files"], sources, strict=True)
@@ -193,6 +202,64 @@ def _verify_retained_sharing(package, sources, recipient):
     reference = _selected_evidence(package, roles, "rightsRef", "rights")
     rights = _check_rights(reference, roles)
     require_native_sharing(package["provider"], recipient, rights)
+
+
+def native_instance_artwork_inputs(workspace, request, selection, source, settings):
+    """Select the exact marked kit copied into this video's canonical instance."""
+    with fingerprint_stage(reuse_current=True, verify_on_exit=True):
+        record, instance = _read_artwork_instance(workspace, selection)
+        if (instance["kitId"], instance["parameters"]) != (
+            request["componentId"],
+            settings["authoringParameters"],
+        ):
+            raise ArtCraftError(
+                "ArtCraft artwork differs from the selected kit instance"
+            )
+        package, manifest, files = _retained_native_instance_package(
+            instance, workspace.raw_dir, request["provider"]
+        )
+        roles = {
+            entry["role"]: fingerprint
+            for entry, fingerprint in zip(package["files"], files, strict=True)
+        }
+        artwork = roles.get(_IDENTITY_ARTWORK)
+        if (
+            artwork is None
+            or roles["native-source"] != source
+            or package["output"] != settings["output"]
+        ):
+            raise ArtCraftError("ArtCraft kit artwork, native source or output differs")
+    return [
+        artwork,
+        record,
+        manifest,
+        *(item for item in files if item not in (source, artwork)),
+    ]
+
+
+def _read_artwork_instance(workspace, selection):
+    from .component_instances import ComponentInstanceService
+
+    service = ComponentInstanceService(workspace)
+    path = service.path(selection["instanceId"])
+    if (
+        path.resolve() != path
+        or not path.is_file()
+        or path.stat().st_nlink != 1
+        or path.stat().st_size > 256 * 1024
+    ):
+        raise ArtCraftError(
+            "ArtCraft artwork requires an exact component instance record"
+        )
+    record = file_fingerprint(path)
+    instance = service.load(selection["instanceId"])
+    if (
+        instance["instanceId"],
+        instance["instanceHash"],
+        instance.get("nativePackage", {}).get("app"),
+    ) != (selection["instanceId"], selection["instanceHash"], "anicraft"):
+        raise ArtCraftError("ArtCraft artwork differs from the selected kit instance")
+    return record, instance
 
 
 def shared_native_package_paths(edit_directory):

@@ -18,7 +18,7 @@ def retained_artcraft_files(workspace):
     retained = {}
     for path in sorted(directory.glob("job-*/job.json")):
         job = _add_artcraft_job(retained, workspace, path)
-        if "artworkRef" in job:
+        if "job" in job.get("artworkRef", {}):
             source = _add_export_reference(
                 retained,
                 workspace,

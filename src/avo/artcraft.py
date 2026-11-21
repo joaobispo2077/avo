@@ -591,6 +591,7 @@ def _require_animated_emblem(request, configuration, document_state, mode):
             "frameCount": 24,
         }
         or "artworkRef" not in configuration
+        or "instanceId" in configuration["artworkRef"]
         or {"authoringParameters", "interchangeSource", "soundCue"}.intersection(
             configuration
         )
@@ -847,7 +848,7 @@ def prepare_authoring(
     roots = _preparation_roots(spec, document.parent)
     source = _preparation_source(spec, roots, document)
     input_field, selected_input = _preparation_media(request, spec, scope, roots)
-    dependencies = _prepared_artwork(request, spec, roots)
+    dependencies = _prepared_artwork(request, spec, roots, source)
     _require_preparation_capacity(
         store.workspace, spec["budget"], source or selected_input
     )
@@ -916,12 +917,46 @@ def _require_label_artwork(scope, mode, specification):
         )
 
 
-def _prepared_artwork(request, spec, roots):
+def _prepared_artwork(request, spec, roots, source):
     if "artworkRef" not in spec:
         return []
-    inputs = _artwork_export_inputs(request, spec["artworkRef"], roots)
+    inputs = _artwork_dependencies(request, spec, roots, source)
     if inputs[0]["sizeBytes"] >= spec["budget"]["bytes"]:
         raise ArtCraftError("Vector artwork exceeds the selected motion budget")
+    return inputs
+
+
+def _artwork_dependencies(request, settings, roots, source):
+    reference = settings["artworkRef"]
+    if "instanceId" not in reference:
+        return _artwork_export_inputs(request, reference, roots)
+
+    from .timeline.artcraft_packages import native_instance_artwork_inputs
+    from .timeline.workspace import TimelineWorkspace
+
+    context = request["context"]
+    if source is None or context["kind"] != "video":
+        raise ArtCraftError(
+            "ArtCraft kit artwork requires a saved video-local instance"
+        )
+    project = Path(context["project"])
+    if not project.is_absolute() or project.resolve() != project:
+        raise ArtCraftError("ArtCraft requires the exact absolute project path")
+    workspace = TimelineWorkspace.from_project(project)
+    if (workspace.video_id, workspace.project.get("provider")) != (
+        context["videoId"],
+        request["provider"],
+    ):
+        raise ArtCraftError(
+            "ArtCraft kit artwork belongs to a different video or provider"
+        )
+    inputs = native_instance_artwork_inputs(
+        workspace, request, reference, source, settings
+    )
+    if not all(_retained_job_file(item, roots["read"]) for item in inputs):
+        raise ArtCraftError(
+            "ArtCraft kit artwork and evidence must stay in the selected read roots"
+        )
     return inputs
 
 
@@ -2054,13 +2089,13 @@ def _owning_root(path, roots):
 
 def _inspect_job_inputs(job):
     if "artworkRef" in job:
+        original = job["inputs"][:1] if job["documentState"] == "saved" else []
         try:
-            inputs = _artwork_export_inputs(
-                job["request"], job["artworkRef"], job["roots"]
+            inputs = _artwork_dependencies(
+                job["request"], job, job["roots"], next(iter(original), None)
             )
         except (OSError, ValueError, RuntimeError):
             return "changed"
-        original = job["inputs"][:1] if job["documentState"] == "saved" else []
         if any(not _retained_job_file(item, job["roots"]["read"]) for item in original):
             return "changed"
         return "current" if [*original, *inputs] == job["inputs"] else "changed"

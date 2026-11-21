@@ -284,6 +284,18 @@
         "exportHead": { "$ref": "#/$defs/hash" }
       }
     },
+    "artworkRef": {
+      "oneOf": [
+        { "$ref": "#/$defs/exportRef" },
+        {
+          "type": "object", "additionalProperties": false, "required": ["instanceId", "instanceHash"],
+          "properties": {
+            "instanceId": { "$ref": "#/$defs/id" },
+            "instanceHash": { "$ref": "#/$defs/hash" }
+          }
+        }
+      ]
+    },
     "stillEvidence": {
       "type": "object", "additionalProperties": false,
       "required": ["format", "color", "alpha", "width", "height", "rgbaSha256"],
@@ -323,7 +335,7 @@
         "photoSource": { "$ref": "#/$defs/photoSource" },
         "effectFont": { "$ref": "#/$defs/text" },
         "interchangeSource": { "$ref": "#/$defs/interchangeSource" },
-        "artworkRef": { "$ref": "#/$defs/exportRef" },
+        "artworkRef": { "$ref": "#/$defs/artworkRef" },
         "output": { "$ref": "#/$defs/output" },
         "budget": { "$ref": "#/$defs/budget" }
       }
@@ -346,7 +358,7 @@
         "photoSource": { "$ref": "#/$defs/photoSource" },
         "effectFont": { "$ref": "#/$defs/text" },
         "interchangeSource": { "$ref": "#/$defs/interchangeSource" },
-        "artworkRef": { "$ref": "#/$defs/exportRef" },
+        "artworkRef": { "$ref": "#/$defs/artworkRef" },
         "projectFingerprint": { "$ref": "#/$defs/fingerprint" },
         "canonicalHeads": { "type": "object", "maxProperties": 12, "propertyNames": { "$ref": "#/$defs/id" }, "additionalProperties": { "$ref": "#/$defs/hash" } },
         "inputs": { "type": "array", "maxItems": 16384, "items": { "$ref": "#/$defs/fingerprint" } },
