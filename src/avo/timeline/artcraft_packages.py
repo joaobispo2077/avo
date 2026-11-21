@@ -174,6 +174,7 @@ def shared_native_package_paths(edit_directory):
         raise ArtCraftError(
             "Native library scan requires an unaliased cleanup directory"
         )
+    _reject_unsealed_shared_versions(root)
     for manifest in sorted(root.rglob("manifest.json")):
         target = manifest.parent
         if not re.fullmatch(r"[a-f0-9]{64}", target.name):
@@ -185,6 +186,25 @@ def shared_native_package_paths(edit_directory):
         yield from (
             Path(item["locator"]) for item in _verify_retained_package(package, target)
         )
+
+
+def _reject_unsealed_shared_versions(root):
+    for files in root.rglob("files"):
+        target = files.parent
+        if (
+            not re.fullmatch(r"[a-f0-9]{64}", target.name)
+            or not files.is_dir()
+            or (target / "manifest.json").is_file()
+        ):
+            continue
+        if _contains_native_source(files):
+            raise ArtCraftError(
+                f"Shared native version is missing its manifest: {target}"
+            )
+
+
+def _contains_native_source(files):
+    return any(entry.suffix.casefold() == ".anicraft" for entry in files.rglob("*"))
 
 
 def _shared_package_manifest(manifest):
@@ -199,6 +219,10 @@ def _shared_package_manifest(manifest):
     document = json.loads(manifest.read_text(encoding="utf-8"))
     markers = {"packageHash", "sourceReviewRef", "designReviewRef"}
     if not isinstance(document, dict) or not markers <= document.keys():
+        if _contains_native_source(manifest.parent / "files"):
+            raise ArtCraftError(
+                f"Shared native version has an invalid manifest: {manifest}"
+            )
         return None
     target = manifest.parent
     package = _read_retained_manifest(target)
