@@ -1023,16 +1023,16 @@ def _reusable_native_export(job_ref, expected_head):
         event["state"],
         job["documentState"],
         job["decision"]["scope"],
-        observation["mode"],
     )
     expected = (
         "exported",
         "saved",
         {"app": "anicraft", "operations": ["lower-third"]},
-        "cli",
     )
     if (
         profile != expected
+        or observation["mode"] == "reuse"
+        or not _qualified_export_mode(observation)
         or not {"application", "executable", "commandSchemaHash"} <= observation.keys()
     ):
         raise ArtCraftError("Select a qualified native saved-source export for reuse")
@@ -1981,7 +1981,7 @@ def _retained_job_file(expected, roots, *, allow_system_font=False):
 
 def require_artcraft_export_environment(observation):
     """Check the current selected tool bytes without probing or launching an app."""
-    if observation["mode"] not in {"cli", "reuse"} or not observation.get(
+    if not _qualified_export_mode(observation) or not observation.get(
         "commandSchemaHash"
     ):
         raise ArtCraftError(
@@ -1997,6 +1997,20 @@ def require_artcraft_export_environment(observation):
             code="ARTCRAFT_SCOPE_CHANGED",
         ) from exc
     return observation
+
+
+def _qualified_export_mode(observation):
+    if observation["mode"] in {"cli", "reuse"}:
+        return True
+    return (
+        observation["mode"],
+        observation.get("app"),
+        observation.get("operations"),
+        observation.get("platform"),
+        observation.get("release"),
+    ) == ("json-lines", "anicraft", ["lower-third"], "windows", "0.2.1") and bool(
+        observation.get("effectiveRoots")
+    )
 
 
 def _verify_selected_binary(fingerprint):
