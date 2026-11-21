@@ -125,6 +125,10 @@ protocols. Common naming does not imply common switches or permissions.
   work and cannot be combined with `--connect`. Slide render indexes start at
   zero; output scale uses points rather than assumed video pixels. Frame export
   is not evidence that a complete animated slide can be reconstructed.
+  The selected Windows 0.18.1 CLI profile retains a custom master layout, its
+  editable placeholder and a 600 ms fade into slide index 1. The 960 by 540
+  point deck yields a verified 320 by 180 pixel midpoint for standalone review.
+  The native deck keeps the complete transition.
 
 ## Qualification model and bounded scope
 

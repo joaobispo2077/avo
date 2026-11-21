@@ -170,6 +170,7 @@
     {
       "app": "deckcraft",
       "name": "DeckCraft",
+      "retrievedOn": "2026-11-21",
       "claimedState": "documented-only",
       "release": "not-pinned",
       "platform": "not-pinned",
@@ -183,7 +184,7 @@
       "limitations": "Background file roots do not constrain a live connection. Slide indexes begin at zero. A frame export preserves a still representation of slide motion.",
       "cli": "deckcraft-cli",
       "prerequisites": "Separately installed matching app and CLI, a permitted selected mode, and task-specific inputs.",
-      "verification": "No local operation qualification recorded."
+      "verification": "Windows 0.18.1 fixture verified editable-explanation-slide through CLI, including its custom master layout and zero-based fade destination. The selected midpoint PNG is standalone review. Automatic use requires independent confinement."
     }
   ]
 }

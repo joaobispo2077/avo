@@ -700,6 +700,11 @@ commands use the owned directory as their permitted read and write root. Static
 export runs through the confined-runner port. The standalone review carries
 the compact sRGB PNG and declares the interaction retained in its native file.
 
+DeckCraft's selected Windows 0.18.1 recipe retains a custom master layout and
+the editable slide transition. The adapter checks 960 by 540 point geometry,
+the zero-based destination index and the fade duration. Two fresh midpoint
+renders must agree before the still is retained for independent review.
+
 Native provider publication extends the existing animation catalog. The package
 reader checks its external root, byte fingerprints, declared source roles,
 review references, rights and local parameter schema before independent source
