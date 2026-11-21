@@ -12,6 +12,7 @@ from tests.artcraft_fixtures import request
 from tests.test_artcraft_jobs import _prepare, job_spec
 
 PHOTO_OPERATION = "layered-image-card"
+FIG_OPERATION = "editable-design-variant"
 
 
 def photo_request(provider="fixture-provider"):
@@ -41,6 +42,41 @@ def photo_spec(workspace, source, **overrides):
             },
             **overrides,
         },
+    )
+
+
+def fig_spec(workspace, **overrides):
+    return job_spec(
+        workspace,
+        **{
+            "output": {
+                "role": "generated-still",
+                "format": "png",
+                "alpha": "straight",
+                "color": "srgb",
+                "width": 320,
+                "height": 180,
+            },
+            **overrides,
+        },
+    )
+
+
+def prepare_fig(spec, adapter):
+    brief = request(
+        provider=spec["provider"],
+        required={
+            "behavior": FIG_OPERATION,
+            "outputRole": "generated-still",
+            "editable": True,
+        },
+    )
+    return _prepare(
+        artcraft,
+        brief,
+        spec,
+        adapter,
+        intent=artcraft.ArtCraftIntent("explicit", "figcraft", (FIG_OPERATION,)),
     )
 
 
@@ -109,3 +145,20 @@ def test_photocraft_rejects_image_without_srgb_profile(tmp_path):
     Image.new("RGBA", (320, 180), (64, 128, 196, 200)).save(source)
     with pytest.raises(artcraft.ArtCraftError, match="embedded sRGB profile"):
         _read_rgba(source, {"width": 320, "height": 180})
+
+
+def test_figcraft_rejects_unqualified_attached_mode(tmp_path, monkeypatch):
+    monkeypatch.setattr(init_project, "load_provider", lambda slug: {"slug": slug})
+    with pytest.raises(artcraft.ArtCraftError, match="FigCraft.*confined CLI"):
+        prepare_fig(fig_spec(tmp_path, mode="live"), None)
+
+
+def test_figcraft_observation_requires_an_independently_confined_runner(tmp_path):
+    with pytest.raises(artcraft.ArtCraftError, match="FigCraft.*confined CLI"):
+        SelectedArtCraftAdapter().observe(
+            scope={"app": "figcraft", "operations": [FIG_OPERATION]},
+            mode="cli",
+            roots={"read": [], "write": [str(tmp_path / "outputs")]},
+            cli_path=None,
+            app_path=None,
+        )

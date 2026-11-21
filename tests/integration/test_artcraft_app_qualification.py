@@ -6,7 +6,12 @@ from pathlib import Path
 
 import pytest
 from PIL import Image, ImageCms
-from tests.test_artcraft_profiles import photo_spec, prepare_photo
+from tests.test_artcraft_profiles import (
+    fig_spec,
+    photo_spec,
+    prepare_fig,
+    prepare_photo,
+)
 
 from avo import artcraft, init_project
 from avo.adapters.artcraft import SelectedArtCraftAdapter
@@ -18,11 +23,22 @@ pytestmark = pytest.mark.integration
 
 @pytest.fixture
 def photocraft_adapter(tmp_path):
-    entry = os.environ.get("AVO_ARTCRAFT_PHOTOCRAFT_TEST_CLI")
+    return _installed_adapter(
+        tmp_path, "AVO_ARTCRAFT_PHOTOCRAFT_TEST_CLI", "PhotoCraft 0.23.1"
+    )
+
+
+@pytest.fixture
+def figcraft_adapter(tmp_path):
+    return _installed_adapter(
+        tmp_path, "AVO_ARTCRAFT_FIGCRAFT_TEST_CLI", "FigCraft 0.18.1"
+    )
+
+
+def _installed_adapter(tmp_path, variable, product):
+    entry = os.environ.get(variable)
     if not entry:
-        pytest.skip(
-            "set AVO_ARTCRAFT_PHOTOCRAFT_TEST_CLI to the installed Windows 0.23.1 CLI"
-        )
+        pytest.skip(f"set {variable} to the installed Windows {product} CLI")
     executable = Path(entry).resolve(strict=True)
 
     def observe(_installed, roots):
@@ -104,3 +120,65 @@ def _synthetic_photo(path):
     )
     profile = ImageCms.ImageCmsProfile(ImageCms.createProfile("sRGB"))
     image.save(path, icc_profile=profile.tobytes())
+
+
+def test_native_figcraft_retains_editable_layout_and_prototype_for_review(
+    tmp_path, monkeypatch, figcraft_adapter
+):
+    executable, adapter = figcraft_adapter
+    monkeypatch.setattr(init_project, "load_provider", lambda slug: {"slug": slug})
+    prepared = prepare_fig(fig_spec(tmp_path, cliPath=str(executable)), adapter)
+    exported = artcraft.run_authoring(
+        prepared["jobRef"], expected_head=prepared["head"], adapter=adapter
+    )
+    job, event = artcraft.read_authoring_export(
+        prepared["jobRef"], expected_head=exported["head"]
+    )
+    assert job["observation"]["release"] == "0.18.1"
+    assert job["inputs"] == []
+    assert Path(event["saved"]["locator"]).name == "component.figcraft"
+    with Image.open(event["outputs"][0]["locator"]) as image:
+        assert image.info["srgb"] == 0
+        assert image.size == (320, 180)
+        assert image.getpixel((40, 40)) == (250, 204, 21, 255)
+    review = artcraft.describe_export_review(
+        prepared["jobRef"], expected_head=exported["head"]
+    )
+    assert review["standalone"]["admission"] == "standalone-review"
+    assert "click-to-switch prototype" in review["standalone"]["losses"][0]
+    assert "generatedStillRef" not in review["standalone"]
+    _assert_figcraft_root_rejection(
+        executable, tmp_path, Path(event["saved"]["locator"])
+    )
+
+
+def _assert_figcraft_root_rejection(executable, tmp_path, source):
+    restricted = tmp_path / "restricted"
+    restricted.mkdir()
+    script = restricted / "inspect.json"
+    script.write_text("[]", encoding="utf-8")
+    forbidden_copy = restricted / "denied.figcraft"
+    response = subprocess.run(
+        [
+            str(executable),
+            "run",
+            str(script),
+            "--no-system-fonts",
+            "--in",
+            str(source),
+            "--out",
+            str(forbidden_copy),
+            "--automation-read-root",
+            str(restricted),
+            "--automation-write-root",
+            str(restricted),
+        ],
+        cwd=restricted,
+        stdin=subprocess.DEVNULL,
+        capture_output=True,
+        check=False,
+        timeout=8,
+    )
+    assert response.returncode != 0
+    assert b"read" in response.stderr.lower()
+    assert not forbidden_copy.exists()
