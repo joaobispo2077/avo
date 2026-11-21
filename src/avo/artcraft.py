@@ -59,12 +59,15 @@ _NATIVE_SUFFIXES = {
     "filmcraft": ".fcproj",
     "photocraft": ".pcraft",
     "figcraft": ".figcraft",
+    "deckcraft": ".deckcraft",
 }
 _SOUND_CUE_SCOPE = {"app": "soundcraft", "operations": ["isolated-cue"]}
 _STILL_CARD_SCOPE = {"app": "vectorcraft", "operations": ["vector-still"]}
 _PHOTO_CARD_SCOPE = {"app": "photocraft", "operations": ["layered-image-card"]}
 _FIG_VARIANT_SCOPE = {"app": "figcraft", "operations": ["editable-design-variant"]}
-_STILL_SCOPES = (_STILL_CARD_SCOPE, _PHOTO_CARD_SCOPE, _FIG_VARIANT_SCOPE)
+_DECK_SLIDE_SCOPE = {"app": "deckcraft", "operations": ["editable-explanation-slide"]}
+_FIXED_STILL_SCOPES = (_FIG_VARIANT_SCOPE, _DECK_SLIDE_SCOPE)
+_STILL_SCOPES = (_STILL_CARD_SCOPE, _PHOTO_CARD_SCOPE, *_FIXED_STILL_SCOPES)
 _VECTOR_EMBLEM_SCOPE = {"app": "vectorcraft", "operations": ["vector-emblem"]}
 _ANIMATED_EMBLEM_SCOPE = {"app": "anicraft", "operations": ["animate-vector-emblem"]}
 _FILM_RETURN_SCOPE = {
@@ -385,7 +388,7 @@ def _check_specialist_job(job, scope):
             job["request"], job, job["documentState"], job["observation"]["mode"]
         )
     _check_photo_job(job, scope)
-    _check_fig_job(job, scope)
+    _check_fixed_still_job(job, scope)
     if scope == _FILM_RETURN_SCOPE:
         _check_film_job(job)
     if scope == _VECTOR_EMBLEM_SCOPE:
@@ -414,20 +417,23 @@ def _check_photo_job(job, scope):
         raise ContractError("PhotoCraft job requires its exact selected image")
 
 
-def _check_fig_job(job, scope):
-    if scope == _FIG_VARIANT_SCOPE:
-        _require_fig_contract(
-            job["request"], job, job["documentState"], job["observation"]["mode"]
+def _check_fixed_still_job(job, scope):
+    if scope in _FIXED_STILL_SCOPES:
+        _require_fixed_still_contract(
+            scope, job["request"], job, job["documentState"], job["observation"]["mode"]
         )
 
 
-def _require_fig_contract(request, selected, document_state, mode):
+def _require_fixed_still_contract(scope, request, selected, document_state, mode):
+    product = {"figcraft": "FigCraft", "deckcraft": "DeckCraft"}[scope["app"]]
     if (document_state, mode) != ("empty", "cli"):
-        raise ArtCraftError("FigCraft requires an empty document and confined CLI mode")
+        raise ArtCraftError(
+            f"{product} requires an empty document and confined CLI mode"
+        )
     if (
         request["required"]
         != {
-            "behavior": "editable-design-variant",
+            "behavior": scope["operations"][0],
             "outputRole": "generated-still",
             "editable": True,
         }
@@ -448,9 +454,7 @@ def _require_fig_contract(request, selected, document_state, mode):
             "photoSource",
         }.intersection(selected)
     ):
-        raise ArtCraftError(
-            "Select the editable FigCraft 320 × 180 design variant recipe"
-        )
+        raise ArtCraftError(f"Select the editable {product} 320 × 180 review recipe")
 
 
 def _require_vector_emblem(request, configuration, document_state, mode):
@@ -806,8 +810,8 @@ def _require_preparation_profile(request, spec, scope):
     arguments = (request, spec, spec["document"]["state"], spec["mode"])
     if scope == _STILL_CARD_SCOPE:
         _require_still_contract(*arguments)
-    if scope == _FIG_VARIANT_SCOPE:
-        _require_fig_contract(*arguments)
+    if scope in _FIXED_STILL_SCOPES:
+        _require_fixed_still_contract(scope, *arguments)
     if scope == _VECTOR_EMBLEM_SCOPE:
         _require_vector_emblem(*arguments)
     if scope == _ANIMATED_EMBLEM_SCOPE:
@@ -1921,6 +1925,8 @@ def _select_job_author(adapter, scope):
         return adapter.author_photo_card
     if scope == _FIG_VARIANT_SCOPE:
         return adapter.author_fig_variant
+    if scope == _DECK_SLIDE_SCOPE:
+        return adapter.author_deck_slide
     if scope == _VECTOR_EMBLEM_SCOPE:
         return adapter.author_vector_emblem
     if scope == _ANIMATED_EMBLEM_SCOPE:
@@ -2031,6 +2037,7 @@ def _require_prepared_authoring(store, job, head):
         _STILL_CARD_SCOPE,
         _PHOTO_CARD_SCOPE,
         _FIG_VARIANT_SCOPE,
+        _DECK_SLIDE_SCOPE,
         _FILM_RETURN_SCOPE,
         _VECTOR_EMBLEM_SCOPE,
         _ANIMATED_EMBLEM_SCOPE,
@@ -2208,6 +2215,7 @@ def _verify_still_authoring_result(job, directory, result):
         "vectorcraft": "card.png",
         "photocraft": "photo.png",
         "figcraft": "design.png",
+        "deckcraft": "slide.png",
     }[app]
     target_paths = {
         "nativeSource": directory / ("component" + _NATIVE_SUFFIXES[app]),
@@ -2326,6 +2334,10 @@ def _describe_still_review(job, event, job_ref):
     if job["decision"]["scope"] == _FIG_VARIANT_SCOPE:
         standalone["losses"] = [
             "The PNG holds a single static variant. The editable layout and click-to-switch prototype remain in the native design."
+        ]
+    if job["decision"]["scope"] == _DECK_SLIDE_SCOPE:
+        standalone["losses"] = [
+            "The PNG holds the midpoint of the selected fade. The editable slides, master layout and full transition remain in the native deck."
         ]
     return {
         "reviewState": "pending-creator",

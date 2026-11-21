@@ -38,11 +38,14 @@ def _require_owned_outputs(files, label):
         raise ArtCraftError(f"{label} created a linked or external file")
 
 
-def observe_native_command_schema(executable, environment, *, needed, label):
+def observe_native_command_schema(
+    executable, environment, *, needed, label, json_registry=True
+):
     path = Path(executable["locator"])
+    arguments = ["commands", "--json"] if json_registry else ["commands"]
     try:
         result = subprocess.run(
-            [str(path), "commands", "--json"],
+            [str(path), *arguments],
             cwd=path.parent,
             env=environment,
             stdin=subprocess.DEVNULL,
@@ -52,11 +55,7 @@ def observe_native_command_schema(executable, environment, *, needed, label):
         )
         if len(result.stdout) > 4 * 1024 * 1024:
             raise ValueError("command registry exceeds its byte limit")
-        commands = {
-            item["id"]: item["params"]
-            for item in json.loads(result.stdout)
-            if item["id"] in needed
-        }
+        commands = _selected_registry_rows(result.stdout, needed, json_registry)
     except (
         OSError,
         subprocess.SubprocessError,
@@ -74,3 +73,18 @@ def observe_native_command_schema(executable, environment, *, needed, label):
             code="ARTCRAFT_NOT_READY",
         )
     return content_hash(commands)
+
+
+def _selected_registry_rows(stdout, needed, json_registry):
+    if json_registry:
+        return {
+            item["id"]: item["params"]
+            for item in json.loads(stdout)
+            if item["id"] in needed
+        }
+    rows = (line.partition(" — ") for line in stdout.decode("utf-8").splitlines())
+    return {
+        command: spec
+        for command, delimiter, spec in rows
+        if delimiter and command in needed
+    }
