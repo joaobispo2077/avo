@@ -24,6 +24,7 @@
     {
       "app": "effectcraft",
       "name": "EffectCraft",
+      "retrievedOn": "2026-11-21",
       "claimedState": "documented-only",
       "release": "not-pinned",
       "platform": "not-pinned",
@@ -37,7 +38,7 @@
       "limitations": "Constrained background MCP disables scripts. Verify support for the selected effects and transparent export in the exact release.",
       "cli": "effectcraft-cli",
       "prerequisites": "Separately installed matching app and CLI, a permitted selected mode, and task-specific inputs.",
-      "verification": "No local operation qualification recorded."
+      "verification": "Windows 0.24.1 fixture verified editable-masked-lower-third through CLI with a pinned Windows Arial font and a six-frame transparent standalone review span. Other modes and broader render or interruption behavior remain unverified."
     },
     {
       "app": "filmcraft",

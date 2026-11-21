@@ -84,6 +84,10 @@ protocols. Common naming does not imply common switches or permissions.
   those restrictions scripts are disabled. Expressions and native project
   imports must therefore be assessed against the actual execution mode. Alpha
   maturity and advertised effects do not qualify a specific renderer.
+  The selected Windows 0.24.1 CLI profile retains editable Arial text and a
+  closed backing mask. It renders the six-frame span beginning at index 3 and
+  ending before index 9. Independent frame-index and seconds requests agree
+  on the first transparent frame. The span is for standalone review.
 - **FilmCraft**: Background and desktop copies must not write the same project;
   background work needs an explicit save. The live protocol requires an
   ephemeral shared token. The guide warns of broad filesystem access; it does

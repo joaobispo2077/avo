@@ -711,6 +711,12 @@ with its exposure adjustment and rebuilds it into a fresh library to verify
 the color profile and exact rendered pixels. Standalone review exposes the
 snapshot and its required original location.
 
+EffectCraft's selected Windows 0.24.1 recipe retains the native composition,
+editable label, backing mask and exact installed Arial dependency. Its
+standalone sequence covers a half-open window on the verified 24 fps source
+clock. The first frame rendered by time and by source frame index must agree
+with the partial render before the review export is retained.
+
 Native provider publication extends the existing animation catalog. The package
 reader checks its external root, byte fingerprints, declared source roles,
 review references, rights and local parameter schema before independent source
