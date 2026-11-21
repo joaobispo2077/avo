@@ -42,7 +42,12 @@ def test_catalog_filters_packaged_knowledge_without_app_claims(tmp_path, monkeyp
     assert [item["app"] for item in result.parsed_json["profiles"]] == ["anicraft"]
     profile = result.parsed_json["profiles"][0]
     assert profile["claimedState"] == "documented-only"
-    assert profile["verification"] == "No local operation qualification recorded."
+    assert {entry["mode"] for entry in profile["qualifiedProfiles"]} == {
+        "cli",
+        "guided",
+        "host-mcp",
+        "json-lines",
+    }
     assert list(tmp_path.iterdir()) == []
 
 
