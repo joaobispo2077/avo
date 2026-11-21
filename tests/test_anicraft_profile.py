@@ -44,6 +44,36 @@ def test_lower_third_has_native_text_symbol_and_exact_phase_frames(tmp_path):
     }
 
 
+def test_lower_third_adds_a_distinct_optional_native_secondary_line(tmp_path):
+    from avo.adapters.artcraft_anicraft import lower_third_steps
+
+    steps = lower_third_steps(
+        _contract(),
+        {"primaryText": "Clara", "secondaryText": "Producer", "font": "Arial"},
+        tmp_path / "native.anicraft",
+        tmp_path / "white",
+    )
+    primary, secondary = (
+        step["params"] for step in steps if step["cmd"] == "text.create"
+    )
+    assert (primary["text"], secondary["text"]) == ("Clara", "Producer")
+    assert primary["font"] == secondary["font"] == "Arial"
+    assert primary["y"] < secondary["y"] and primary["size"] > secondary["size"]
+
+
+def test_lower_third_rejects_blank_or_multiline_secondary_text(tmp_path):
+    from avo.adapters.artcraft_anicraft import lower_third_steps
+
+    for secondary in (" ", "Two\nlines"):
+        with pytest.raises(ArtCraftError, match="secondary"):
+            lower_third_steps(
+                _contract(),
+                {"primaryText": "Clara", "secondaryText": secondary, "font": "Arial"},
+                tmp_path / "native.anicraft",
+                tmp_path / "white",
+            )
+
+
 @pytest.mark.parametrize(
     "contract",
     [

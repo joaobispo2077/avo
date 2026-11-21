@@ -86,6 +86,99 @@ def test_installed_anicraft_portrait_lower_third_uses_safe_mobile_placement(tmp_
             assert blank.getchannel("A").getbbox() is None
 
 
+@pytest.mark.parametrize("width,height", [(640, 360), (360, 640)])
+def test_installed_anicraft_revises_both_selected_text_slots(
+    tmp_path, monkeypatch, width, height
+):
+    from tests.test_artcraft_jobs import _prepare, job_spec
+
+    from avo import artcraft, init_project
+    from avo.adapters.artcraft import SelectedArtCraftAdapter
+    from avo.adapters.artcraft_anicraft import inspect_lower_third_source
+
+    entry = os.environ.get("AVO_ARTCRAFT_ANICRAFT_TEST_CLI")
+    if not entry:
+        pytest.skip("Select the installed AniCraft 0.2.1 CLI")
+    executable = Path(entry).resolve(strict=True)
+    monkeypatch.setattr(init_project, "load_provider", lambda slug: {"slug": slug})
+
+    def invoke(binary, roots, directory, arguments, *, env, timeout):
+        assert binary["locator"] == str(executable)
+        assert directory.is_relative_to(Path(roots["write"][0]))
+        return subprocess.run(
+            [str(executable), *map(str, arguments)],
+            cwd=directory,
+            env=env,
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            check=True,
+            timeout=timeout,
+        ).stdout
+
+    adapter = SelectedArtCraftAdapter(
+        observe_confinement=lambda _tool, roots: roots, run_confined=invoke
+    )
+    output = {**_job_contract(), "width": width, "height": height}
+    original = {"primaryText": "Clara", "secondaryText": "Producer", "font": "Arial"}
+    first = _prepare(
+        artcraft,
+        request(),
+        job_spec(
+            tmp_path,
+            jobId="two-text-slots",
+            cliPath=str(executable),
+            output=output,
+            authoringParameters=original,
+        ),
+        adapter,
+    )
+    rendered = artcraft.run_authoring(
+        first["jobRef"], expected_head=first["head"], adapter=adapter
+    )
+    _, event = artcraft.read_authoring_export(
+        first["jobRef"], expected_head=rendered["head"]
+    )
+    source = Path(event["saved"]["locator"])
+    fingerprint = file_fingerprint(source)
+    assert (
+        inspect_lower_third_source(source, output, original, max_bytes=4_000_000)[
+            "editableSecondaryText"
+        ]
+        == "Producer"
+    )
+
+    revised = {"primaryText": "Carlos", "secondaryText": "Editor", "font": "Arial"}
+    second = _prepare(
+        artcraft,
+        request(),
+        job_spec(
+            tmp_path,
+            jobId="revise-two-text-slots",
+            cliPath=str(executable),
+            output=output,
+            authoringParameters=revised,
+            readRoots=[str(source.parent)],
+            document={"state": "saved", "source": str(source)},
+        ),
+        adapter,
+    )
+    rerendered = artcraft.run_authoring(
+        second["jobRef"], expected_head=second["head"], adapter=adapter
+    )
+    _, returned = artcraft.read_authoring_export(
+        second["jobRef"], expected_head=rerendered["head"]
+    )
+    inspection = inspect_lower_third_source(
+        Path(returned["saved"]["locator"]), output, revised, max_bytes=4_000_000
+    )
+    assert (inspection["editableText"], inspection["editableSecondaryText"]) == (
+        "Carlos",
+        "Editor",
+    )
+    assert event["outputs"][8]["sha256"] != returned["outputs"][8]["sha256"]
+    assert file_fingerprint(source) == fingerprint
+
+
 def test_installed_anicraft_saves_reopens_and_reconstructs_a_transparent_label(
     tmp_path,
 ):

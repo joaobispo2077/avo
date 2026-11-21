@@ -146,6 +146,34 @@ def test_reuse_refuses_wrong_provider_manifest_and_unbounded_parameters(
     assert not own.path("speaker-first-use").exists()
 
 
+def test_native_instance_applies_an_approved_secondary_slot_default(tmp_path):
+    service = _video_components(tmp_path / "second-line-video")
+    evidence = {
+        "fixtureParameters": {
+            "primaryText": "Clara",
+            "font": "Arial",
+            "secondaryText": "Producer",
+        },
+        "parameterSchema": {
+            "type": "object",
+            "properties": {
+                "primaryText": {"type": "string"},
+                "secondaryText": {"type": "string", "maxLength": 48},
+            },
+            "additionalProperties": False,
+        },
+    }
+    assert service._native_instance_parameters({"primaryText": "Carlos"}, evidence) == {
+        "primaryText": "Carlos",
+        "font": "Arial",
+        "secondaryText": "Producer",
+    }
+    with pytest.raises(
+        ComponentInstanceError, match="nonempty secondary lower-third label"
+    ):
+        service._native_instance_parameters({"secondaryText": " "}, evidence)
+
+
 def test_native_upgrade_is_explicit_and_keeps_the_original_pin(
     tmp_path, native_library
 ):
