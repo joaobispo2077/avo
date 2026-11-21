@@ -5,6 +5,7 @@ from pathlib import Path
 
 from avo.artcraft import read_authoring_export
 
+from .artcraft_binding import require_artcraft_media_scope
 from .contracts import content_hash, file_fingerprint, validate_document
 from .event_clock import frame_range_to_samples
 from .media_admission import FORBIDDEN_OUTPUT_CLASSES
@@ -32,7 +33,7 @@ def resolve_generated_audio(reference):
     return job, event
 
 
-def require_generated_audio_layer(layer):
+def require_generated_audio_layer(layer, *, workspace=None):
     source = layer["source"]
     if layer["role"] != "sfx" or "locator" not in source:
         raise ValueError("Generated audio must be placed on its own SFX layer")
@@ -41,6 +42,8 @@ def require_generated_audio_layer(layer):
     job, event = resolve_generated_audio(layer["generatedAudioRef"])
     if source != event["outputs"][0]:
         raise ValueError("Tracks generated audio differs from its verified export")
+    if workspace is not None:
+        require_artcraft_media_scope(workspace, job, "Generated audio")
     return job, event
 
 
@@ -94,10 +97,7 @@ def _require_nonoverlapping_cue(items, key, sha256):
 
 
 def _require_cue_scope(workspace, job, event):
-    if job["request"]["provider"] != workspace.project["provider"]:
-        raise ValueError("Generated audio belongs to a different provider")
-    if job.get("videoId") is not None and job["videoId"] != workspace.video_id:
-        raise ValueError("Generated audio belongs to a different video")
+    require_artcraft_media_scope(workspace, job, "Generated audio")
     source = job["inputs"][0]
     inputs = (source, event["outputs"][0])
     for item in inputs:

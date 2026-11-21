@@ -26,10 +26,24 @@ __all__ = [
     "build_artcraft_asset_record",
     "freeze_export_binding",
     "read_artcraft_binding",
+    "require_artcraft_media_scope",
     "require_artcraft_operation_binding",
     "require_artcraft_output_geometry",
     "verify_artcraft_asset_record",
 ]
+
+
+def require_artcraft_media_scope(workspace, job, media_name):
+    request = job["request"]
+    if request["provider"] != workspace.project.get("provider"):
+        raise ValueError(f"{media_name} belongs to a different provider")
+    context = request["context"]
+    if context["kind"] == "video" and (
+        context["videoId"] != workspace.video_id
+        or Path(context["project"]) != Path(workspace.project_path)
+        or Path(job["workspace"]) != workspace.raw_dir.resolve()
+    ):
+        raise ValueError(f"{media_name} belongs to a different video or project")
 
 
 def freeze_export_binding(workspace, *, job_ref, expected_head):
