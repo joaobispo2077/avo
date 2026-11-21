@@ -112,9 +112,8 @@ def retain_provider_package(package, evidence, store_root):
 def _verify_retained_package(package, target):
     if _read_retained_manifest(target) != package:
         raise ArtCraftError("Immutable ArtCraft package manifest has changed")
-    for item in package["files"]:
-        root = target / "files"
-        _verify_file(root / item["path"], root, item)
+    root = target / "files"
+    return [_verify_file(root / item["path"], root, item) for item in package["files"]]
 
 
 def _read_retained_manifest(target):
@@ -139,6 +138,32 @@ def retain_native_instance_sources(package, evidence, *, project_root, target):
     else:
         target.parent.mkdir(parents=True, exist_ok=True)
         _retain_new_package(package, evidence, target)
+
+
+def retained_native_instance_files(instance, project_root, provider):
+    """Verify the video-local copy of the exact pinned native package."""
+    raw = _require_external_root(project_root)
+    base = raw / "edit" / "derived" / "provider-components"
+    target = base / instance["instanceId"]
+    if target.resolve() != target or not target.is_relative_to(base):
+        raise ArtCraftError("ArtCraft instance source escaped its owning video")
+    package = _read_retained_manifest(target)
+    pin = instance["nativePackage"]
+    identity = {key: package[key] for key in ("provider", "app", "packageHash")}
+    selected_kit = (instance["kitId"], instance["kitVersion"])
+    if (
+        provider != package["provider"]
+        or pin != identity
+        or selected_kit != (package["componentId"], package["componentVersion"])
+    ):
+        raise ArtCraftError("ArtCraft package differs from the pinned video instance")
+    sources = _verify_retained_package(package, target)
+    declared = [{"path": item["locator"], "sha256": item["sha256"]} for item in sources]
+    if declared != instance["generatedFiles"]:
+        raise ArtCraftError(
+            "ArtCraft package file list differs from the pinned video instance"
+        )
+    return [file_fingerprint(target / "manifest.json"), *sources]
 
 
 def _retain_new_package(package, evidence, target):

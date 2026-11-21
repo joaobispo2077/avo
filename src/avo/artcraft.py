@@ -45,6 +45,7 @@ __all__ = [
     "recover_authoring",
     "require_artcraft_export_environment",
     "require_eligible",
+    "retained_authoring_files",
     "run_authoring",
     "seal_record",
     "validate_record",
@@ -1287,6 +1288,69 @@ def _recorded_authoring_files(job, head):
         ],
         "handoff": [head.get("handoff")],
     }
+
+
+def retained_authoring_files(job_ref, *, expected_head=None):
+    """Return exact local and external files needed to retain a native job."""
+    store, job, head = _selected_job(job_ref)
+    if expected_head is not None and (head["eventHash"], head["state"]) != (
+        expected_head,
+        "exported",
+    ):
+        raise _changed_job_head()
+    roots = job["roots"]
+    declared = _recorded_authoring_files(job, head)
+    owned = [
+        *declared["nativeDocument"],
+        *declared["outputs"],
+        *declared["handoff"],
+        *head.get("partialFiles", []),
+    ]
+    _require_retained_artifacts(declared["inputs"], roots["read"])
+    _require_retained_artifacts(owned, roots["write"])
+    return job, [
+        *_retained_job_records(store, job, head),
+        *declared["inputs"],
+        *(item for item in owned if item),
+    ]
+
+
+def _require_retained_artifacts(references, roots):
+    for reference in references:
+        if reference is not None and not _retained_job_file(reference, roots):
+            raise ArtCraftError(
+                f"Retained ArtCraft file changed or is missing: {reference['locator']}"
+            )
+
+
+def _retained_job_records(store, job, head):
+    directory = store.reference(job["jobId"]).parent
+    index_path = store._index_path(directory)
+    index_fingerprint = file_fingerprint(index_path)
+    index = store._index(directory)
+    if index["operations"].get(index["head"]) != head["eventHash"]:
+        raise _changed_job_head()
+    records = [file_fingerprint(store.reference(job["jobId"])), index_fingerprint]
+    predecessors = {}
+    for operation, event_hash in index["operations"].items():
+        event = store._indexed_event(directory, operation, event_hash, job["jobHash"])
+        predecessors[event_hash] = event["predecessorHash"]
+        records.append(file_fingerprint(directory / f"event-{operation}.json"))
+    _require_retained_job_chain(head["eventHash"], predecessors)
+    if file_fingerprint(index_path) != index_fingerprint:
+        raise _changed_job_head()
+    return records
+
+
+def _require_retained_job_chain(head_hash, predecessors):
+    while head_hash is not None:
+        if head_hash not in predecessors:
+            raise ArtCraftError(
+                "Retained ArtCraft journal has an incomplete event chain"
+            )
+        head_hash = predecessors.pop(head_hash)
+    if predecessors:
+        raise ArtCraftError("Retained ArtCraft journal has an unrelated event")
 
 
 def _inspect_edited_parameters(job, reference, source_inspector):
