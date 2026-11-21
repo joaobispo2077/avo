@@ -39,6 +39,9 @@ LOWER_THIRD_COMMANDS = frozenset(
 TEXT_REVISION_COMMANDS = frozenset(
     {"symbol.edit", "symbol.exit", "element.select", "text.edit"}
 )
+EMBLEM_COMMANDS = (
+    LOWER_THIRD_COMMANDS - {"draw.rect", "text.create", "text.fonts"}
+) | {"file.import"}
 
 __all__ = [
     "LOWER_THIRD_COMMANDS",
@@ -143,13 +146,7 @@ def lower_third_steps(output, parameters, source, white_directory):
     """Build the selected native commands, with frame numbers in the document clock."""
     _profile_clock(output)
     scale, offset = _lower_third_layout(output)
-    count = output["frameCount"]
-    enter, hold = count // 8, count // 3
-    leave, exit_end = 3 * count // 4, 7 * count // 8
-    return [
-        _step("layer.new", name="Speaker label"),
-        _step("timeline.insert_blank_keyframe", frame=enter),
-        _step("timeline.goto", frame=enter),
+    artwork = [
         _step(
             "draw.rect",
             x=24 * scale,
@@ -160,12 +157,33 @@ def lower_third_steps(output, parameters, source, white_directory):
             fill="#102c48",
         ),
         _speaker_label(parameters, scale, offset),
+    ]
+    return _slide_steps(
+        output,
+        artwork,
+        source,
+        white_directory,
+        "Speaker label",
+        "Speaker plate",
+        24 * scale,
+    )
+
+
+def _slide_steps(output, artwork, source, white_directory, layer, symbol, distance):
+    count = output["frameCount"]
+    enter, hold = count // 8, count // 3
+    leave, exit_end = 3 * count // 4, 7 * count // 8
+    return [
+        _step("layer.new", name=layer),
+        _step("timeline.insert_blank_keyframe", frame=enter),
+        _step("timeline.goto", frame=enter),
+        *artwork,
         _step("edit.select_all"),
-        _step("modify.convert_to_symbol", name="Speaker plate", kind="graphic"),
-        *_move_key(hold, 24 * scale),
+        _step("modify.convert_to_symbol", name=symbol, kind="graphic"),
+        *_move_key(hold, distance),
         _step("timeline.create_tween", frame=enter),
         _step("timeline.insert_keyframe", frame=leave),
-        *_move_key(exit_end, -24 * scale),
+        *_move_key(exit_end, -distance),
         _step("timeline.create_tween", frame=leave),
         _step("timeline.insert_blank_keyframe", frame=count - 1),
         _step("file.save_as", path=str(source)),
@@ -212,6 +230,21 @@ def _opaque(image):
 
 def inspect_lower_third_source(native, output, parameters, *, max_bytes):
     """Inspect the selected native JSON without asking AniCraft to load it."""
+    return _inspect_source_file(native, output, parameters, max_bytes=max_bytes)
+
+
+def inspect_animated_emblem_source(native, output, artwork, *, max_bytes):
+    from .artcraft_vectorcraft import verify_emblem_svg
+
+    digest, outline = verify_emblem_svg(Path(artwork["locator"]))
+    if digest != artwork["sha256"]:
+        raise ArtCraftError("AniCraft source no longer matches its selected artwork")
+    return _inspect_source_file(
+        native, output, None, max_bytes=max_bytes, emblem_path=outline
+    )
+
+
+def _inspect_source_file(native, output, parameters, *, max_bytes, emblem_path=None):
     native = Path(native)
     if not native.is_absolute() or native.resolve() != native or not native.is_file():
         raise ArtCraftError("AniCraft source must be one exact regular native file")
@@ -227,7 +260,9 @@ def inspect_lower_third_source(native, output, parameters, *, max_bytes):
         raise ArtCraftError("AniCraft source exceeds the byte budget")
     try:
         source = json.loads(raw, object_pairs_hook=_distinct_native_fields)
-        details = _native_source_profile(source, output, parameters)
+        details = _native_source_profile(
+            source, output, parameters, emblem_path=emblem_path
+        )
     except (
         KeyError,
         TypeError,
@@ -257,29 +292,10 @@ def _distinct_native_fields(pairs):
     return result
 
 
-def _native_source_profile(source, output, parameters):
-    _native_shape(source, "format version generator paths document")
-    if (source["format"], source["version"], source["generator"]) != (
-        "anicraft",
-        3,
-        "AniCraft 0.2.1",
-    ):
-        raise ArtCraftError(
-            "AniCraft saved format or source release differs from the checked profile"
-        )
-    paths = source["paths"]
-    if (
-        not isinstance(paths, list)
-        or len(paths) != 2
-        or any(
-            not isinstance(path, str) or not _VECTOR_PATH.fullmatch(path)
-            for path in paths
-        )
-    ):
-        raise ArtCraftError("AniCraft source must contain only inline vector paths")
-    body = source["document"]
-    _native_shape(body, "stage scenes library next_id")
-    _require_native_canvas(body["stage"], output)
+def _native_source_profile(source, output, parameters, *, emblem_path=None):
+    paths, body = _native_document(source, output, path_count=1 if emblem_path else 2)
+    if emblem_path is not None:
+        return _inspect_emblem_source(paths, body, output, emblem_path)
     symbol = _native_symbol(body)
     _require_symbol_references(body["scenes"], symbol["id"], output["frameCount"])
     text = _inspect_symbol_artwork(symbol)
@@ -295,6 +311,53 @@ def _native_source_profile(source, output, parameters):
         "fontFamily": text["font"],
         "inlineVectorHash": content_hash(paths),
     }
+
+
+def _native_document(source, output, *, path_count):
+    _native_shape(source, "format version generator paths document")
+    if (source["format"], source["version"], source["generator"]) != (
+        "anicraft",
+        3,
+        "AniCraft 0.2.1",
+    ):
+        raise ArtCraftError(
+            "AniCraft saved format or source release differs from the checked profile"
+        )
+    paths = source["paths"]
+    if (
+        not isinstance(paths, list)
+        or len(paths) != path_count
+        or any(
+            not isinstance(path, str) or not _VECTOR_PATH.fullmatch(path)
+            for path in paths
+        )
+    ):
+        raise ArtCraftError("AniCraft source must contain only inline vector paths")
+    body = source["document"]
+    _native_shape(body, "stage scenes library next_id")
+    _require_native_canvas(body["stage"], output)
+    return paths, body
+
+
+def _inspect_emblem_source(paths, body, output, emblem_path):
+    symbol = _native_symbol(body, name="Emblem")
+    _require_symbol_references(
+        body["scenes"], symbol["id"], output["frameCount"], layer="Emblem"
+    )
+    (element,) = _native_elements(symbol["timeline"])
+    _native_shape(element, "Shape")
+    shape = element["Shape"]
+    _native_shape(shape, "fill fill_rule path stroke")
+    _native_shape(shape["fill"], "Solid")
+    _native_rgba(shape["fill"]["Solid"])
+    _native_shape(shape["stroke"], "color width style")
+    _native_rgba(shape["stroke"]["color"])
+    _native_shape(shape["stroke"]["style"], "cap join miter_limit")
+    if paths != [emblem_path] or shape["path"] != 0:
+        raise ArtCraftError(
+            "AniCraft editable emblem does not match the selected polygon"
+        )
+    return {"inlineVectorHash": content_hash(paths)}
 
 
 def _native_shape(value, names):
@@ -317,12 +380,12 @@ def _require_native_canvas(stage, output):
         )
 
 
-def _native_symbol(body):
+def _native_symbol(body, *, name="Speaker plate"):
     if len(body["library"]) != 1:
         raise ArtCraftError("AniCraft source has unexpected library dependencies")
     symbol = body["library"][0]
     _native_shape(symbol, "id kind name timeline")
-    if symbol["name"] != "Speaker plate" or symbol["kind"] != "Graphic":
+    if (symbol["name"], symbol["kind"]) != (name, "Graphic"):
         raise ArtCraftError(
             "AniCraft source library lacks the selected editable graphic symbol"
         )
@@ -367,11 +430,11 @@ def _native_rgba(color):
     _native_numbers(list(color.values()), 4)
 
 
-def _require_symbol_references(scenes, expected_id, count):
+def _require_symbol_references(scenes, expected_id, count, *, layer="Speaker label"):
     if len(scenes) != 1:
         raise ArtCraftError("AniCraft source must contain one selected scene")
     _native_shape(scenes[0], "name timeline")
-    _require_native_keyframes(scenes[0]["timeline"], count)
+    _require_native_keyframes(scenes[0]["timeline"], count, layer)
     for reference in _native_elements(scenes[0]["timeline"]):
         _native_shape(reference, "Symbol")
         _native_shape(reference["Symbol"], "first_frame loop_mode symbol")
@@ -381,9 +444,9 @@ def _require_symbol_references(scenes, expected_id, count):
             )
 
 
-def _require_native_keyframes(timeline, count):
+def _require_native_keyframes(timeline, count, layer_name):
     layers = timeline["layers"]
-    if [layer["name"] for layer in layers] != ["Speaker label", "Layer 1"]:
+    if [layer["name"] for layer in layers] != [layer_name, "Layer 1"]:
         raise ArtCraftError("AniCraft source has unexpected scene layers")
     starts = [
         0,
@@ -443,6 +506,52 @@ def run_lower_third(output, parameters, *, directory, budget, invoke, open_strea
     _initialize_document(call, empty, output, parameters["font"])
     _apply_recipe(call, empty, native, recipe, steps, open_stream, budget, deadline)
     return _verified_export(call, native, recipe, output, parameters, budget, deadline)
+
+
+def run_animated_emblem(output, artwork, *, directory, budget, invoke):
+    from avo.artcraft import _copy_native_source
+
+    from .artcraft_vectorcraft import verify_emblem_svg
+
+    count = output["frameCount"]
+    _require_new_output_directory(directory, budget, count)
+    directory.mkdir(parents=True)
+    native, white = directory / "component.anicraft", directory / "white"
+    retained = directory / "emblem.svg"
+    _copy_native_source(retained, artwork)
+    digest, emblem_path = verify_emblem_svg(retained)
+    if digest != artwork["sha256"]:
+        raise ArtCraftError("AniCraft SVG differs from the exact selected artwork")
+    deadline = monotonic() + budget["seconds"]
+    call = _profile_invocation(directory, budget, invoke, deadline)
+    art = [_step("file.import", path=str(retained), x=36, y=26, layer="active")]
+    steps = _slide_steps(output, art, native, white, "Emblem", "Emblem", 24)
+    recipe = write_immutable_json(directory / "recipe.json", steps)
+    empty = directory / "empty.anicraft"
+    _initialize_document(call, empty, output, None)
+    receipts = _apply_recipe(call, empty, native, recipe, steps, None, budget, deadline)
+    _require_emblem_import(receipts[3])
+    return _verified_export(
+        call, native, recipe, output, None, budget, deadline, emblem_path=emblem_path
+    )
+
+
+def _require_emblem_import(receipt):
+    expected = {
+        "bitmap": None,
+        "elements": 1,
+        "height": 128.0,
+        "layers": 0,
+        "masks": 0,
+        "missing_fonts": [],
+        "skipped": {},
+        "texts": 0,
+        "width": 128.0,
+    }
+    if {key: receipt.get(key) for key in expected} != expected:
+        raise ArtCraftError(
+            "AniCraft import omitted or changed part of the editable emblem"
+        )
 
 
 def revise_lower_third(
@@ -535,19 +644,28 @@ def _text_revision_steps(target, label, native, count):
     ]
 
 
-def _verified_export(call, native, recipe, output, parameters, budget, deadline):
+def _verified_export(
+    call, native, recipe, output, parameters, budget, deadline, *, emblem_path=None
+):
     directory = native.parent
     white = directory / "white"
-    source = inspect_lower_third_source(
-        native, output, parameters, max_bytes=budget["bytes"]
+    source = _inspect_source_file(
+        native, output, parameters, max_bytes=budget["bytes"], emblem_path=emblem_path
     )
     locked_source = source["fingerprint"]
-    information = _inspect_document(call, native, output)
+    symbol = "Emblem" if emblem_path is not None else "Speaker plate"
+    information = _inspect_document(call, native, output, symbol=symbol)
     reopened, black, check = _render_backings(
         call, directory, native, output["frameCount"]
     )
+    safe_bounds = (51, 38, 173, 132) if emblem_path is not None else None
     matte, maximum = _render_matte(
-        (white, reopened, black, check), directory, output, budget, deadline
+        (white, reopened, black, check),
+        directory,
+        output,
+        budget,
+        deadline,
+        safe_bounds=safe_bounds,
     )
     _require_profile_budget(directory, budget)
     if file_fingerprint(native) != locked_source:
@@ -615,7 +733,8 @@ def _require_profile_budget(directory, budget):
 def _initialize_document(call, empty, output, font):
     width, height, fps = output["width"], output["height"], _profile_clock(output)
     call("new", "--out", empty, "--width", width, "--height", height, "--fps", fps)
-    _require_font(call, empty, font)
+    if font is not None:
+        _require_font(call, empty, font)
 
 
 def _require_font(call, document, font):
@@ -639,6 +758,7 @@ def _apply_recipe(call, document, native, recipe, steps, open_stream, budget, de
         raise ArtCraftError(
             "AniCraft did not report every authoring operation or save its native document"
         )
+    return responses
 
 
 def _run_json_lines(open_stream, document, native, steps, *, budget, deadline):
@@ -691,7 +811,7 @@ def _require_json_lines_reply(reply, index):
         )
 
 
-def _inspect_document(call, native, output):
+def _inspect_document(call, native, output, *, symbol="Speaker plate"):
     document = json.loads(call("info", native))
     expected = (output["width"], output["height"], _profile_clock(output), "#ffffff")
     stage = tuple(
@@ -713,15 +833,15 @@ def _inspect_document(call, native, output):
         raise ArtCraftError(
             "AniCraft saved document contains unsupported scripts or sounds"
         )
-    _require_native_library(document)
+    _require_native_library(document, symbol)
     return document
 
 
-def _require_native_library(document):
+def _require_native_library(document, symbol):
     library = [
         (item["name"], item["kind"], item["frames"]) for item in document["library"]
     ]
-    if library != [("Speaker plate", "Graphic", 1)]:
+    if library != [(symbol, "Graphic", 1)]:
         raise ArtCraftError(
             "AniCraft saved document has unexpected library dependencies"
         )
@@ -753,7 +873,7 @@ def _render_backing(call, directory, native, count, name, color):
     return frames
 
 
-def _render_matte(backings, directory, output, budget, deadline):
+def _render_matte(backings, directory, output, budget, deadline, *, safe_bounds=None):
     target = directory / "alpha"
     names = [f"frame_{frame:05d}.png" for frame in range(1, output["frameCount"] + 1)]
     expected_names = set(names)
@@ -780,7 +900,7 @@ def _render_matte(backings, directory, output, budget, deadline):
         rendered.append(fingerprint)
         maximum = max(maximum, error)
         boxes.append(matte.getchannel("A").getbbox())
-    _require_motion_observation(boxes, output)
+    _require_motion_observation(boxes, output, safe_bounds=safe_bounds)
     return rendered, maximum
 
 
@@ -801,7 +921,7 @@ def _open_matte_frame(backings, name, dimensions):
         return recover_matte(white, dark, check)
 
 
-def _require_motion_observation(boxes, output):
+def _require_motion_observation(boxes, output, *, safe_bounds=None):
     count = len(boxes)
     enter, hold, leave, exit_end = (
         count // 8,
@@ -821,17 +941,21 @@ def _require_motion_observation(boxes, output):
         raise ArtCraftError(
             "AniCraft rendered phases do not match the selected entrance, hold and exit"
         )
-    _require_safe_area(boxes, output)
+    _require_safe_area(boxes, output, safe_bounds)
 
 
-def _require_safe_area(boxes, output):
+def _lower_third_bounds(output):
     scale, offset = _lower_third_layout(output)
-    expected = (
+    return (
         round(23 * scale),
         round(267 * scale + offset),
         round(319 * scale),
         round(325 * scale + offset),
     )
+
+
+def _require_safe_area(boxes, output, bounds):
+    expected = bounds or _lower_third_bounds(output)
     for box in filter(None, boxes):
         if (
             box[0] < expected[0] - 2
