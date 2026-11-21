@@ -1,7 +1,9 @@
 """Opt-in checks against explicitly selected local ArtCraft installations."""
 
+import json
 import os
 import subprocess
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import pytest
@@ -321,3 +323,137 @@ def test_native_effectcraft_reopens_mask_and_renders_exact_partial_span(
         "startFrame": 3,
         "endFrameExclusive": 9,
     }
+
+
+def test_native_vectorcraft_graph_data_survives_reopen_and_revision(tmp_path):
+    entry = os.environ.get("AVO_ARTCRAFT_VECTORCRAFT_TEST_CLI")
+    if not entry:
+        pytest.skip("Select the installed VectorCraft 0.24.1 CLI")
+    executable = Path(entry).resolve(strict=True)
+    environment = {
+        key: value
+        for key, value in os.environ.items()
+        if not key.upper().startswith("VECTORCRAFT_")
+    }
+    environment["VECTORCRAFT_NO_PREFS"] = "1"
+
+    def run(name, steps, target, *, source=None):
+        script = tmp_path / f"{name}.json"
+        script.write_text(json.dumps(steps), encoding="utf-8")
+        initial = [] if source is None else ["--in", str(source)]
+        result = subprocess.run(
+            [
+                str(executable),
+                "--safe-mode",
+                "run",
+                *initial,
+                "--commands",
+                str(script),
+                "--scale",
+                "1",
+                "--export",
+                str(target),
+            ],
+            cwd=tmp_path,
+            env=environment,
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            check=True,
+            timeout=14,
+        )
+        rows = [json.loads(line) for line in result.stdout.splitlines()]
+        assert rows[-1]["step"] == "export"
+        assert rows[-1]["result"]["path"] == str(target)
+        return {row["command"]: row["result"] for row in rows if row["step"] == "cmd"}
+
+    source = tmp_path / "chart.vectorcraft"
+    original = tmp_path / "chart.png"
+    data = {
+        "series": ["Current", "Previous"],
+        "categories": ["A", "B"],
+        "rows": [[2, 5], [7, 3]],
+    }
+    created = run(
+        "create",
+        [
+            _vector_step(
+                "file.new",
+                name="Editable data preview",
+                width=320,
+                height=180,
+                units="Pixels",
+                colorMode="rgb",
+                backgroundContents="transparent",
+                created=0,
+            ),
+            _vector_step(
+                "graph.create", type="column", x=45, y=36, width=230, height=110, **data
+            ),
+            _vector_step("file.save", path=str(source)),
+        ],
+        original,
+    )
+    graph = created["graph.create"]["id"]
+    fingerprint = file_fingerprint(source)
+    inspect = [
+        _vector_step("select.set", ids=[graph]),
+        _vector_step("graph.setData", id=graph),
+    ]
+    reopened = tmp_path / "reopened.png"
+    facts = run("inspect", inspect, reopened, source=source)["graph.setData"]
+    assert {key: facts[key] for key in data} == data
+    assert _vector_rgba(reopened) == _vector_rgba(original)
+    vector = tmp_path / "chart.svg"
+    run("exchange", inspect, vector, source=source)
+    root = ET.parse(vector).getroot()
+    assert root.tag == "{http://www.w3.org/2000/svg}svg"
+    assert root.attrib["viewBox"] == "0 0 320 180"
+    assert len(root) > 0
+
+    updated = {**data, "rows": [[9, 1], [4, 8]]}
+    revised = tmp_path / "new-chart.vectorcraft"
+    after = tmp_path / "new-chart.png"
+    run(
+        "revise",
+        [
+            inspect[0],
+            _vector_step("graph.setData", id=graph, **updated),
+            _vector_step("file.save", path=str(revised)),
+        ],
+        after,
+        source=source,
+    )
+    changed = run(
+        "check-revision", inspect, tmp_path / "new-reopened.png", source=revised
+    )
+    assert {key: changed["graph.setData"][key] for key in updated} == updated
+    assert _vector_rgba(after) != _vector_rgba(original)
+
+    partial = tmp_path / "partial.vectorcraft"
+    missing_export = tmp_path / "partial.png"
+    with pytest.raises(subprocess.CalledProcessError):
+        run(
+            "partial-save",
+            [
+                _vector_step("file.save", path=str(partial)),
+                _vector_step("graph.setData", id=graph),
+            ],
+            missing_export,
+            source=source,
+        )
+    assert partial.is_file()
+    assert not missing_export.exists()
+    partial_png = tmp_path / "partial-reopened.png"
+    run("check-partial", inspect, partial_png, source=partial)
+    assert _vector_rgba(partial_png) == _vector_rgba(original)
+    assert file_fingerprint(source) == fingerprint
+
+
+def _vector_step(command, **parameters):
+    return {"command": command, "params": parameters}
+
+
+def _vector_rgba(path):
+    with Image.open(path) as image:
+        assert image.mode == "RGBA" and image.size == (320, 180)
+        return image.tobytes()
