@@ -38,11 +38,15 @@ def configure(sub):
     for operation, hint in (
         ("inspect", "Reconcile retained job evidence"),
         ("run", "Execute a prepared native job"),
-        ("recover", "Read retained evidence for an interrupted job"),
+        ("recover", "Inspect, retry or cancel a selected authoring job"),
     ):
         command = operations.add_parser(operation, help=hint)
         command.add_argument("--job", required=True)
         command.add_argument("--expected-head", required=True)
+        if operation == "recover":
+            command.add_argument(
+                "--action", choices=("inspect", "retry", "cancel"), default="inspect"
+            )
         command.add_argument("--json", action="store_true")
     register = operations.add_parser(
         "register", help="Register a verified ArtCraft export for one video"
@@ -387,13 +391,17 @@ def _register_export(args):
 
 
 def _read_job(args):
-    if args.artcraft_operation == "recover":
-        from avo.artcraft import recover_authoring
-
-        return recover_authoring(args.job, expected_head=args.expected_head)
     from avo.adapters.artcraft import SelectedArtCraftAdapter
-    from avo.artcraft import inspect_authoring
+    from avo.artcraft import inspect_authoring, recover_authoring
 
+    if args.artcraft_operation == "recover":
+        selected = SelectedArtCraftAdapter() if args.action == "retry" else None
+        return recover_authoring(
+            args.job,
+            expected_head=args.expected_head,
+            action=args.action,
+            adapter=selected,
+        )
     return inspect_authoring(
         args.job,
         expected_head=args.expected_head,

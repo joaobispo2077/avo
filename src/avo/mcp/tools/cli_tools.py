@@ -1138,7 +1138,7 @@ def _artcraft_job_bridge_defs():
     descriptions = {
         "run": "Run the selected job at its exact head and write only its owned output.",
         "inspect": "Read current or stale evidence for the selected job and expected head.",
-        "recover": "Inspect retained files and the next supported action after a job interruption.",
+        "recover": "Inspect retained files, retry the exact operation, or cancel a job before launch.",
     }
     selected_job = (
         ParamSpec("job", str, required=True),
@@ -1154,7 +1154,10 @@ def _artcraft_job_bridge_defs():
                 operation,
                 description,
                 include_project=False,
-                extra_params=selected_job,
+                extra_params=selected_job
+                + (
+                    (ParamSpec("action", str | None),) if operation == "recover" else ()
+                ),
             )
             for operation, description in descriptions.items()
         ),
