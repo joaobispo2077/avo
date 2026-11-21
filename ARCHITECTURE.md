@@ -552,6 +552,123 @@ See [agent cost continuity](docs/agent-cost-continuity.md),
 [feature-015 validation guide](specs/015-agent-cost-continuity/quickstart.md).
 
 
+## Optional ArtCraft provider authoring
+
+The ArtCraft assessment receives a closed request and the current invocation's
+intent separately. It resolves existing routes and pinned component evidence
+against the exact provider, component and required behavior. CLI and MCP share
+this assessment and the bundled capability catalog. An eligible decision
+records one app and its operations. The authoring boundary re-evaluates that
+same scope before tool access. Motion engine selection and canonical timeline
+ownership stay with the existing services.
+
+Provider job records live in a declared external workspace. The shared
+ArtCraft schema and timeline store primitives bind job and event content,
+serialize writes and compare the expected event head. An exact operation can
+recover after an interrupted index write. App observations, reusable source
+receipts and creator decisions carry distinct evidence. Legacy component
+commands reserve ArtCraft declarations for its qualified admission path.
+Packages include the AVO-owned catalog and schema. Users manage the selected
+app installation separately. The distribution smoke reads bundled metadata.
+
+Structured ArtCraft job tools invoke the same prepare, run, inspect and recover
+commands as the CLI. Inspection and recovery compare the selected event head
+with current evidence and read only the artifacts owned by the job. Recovery
+reports a next action and fingerprints bounded partial files for reference.
+An interrupted write retains its event and requires a fresh job before another
+attempt at authoring.
+
+The first AniCraft profile authors a Windows 0.2.1 lower third from a job-owned
+empty document. A supplied confined command runner executes the fixed native
+recipe and checks the exact saved stage and clock, installed font family and
+fresh-session pixels. The renderer reconstructs straight alpha from two native
+backings and verifies every channel against an independent third. Job events
+bind the saved native source, recipe and frame fingerprints. The guided route
+prepares the same native recipe under operator control and retains its returned
+files as references. Proof admission remains a separate decision boundary.
+
+An explicit host-MCP job stages a headless AniCraft launch descriptor and a
+version-specific operator recipe. It binds the installed files, owned empty
+document, command IDs, permitted roots and resource limits. The handoff requires
+the selected host to enforce those limits. AVO stages and inspects the handoff
+without connecting to the host or starting a server.
+
+AniCraft JSON-lines authoring uses an independently confined stdio runner and
+the same fixed recipe and verification as CLI batching. It checks the startup
+record and waits for the exact successful receipt at each step before sending
+the next command. The first failed or incomplete receipt leaves a recoverable
+job outcome and prevents subsequent commands.
+
+The explicitly selected SoundCraft cue profile accepts one external WAV and
+an exact 48 kHz stereo output contract. A confined Windows 0.20.1 CLI builds
+an owned session with one track and the built-in room reverb. The media
+adapter independently decodes the retained source and both bounces, checks
+the PCM clock, and compares the saved session's fresh bounce. The export event
+binds the editable session, recipe, retained audio dependency and decoded
+output for standalone review. Canonical proof admission has its own checks.
+
+Generated cue placement binds the export receipt and output fingerprint to an
+explicit SFX region in Tracks. Proof compilation seals both identities and
+verifies the current frame and sample ranges. Materialization and native
+execution recheck the receipt and its closure while resolving the audio.
+The native mixer adds the cue through the existing SFX node and final encode.
+
+The selected VectorCraft Windows 0.24.1 profile stages a fixed card recipe
+under a confined runner with plug-ins and preferences disabled. It retains
+the editable native source, its bounded inline resource envelope and the
+verified sRGB RGBA still. Tracks selects that exact static asset and its
+placement. Proof execution verifies the source, dimensions and decoded pixels
+before using the existing overlay layers for the exact requested frames.
+
+The explicitly selected video export binds the unchanged AniCraft source,
+recipe, app and CLI fingerprints, ordered alpha frames and current approved
+cut and sync to the logical component in Animation, BMap and Tracks. Proof
+composition observes the actual source and packs the frames into a silent
+lossless FFV1/BGRA clip. It checks each decoded frame and timestamp before
+registering the generated asset. The timeline service verifies the retained
+binding and recursively rejects forbidden output ancestry. Compilation and
+execution read the same source lock and use the existing `overlay-video`
+operation, preserving the canonical placement, alpha and local frame phase
+through full and window proofs. Creator review follows the existing gates.
+
+ArtCraft review pairs the retained standalone phase frames with an exact
+original-footage candidate when the caller selects its proof record. The
+review reader verifies the immutable plan, materialization, source binding
+and current candidate bytes, and links available source and edit logs. It
+reports the review as pending for the existing creator approval workflow.
+
+Native provider publication extends the existing animation catalog. The package
+reader checks its external root, byte fingerprints, declared source roles,
+review references, rights and local parameter schema before independent source
+inspection. An explicit approval against the current catalog version retains
+the verified bytes in a provider-scoped external store and publishes hash-only
+source provenance. An identical retry verifies the retained package and returns
+the existing promotion without adding an event.
+
+Native kit instantiation verifies the exact catalog version and rechecks the
+provider store's retained source, reviews and rights. The selected video's
+component instance records its parameters and project-owned source copies.
+An explicit upgrade creates a new version-pinned instance linked to the
+previous record. Its contextual review follows the existing video gates.
+
+The AniCraft lower-third profile authors 16:9 and 9:16 on their declared
+canvases. Both use the same phase clock and width-scaled typography. The
+portrait layout anchors the plate near three quarters of the canvas height
+and checks every visible alpha frame against its independently measured bounds.
+
+A saved-source text revision starts from an immutable job-owned copy and saves
+into a separate revision folder. The native adapter observes the selected edit
+command signatures and compares the new document with the preserved design.
+The receipt retains the original source, revision recipe and decoded output.
+
+Copy-only reuse binds a selected native export to a new project's exact
+provider, editable source bytes, parameters, render contract and installed
+tool fingerprints. It copies the verified component frames, native revision
+and recipe into the new job without an application session. The new proof
+receives its own canonical placement and source binding. Native label
+instances resolve omitted settings from the reviewed template and retain its
+qualified font.
+
 ## Motion engine selection and code-drawn capture (feature 012)
 
 HyperFrames remains the default. The pure shared motion policy resolves invocation, pinned run, project/video, provider/channel and global preferences, in that order. Strict saved IDs are hyperframes, remotion, and code-drawn; Remotion retains its existing unsupported execution adapter. A new default never rewrites a recorded animation revision or creator decision. Explicit new engine/source authoring uses existing revision invalidation. Installed motion and pipeline routers resolve current no-framework intent before loading engine-specific skills.
@@ -947,9 +1064,10 @@ typed request freezing and the default motion-review projection are implemented.
 Untimed proposal/selection and recoverable canonical application use the existing
 timeline owners. The sound catalogue and descriptor search are local source-read
 and saved-metadata operations respectively; semantic execution has an explicit
-isolated optional boundary. Camera, visual analysis, sound placement, preparation
-and editor interchange below remain planned until their own execution and
-acceptance evidence is complete.
+isolated optional boundary. Camera, visual analysis, sound placement and source
+preparation use explicit selections. Editor interchange exposes source-preserving
+validation, returned XML review and selected cuts through the normal trim owner.
+Its production targets await version-specific qualification.
 
 Motion map and linked lightweight storyboard are built-in, engine-independent
 projections at applicable motion planning/review. They join the selected brief,
@@ -979,8 +1097,13 @@ An explicit semantic operation injects a ranker and paired local CLAP worker;
 manifest/model/preprocessing/runtime identities must agree before cosine scores
 are accepted. The optional worker uses offline local files and bounded validated
 vectors; ordinary model defaults and proof capability registration stay unchanged.
-No model package or weights are an AVO core prerequisite. Real provisioned-model
-acceptance remains unperformed until the artifacts/runtime are available.
+No model package or weights are an AVO core prerequisite. The distributions
+include separate Windows CPU wheel locks for CLAP and face analysis. Explicit
+local runtime qualification uses `AVO_TEST_CLAP_PIN` without changing ordinary
+job defaults;
+the real worker test records joint-space/manifest identity, normalized vectors,
+exact source-bound cache reuse and changed-source rejection. Human suitability
+and listening acceptance remain separate.
 
 Advanced camera strategy validation reserves a closed relative-behavior extension
 and publishes the revision reference with an index-v2 capability fence in one
@@ -989,9 +1112,8 @@ the same guard; existing v1 snapshots do not cause an upgrade on inspection.
 The pure camera planner derives frames from BMap and binds moves to exact source
 occurrences, geometry, source bytes and frozen options. Camera proof compilation
 uses a strict v2 operation contract and requires a qualified native implementation;
-legacy proof contracts are unchanged. Encoded execution remains a qualification
-candidate until the native capability, provenance and authoring controls are
-registered together.
+legacy proof contracts are unchanged. The selected native route verifies tool
+and input identity before executing and leaves creative approval to review.
 
 Selected untimed camera recipes expand inside `MotionAuthoringService` into
 strict relative paths with frozen options, source identity and display geometry.
@@ -1049,6 +1171,24 @@ source/measurement and current annotation identities. It creates no source reads
 canonical timing, selection, gain policy or listening approval. Publication and
 encoded contextual qualification belong to their existing owners.
 
+Optional catalogue descriptions and categories extend the existing strict
+curation contract. Generic annotation revision/expected-generation controls
+remain authoritative; descriptor ranking includes those labels and shared
+eligibility enforces exact category filters for descriptor and semantic modes.
+Missing fields preserve legacy entries without migration. No new index, runtime,
+source analysis or rights claim follows from these labels.
+
+`avo.sfx_preferences` explicitly promotes selected portable descriptors and a
+library/source-byte identity into bounded `routingOverrides.sfxFavorites` in the
+existing provider manifest. Existing preference schema/byte guards and writer
+locks preserve unrelated settings and recheck the current catalogue before
+publication. Native/MCP mutations bind exact request bytes and provider scope;
+they gain no canonical timeline authority. Selected scans alone seed new matching
+entries, freeze their preference snapshot through resume and expose origin hashes
+in catalogue/search metadata. Existing project choices and all source, rights,
+marker, measurement and approval owners remain independent. No second project
+state store, media copying or default provider lookup is added.
+
 Explicit sound proposals now reuse `MotionAuthoringService` head guards and
 `PipelineRunStore` option freezing, with strict bounded intent/proposal contracts
 and immutable metadata below `edit/motion/sound/`. The timeline service derives
@@ -1078,6 +1218,23 @@ JSON budgets, track channel/overlay rules and frozen sound choice validation liv
 in the data-only `motion_metadata`, `track_rules` and `sound_choices` modules.
 Existing review, Tracks and sound-planning imports remain available. Canonical
 readers reuse these rules without importing authoring, rendering or models.
+
+Optional camera-node sound anchors use the data-only `timeline.sound_anchors`
+resolver. It reads the actual current Animation component through its calling
+service, verifies the linked cue/target layer and exact camera path/source, then
+derives a phase on BMap's full canonical interval. Proposed camera descriptions
+grant no execution authority. Frozen sound opportunities retain the selected
+node; native proof admission recomputes it against canonical Animation. Checkout
+producer identity includes the sound anchor, admission, fitting and compilation
+sources; packaged engines continue to bind their executable bytes. This adds no
+timing owner, decoder, model or approval path.
+
+Sound choice advisories compare exact native-sample schedules as rational time,
+including retained siblings during per-ID publication. A bounded sweep reports
+overlapping event/role pairs and their half-open intervals with explicit report
+truncation. Equal-time impact comparisons also respect each output sample rate.
+These data-only observations leave source signal, gain/fades/ducking and frozen
+choice identities unchanged; they establish no masking measurement or approval.
 
 Selected sound Tracks carry a strict source/choice/cue/request binding and require
 the `sound-selection-v1` reader capability. Generic publication atomically updates
@@ -1191,6 +1348,236 @@ timed visual items can retain direction while the full proposal, composite and
 Animation remain stale. No media caching or evidence/approval transfer is added.
 Changed visual assembly currently blocks this reuse for the whole assembly.
 See [`docs/motion-review-scope.md`](docs/motion-review-scope.md).
+
+`timeline.craft_scope` classifies one canonical-start owner and untrimmed
+intersecting context against a bounded complete partition. The native clock
+check is shared with sound planning; exact native rounding and placed rates are
+preserved. Optional scope views use the existing native/engine/MCP plan routes
+and generator 1.8, with no execution setup or approval authority.
+`timeline.motion_scope_application` freezes scope in existing immutable requests
+and receipts, protects unselected/shared IDs, requires previous owners for
+cross-chunk retiming, and records exact applied IDs. The existing run keeps a
+bounded typed application history, while existing retention verifies its closure.
+Legacy unscoped receipts retain their original meaning. Unique explicit cue
+references can associate legacy cues without altering canonical identity;
+conflicting claims remain unresolved. See
+[`docs/scoped-craft-production.md`](docs/scoped-craft-production.md).
+
+`timeline.sound_scope` applies the same bounded partition to explicit sound
+choices. Ownership uses exact scheduled sample time, with both original and
+replacement owners required across chunks. Existing immutable sound receipts
+freeze current/previous whole intervals and recompute ownership on replay and
+retention. Parent BMap validity and exact cut binding remain prerequisites;
+unscoped compatibility, source admission, full/window absolute evaluation and
+listening/approval boundaries are preserved. No sound state store is added.
+
+Canonical contract validation retains at most four parsed schema registries,
+keyed by the complete freshly read schema bytes. Every validation rereads the
+current schema files and validates its input document. Changed, missing or
+malformed references therefore invalidate parsed reuse without trusting file
+timestamps, caching validation results or refreshing media/review approvals.
+
+Motion-review generator 1.9 binds bounded requested-work and context identities
+separately from canonical picture/audio heads. Native reports record their
+explicit proposal origin and reconstruct current inputs through the same
+read-only pipeline context reader, reopening project preferences while retaining
+active frozen choices. Relevant sound context binds validated catalogue
+metadata. Missing or changed inputs retain historical report files without
+source analysis, canonical mutation or approval transfer. Older generators stay
+readable as historical views. Scope/report regeneration preserves an identical
+canonical ProofPlan; changed full proof dependencies still require normal
+reconstruction and owner review.
+
+Preparation coverage uses the pure `timeline.preparation` inspector over existing
+source/routing/Sync-bound acoustic and aligned-word facts. Cutting persists its
+strict document inside existing immutable source-analysis records and returns
+compact review references. The inspector neither decodes nor executes models;
+missing facts remain unavailable rather than an empty measured result. Outward
+source-tick uncertainty feeds the existing retake protection policy without a
+second timing owner or an automatic transcript/cut decision. Explicit editorial
+and pause-verification flows retain their current boundaries. Cutting producer
+identity includes the inspector and preparation schema.
+
+`timeline.preparation_recovery` freezes explicit source intervals and existing
+editing-craft recovery limits in typed cutting documents. The existing cutting
+journal serializes durable requests and source-stable attempt claims before
+inference. OS-owned per-interval locks prevent duplicate concurrent execution;
+immutable deterministic results survive interruption before journal publication.
+Exact replay reuses evidence while changed source/routing/Sync/original analysis,
+model or producer identities retain stale results without automatic retry.
+`CuttingAnalysisAdapter.recover` reuses routed native extraction, the existing
+local transcriber and optional isolated alignment. Actual source offsets and
+reduced context remain explicit; unavailable alignment preserves text without
+word-exact authority. No transcript replacement or CMap approval is granted.
+
+`preparation_cli` and the model-tool bridge expose metadata-only coverage and an
+explicit selected recovery operation. Coverage constructs no model adapter and
+does not verify source bytes. Recovery confirmation binds exact bounded request
+bytes. `timeline.preparation_retention` verifies a bounded transitive journal
+closure for reconstruction and fallback inventory, including unpublished durable
+results, without retaining extracted PCM or unreferenced drafts.
+
+`timeline.preparation_choices` records explicit original/recovered/reject/defer
+decisions in the same cutting journal, guarded by current-head CAS, complete
+overlapping predecessor identities and exact result/request scope. Immutable
+alternatives and superseded decisions remain reconstruction dependencies.
+`timeline.preparation_selected` derives a bounded source-unit view for existing
+cutting analysis. Pending/deferred, stale and unqualified timing ranges retain
+speech protection. Replaced word/character spans cannot silently cross selected
+boundaries, and recovered text drops affected pause certifications. Selection
+grants no cut approval, replaces no source transcript and starts no inference.
+Recovered choices revalidate source/model/execution bindings; choosing original,
+rejecting or deferring requires no model adapter. Cutting producer dependencies
+include the selected-evidence documents and implementation. Metadata-only
+coverage retains its existing no-source/no-model boundary. Disjoint measured
+windows preserve their unmeasured gaps rather than claiming envelope coverage.
+
+`timeline.preparation_facts` composes selected measured windows through the same
+pure coverage rules. Each incoming measurement needs its own observed facts and
+tool provenance; it cannot borrow missing original provenance. Valid original
+measurements and activity remain available, while unmeasured source time remains
+protected. A previously blocked analysis gains only the selected actual coverage,
+and unmeasured or affected pause certifications are not transferred. Cutting
+producer bindings include this composer. No media/model execution or new timing
+owner is introduced. Actual local alignment validation additionally verifies
+cutting consumes the selected facts without another analysis call.
+
+Explicit source-point consumers can select a contiguous CMap `segment_id` through
+the existing raw-to-output mapper. This identifies repeated occurrences without
+changing program offsets or the default mapping. The selected segment owns its
+native source clock; an unknown occurrence stays unresolved. Placed CMaps retain
+their placement/track selectors and reject the contiguous-only selector. This is
+a mapping primitive, not a second timeline or automatic spoken-sound trigger.
+
+Optional original-source sound anchors resolve through the existing CMap mapping
+primitive in `timeline.sound_anchors`. They bind the raw fingerprint, rational
+source point and exact segment/placement, reject ambiguous or unsupported inverse
+mapping, and require the derived output frame inside the linked cue. Proposals
+read current metadata only when this option is selected; canonical publication
+binds the unchanged heads and verifies originals. Native sound admission reuses
+the same resolver against current CMap and compares the frozen opportunity.
+Mapping implementation bytes join native producer identity, so cached proof
+evidence cannot survive an unqualified mapping change. Encoded full/window tests
+measure the selected transient while preserving source picture and the original
+CMap. This route does not infer spoken timing or grant listening approval.
+
+Current local speech dependency inspection lives in the shared
+`avo.speech_dependencies` metadata helper. The cutting adapter retains its
+existing interfaces, runtime selection and failure behavior while delegating
+dependency-byte/version checks. The helper imports no media adapter and loads
+no model; cutting and recovery producer identities bind its implementation.
+Before/after adapter and recovery tests preserve the existing behavior, including
+configured ASR with separate alignment and changed local dependency bytes.
+
+Optional word-timed sound remains a source anchor on the existing CMap clock.
+`timeline.preparation_words` qualifies an immutable word's measured, aligned and
+unprotected source time against current model facts. `timeline.sound_word_evidence`
+reuses CuttingStore/preparation selection and bounded retention; it binds exact
+original or selected-result provenance without a new mutable store. Shared speech
+dependency metadata reads package versions from the declared isolated environment
+without importing its runtimes. Actual initial analysis records dependencies
+before/after the pass and rejects changes. Proposals freeze concrete source time,
+word and selection hashes; publication, native sound admission and existing-plan
+approval recheck them. Exact analysis roots survive reconstruction without a
+recovery journal. Model packages and temporary PCM remain outside this metadata
+closure. Ordinary intents do no speech work. Unit, publication, actual encoded
+full/window and separately prepared Portuguese ASR/alignment tests cover these
+boundaries; listening and creator approval remain independent.
+
+The optional face detector uses the existing model-source scope resolver. Its
+explicit preflight seals the pinned local YuNet bytes and checks an isolated CPU
+Python worker. AVO packages the worker code and schemas. A separate hashed wheel
+list describes the qualified environment. Geometry association uses normalized
+boxes and native source ticks in pure code. Ambiguity, missing detections and
+sampling gaps require a new selection. Runtime readiness and observations are
+separate from camera application or proof approval.
+
+Face analysis binds the original stream, native clock origin, proxy digest,
+detector identity and selected measurements in one immutable record. Pure timeline
+code smooths its bounded trajectory and compiles it against one exact visible
+source occurrence and BMap cue. Recorded hold or static fallback choices handle
+uncertain output frames. The existing camera evaluator and native resampler consume
+the compiled path and check crop margins and protected regions on every frame.
+Proposal, application and proof admission verify the selected evidence. Historical
+face records referenced by proposals or Animation survive reconstruction. The
+linked map and storyboard read face readiness from metadata without running the
+detector. Existing non-face moves retain their recorded options and cue clock.
+
+For selected SFX, proof receipts bind the native combined sample peak and RMS
+to the exact output window, candidate and mixed PCM. An explicit ducking review
+margin adds a bounded, separate analysis pass on the prepared control signal
+and post-duck effect. Timeline review verifies the overlapping sample range and
+the frozen setting before deriving an attenuation suggestion. The analysis
+never contributes samples to the proof output. Native PCM fixtures verify
+bit-for-bit equivalence with the optional analysis on or off.
+
+Explicit reference analysis shares the bounded display proxy and isolated CPU
+vision runtime. It uses feature tracking without the face model, binds its
+partial-affine estimates and residuals to actual adjacent native timestamps,
+and exposes cut candidates and unmeasurable intervals separately. Reference
+measurements and labeled contact sheets form an immutable inspection record
+under the project. They enter editorial decisions through reviewed document
+references and keep proof source admission independent.
+
+Visual timing derives hold, reveal, fade and easing candidates from the sampled
+frame grid. With an explicit audio selection, the media adapter measures energy
+onsets on the original sample clock. The timeline may attach current prepared
+word evidence from the same route. It validates the source, scope and retained
+analysis before publication. These observations inform review and carry no
+rendering or source-admission authority.
+
+Reviewed reference decisions seal the selected measured aspects into a compact
+project-only `ReferenceDescriptor`. Briefstart consumes that document through
+its existing source loader and checks the inspection hash and project identity.
+The direction layer has no dependency on the vision runtime or reference media.
+
+Contextual asset review binds one motion proposal need, scoped local folders,
+fingerprinted options and an optional prepared background. The image adapter
+produces a numbered comparison sheet. Motion plan selection retains the chosen
+round and revalidates its precise source before canonical application. The
+storyboard bases declared readiness on a matching canonical cue fingerprint.
+Library promotion and media admission keep their existing owners.
+
+Spoken-note detection inspects prepared source evidence using an explicit
+language and delimiter convention. The cutting store retains the immutable
+report and separately tracks interpretation and speech choices. Iteration
+context exposes accepted interpretations only to their owning stage and
+rechecks the original source and transcript. Speech exclusion creates a
+normal editorial cutting proposal under the current cutting policy.
+
+The optional editor handoff assembles a bounded, original-source interchange
+example from the current canonical contiguous or placed timeline. The native
+command injects media inventory and the FCP7 XML adapter into the timeline
+service. The immutable manifest retains exact occurrence clocks, audio frame
+quantization, and affected ranges whose treatments stay in AVO. Returned XML
+is saved verbatim and compared with the retained export and current timeline.
+An explicit validation request can link a full-canvas generated alpha source
+from a current immutable proof plan. The native adapter reuses the normal
+generated-media admission checks and validates the editor transport copy against
+every decoded RGBA frame. The manifest retains both media fingerprints, the
+range, the generated receipt and the proof-plan identity for relinking.
+That comparison records separate field proposals and conflicts for review.
+Selected linked original-source trims become ordinary cutting proposals with
+their existing preview and editorial approval. The route retains its exact
+editor evidence, and ambiguous or unsupported fields stay available for manual
+review.
+Project-local target qualification binds operator observations and both XML
+identities to the exact app, OS, profile and implementation. Production export
+requires a qualified review reference that still verifies against its sources.
+See [editor handoff](docs/editor-handoff.md).
+
+The iteration ledger ties a proposed render workaround to the exact candidate,
+its matching reproduction evidence, affected program windows and the observed
+engine, runtime, profile and platform. Provider learning retains the summarized
+defect. Workaround details stay in the originating project review.
+
+Candidate craft review reads current BMap intent only after the proof
+materialization and canonical hashes match the encoded candidate. Sampled
+findings link to cues through cited frame numbers and half-open program
+intervals. The review package preserves playback and listening requirements.
+The wrap uses the approved master, candidate snapshot and retained ledger for
+provider learning. Project-only records stay out of direction suggestions.
+Provider animation decisions verify their own proposal and provider identity.
 
 Camera movement, face anchoring, sound matching, reference analysis, spoken
 notes/recovery and editor handoff are selected options resolved through existing

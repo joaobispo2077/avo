@@ -1,6 +1,7 @@
 """Shared bounded JSON motion metadata; no authoring, persistence or media imports."""
 
 MAX_DOCUMENT_BYTES = 4 * 1024 * 1024
+LIFECYCLE = ("preEntry", "entrance", "hold", "payoff", "exit")
 
 
 METADATA_LIMITS = {
@@ -14,6 +15,26 @@ METADATA_LIMITS = {
 
 class MotionReviewError(ValueError):
     pass
+
+
+def cue_item_claims(items):
+    claims = {}
+    for item in items:
+        if isinstance(item.get("cueId"), str) and item["cueId"]:
+            claims.setdefault(item["cueId"], set()).add(item["itemId"])
+    return claims
+
+
+def cue_item_identity(cue, claims):
+    explicit = (cue.get("contentRef") or {}).get("itemId")
+    if explicit is not None and not isinstance(explicit, str):
+        raise MotionReviewError("Canonical item identity must be a string")
+    proposed = claims.get(cue["cueId"], set())
+    if explicit:
+        return explicit, sorted(proposed - {explicit})
+    if len(proposed) == 1:
+        return next(iter(proposed)), []
+    return cue["cueId"], sorted(proposed)
 
 
 def _basis_matches(expected, actual):

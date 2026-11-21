@@ -53,6 +53,7 @@
         "reason"
       ],
       "properties": {
+        "favoritePreferencesHash": {"$ref": "#/$defs/sha"},
         "kind": {
           "enum": [
             "empty",
@@ -124,6 +125,7 @@
             "visitedIds"
           ],
           "properties": {
+            "favoritesHash": {"$ref": "#/$defs/sha"},
             "inventoryHash": {
               "$ref": "#/$defs/sha"
             },
@@ -395,6 +397,12 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
+        "description": {
+          "$ref": "#/$defs/nullableText"
+        },
+        "category": {
+          "$ref": "#/$defs/nullableText"
+        },
         "material": {
           "$ref": "#/$defs/nullableText"
         },
@@ -516,6 +524,7 @@
         "conflicts"
       ],
       "properties": {
+        "curationOrigin": {"$ref": "avo.sfx-provider.schema.json#/$defs/origin"},
         "entryId": {
           "$ref": "#/$defs/sha"
         },

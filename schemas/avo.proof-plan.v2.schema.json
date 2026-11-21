@@ -252,6 +252,9 @@
         },
         "optionsHash": {
           "$ref": "#/$defs/sha"
+        },
+        "faceAnchor": {
+          "$ref": "https://avo.local/avo.visual-motion-analysis.schema.json#/$defs/faceAnchor"
         }
       }
     },

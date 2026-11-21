@@ -47,6 +47,7 @@
         },
         "targetScale": {"type": "number", "exclusiveMinimum": 0},
         "targetCenter": {"$ref": "https://avo.local/schemas/avo.camera-behavior.schema.json#/$defs/center"},
+        "faceAnchor": {"$ref": "https://avo.local/avo.visual-motion-analysis.schema.json#/$defs/faceAnchor"},
         "safeRegions": {
           "type": "array", "maxItems": 64,
           "items": {"$ref": "https://avo.local/schemas/avo.camera-behavior.schema.json#/$defs/safeRegion"}
@@ -472,6 +473,10 @@
               "items": {
                 "$ref": "#/$defs/disposition"
               }
+            },
+            "assetChoices": {
+              "type": "array", "maxItems": 16,
+              "items": {"$ref": "avo.asset-review.schema.json#/$defs/choice"}
             }
           },
           "required": [
@@ -541,6 +546,7 @@
             "decisionHash"
           ]
         },
+        "productionScope": {"$ref": "avo.editing-craft-run.schema.json#/$defs/productionScope"},
         "authoring": {
           "type": "object",
           "additionalProperties": false,
@@ -744,6 +750,10 @@
             "$ref": "#/$defs/disposition"
           }
         },
+        "assetChoices": {
+          "type": "array", "maxItems": 16,
+          "items": {"$ref": "avo.asset-review.schema.json#/$defs/choiceEvidence"}
+        },
         "actor": {
           "type": "string",
           "minLength": 1,
@@ -840,6 +850,8 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
+        "productionScope": {"$ref": "avo.editing-craft-run.schema.json#/$defs/productionScopePlan"},
+        "appliedItemIds": {"allOf": [{"$ref": "avo.editing-craft-run.schema.json#/$defs/workIds"}], "minItems": 1},
         "cameraEnvironmentHash": {"$ref": "#/$defs/sha256"},
         "contractVersion": {
           "const": "1.0.0"

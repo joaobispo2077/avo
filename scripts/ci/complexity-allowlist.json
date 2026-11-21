@@ -627,13 +627,6 @@
       "reason": "Feature 006 validation/orchestration branch matrix; recorded for explicit decomposition follow-up"
     },
     {
-      "path": "src/avo/timeline/materialize.py",
-      "name": "_require_current_microproof_gate",
-      "complexity": 16,
-      "rank": "C",
-      "reason": "Feature 006 validation/orchestration branch matrix; recorded for explicit decomposition follow-up"
-    },
-    {
       "path": "src/avo/timeline/migration.py",
       "name": "validate",
       "complexity": 16,
@@ -814,13 +807,6 @@
       "complexity": 13,
       "rank": "C",
       "reason": "Media/render pipeline with ffmpeg/qc branches"
-    },
-    {
-      "path": "src/avo/timeline/review_runner.py",
-      "name": "actual_coverage",
-      "complexity": 13,
-      "rank": "C",
-      "reason": "Feature 006 validation/orchestration branch matrix; recorded for explicit decomposition follow-up"
     },
     {
       "path": "src/avo/timeline/review_runner.py",

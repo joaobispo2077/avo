@@ -1,0 +1,415 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://avo.local/schemas/avo.artcraft.schema.json",
+  "title": "AVO optional ArtCraft authoring records",
+  "oneOf": [
+    { "$ref": "#/$defs/request" },
+    { "$ref": "#/$defs/decision" },
+    { "$ref": "#/$defs/job" },
+    { "$ref": "#/$defs/event" },
+    { "$ref": "#/$defs/package" },
+    { "$ref": "#/$defs/receipt" }
+  ],
+  "$defs": {
+    "id": { "type": "string", "pattern": "^[a-z0-9](?:[a-z0-9-]{0,94}[a-z0-9])?(?![\\s\\S])" },
+    "hash": { "type": "string", "minLength": 64, "maxLength": 64, "pattern": "^[a-f0-9]{64}$" },
+    "text": { "type": "string", "minLength": 1, "maxLength": 4096 },
+    "relativePath": { "type": "string", "maxLength": 1024, "pattern": "^(?!/|.*[:\\\\]|.*(?:^|/)\\.\\.?(?:/|$))[^/\\u0000]+(?:/[^/\\u0000]+)*(?![\\s\\S])" },
+    "positiveInteger": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 },
+    "count": { "type": "integer", "minimum": 0, "maximum": 9007199254740991 },
+    "app": { "enum": ["anicraft", "effectcraft", "filmcraft", "soundcraft", "vectorcraft", "photocraft", "lightcraft", "figcraft", "texturecraft", "deckcraft"] },
+    "mode": { "enum": ["cli", "host-mcp", "live", "guided", "script", "action", "json-lines", "reuse"] },
+    "role": { "enum": ["overlay-video", "generated-clip", "generated-still", "generated-audio", "timeline-interchange"] },
+    "clock": {
+      "type": "object", "additionalProperties": false,
+      "required": ["numerator", "denominator"],
+      "properties": {
+        "numerator": { "$ref": "#/$defs/positiveInteger" },
+        "denominator": { "$ref": "#/$defs/positiveInteger" }
+      }
+    },
+    "fingerprint": {
+      "type": "object", "additionalProperties": false,
+      "required": ["locator", "sizeBytes", "sha256"],
+      "properties": {
+        "locator": { "$ref": "#/$defs/text" },
+        "sizeBytes": { "$ref": "#/$defs/count" },
+        "sha256": { "$ref": "#/$defs/hash" }
+      }
+    },
+    "manifestFile": {
+      "type": "object", "additionalProperties": false,
+      "required": ["path", "sizeBytes", "sha256"],
+      "properties": {
+        "path": { "$ref": "#/$defs/relativePath" },
+        "sizeBytes": { "$ref": "#/$defs/count" },
+        "sha256": { "$ref": "#/$defs/hash" },
+        "role": { "enum": ["native-source", "image", "audio", "video", "font", "mesh", "plugin", "script", "recipe", "rights", "parameter-schema", "source-review", "design-review"] },
+        "rightsRef": { "$ref": "#/$defs/text" }
+      }
+    },
+    "context": {
+      "oneOf": [
+        {
+          "type": "object", "additionalProperties": false, "required": ["kind"],
+          "properties": { "kind": { "const": "provider-only" } }
+        },
+        {
+          "type": "object", "additionalProperties": false, "required": ["kind", "project", "videoId"],
+          "properties": {
+            "kind": { "const": "video" },
+            "project": { "$ref": "#/$defs/text" },
+            "videoId": { "$ref": "#/$defs/id" }
+          }
+        }
+      ]
+    },
+    "requirement": {
+      "type": "object", "additionalProperties": false,
+      "required": ["behavior", "outputRole", "editable"],
+      "properties": {
+        "behavior": { "$ref": "#/$defs/id" },
+        "outputRole": { "$ref": "#/$defs/role" },
+        "editable": { "type": "boolean" }
+      }
+    },
+    "candidate": {
+      "type": "object", "additionalProperties": false,
+      "required": ["route", "contractRef", "contractHash", "status"],
+      "properties": {
+        "route": { "$ref": "#/$defs/id" },
+        "contractRef": { "$ref": "#/$defs/text" },
+        "contractHash": { "$ref": "#/$defs/hash" },
+        "status": { "enum": ["sufficient", "unsupported", "unknown", "not-installed", "invalid-input", "permission-denied", "transient-error", "defect"] },
+        "reason": { "$ref": "#/$defs/text" }
+      }
+    },
+    "request": {
+      "type": "object", "additionalProperties": false,
+      "required": ["version", "requestId", "provider", "componentId", "purpose", "context", "required", "exclusions", "candidates"],
+      "properties": {
+        "version": { "const": 1 },
+        "requestId": { "$ref": "#/$defs/id" },
+        "provider": { "$ref": "#/$defs/id" },
+        "componentId": { "$ref": "#/$defs/id" },
+        "purpose": { "$ref": "#/$defs/text" },
+        "context": { "$ref": "#/$defs/context" },
+        "required": { "$ref": "#/$defs/requirement" },
+        "exclusions": { "type": "array", "uniqueItems": true, "maxItems": 12, "items": { "enum": ["artcraft", "motion", "other-authoring", "anicraft", "effectcraft", "filmcraft", "soundcraft", "vectorcraft", "photocraft", "lightcraft", "figcraft", "texturecraft", "deckcraft"] } },
+        "candidates": { "type": "array", "maxItems": 32, "items": { "$ref": "#/$defs/candidate" } }
+      }
+    },
+    "scope": {
+      "type": "object", "additionalProperties": false, "required": ["app", "operations"],
+      "properties": {
+        "app": { "$ref": "#/$defs/app" },
+        "operations": { "type": "array", "minItems": 1, "maxItems": 16, "uniqueItems": true, "items": { "$ref": "#/$defs/id" } }
+      }
+    },
+    "decision": {
+      "type": "object", "additionalProperties": false,
+      "required": ["version", "requestHash", "disposition", "reason", "provider", "componentId", "checkedCandidates", "missingInputs", "decisionHash"],
+      "properties": {
+        "version": { "const": 1 },
+        "requestHash": { "$ref": "#/$defs/hash" },
+        "disposition": { "enum": ["existing", "eligible", "blocked", "needs-input"] },
+        "reason": { "enum": ["excluded-or-conflicting", "knowledge-only", "explicit-request", "reuse-current", "recorded-component", "native-sufficient", "capability-undetermined", "native-operational-failure", "capability-gap", "gap-evidence-incomplete"] },
+        "provider": { "$ref": "#/$defs/id" },
+        "componentId": { "$ref": "#/$defs/id" },
+        "scope": { "$ref": "#/$defs/scope" },
+        "packageHash": { "$ref": "#/$defs/hash" },
+        "checkedCandidates": { "type": "array", "maxItems": 32, "items": { "$ref": "#/$defs/candidate" } },
+        "missingInputs": { "type": "array", "maxItems": 32, "items": { "$ref": "#/$defs/text" } },
+        "decisionHash": { "$ref": "#/$defs/hash" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "disposition": { "const": "eligible" } } },
+          "then": { "required": ["scope"], "properties": { "reason": { "enum": ["explicit-request", "recorded-component", "capability-gap"] } } },
+          "else": { "not": { "required": ["scope"] } }
+        },
+        {
+          "if": { "properties": { "reason": { "enum": ["recorded-component", "reuse-current"] } } },
+          "then": { "required": ["packageHash"] },
+          "else": { "not": { "required": ["packageHash"] } }
+        }
+      ]
+    },
+    "roots": {
+      "type": "object", "additionalProperties": false, "required": ["read", "write"],
+      "properties": {
+        "read": { "type": "array", "minItems": 1, "maxItems": 32, "uniqueItems": true, "items": { "$ref": "#/$defs/text" } },
+        "write": { "type": "array", "minItems": 1, "maxItems": 8, "uniqueItems": true, "items": { "$ref": "#/$defs/text" } }
+      }
+    },
+    "observation": {
+      "type": "object", "additionalProperties": false,
+      "required": ["app", "platform", "release", "mode", "operations"],
+      "properties": {
+        "app": { "$ref": "#/$defs/app" },
+        "platform": { "enum": ["windows", "macos", "linux"] },
+        "release": { "$ref": "#/$defs/text" },
+        "mode": { "$ref": "#/$defs/mode" },
+        "executable": { "$ref": "#/$defs/fingerprint" },
+        "application": { "$ref": "#/$defs/fingerprint" },
+        "operations": { "type": "array", "minItems": 1, "maxItems": 16, "uniqueItems": true, "items": { "$ref": "#/$defs/id" } },
+        "commandSchemaHash": { "$ref": "#/$defs/hash" },
+        "authority": { "const": "operator" },
+        "hostTransport": { "const": "stdio" },
+        "effectiveRoots": { "$ref": "#/$defs/roots" },
+        "reuseSource": {
+          "type": "object", "additionalProperties": false, "required": ["jobRef", "exportHead"],
+          "properties": { "jobRef": { "$ref": "#/$defs/fingerprint" }, "exportHead": { "$ref": "#/$defs/hash" } }
+        }
+      },
+      "if": { "properties": { "mode": { "enum": ["guided", "host-mcp"] } } },
+      "then": { "required": ["authority"], "not": { "required": ["effectiveRoots"] } },
+      "else": { "not": { "required": ["authority"] } },
+      "allOf": [
+        {
+          "if": { "properties": { "mode": { "const": "host-mcp" } } },
+          "then": { "required": ["hostTransport", "commandSchemaHash", "application", "executable"] },
+          "else": { "not": { "required": ["hostTransport"] } }
+        },
+        {
+          "if": { "properties": { "mode": { "const": "json-lines" } } },
+          "then": { "required": ["effectiveRoots", "commandSchemaHash", "application", "executable"] }
+        },
+        {
+          "if": { "properties": { "mode": { "const": "reuse" } } },
+          "then": {
+            "required": ["reuseSource", "commandSchemaHash", "application", "executable"],
+            "not": { "required": ["effectiveRoots"] }
+          },
+          "else": { "not": { "required": ["reuseSource"] } }
+        }
+      ]
+    },
+    "output": {
+      "type": "object", "additionalProperties": false, "required": ["role", "format"],
+      "properties": {
+        "role": { "$ref": "#/$defs/role" },
+        "format": { "$ref": "#/$defs/id" },
+        "width": { "type": "integer", "minimum": 1, "maximum": 32768 },
+        "height": { "type": "integer", "minimum": 1, "maximum": 32768 },
+        "frameRate": { "$ref": "#/$defs/clock" },
+        "frameCount": { "$ref": "#/$defs/positiveInteger" },
+        "alpha": { "enum": ["none", "straight", "premultiplied"] },
+        "color": { "enum": ["srgb", "rec709", "linear-srgb", "display-p3"] },
+        "sampleRate": { "type": "integer", "minimum": 8000, "maximum": 384000 },
+        "sampleCount": { "$ref": "#/$defs/positiveInteger" },
+        "channels": { "type": "integer", "minimum": 1, "maximum": 32 }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "role": { "enum": ["overlay-video", "generated-clip", "generated-still"] } } },
+          "then": { "required": ["width", "height", "alpha", "color"] },
+          "else": { "properties": { "width": false, "height": false, "alpha": false, "color": false } }
+        },
+        {
+          "if": { "properties": { "role": { "enum": ["overlay-video", "generated-clip", "timeline-interchange"] } } },
+          "then": { "required": ["frameRate", "frameCount"] },
+          "else": { "properties": { "frameRate": false, "frameCount": false } }
+        },
+        {
+          "if": { "properties": { "role": { "const": "generated-audio" } } },
+          "then": { "required": ["sampleRate", "sampleCount", "channels"] },
+          "else": { "properties": { "sampleRate": false, "sampleCount": false, "channels": false } }
+        }
+      ]
+    },
+    "budget": {
+      "type": "object", "additionalProperties": false, "required": ["seconds", "files", "bytes"],
+      "properties": {
+        "seconds": { "type": "integer", "minimum": 1, "maximum": 3600 },
+        "files": { "type": "integer", "minimum": 1, "maximum": 16384 },
+        "bytes": { "$ref": "#/$defs/positiveInteger" }
+      }
+    },
+    "lowerThirdParameters": {
+      "type": "object", "additionalProperties": false, "required": ["primaryText", "font"],
+      "properties": {
+        "primaryText": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "font": { "type": "string", "minLength": 1, "maxLength": 128 }
+      }
+    },
+    "soundCue": {
+      "type": "object", "additionalProperties": false, "required": ["source", "effect"],
+      "properties": {
+        "source": { "$ref": "#/$defs/text" },
+        "effect": { "const": "room-reverb" }
+      }
+    },
+    "audioEvidence": {
+      "type": "object", "additionalProperties": false,
+      "required": ["sampleRate", "sampleCount", "channels", "codec", "pcmSha256"],
+      "properties": {
+        "sampleRate": { "const": 48000 },
+        "sampleCount": { "type": "integer", "minimum": 1, "maximum": 480000 },
+        "channels": { "const": 2 },
+        "codec": { "const": "pcm_s24le" },
+        "pcmSha256": { "$ref": "#/$defs/hash" }
+      }
+    },
+    "generatedAudioRef": {
+      "$ref": "#/$defs/exportRef"
+    },
+    "exportRef": {
+      "type": "object", "additionalProperties": false, "required": ["job", "exportHead"],
+      "properties": {
+        "job": { "$ref": "#/$defs/fingerprint" },
+        "exportHead": { "$ref": "#/$defs/hash" }
+      }
+    },
+    "stillEvidence": {
+      "type": "object", "additionalProperties": false,
+      "required": ["format", "color", "alpha", "width", "height", "rgbaSha256"],
+      "properties": {
+        "format": { "const": "png" },
+        "color": { "const": "srgb" },
+        "alpha": { "const": "straight" },
+        "width": { "type": "integer", "minimum": 240, "maximum": 1920 },
+        "height": { "type": "integer", "minimum": 160, "maximum": 1920 },
+        "rgbaSha256": { "$ref": "#/$defs/hash" }
+      }
+    },
+    "jobSpec": {
+      "type": "object", "additionalProperties": false,
+      "required": ["version", "jobId", "provider", "workspace", "mode", "document", "readRoots", "output", "budget"],
+      "properties": {
+        "version": { "const": 1 },
+        "jobId": { "$ref": "#/$defs/id" },
+        "provider": { "$ref": "#/$defs/id" },
+        "workspace": { "$ref": "#/$defs/text" },
+        "mode": { "$ref": "#/$defs/mode" },
+        "document": {
+          "type": "object", "additionalProperties": false, "required": ["state"],
+          "properties": {
+            "state": { "enum": ["empty", "saved"] },
+            "source": { "$ref": "#/$defs/text" }
+          },
+          "if": { "properties": { "state": { "const": "saved" } } },
+          "then": { "required": ["source"] },
+          "else": { "not": { "required": ["source"] } }
+        },
+        "readRoots": { "type": "array", "maxItems": 31, "uniqueItems": true, "items": { "$ref": "#/$defs/text" } },
+        "cliPath": { "$ref": "#/$defs/text" },
+        "appPath": { "$ref": "#/$defs/text" },
+        "authoringParameters": { "$ref": "#/$defs/lowerThirdParameters" },
+        "soundCue": { "$ref": "#/$defs/soundCue" },
+        "output": { "$ref": "#/$defs/output" },
+        "budget": { "$ref": "#/$defs/budget" }
+      }
+    },
+    "job": {
+      "type": "object", "additionalProperties": false,
+      "required": ["version", "jobId", "request", "decision", "workspace", "roots", "observation", "document", "inputs", "recipeHash", "output", "budget", "jobHash"],
+      "properties": {
+        "version": { "const": 1 },
+        "jobId": { "$ref": "#/$defs/id" },
+        "request": { "$ref": "#/$defs/request" },
+        "decision": { "$ref": "#/$defs/decision" },
+        "workspace": { "$ref": "#/$defs/text" },
+        "roots": { "$ref": "#/$defs/roots" },
+        "observation": { "$ref": "#/$defs/observation" },
+        "document": { "$ref": "#/$defs/relativePath" },
+        "documentState": { "enum": ["empty", "saved"] },
+        "authoringParameters": { "$ref": "#/$defs/lowerThirdParameters" },
+        "soundCue": { "$ref": "#/$defs/soundCue" },
+        "projectFingerprint": { "$ref": "#/$defs/fingerprint" },
+        "canonicalHeads": { "type": "object", "maxProperties": 12, "propertyNames": { "$ref": "#/$defs/id" }, "additionalProperties": { "$ref": "#/$defs/hash" } },
+        "inputs": { "type": "array", "maxItems": 16384, "items": { "$ref": "#/$defs/fingerprint" } },
+        "recipeHash": { "$ref": "#/$defs/hash" },
+        "output": { "$ref": "#/$defs/output" },
+        "budget": { "$ref": "#/$defs/budget" },
+        "jobHash": { "$ref": "#/$defs/hash" }
+      }
+    },
+    "event": {
+      "type": "object", "additionalProperties": false,
+      "required": ["version", "operationId", "state", "jobHash", "predecessorHash", "eventHash"],
+      "properties": {
+        "version": { "const": 1 },
+        "operationId": { "$ref": "#/$defs/id" },
+        "state": { "enum": ["prepared", "ready", "running", "saved", "exported", "inspected", "failed", "cancel-requested", "cancelled", "outcome-unknown", "stale"] },
+        "jobHash": { "$ref": "#/$defs/hash" },
+        "predecessorHash": { "anyOf": [{ "$ref": "#/$defs/hash" }, { "type": "null" }] },
+        "saved": { "$ref": "#/$defs/fingerprint" },
+        "revisionCommandSchemaHash": { "$ref": "#/$defs/hash" },
+        "recipe": { "$ref": "#/$defs/fingerprint" },
+        "handoff": { "$ref": "#/$defs/fingerprint" },
+        "outputs": { "type": "array", "maxItems": 16384, "items": { "$ref": "#/$defs/fingerprint" } },
+        "dependencies": { "type": "array", "maxItems": 16, "items": { "$ref": "#/$defs/fingerprint" } },
+        "audioEvidence": { "$ref": "#/$defs/audioEvidence" },
+        "stillEvidence": { "$ref": "#/$defs/stillEvidence" },
+        "createdBytes": { "$ref": "#/$defs/count" },
+        "detail": { "$ref": "#/$defs/text" },
+        "eventHash": { "$ref": "#/$defs/hash" }
+      }
+    },
+    "eventIndex": {
+      "type": "object", "additionalProperties": false,
+      "required": ["head", "operations"],
+      "properties": {
+        "head": { "anyOf": [{ "$ref": "#/$defs/id" }, { "type": "null" }] },
+        "operations": { "type": "object", "maxProperties": 16384, "propertyNames": { "$ref": "#/$defs/id" }, "additionalProperties": { "$ref": "#/$defs/hash" } }
+      }
+    },
+    "package": {
+      "type": "object", "additionalProperties": false,
+      "required": ["version", "provider", "componentId", "componentVersion", "app", "sourceRoot", "files", "recipeHash", "parameterSchemaHash", "output", "sourceReviewRef", "designReviewRef", "rightsRef", "packageHash"],
+      "properties": {
+        "version": { "const": 1 },
+        "provider": { "$ref": "#/$defs/id" },
+        "componentId": { "$ref": "#/$defs/id" },
+        "componentVersion": { "type": "string", "maxLength": 96, "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$" },
+        "app": { "$ref": "#/$defs/app" },
+        "sourceRoot": { "$ref": "#/$defs/text" },
+        "files": { "type": "array", "minItems": 1, "maxItems": 16384, "items": { "$ref": "#/$defs/manifestFile" } },
+        "recipeHash": { "$ref": "#/$defs/hash" },
+        "parameterSchemaHash": { "$ref": "#/$defs/hash" },
+        "output": { "$ref": "#/$defs/output" },
+        "sourceReviewRef": { "$ref": "#/$defs/text" },
+        "designReviewRef": { "$ref": "#/$defs/text" },
+        "rightsRef": { "$ref": "#/$defs/text" },
+        "packageHash": { "$ref": "#/$defs/hash" }
+      }
+    },
+    "receipt": {
+      "type": "object", "additionalProperties": false,
+      "required": ["version", "artifactState", "app", "requestHash", "parameterHash", "recipeHash", "environmentHash", "inputs", "output", "observed", "receiptHash"],
+      "properties": {
+        "version": { "const": 1 },
+        "artifactState": { "enum": ["reference-only", "reproducibility-qualified", "admitted"] },
+        "app": { "$ref": "#/$defs/app" },
+        "requestHash": { "$ref": "#/$defs/hash" },
+        "packageHash": { "$ref": "#/$defs/hash" },
+        "nativeRevisionHash": { "$ref": "#/$defs/hash" },
+        "bindingRef": { "$ref": "#/$defs/fingerprint" },
+        "parameterHash": { "$ref": "#/$defs/hash" },
+        "recipeHash": { "$ref": "#/$defs/hash" },
+        "environmentHash": { "$ref": "#/$defs/hash" },
+        "inputs": { "type": "array", "maxItems": 16384, "items": { "$ref": "#/$defs/fingerprint" } },
+        "output": { "$ref": "#/$defs/output" },
+        "observed": { "type": "array", "maxItems": 16384, "items": { "$ref": "#/$defs/fingerprint" } },
+        "rebuildEvidenceHash": { "$ref": "#/$defs/hash" },
+        "bindingHash": { "$ref": "#/$defs/hash" },
+        "receiptHash": { "$ref": "#/$defs/hash" }
+      },
+      "oneOf": [
+        { "required": ["packageHash"], "not": { "required": ["nativeRevisionHash"] } },
+        { "required": ["nativeRevisionHash", "bindingRef"], "not": { "required": ["packageHash"] } }
+      ],
+      "allOf": [
+        {
+          "if": { "properties": { "artifactState": { "enum": ["reproducibility-qualified", "admitted"] } } },
+          "then": { "required": ["rebuildEvidenceHash"], "properties": { "observed": { "minItems": 1 } } }
+        },
+        {
+          "if": { "properties": { "artifactState": { "const": "admitted" } } },
+          "then": { "required": ["bindingHash"] }
+        }
+      ]
+    }
+  }
+}

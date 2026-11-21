@@ -10,14 +10,22 @@ from html import escape
 from importlib.resources import files
 from string import Template
 
-from .contracts import content_hash, document_hash_excluding, validate_document
+from .contracts import (
+    ContractError,
+    content_hash,
+    document_hash_excluding,
+    validate_document,
+)
 from .craft_work import project_craft_work
 from .motion_metadata import (
+    LIFECYCLE,
     MAX_DOCUMENT_BYTES,
     METADATA_LIMITS,
     MotionReviewError,
     _basis_matches,
     _check_budget,
+    cue_item_claims,
+    cue_item_identity,
 )
 from .motion_scope import unchanged_visual_items, visual_roots_match
 from .motion_sound_review import (
@@ -26,11 +34,12 @@ from .motion_sound_review import (
     sound_review_context,
 )
 from .store import atomic_write_json
+from .track_review import project_track_review, track_review_html, track_review_text
+from .tracks import inspect_track_snapshot
 from .workspace import ARTIFACTS
 
-GENERATOR = {"id": "avo.motion-review", "version": "1.7.0"}
+GENERATOR = {"id": "avo.motion-review", "version": "1.12.0"}
 MAX_ITEMS = 500
-LIFECYCLE = ("preEntry", "entrance", "hold", "payoff", "exit")
 CONCEPT_TEXT_FIELDS = {
     "dominantFocus": ("Dominant focus", 4096),
     "supportingMotion": ("Supporting motion", 4096),
@@ -68,6 +77,99 @@ def _metadata_path(path, root):
     if not path.is_relative_to(root):
         raise MotionReviewError("Selected metadata path escapes timeline containment")
     return path
+
+
+def _matching_review_heads(report, heads):
+    declared = report["canonicalRevisionHashes"]
+    for name, digest in declared.items():
+        head = heads[name] or {}
+        if (
+            head.get("availability") == "unavailable"
+            or head.get("sha256") != digest
+            or (digest is not None and head.get("activeState") != "valid")
+        ):
+            return False
+    return True
+
+
+def _recorded_review(workspace, heads):
+    from .editing_craft_qc import report_from_review
+    from .pipeline import TimelinePipeline
+
+    selected = TimelinePipeline(workspace).active_candidate_snapshot() or {}
+    reference = selected.get("review") or {}
+    checkpoint = str(reference.get("artifactId") or "").removesuffix("-review")
+    if checkpoint not in {"motion-proof", "pre-master", "deliver"}:
+        return None
+    candidate_sha256 = selected["candidate"]["sha256"]
+    path = _metadata_path(
+        workspace.review_dir / checkpoint / candidate_sha256[:12] / "review.json",
+        workspace.review_dir.resolve(),
+    )
+    review = _bounded_json(path, {"remaining": MAX_DOCUMENT_BYTES})
+    if content_hash(review) != reference["sha256"]:
+        return None
+    report = report_from_review(review)
+    if report is None:
+        return None
+    if (
+        report["candidateSha256"],
+        report["materializationHash"],
+        report["bmapRevisionHash"],
+    ) != (
+        candidate_sha256,
+        selected["materialization"]["sha256"],
+        heads["bmap"]["sha256"],
+    ):
+        return None
+    if not _matching_review_heads(report, heads):
+        return None
+    return path, report, reference
+
+
+def _cue_review_link(item_id, matches):
+    return {
+        "itemId": item_id,
+        "cueIds": [cue["cueId"] for cue in matches],
+        "observedFrames": sorted(
+            {frame for cue in matches for frame in cue["observedFrames"]}
+        ),
+        "findingIds": sorted(
+            {row["findingId"] for cue in matches for row in cue["frameFindings"]}
+        ),
+    }
+
+
+def _cue_review_links(items, cues):
+    observed = {cue["cueId"]: cue for cue in cues if cue["observedFrames"]}
+    links = []
+    for item in items:
+        cue_ids = {item["cueId"], *(part["cueId"] for part in item["parts"])}
+        matches = [observed[cue_id] for cue_id in sorted(cue_ids & observed.keys())]
+        if matches:
+            links.append(_cue_review_link(item["itemId"], matches))
+    return links
+
+
+def _recorded_review_view(workspace, heads, items):
+    if not heads["bmap"] or not workspace.pipeline_run_path.is_file():
+        return {}
+    try:
+        result = _recorded_review(workspace, heads)
+        if result is None:
+            return {}
+        path, report, reference = result
+        links = _cue_review_links(items, report["cues"])
+        return {
+            "encodedReview": {
+                "candidateSha256": report["candidateSha256"],
+                "reviewSha256": reference["sha256"],
+                "reviewPath": path.relative_to(workspace.raw_dir.resolve()).as_posix(),
+                "links": links,
+            }
+        }
+    except (OSError, RuntimeError, ValueError, TypeError, KeyError):
+        return {}
 
 
 def _head_reference(index):
@@ -194,16 +296,44 @@ def _text(value, default="Unresolved"):
 
 def _assets(data):
     assets = deepcopy(data.get("assets") or [])
+    references = [part["cue"].get("assetRef") or {} for part in data.get("_parts", [])]
+    for asset in assets:
+        _reviewed_asset_state(asset, references)
     if data.get("assetRef"):
         assets.append({"status": "declared", "source": deepcopy(data["assetRef"])})
-    if any(
-        asset.get("status") in {"missing", "unavailable", "restricted"}
-        for asset in assets
-    ):
-        return assets, "missing"
+    return assets, _asset_readiness(assets, data.get("treatment"))
+
+
+def _asset_readiness(assets, treatment):
+    states = {asset.get("status") for asset in assets}
+    if states.intersection({"missing", "unavailable", "restricted"}):
+        return "missing"
+    if "unresolved" in states:
+        return "unresolved"
     if assets:
-        return assets, "declared"
-    return assets, "not-required" if data.get("treatment") == "static" else "unresolved"
+        return "declared"
+    return "not-required" if treatment == "static" else "unresolved"
+
+
+def _reviewed_asset_state(asset, references):
+    review = asset.get("review")
+    if review is None:
+        return
+    try:
+        validate_document(review, "avo.asset-review.schema.json#/$defs/choiceEvidence")
+    except ContractError:
+        asset["status"] = "unresolved"
+        return
+    if review["choice"]["disposition"] == "reject":
+        asset["status"] = "missing"
+        return
+    source = review["option"]["source"]
+    key = (source["sha256"], source["sizeBytes"])
+    applied = any(
+        (reference.get("sha256"), reference.get("sizeBytes")) == key
+        for reference in references
+    )
+    asset["status"] = "declared" if applied else "unresolved"
 
 
 def _evidence(data, heads):
@@ -316,14 +446,27 @@ def _concept_text_metadata(data, gaps, identifier):
     return result
 
 
-def _lanes(snapshot):
+def _lanes(inspected):
     return {
         kind: sorted(
-            [deepcopy(layer) for layer in (snapshot.get(key) or {}).get("layers", [])],
+            deepcopy(inspected[key]),
             key=lambda layer: (layer.get("order", 0), layer.get("layerId", "")),
         )
-        for kind, key in (("audio", "audioTracks"), ("video", "videoTracks"))
+        for kind, key in (("audio", "audioLayers"), ("video", "videoLayers"))
     }
+
+
+def _track_state(snapshots, heads):
+    if "tracks" not in snapshots:
+        return "unavailable"
+    selected = snapshots["tracks"].get("basis") or {}
+    head = heads.get("tracks") or {}
+    current = (heads.get("bmap") or {}).get("sha256")
+    if head.get("activeState") != "valid" or (
+        selected.get("sha256") and selected["sha256"] != current
+    ):
+        return "stale"
+    return "declared"
 
 
 def _stale(snapshots, heads):
@@ -366,7 +509,14 @@ def _camera_states(data):
 
 def _typed_camera_preview(data, gaps):
     wrapper = data.get("_authoredCamera") or data.get("cameraTreatment")
+    face = (
+        {"faceAnchor": deepcopy(data["_faceReadiness"])}
+        if "_faceReadiness" in data
+        else {}
+    )
     if wrapper is None:
+        if face:
+            return {"during": face}
         return deepcopy(data.get("camera"))
     try:
         validate_document(wrapper, "avo.animation.schema.json#/$defs/editingCraft")
@@ -385,7 +535,7 @@ def _typed_camera_preview(data, gaps):
         ),
         "optionsHash": content_hash(wrapper.get("options")),
         "before": deepcopy(camera["nodes"][0]),
-        "during": {"nodes": deepcopy(camera["nodes"])},
+        "during": {"nodes": deepcopy(camera["nodes"]), **face},
         "after": deepcopy(camera["nodes"][-1]),
     }
 
@@ -461,7 +611,22 @@ def _context(context, gaps):
     result["applicability"] = _applicability(context, gaps)
     result["coverageUnavailable"] = unavailable
     result["proposalDefinitionCount"] = proposal_count
+    result["projectionSource"] = _projection_source(context, gaps)
     return result
+
+
+def _projection_source(context, gaps):
+    value = context.get("projectionSource")
+    if value is None:
+        return None
+    try:
+        validate_document(
+            value, "avo.motion-review.schema.json#/$defs/projectionSource"
+        )
+    except (ValueError, TypeError, RecursionError):
+        gaps.append("context:projectionSource:invalid")
+        return None
+    return deepcopy(value)
 
 
 def _applied_heads(context, gaps):
@@ -509,9 +674,24 @@ def _combined(proposal, snapshots, gaps):
         groups.setdefault(identifier, {"proposals": [], "cues": []})[
             "proposals"
         ].append(item)
+    claims = cue_item_claims(
+        [item for group in groups.values() for item in group["proposals"]]
+    )
     for cue in (snapshots.get("bmap") or {}).get("cues", []):
-        identifier = str((cue.get("contentRef") or {}).get("itemId") or cue["cueId"])
+        identifier, conflicts = cue_item_identity(cue, claims)
+        identifier = str(identifier)
         groups.setdefault(identifier, {"proposals": [], "cues": []})["cues"].append(cue)
+        if conflicts:
+            conflict = {
+                "cueId": cue["cueId"],
+                "canonicalItemId": identifier,
+                "claimedItemIds": conflicts,
+            }
+            for identity in {identifier, *conflicts}:
+                groups[identity].setdefault("claimConflicts", []).append(
+                    deepcopy(conflict)
+                )
+            gaps.append({"kind": "cue-item-identity-conflict", **conflict})
     return groups
 
 
@@ -545,6 +725,23 @@ def _component_reference(data):
     return identifiers[0] if len(identifiers) == 1 else None
 
 
+def _face_options(wrapper, selection):
+    options = (wrapper or {}).get("options", selection) or {}
+    return (options.get("effective") or {}).get("camera") or {}
+
+
+def _enrich_face_reviews(items, selection, read_face_state):
+    if read_face_state is None:
+        return
+    for data in items.values():
+        wrapper = data.get("_authoredCamera") or data.get("cameraTreatment")
+        if not (wrapper or data.get("cameraRecipe") or data.get("cameraIntent")):
+            continue
+        camera = _face_options(wrapper, selection)
+        if camera.get("enabled") and camera.get("faceAnchor") == "selected-subject":
+            data["_faceReadiness"] = read_face_state(wrapper, camera)
+
+
 def _proposal_basis_stale(proposal, heads, applied_heads, selected_stale):
     if selected_stale:
         return True
@@ -570,6 +767,7 @@ def _project_items(
     applied_heads=None,
     proposal_stale=False,
     reusable_visual_items=(),
+    read_face_state=None,
 ):
     groups = _combined(proposal, snapshots, gaps)
     add_sound_groups(groups, sound_context)
@@ -588,6 +786,7 @@ def _project_items(
         for identifier, group in ordered[:MAX_ITEMS]
     }
     _enrich_components(selected, snapshots.get("animation") or {})
+    _enrich_face_reviews(selected, proposal.get("options"), read_face_state)
     enrich_sound_items(selected, snapshots.get("tracks") or {}, sound_context, heads)
     pairs = [
         _item(
@@ -658,7 +857,9 @@ def _group_data(identifier, group):
     data["_parts"] = [_canonical_part(cue) for cue in group["cues"]]
     data["_identityConflicts"] = (
         deepcopy(group["proposals"]) if len(group["proposals"]) > 1 else []
-    )
+    ) + deepcopy(group.get("claimConflicts", []))
+    if group.get("claimConflicts"):
+        data["disposition"] = "needs-judgment"
     return data
 
 
@@ -810,7 +1011,31 @@ class MotionReviewService:
             )
             return []
 
-    def project(self, context=None):
+    def _validate_scope_clock(self, scope_request):
+        if scope_request is None:
+            return
+        from .craft_scope import validate_scope_request
+        from .program_clock import require_program_clock
+
+        validate_scope_request(scope_request)
+        require_program_clock(
+            self.workspace, scope_request["clock"], subject="Production"
+        )
+
+    @staticmethod
+    def _add_scope(snapshot, scope_request):
+        if scope_request is None:
+            return
+        from .craft_scope import build_scope_plan
+
+        plan = build_scope_plan(
+            snapshot["items"], scope_request, basis_heads=snapshot["basisHeads"]
+        )
+        plan["complete"] = plan["complete"] and snapshot["coverage"]["complete"]
+        plan["scopeHash"] = document_hash_excluding(plan, "scopeHash")
+        snapshot["productionScope"] = plan
+
+    def _capture_inputs(self, context):
         heads, snapshots, gaps = self._metadata()
         context = _context(context, gaps)
         work, work_gaps = project_craft_work(self.workspace, heads)
@@ -824,6 +1049,47 @@ class MotionReviewService:
         ):
             gaps.append({"kind": "sound-proposal-owner-mismatch"})
             context["soundProposal"] = None
+        if context["projectionSource"] is not None:
+            context["projectionSource"]["soundProposalRef"] = (
+                context["soundProposal"] or {}
+            ).get("proposalRef")
+        basis = self._context_basis(context, work, work_gaps, gaps)
+        return heads, snapshots, gaps, context, basis
+
+    def _context_basis(self, context, work, work_gaps, gaps):
+        from .motion_authoring import MotionAuthoringService
+
+        direction, generation = None, None
+        complete = not context["coverageUnavailable"]
+        try:
+            direction = MotionAuthoringService(self.workspace)._direction_ref()
+            if context["soundProposal"] or any(row["kind"] == "sound" for row in work):
+                from .motion_retention import _Retention
+
+                generation = _Retention(
+                    self.workspace
+                ).sound_retention.current_generation()
+        except (OSError, ValueError, RuntimeError, KeyError, TypeError) as error:
+            complete = False
+            gaps.append(
+                {"kind": "review-basis-unavailable", "detail": str(error)[:500]}
+            )
+        return {
+            "workHash": content_hash(
+                {"work": work, "gaps": work_gaps, "soundGeneration": generation}
+            ),
+            "inputHash": content_hash(
+                {"context": context, "gaps": gaps, "directionRef": direction}
+            ),
+            "directionRef": direction,
+            "complete": complete,
+        }
+
+    def project(self, context=None, *, scope_request=None):
+        from .face_analysis import describe_face_readiness
+
+        self._validate_scope_clock(scope_request)
+        heads, snapshots, gaps, context, basis = self._capture_inputs(context)
         pairs, counts, stale = _project_items(
             context["proposal"],
             snapshots,
@@ -833,12 +1099,17 @@ class MotionReviewService:
             applied_heads=context["appliedHeads"],
             proposal_stale=context["proposalStale"],
             reusable_visual_items=self._visual_reuse(context, heads, snapshots, gaps),
+            read_face_state=lambda treatment, options: describe_face_readiness(
+                self.workspace, treatment, options
+            ),
         )
         items, cards = [pair[0] for pair in pairs], [pair[1] for pair in pairs]
+        tracks = inspect_track_snapshot(snapshots.get("tracks") or {})
         snapshot = {
             "schemaVersion": "1.0.0",
             "snapshotHash": "",
             "generator": deepcopy(GENERATOR),
+            "contextBasis": basis,
             "videoId": self.workspace.video_id,
             "provider": str(self.workspace.project.get("provider") or ""),
             "basisHeads": heads,
@@ -849,7 +1120,13 @@ class MotionReviewService:
             "advisories": deepcopy(context["advisories"]),
             "items": items,
             "storyboardCards": cards,
-            "lanes": _lanes(snapshots.get("tracks") or {}),
+            "lanes": _lanes(tracks),
+            "trackReview": project_track_review(
+                tracks,
+                snapshots.get("bmap") or {},
+                items,
+                state=_track_state(snapshots, heads),
+            ),
             "gaps": [
                 value
                 for _, value in sorted(
@@ -859,6 +1136,10 @@ class MotionReviewService:
             "pendingRevisions": deepcopy(context["pendingRevisions"]),
             "coverage": _coverage(pairs, counts, context, gaps),
         }
+        if context["projectionSource"] is not None:
+            snapshot["projectionSource"] = context["projectionSource"]
+        snapshot.update(_recorded_review_view(self.workspace, heads, items))
+        self._add_scope(snapshot, scope_request)
         snapshot["snapshotHash"] = document_hash_excluding(snapshot, "snapshotHash")
         validate_document(snapshot, "avo.motion-review.schema.json")
         return snapshot
@@ -916,9 +1197,63 @@ class MotionReviewService:
                     )
         except (OSError, ValueError) as error:
             return {"freshness": "invalid", "refs": {}, "warnings": [str(error)]}
-        current = self._metadata(snapshots=False)[0]
-        freshness = "current" if current == snapshot["basisHeads"] else "historical"
+        try:
+            freshness = "current" if self._report_is_current(snapshot) else "historical"
+        except (OSError, ValueError, RuntimeError, KeyError, TypeError) as error:
+            return {
+                "freshness": "historical",
+                "refs": refs,
+                "warnings": [f"Current review inputs could not be verified: {error}"],
+            }
         return {"freshness": freshness, "refs": refs, "warnings": []}
+
+    def _report_is_current(self, snapshot):
+        expected = snapshot.get("contextBasis")
+        if (
+            not expected
+            or not expected["complete"]
+            or snapshot["generator"] != GENERATOR
+        ):
+            return False
+        if self._metadata(snapshots=False)[0] != snapshot["basisHeads"]:
+            return False
+        if snapshot.get("projectionSource") is not None:
+            heads, actual = self._native_context_basis(snapshot)
+            return heads == snapshot["basisHeads"] and actual == expected
+        heads, _, _, _, actual = self._capture_inputs(None)
+        return heads == snapshot["basisHeads"] and all(
+            actual[key] == expected[key]
+            for key in ("workHash", "directionRef", "complete")
+        )
+
+    def _native_context_basis(self, snapshot):
+        from .pipeline import TimelinePipeline
+        from .workspace import TimelineWorkspace
+
+        workspace = TimelineWorkspace.from_project(
+            self.workspace.project_path, video_id=self.workspace.video_id
+        )
+        origin = snapshot["projectionSource"]
+        supplied = None
+        if origin["soundProposalRef"] is not None:
+            from .motion_retention import _Retention
+
+            retained = _Retention(workspace).sound_retention
+            retained.proposal(origin["soundProposalRef"])
+            supplied = {
+                "proposal": retained.reference(origin["soundProposalRef"], "proposal"),
+                "proposalRef": origin["soundProposalRef"],
+            }
+        context = TimelinePipeline(workspace)._motion_context(
+            proposal_hash=origin["proposalHash"], sound_proposal=supplied
+        )
+        context["projectionSource"] = deepcopy(origin)
+        reader = MotionReviewService(workspace)
+        reader._validate_scope_clock(
+            (snapshot.get("productionScope") or {}).get("request")
+        )
+        heads, _, _, _, basis = reader._capture_inputs(context)
+        return heads, basis
 
     @staticmethod
     def _write_immutable(path, content):
@@ -954,7 +1289,7 @@ class MotionReviewService:
         if report["freshness"] == "historical":
             warnings = [
                 *warnings,
-                "Canonical heads changed; report retained as historical, not current review approval",
+                "Review inputs changed or could not be verified; report retained as historical, not current review approval",
             ]
         return {
             "status": "published" if report["freshness"] == "current" else "stale",
@@ -964,12 +1299,46 @@ class MotionReviewService:
         }
 
 
-def render_text(snapshot):
+def _scope_summary(snapshot):
+    plan = snapshot.get("productionScope")
+    if plan is None:
+        return []
+    lines = [
+        "Selected production chunks: " + ", ".join(plan["request"]["selectedChunkIds"]),
+        "No approval is granted by this view.",
+    ]
+    for group in ("production", "context"):
+        lines.extend(
+            f"{row['itemId']} | {group} | owner {row['ownerChunkId']} | needed in {', '.join(row['consumerChunkIds'])}"
+            for row in plan[group]
+        )
+    lines.extend(
+        [
+            "Unresolved item ownership: "
+            + (", ".join(plan["unresolvedItemIds"]) or "none"),
+            "Scope coverage: " + ("complete" if plan["complete"] else "partial"),
+            "",
+        ]
+    )
+    return lines
+
+
+def _track_lines(snapshot, include_tracks):
+    if "trackReview" not in snapshot:
+        return ["Tracks", json.dumps(snapshot["lanes"], indent=2, sort_keys=True)]
+    return track_review_text(snapshot["trackReview"]) if include_tracks else []
+
+
+def render_text(snapshot, *, include_tracks=True):
+    recorded = snapshot.get("encodedReview") or {}
+    review_links = _craft_review_descriptions(recorded)
     lines = [
         f"Motion plan: {snapshot['videoId']}",
         f"Readiness: {snapshot['readiness']}",
         f"Applicability: {snapshot['applicability']}",
         "",
+        *_scope_summary(snapshot),
+        *_craft_review_header(recorded),
     ]
     for item, card in zip(snapshot["items"], snapshot["storyboardCards"], strict=True):
         lines.extend(
@@ -992,14 +1361,14 @@ def render_text(snapshot):
                 f"Canonical parts (exact BMap ranges): {_text(item['parts'])}",
                 f"Non-authoritative proposal identity conflicts: {_text(item['identityConflicts'])}",
                 f"Evidence: {_text(card['evidence'])}",
+                *review_links.get(item["itemId"], []),
                 f"Unresolved: {', '.join(card['unresolvedFields'])}",
                 "",
             ]
         )
     lines.extend(
         [
-            "Tracks",
-            json.dumps(snapshot["lanes"], indent=2, sort_keys=True),
+            *_track_lines(snapshot, include_tracks),
             "Pending revisions",
             json.dumps(snapshot["pendingRevisions"], indent=2, sort_keys=True),
             "Recorded planning advisories",
@@ -1010,6 +1379,34 @@ def render_text(snapshot):
         ]
     )
     return "\n".join(lines) + "\n"
+
+
+def _craft_review_header(recorded):
+    if not recorded:
+        return []
+    return [
+        f"Encoded cue review for {recorded['candidateSha256'][:12]} in {recorded['reviewPath']}",
+        "Play the affected intervals and listen before accepting a change.",
+        "Route picture and sound revisions through their owning commands.",
+        "",
+    ]
+
+
+def _craft_review_descriptions(recorded):
+    return {
+        link["itemId"]: [
+            f"Observed frames for {', '.join(link['cueIds'])}: {_bounded_labels(link['observedFrames'])}",
+            f"Linked findings: {_bounded_labels(link['findingIds'])}",
+        ]
+        for link in recorded.get("links", [])
+    }
+
+
+def _bounded_labels(values):
+    first = ", ".join(map(str, values[:12]))
+    if len(values) > 12:
+        return f"{first} and {len(values) - 12} more in the review"
+    return first or "None recorded"
 
 
 def _concept_descriptions(item):
@@ -1040,6 +1437,7 @@ def render_html(snapshot):
         .read_text(encoding="utf-8")
     )
     map_rows, cards = [], []
+    review_links = _craft_review_descriptions(snapshot.get("encodedReview") or {})
     for item, card in zip(snapshot["items"], snapshot["storyboardCards"], strict=True):
         anchor = "item-" + content_hash(item["itemId"])
         map_rows.append(
@@ -1063,6 +1461,8 @@ def render_html(snapshot):
             "Evidence": card["evidence"],
             "Unresolved": card["unresolvedFields"],
         }
+        if item["itemId"] in review_links:
+            fields["Encoded cue review"] = review_links[item["itemId"]]
         descriptions = "".join(
             f"<dt>{escape(key)}</dt><dd>{escape(_text(value))}</dd>"
             for key, value in fields.items()
@@ -1076,7 +1476,17 @@ def render_html(snapshot):
         map_rows="".join(map_rows),
         cards="".join(cards),
         advisories=_render_advisories(snapshot["advisories"]),
-        content=escape(render_text(snapshot)),
+        scope_summary=(
+            '<section aria-label="Production scope"><h2>Production scope</h2><ul>'
+            + "".join(
+                f"<li>{escape(line)}</li>" for line in _scope_summary(snapshot) if line
+            )
+            + "</ul></section>"
+        )
+        if snapshot.get("productionScope") is not None
+        else "",
+        track_review=track_review_html(snapshot.get("trackReview")),
+        content=escape(render_text(snapshot, include_tracks=False)),
     )
 
 

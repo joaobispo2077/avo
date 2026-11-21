@@ -66,6 +66,12 @@ Learndown does **not** delete files. Run `/avo.cleanup` after learndown complete
 
 - Export immutable, content-hashed timeline-learning snapshots. Provider preflight
   loads final snapshots as contextual advice; it never imports prior approvals.
+- When the wrap names the currently approved master and a timeline iteration
+  ledger is available, the provider export records the exact master, candidate
+  snapshot and ledger identities. Project decisions stay scoped to that project.
+  Label deliberately curated lessons as reusable craft, provider taste or
+  project-only. Record the formats, sections, conditions and exclusions that
+  govern reuse.
 - A reusable project component first becomes a sanitized proposal. Strip project
   text, claims, timing, media, absolute/private paths, secrets, source maps, and
   render-time network access; require typed parameters, exact dependency locks,

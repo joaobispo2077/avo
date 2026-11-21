@@ -9,7 +9,7 @@ from avo.timeline.sound_planning import SoundPlanningError, freeze_sound_choices
 from tests.test_sound_choices import inputs
 
 
-def prepared(tmp_path, *, duck=False):
+def prepared(tmp_path, *, duck=False, dialogue_margin=None):
     entry, event, choice, context, clock = inputs(tmp_path)
     if duck:
         choice["mix"]["ducking"] = {
@@ -18,6 +18,8 @@ def prepared(tmp_path, *, duck=False):
             "attackMs": 20,
             "releaseMs": 250,
         }
+        if dialogue_margin is not None:
+            choice["mix"]["ducking"]["minimumDialogueMarginDb"] = dialogue_margin
     choices = freeze_sound_choices(
         [event], [choice], entries=[entry], contexts=[context], clock=clock
     )["choices"]
@@ -146,8 +148,9 @@ def test_existing_mix_and_voice_processing_keep_their_original_identity(tmp_path
     assert append_selected_sound(result, choices, source_refs=refs) == result
 
 
-def test_ducking_requires_exact_supplied_current_dialogue_nodes(tmp_path):
-    execution, choices, refs = prepared(tmp_path, duck=True)
+@pytest.mark.parametrize("margin", [None, 6.5])
+def test_ducking_requires_exact_supplied_current_dialogue_nodes(tmp_path, margin):
+    execution, choices, refs = prepared(tmp_path, duck=True, dialogue_margin=margin)
     with pytest.raises(SoundPlanningError, match="dialogue nodes"):
         append_selected_sound(execution, choices, source_refs=refs)
     result = append_selected_sound(
@@ -156,3 +159,4 @@ def test_ducking_requires_exact_supplied_current_dialogue_nodes(tmp_path):
     duck = next(op for op in result["audioGraph"]["operations"] if op["kind"] == "duck")
     assert duck["parameters"]["sidechainNodeIds"] == ["voice"]
     assert duck["parameters"]["amountDb"] == 8
+    assert duck["parameters"].get("minimumDialogueMarginDb") == margin

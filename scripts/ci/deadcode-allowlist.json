@@ -149,22 +149,6 @@
     },
     {
       "path": "src/avo/learndown_export.py",
-      "name": "build_timeline_learning_snapshot",
-      "kind": "function",
-      "lineno": 87,
-      "confidence": 60,
-      "reason": "Feature 006 public/dynamic contract covered by focused tests and runtime registration"
-    },
-    {
-      "path": "src/avo/learndown_export.py",
-      "name": "export_timeline_learning_snapshot",
-      "kind": "function",
-      "lineno": 242,
-      "confidence": 60,
-      "reason": "Feature 006 public/dynamic contract covered by focused tests and runtime registration"
-    },
-    {
-      "path": "src/avo/learndown_export.py",
       "name": "load_active_timeline_learning",
       "kind": "function",
       "lineno": 275,
@@ -412,14 +396,6 @@
       "reason": "Feature 006 public/dynamic contract covered by focused tests and runtime registration"
     },
     {
-      "path": "src/avo/timeline/event_clock.py",
-      "name": "frame_range_to_samples",
-      "kind": "function",
-      "lineno": 59,
-      "confidence": 60,
-      "reason": "Feature 006 public/dynamic contract covered by focused tests and runtime registration"
-    },
-    {
       "path": "src/avo/timeline/iterations.py",
       "name": "fingerprint_candidate",
       "kind": "method",
@@ -496,14 +472,6 @@
       "name": "cmap_output_to_raw",
       "kind": "function",
       "lineno": 67,
-      "confidence": 60,
-      "reason": "Timeline domain/API surface (dynamic CLI and future stages)"
-    },
-    {
-      "path": "src/avo/timeline/mapping.py",
-      "name": "cmap_raw_to_output",
-      "kind": "function",
-      "lineno": 44,
       "confidence": 60,
       "reason": "Timeline domain/API surface (dynamic CLI and future stages)"
     },

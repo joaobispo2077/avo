@@ -286,6 +286,18 @@ def test_destructive_flags_and_warnings() -> None:
     assert "DESTRUCTIVE" in migrate_rollback.description
 
 
+@pytest.mark.parametrize("operation", ["prepare", "run", "inspect", "recover"])
+def test_artcraft_job_tools_discover_their_exact_cli_scope(operation) -> None:
+    definition = next(
+        item
+        for item in all_bridge_defs()
+        if item.spec.name == f"avo_artcraft_{operation}"
+    )
+    assert definition.cli_prefix == ("artcraft", operation)
+    assert definition.spec.destructive is False
+    assert definition.spec.group == "artcraft"
+
+
 def test_kwargs_to_argv_omits_false_bools() -> None:
     argv = kwargs_to_argv(
         ("migrate-timeline", "activate"),
@@ -370,6 +382,46 @@ def test_remaining_bridge_defs_match_cli_groups() -> None:
     assert {d.spec.group for d in remaining} == set(REMAINING_CLI_GROUPS)
     # Core defs still available separately
     assert {d.spec.group for d in core_bridge_defs()} == set(CORE_CLI_GROUPS)
+
+
+def test_editor_review_tool_gate_seals_exact_requests(tmp_path: Path) -> None:
+    from hashlib import sha256
+
+    from avo.mcp.tools.cli_tools import _decision_gate_args
+
+    by_operation = {
+        item.cli_prefix[1]: item
+        for item in all_bridge_defs()
+        if item.spec.group == "timeline-export"
+    }
+    assert set(by_operation) == {
+        "prepare",
+        "status",
+        "inspect-feedback",
+        "propose-feedback",
+        "apply-feedback",
+        "qualify-target",
+    }
+    assert not by_operation["status"].spec.destructive
+    target = tmp_path / "request.json"
+    target.write_bytes(b'{"operation":"propose-feedback"}')
+    arguments = {"project": str(tmp_path / "avo.project.json"), "request": str(target)}
+    for operation in (
+        "prepare",
+        "inspect-feedback",
+        "propose-feedback",
+        "apply-feedback",
+        "qualify-target",
+    ):
+        definition = by_operation[operation]
+        assert definition.spec.destructive
+        qualified = _decision_gate_args(definition, arguments)
+        assert (
+            qualified["_decisionDocumentSha256"]
+            == sha256(target.read_bytes()).hexdigest()
+        )
+    target.write_bytes(b'{"operation":"inspect-feedback"}')
+    assert _decision_gate_args(by_operation["propose-feedback"], arguments) != qualified
 
 
 def test_register_cli_tools_on_server() -> None:

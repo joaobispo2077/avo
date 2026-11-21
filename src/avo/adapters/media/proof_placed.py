@@ -42,10 +42,12 @@ def _require_implementation(execution, operation):
 
 
 def _layout_operation(execution):
+    from .proof_executor import _is_auxiliary_picture
+
     operations = execution["videoGraph"]["operations"]
     layouts = [op for op in operations if op["kind"] == "source-layout"]
     if len(layouts) != 1 or any(
-        op["kind"] not in {"source-layout", "overlay-video", "camera-transform"}
+        op["kind"] != "source-layout" and not _is_auxiliary_picture(op)
         for op in operations
     ):
         raise RuntimeError(

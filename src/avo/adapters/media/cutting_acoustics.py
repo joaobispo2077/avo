@@ -193,6 +193,7 @@ class CuttingAcousticsAdapter:
         )
         return {
             **extraction,
+            "transcript": transcript,
             "words": transcript["words"],
             "speechRanges": speech,
             "silenceRanges": silences,

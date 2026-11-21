@@ -3,6 +3,39 @@
 from copy import deepcopy
 from fractions import Fraction
 
+from .cutting_contracts import selected_source_range, source_interval
+
+
+def _terminal_trim(outer, retained, edits, *, beginning):
+    identity = outer["segmentId"]
+    if retained["segmentId"].rpartition("-cut-")[0] != identity:
+        return []
+    raw, original_first, original_last = source_interval(selected_source_range(outer))
+    retained_raw, kept_first, kept_last = source_interval(
+        selected_source_range(retained)
+    )
+    if raw != retained_raw:
+        return []
+    first, last = (
+        (original_first, kept_first) if beginning else (kept_last, original_last)
+    )
+    return [
+        (beginning, edit["occurrenceId"])
+        for edit in edits
+        if edit["segmentId"] == identity
+        and source_interval(edit["removeRange"]) == (raw, first, last)
+    ]
+
+
+def editor_terminal_trims(original, candidate, edits):
+    """Find exact retained boundaries for editor changes that create no join."""
+    before, after = original["segments"], candidate["segments"]
+    if not before or not after:
+        return []
+    return _terminal_trim(before[0], after[0], edits, beginning=True) + _terminal_trim(
+        before[-1], after[-1], edits, beginning=False
+    )
+
 
 def _validate_window(first, last):
     if (

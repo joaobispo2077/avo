@@ -11,12 +11,14 @@ from .cmap_service import CMapService
 from .command_registry import authorize
 from .contracts import content_hash, file_fingerprint, fingerprint_stage
 from .lineage import stale_descendants
+from .motion_metadata import _basis_matches
 from .sound_choices import (
     _check_sound_roles,
     _sound_choice_advisories,
     _sound_document,
     _unique_sound_ids,
     freeze_sound_choices,
+    require_native_mix_support,
 )
 from .sound_fitting import SoundPlanningError
 from .sound_tracks import validate_sound_bindings
@@ -62,6 +64,69 @@ def _encoded(value):
     return (
         json.dumps(value, indent=2, ensure_ascii=False, sort_keys=True) + "\n"
     ).encode("utf-8")
+
+
+def _sound_layer_content(layer):
+    provenance = layer["provenance"]
+    selection = {
+        key: value
+        for key, value in provenance["soundSelection"].items()
+        if key not in {"proposalRef", "applicationRef"}
+    }
+    return {**layer, "provenance": {**provenance, "soundSelection": selection}}
+
+
+def _sound_cue_content(cue):
+    if (cue.get("audio") or {}).get("playbackOwner") != "tracks-native":
+        return cue
+    return {
+        **cue,
+        "contentRef": {
+            key: value
+            for key, value in cue["contentRef"].items()
+            if key != "applicationRef"
+        },
+    }
+
+
+def _sound_publication_hash(snapshots):
+    bmap, tracks = snapshots["bmap"], snapshots["tracks"]
+    audio = tracks["audioTracks"]
+    return content_hash(
+        {
+            "bmap": {**bmap, "cues": [_sound_cue_content(cue) for cue in bmap["cues"]]},
+            "tracks": {
+                **tracks,
+                "audioTracks": {
+                    **audio,
+                    "layers": [
+                        _sound_layer_content(layer)
+                        if (layer.get("provenance") or {}).get("soundSelection")
+                        else layer
+                        for layer in audio["layers"]
+                    ],
+                },
+            },
+        }
+    )
+
+
+def _require_mix_admission(choices, tracks):
+    dialogue = {
+        layer["layerId"]
+        for layer in tracks["audioTracks"]["layers"]
+        if layer["role"] == "dialogue" and not layer.get("mute", False)
+    }
+    for choice in choices:
+        if choice["fit"]["status"] != "fit":
+            continue
+        mix = choice["mix"]
+        require_native_mix_support(mix)
+        ducking = mix["ducking"]
+        if ducking is not None and ducking["sidechainLayerId"] not in dialogue:
+            raise SoundPlanningError(
+                "Sound ducking requires a current unmuted dialogue layer"
+            )
 
 
 class _Application:
@@ -182,15 +247,19 @@ class _Application:
             request,
             proposal,
             {"entries": list(entries.values())},
-            {"tracks": self._parent_tracks(request)},
+            {"tracks": self._parent_tracks(request["expectedBasis"])},
         )
         if prepared["choices"] != receipt["choices"]:
             raise SoundPlanningError(
                 "Sound receipt recipe changes its explicit selected choices"
             )
+        if prepared.get("productionScope") != receipt.get("productionScope"):
+            raise SoundPlanningError(
+                "Sound receipt changes its exact production ownership"
+            )
 
-    def _parent_tracks(self, request):
-        head = request["expectedBasis"]["tracks"]
+    def _parent_tracks(self, basis):
+        head = basis["tracks"]
         if head is None:
             return {"audioTracks": {"layers": []}}
         revision = self.workspace.store("tracks").revision(head["revisionId"])
@@ -400,7 +469,15 @@ class _Application:
             clock=proposal["clock"],
             previous=old,
         )
-        return self._restore_choice_order(prepared, retired, request["choices"])
+        prepared = self._restore_choice_order(prepared, retired, request["choices"])
+        from .sound_scope import project_sound_scope
+
+        scope = project_sound_scope(
+            request, proposal["clock"], prepared["choices"], old
+        )
+        if scope is not None:
+            prepared["productionScope"] = scope
+        return prepared
 
     @staticmethod
     def _restore_choice_order(prepared, retired, choices):
@@ -573,7 +650,7 @@ class _Application:
         snapshots["tracks"]["audioTracks"]["layers"].append(layer)
         snapshots["bmap"]["cues"].append(cue)
 
-    def _combined_roles(self, snapshots, choices, contexts):
+    def _combined_roles(self, snapshots, choices, contexts, *, repetition_window_ms):
         layers = sorted(
             self._selected_layers(snapshots["tracks"]).values(),
             key=lambda layer: layer["order"],
@@ -593,7 +670,9 @@ class _Application:
             ],
             contexts,
         )
-        return _sound_choice_advisories(combined)
+        return _sound_choice_advisories(
+            combined, repetition_window_ms=repetition_window_ms
+        )
 
     @staticmethod
     def _check_preserved_contexts(layers, affected, contexts):
@@ -644,7 +723,16 @@ class _Application:
         self._append_layer(snapshots, layer, cue)
 
     def _authoring(
-        self, request, shown, prepared, sources, snapshots, request_ref, contexts
+        self,
+        request,
+        shown,
+        prepared,
+        sources,
+        snapshots,
+        request_ref,
+        contexts,
+        *,
+        repetition_window_ms=None,
     ):
         current = self._selected_layers(snapshots["tracks"])
         order = max(
@@ -670,11 +758,52 @@ class _Application:
                 current.get(choice["eventId"]),
                 order,
             )
-        return snapshots, self._combined_roles(snapshots, prepared["choices"], contexts)
+        return snapshots, self._combined_roles(
+            snapshots,
+            prepared["choices"],
+            contexts,
+            repetition_window_ms=repetition_window_ms,
+        )
+
+    def _retained_revisions(self, basis):
+        retained = {}
+        for name in OWNERS:
+            head = basis[name]
+            if head is None or head.get("activeState") != "valid":
+                return None
+            store = self.workspace.store(name)
+            revision = store._revision_body(store.load_index(), head["revisionId"])
+            if revision["contentSha256"] != head["sha256"]:
+                raise SoundPlanningError(
+                    "Unchanged sound basis changed during publication"
+                )
+            retained[name] = revision
+        return retained
+
+    def _prepare_revisions(self, request, snapshots, evidence, previous):
+        if previous is not None and previous == _sound_publication_hash(snapshots):
+            retained = self._retained_revisions(request["expectedBasis"])
+            if retained is not None:
+                return retained
+        revisions = {}
+        for name, owner in OWNERS.items():
+            kwargs = {} if name == "bmap" else {"parents": revisions}
+            revisions[name] = owner(self.workspace).prepare_authoring(
+                snapshots[name],
+                actor=request["actor"],
+                reason=request["reason"],
+                evidence=evidence,
+                **kwargs,
+            )
+        return revisions
 
     def _prepare(self, request):
+        from .sound_scope import require_sound_scope_parent
+        from .sound_word_evidence import require_word_publication
+
         shown, generation = self._basis(request)
         snapshots = self._snapshots()
+        require_sound_scope_parent(request, snapshots)
         validate_sound_bindings(
             snapshots["bmap"],
             snapshots["tracks"],
@@ -683,11 +812,26 @@ class _Application:
             },
         )
         contexts = self._visual_contexts(request, shown["proposal"], snapshots)
+        word_reader = require_word_publication(
+            self.workspace, request, shown["proposal"]
+        )
         choices = self._choices(request, shown["proposal"], generation, snapshots)
+        _require_mix_admission(choices["choices"], snapshots["tracks"])
         sources = self._source_refs(choices["choices"], generation)
+        previous = (
+            _sound_publication_hash(snapshots) if "productionScope" in request else None
+        )
         _, request_ref, _ = self._reference("requests", request, "applyRequest")
+        matching = shown["proposal"]["options"]["effective"]["soundMatching"]
         snapshots, advisories = self._authoring(
-            request, shown, choices, sources, snapshots, request_ref, contexts
+            request,
+            shown,
+            choices,
+            sources,
+            snapshots,
+            request_ref,
+            contexts,
+            repetition_window_ms=matching.get("repetitionWindowMs"),
         )
         _, cmap, _ = BMapService(self.workspace).current_basis()
         CMapService(self.workspace)._verify_raw(cmap["snapshot"])
@@ -703,17 +847,10 @@ class _Application:
                 **request_ref,
             },
         ]
-        revisions = {}
-        for name, owner in OWNERS.items():
-            kwargs = {} if name == "bmap" else {"parents": revisions}
-            revisions[name] = owner(self.workspace).prepare_authoring(
-                snapshots[name],
-                actor=request["actor"],
-                reason=request["reason"],
-                evidence=evidence,
-                **kwargs,
-            )
+        revisions = self._prepare_revisions(request, snapshots, evidence, previous)
         self._basis(request)
+        if word_reader is not None:
+            word_reader.recheck()
         receipt = {
             "contractVersion": "1.0.0",
             "operationId": request["operationId"],
@@ -733,7 +870,24 @@ class _Application:
             "previousReceiptRef": None,
             "lastError": None,
         }
+        if "productionScope" in choices:
+            receipt["productionScope"] = choices["productionScope"]
         return _sound_document(receipt, "applicationReceipt")
+
+    def _review_scope(self, receipt):
+        from .sound_scope import sound_review_scope
+
+        scope = receipt.get("productionScope")
+        if scope is None:
+            return {}
+        before = self._selected_layers(self._parent_tracks(receipt["expectedBasis"]))
+        after = self._selected_layers(receipt["prepared"]["tracks"]["snapshot"])
+        unchanged = {
+            event
+            for event in before.keys() & after.keys()
+            if _sound_layer_content(before[event]) == _sound_layer_content(after[event])
+        }
+        return {"reviewScope": sound_review_scope(scope, unchanged_ids=unchanged)}
 
     def _result(self, receipt, reference):
         actual = self.authoring._actual_committed(receipt, require_active=False)
@@ -750,10 +904,11 @@ class _Application:
             "proposalRef": receipt["proposalRef"],
             "committedHeads": actual,
             "currentHeads": current,
-            "headsCurrent": all(current[name] == head for name, head in actual.items()),
+            "headsCurrent": _basis_matches(actual, current),
             "changes": receipt["changes"],
             "advisories": receipt["advisories"],
             "acceptance": "pending-listening",
+            **self._review_scope(receipt),
         }
 
     def _commit(self, request, receipt):

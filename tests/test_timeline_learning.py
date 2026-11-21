@@ -120,3 +120,69 @@ def test_export_is_idempotent_and_preserves_draft_when_final_activates(
     export_timeline_learning_snapshot(tmp_path, final)
     assert first.is_file()
     assert load_active_timeline_learning(tmp_path)["status"] == "final"
+
+
+def test_active_snapshot_reader_refuses_modified_learning_under_original_hash(tmp_path):
+    snapshot = build_timeline_learning_snapshot(
+        ledger=_ledger(), candidate_snapshot_hash=SHA_B, status="draft"
+    )
+    path = export_timeline_learning_snapshot(tmp_path, snapshot)
+    snapshot["decisionOutcomes"][0]["summary"] = "Unreviewed replacement"
+    path.write_text(json.dumps(snapshot), encoding="utf-8")
+
+    with pytest.raises(ValueError, match="snapshot hash mismatch"):
+        load_active_timeline_learning(tmp_path)
+
+
+def test_scoped_learning_retains_source_and_only_portable_treatment_fields():
+    snapshot = build_timeline_learning_snapshot(
+        ledger=_ledger(),
+        candidate_snapshot_hash=SHA_B,
+        status="draft",
+        technique_candidates=[
+            {
+                "id": "tip-hold",
+                "summary": "Hold the title through the spoken subject",
+                "status": "approved",
+                "learningScope": "reusable-craft",
+                "applicability": {
+                    "formats": ["talking-head"],
+                    "exclusions": ["caption-dense opening"],
+                },
+                "impact": {
+                    "copiedText": "private title line",
+                    "rights": {"license": "project only"},
+                    "approvalEvidence": "old proof approval",
+                },
+            },
+            {
+                "id": "channel-choice",
+                "summary": "Use softer motion on this channel",
+                "learningScope": "provider-taste",
+                "applicability": {"conditions": ["low density"]},
+            },
+            {
+                "id": "project-exception",
+                "summary": "Text specific to the current project",
+                "learningScope": "project-only",
+            },
+        ],
+    )
+    assert snapshot["candidateSnapshotHash"] == SHA_B
+    assert snapshot["iterationLedgerHash"] == SHA_A
+    assert snapshot["decisionOutcomes"][0]["learningScope"] == "project-only"
+    craft, taste, project = snapshot["techniqueCandidates"]
+    assert craft["status"] == "candidate"
+    assert craft["learningScope"] == "reusable-craft"
+    assert craft["applicability"]["exclusions"] == ["caption-dense opening"]
+    assert craft["applicability"]["formats"] == ["talking-head"]
+    assert taste["learningScope"] == "provider-taste"
+    assert project["learningScope"] == "project-only"
+    encoded = json.dumps(snapshot)
+    for private in (
+        "private title line",
+        "project only",
+        "old proof approval",
+        "Text specific",
+    ):
+        assert private not in encoded

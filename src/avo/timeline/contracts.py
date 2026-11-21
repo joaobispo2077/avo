@@ -135,16 +135,28 @@ def _schema_and_fragment(
 
 def _schema_registry(root: Path):
     """Build a local registry so production schemas may use cross-file refs."""
+    documents = []
+    for path in sorted(Path(root).glob("*.json")):
+        try:
+            documents.append(path.read_bytes())
+        except OSError:
+            continue
+    return _parsed_schema_registry(tuple(documents))
+
+
+@lru_cache(maxsize=4)
+def _parsed_schema_registry(documents: tuple[bytes, ...]):
+    """Reuse parsing only; every caller rereads all current schema bytes."""
     try:
         from referencing import Registry, Resource
     except ImportError as exc:  # pragma: no cover - jsonschema installs referencing
         raise ContractError(f"cannot load JSON Schema registry support: {exc}") from exc
 
     registry = Registry()
-    for path in sorted(Path(root).glob("*.json")):
+    for raw in documents:
         try:
-            document = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, ValueError):
+            document = json.loads(raw.decode("utf-8"))
+        except ValueError:
             # An unrelated optional schema must not break validation of a
             # self-contained contract. A referenced malformed schema remains
             # absent and therefore fails closed when the validator resolves it.

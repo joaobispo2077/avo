@@ -114,7 +114,7 @@ jobs:
         run: npm ci
 
       - name: Install ffmpeg
-        timeout-minutes: 8
+        timeout-minutes: 22
         run: bash scripts/ci/ensure-ffmpeg.sh
 
       - name: Run unit tests
@@ -146,7 +146,7 @@ jobs:
     name: Integration tests (AVO repo)
     runs-on: ubuntu-24.04
     needs: prerequisites-gate
-    timeout-minutes: 30
+    timeout-minutes: 45
     # Real capture checks must fail, rather than skip, when this runtime is absent.
     env:
       AVO_REQUIRE_CODE_DRAWN_RUNTIME: '1'
@@ -173,11 +173,12 @@ jobs:
         run: echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
 
       - name: Install ffmpeg
-        timeout-minutes: 8
+        timeout-minutes: 22
         run: bash scripts/ci/ensure-ffmpeg.sh
 
       - name: Install managed Chromium for code-drawn integration
-        timeout-minutes: 8
+        # The Ubuntu mirror was still downloading the required fonts at 8 minutes.
+        timeout-minutes: 15
         run: python -m playwright install --with-deps --no-shell chromium
 
       - name: Provision pinned standalone brush dependency
@@ -223,8 +224,9 @@ jobs:
     permissions:
       contents: read
     # Coverage re-runs the unit suite only (tests/integration has its own job).
-    # Run 44170109995 reached 99% coverage progress before the 35-minute timeout.
-    timeout-minutes: 50
+    # Run 44246128502 reached 84% coverage after 48m33s before its 50m job limit.
+    # Budget the measured instrumented workload plus setup/gates/evidence.
+    timeout-minutes: 65
     outputs:
       evidence_url: ${{ steps.quality-evidence.outputs.artifact-url }}
     steps:
@@ -256,8 +258,9 @@ jobs:
       - name: Install Node dependencies
         run: npm ci
 
+      # Keep both bounded apt attempts inside this step.
       - name: Install ffmpeg
-        timeout-minutes: 8
+        timeout-minutes: 22
         run: bash scripts/ci/ensure-ffmpeg.sh
 
       # Spec v1.4 / task-013: Phase-1 fast gates — all fail-immediately (no soft stubs).

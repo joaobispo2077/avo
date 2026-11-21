@@ -23,7 +23,41 @@
     "coverage",
     "advisories"
   ],
+  "allOf": [
+    {
+      "if": {"properties": {"generator": {"properties": {"version": {"enum": ["1.9.0", "1.10.0", "1.11.0", "1.12.0"]}}}}},
+      "then": {"required": ["contextBasis"]}
+    },
+    {"if": {"properties": {"generator": {"properties": {"version": {"const": "1.12.0"}}}}}, "then": {"required": ["trackReview"]}}
+  ],
   "properties": {
+    "contextBasis": {"$ref": "#/$defs/contextBasis"},
+    "projectionSource": {"$ref": "#/$defs/projectionSource"},
+    "productionScope": {"$ref": "avo.editing-craft-run.schema.json#/$defs/productionScopePlan"},
+    "encodedReview": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["candidateSha256", "reviewSha256", "reviewPath", "links"],
+      "properties": {
+        "candidateSha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "reviewSha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "reviewPath": {"type": "string", "minLength": 1},
+        "links": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["itemId", "cueIds", "observedFrames", "findingIds"],
+            "properties": {
+              "itemId": {"type": "string", "minLength": 1},
+              "cueIds": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string"}},
+              "observedFrames": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "integer", "minimum": 0}},
+              "findingIds": {"type": "array", "uniqueItems": true, "items": {"type": "string"}}
+            }
+          }
+        }
+      }
+    },
     "schemaVersion": {
       "const": "1.0.0"
     },
@@ -43,7 +77,7 @@
           "const": "avo.motion-review"
         },
         "version": {
-            "enum": ["1.1.0", "1.2.0", "1.3.0", "1.4.0", "1.5.0", "1.6.0", "1.7.0"]
+            "enum": ["1.1.0", "1.2.0", "1.3.0", "1.4.0", "1.5.0", "1.6.0", "1.7.0", "1.8.0", "1.9.0", "1.10.0", "1.11.0", "1.12.0"]
         }
       }
     },
@@ -507,6 +541,21 @@
         }
       }
     },
+    "trackReview": {
+      "type": "object", "additionalProperties": false,
+      "required": ["state", "audio", "video", "findings"],
+      "properties": {
+        "state": {"enum": ["declared", "stale", "unavailable"]},
+        "audio": {"type": "array", "items": {"$ref": "#/$defs/reviewLane"}},
+        "video": {"type": "array", "items": {"$ref": "#/$defs/reviewLane"}},
+        "findings": {"type": "object", "additionalProperties": false, "required": ["audio", "video"],
+          "properties": {
+            "audio": {"type": "array", "items": {"type": "string"}},
+            "video": {"type": "array", "items": {"type": "string"}}
+          }
+        }
+      }
+    },
     "gaps": {
       "type": "array",
       "items": {
@@ -571,6 +620,56 @@
     }
   },
   "$defs": {
+    "reviewLane": {
+      "type": "object", "additionalProperties": false,
+      "required": ["laneId", "role", "order", "pictureOrder", "state", "source", "gainDb", "channels", "regions"],
+      "properties": {
+        "laneId": {"type": "string"},
+        "role": {"type": "string"},
+        "order": {"type": "integer"},
+        "pictureOrder": {"type": ["integer", "null"]},
+        "state": {"enum": ["declared", "disabled", "muted", "unresolved"]},
+        "source": {"type": ["string", "null"]},
+        "gainDb": {"type": ["number", "null"]},
+        "channels": {"type": ["array", "null"], "items": {"type": "integer"}},
+        "regions": {"type": "array", "items": {"$ref": "#/$defs/reviewLaneRegion"}}
+      }
+    },
+    "reviewLaneRegion": {
+      "type": "object", "additionalProperties": false,
+      "required": ["regionId", "startTicks", "endTicks", "timebase", "gainDb", "cueIds", "itemIds", "componentRefs", "missingCueIds"],
+      "properties": {
+        "regionId": {"type": "string"},
+        "startTicks": {"type": "integer"},
+        "endTicks": {"type": "integer"},
+        "timebase": {"type": "object", "additionalProperties": false, "required": ["num", "den"],
+          "properties": {"num": {"type": "integer", "minimum": 1}, "den": {"type": "integer", "minimum": 1}}},
+        "gainDb": {"type": ["number", "null"]},
+        "cueIds": {"type": "array", "items": {"type": "string"}},
+        "itemIds": {"type": "array", "items": {"type": "string"}},
+        "componentRefs": {"type": "array", "items": {"type": "string"}},
+        "missingCueIds": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "contextBasis": {
+      "type": "object", "additionalProperties": false,
+      "required": ["workHash", "inputHash", "directionRef", "complete"],
+      "properties": {
+        "workHash": {"$ref": "https://avo.local/avo.motion-proposal.schema.json#/$defs/sha256"},
+        "inputHash": {"$ref": "https://avo.local/avo.motion-proposal.schema.json#/$defs/sha256"},
+        "directionRef": {"oneOf": [{"type": "null"}, {"$ref": "https://avo.local/avo.motion-proposal.schema.json#/$defs/ref"}]},
+        "complete": {"type": "boolean"}
+      }
+    },
+    "projectionSource": {
+      "type": "object", "additionalProperties": false,
+      "required": ["kind", "proposalHash", "soundProposalRef"],
+      "properties": {
+        "kind": {"const": "pipeline"},
+        "proposalHash": {"oneOf": [{"type": "null"}, {"$ref": "https://avo.local/avo.motion-proposal.schema.json#/$defs/sha256"}]},
+        "soundProposalRef": {"oneOf": [{"type": "null"}, {"$ref": "https://avo.local/avo.motion-proposal.schema.json#/$defs/ref"}]}
+      }
+    },
     "time": {
       "type": "object",
       "additionalProperties": false,
@@ -1069,7 +1168,10 @@
     "canonicalCues": {
       "type": "array",
       "items": {
-        "$ref": "https://github.com/joaobispo2077/avo/schemas/avo.bmap.schema.json#/$defs/cue"
+        "allOf": [
+          {"$ref": "https://github.com/joaobispo2077/avo/schemas/avo.bmap.schema.json#/$defs/cue"},
+          {"properties": {"contentRef": {"properties": {"itemId": {"type": ["string", "null"], "maxLength": 128}}}}}
+        ]
       }
     },
     "advisories": {

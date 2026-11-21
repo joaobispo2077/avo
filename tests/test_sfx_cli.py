@@ -146,17 +146,36 @@ def test_scan_annotation_and_descriptor_search_use_read_only_declared_library(
             "expectedGeneration": scanned["generationId"],
             "selection": {"entryId": entry["entryId"]},
             "patch": {
+                "curation": {
+                    "description": "Positive confirmation",
+                    "category": "interface",
+                },
                 "rights": {
                     "status": "licensed",
                     "license": "Fixture",
                     "evidenceRef": "fixture-license",
-                }
+                },
             },
         },
     )
     found = invoke(
-        "search", {"query": "soft click", "generation": annotated["generationId"]}
+        "search",
+        {
+            "query": "positive confirmation",
+            "filters": {"category": "interface"},
+            "generation": annotated["generationId"],
+        },
     )
+    bridged = run_bridged(
+        definition("search").cli_prefix,
+        {
+            "project": str(workspace.project_path),
+            "request": str(request),
+            "as_json": True,
+        },
+    )
+    assert bridged.exit_code == 0, bridged.stderr
+    assert bridged.parsed_json == found
     assert found["effect"] == "metadata-read"
     assert found["results"][0]["entryId"] == entry["entryId"]
     assert found["results"][0]["rightsState"] == "licensed"

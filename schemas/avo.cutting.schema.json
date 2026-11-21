@@ -15,7 +15,13 @@
         "proposal",
         "verification",
         "decision",
-        "repair-reservation"
+        "repair-reservation",
+        "speech-recovery-request",
+        "speech-recovery-attempt",
+        "speech-recovery-result",
+        "speech-recovery-decision",
+        "spoken-note-report",
+        "spoken-note-decision"
       ]
     },
     "payload": {
@@ -32,6 +38,12 @@
     "documentHash"
   ],
   "allOf": [
+    {"if": {"properties": {"documentType": {"const": "speech-recovery-request"}}}, "then": {"properties": {"payload": {"$ref": "avo.preparation.schema.json#/$defs/recoveryRequest"}}}},
+    {"if": {"properties": {"documentType": {"const": "speech-recovery-attempt"}}}, "then": {"properties": {"payload": {"$ref": "avo.preparation.schema.json#/$defs/recoveryAttempt"}}}},
+    {"if": {"properties": {"documentType": {"const": "speech-recovery-result"}}}, "then": {"properties": {"payload": {"$ref": "avo.preparation.schema.json#/$defs/recoveryResult"}}}},
+    {"if": {"properties": {"documentType": {"const": "speech-recovery-decision"}}}, "then": {"properties": {"payload": {"$ref": "avo.preparation.schema.json#/$defs/recoveryDecision"}}}},
+    {"if": {"properties": {"documentType": {"const": "spoken-note-report"}}}, "then": {"properties": {"payload": {"$ref": "avo.preparation.schema.json#/$defs/spokenNoteReport"}}}},
+    {"if": {"properties": {"documentType": {"const": "spoken-note-decision"}}}, "then": {"properties": {"payload": {"$ref": "avo.preparation.schema.json#/$defs/spokenNoteDecision"}}}},
     {
       "if": {
         "properties": {
@@ -432,6 +444,13 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
+        "recoveryContext": {"$ref": "avo.preparation.schema.json#/$defs/recoveryContext"},
+        "preparationEvidence": {"$ref": "avo.preparation.schema.json#/$defs/selectedEvidence"},
+        "speechDependencies": {
+          "type": "object", "additionalProperties": false,
+          "required": ["transcription", "alignment"],
+          "properties": {"transcription": {"type": "object"}, "alignment": {"type": "object"}}
+        },
         "sourceRef": {
           "$ref": "#/$defs/artifactRef"
         },
@@ -529,6 +548,9 @@
         },
         "coverage": {
           "type": "object"
+        },
+        "speechCoverage": {
+          "$ref": "avo.preparation.schema.json#/$defs/coverage"
         },
         "uncertainty": {
           "type": "array",

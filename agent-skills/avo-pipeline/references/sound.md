@@ -97,12 +97,50 @@ Supply the current `expectedBasis` heads, `expectedGeneration`, exact output
 must be explicitly enabled; an active request retains its original options until
 an explicit new request is selected.
 
+Check the proposal's `candidateTiming` rows alongside the search rank. A fit
+includes the shortest native trim preserving the reviewed marker, useful attack
+and tail, plus the scheduled output samples. Unresolved rows explain which
+timing or review condition is missing. Audition the result in context before
+selecting its trim and mix. Silence remains available.
+
+To focus repetition review on nearby reuse, select
+`soundMatching.repetitionWindowMs` in the craft options. The application report
+lists the events whose adjacent impacts reuse the same sound within that gap.
+The selected policy is frozen with the request.
+
 Each intent identifies a stable `eventId`, current motion `itemId`, purpose,
 role, declared visibility and motion character. An optional `cueId` resolves
 split items; `phase` locates an accent inside the canonical cue. Missing,
 ambiguous or removed anchors remain unresolved. Slow, hidden, static and
 background movement recommend silence. Silence is always available and no
 effect is added merely because motion exists.
+
+To accent a specific authored camera node, use `kind: "camera-emphasis"` and
+`cameraAnchor: {componentId, pathHash, sourceSha256, nodeIndex}` instead of
+`phase`. Copy the exact component/path/source identity from the current motion
+map; `nodeIndex` is zero-based. The actual canonical Animation and linked BMap
+cue are authoritative. Missing, changed or ambiguous camera context stays
+unresolved, including at proof admission. This does not enable camera authoring
+or sound matching by itself.
+
+To accent an explicitly chosen original-source moment, use `sourceAnchor`
+instead of `phase` or `cameraAnchor`. Supply `sourceId`, `sourceSha256`,
+`sourceTime: {ticks, timebase: {num, den}}`, and exact `segmentId` or
+`placementId` (with optional `trackId`). Copy the current original identity and
+occurrence from CMap. The mapped frame must remain inside the linked cue;
+removed, changed, ambiguous, still or picture-sampled occurrences stay
+unresolved. This is an explicit timed source point, not inferred word timing.
+See [source anchor fitting](../../../docs/sound-candidate-fitting.md).
+
+For a word-timed source accent, include
+`spokenEvidence: {analysisRef: {locator, sha256}, wordIndex}` in `sourceAnchor`.
+Use an exact immutable source-analysis reference from current `cutting analyze`
+and a zero-based word index. AVO derives native word time and freezes the word
+and current selection hashes. Current measured/aligned timing, source/routing/
+Sync, prepared model bytes and runtime package metadata are required. Changed,
+uncertain or cut-crossing words stay unresolved. This never runs ASR/alignment.
+Ordinary sound intents do no additional speech work. Publication, native proof
+and existing-plan approval recheck the word evidence; listening stays separate.
 
 Proposals save immutable metadata under `edit/motion/sound/`, binding current
 heads, selected sound direction, options, library generation, queries and actual
@@ -130,9 +168,18 @@ Choice preparation checks measured channel count, the explicitly selected source
 peak ceiling, and fade space outside the useful attack/tail. It does not invent a
 gain target or change the original dialogue/music. Repeated sources and coincident
 attacks are advisories. Per-ID changes report before/after asset identities, role,
-gain and schedule; live source checks, combined peak, speech masking and actual
-contextual listening remain review obligations. Choice preparation alone does
-not publish canonical audio.
+gain and schedule. Use the before and after `listeningRanges` for contextual
+review of edits, including the lead-in and complete tail. Their sample rates
+belong to the respective schedules. Check live sources, combined peak and speech
+clarity during review. Explicit application publishes the selected audio.
+
+`overlapping-sounds` additionally identifies scheduled overlapping pairs, their
+roles and exact rational intervals in seconds. The report includes pre-roll and
+selected tails, preserves each native output sample rate and excludes touching
+ranges/silence/unresolved fits. It shows at most 64 pairs plus explicit truncation
+counts. `assessment: "timing-only"` is not measured masking or clipping; do not
+auto-change levels or claim mix acceptance from it. Per-ID application includes
+the retained selected siblings in this report.
 
 The native proof graph compiler can qualify frozen choices using the existing
 source-native audio path. It keeps the full program clock during window renders,

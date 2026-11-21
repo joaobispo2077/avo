@@ -14,6 +14,10 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 WORKER = "avo/adapters/understand/clap_embeddings_worker.py"
+RUNTIME_LOCKS = (
+    "sfx-clap-cpu-windows.requirements.txt",
+    "visual-motion-cpu-windows.requirements.txt",
+)
 
 
 def test_optional_worker_and_manifest_survive_actual_wheel_build(tmp_path):
@@ -27,6 +31,7 @@ def test_optional_worker_and_manifest_survive_actual_wheel_build(tmp_path):
         "src/avo/adapters/understand/__init__.py",
         "src/" + WORKER,
         "schemas/avo.clap-manifest.schema.json",
+        *(f"config/{name}" for name in RUNTIME_LOCKS),
     )
     for name in paths:
         target = project / name
@@ -63,6 +68,13 @@ def test_optional_worker_and_manifest_survive_actual_wheel_build(tmp_path):
             archive.read(manifest)
             == (ROOT / "schemas/avo.clap-manifest.schema.json").read_bytes()
         )
+        for lock in RUNTIME_LOCKS:
+            member = next(
+                name
+                for name in archive.namelist()
+                if name.endswith(f"share/avo/config/{lock}")
+            )
+            assert archive.read(member) == (ROOT / "config" / lock).read_bytes()
 
 
 def test_actual_frozen_collector_includes_external_worker_source_bytes():

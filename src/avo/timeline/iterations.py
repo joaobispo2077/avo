@@ -42,6 +42,45 @@ class IterationLedgerError(RuntimeError):
     """Raised when iteration history would become ambiguous or inconsistent."""
 
 
+def pending_stage_notes(workspace, stage):
+    """Reopen retained interpretations for their owning authoring stage."""
+    from .contracts import fingerprint_stage
+    from .preparation_recovery import PreparationService
+
+    owners = {"cmap": "cutting", "bmap": "assets", "motion": "motion", "sound": "sound"}
+    owner = owners.get(stage)
+    if owner is None:
+        return []
+    preparation = PreparationService(workspace)
+    results = []
+    with fingerprint_stage():
+        for reference in preparation.store.active_note_interpretations():
+            record = preparation.store.load_document(reference)["payload"]
+            if (
+                record["interpretationEffect"] != "pending-owner-review"
+                or record["note"]["interpretation"]["stage"] != owner
+            ):
+                continue
+            results.append(_pending_note(preparation, reference, record))
+    return results
+
+
+def _pending_note(preparation, reference, record):
+    from .preparation_note_decisions import _current_note
+
+    row = {"noteId": record["note"]["noteId"], "decisionRef": reference}
+    try:
+        current, _ = _current_note(preparation, record["input"])
+    except (OSError, ValueError, RuntimeError) as error:
+        return {**row, "status": "stale", "reason": str(error)[:256]}
+    return {
+        **row,
+        "status": "pending-owner-review",
+        "sourceRange": current["sourceRange"],
+        "interpretation": current["interpretation"],
+    }
+
+
 def _attach_cutting_refs(request):
     cutting_refs = request.pop("cuttingRefs", None)
     if cutting_refs is None:
@@ -89,6 +128,39 @@ def _seal(document: dict[str, Any], hash_field: str) -> dict[str, Any]:
     result = deepcopy(document)
     result[hash_field] = document_hash_excluding(result, hash_field)
     return result
+
+
+def _has_affected_windows(windows):
+    return bool(windows) and all(
+        window["endFrameExclusive"] > window["startFrame"] for window in windows
+    )
+
+
+def _validate_workaround(rework, iteration):
+    if "workaround" not in rework:
+        return
+    proposal = rework["workaround"]
+    validate_document(
+        proposal, "avo.iteration-ledger.schema.json#/$defs/workaroundProposal"
+    )
+    if rework["origin"] not in {"implementation-defect", "external-dependency-failure"}:
+        raise IterationLedgerError(
+            "A workaround requires a reproduced technical defect"
+        )
+    candidate = iteration.get("candidate") or {}
+    if candidate.get("sha256") != proposal["candidateSha256"]:
+        raise IterationLedgerError(
+            "Workaround reproduction belongs to a different candidate"
+        )
+    evidence = proposal["reproductionRef"]
+    if evidence not in rework["evidenceRefs"] or evidence not in (
+        iteration.get("findings") or []
+    ):
+        raise IterationLedgerError(
+            "Workaround requires a reproduction in the same iteration findings"
+        )
+    if not _has_affected_windows(rework["impact"]["programWindows"]):
+        raise IterationLedgerError("Workaround requires exact affected program windows")
 
 
 class IterationLedgerService:
@@ -329,6 +401,7 @@ class IterationLedgerService:
                 iteration_id=iteration_id,
                 actor=actor_value,
             )
+            _validate_workaround(classification, request)
             supersedes = classification.get("supersedes")
             if supersedes:
                 if supersedes not in rework_ids:
