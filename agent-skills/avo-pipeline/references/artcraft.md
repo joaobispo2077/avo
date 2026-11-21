@@ -52,8 +52,11 @@ canonical revisions. Inspection is read-only and can run in a fresh session.
 
 Use `avo cli artcraft recover --job <absolute-job-record> --expected-head
 <event-hash> --json` after an interrupted run. Recovery reports the next action
-and identifies any partial job files as references. Prepare a fresh job when
-the previous run's outcome is unknown. The AVO MCP tools
+and compares retained files with the recorded partial fingerprints. Use
+`--action retry` for an unchanged prepared job or to recover its exact completed
+result after a lost response. Use `--action cancel` before authoring starts.
+Resolve the writer's state when a job is active or has gone to an operator.
+The AVO MCP tools
 `avo_artcraft_prepare`, `avo_artcraft_run`, `avo_artcraft_inspect` and
 `avo_artcraft_recover` use the same job controls and exact event heads.
 Pass the request and job specification as structured objects in MCP.

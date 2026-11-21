@@ -653,6 +653,12 @@ review reader verifies the immutable plan, materialization, source binding
 and current candidate bytes, and links available source and edit logs. It
 reports the review as pending for the existing creator approval workflow.
 
+ArtCraft job recovery resolves an exact retry through its prepared, run and
+result events. A completed retry rereads the saved source and verified export.
+An interrupted write retains bounded file fingerprints as reference material.
+Cancellation of an unstarted job uses the same event compare-and-swap and
+preserves the source copy. Owner reconciliation is required for active work.
+
 Native provider publication extends the existing animation catalog. The package
 reader checks its external root, byte fingerprints, declared source roles,
 review references, rights and local parameter schema before independent source
