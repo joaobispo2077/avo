@@ -360,6 +360,7 @@
         "recipe": { "$ref": "#/$defs/fingerprint" },
         "handoff": { "$ref": "#/$defs/fingerprint" },
         "outputs": { "type": "array", "maxItems": 16384, "items": { "$ref": "#/$defs/fingerprint" } },
+        "partialFiles": { "type": "array", "maxItems": 16384, "items": { "$ref": "#/$defs/fingerprint" } },
         "dependencies": { "type": "array", "maxItems": 16, "items": { "$ref": "#/$defs/fingerprint" } },
         "audioEvidence": { "$ref": "#/$defs/audioEvidence" },
         "stillEvidence": { "$ref": "#/$defs/stillEvidence" },
@@ -367,7 +368,9 @@
         "createdBytes": { "$ref": "#/$defs/count" },
         "detail": { "$ref": "#/$defs/text" },
         "eventHash": { "$ref": "#/$defs/hash" }
-      }
+      },
+      "if": { "required": ["partialFiles"] },
+      "then": { "properties": { "state": { "const": "outcome-unknown" } } }
     },
     "eventIndex": {
       "type": "object", "additionalProperties": false,

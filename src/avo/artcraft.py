@@ -596,6 +596,13 @@ class ArtCraftJobStore:
             raise ArtCraftError("ArtCraft event index and record do not match")
         return event
 
+    def _committed_operation(self, job, operation_id):
+        directory = self._job_dir(job["jobId"])
+        operation = self._index(directory)["operations"].get(operation_id)
+        if operation is None:
+            return None
+        return self._indexed_event(directory, operation_id, operation, job["jobHash"])
+
     def head(self, job_id: str) -> dict[str, Any] | None:
         job = self.load(job_id)
         directory = self._job_dir(job_id)
@@ -1230,8 +1237,64 @@ def inspect_authoring(job_ref, *, expected_head, source_inspector=None):
     return result
 
 
-def recover_authoring(job_ref, *, expected_head):
-    """Locate bounded retained evidence after an interrupted native operation."""
+def recover_authoring(job_ref, *, expected_head, action="inspect", adapter=None):
+    """Inspect retained evidence or explicitly retry or cancel an unstarted job."""
+    if action == "retry":
+        return run_authoring(job_ref, expected_head=expected_head, adapter=adapter)
+    if action == "cancel":
+        return _cancel_prepared_authoring(job_ref, expected_head)
+    if action != "inspect":
+        raise ArtCraftError(
+            "Select inspect, retry, or cancel to recover the ArtCraft job"
+        )
+    return _summarize_recovery(job_ref, expected_head)
+
+
+def _cancel_prepared_authoring(job_ref, expected_head):
+    store, _, head = _selected_job(job_ref)
+    _require_cancel_head(head, expected_head)
+    with store.writer():
+        _, job, head = _selected_job(job_ref)
+        _require_cancel_head(head, expected_head)
+        result = _inspection_result(store, job, head)
+        if head["state"] == "cancelled":
+            return result
+        if result["status"] != "current":
+            raise _changed_job_head()
+        event = store.append(
+            job["jobId"],
+            expected_head=expected_head,
+            event={"operationId": "cancel", "state": "cancelled"},
+        )
+        return _inspection_result(store, job, event)
+
+
+def _require_cancel_head(head, expected_head):
+    if (head["operationId"], head["state"]) == (
+        "cancel",
+        "cancelled",
+    ) and expected_head in {head["eventHash"], head["predecessorHash"]}:
+        return
+    if head["eventHash"] != expected_head:
+        raise _changed_job_head()
+    if head["state"] == "ready":
+        raise ArtCraftError(
+            "Reconcile the operator-owned ArtCraft handoff before cancellation",
+            code="ARTCRAFT_OWNERSHIP_CONFLICT",
+        )
+    if head["state"] in {"running", "cancel-requested", "outcome-unknown"}:
+        raise ArtCraftError(
+            "Reconcile the active ArtCraft writer before cancellation",
+            code="ARTCRAFT_OUTCOME_UNKNOWN",
+        )
+    if head["state"] != "prepared":
+        raise ArtCraftError(
+            "ArtCraft cancellation requires an unstarted job",
+            code="ARTCRAFT_NOT_ELIGIBLE",
+        )
+
+
+def _summarize_recovery(job_ref, expected_head):
     store, job, head = _open_selected_job(job_ref, expected_head)
     result = _inspection_result(store, job, head)
     state = head["state"]
@@ -1248,6 +1311,7 @@ def recover_authoring(job_ref, *, expected_head):
         "prepared": "run-prepared-job",
         "ready": "inspect-operator-return",
         "running": "inspect-current-owner",
+        "cancelled": "keep-cancelled",
     }
     action = actions.get(state, "prepare-fresh-job")
     if result["status"] == "stale" and state in {"prepared", "ready", "exported"}:
@@ -1257,11 +1321,22 @@ def recover_authoring(job_ref, *, expected_head):
         "recovery": {
             "nextAction": action,
             "artifactState": "reference-only",
-            "retainedFiles": _recoverable_job_files(
-                job, _authoring_export_directory(store, job)
-            ),
+            **_recovery_files(job, _authoring_export_directory(store, job), head),
         },
     }
+
+
+def _recovery_files(job, directory, head):
+    files = _recoverable_job_files(job, directory)
+    locked = head.get("partialFiles")
+    if locked is None:
+        return {"retainedFiles": files}
+    by_locator = {item["locator"]: item for item in files}
+    retained, changed = [], []
+    for fingerprint in locked:
+        matches = by_locator.get(fingerprint["locator"]) == fingerprint
+        (retained if matches else changed).append(fingerprint)
+    return {"retainedFiles": retained, "changedPartialFiles": changed}
 
 
 def _recoverable_job_files(job, directory):
@@ -1274,7 +1349,12 @@ def _recoverable_job_files(job, directory):
             "cue.wav",
             "Audio Files/source.wav",
         ),
-        "vectorcraft": ("component.vectorcraft", "recipe.json", "card.png", "emblem.svg"),
+        "vectorcraft": (
+            "component.vectorcraft",
+            "recipe.json",
+            "card.png",
+            "emblem.svg",
+        ),
         "filmcraft": ("component.fcproj", "recipe.json", "component.otio"),
     }.get(
         job["decision"]["scope"]["app"],
@@ -1286,14 +1366,27 @@ def _recoverable_job_files(job, directory):
     )
     observed, used = [], 0
     for path in candidates[: budget["files"]]:
-        if path.resolve() != path or not path.is_file():
+        fingerprint = _recoverable_file(path, budget["bytes"] - used)
+        if fingerprint is None:
             continue
-        info = path.stat()
-        if info.st_nlink != 1 or used + info.st_size > budget["bytes"]:
-            continue
-        observed.append(file_fingerprint(path))
-        used += info.st_size
+        observed.append(fingerprint)
+        used += fingerprint["sizeBytes"]
     return observed
+
+
+def _recoverable_file(path, remaining):
+    try:
+        if path.resolve() != path or not path.is_file():
+            return None
+        metadata = path.stat()
+        if metadata.st_nlink != 1 or metadata.st_size > remaining:
+            return None
+        fingerprint = file_fingerprint(path)
+        if fingerprint["sizeBytes"] == metadata.st_size:
+            return fingerprint
+    except (OSError, RuntimeError):
+        return None
+    return None
 
 
 def _inspection_result(store, job, head):
@@ -1332,6 +1425,20 @@ def _inspect_handoff(store, job, handoff):
 
 
 def _open_selected_job(job_ref, expected_head):
+    store, job, head = _selected_job(job_ref)
+    if head["eventHash"] != expected_head:
+        raise _changed_job_head()
+    return store, job, head
+
+
+def _changed_job_head():
+    return ArtCraftError(
+        "ArtCraft expected job event head changed or is missing",
+        code="ARTCRAFT_SCOPE_CHANGED",
+    )
+
+
+def _selected_job(job_ref):
     path = Path(job_ref)
     if (
         not path.is_absolute()
@@ -1349,11 +1456,8 @@ def _open_selected_job(job_ref, expected_head):
         )
     stored = store.load(record["jobId"])
     head = store.head(record["jobId"])
-    if stored != record or head is None or head["eventHash"] != expected_head:
-        raise ArtCraftError(
-            "ArtCraft expected job event head changed or is missing",
-            code="ARTCRAFT_SCOPE_CHANGED",
-        )
+    if stored != record or head is None:
+        raise _changed_job_head()
     return store, stored, head
 
 
@@ -1465,9 +1569,17 @@ def _inspect_unrecorded_document(path, handoff):
 
 def run_authoring(job_ref, *, expected_head, adapter):
     """Reserve the exact job once, then record inspected output or an unknown outcome."""
-    store, _, _ = _open_selected_job(job_ref, expected_head)
+    store, job, head = _selected_job(job_ref)
+    _require_current_or_replayed_authoring(store, job, head, expected_head)
     with store.writer():
-        _, job, head = _open_selected_job(job_ref, expected_head)
+        _, job, head = _selected_job(job_ref)
+        _require_current_or_replayed_authoring(store, job, head, expected_head)
+        if head["state"] in {"running", "outcome-unknown", "cancel-requested"}:
+            raise ArtCraftError(
+                "ArtCraft job requires reconciliation before another operation",
+                code="ARTCRAFT_OUTCOME_UNKNOWN",
+                remediation=f"Inspect the retained job at head {head['eventHash']} before attempting recovery.",
+            )
         inspection = _inspection_result(store, job, head)
         if inspection["status"] != "current":
             raise ArtCraftError(
@@ -1490,6 +1602,26 @@ def run_authoring(job_ref, *, expected_head, adapter):
             event={"operationId": "run", "state": "running"},
         )
     return _execute_prepared_job(store, job, running, directory, produce)
+
+
+def _require_current_or_replayed_authoring(store, job, head, expected_head):
+    if head["eventHash"] == expected_head:
+        return
+    outcome = head["operationId"], head["state"]
+    if (
+        outcome in {("run", "running"), ("guide", "ready")}
+        and head["predecessorHash"] == expected_head
+    ):
+        return
+    if outcome in {("verify-run", "exported"), ("reconcile-run", "outcome-unknown")}:
+        running = store._committed_operation(job, "run")
+        if running is not None and (
+            running["state"],
+            running["predecessorHash"],
+            running["eventHash"],
+        ) == ("running", expected_head, head["predecessorHash"]):
+            return
+    raise _changed_job_head()
 
 
 def _select_job_author(adapter, scope):
@@ -1594,6 +1726,10 @@ def _run_operator_handoff(store, job, head, inspection, adapter):
 
 
 def _require_prepared_authoring(store, job, head):
+    if head["state"] == "cancelled":
+        raise ArtCraftError(
+            "ArtCraft job was cancelled before launch", code="ARTCRAFT_NOT_ELIGIBLE"
+        )
     if head["state"] != "prepared":
         raise ArtCraftError(
             "ArtCraft job requires reconciliation before another operation",
@@ -1645,7 +1781,11 @@ def _execute_prepared_job(store, job, running, directory, produce):
         pending = store.append(
             job["jobId"],
             expected_head=running["eventHash"],
-            event={"operationId": "reconcile-run", "state": "outcome-unknown"},
+            event={
+                "operationId": "reconcile-run",
+                "state": "outcome-unknown",
+                "partialFiles": _recoverable_job_files(job, directory),
+            },
         )
         raise ArtCraftError(
             "ArtCraft authoring did not produce independently verified job outputs",
