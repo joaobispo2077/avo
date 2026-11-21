@@ -951,7 +951,7 @@ def _artwork_dependencies(request, settings, roots, source):
             "ArtCraft kit artwork belongs to a different video or provider"
         )
     inputs = native_instance_artwork_inputs(
-        workspace, request, reference, source, settings
+        workspace, request, reference, source, settings, read_roots=roots["read"]
     )
     if not all(_retained_job_file(item, roots["read"]) for item in inputs):
         raise ArtCraftError(

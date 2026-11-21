@@ -204,10 +204,12 @@ def _verify_retained_rights(package, sources, recipient):
     require_native_sharing(package["provider"], recipient, rights)
 
 
-def native_instance_artwork_inputs(workspace, request, selection, source, settings):
+def native_instance_artwork_inputs(
+    workspace, request, selection, source, settings, *, read_roots
+):
     """Select the exact marked kit copied into this video's canonical instance."""
     with fingerprint_stage(reuse_current=True, verify_on_exit=True):
-        record, instance = _read_artwork_instance(workspace, selection)
+        record, instance = _read_artwork_instance(workspace, selection, read_roots)
         if (instance["kitId"], instance["parameters"]) != (
             request["componentId"],
             settings["authoringParameters"],
@@ -237,11 +239,24 @@ def native_instance_artwork_inputs(workspace, request, selection, source, settin
     ]
 
 
-def _read_artwork_instance(workspace, selection):
+def _read_artwork_instance(workspace, selection, read_roots):
     from .component_instances import ComponentInstanceService
 
     service = ComponentInstanceService(workspace)
     path = service.path(selection["instanceId"])
+    target = (
+        workspace.raw_dir
+        / "edit"
+        / "derived"
+        / "provider-components"
+        / selection["instanceId"]
+    )
+    if not all(
+        any(item.is_relative_to(root) for root in read_roots) for item in (path, target)
+    ):
+        raise ArtCraftError(
+            "ArtCraft kit and instance record must stay in the selected read roots"
+        )
     if (
         path.resolve() != path
         or not path.is_file()
