@@ -102,6 +102,18 @@ layer. The proof's `overlay-image` operation uses the same receipt, layer,
 native dimensions, placement and frame range. It holds the image on those
 frames and preserves the original audio.
 
+For an animated emblem, explicitly select `vectorcraft` with operation and
+request behavior `vector-emblem` in confined CLI mode. The Windows 0.24.1
+profile authors one editable 128 × 128 star and verifies its straight-alpha
+sRGB SVG export. Use the review's `artworkRef` as the `artworkRef` in a second
+job for the same provider and component. Explicitly select `anicraft` with
+operation and request behavior `animate-vector-emblem` in confined CLI mode.
+Its Windows 0.2.1 profile produces a 320 × 180 straight-alpha sRGB PNG sequence
+of 24 frames at 24 fps. Include the upstream records and output in the selected
+read roots. The prepared motion job retains both editable sources. Add a
+separately selected SoundCraft cue with the existing SFX Tracks workflow when
+the video needs sound.
+
 For a source-linked FilmCraft return, explicitly select `--app filmcraft
 --operation source-linked-timeline-return --mode cli` using the selected
 Windows 0.20.1 tools and a confined runner. Use a blank document, an

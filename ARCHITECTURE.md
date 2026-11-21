@@ -620,6 +620,14 @@ verified sRGB RGBA still. Tracks selects that exact static asset and its
 placement. Proof execution verifies the source, dimensions and decoded pixels
 before using the existing overlay layers for the exact requested frames.
 
+The selected VectorCraft emblem and AniCraft motion profiles run as explicit
+jobs. AniCraft accepts one exact same-provider, same-component emblem export.
+The motion job binds the upstream job head, editable source, recipe and SVG.
+It imports a bounded inline polygon, preserves it as an editable symbol, and
+verifies its reopened alpha frames. Proof admission rechecks that dependency
+through the existing generated-asset binding. Optional sound enters through its
+own SFX region on the same canonical timeline.
+
 The selected FilmCraft Windows 0.20.1 profile saves and reopens a native
 project and exports an OTIO timeline linked to the exact original. AVO checks
 the application version resource without starting the desktop editor. The
