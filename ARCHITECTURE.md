@@ -613,6 +613,12 @@ verifies the current frame and sample ranges. Materialization and native
 execution recheck the receipt and its closure while resolving the audio.
 The native mixer adds the cue through the existing SFX node and final encode.
 
+Generated ArtCraft cues and stills use their recorded provider and video scope
+at Tracks authoring and proof compilation. A video-scoped receipt must match
+the exact project, video identity and raw workspace. Provider-level receipts
+can serve multiple videos within that provider. Static-card admission verifies
+the PNG representation of the selected source.
+
 The selected VectorCraft Windows 0.24.1 profile stages a fixed card recipe
 under a confined runner with plug-ins and preferences disabled. It retains
 the editable native source, its bounded inline resource envelope and the
