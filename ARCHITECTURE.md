@@ -651,6 +651,9 @@ artwork closure. Switching that artwork requires a fresh render and proof.
 Native provider publication can retain that SVG as optional identity artwork.
 The package validator binds it to the exact native shape, design review and
 per-file rights before the package and video instance retain its bytes.
+An explicit instance ID and hash can bind a saved-source label job to that
+video-local package. The job verifies the selected original, parameters,
+output contract, artwork and rights through the existing input closure.
 
 The selected FilmCraft Windows 0.20.1 profile saves and reopens a native
 project and exports an OTIO timeline linked to the exact original. AVO checks

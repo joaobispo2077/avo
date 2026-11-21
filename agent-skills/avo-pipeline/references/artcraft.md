@@ -209,8 +209,12 @@ that recipient. The kit and each selected video instance keep byte-exact copies.
 For a saved-source text revision, set `document.state` to `saved` and
 `document.source` to the selected project-owned `.anicraft` copy. Include
 the source directory in `readRoots` and choose the instance's text and approved
-font. Run the selected qualified confined CLI profile. AVO keeps the original
-and saves a separate revision with its recipe and edit-command evidence.
+font. For a kit with retained identity artwork, use `artworkRef` with the
+`instanceId` and `instanceHash` returned by `provider-instantiate`. Include
+the video-local kit directory and the instance record directory in `readRoots`.
+Use the instance's selected parameters and the package's exact output contract.
+Run the selected qualified confined CLI profile. AVO keeps the original and
+saves a separate revision with its recipe and edit-command evidence.
 
 For a byte-identical repeat, use `--mode reuse` with `--reuse-job` and
 `--reuse-head` from the verified saved-source run. Keep the same provider,
