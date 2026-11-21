@@ -2,6 +2,7 @@
 
 import json
 import os
+import shutil
 import subprocess
 from fractions import Fraction
 from pathlib import Path
@@ -17,6 +18,10 @@ from tests.integration.test_artcraft_audio_runtime import (
     _prepare_native_cue,
     _tracks_with_generated_cue,
     _with_cue_graph,
+)
+from tests.integration.test_artcraft_lower_third_runtime import (
+    _assert_pinned_native_source,
+    _publish_fixture_package,
 )
 from tests.integration.test_canonical_sound_proof_runtime import recorded_program
 from tests.integration.test_code_drawn_proof_executor import (
@@ -278,12 +283,37 @@ def _revise_identity_label(specification, context, initial, rendered, adapter):
 def test_native_vector_identity_survives_an_editable_lower_third_revision(
     tmp_path, monkeypatch
 ):
+    from avo.adapters.artcraft_anicraft import inspect_lower_third_source
+
     _, _, record, standalone, rendered = _registered_emblem(
         tmp_path, monkeypatch, *_tools(), identity_label=True
     )
     assert standalone["vectorArtwork"] in [
         item["fingerprint"] for item in record["inputs"]
     ]
+    job, exported = artcraft.read_authoring_export(
+        rendered["jobRef"], expected_head=rendered["head"]
+    )
+    source = tmp_path / "identity-package-source"
+    source.mkdir()
+    native = Path(
+        shutil.copyfile(exported["saved"]["locator"], source / "label.anicraft")
+    )
+    shutil.copyfile(exported["recipe"]["locator"], source / "recipe.json")
+    artwork = Path(
+        shutil.copyfile(standalone["vectorArtwork"]["locator"], source / "identity.svg")
+    )
+    catalog, store, event = _publish_fixture_package(
+        tmp_path,
+        native,
+        job["output"],
+        inspect_lower_third_source,
+        parameters=job["authoringParameters"],
+        artwork=artwork,
+    )
+    _assert_pinned_native_source(
+        tmp_path, catalog.path, store, event, native, artwork=artwork
+    )
     Path(standalone["vectorArtwork"]["locator"]).write_bytes(b"changed artwork")
     inspection = artcraft.inspect_authoring(
         rendered["jobRef"], expected_head=rendered["head"]
