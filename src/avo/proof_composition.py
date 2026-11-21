@@ -135,6 +135,7 @@ def _observe_artcraft_source(binding):
         inspect_animated_emblem_source,
         inspect_lower_third_source,
     )
+    from avo.artcraft import selected_vector_artwork
 
     if binding["environment"]["app"] != "anicraft":
         raise ValueError(
@@ -142,13 +143,20 @@ def _observe_artcraft_source(binding):
         )
     source = binding["nativeSource"]
     profile, parameters = inspect_lower_third_source, binding["parameters"]
-    if "artworkRef" in parameters:
+    options = {}
+    if "artworkRef" in parameters and "primaryText" in parameters:
+        options["artwork"] = selected_vector_artwork(binding["inputSources"])
+        parameters = {
+            field: value for field, value in parameters.items() if field != "artworkRef"
+        }
+    elif "artworkRef" in parameters:
         profile, parameters = inspect_animated_emblem_source, binding["inputSources"][0]
     observed = profile(
         Path(source["locator"]),
         binding["outputContract"],
         parameters,
         max_bytes=binding["nativeByteBudget"],
+        **options,
     )
     if observed["fingerprint"] != source:
         raise ValueError("ArtCraft native source changed during observation")

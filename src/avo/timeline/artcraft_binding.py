@@ -57,9 +57,10 @@ def freeze_export_binding(workspace, *, job_ref, expected_head):
         source = {
             "nativeSource": event["saved"],
             "recipe": event["recipe"],
-            "parameters": {"artworkRef": artwork}
-            if artwork
-            else job["authoringParameters"],
+            "parameters": {
+                **job.get("authoringParameters", {}),
+                **({"artworkRef": artwork} if artwork else {}),
+            },
             "requestHash": job["decision"]["requestHash"],
             "environmentHash": content_hash(environment),
         }

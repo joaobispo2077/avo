@@ -84,6 +84,7 @@ _STILL_OUTPUT_NAMES = {
 }
 _VECTOR_EMBLEM_SCOPE = {"app": "vectorcraft", "operations": ["vector-emblem"]}
 _ANIMATED_EMBLEM_SCOPE = {"app": "anicraft", "operations": ["animate-vector-emblem"]}
+_IDENTITY_LABEL_SCOPE = {"app": "anicraft", "operations": ["lower-third"]}
 _EFFECT_MASK_SCOPE = {
     "app": "effectcraft",
     "operations": ["editable-masked-lower-third"],
@@ -420,7 +421,7 @@ def _check_specialist_job(job, scope):
             job["request"], job, job["documentState"], job["observation"]["mode"]
         )
     elif "artworkRef" in job:
-        raise ContractError("Only the animated emblem may consume vector artwork")
+        _require_label_artwork(scope, job["observation"]["mode"], job)
 
 
 def _check_photo_job(job, scope):
@@ -846,7 +847,7 @@ def prepare_authoring(
     roots = _preparation_roots(spec, document.parent)
     source = _preparation_source(spec, roots, document)
     input_field, selected_input = _preparation_media(request, spec, scope, roots)
-    dependencies = _prepared_artwork(request, spec, roots, scope)
+    dependencies = _prepared_artwork(request, spec, roots)
     _require_preparation_capacity(
         store.workspace, spec["budget"], source or selected_input
     )
@@ -901,13 +902,22 @@ def _require_preparation_profile(request, spec, scope):
     if scope == _ANIMATED_EMBLEM_SCOPE:
         _require_animated_emblem(*arguments)
     elif "artworkRef" in spec:
+        _require_label_artwork(scope, spec["mode"], spec)
+
+
+def _require_label_artwork(scope, mode, specification):
+    if (
+        scope != _IDENTITY_LABEL_SCOPE
+        or mode not in {"cli", "reuse"}
+        or not specification.get("authoringParameters")
+    ):
         raise ArtCraftError(
-            "Select AniCraft animate-vector-emblem to consume vector artwork"
+            "Select the AniCraft CLI lower-third label or animated emblem for vector artwork"
         )
 
 
-def _prepared_artwork(request, spec, roots, scope):
-    if scope != _ANIMATED_EMBLEM_SCOPE:
+def _prepared_artwork(request, spec, roots):
+    if "artworkRef" not in spec:
         return []
     inputs = _artwork_export_inputs(request, spec["artworkRef"], roots)
     if inputs[0]["sizeBytes"] >= spec["budget"]["bytes"]:
@@ -938,6 +948,15 @@ def _artwork_export_inputs(request, reference, roots):
             "Vector artwork and editable source must stay in the selected read roots"
         )
     return inputs
+
+
+def selected_vector_artwork(inputs):
+    artwork = [
+        item for item in inputs if Path(item["locator"]).suffix.casefold() == ".svg"
+    ]
+    if len(artwork) != 1:
+        raise ArtCraftError("ArtCraft needs one exact selected vector artwork source")
+    return artwork[0]
 
 
 def _require_artwork_owner(request, upstream):
@@ -1010,9 +1029,12 @@ def _require_reuse_match(request, spec, original):
         raise ArtCraftError(
             "ArtCraft reusable export belongs to a different provider component"
         )
-    if any(spec.get(key) != original[key] for key in ("output", "authoringParameters")):
+    if any(
+        spec.get(key) != original.get(key)
+        for key in ("output", "authoringParameters", "artworkRef")
+    ):
         raise ArtCraftError(
-            "ArtCraft selected parameters or output contract changed and needs rendering"
+            "ArtCraft selected parameters, artwork or output contract changed and needs rendering"
         )
 
 
@@ -2038,7 +2060,10 @@ def _inspect_job_inputs(job):
             )
         except (OSError, ValueError, RuntimeError):
             return "changed"
-        return "current" if inputs == job["inputs"] else "changed"
+        original = job["inputs"][:1] if job["documentState"] == "saved" else []
+        if any(not _retained_job_file(item, job["roots"]["read"]) for item in original):
+            return "changed"
+        return "current" if [*original, *inputs] == job["inputs"] else "changed"
     return (
         "current"
         if all(

@@ -168,7 +168,9 @@ def _lower_third_labels(parameters, scale, offset):
     return labels
 
 
-def lower_third_steps(output, parameters, source, white_directory):
+def lower_third_steps(
+    output, parameters, source, white_directory, *, identity_svg=None
+):
     """Build the selected native commands, with frame numbers in the document clock."""
     _profile_clock(output)
     scale, offset = _lower_third_layout(output)
@@ -176,6 +178,7 @@ def lower_third_steps(output, parameters, source, white_directory):
     if hold and parameters["motion"] != "hold":
         raise ArtCraftError("AniCraft lower-third motion must select a fixed hold")
     distance = 24 * scale
+    labels = _lower_third_labels(parameters, scale, offset)
     artwork = [
         _step(
             "draw.rect",
@@ -186,8 +189,12 @@ def lower_third_steps(output, parameters, source, white_directory):
             radius=8 * scale,
             fill="#102c48",
         ),
-        *_lower_third_labels(parameters, scale, offset),
+        *labels,
     ]
+    if identity_svg is not None:
+        for label in labels:
+            label["params"]["x"] += 32 * scale
+        artwork.extend(_identity_artwork(identity_svg, scale, offset))
     if hold:
         for step in artwork:
             step["params"]["x"] += distance
@@ -201,6 +208,24 @@ def lower_third_steps(output, parameters, source, white_directory):
         distance,
         hold=hold,
     )
+
+
+def _identity_artwork(svg, scale, offset):
+    x, y = 35 * scale, 283 * scale + offset
+    factor = 0.18 * scale
+    return [
+        _step(
+            "draw.rect",
+            x=31 * scale,
+            y=279 * scale + offset,
+            w=31 * scale,
+            h=31 * scale,
+            radius=5 * scale,
+            fill="#f5f8fb",
+        ),
+        _step("file.import", path=str(svg), x=x, y=y, layer="active"),
+        _step("element.set_transform", x=x, y=y, sx=factor, sy=factor),
+    ]
 
 
 def _slide_steps(
@@ -269,9 +294,17 @@ def _opaque(image):
     return image.convert("RGBA").getchannel("A").getextrema() == (255, 255)
 
 
-def inspect_lower_third_source(native, output, parameters, *, max_bytes):
+def inspect_lower_third_source(native, output, parameters, *, max_bytes, artwork=None):
     """Inspect the selected native JSON without asking AniCraft to load it."""
-    return _inspect_source_file(native, output, parameters, max_bytes=max_bytes)
+    return _inspect_source_file(
+        native,
+        output,
+        parameters,
+        max_bytes=max_bytes,
+        identity_outline=None
+        if artwork is None
+        else _selected_identity_outline(artwork),
+    )
 
 
 def inspect_animated_emblem_source(native, output, artwork, *, max_bytes):
@@ -285,7 +318,9 @@ def inspect_animated_emblem_source(native, output, artwork, *, max_bytes):
     )
 
 
-def _inspect_source_file(native, output, parameters, *, max_bytes, emblem_path=None):
+def _inspect_source_file(
+    native, output, parameters, *, max_bytes, emblem_path=None, identity_outline=None
+):
     native = Path(native)
     if not native.is_absolute() or native.resolve() != native or not native.is_file():
         raise ArtCraftError("AniCraft source must be one exact regular native file")
@@ -302,7 +337,11 @@ def _inspect_source_file(native, output, parameters, *, max_bytes, emblem_path=N
     try:
         source = json.loads(raw, object_pairs_hook=_distinct_native_fields)
         details = _native_source_profile(
-            source, output, parameters, emblem_path=emblem_path
+            source,
+            output,
+            parameters,
+            emblem_path=emblem_path,
+            identity_outline=identity_outline,
         )
     except (
         KeyError,
@@ -333,19 +372,29 @@ def _distinct_native_fields(pairs):
     return result
 
 
-def _native_source_profile(source, output, parameters, *, emblem_path=None):
+def _native_source_profile(
+    source, output, parameters, *, emblem_path=None, identity_outline=None
+):
+    extra = 0 if identity_outline is None else 2
     paths, body = _native_document(
-        source, output, path_counts=(1,) if emblem_path else (2, 3)
+        source, output, path_counts=(1,) if emblem_path else (2 + extra, 3 + extra)
     )
     if emblem_path is not None:
         return _inspect_emblem_source(paths, body, output, emblem_path)
+    return _inspect_label_source(paths, body, output, parameters, identity_outline)
+
+
+def _inspect_label_source(paths, body, output, parameters, identity_outline):
+    identity = identity_outline is not None
     symbol = _native_symbol(body)
     hold = _require_symbol_references(
         body["scenes"], symbol["id"], output["frameCount"], allow_hold=True
     )
-    facts = _observed_lower_third(
-        _inspect_symbol_artwork(symbol, labels=len(paths) - 1), output
-    )
+    label_count = len(paths) - (3 if identity else 1)
+    if identity and paths[-1] != identity_outline:
+        raise ArtCraftError("AniCraft identity outline differs from the selected SVG")
+    labels = _inspect_symbol_artwork(symbol, labels=label_count, identity=identity)
+    facts = _observed_lower_third(labels, output, identity=identity)
     if hold:
         facts["motion"] = "hold"
     if parameters is not None and facts != parameters:
@@ -355,6 +404,7 @@ def _native_source_profile(source, output, parameters, *, emblem_path=None):
     return {
         "editableText": facts["primaryText"],
         "fontFamily": facts["font"],
+        **({"identityVectorHash": content_hash(identity_outline)} if identity else {}),
         **({"motion": "hold"} if hold else {}),
         **(
             {"editableSecondaryText": facts["secondaryText"]}
@@ -365,9 +415,15 @@ def _native_source_profile(source, output, parameters, *, emblem_path=None):
     }
 
 
-def _observed_lower_third(labels, output):
+def _observed_lower_third(labels, output, *, identity=False):
     primary, *optional = labels
     facts = {"primaryText": primary["text"], "font": primary["font"]}
+    if identity:
+        scale, _ = _lower_third_layout(output)
+        if not all(0 < label["box_width"] <= 214 * scale for label in labels):
+            raise ArtCraftError(
+                "AniCraft text exceeds the identity layout's readable width"
+            )
     if optional:
         (secondary,) = optional
         if secondary["font"] != primary["font"]:
@@ -417,6 +473,15 @@ def _inspect_emblem_source(paths, body, output, emblem_path):
     )
     (element,) = _native_elements(symbol["timeline"])
     _native_shape(element, "Shape")
+    if paths != [emblem_path] or _inspect_svg_shape(element) != 0:
+        raise ArtCraftError(
+            "AniCraft editable emblem does not match the selected polygon"
+        )
+    return {"inlineVectorHash": content_hash(paths)}
+
+
+def _inspect_svg_shape(element):
+    _native_shape(element, "Shape")
     shape = element["Shape"]
     _native_shape(shape, "fill fill_rule path stroke")
     _native_shape(shape["fill"], "Solid")
@@ -424,11 +489,7 @@ def _inspect_emblem_source(paths, body, output, emblem_path):
     _native_shape(shape["stroke"], "color width style")
     _native_rgba(shape["stroke"]["color"])
     _native_shape(shape["stroke"]["style"], "cap join miter_limit")
-    if paths != [emblem_path] or shape["path"] != 0:
-        raise ArtCraftError(
-            "AniCraft editable emblem does not match the selected polygon"
-        )
-    return {"inlineVectorHash": content_hash(paths)}
+    return shape["path"]
 
 
 def _native_shape(value, names):
@@ -559,20 +620,44 @@ def _require_fixed_keyframe_contents(frames):
         raise ArtCraftError("AniCraft fixed hold contains unexpected keyframe content")
 
 
-def _inspect_symbol_artwork(symbol, *, labels):
+def _inspect_symbol_artwork(symbol, *, labels, identity=False):
     elements = list(_native_elements(symbol["timeline"]))
-    if len(elements) != labels + 1:
+    if len(elements) != labels + 1 + (2 if identity else 0):
         raise ArtCraftError("AniCraft source contains unexpected symbol artwork")
     shape, *texts = elements
+    _inspect_plate_shape(shape, path_index=0)
+    if identity:
+        tile, icon = texts[-2:]
+        _inspect_plate_shape(tile, path_index=labels + 1)
+        if _inspect_svg_shape(icon) != labels + 2:
+            raise ArtCraftError(
+                "AniCraft identity artwork does not use its exact inline path"
+            )
+        texts = texts[:-2]
+    return [_inspect_native_label(text, index) for index, text in enumerate(texts, 1)]
+
+
+def _inspect_plate_shape(shape, *, path_index):
     _native_shape(shape, "Shape")
     _native_shape(shape["Shape"], "fill fill_rule path stroke")
     _native_shape(shape["Shape"]["fill"], "Solid")
     _native_rgba(shape["Shape"]["fill"]["Solid"])
     _native_shape(shape["Shape"]["stroke"], "color width")
     _native_rgba(shape["Shape"]["stroke"]["color"])
-    if shape["Shape"]["path"] != 0:
+    if shape["Shape"]["path"] != path_index:
         raise ArtCraftError("AniCraft source refers outside its retained plate shape")
-    return [_inspect_native_label(text, index) for index, text in enumerate(texts, 1)]
+
+
+def _selected_identity_outline(artwork):
+    from .artcraft_vectorcraft import verify_emblem_svg
+
+    digest, outline = verify_emblem_svg(Path(artwork["locator"]))
+    numbers = re.findall(r"\d+(?:\.\d+)?", outline)
+    if digest != artwork["sha256"] or any(float(number) > 128 for number in numbers):
+        raise ArtCraftError(
+            "AniCraft identity requires the exact artwork inside its 128-unit canvas"
+        )
+    return outline
 
 
 def _inspect_native_label(text, index):
@@ -590,22 +675,53 @@ def _inspect_native_label(text, index):
     return native_text
 
 
-def run_lower_third(output, parameters, *, directory, budget, invoke, open_stream=None):
+def run_lower_third(
+    output, parameters, *, directory, budget, invoke, open_stream=None, artwork=None
+):
     """Materialize the selected native recipe through a supplied confined runner."""
     directory = Path(directory)
     native, white = directory / "component.anicraft", directory / "white"
-    steps = lower_third_steps(output, parameters, native, white)
+    identity = None if artwork is None else directory / "identity.svg"
+    steps = lower_third_steps(output, parameters, native, white, identity_svg=identity)
     count = output["frameCount"]
     _require_new_output_directory(directory, budget, count)
     directory.mkdir(parents=True)
     deadline = monotonic() + budget["seconds"]
     call = _profile_invocation(directory, budget, invoke, deadline)
+    outline = None if artwork is None else _prepare_identity(artwork, identity, call)
     recipe = write_immutable_json(directory / "recipe.json", steps)
     _require_profile_budget(directory, budget)
     empty = directory / "empty.anicraft"
     _initialize_document(call, empty, output, parameters["font"])
-    _apply_recipe(call, empty, native, recipe, steps, open_stream, budget, deadline)
-    return _verified_export(call, native, recipe, output, parameters, budget, deadline)
+    replies = _apply_recipe(
+        call, empty, native, recipe, steps, open_stream, budget, deadline
+    )
+    if identity is not None and replies is not None:
+        index = next(
+            index for index, step in enumerate(steps) if step["cmd"] == "file.import"
+        )
+        _require_emblem_import(replies[index])
+    return _verified_export(
+        call,
+        native,
+        recipe,
+        output,
+        parameters,
+        budget,
+        deadline,
+        identity_outline=outline,
+    )
+
+
+def _prepare_identity(artwork, identity, call):
+    from avo.artcraft import _copy_native_source
+
+    _copy_native_source(identity, artwork)
+    outline = _selected_identity_outline({**artwork, "locator": str(identity)})
+    observe_command_schema(
+        json.loads(call("commands")), required={"file.import", "element.set_transform"}
+    )
+    return outline
 
 
 def run_animated_emblem(output, artwork, *, directory, budget, invoke):
@@ -664,13 +780,14 @@ def revise_lower_third(
     budget,
     invoke,
     open_stream=None,
+    artwork=None,
 ):
     """Change the selected editable label in a newly saved native revision."""
     from avo.artcraft import _copy_native_source
 
     source, directory = Path(source), Path(directory)
     original = inspect_lower_third_source(
-        source, output, original_parameters, max_bytes=budget["bytes"]
+        source, output, original_parameters, max_bytes=budget["bytes"], artwork=artwork
     )
     labels = _lower_third_labels(parameters, *_lower_third_layout(output))
     if parameters["font"] != original["fontFamily"]:
@@ -709,7 +826,16 @@ def revise_lower_third(
     _require_font(call, working, parameters["font"])
     _apply_recipe(call, working, native, recipe, steps, open_stream, budget, deadline)
     result = _verified_export(
-        call, native, recipe, output, parameters, budget, deadline
+        call,
+        native,
+        recipe,
+        output,
+        parameters,
+        budget,
+        deadline,
+        identity_outline=None
+        if artwork is None
+        else _selected_identity_outline(artwork),
     )
     if file_fingerprint(source) != original["fingerprint"]:
         raise ArtCraftError("AniCraft changed the preserved source during revision")
@@ -762,12 +888,26 @@ def _text_revision_steps(target, labels, native, count):
 
 
 def _verified_export(
-    call, native, recipe, output, parameters, budget, deadline, *, emblem_path=None
+    call,
+    native,
+    recipe,
+    output,
+    parameters,
+    budget,
+    deadline,
+    *,
+    emblem_path=None,
+    identity_outline=None,
 ):
     directory = native.parent
     white = directory / "white"
     source = _inspect_source_file(
-        native, output, parameters, max_bytes=budget["bytes"], emblem_path=emblem_path
+        native,
+        output,
+        parameters,
+        max_bytes=budget["bytes"],
+        emblem_path=emblem_path,
+        identity_outline=identity_outline,
     )
     locked_source = source["fingerprint"]
     symbol = "Emblem" if emblem_path is not None else "Speaker plate"
