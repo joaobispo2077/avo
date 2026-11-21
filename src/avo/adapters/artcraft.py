@@ -255,9 +255,9 @@ def _installed_tools(product, cli_path, app_path):
 
 def _application_release(product, app):
     if product == "filmcraft":
-        from .artcraft_filmcraft import filmcraft_application_release
+        from .artcraft_windows import windows_application_release
 
-        return filmcraft_application_release(app)
+        return windows_application_release(app, _PRODUCTS[product])
     return _release(app)
 
 
