@@ -644,6 +644,11 @@ verifies its reopened alpha frames. Proof admission rechecks that dependency
 through the existing generated-asset binding. Optional sound enters through its
 own SFX region on the same canonical timeline.
 
+The optional AniCraft lower-third identity mark uses the same verified
+VectorCraft receipt. Its inline shape and readable text width are checked in
+the native source. Saved-source text edits and copy-only reuse retain the exact
+artwork closure. Switching that artwork requires a fresh render and proof.
+
 The selected FilmCraft Windows 0.20.1 profile saves and reopens a native
 project and exports an OTIO timeline linked to the exact original. AVO checks
 the application version resource without starting the desktop editor. The

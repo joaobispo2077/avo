@@ -193,6 +193,13 @@ Add a `sharing` object with `providers`, a list of exact provider slugs, and
 from the recipient's project using `--source-provider` with the origin slug.
 The project instance retains the origin, recipient and fingerprinted rights.
 
+To add an optional identity mark to a lower-third job, select its verified
+VectorCraft emblem with `artworkRef` in the AniCraft CLI job specification.
+Use the same provider and component and authorize the upstream export and
+native evidence in the job's read roots. The mark stays editable beside the
+label. Carry the same `artworkRef` through saved-source text edits and exact
+copy-only reuse.
+
 For a saved-source text revision, set `document.state` to `saved` and
 `document.source` to the selected project-owned `.anicraft` copy. Include
 the source directory in `readRoots` and choose the instance's text and approved
