@@ -38,16 +38,21 @@ def freeze_export_binding(workspace, *, job_ref, expected_head):
         job, event = read_authoring_export(job_ref, expected_head=expected_head)
         canonical = _canonical_export_scope(workspace, job)
         environment = _verified_export_environment(job["observation"])
+        artwork = job.get("artworkRef")
         source = {
             "nativeSource": event["saved"],
             "recipe": event["recipe"],
-            "parameters": job["authoringParameters"],
+            "parameters": {"artworkRef": artwork}
+            if artwork
+            else job["authoringParameters"],
             "requestHash": job["decision"]["requestHash"],
             "environmentHash": content_hash(environment),
         }
         if job["documentState"] == "saved":
             source["inputSources"] = job["inputs"]
             source["revisionCommandSchemaHash"] = event["revisionCommandSchemaHash"]
+        if artwork:
+            source["inputSources"] = job["inputs"]
         if job["observation"]["mode"] == "reuse":
             source["reusedExport"] = job["observation"]["reuseSource"]
         components = {
