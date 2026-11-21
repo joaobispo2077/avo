@@ -1,6 +1,7 @@
 """Proof reuse requires current retained native tool and media evidence."""
 
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -20,6 +21,7 @@ from avo.timeline.reconstruction import (
 )
 from tests.artcraft_fixtures import locked_tool_observation, picture_output, request
 from tests.test_artcraft_jobs import AuthoringApp, _prepare, job_spec
+from tests.test_artcraft_profiles import EFFECT_OPERATION, effect_spec
 from tests.test_artcraft_provider_packages import (
     _observe_fixture,
     _package_from_retained_source,
@@ -171,6 +173,61 @@ def test_reconstruction_checks_a_selected_native_input_outside_the_video_root(
     separate_source.write_bytes(b"externally edited native source")
     with pytest.raises(ReconstructionError, match="Retained ArtCraft file changed"):
         verify_reconstruction_bundle(raw)
+
+
+def test_reconstruction_requires_the_exact_selected_effectcraft_font(
+    tmp_path, monkeypatch
+):
+    raw = tmp_path / "video"
+    raw.mkdir()
+    workspace, master = canonical_project(raw)
+    monkeypatch.setattr(init_project, "load_provider", lambda slug: {"slug": slug})
+    font = tmp_path / "fonts" / "arial.ttf"
+    font.parent.mkdir()
+    font.write_bytes(b"synthetic installed font")
+    monkeypatch.setattr(artcraft, "_is_effect_system_font", lambda path: path == font)
+    observed = {
+        **locked_tool_observation(tmp_path, "effectcraft"),
+        "operations": [EFFECT_OPERATION],
+        "release": "0.24.1",
+    }
+    adapter = SimpleNamespace(
+        observe=lambda **selected: {**observed, "effectiveRoots": selected["roots"]}
+    )
+    provider = workspace.project["provider"]
+    brief = request(
+        provider=provider,
+        required={
+            "behavior": EFFECT_OPERATION,
+            "outputRole": "overlay-video",
+            "editable": True,
+        },
+        context={
+            "kind": "video",
+            "project": str(workspace.project_path),
+            "videoId": workspace.video_id,
+        },
+    )
+    _prepare(
+        artcraft,
+        brief,
+        effect_spec(
+            raw, provider=provider, effectFont=str(font), readRoots=[str(font.parent)]
+        ),
+        adapter,
+        intent=artcraft.ArtCraftIntent("explicit", "effectcraft", (EFFECT_OPERATION,)),
+    )
+    bundle = build_reconstruction_bundle(
+        workspace, master_basename=master, actor="fixture"
+    )
+    assert bundle["externalArtCraftInputs"] == [file_fingerprint(font)]
+    assert verify_reconstruction_bundle(raw)["bundleSha256"] == bundle["bundleSha256"]
+    font.write_bytes(b"replacement installed font")
+    with pytest.raises(
+        ReconstructionError, match="Retained ArtCraft file changed"
+    ) as error:
+        verify_reconstruction_bundle(raw)
+    assert font.name in str(error.value)
 
 
 def _approved_package(source, provider):
