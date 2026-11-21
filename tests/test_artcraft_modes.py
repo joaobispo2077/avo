@@ -175,6 +175,71 @@ def test_json_lines_requires_its_own_confined_stream(tmp_path, operator_profile)
     assert observed == []
 
 
+@pytest.mark.parametrize("mode", ["live", "script", "action"])
+def test_unqualified_transport_refuses_before_native_probe(
+    tmp_path, monkeypatch, operator_profile, mode
+):
+    def unexpected(*_args, **_kwargs):
+        pytest.fail("An unqualified transport attempted native discovery")
+
+    monkeypatch.setattr(native, "_installed_anicraft", unexpected)
+    with pytest.raises(artcraft.ArtCraftError, match="no qualified profile"):
+        _prepare(
+            artcraft,
+            request(),
+            job_spec(tmp_path, mode=mode),
+            native.SelectedArtCraftAdapter(),
+        )
+    assert not list(tmp_path.rglob("job.json"))
+
+
+@pytest.mark.parametrize("conflict", ["effective-roots", "owned-document"])
+def test_changed_authority_or_document_refuses_before_dispatch(
+    tmp_path, operator_profile, conflict
+):
+    expanded = False
+
+    def confinement(_installed, roots):
+        if expanded:
+            return {**roots, "read": [str(tmp_path)]}
+        return roots
+
+    def unexpected(*_args, **_kwargs):
+        pytest.fail("A changed authority or occupied document dispatched a command")
+
+    adapter = native.SelectedArtCraftAdapter(
+        observe_confinement=confinement, run_confined=unexpected
+    )
+    spec = job_spec(
+        tmp_path,
+        authoringParameters={"primaryText": "Speaker", "font": "Arial"},
+        output=picture_output(
+            width=640,
+            height=360,
+            frameCount=24,
+            frameRate={"numerator": 24, "denominator": 1},
+        ),
+    )
+    prepared = _prepare(artcraft, request(), spec, adapter)
+    if conflict == "effective-roots":
+        expanded = True
+        message = "exact qualified"
+    else:
+        document = tmp_path / prepared["job"]["document"]
+        document.parent.mkdir(parents=True, exist_ok=True)
+        document.write_bytes(b"owned by another writer")
+        message = "stale"
+
+    with pytest.raises(artcraft.ArtCraftError, match=message):
+        artcraft.run_authoring(
+            prepared["jobRef"], expected_head=prepared["head"], adapter=adapter
+        )
+    current = artcraft.inspect_authoring(
+        prepared["jobRef"], expected_head=prepared["head"]
+    )
+    assert current["state"] == "prepared"
+
+
 @pytest.mark.parametrize(
     "reply",
     [
