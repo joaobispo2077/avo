@@ -705,6 +705,12 @@ the editable slide transition. The adapter checks 960 by 540 point geometry,
 the zero-based destination index and the fade duration. Two fresh midpoint
 renders must agree before the still is retained for independent review.
 
+LightCraft's selected Windows 0.21.1 treatment uses a fresh single-owner
+library and pins the original JPEG. The adapter retains the native snapshot
+with its exposure adjustment and rebuilds it into a fresh library to verify
+the color profile and exact rendered pixels. Standalone review exposes the
+snapshot and its required original location.
+
 Native provider publication extends the existing animation catalog. The package
 reader checks its external root, byte fingerprints, declared source roles,
 review references, rights and local parameter schema before independent source

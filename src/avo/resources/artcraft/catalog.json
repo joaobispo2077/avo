@@ -115,6 +115,7 @@
     {
       "app": "lightcraft",
       "name": "LightCraft",
+      "retrievedOn": "2026-11-21",
       "claimedState": "documented-only",
       "release": "not-pinned",
       "platform": "not-pinned",
@@ -128,7 +129,7 @@
       "limitations": "Use an isolated library with one owner and matching app/CLI releases. Local live control has no password. Supported RAW decoding varies.",
       "cli": "lightcraft-cli",
       "prerequisites": "Separately installed matching app and CLI, a permitted selected mode, and task-specific inputs.",
-      "verification": "No local operation qualification recorded."
+      "verification": "Windows 0.21.1 fixture verified reusable-photo-treatment through CLI for one RGB JPEG. Its retained catalog and original reopen in a fresh library. The PNG is standalone review. RAW and connected modes remain unverified."
     },
     {
       "app": "figcraft",

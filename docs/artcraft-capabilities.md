@@ -107,6 +107,10 @@ protocols. Common naming does not imply common switches or permissions.
   in both background and desktop processes. Live control is local but has no
   password per the guide, so a loopback address alone does not prove exclusive
   access. RAW decoding varies by camera and may use embedded previews.
+  The selected Windows 0.21.1 CLI profile develops one original RGB JPEG in a
+  fresh library. A retained catalog snapshot and its fingerprinted original
+  reproduced the same exposure and sRGB image in a second library. This
+  qualification covers JPEG and the standalone PNG review.
 - **FigCraft**: Background automation roots are supplied to MCP. In attached
   mode, equivalent limits must instead be supplied when starting the app; they
   are not compatible CLI `--attach` options. Imports and live collaboration have
