@@ -44,7 +44,7 @@
         "path": { "$ref": "#/$defs/relativePath" },
         "sizeBytes": { "$ref": "#/$defs/count" },
         "sha256": { "$ref": "#/$defs/hash" },
-        "role": { "enum": ["native-source", "image", "audio", "video", "font", "mesh", "plugin", "script", "recipe", "rights", "parameter-schema", "source-review", "design-review"] },
+        "role": { "enum": ["native-source", "identity-artwork", "image", "audio", "video", "font", "mesh", "plugin", "script", "recipe", "rights", "parameter-schema", "source-review", "design-review"] },
         "rightsRef": { "$ref": "#/$defs/text" }
       }
     },

@@ -24,6 +24,7 @@ _ROLES = frozenset(
         "rights",
     }
 )
+_IDENTITY_ARTWORK = "identity-artwork"
 _PACKAGE_STAGING_PREFIX = "artcraft-package-"
 
 
@@ -190,7 +191,7 @@ def _verify_retained_sharing(package, sources, recipient):
         for entry, fingerprint in zip(package["files"], sources, strict=True)
     }
     reference = _selected_evidence(package, roles, "rightsRef", "rights")
-    rights = _check_rights(reference, roles["native-source"][0])
+    rights = _check_rights(reference, roles)
     require_native_sharing(package["provider"], recipient, rights)
 
 
@@ -314,7 +315,11 @@ def _verify_files(package, root, file_limit, byte_limit):
         raise ArtCraftError("ArtCraft package exceeds its selected file or byte limit")
     if len({item["path"].casefold() for item in entries}) != len(entries):
         raise ArtCraftError("ArtCraft package has conflicting file aliases")
-    if {item.get("role") for item in entries} != _ROLES or len(entries) != len(_ROLES):
+    selected_roles = {item.get("role") for item in entries}
+    if (
+        len(entries) != len(selected_roles)
+        or selected_roles - {_IDENTITY_ARTWORK} != _ROLES
+    ):
         raise ArtCraftError(
             "ArtCraft lower-third package requires the exact supported source roles"
         )
@@ -358,12 +363,20 @@ def _observe_package(package, roles, source_observer, byte_limit):
     source_ref = _selected_evidence(package, roles, "sourceReviewRef", "source-review")
     design_ref = _selected_evidence(package, roles, "designReviewRef", "design-review")
     rights_ref = _selected_evidence(package, roles, "rightsRef", "rights")
+    artwork_entry = roles.get(_IDENTITY_ARTWORK)
+    artwork = artwork_entry[1] if artwork_entry else None
+    if artwork and Path(artwork["locator"]).suffix.lower() != ".svg":
+        raise ArtCraftError("ArtCraft package identity artwork must be an SVG")
     fixture = _source_review(source_ref, native, recipe)
-    _design_review(design_ref, native)
-    rights = _check_rights(rights_ref, roles["native-source"][0])
+    _design_review(design_ref, native, artwork)
+    rights = _check_rights(rights_ref, roles)
     parameter_schema = _parameter_schema(parameters, fixture)
     observed = source_observer(
-        Path(native["locator"]), package["output"], fixture, max_bytes=byte_limit
+        Path(native["locator"]),
+        package["output"],
+        fixture,
+        max_bytes=byte_limit,
+        **({"artwork": artwork} if artwork else {}),
     )
     if observed.get("fingerprint") != native:
         raise ArtCraftError("ArtCraft source observation refers to other bytes")
@@ -418,9 +431,11 @@ def _source_review(reference, native, recipe):
     return value["fixtureParameters"]
 
 
-def _design_review(reference, native):
+def _design_review(reference, native, artwork):
     value = _read_json(reference, dict)
     expected = {"version": 1, "decision": "approved", "nativeSha256": native["sha256"]}
+    if artwork:
+        expected["identityArtworkSha256"] = artwork["sha256"]
     if any(value.get(key) != fact for key, fact in expected.items()) or not all(
         isinstance(value.get(key), str) and value[key].strip()
         for key in ("actor", "reference")
@@ -430,7 +445,7 @@ def _design_review(reference, native):
         )
 
 
-def _check_rights(reference, native):
+def _check_rights(reference, roles):
     from .animation import AnimationError
     from .provider_animation import ProviderAnimationService
 
@@ -443,11 +458,14 @@ def _check_rights(reference, native):
         ProviderAnimationService.validate_rights(rights)
     except AnimationError as exc:
         raise ArtCraftError(str(exc)) from exc
-    if {(item["dependencyId"], item["sha256"]) for item in rights} != {
-        (native["path"], native["sha256"])
-    }:
+    expected = {
+        (entry["path"], entry["sha256"])
+        for role, (entry, _) in roles.items()
+        if role in {"native-source", _IDENTITY_ARTWORK}
+    }
+    if {(item["dependencyId"], item["sha256"]) for item in rights} != expected:
         raise ArtCraftError(
-            "ArtCraft rights must cover the package's exact native source"
+            "ArtCraft rights must cover the package's exact native source and any identity artwork"
         )
     return rights
 
