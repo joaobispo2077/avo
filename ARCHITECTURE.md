@@ -748,6 +748,11 @@ the same animated symbol. Source inspection checks its outline, font and
 measured width. An approved revision can change either recorded label while
 preserving the source and the selected design's text slots.
 
+The opt-in AniCraft fixed hold uses the same readable plate position with
+clear frames at the start and end. Source inspection binds its exact keyframe
+spans, and export verification requires identical frames through the visible
+hold. Saved-source text revisions preserve the reviewed motion profile.
+
 A saved-source text revision starts from an immutable job-owned copy and saves
 into a separate revision folder. The native adapter observes the selected edit
 command signatures and compares the new document with the preserved design.

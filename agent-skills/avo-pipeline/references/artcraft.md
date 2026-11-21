@@ -53,6 +53,12 @@ line to a new AniCraft lower third. Use one line of up to 48 characters.
 Both lines use the selected installed font, and the adapter checks that the
 secondary line fits the plate. A saved-source revision can change the text in
 the approved design's existing slots.
+
+For a reduced-motion AniCraft lower third, set `authoringParameters.motion`
+to `"hold"`. AVO verifies a fixed plate with clear starts and ends. Omit
+`motion` for the current slide. Text revisions preserve the selected motion.
+To change it, approve and select a separate native design.
+
 The current lower-third profile supports declared 16:9 and 9:16 canvases.
 Review the text size, face and caption clearance within the selected format.
 Automated authoring uses a confined runner and verifies the saved document's
