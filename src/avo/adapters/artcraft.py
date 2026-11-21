@@ -12,6 +12,7 @@ from pathlib import Path
 from avo.artcraft import (
     _ANIMATED_EMBLEM_SCOPE,
     _FILM_RETURN_SCOPE,
+    _PHOTO_CARD_SCOPE,
     _SOUND_CUE_SCOPE,
     _STILL_CARD_SCOPE,
     _VECTOR_EMBLEM_SCOPE,
@@ -20,7 +21,7 @@ from avo.artcraft import (
 from avo.timeline.contracts import content_hash, file_fingerprint
 
 _VERSION = re.compile(
-    r"(?:(?:ani|sound|vector|film)craft(?:-cli)?\s+)?v?(\d+\.\d+\.\d+(?:[-+][a-z0-9.-]+)?)(?: \((?:early alpha|windows x86_64)\))?",
+    r"(?:(?:ani|sound|vector|film|photo)craft(?:-cli)?\s+)?v?(\d+\.\d+\.\d+(?:[-+][a-z0-9.-]+)?)(?: \((?:early alpha|windows x86_64|[a-f0-9]{7,40}, \d{4}-\d{2}-\d{2})\))?",
     re.IGNORECASE,
 )
 _PRODUCTS = {
@@ -28,6 +29,7 @@ _PRODUCTS = {
     "soundcraft": "SoundCraft",
     "vectorcraft": "VectorCraft",
     "filmcraft": "FilmCraft",
+    "photocraft": "PhotoCraft",
 }
 
 
@@ -254,7 +256,7 @@ def _installed_tools(product, cli_path, app_path):
 
 
 def _application_release(product, app):
-    if product == "filmcraft":
+    if product in {"filmcraft", "photocraft"}:
         from .artcraft_windows import windows_application_release
 
         return windows_application_release(app, _PRODUCTS[product])
@@ -287,6 +289,7 @@ class SelectedArtCraftAdapter:
         if scope in (
             _SOUND_CUE_SCOPE,
             _STILL_CARD_SCOPE,
+            _PHOTO_CARD_SCOPE,
             _FILM_RETURN_SCOPE,
             _VECTOR_EMBLEM_SCOPE,
         ):
@@ -491,6 +494,14 @@ class SelectedArtCraftAdapter:
             invoke=invoke,
         )
 
+    def author_photo_card(self, job, directory):
+        from .artcraft_photocraft import author_photo_card
+
+        def invoke(workdir, *arguments, timeout):
+            return self._invoke_confined(job, workdir, arguments, timeout)
+
+        return author_photo_card(job, directory=directory, invoke=invoke)
+
     def author_vector_emblem(self, job, directory):
         from .artcraft_vectorcraft import author_vector_emblem
 
@@ -602,6 +613,10 @@ def _supports_anicraft(scope, mode):
 
 def _specialist_profile(scope):
     product = scope["app"]
+    if product == "photocraft":
+        from .artcraft_photocraft import observe_photocraft
+
+        return "PhotoCraft card", "0.23.1", observe_photocraft
     if product == "filmcraft":
         from .artcraft_filmcraft import observe_filmcraft
 

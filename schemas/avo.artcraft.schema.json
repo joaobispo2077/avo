@@ -240,6 +240,10 @@
         "effect": { "const": "room-reverb" }
       }
     },
+    "photoSource": {
+      "type": "object", "additionalProperties": false, "required": ["source"],
+      "properties": { "source": { "$ref": "#/$defs/text" } }
+    },
     "interchangeSource": {
       "type": "object", "additionalProperties": false, "required": ["source", "width", "height"],
       "properties": {
@@ -314,6 +318,7 @@
         "appPath": { "$ref": "#/$defs/text" },
         "authoringParameters": { "$ref": "#/$defs/lowerThirdParameters" },
         "soundCue": { "$ref": "#/$defs/soundCue" },
+        "photoSource": { "$ref": "#/$defs/photoSource" },
         "interchangeSource": { "$ref": "#/$defs/interchangeSource" },
         "artworkRef": { "$ref": "#/$defs/exportRef" },
         "output": { "$ref": "#/$defs/output" },
@@ -335,6 +340,7 @@
         "documentState": { "enum": ["empty", "saved"] },
         "authoringParameters": { "$ref": "#/$defs/lowerThirdParameters" },
         "soundCue": { "$ref": "#/$defs/soundCue" },
+        "photoSource": { "$ref": "#/$defs/photoSource" },
         "interchangeSource": { "$ref": "#/$defs/interchangeSource" },
         "artworkRef": { "$ref": "#/$defs/exportRef" },
         "projectFingerprint": { "$ref": "#/$defs/fingerprint" },
