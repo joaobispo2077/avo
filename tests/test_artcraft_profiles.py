@@ -13,6 +13,7 @@ from tests.test_artcraft_jobs import _prepare, job_spec
 
 PHOTO_OPERATION = "layered-image-card"
 FIG_OPERATION = "editable-design-variant"
+DECK_OPERATION = "editable-explanation-slide"
 
 
 def photo_request(provider="fixture-provider"):
@@ -45,7 +46,7 @@ def photo_spec(workspace, source, **overrides):
     )
 
 
-def fig_spec(workspace, **overrides):
+def static_review_spec(workspace, **overrides):
     return job_spec(
         workspace,
         **{
@@ -63,10 +64,18 @@ def fig_spec(workspace, **overrides):
 
 
 def prepare_fig(spec, adapter):
+    return _prepare_static_profile(spec, adapter, "figcraft", FIG_OPERATION)
+
+
+def prepare_deck(spec, adapter):
+    return _prepare_static_profile(spec, adapter, "deckcraft", DECK_OPERATION)
+
+
+def _prepare_static_profile(spec, adapter, app, operation):
     brief = request(
         provider=spec["provider"],
         required={
-            "behavior": FIG_OPERATION,
+            "behavior": operation,
             "outputRole": "generated-still",
             "editable": True,
         },
@@ -76,7 +85,7 @@ def prepare_fig(spec, adapter):
         brief,
         spec,
         adapter,
-        intent=artcraft.ArtCraftIntent("explicit", "figcraft", (FIG_OPERATION,)),
+        intent=artcraft.ArtCraftIntent("explicit", app, (operation,)),
     )
 
 
@@ -150,7 +159,7 @@ def test_photocraft_rejects_image_without_srgb_profile(tmp_path):
 def test_figcraft_rejects_unqualified_attached_mode(tmp_path, monkeypatch):
     monkeypatch.setattr(init_project, "load_provider", lambda slug: {"slug": slug})
     with pytest.raises(artcraft.ArtCraftError, match="FigCraft.*confined CLI"):
-        prepare_fig(fig_spec(tmp_path, mode="live"), None)
+        prepare_fig(static_review_spec(tmp_path, mode="live"), None)
 
 
 def test_figcraft_observation_requires_an_independently_confined_runner(tmp_path):
@@ -162,3 +171,9 @@ def test_figcraft_observation_requires_an_independently_confined_runner(tmp_path
             cli_path=None,
             app_path=None,
         )
+
+
+def test_deckcraft_rejects_live_control_for_cli_recipe(tmp_path, monkeypatch):
+    monkeypatch.setattr(init_project, "load_provider", lambda slug: {"slug": slug})
+    with pytest.raises(artcraft.ArtCraftError, match="DeckCraft.*confined CLI"):
+        prepare_deck(static_review_spec(tmp_path, mode="live"), None)

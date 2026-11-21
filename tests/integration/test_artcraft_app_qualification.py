@@ -7,10 +7,11 @@ from pathlib import Path
 import pytest
 from PIL import Image, ImageCms
 from tests.test_artcraft_profiles import (
-    fig_spec,
     photo_spec,
+    prepare_deck,
     prepare_fig,
     prepare_photo,
+    static_review_spec,
 )
 
 from avo import artcraft, init_project
@@ -32,6 +33,13 @@ def photocraft_adapter(tmp_path):
 def figcraft_adapter(tmp_path):
     return _installed_adapter(
         tmp_path, "AVO_ARTCRAFT_FIGCRAFT_TEST_CLI", "FigCraft 0.18.1"
+    )
+
+
+@pytest.fixture
+def deckcraft_adapter(tmp_path):
+    return _installed_adapter(
+        tmp_path, "AVO_ARTCRAFT_DECKCRAFT_TEST_CLI", "DeckCraft 0.18.1"
     )
 
 
@@ -127,7 +135,9 @@ def test_native_figcraft_retains_editable_layout_and_prototype_for_review(
 ):
     executable, adapter = figcraft_adapter
     monkeypatch.setattr(init_project, "load_provider", lambda slug: {"slug": slug})
-    prepared = prepare_fig(fig_spec(tmp_path, cliPath=str(executable)), adapter)
+    prepared = prepare_fig(
+        static_review_spec(tmp_path, cliPath=str(executable)), adapter
+    )
     exported = artcraft.run_authoring(
         prepared["jobRef"], expected_head=prepared["head"], adapter=adapter
     )
@@ -182,3 +192,32 @@ def _assert_figcraft_root_rejection(executable, tmp_path, source):
     assert response.returncode != 0
     assert b"read" in response.stderr.lower()
     assert not forbidden_copy.exists()
+
+
+def test_native_deckcraft_retains_master_and_transition_for_static_review(
+    tmp_path, monkeypatch, deckcraft_adapter
+):
+    executable, adapter = deckcraft_adapter
+    monkeypatch.setattr(init_project, "load_provider", lambda slug: {"slug": slug})
+    prepared = prepare_deck(
+        static_review_spec(tmp_path, cliPath=str(executable)), adapter
+    )
+    exported = artcraft.run_authoring(
+        prepared["jobRef"], expected_head=prepared["head"], adapter=adapter
+    )
+    job, event = artcraft.read_authoring_export(
+        prepared["jobRef"], expected_head=exported["head"]
+    )
+    assert job["observation"]["release"] == "0.18.1"
+    assert job["inputs"] == []
+    assert Path(event["saved"]["locator"]).name == "component.deckcraft"
+    with Image.open(event["outputs"][0]["locator"]) as image:
+        assert image.info["srgb"] == 0
+        assert image.size == (320, 180)
+        assert image.getpixel((160, 90)) == (106, 48, 80, 255)
+    review = artcraft.describe_export_review(
+        prepared["jobRef"], expected_head=exported["head"]
+    )
+    assert review["standalone"]["admission"] == "standalone-review"
+    assert "midpoint of the selected fade" in review["standalone"]["losses"][0]
+    assert "generatedStillRef" not in review["standalone"]
