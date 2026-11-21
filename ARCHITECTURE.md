@@ -670,6 +670,13 @@ An interrupted write retains bounded file fingerprints as reference material.
 Cancellation of an unstarted job uses the same event compare-and-swap and
 preserves the source copy. Owner reconciliation is required for active work.
 
+An active CLI job can be cancelled when its confined runner claims the exact
+job, running event and output directory. AVO records the request before
+signalling and keeps partial files as reference evidence. A cancelled event
+requires a settled runner and writes. Concurrent retries reuse the recorded
+request or result. Operator-owned and unverified writers retain their current
+state.
+
 The ArtCraft inspection response lists changed recorded files and the review
 actions for each affected area. A checked AniCraft lower-third document also
 reports differences in its editable text and font. These observations leave

@@ -58,7 +58,10 @@ Use `avo cli artcraft recover --job <absolute-job-record> --expected-head
 and compares retained files with the recorded partial fingerprints. Use
 `--action retry` for an unchanged prepared job or to recover its exact completed
 result after a lost response. Use `--action cancel` before authoring starts.
-Resolve the writer's state when a job is active or has gone to an operator.
+Active CLI cancellation requires its confined runner to own the exact running
+job and confirm that its processes and writes have stopped. The cancellation
+receipt keeps partial files as inspection references. For an operator-owned
+handoff, have the operator resolve the writer's state before recovery.
 The AVO MCP tools
 `avo_artcraft_prepare`, `avo_artcraft_run`, `avo_artcraft_inspect` and
 `avo_artcraft_recover` use the same job controls and exact event heads.
