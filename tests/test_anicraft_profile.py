@@ -82,6 +82,28 @@ def test_lower_third_can_hold_at_a_fixed_position_without_tweens(tmp_path):
     assert plate["x"] == 48
 
 
+def test_lower_third_can_place_a_selected_editable_identity_mark(tmp_path):
+    from avo.adapters.artcraft_anicraft import lower_third_steps
+
+    svg = tmp_path / "identity.svg"
+    steps = lower_third_steps(
+        _contract(),
+        {"primaryText": "Clara", "font": "Arial", "motion": "hold"},
+        tmp_path / "native.anicraft",
+        tmp_path / "white",
+        identity_svg=svg,
+    )
+    logo = next(step["params"] for step in steps if step["cmd"] == "file.import")
+    text = next(step["params"] for step in steps if step["cmd"] == "text.create")
+    scale = next(
+        step["params"] for step in steps if step["cmd"] == "element.set_transform"
+    )
+    assert logo["path"] == str(svg) and logo["layer"] == "active"
+    assert logo["x"] == scale["x"] == 59
+    assert scale["sx"] == scale["sy"] == 0.18
+    assert text["x"] > logo["x"] + 24
+
+
 def test_lower_third_rejects_blank_or_multiline_secondary_text(tmp_path):
     from avo.adapters.artcraft_anicraft import lower_third_steps
 

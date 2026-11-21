@@ -9,6 +9,7 @@ from pathlib import Path
 import numpy as np
 import pytest
 from PIL import Image
+from tests.artcraft_fixtures import request
 from tests.integration.test_artcraft_audio_runtime import (
     _installed_cli as _installed_sound,
 )
@@ -31,7 +32,7 @@ from tests.test_artcraft_handoffs import (
     animated_emblem_spec,
     emblem_spec,
 )
-from tests.test_artcraft_jobs import _overlay_snapshots
+from tests.test_artcraft_jobs import _overlay_snapshots, _prepare
 
 from avo import artcraft, init_project, motion
 from avo.adapters.artcraft import SelectedArtCraftAdapter
@@ -41,6 +42,7 @@ from avo.proof_composition import (
     register_artcraft_export,
 )
 from avo.timeline.artcraft_audio import lock_generated_audio
+from avo.timeline.contracts import file_fingerprint
 from avo.timeline.generated_assets import GeneratedAssetService
 from avo.timeline.proof_plan import ProofPlanCompiler
 from avo.timeline.tracks import TracksService
@@ -112,7 +114,9 @@ def _run(prepared, adapter):
     )
 
 
-def _registered_emblem(tmp_path, monkeypatch, vector, ani, *, workspace=None):
+def _registered_emblem(
+    tmp_path, monkeypatch, vector, ani, *, workspace=None, identity_label=False
+):
     heads, workspace, context = _video_context(
         tmp_path, monkeypatch, workspace=workspace
     )
@@ -127,7 +131,8 @@ def _registered_emblem(tmp_path, monkeypatch, vector, ani, *, workspace=None):
         cli = Path(binary["locator"])
         assert cli in [vector, ani]
         assert directory.is_relative_to(tmp_path)
-        assert roots["write"] == [str(directory)]
+        assert len(roots["write"]) == 1
+        assert directory.is_relative_to(roots["write"][0])
         invoked.append(cli)
         return subprocess.run(
             [str(cli), *map(str, arguments)],
@@ -161,10 +166,27 @@ def _registered_emblem(tmp_path, monkeypatch, vector, ani, *, workspace=None):
         provider=provider,
         readRoots=[str(tmp_path)],
     )
-    selected = _prepare_animated_emblem(
-        specification, adapter, context=context, provider=provider
-    )
+    if identity_label:
+        specification["output"].update(width=640, height=360)
+        specification["authoringParameters"] = {
+            "primaryText": "Speaker",
+            "font": "Arial",
+        }
+        selected = _prepare(
+            artcraft,
+            request(provider=provider, componentId="emblem", context=context),
+            specification,
+            adapter,
+        )
+    else:
+        selected = _prepare_animated_emblem(
+            specification, adapter, context=context, provider=provider
+        )
     rendered = _run(selected, adapter)
+    if identity_label:
+        selected, rendered = _revise_identity_label(
+            specification, context, selected, rendered, adapter
+        )
     assert set(discovered) == set(invoked) == {ani}
     assert _run(rendered, None) == rendered
     _, exported = artcraft.read_authoring_export(
@@ -193,6 +215,80 @@ def _registered_emblem(tmp_path, monkeypatch, vector, ani, *, workspace=None):
         for input_ in selected["job"]["inputs"]
     )
     return workspace, heads, record, standalone, rendered
+
+
+def _revise_identity_label(specification, context, initial, rendered, adapter):
+    from avo.adapters.artcraft_anicraft import inspect_lower_third_source
+
+    original, event = artcraft.read_authoring_export(
+        initial["jobRef"], expected_head=rendered["head"]
+    )
+    source = Path(event["saved"]["locator"])
+    fingerprint = file_fingerprint(source)
+    parameters = {**original["authoringParameters"], "primaryText": "Presenter"}
+    revised = {
+        **specification,
+        "jobId": "identity-label-revision",
+        "document": {"state": "saved", "source": str(source)},
+        "authoringParameters": parameters,
+    }
+    brief = request(
+        provider=specification["provider"], componentId="emblem", context=context
+    )
+    selected = _prepare(artcraft, brief, revised, adapter)
+    rendered = _run(selected, adapter)
+    job, event = artcraft.read_authoring_export(
+        selected["jobRef"], expected_head=rendered["head"]
+    )
+    artwork = artcraft.selected_vector_artwork(job["inputs"])
+    facts = inspect_lower_third_source(
+        Path(event["saved"]["locator"]),
+        job["output"],
+        parameters,
+        max_bytes=job["budget"]["bytes"],
+        artwork=artwork,
+    )
+    assert facts["editableText"] == "Presenter" and facts["identityVectorHash"]
+    assert file_fingerprint(source) == fingerprint
+    with Image.open(event["outputs"][8]["locator"]) as frame:
+        patch = frame.crop((61, 285, 80, 304))
+        colors = {pixel for _, pixel in patch.getcolors(patch.width * patch.height)}
+        assert {(245, 248, 251, 255), (16, 44, 72, 255)} <= colors
+    intent = artcraft.ArtCraftIntent("explicit", "anicraft", ("lower-third",))
+    reuse_spec = {**revised, "mode": "reuse", "jobId": "identity-label-reuse"}
+    reuse_spec.pop("cliPath")
+    reuse = artcraft.prepare_authoring_reuse(
+        brief,
+        reuse_spec,
+        from_job=selected["jobRef"],
+        from_head=rendered["head"],
+        intent=intent,
+        decision=artcraft.assess_request(brief, intent=intent),
+    )
+    reused = _run(reuse, None)
+    _, copied = artcraft.read_authoring_export(
+        reused["jobRef"], expected_head=reused["head"]
+    )
+    assert [row["sha256"] for row in copied["outputs"]] == [
+        row["sha256"] for row in event["outputs"]
+    ]
+    return reuse, reused
+
+
+def test_native_vector_identity_survives_an_editable_lower_third_revision(
+    tmp_path, monkeypatch
+):
+    _, _, record, standalone, rendered = _registered_emblem(
+        tmp_path, monkeypatch, *_tools(), identity_label=True
+    )
+    assert standalone["vectorArtwork"] in [
+        item["fingerprint"] for item in record["inputs"]
+    ]
+    Path(standalone["vectorArtwork"]["locator"]).write_bytes(b"changed artwork")
+    inspection = artcraft.inspect_authoring(
+        rendered["jobRef"], expected_head=rendered["head"]
+    )
+    assert inspection["status"] == "stale"
 
 
 def test_native_vector_emblem_becomes_an_editable_animation_and_proof_asset(
