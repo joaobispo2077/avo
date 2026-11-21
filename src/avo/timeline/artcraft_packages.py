@@ -24,6 +24,7 @@ _ROLES = frozenset(
         "rights",
     }
 )
+_PACKAGE_STAGING_PREFIX = "artcraft-package-"
 
 
 def verify_provider_package(
@@ -166,9 +167,62 @@ def retained_native_instance_files(instance, project_root, provider):
     return [file_fingerprint(target / "manifest.json"), *sources]
 
 
+def shared_native_package_paths(edit_directory):
+    """Find verified immutable provider packages stored inside a cleanup tree."""
+    root = Path(edit_directory)
+    if root.resolve() != root:
+        raise ArtCraftError(
+            "Native library scan requires an unaliased cleanup directory"
+        )
+    for manifest in sorted(root.rglob("manifest.json")):
+        target = manifest.parent
+        if not re.fullmatch(r"[a-f0-9]{64}", target.name):
+            continue
+        package = _shared_package_manifest(manifest)
+        if package is None:
+            continue
+        yield manifest
+        yield from (
+            Path(item["locator"]) for item in _verify_retained_package(package, target)
+        )
+
+
+def _shared_package_manifest(manifest):
+    if (
+        manifest.resolve() != manifest
+        or not manifest.is_file()
+        or manifest.stat().st_size > 256 * 1024
+    ):
+        raise ArtCraftError(
+            "Possible ArtCraft library manifest is missing, oversized or escaped"
+        )
+    document = json.loads(manifest.read_text(encoding="utf-8"))
+    markers = {"packageHash", "sourceReviewRef", "designReviewRef"}
+    if not isinstance(document, dict) or not markers <= document.keys():
+        return None
+    target = manifest.parent
+    package = _read_retained_manifest(target)
+    if (package["provider"], package["packageHash"]) != (
+        target.parent.name,
+        target.name,
+    ):
+        raise ArtCraftError(
+            "ArtCraft provider library path differs from its immutable package"
+        )
+    return package
+
+
+def is_native_publication_stage(relative_path):
+    return any(
+        part.startswith(_PACKAGE_STAGING_PREFIX) for part in relative_path.parts[:-1]
+    )
+
+
 def _retain_new_package(package, evidence, target):
     source_root = evidence["sourceRoot"]
-    with TemporaryDirectory(prefix="artcraft-package-", dir=target.parent) as directory:
+    with TemporaryDirectory(
+        prefix=_PACKAGE_STAGING_PREFIX, dir=target.parent
+    ) as directory:
         stage = Path(directory)
         if stage.resolve() != stage or stage.parent != target.parent:
             raise ArtCraftError(
