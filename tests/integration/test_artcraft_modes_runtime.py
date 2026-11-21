@@ -16,7 +16,7 @@ from avo import artcraft, init_project
 from avo.adapters.artcraft import SelectedArtCraftAdapter
 from avo.timeline.contracts import file_fingerprint
 
-pytestmark = pytest.mark.integration
+pytestmark = [pytest.mark.integration, pytest.mark.native_artcraft]
 
 
 def _installed_cli():

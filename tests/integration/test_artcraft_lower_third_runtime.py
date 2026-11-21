@@ -11,7 +11,7 @@ from tests.artcraft_fixtures import picture_output, request
 
 from avo.timeline.contracts import file_fingerprint
 
-pytestmark = pytest.mark.integration
+pytestmark = [pytest.mark.integration, pytest.mark.native_artcraft]
 
 
 def _job_contract():

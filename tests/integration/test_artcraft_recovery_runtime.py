@@ -27,7 +27,7 @@ from avo.timeline.reconstruction import (
     verify_reconstruction_bundle,
 )
 
-pytestmark = pytest.mark.integration
+pytestmark = [pytest.mark.integration, pytest.mark.native_artcraft]
 
 
 def _installed_cli():

@@ -46,7 +46,7 @@ from avo.timeline.proof_plan import ProofPlanCompiler
 from avo.timeline.tracks import TracksService
 from avo.timeline.workspace import TimelineWorkspace
 
-pytestmark = pytest.mark.integration
+pytestmark = [pytest.mark.integration, pytest.mark.native_artcraft]
 
 
 def _tools():

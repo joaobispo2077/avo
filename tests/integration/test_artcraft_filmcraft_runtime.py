@@ -18,7 +18,7 @@ from avo.mcp.bridge import run_cli
 from avo.timeline.contracts import file_fingerprint
 from avo.timeline.import_service import TimelineImportService
 
-pytestmark = pytest.mark.integration
+pytestmark = [pytest.mark.integration, pytest.mark.native_artcraft]
 
 
 def test_native_filmcraft_returns_exact_source_timeline_for_sync_review(

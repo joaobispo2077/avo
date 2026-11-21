@@ -22,7 +22,7 @@ from avo.adapters.artcraft import SelectedArtCraftAdapter
 from avo.timeline.artcraft_stills import read_generated_still
 from avo.timeline.contracts import file_fingerprint
 
-pytestmark = pytest.mark.integration
+pytestmark = [pytest.mark.integration, pytest.mark.native_artcraft]
 
 
 @pytest.fixture
