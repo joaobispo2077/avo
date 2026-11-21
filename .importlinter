@@ -58,6 +58,17 @@ source_modules =
 forbidden_modules =
     avo.mcp.tools
 
+[importlinter:contract:artcraft-coordinator-not-execution]
+name = ArtCraft policy and coordination must not import concrete adapters or entry points
+type = forbidden
+source_modules =
+    avo.artcraft
+forbidden_modules =
+    avo.adapters
+    avo.artcraft_cli
+    avo.cli
+    avo.mcp
+
 [importlinter:contract:domain-not-adapters]
 name = Timeline domain must not grow new adapter imports
 type = forbidden
