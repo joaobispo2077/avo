@@ -4,10 +4,11 @@ from pathlib import Path
 
 import pytest
 
-from avo import artcraft, init_project
+from avo import artcraft, init_project, project_inventory
 from avo.timeline import artcraft_audio, artcraft_stills
 from avo.timeline.artcraft_packages import (
     retain_native_instance_sources,
+    retain_provider_package,
     verify_provider_package,
 )
 from avo.timeline.component_instances import ComponentInstanceService
@@ -157,22 +158,26 @@ def test_reconstruction_checks_a_selected_native_input_outside_the_video_root(
         verify_reconstruction_bundle(raw)
 
 
-def test_reconstruction_refuses_changed_rights_in_the_pinned_video_package(tmp_path):
-    raw = tmp_path / "video"
-    raw.mkdir()
-    workspace, master = canonical_project(raw)
-    source = tmp_path / "approved-source"
+def _approved_package(source, provider):
     source.mkdir()
     native = source / "component.anicraft"
     native.write_bytes(b"immutable synthetic package source")
     (source / "recipe.json").write_bytes(b'{"fixture":"lower-third"}')
     packet = _package_from_retained_source(native, picture_output(), {})
     body = {key: value for key, value in packet.items() if key != "packageHash"}
-    package = artcraft.seal_record(
-        "package", {**body, "provider": workspace.project["provider"]}
-    )
+    package = artcraft.seal_record("package", {**body, "provider": provider})
     evidence = verify_provider_package(
         package, source, provider=package["provider"], source_observer=_observe_fixture
+    )
+    return package, evidence
+
+
+def test_reconstruction_refuses_changed_rights_in_the_pinned_video_package(tmp_path):
+    raw = tmp_path / "video"
+    raw.mkdir()
+    workspace, master = canonical_project(raw)
+    package, evidence = _approved_package(
+        tmp_path / "approved-source", workspace.project["provider"]
     )
     instance_id = "speaker-first-use"
     target = raw / "edit" / "derived" / "provider-components" / instance_id
@@ -214,3 +219,54 @@ def test_reconstruction_refuses_changed_rights_in_the_pinned_video_package(tmp_p
     rights.write_bytes(b"changed rights evidence in pinned copy")
     with pytest.raises(ReconstructionError, match="ArtCraft package"):
         build_reconstruction_bundle(workspace, master_basename=master, actor="fixture")
+
+
+def test_cleanup_preserves_shared_native_provider_library_below_another_videos_edit(
+    tmp_path,
+):
+    raw = tmp_path / "library-host-video"
+    raw.mkdir()
+    workspace, master = canonical_project(raw)
+    package, evidence = _approved_package(
+        tmp_path / "approved-shared-source", "other-provider"
+    )
+    store = raw / "edit" / "shared-native-library"
+    store.mkdir()
+    target = store / retain_provider_package(package, evidence, store)
+    scratch = raw / "edit" / "ordinary-scratch.bin"
+    scratch.write_bytes(b"discardable fixture scratch")
+    unrelated = raw / "edit" / "cache" / ("f" * 64) / "manifest.json"
+    unrelated.parent.mkdir(parents=True)
+    unrelated.write_text("[]", encoding="utf-8")
+    publisher = (
+        target.parent / "artcraft-package-inflight" / "files" / "component.anicraft"
+    )
+    publisher.parent.mkdir(parents=True)
+    publisher.write_bytes(b"incomplete native write")
+    bundle = build_reconstruction_bundle(
+        workspace, master_basename=master, actor="fixture"
+    )
+    assert not any(
+        "shared-native-library" in entry["path"] for entry in bundle["files"]
+    )
+
+    preview = project_inventory.run_cleanup(
+        raw, master, dry_run=True, purge_session=False
+    )
+    protected = {
+        target / "manifest.json",
+        *(target / "files" / item["path"] for item in package["files"]),
+    }
+    assert scratch in preview.paths
+    assert unrelated in preview.paths
+    assert protected <= set(preview.preserved.all_paths)
+    assert protected.isdisjoint(preview.paths)
+    assert publisher not in preview.paths
+
+    (target / "files" / package["rightsRef"]).write_bytes(
+        b"unreconciled shared package rights"
+    )
+    with pytest.raises(
+        project_inventory.PreservedSetViolation, match="shared ArtCraft library"
+    ):
+        project_inventory.run_cleanup(raw, master, dry_run=True, purge_session=False)
