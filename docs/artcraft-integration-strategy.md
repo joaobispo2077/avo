@@ -1,10 +1,18 @@
 # ArtCraft integration strategy
 
-This document covers the integration boundaries and the first Windows AniCraft
-lower-third profile. The capability register tracks work on the other profiles.
+This document covers the integration boundaries and the Windows AniCraft
+lower-third workflow. The capability register lists each qualified operation,
+release and mode, including additional still, audio, animation and timeline
+profiles. [ArtCraft capability coverage](artcraft-capabilities.md)
 
-ArtCraft is specialist authoring for a component that needs it. It is not a new
-default motion engine or a normal prerequisite for AVO.
+ArtCraft is specialist authoring for a selected component. HyperFrames is the
+built-in engine for ordinary agent-authored motion.
+
+The ArtCraft coordinator owns selection, job records and recovery. Concrete
+adapters check the selected installation and run native commands through the
+appropriate authority. Tracks and the proof compiler own admission of qualified
+program assets. PhotoCraft, LightCraft, FigCraft, DeckCraft and EffectCraft
+currently produce standalone review artifacts in their selected profiles.
 
 ## Separate user-managed installation
 

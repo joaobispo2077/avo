@@ -147,6 +147,14 @@ The catalog reads this evidence without probing the machine. An empty list
 means local qualification is pending. Wider capability families describe
 what the vendor documents.
 
+Run the opt-in installed qualification cases with
+`python -m pytest -m native_artcraft`. Supply each explicitly selected CLI
+through its `AVO_ARTCRAFT_<APP>_TEST_CLI` variable. Cases with missing
+prerequisites skip and remain unqualified on that installation. Tests use
+synthetic external workspaces and record the exact selected operations.
+Keep the temporary directory outside the repository when setting
+`--basetemp` explicitly.
+
 The required operation dispositions are **documented-only**, **locally verified**,
 **unavailable** and **unsupported**. Availability and trust remain distinct from
 artifact status: authoring/exported, reproducibility-qualified, canonically

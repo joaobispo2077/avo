@@ -75,3 +75,10 @@ Shared args: [`arguments.md`](arguments.md)
 - `sfx search` reads descriptor matches. Select `sfx search-semantic` explicitly to use the configured local model.
 - `sfx apply` publishes selected sound changes and reports the listening scope for an explicit chunk selection.
 - `timeline-export status` shows editor validation targets and qualification. The optional handoff and returned-edit commands are documented in [Editor exports](exports.md).
+
+## Optional ArtCraft authoring
+
+- `artcraft catalog` reads the bundled capability metadata. `artcraft assess` checks explicit selection, evidence of a required gap or exact pinned rematerialization.
+- `artcraft prepare` and `artcraft run` stage the selected native job. `artcraft inspect`, `artcraft recover` and `artcraft review` use the exact event head.
+- `artcraft register` and `artcraft import-timeline` enforce the supported program admission boundaries. FilmCraft's source-linked import waits for AVO sync.
+- `artcraft provider-propose`, `artcraft provider-publish` and `artcraft provider-instantiate` own the exact reviewed native version. [ArtCraft workflow](artcraft.md)
