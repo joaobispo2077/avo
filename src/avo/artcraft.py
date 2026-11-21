@@ -61,6 +61,7 @@ _NATIVE_SUFFIXES = {
     "figcraft": ".figcraft",
     "deckcraft": ".deckcraft",
     "lightcraft": ".snap",
+    "effectcraft": ".ecproj",
 }
 _SOUND_CUE_SCOPE = {"app": "soundcraft", "operations": ["isolated-cue"]}
 _STILL_CARD_SCOPE = {"app": "vectorcraft", "operations": ["vector-still"]}
@@ -76,6 +77,11 @@ _FIXED_STILL_SCOPES = (_FIG_VARIANT_SCOPE, _DECK_SLIDE_SCOPE)
 _STILL_SCOPES = (_STILL_CARD_SCOPE, *_PHOTO_SCOPES, *_FIXED_STILL_SCOPES)
 _VECTOR_EMBLEM_SCOPE = {"app": "vectorcraft", "operations": ["vector-emblem"]}
 _ANIMATED_EMBLEM_SCOPE = {"app": "anicraft", "operations": ["animate-vector-emblem"]}
+_EFFECT_MASK_SCOPE = {
+    "app": "effectcraft",
+    "operations": ["editable-masked-lower-third"],
+}
+_EFFECT_SOURCE_WINDOW = {"startFrame": 3, "endFrameExclusive": 9}
 _FILM_RETURN_SCOPE = {
     "app": "filmcraft",
     "operations": ["source-linked-timeline-return"],
@@ -395,6 +401,7 @@ def _check_specialist_job(job, scope):
         )
     _check_photo_job(job, scope)
     _check_fixed_still_job(job, scope)
+    _check_effect_job(job, scope)
     if scope == _FILM_RETURN_SCOPE:
         _check_film_job(job)
     if scope == _VECTOR_EMBLEM_SCOPE:
@@ -422,6 +429,64 @@ def _check_photo_job(job, scope):
     if [item["locator"] for item in job["inputs"]] != [job["photoSource"]["source"]]:
         raise ContractError(
             "ArtCraft photo treatment requires its exact selected image"
+        )
+
+
+def _check_effect_job(job, scope):
+    if scope != _EFFECT_MASK_SCOPE:
+        if "effectFont" in job:
+            raise ContractError(
+                "Only the selected EffectCraft mask recipe may pin its font"
+            )
+        return
+    _require_effect_contract(
+        job["request"], job, job["documentState"], job["observation"]["mode"]
+    )
+    if [entry["locator"] for entry in job["inputs"]] != [job["effectFont"]]:
+        raise ContractError("EffectCraft job requires its exact selected font file")
+
+
+def _require_effect_contract(request, spec, document_state, mode):
+    _require_effect_label(spec, document_state, mode)
+    if (
+        request["required"]
+        != {
+            "behavior": "editable-masked-lower-third",
+            "outputRole": "overlay-video",
+            "editable": True,
+        }
+        or spec["output"]
+        != {
+            "role": "overlay-video",
+            "format": "png-sequence",
+            "width": 320,
+            "height": 180,
+            "alpha": "straight",
+            "color": "srgb",
+            "frameRate": {"numerator": 24, "denominator": 1},
+            "frameCount": 6,
+        }
+        or {"interchangeSource", "photoSource", "soundCue"}.intersection(spec)
+    ):
+        raise ArtCraftError(
+            "Select the exact six-frame EffectCraft mask review profile"
+        )
+
+
+def _require_effect_label(spec, document_state, mode):
+    parameters = spec.get("authoringParameters", {})
+    if "effectFont" not in spec or parameters.get("font") != "Arial":
+        raise ArtCraftError(
+            "EffectCraft requires an explicit installed Arial font source"
+        )
+    text = parameters.get("primaryText", "")
+    if (document_state, mode) != ("empty", "cli") or not 1 <= len(text) <= 32:
+        raise ArtCraftError(
+            "Select an empty EffectCraft CLI job with a short editable label"
+        )
+    if not (text.isascii() and text.isprintable() and text.strip()):
+        raise ArtCraftError(
+            "EffectCraft label requires printable text supported by the pinned font"
         )
 
 
@@ -1078,6 +1143,8 @@ def _preparation_source(spec, roots, document):
 
 
 def _preparation_media(request, spec, scope, roots):
+    if "effectFont" in spec or scope == _EFFECT_MASK_SCOPE:
+        return "effectFont", _preparation_effect_font(request, spec, scope, roots)
     if "photoSource" in spec or scope in _PHOTO_SCOPES:
         return "photoSource", _preparation_photo(request, spec, scope, roots)
     if "interchangeSource" in spec or scope == _FILM_RETURN_SCOPE:
@@ -1085,6 +1152,28 @@ def _preparation_media(request, spec, scope, roots):
             request, spec, scope, roots
         )
     return "soundCue", _preparation_audio(request, spec, scope, roots)
+
+
+def _preparation_effect_font(request, spec, scope, roots):
+    if scope != _EFFECT_MASK_SCOPE:
+        raise ArtCraftError("Select the EffectCraft mask recipe to pin its font")
+    _require_effect_contract(request, spec, spec["document"]["state"], spec["mode"])
+    font = Path(spec["effectFont"])
+    font = _bounded_path(_owning_root(font, roots["read"]), font, "EffectCraft font")
+    if not _is_effect_system_font(font) or not font.is_file():
+        raise ArtCraftError("EffectCraft requires the Windows system Arial font")
+    if font.stat().st_size >= spec["budget"]["bytes"]:
+        raise ArtCraftError("EffectCraft font exceeds the selected byte budget")
+    return file_fingerprint(font)
+
+
+def _is_effect_system_font(path):
+    windows = Path(os.environ.get("SystemRoot") or ".")
+    return (
+        os.name == "nt"
+        and windows.is_absolute()
+        and path == windows / "Fonts" / "arial.ttf"
+    )
 
 
 def _preparation_photo(request, spec, scope, roots):
@@ -1445,7 +1534,9 @@ def retained_authoring_files(job_ref, *, expected_head=None):
         *declared["handoff"],
         *head.get("partialFiles", []),
     ]
-    _require_retained_artifacts(declared["inputs"], roots["read"])
+    _require_retained_artifacts(
+        declared["inputs"], roots["read"], allow_system_font="effectFont" in job
+    )
     _require_retained_artifacts(owned, roots["write"])
     return job, [
         *_retained_job_records(store, job, head),
@@ -1454,9 +1545,11 @@ def retained_authoring_files(job_ref, *, expected_head=None):
     ]
 
 
-def _require_retained_artifacts(references, roots):
+def _require_retained_artifacts(references, roots, *, allow_system_font=False):
     for reference in references:
-        if reference is not None and not _retained_job_file(reference, roots):
+        if reference is not None and not _retained_job_file(
+            reference, roots, allow_system_font=allow_system_font
+        ):
             raise ArtCraftError(
                 f"Retained ArtCraft file changed or is missing: {reference['locator']}"
             )
@@ -1771,13 +1864,16 @@ def _inspect_job_project(store, job):
     return "current"
 
 
-def _retained_job_file(expected, roots):
+def _retained_job_file(expected, roots, *, allow_system_font=False):
     path = Path(expected["locator"])
     try:
         path = _bounded_path(_owning_root(path, roots), path, "retained file")
         return (
             path.is_file()
-            and path.stat().st_nlink == 1
+            and (
+                path.stat().st_nlink == 1
+                or (allow_system_font and _is_effect_system_font(path))
+            )
             and file_fingerprint(path) == expected
         )
     except (OSError, ValueError, RuntimeError):
@@ -1832,7 +1928,12 @@ def _inspect_job_inputs(job):
         return "current" if inputs == job["inputs"] else "changed"
     return (
         "current"
-        if all(_retained_job_file(item, job["roots"]["read"]) for item in job["inputs"])
+        if all(
+            _retained_job_file(
+                item, job["roots"]["read"], allow_system_font="effectFont" in job
+            )
+            for item in job["inputs"]
+        )
         else "changed"
     )
 
@@ -1937,10 +2038,22 @@ def _require_current_or_replayed_authoring(store, job, head, expected_head):
 
 
 def _select_job_author(adapter, scope):
+    if scope in _STILL_SCOPES:
+        return _select_job_still_author(adapter, scope)
     if scope == _FILM_RETURN_SCOPE:
         return adapter.author_film_interchange
     if scope == _SOUND_CUE_SCOPE:
         return adapter.author_isolated_cue
+    if scope == _VECTOR_EMBLEM_SCOPE:
+        return adapter.author_vector_emblem
+    if scope == _ANIMATED_EMBLEM_SCOPE:
+        return adapter.author_animated_emblem
+    if scope == _EFFECT_MASK_SCOPE:
+        return adapter.author_effect_mask
+    return adapter.author_lower_third
+
+
+def _select_job_still_author(adapter, scope):
     if scope == _STILL_CARD_SCOPE:
         return adapter.author_vector_card
     if scope == _PHOTO_CARD_SCOPE:
@@ -1949,13 +2062,7 @@ def _select_job_author(adapter, scope):
         return adapter.author_light_treatment
     if scope == _FIG_VARIANT_SCOPE:
         return adapter.author_fig_variant
-    if scope == _DECK_SLIDE_SCOPE:
-        return adapter.author_deck_slide
-    if scope == _VECTOR_EMBLEM_SCOPE:
-        return adapter.author_vector_emblem
-    if scope == _ANIMATED_EMBLEM_SCOPE:
-        return adapter.author_animated_emblem
-    return adapter.author_lower_third
+    return adapter.author_deck_slide
 
 
 def _copy_reusable_export(job, directory):
@@ -2066,6 +2173,7 @@ def _require_prepared_authoring(store, job, head):
         _FILM_RETURN_SCOPE,
         _VECTOR_EMBLEM_SCOPE,
         _ANIMATED_EMBLEM_SCOPE,
+        _EFFECT_MASK_SCOPE,
     ) and (
         scope != {"app": "anicraft", "operations": ["lower-third"]}
         or not job.get("authoringParameters")
@@ -2163,7 +2271,11 @@ def _verify_sequence_authoring_result(job, directory, result):
     if len(frames) != job["output"]["frameCount"]:
         raise ArtCraftError("ArtCraft output does not contain the selected frame count")
     references = [
-        (native, directory / "component.anicraft"),
+        (
+            native,
+            directory
+            / ("component" + _NATIVE_SUFFIXES[job["decision"]["scope"]["app"]]),
+        ),
         (recipe, directory / "recipe.json"),
     ]
     references.extend(
@@ -2415,6 +2527,20 @@ def describe_export_review(job_ref, *, expected_head):
         }
     if job["decision"]["scope"] in _STILL_SCOPES:
         return _describe_still_review(job, event, job_ref)
+    if job["decision"]["scope"] == _EFFECT_MASK_SCOPE:
+        return {
+            "reviewState": "pending-creator",
+            "jobHash": job["jobHash"],
+            "exportHead": expected_head,
+            "nativeSource": event["saved"],
+            "outputContract": job["output"],
+            "standalone": {
+                "admission": "standalone-review",
+                "sequence": event["outputs"],
+                "sourceWindow": dict(_EFFECT_SOURCE_WINDOW),
+                "font": job["inputs"][0],
+            },
+        }
     if job["decision"]["scope"] == _SOUND_CUE_SCOPE:
         reference = {
             "job": file_fingerprint(Path(job_ref)),

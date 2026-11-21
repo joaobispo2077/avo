@@ -12,6 +12,7 @@ from pathlib import Path
 from avo.artcraft import (
     _ANIMATED_EMBLEM_SCOPE,
     _DECK_SLIDE_SCOPE,
+    _EFFECT_MASK_SCOPE,
     _FIG_VARIANT_SCOPE,
     _FILM_RETURN_SCOPE,
     _LIGHT_TREATMENT_SCOPE,
@@ -24,7 +25,7 @@ from avo.artcraft import (
 from avo.timeline.contracts import content_hash, file_fingerprint
 
 _VERSION = re.compile(
-    r"(?:(?:ani|sound|vector|film|photo|fig|deck|light)craft(?:-cli)?\s+)?v?(\d+\.\d+\.\d+(?:[-+][a-z0-9.-]+)?)(?: \((?:early alpha|windows x86_64|[a-f0-9]{7,40}, \d{4}-\d{2}-\d{2})\))?",
+    r"(?:(?:ani|sound|vector|film|photo|fig|deck|light|effect)craft(?:-cli)?\s+)?v?(\d+\.\d+\.\d+(?:[-+][a-z0-9.-]+)?)(?: \((?:early alpha|windows x86_64|[a-f0-9]{7,40}, \d{4}-\d{2}-\d{2})\))?",
     re.IGNORECASE,
 )
 _PRODUCTS = {
@@ -36,6 +37,7 @@ _PRODUCTS = {
     "figcraft": "FigCraft",
     "deckcraft": "DeckCraft",
     "lightcraft": "LightCraft",
+    "effectcraft": "EffectCraft",
 }
 
 
@@ -262,7 +264,14 @@ def _installed_tools(product, cli_path, app_path):
 
 
 def _application_release(product, app):
-    if product in {"filmcraft", "photocraft", "figcraft", "deckcraft", "lightcraft"}:
+    if product in {
+        "filmcraft",
+        "photocraft",
+        "figcraft",
+        "deckcraft",
+        "lightcraft",
+        "effectcraft",
+    }:
         from .artcraft_windows import windows_application_release
 
         return windows_application_release(app, _PRODUCTS[product])
@@ -299,6 +308,7 @@ class SelectedArtCraftAdapter:
             _LIGHT_TREATMENT_SCOPE,
             _FIG_VARIANT_SCOPE,
             _DECK_SLIDE_SCOPE,
+            _EFFECT_MASK_SCOPE,
             _FILM_RETURN_SCOPE,
             _VECTOR_EMBLEM_SCOPE,
         ):
@@ -535,6 +545,14 @@ class SelectedArtCraftAdapter:
 
         return author_deck_slide(job, directory=directory, invoke=invoke)
 
+    def author_effect_mask(self, job, directory):
+        from .artcraft_effectcraft import author_effect_mask
+
+        def invoke(workdir, *arguments, timeout):
+            return self._invoke_confined(job, workdir, arguments, timeout)
+
+        return author_effect_mask(job, directory=directory, invoke=invoke)
+
     def author_vector_emblem(self, job, directory):
         from .artcraft_vectorcraft import author_vector_emblem
 
@@ -646,6 +664,10 @@ def _supports_anicraft(scope, mode):
 
 def _specialist_profile(scope):
     product = scope["app"]
+    if product == "effectcraft":
+        from .artcraft_effectcraft import observe_effectcraft
+
+        return "EffectCraft masked lower third", "0.24.1", observe_effectcraft
     if product == "lightcraft":
         from .artcraft_lightcraft import observe_lightcraft
 
