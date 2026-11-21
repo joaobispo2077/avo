@@ -460,6 +460,7 @@ def _assert_pinned_native_source(
             "path": str(retained),
             "sha256": file_fingerprint(artwork)["sha256"],
         } in selected["generatedFiles"]
+    return selected, project, copy
 
 
 def test_installed_anicraft_guided_job_round_trips_through_avo_commands(

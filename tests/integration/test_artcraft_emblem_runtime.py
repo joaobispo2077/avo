@@ -37,7 +37,7 @@ from tests.test_artcraft_handoffs import (
     animated_emblem_spec,
     emblem_spec,
 )
-from tests.test_artcraft_jobs import _overlay_snapshots, _prepare
+from tests.test_artcraft_jobs import _overlay_snapshots, _prepare, job_spec
 
 from avo import artcraft, init_project, motion
 from avo.adapters.artcraft import SelectedArtCraftAdapter
@@ -64,7 +64,7 @@ def _tools():
     return [Path(selector).resolve(strict=True) for selector in selectors]
 
 
-def _video_context(path, monkeypatch, *, workspace=None):
+def _video_context(path, monkeypatch, *, workspace=None, component="emblem"):
     if workspace is None:
         project = path / "avo.project.json"
         project.write_text(
@@ -90,10 +90,10 @@ def _video_context(path, monkeypatch, *, workspace=None):
         )
     }
     snapshots = _overlay_snapshots(width=640, height=360, start_frame=0, frame_count=24)
-    snapshots["animation"]["components"][0]["componentId"] = "emblem"
-    snapshots["bmap"]["cues"][0]["componentRef"] = "emblem"
+    snapshots["animation"]["components"][0]["componentId"] = component
+    snapshots["bmap"]["cues"][0]["componentRef"] = component
     layer = snapshots["tracks"]["videoTracks"]["layers"][0]
-    layer["animationRef"] = layer["generator"]["componentId"] = "emblem"
+    layer["animationRef"] = layer["generator"]["componentId"] = component
     monkeypatch.setattr(
         TimelineWorkspace, "active_dependency_snapshot", lambda _self: heads
     )
@@ -119,13 +119,7 @@ def _run(prepared, adapter):
     )
 
 
-def _registered_emblem(
-    tmp_path, monkeypatch, vector, ani, *, workspace=None, identity_label=False
-):
-    heads, workspace, context = _video_context(
-        tmp_path, monkeypatch, workspace=workspace
-    )
-    provider = workspace.project["provider"]
+def _selected_adapter(tmp_path, *tools):
     discovered, invoked = [], []
 
     def observe(installation, roots):
@@ -134,7 +128,7 @@ def _registered_emblem(
 
     def invoke(binary, roots, directory, arguments, *, env, timeout):
         cli = Path(binary["locator"])
-        assert cli in [vector, ani]
+        assert cli in tools
         assert directory.is_relative_to(tmp_path)
         assert len(roots["write"]) == 1
         assert directory.is_relative_to(roots["write"][0])
@@ -149,6 +143,17 @@ def _registered_emblem(
         ).stdout
 
     adapter = SelectedArtCraftAdapter(observe_confinement=observe, run_confined=invoke)
+    return adapter, discovered, invoked
+
+
+def _registered_emblem(
+    tmp_path, monkeypatch, vector, ani, *, workspace=None, identity_label=False
+):
+    heads, workspace, context = _video_context(
+        tmp_path, monkeypatch, workspace=workspace
+    )
+    provider = workspace.project["provider"]
+    adapter, discovered, invoked = _selected_adapter(tmp_path, vector, ani)
     artwork = _run(
         _prepare_emblem(
             emblem_spec(tmp_path, cliPath=str(vector), provider=provider),
@@ -285,8 +290,9 @@ def test_native_vector_identity_survives_an_editable_lower_third_revision(
 ):
     from avo.adapters.artcraft_anicraft import inspect_lower_third_source
 
+    vector, ani = _tools()
     _, _, record, standalone, rendered = _registered_emblem(
-        tmp_path, monkeypatch, *_tools(), identity_label=True
+        tmp_path, monkeypatch, vector, ani, identity_label=True
     )
     assert standalone["vectorArtwork"] in [
         item["fingerprint"] for item in record["inputs"]
@@ -311,7 +317,7 @@ def test_native_vector_identity_survives_an_editable_lower_third_revision(
         parameters=job["authoringParameters"],
         artwork=artwork,
     )
-    _assert_pinned_native_source(
+    instance, project, retained_native = _assert_pinned_native_source(
         tmp_path, catalog.path, store, event, native, artwork=artwork
     )
     Path(standalone["vectorArtwork"]["locator"]).write_bytes(b"changed artwork")
@@ -319,6 +325,73 @@ def test_native_vector_identity_survives_an_editable_lower_third_revision(
         rendered["jobRef"], expected_head=rendered["head"]
     )
     assert inspection["status"] == "stale"
+    _render_retained_identity(
+        monkeypatch, ani, instance, project, retained_native, job["output"]
+    )
+
+
+def _render_retained_identity(monkeypatch, ani, instance, project, native, output):
+    from avo.adapters.artcraft_anicraft import inspect_lower_third_source
+
+    _, workspace, context = _video_context(
+        project.parent,
+        monkeypatch,
+        workspace=TimelineWorkspace.from_project(project),
+        component=instance["kitId"],
+    )
+    adapter, discovered, invoked = _selected_adapter(workspace.raw_dir, ani)
+    provider = workspace.project["provider"]
+    brief = request(provider=provider, componentId=instance["kitId"], context=context)
+    mark = native.parent / "identity.svg"
+    original = file_fingerprint(native)
+    artwork = file_fingerprint(mark)
+    selection = {key: instance[key] for key in ("instanceId", "instanceHash")}
+    spec = job_spec(
+        workspace.raw_dir,
+        cliPath=str(ani),
+        provider=provider,
+        document={"state": "saved", "source": str(native)},
+        authoringParameters=instance["parameters"],
+        output=output,
+        artworkRef=selection,
+        readRoots=[str(workspace.raw_dir)],
+    )
+    with pytest.raises(artcraft.ArtCraftError, match="selected kit instance"):
+        _prepare(
+            artcraft,
+            brief,
+            {**spec, "artworkRef": {**selection, "instanceHash": "0" * 64}},
+            adapter,
+        )
+    assert not discovered and not invoked
+    rendered = _run(_prepare(artcraft, brief, spec, adapter), adapter)
+    job, exported = artcraft.read_authoring_export(
+        rendered["jobRef"], expected_head=rendered["head"]
+    )
+    facts = inspect_lower_third_source(
+        Path(exported["saved"]["locator"]),
+        output,
+        instance["parameters"],
+        max_bytes=job["budget"]["bytes"],
+        artwork=artwork,
+    )
+    assert facts["editableText"] == "Mar\u00eda" and facts["identityVectorHash"]
+    assert file_fingerprint(native) == original
+    record = register_artcraft_export(
+        workspace,
+        job_ref=rendered["jobRef"],
+        expected_head=rendered["head"],
+        output=workspace.raw_dir / "edit" / "derived" / "retained-identity.mkv",
+        asset_id="retained-identity",
+    )
+    assert artwork in [item["fingerprint"] for item in record["inputs"]]
+    mark.write_bytes(b"changed retained SVG")
+    assert (
+        artcraft.inspect_authoring(rendered["jobRef"], expected_head=rendered["head"])[
+            "status"
+        ]
+        == "stale"
+    )
 
 
 def test_native_vector_emblem_becomes_an_editable_animation_and_proof_asset(
