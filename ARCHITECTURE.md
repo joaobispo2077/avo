@@ -670,6 +670,11 @@ An interrupted write retains bounded file fingerprints as reference material.
 Cancellation of an unstarted job uses the same event compare-and-swap and
 preserves the source copy. Owner reconciliation is required for active work.
 
+The ArtCraft inspection response lists changed recorded files and the review
+actions for each affected area. A checked AniCraft lower-third document also
+reports differences in its editable text and font. These observations leave
+the existing job and creator decision records intact.
+
 Native provider publication extends the existing animation catalog. The package
 reader checks its external root, byte fingerprints, declared source roles,
 review references, rights and local parameter schema before independent source

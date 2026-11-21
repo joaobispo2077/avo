@@ -49,6 +49,9 @@ Use `avo cli artcraft inspect --job <absolute-job-record> --expected-head
 <event-hash> --json` to compare the retained job document, inputs and output
 records against the current files. A video job also checks the project and
 canonical revisions. Inspection is read-only and can run in a fresh session.
+If evidence changed, inspection reports the affected files and the relevant
+rebuild or review actions. The AniCraft lower-third profile can also report
+edited text or font values from the selected native document.
 
 Use `avo cli artcraft recover --job <absolute-job-record> --expected-head
 <event-hash> --json` after an interrupted run. Recovery reports the next action
