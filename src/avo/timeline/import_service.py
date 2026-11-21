@@ -758,6 +758,97 @@ def _import_next_action(state):
     )
 
 
+def _filmcraft_exchange_inputs(job, event):
+    (exported,) = event["outputs"]
+    exchange = Path(exported["locator"])
+    if exchange.suffix != ".otio" or file_fingerprint(exchange) != exported:
+        raise ImportError(
+            "OTIO_SOURCE_CHANGED", "FilmCraft return is not the exact retained OTIO"
+        )
+    (source,) = job["inputs"]
+    original = Path(source["locator"])
+    if (
+        not original.is_absolute()
+        or original.resolve() != original
+        or file_fingerprint(original) != source
+    ):
+        raise ImportError(
+            "OTIO_SOURCE_CHANGED",
+            "FilmCraft original differs from its retained fingerprint",
+        )
+    report = inspect_export(exchange)
+    if report["source"]["sha256"] != exported["sha256"]:
+        raise ImportError(
+            "OTIO_SOURCE_CHANGED", "FilmCraft OTIO changed during inspection"
+        )
+    return exchange, original, report
+
+
+def _filmcraft_reference_findings(report, directory, original, losses):
+    if losses:
+        return [{"code": "FILMCRAFT_EXCHANGE_LOSS", "detail": loss} for loss in losses]
+    shape = report["summary"]
+    if (
+        report["truncated"]
+        or report["findings"]
+        or any(shape[key] for key in ("markers", "effects", "gaps", "transitions"))
+    ):
+        return [{"code": "FILMCRAFT_UNSUPPORTED_TREATMENT", "inventory": shape}]
+    if (shape["tracks"], shape["clips"], len(report["references"])) != (2, 2, 2):
+        return [{"code": "FILMCRAFT_UNSUPPORTED_TIMELINE", "inventory": shape}]
+    for reference in report["references"]:
+        if not _filmcraft_original_matches(reference, directory, original):
+            return [
+                {"code": "FILMCRAFT_ORIGINAL_MISMATCH", "pointer": reference["pointer"]}
+            ]
+    return []
+
+
+def _filmcraft_original_matches(reference, directory, original):
+    if not reference.get("targetUrl"):
+        return False
+    try:
+        selected = _local_reference(reference["targetUrl"])
+        return (directory / selected).resolve() == original
+    except (OSError, ValueError, RuntimeError):
+        return False
+
+
+def _filmcraft_mappings(references, original):
+    return {
+        value["pointer"]: {
+            "path": str(original),
+            "identityConfirmed": True,
+            "videoStreamIndex": 0,
+            "audioSelection": {
+                "streamIndex": 1,
+                "channels": [0, 1],
+                "sourceLayout": "stereo",
+                "outputLayout": "stereo",
+            },
+        }
+        for value in references
+    }
+
+
+def _filmcraft_declarations(job):
+    source, frame_rate = job["interchangeSource"], job["output"]["frameRate"]
+    return {
+        "sourceOnly": True,
+        "layoutMode": "placed",
+        "output": {
+            "width": source["width"],
+            "height": source["height"],
+            "frameRate": {
+                "num": frame_rate["numerator"],
+                "den": frame_rate["denominator"],
+            },
+            "audioSampleRate": 48000,
+            "channelLayout": "stereo",
+        },
+    }
+
+
 class TimelineImportService:
     def __init__(
         self,
@@ -1080,6 +1171,7 @@ class TimelineImportService:
         mappings=None,
         declarations=None,
         supersedes_import_id=None,
+        expected_source_sha256=None,
         actor,
         reason,
     ):
@@ -1091,7 +1183,13 @@ class TimelineImportService:
         predecessor, timeline = self._predecessor(supersedes_import_id, timeline)
         inventory = inspect_export(input_path, timeline=timeline)
         data, _, _ = read_export(input_path)
-        if hashlib.sha256(data).hexdigest() != inventory["source"]["sha256"]:
+        observed_sha256 = inventory["source"]["sha256"]
+        if hashlib.sha256(
+            data
+        ).hexdigest() != observed_sha256 or expected_source_sha256 not in (
+            None,
+            observed_sha256,
+        ):
             raise ImportError(
                 "OTIO_SOURCE_CHANGED", "Export changed during preparation"
             )
@@ -1138,6 +1236,49 @@ class TimelineImportService:
                 "Preparation was interrupted before canonical selection; retry the same input and options",
                 scope=import_id,
             ) from exc
+
+    def prepare_filmcraft_return(self, job, event, *, actor, reason):
+        """Stage and validate the selected FilmCraft return without activating it."""
+        from avo.artcraft import _FILM_RETURN_SCOPE
+
+        if (
+            job["decision"]["scope"] != _FILM_RETURN_SCOPE
+            or job["request"]["provider"] != self.provider
+            or job.get("videoId", self.workspace.video_id) != self.workspace.video_id
+        ):
+            raise ImportError(
+                "OTIO_TARGET_CONFLICT",
+                "FilmCraft return does not belong to this target",
+            )
+        exchange, original, report = _filmcraft_exchange_inputs(job, event)
+        differences = _filmcraft_reference_findings(
+            report, exchange.parent, original, event["interchangeEvidence"]["losses"]
+        )
+        if differences:
+            return {"status": "reference-only", "findings": differences}
+        prepared = self.prepare(
+            exchange,
+            expected_source_sha256=event["outputs"][0]["sha256"],
+            media_roots=[str(original.parent)],
+            mappings=_filmcraft_mappings(report["references"], original),
+            declarations=_filmcraft_declarations(job),
+            actor=actor,
+            reason=reason,
+        )
+        with fingerprint_stage(verify_on_exit=True):
+            if file_fingerprint(original) != job["inputs"][0]:
+                raise ImportError(
+                    "OTIO_SOURCE_CHANGED",
+                    "FilmCraft original changed before validation",
+                )
+            validated = self.validate(prepared["importId"])
+        if validated["status"] == "blocked":
+            return {
+                "status": "reference-only",
+                "importId": prepared["importId"],
+                "findings": validated["findings"],
+            }
+        return validated
 
     def _persist_prepared_packet(self, session, snapshot, data):
         import_id = session["importId"]

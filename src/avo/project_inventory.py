@@ -1002,12 +1002,23 @@ def _normalized_path_set(paths: list[Path]) -> set[str]:
     return {str(path.resolve()) for path in paths}
 
 
-def _cleanup_preserved(path, preserved_set):
+def _cleanup_preserved(path, preserved_set, *, publishing):
     # Kernel coordination must retain its inode, without becoming byte evidence.
-    return path.name == ".mutation.lock" or str(path.resolve()) in preserved_set
+    return (
+        publishing
+        or path.name == ".mutation.lock"
+        or str(path.resolve()) in preserved_set
+    )
 
 
 def scan_delete_candidates(
+    raw_dir: Path, preserved: PreservedSetResult
+) -> tuple[list[Path], int]:
+    raw_dir = raw_dir.resolve()
+    return _scan_delete_candidates(raw_dir, _with_shared_artcraft(raw_dir, preserved))
+
+
+def _scan_delete_candidates(
     raw_dir: Path, preserved: PreservedSetResult
 ) -> tuple[list[Path], int]:
     """Walk ``edit/`` for delete candidates. ``OSError`` skips increment leftover.
@@ -1016,7 +1027,8 @@ def scan_delete_candidates(
     ``<rawDir>/`` is a living audit (and is in ``TOP_LEVEL_EXCLUDE_NAMES``);
     ``edit/EDITLOG.md`` may still be disposable after migration.
     """
-    raw_dir = raw_dir.resolve()
+    from avo.timeline.artcraft_packages import is_native_publication_stage
+
     edit_dir = raw_dir / "edit"
     if not edit_dir.is_dir():
         return [], 0
@@ -1036,7 +1048,11 @@ def scan_delete_candidates(
 
                 CostStore(raw_dir).path(str(path.relative_to(edit_dir / "costs")))
                 continue
-            if _cleanup_preserved(path, preserved_set):
+            if _cleanup_preserved(
+                path,
+                preserved_set,
+                publishing=is_native_publication_stage(path.relative_to(edit_dir)),
+            ):
                 continue
             if path.is_file() and not path.is_symlink():
                 candidates.append(path)
@@ -1374,15 +1390,27 @@ def _path_still_present(path: Path) -> bool:
         return True
 
 
-def _merge_legacy_dests(
-    preserved: PreservedSetResult, dests: list[Path]
+def _merge_reconstruction_metadata(
+    preserved: PreservedSetResult, paths: list[Path]
 ) -> PreservedSetResult:
-    if not dests:
+    if not paths:
         return preserved
     return replace(
         preserved,
-        reconstruction_metadata=list(preserved.reconstruction_metadata) + list(dests),
+        reconstruction_metadata=list(preserved.reconstruction_metadata) + paths,
     )
+
+
+def _with_shared_artcraft(raw_dir, preserved):
+    from avo.timeline.artcraft_packages import shared_native_package_paths
+
+    try:
+        paths = list(shared_native_package_paths(raw_dir / "edit"))
+    except (OSError, ValueError, RuntimeError) as error:
+        raise PreservedSetViolation(
+            f"Cannot verify the shared ArtCraft library: {error}"
+        ) from error
+    return _merge_reconstruction_metadata(preserved, paths)
 
 
 def _execute_deletes(delete_list: list[Path], runner: Any) -> int:
@@ -1518,12 +1546,12 @@ def _run_guarded_cleanup(
     preserved = _cleanup_preserved_set(
         raw_dir, master_basename, initial_transcript, project_path=project_path
     )
-
     dests = promote_legacy_reconstruction(
         raw_dir, apply=not dry_run, project_path=project_path
     )
-    preserved = _merge_legacy_dests(preserved, dests)
+    preserved = _merge_reconstruction_metadata(preserved, dests)
     delete_list, leftover = scan_delete_candidates(raw_dir, preserved)
+    preserved = _with_shared_artcraft(raw_dir, preserved)
     if not known_target:
         _refuse_unknown_canonical_candidates(raw_dir, delete_list)
     assert_no_preserved_in_delete_list(preserved, delete_list)

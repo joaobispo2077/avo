@@ -152,10 +152,19 @@ class ComponentInstanceService:
         safe_area_bindings,
         source_observer,
         supersedes_instance_id=None,
+        source_provider=None,
     ):
         """Pin and copy a provider-authored native source for this video only."""
-        from .artcraft_packages import retain_native_instance_sources
+        from .artcraft_packages import (
+            native_instance_identity,
+            retain_native_instance_sources,
+        )
 
+        provider = self.workspace.project.get("provider")
+        if not provider:
+            raise ComponentInstanceError(
+                "A current video provider is required for native reuse"
+            )
         instance_path = self.path(instance_id)
         package, evidence = self._selected_native_package(
             catalog_path,
@@ -164,6 +173,8 @@ class ComponentInstanceService:
             version,
             manifest_hash,
             source_observer,
+            provider=provider,
+            source_provider=source_provider,
         )
         root = Path(self.workspace.raw_dir).resolve()
         target = root / "edit" / "derived" / "provider-components" / instance_id
@@ -178,11 +189,7 @@ class ComponentInstanceService:
                 "assetBindings": asset_bindings,
                 "eventBindings": event_bindings,
                 "safeAreaBindings": safe_area_bindings,
-                "nativePackage": {
-                    "provider": package["provider"],
-                    "app": package["app"],
-                    "packageHash": package["packageHash"],
-                },
+                "nativePackage": native_instance_identity(package, provider),
                 "generatedFiles": [
                     {
                         "path": str(target / "files" / item["path"]),
@@ -235,10 +242,24 @@ class ComponentInstanceService:
             raise ComponentInstanceError(
                 "Select a provider design reviewed with this font"
             )
-        text = resolved["primaryText"]
-        if not text.strip() or any(char in text for char in "\r\n\0—"):
-            raise ComponentInstanceError("Choose one nonempty lower-third label")
+        if resolved.get("motion") != defaults.get("motion"):
+            raise ComponentInstanceError(
+                "Select a provider design reviewed with this motion"
+            )
+        self._require_native_label_lines(resolved)
         return resolved
+
+    @staticmethod
+    def _require_native_label_lines(parameters):
+        for field, label in (
+            ("primaryText", "lower-third label"),
+            ("secondaryText", "secondary lower-third label"),
+        ):
+            text = parameters.get(field)
+            if text is not None and (
+                not text.strip() or any(char in text for char in "\r\n\0—")
+            ):
+                raise ComponentInstanceError(f"Choose one nonempty {label}")
 
     def _require_same_native_instance(self, path, document, evidence):
         if not path.is_file():
@@ -281,6 +302,9 @@ class ComponentInstanceService:
         version,
         manifest_hash,
         source_observer,
+        *,
+        provider,
+        source_provider=None,
     ):
         from avo.artcraft import ArtCraftError
 
@@ -288,18 +312,15 @@ class ComponentInstanceService:
         from .artcraft_packages import (
             native_catalog_manifest,
             read_retained_provider_package,
+            require_native_sharing,
         )
         from .provider_animation import ProviderAnimationService
 
-        provider = self.workspace.project.get("provider")
-        if not provider:
-            raise ComponentInstanceError(
-                "A current video provider is required for native reuse"
-            )
         path = Path(catalog_path)
         if path.resolve() != path:
             raise ComponentInstanceError("Choose the exact absolute provider catalog")
-        service = ProviderAnimationService(path, provider=provider)
+        origin = provider if source_provider is None else source_provider
+        service = ProviderAnimationService(path, provider=origin)
         try:
             pattern = service.resolve_version(kit_id, version)
             if (pattern.get("manifest") or {}).get("sha256") != manifest_hash:
@@ -309,10 +330,11 @@ class ComponentInstanceService:
                 raise ComponentInstanceError("Select a published native provider kit")
             package, evidence = read_retained_provider_package(
                 native_store,
-                provider=provider,
+                provider=origin,
                 package_hash=metadata["packageHash"],
                 source_observer=source_observer,
             )
+            require_native_sharing(origin, provider, evidence["rights"])
         except (ArtCraftError, AnimationError, ContractError, OSError) as exc:
             raise ComponentInstanceError(str(exc)) from exc
         manifest = native_catalog_manifest(package, evidence)

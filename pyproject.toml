@@ -85,6 +85,7 @@ norecursedirs = [
 markers = [
     "slow: downloads models or heavy IO (orchestrator-smoke only)",
     "integration: crosses script/subprocess boundaries",
+    "native_artcraft: opt-in execution against an installed ArtCraft application",
     "project: footage-project or spec-scoped edit tests (excluded from default CI)",
 ]
 

@@ -11,7 +11,7 @@ from avo.timeline.component_instances import (
     ComponentInstanceError,
     ComponentInstanceService,
 )
-from avo.timeline.contracts import content_hash
+from avo.timeline.contracts import content_hash, file_fingerprint
 from avo.timeline.provider_animation import ProviderAnimationService
 from tests.artcraft_fixtures import picture_output
 from tests.test_artcraft_provider_packages import (
@@ -23,18 +23,51 @@ from tests.test_artcraft_provider_packages import (
 
 @pytest.fixture
 def native_library(tmp_path):
+    return _published_native_library(
+        tmp_path, "first-channel", b"\x00\xffeditable-provider-file"
+    )
+
+
+def _published_native_library(tmp_path, provider, source_bytes, *, share_with=()):
+    from avo.artcraft import seal_record
+
     source = tmp_path / "native-source"
-    source.mkdir()
+    source.mkdir(parents=True)
     native = source / "component.anicraft"
-    native.write_bytes(b"\x00\xffeditable-provider-file")
+    native.write_bytes(source_bytes)
     (source / "recipe.json").write_text("{}", encoding="utf-8")
     package = _package_from_retained_source(
         native, picture_output(), {"primaryText": "Fixture", "font": "Arial"}
     )
+    if share_with:
+        rights = source / package["rightsRef"]
+        entries = json.loads(rights.read_text(encoding="utf-8"))
+        entries[0]["sharing"] = {
+            "providers": list(share_with),
+            "evidenceRef": "fixture-license",
+        }
+        rights.write_text(json.dumps(entries), encoding="utf-8")
+        fingerprint = file_fingerprint(rights)
+        manifest_entry = next(
+            item for item in package["files"] if item["path"] == rights.name
+        )
+        manifest_entry.update(
+            {key: fingerprint[key] for key in ("sha256", "sizeBytes")}
+        )
+    if package["provider"] != provider or share_with:
+        package = seal_record(
+            "package",
+            {
+                **{
+                    key: value for key, value in package.items() if key != "packageHash"
+                },
+                "provider": provider,
+            },
+        )
     store = tmp_path / "native-store"
     store.mkdir()
     service = ProviderAnimationService(
-        tmp_path / "catalog" / "library.json", provider="first-channel"
+        tmp_path / "catalog" / "library.json", provider=provider
     )
     pattern = _native_pattern()
     for key in ("nativePackage", "provenance", "promotionEventId"):
@@ -125,6 +158,102 @@ def test_pinned_native_instances_copy_owned_source_and_keep_parameter_revisions_
         first.implementation_reference(one["instanceId"], adapter_id="hyperframes")
 
 
+def test_same_named_native_kits_resolve_within_their_approved_provider(
+    tmp_path, native_library
+):
+    first = _video_components(tmp_path / "first-channel-video")
+    other = _video_components(
+        tmp_path / "second-channel-video", provider="other-channel"
+    )
+    other_library = _published_native_library(
+        tmp_path / "other-library", "other-channel", b"\x00\xffanother-author-native"
+    )
+    first_pin = _resolve(first, native_library)
+    other_pin = _resolve(other, other_library)
+    assert (first_pin["kitId"], first_pin["kitVersion"]) == (
+        other_pin["kitId"],
+        other_pin["kitVersion"],
+    )
+    assert first_pin["nativePackage"]["provider"] == "first-channel"
+    assert other_pin["nativePackage"]["provider"] == "other-channel"
+    assert (
+        first_pin["nativePackage"]["packageHash"]
+        != other_pin["nativePackage"]["packageHash"]
+    )
+    with pytest.raises(ComponentInstanceError, match="another provider"):
+        _resolve(first, other_library, instance_id="foreign-version")
+    with pytest.raises(ComponentInstanceError, match="manifest hash"):
+        _resolve(
+            first,
+            native_library,
+            instance_id="foreign-hash",
+            manifest_hash=other_library[2],
+        )
+    assert not first.path("foreign-version").exists()
+    assert not first.path("foreign-hash").exists()
+
+
+def test_cross_provider_pin_requires_explicit_origin_and_fingerprinted_rights(tmp_path):
+    from avo.artcraft import ArtCraftError
+    from avo.timeline.artcraft_packages import retained_native_instance_files
+
+    shared = _published_native_library(
+        tmp_path / "original",
+        "first-channel",
+        b"published native bytes",
+        share_with=("second-channel",),
+    )
+    recipient = _video_components(tmp_path / "recipient", provider="second-channel")
+    outsider = _video_components(tmp_path / "outsider", provider="third-channel")
+    with pytest.raises(ComponentInstanceError, match="provider"):
+        _resolve(recipient, shared)
+    with pytest.raises(ComponentInstanceError, match="sharing rights"):
+        _resolve(outsider, shared, source_provider="first-channel")
+    assert not outsider.directory.exists()
+
+    instance = _resolve(recipient, shared, source_provider="first-channel")
+    assert instance["nativePackage"]["provider"] == "first-channel"
+    assert instance["nativePackage"]["sharedWith"] == "second-channel"
+    assert instance["reviewRefs"] == []
+    assert _resolve(recipient, shared, source_provider="first-channel") == instance
+    retained = retained_native_instance_files(
+        instance, recipient.workspace.raw_dir, "second-channel"
+    )
+    rights = next(
+        Path(item["locator"])
+        for item in retained
+        if item["locator"].endswith("rights.json")
+    )
+    assert json.loads(rights.read_bytes())[0]["sharing"]["providers"] == [
+        "second-channel"
+    ]
+    assert _resolve(_video_components(tmp_path / "original-project"), shared)[
+        "nativePackage"
+    ] == {
+        key: value
+        for key, value in instance["nativePackage"].items()
+        if key != "sharedWith"
+    }
+    with pytest.raises(ArtCraftError, match="pinned video instance"):
+        retained_native_instance_files(
+            instance, recipient.workspace.raw_dir, "third-channel"
+        )
+    rights.write_bytes(rights.read_bytes() + b"\n")
+    with pytest.raises(ArtCraftError, match="source has changed"):
+        retained_native_instance_files(
+            instance, recipient.workspace.raw_dir, "second-channel"
+        )
+
+
+def test_provider_package_rejects_wildcard_sharing(tmp_path):
+    from avo.artcraft import ArtCraftError
+
+    with pytest.raises(ArtCraftError, match="exact provider names"):
+        _published_native_library(
+            tmp_path, "first-channel", b"test fixture", share_with=("*",)
+        )
+
+
 def test_reuse_refuses_wrong_provider_manifest_and_unbounded_parameters(
     tmp_path, native_library
 ):
@@ -144,6 +273,59 @@ def test_reuse_refuses_wrong_provider_manifest_and_unbounded_parameters(
     with pytest.raises(ComponentInstanceError, match="nonempty lower-third label"):
         _resolve(own, native_library, parameters={"primaryText": " "})
     assert not own.path("speaker-first-use").exists()
+
+
+def test_native_instance_applies_an_approved_secondary_slot_default(tmp_path):
+    service = _video_components(tmp_path / "second-line-video")
+    evidence = {
+        "fixtureParameters": {
+            "primaryText": "Clara",
+            "font": "Arial",
+            "secondaryText": "Producer",
+        },
+        "parameterSchema": {
+            "type": "object",
+            "properties": {
+                "primaryText": {"type": "string"},
+                "secondaryText": {"type": "string", "maxLength": 48},
+            },
+            "additionalProperties": False,
+        },
+    }
+    assert service._native_instance_parameters({"primaryText": "Carlos"}, evidence) == {
+        "primaryText": "Carlos",
+        "font": "Arial",
+        "secondaryText": "Producer",
+    }
+    with pytest.raises(
+        ComponentInstanceError, match="nonempty secondary lower-third label"
+    ):
+        service._native_instance_parameters({"secondaryText": " "}, evidence)
+
+
+def test_provider_pin_uses_the_reviewed_motion_variant(tmp_path):
+    service = _video_components(tmp_path / "fixed-hold")
+    evidence = {
+        "fixtureParameters": {"primaryText": "Host", "font": "Arial", "motion": "hold"},
+        "parameterSchema": {
+            "type": "object",
+            "properties": {
+                "primaryText": {"type": "string"},
+                "motion": {"type": "string"},
+            },
+        },
+    }
+    assert service._native_instance_parameters({"primaryText": "Clara"}, evidence) == {
+        "primaryText": "Clara",
+        "font": "Arial",
+        "motion": "hold",
+    }
+    slide_review = {
+        **evidence,
+        "fixtureParameters": {"primaryText": "Host", "font": "Arial"},
+    }
+    with pytest.raises(ComponentInstanceError, match="reviewed with this motion"):
+        service._native_instance_parameters({"motion": "hold"}, slide_review)
 
 
 def test_native_upgrade_is_explicit_and_keeps_the_original_pin(

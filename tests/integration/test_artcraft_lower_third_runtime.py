@@ -11,7 +11,7 @@ from tests.artcraft_fixtures import picture_output, request
 
 from avo.timeline.contracts import file_fingerprint
 
-pytestmark = pytest.mark.integration
+pytestmark = [pytest.mark.integration, pytest.mark.native_artcraft]
 
 
 def _job_contract():
@@ -86,6 +86,126 @@ def test_installed_anicraft_portrait_lower_third_uses_safe_mobile_placement(tmp_
             assert blank.getchannel("A").getbbox() is None
 
 
+@pytest.mark.parametrize(
+    "width,height,reduced", [(640, 360, False), (360, 640, False), (360, 640, True)]
+)
+def test_installed_anicraft_revises_both_selected_text_slots(
+    tmp_path, monkeypatch, width, height, reduced
+):
+    from tests.test_artcraft_jobs import _prepare, job_spec
+
+    from avo import artcraft, init_project
+    from avo.adapters.artcraft import SelectedArtCraftAdapter
+    from avo.adapters.artcraft_anicraft import inspect_lower_third_source
+
+    entry = os.environ.get("AVO_ARTCRAFT_ANICRAFT_TEST_CLI")
+    if not entry:
+        pytest.skip("Select the installed AniCraft 0.2.1 CLI")
+    executable = Path(entry).resolve(strict=True)
+    monkeypatch.setattr(init_project, "load_provider", lambda slug: {"slug": slug})
+
+    def invoke(binary, roots, directory, arguments, *, env, timeout):
+        assert binary["locator"] == str(executable)
+        assert directory.is_relative_to(Path(roots["write"][0]))
+        return subprocess.run(
+            [str(executable), *map(str, arguments)],
+            cwd=directory,
+            env=env,
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            check=True,
+            timeout=timeout,
+        ).stdout
+
+    adapter = SelectedArtCraftAdapter(
+        observe_confinement=lambda _tool, roots: roots, run_confined=invoke
+    )
+    output = {**_job_contract(), "width": width, "height": height}
+    motion = {"motion": "hold"} if reduced else {}
+    original = {
+        "primaryText": "Clara",
+        "secondaryText": "Producer",
+        "font": "Arial",
+        **motion,
+    }
+    first = _prepare(
+        artcraft,
+        request(),
+        job_spec(
+            tmp_path,
+            jobId="two-text-slots",
+            cliPath=str(executable),
+            output=output,
+            authoringParameters=original,
+        ),
+        adapter,
+    )
+    rendered = artcraft.run_authoring(
+        first["jobRef"], expected_head=first["head"], adapter=adapter
+    )
+    _, event = artcraft.read_authoring_export(
+        first["jobRef"], expected_head=rendered["head"]
+    )
+    source = Path(event["saved"]["locator"])
+    fingerprint = file_fingerprint(source)
+    assert (
+        inspect_lower_third_source(source, output, original, max_bytes=4_000_000)[
+            "editableSecondaryText"
+        ]
+        == "Producer"
+    )
+
+    revised = {
+        "primaryText": "Carlos",
+        "secondaryText": "Editor",
+        "font": "Arial",
+        **motion,
+    }
+    second = _prepare(
+        artcraft,
+        request(),
+        job_spec(
+            tmp_path,
+            jobId="revise-two-text-slots",
+            cliPath=str(executable),
+            output=output,
+            authoringParameters=revised,
+            readRoots=[str(source.parent)],
+            document={"state": "saved", "source": str(source)},
+        ),
+        adapter,
+    )
+    rerendered = artcraft.run_authoring(
+        second["jobRef"], expected_head=second["head"], adapter=adapter
+    )
+    _, returned = artcraft.read_authoring_export(
+        second["jobRef"], expected_head=rerendered["head"]
+    )
+    inspection = inspect_lower_third_source(
+        Path(returned["saved"]["locator"]), output, revised, max_bytes=4_000_000
+    )
+    assert (inspection["editableText"], inspection["editableSecondaryText"]) == (
+        "Carlos",
+        "Editor",
+    )
+    assert event["outputs"][8]["sha256"] != returned["outputs"][8]["sha256"]
+    if reduced:
+        assert inspection["motion"] == "hold"
+        with pytest.raises(artcraft.ArtCraftError, match="motion differs"):
+            inspect_lower_third_source(
+                Path(returned["saved"]["locator"]),
+                output,
+                {key: value for key, value in revised.items() if key != "motion"},
+                max_bytes=4_000_000,
+            )
+        assert len({item["sha256"] for item in returned["outputs"][3:23]}) == 1
+        with Image.open(returned["outputs"][2]["locator"]) as before:
+            assert before.getchannel("A").getbbox() is None
+        with Image.open(returned["outputs"][23]["locator"]) as after:
+            assert after.getchannel("A").getbbox() is None
+    assert file_fingerprint(source) == fingerprint
+
+
 def test_installed_anicraft_saves_reopens_and_reconstructs_a_transparent_label(
     tmp_path,
 ):
@@ -143,7 +263,10 @@ def test_installed_anicraft_saves_reopens_and_reconstructs_a_transparent_label(
     assert source["fingerprint"] == original
     assert source["editableText"] == "Clara Caf\u00e9"
     assert source["fontFamily"] == "Arial"
-    _publish_fixture_package(tmp_path, native, output, inspect_lower_third_source)
+    provider, store, event = _publish_fixture_package(
+        tmp_path, native, output, inspect_lower_third_source
+    )
+    _assert_pinned_native_source(tmp_path, provider.path, store, event, native)
     from avo.adapters.media.artcraft_alpha import pack_alpha_sequence
 
     packed_path = tmp_path / "component.mkv"
@@ -199,24 +322,34 @@ def test_installed_anicraft_saves_reopens_and_reconstructs_a_transparent_label(
     assert next_result["frames"][8]["sha256"] != result["frames"][8]["sha256"]
 
 
-def _publish_fixture_package(tmp_path, native, output, inspect_source):
+def _publish_fixture_package(
+    tmp_path, native, output, inspect_source, *, version="1.0.0", parameters=None
+):
     from tests.test_artcraft_provider_packages import (
         _native_pattern,
         _package_from_retained_source,
     )
 
+    from avo.artcraft import seal_record
     from avo.timeline.contracts import content_hash
     from avo.timeline.provider_animation import ProviderAnimationService
 
     package = _package_from_retained_source(
-        native, output, {"primaryText": "Clara Caf\u00e9", "font": "Arial"}
+        native,
+        output,
+        parameters or {"primaryText": "Clara Caf\u00e9", "font": "Arial"},
     )
+    if version != package["componentVersion"]:
+        del package["packageHash"]
+        package["componentVersion"] = version
+        package = seal_record("package", package)
     store = tmp_path / "native-store"
-    store.mkdir()
+    store.mkdir(exist_ok=True)
     service = ProviderAnimationService(
         tmp_path / "provider" / "animation-library.json", provider="first-channel"
     )
     pattern = _native_pattern()
+    pattern["version"] = version
     for key in ("nativePackage", "provenance", "promotionEventId"):
         del pattern[key]
     options = {
@@ -241,12 +374,12 @@ def _publish_fixture_package(tmp_path, native, output, inspect_source):
     published = store / event["publishedPath"] / "files" / native.name
     assert published.read_bytes() == native.read_bytes()
     assert (
-        service.resolve_version("speaker-label", "1.0.0")["nativePackage"][
+        service.resolve_version("speaker-label", version)["nativePackage"][
             "packageHash"
         ]
         == package["packageHash"]
     )
-    _assert_pinned_native_source(tmp_path, service.path, store, event, native)
+    return service, store, event
 
 
 def _assert_pinned_native_source(tmp_path, catalog_path, store, event, native):
@@ -416,7 +549,8 @@ def test_installed_anicraft_guided_job_round_trips_through_avo_commands(
     assert len(list((handoff_ref.parent / "white").glob("*.png"))) == 24
 
 
-def _register_native_overlay(tmp_path, monkeypatch, cli):
+def _register_native_overlay(tmp_path, monkeypatch, cli, *, mode="cli"):
+    from tests.integration.test_artcraft_modes_runtime import _fixture_stream
     from tests.test_artcraft_jobs import _overlay_snapshots, job_spec
 
     from avo import artcraft, init_project, motion
@@ -469,6 +603,7 @@ def _register_native_overlay(tmp_path, monkeypatch, cli):
     adapter = SelectedArtCraftAdapter(
         observe_confinement=lambda _installed, roots: roots,
         run_confined=fixture_runner,
+        open_confined=_fixture_stream,
     )
     brief = request(
         context={
@@ -480,6 +615,7 @@ def _register_native_overlay(tmp_path, monkeypatch, cli):
     intent = artcraft.ArtCraftIntent("explicit", "anicraft", ("lower-third",))
     specification = job_spec(
         tmp_path,
+        mode=mode,
         output=_job_contract(),
         cliPath=str(cli),
         appPath=str(cli.with_name("anicraft.exe")),
@@ -538,8 +674,9 @@ def _register_native_overlay(tmp_path, monkeypatch, cli):
     return workspace, heads, record, job["jobRef"], rendered["head"]
 
 
+@pytest.mark.parametrize("mode", ["cli", "json-lines"])
 def test_installed_anicraft_overlay_contributes_to_full_and_window_proofs(
-    tmp_path, monkeypatch
+    tmp_path, monkeypatch, mode
 ):
     from fractions import Fraction
 
@@ -564,7 +701,7 @@ def test_installed_anicraft_overlay_contributes_to_full_and_window_proofs(
         )
     cli = Path(entry).resolve(strict=True)
     workspace, heads, record, job_ref, event_head = _register_native_overlay(
-        tmp_path, monkeypatch, cli
+        tmp_path, monkeypatch, cli, mode=mode
     )
     execution = _conformance(_execution(tmp_path, fps=Fraction(24)))
     native_output = tmp_path / "native-source-test.mkv"

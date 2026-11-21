@@ -38,11 +38,15 @@ def configure(sub):
     for operation, hint in (
         ("inspect", "Reconcile retained job evidence"),
         ("run", "Execute a prepared native job"),
-        ("recover", "Read retained evidence for an interrupted job"),
+        ("recover", "Inspect, retry or cancel a selected authoring job"),
     ):
         command = operations.add_parser(operation, help=hint)
         command.add_argument("--job", required=True)
         command.add_argument("--expected-head", required=True)
+        if operation == "recover":
+            command.add_argument(
+                "--action", choices=("inspect", "retry", "cancel"), default="inspect"
+            )
         command.add_argument("--json", action="store_true")
     register = operations.add_parser(
         "register", help="Register a verified ArtCraft export for one video"
@@ -58,6 +62,12 @@ def configure(sub):
     for field in ("project", "asset-id", "materialization"):
         review.add_argument(f"--{field}")
     review.add_argument("--json", action="store_true")
+    interchange = operations.add_parser(
+        "import-timeline", help="Validate the retained FilmCraft exchange"
+    )
+    for field in ("project", "job", "expected-head", "actor", "reason"):
+        interchange.add_argument(f"--{field}", required=True)
+    interchange.add_argument("--json", action="store_true")
     _provider_commands(operations)
 
 
@@ -95,6 +105,9 @@ def _provider_commands(operations):
         instantiate.add_argument(f"--{field}", required=True)
     instantiate.add_argument("--json", action="store_true")
     instantiate.add_argument("--supersedes", help="Explicitly upgrade a prior instance")
+    instantiate.add_argument(
+        "--source-provider", help="Explicitly select an approved sharing origin"
+    )
 
 
 def _distinct_keys(pairs):
@@ -356,6 +369,7 @@ def _instantiate_native_provider(args, source_observer):
             safe_area_bindings=bindings["safeAreaBindings"],
             source_observer=source_observer,
             supersedes_instance_id=args.supersedes,
+            source_provider=args.source_provider,
         )
     except (ComponentInstanceError, StoreError, WorkspaceError) as exc:
         raise ArtCraftError(str(exc), code="ARTCRAFT_INSTANCE_UNAVAILABLE") from exc
@@ -381,17 +395,31 @@ def _register_export(args):
 
 
 def _read_job(args):
-    if args.artcraft_operation == "recover":
-        from avo.artcraft import recover_authoring
-
-        return recover_authoring(args.job, expected_head=args.expected_head)
     from avo.adapters.artcraft import SelectedArtCraftAdapter
-    from avo.artcraft import inspect_authoring
+    from avo.artcraft import inspect_authoring, recover_authoring
 
+    if args.artcraft_operation == "recover":
+        selected = SelectedArtCraftAdapter() if args.action == "retry" else None
+        return recover_authoring(
+            args.job,
+            expected_head=args.expected_head,
+            action=args.action,
+            adapter=selected,
+        )
     return inspect_authoring(
         args.job,
         expected_head=args.expected_head,
         source_inspector=SelectedArtCraftAdapter.inspect_returned_source,
+    )
+
+
+def _import_timeline(args):
+    from avo.artcraft import read_authoring_export
+    from avo.timeline_import_cli import create_service
+
+    job, event = read_authoring_export(args.job, expected_head=args.expected_head)
+    return create_service(args).prepare_filmcraft_return(
+        job, event, actor=args.actor, reason=args.reason
     )
 
 
@@ -416,8 +444,9 @@ def run(args):
             )
         elif args.artcraft_operation == "register":
             result = _register_export(args)
-        elif args.artcraft_operation == "review":
-            result = _review_export(args)
+        elif args.artcraft_operation in {"review", "import-timeline"}:
+            handlers = {"review": _review_export, "import-timeline": _import_timeline}
+            result = handlers[args.artcraft_operation](args)
         elif args.artcraft_operation in {
             "provider-propose",
             "provider-publish",

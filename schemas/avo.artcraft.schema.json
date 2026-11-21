@@ -230,7 +230,9 @@
       "type": "object", "additionalProperties": false, "required": ["primaryText", "font"],
       "properties": {
         "primaryText": { "type": "string", "minLength": 1, "maxLength": 64 },
-        "font": { "type": "string", "minLength": 1, "maxLength": 128 }
+        "font": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "secondaryText": { "type": "string", "minLength": 1, "maxLength": 48 },
+        "motion": { "const": "hold" }
       }
     },
     "soundCue": {
@@ -238,6 +240,27 @@
       "properties": {
         "source": { "$ref": "#/$defs/text" },
         "effect": { "const": "room-reverb" }
+      }
+    },
+    "photoSource": {
+      "type": "object", "additionalProperties": false, "required": ["source"],
+      "properties": { "source": { "$ref": "#/$defs/text" } }
+    },
+    "interchangeSource": {
+      "type": "object", "additionalProperties": false, "required": ["source", "width", "height"],
+      "properties": {
+        "source": { "$ref": "#/$defs/text" },
+        "width": { "type": "integer", "minimum": 1, "maximum": 3840 },
+        "height": { "type": "integer", "minimum": 1, "maximum": 3840 }
+      }
+    },
+    "interchangeEvidence": {
+      "type": "object", "additionalProperties": false, "required": ["losses"],
+      "properties": {
+        "losses": {
+          "type": "array", "maxItems": 64,
+          "items": { "type": "string", "minLength": 1, "maxLength": 2048 }
+        }
       }
     },
     "audioEvidence": {
@@ -297,6 +320,10 @@
         "appPath": { "$ref": "#/$defs/text" },
         "authoringParameters": { "$ref": "#/$defs/lowerThirdParameters" },
         "soundCue": { "$ref": "#/$defs/soundCue" },
+        "photoSource": { "$ref": "#/$defs/photoSource" },
+        "effectFont": { "$ref": "#/$defs/text" },
+        "interchangeSource": { "$ref": "#/$defs/interchangeSource" },
+        "artworkRef": { "$ref": "#/$defs/exportRef" },
         "output": { "$ref": "#/$defs/output" },
         "budget": { "$ref": "#/$defs/budget" }
       }
@@ -316,6 +343,10 @@
         "documentState": { "enum": ["empty", "saved"] },
         "authoringParameters": { "$ref": "#/$defs/lowerThirdParameters" },
         "soundCue": { "$ref": "#/$defs/soundCue" },
+        "photoSource": { "$ref": "#/$defs/photoSource" },
+        "effectFont": { "$ref": "#/$defs/text" },
+        "interchangeSource": { "$ref": "#/$defs/interchangeSource" },
+        "artworkRef": { "$ref": "#/$defs/exportRef" },
         "projectFingerprint": { "$ref": "#/$defs/fingerprint" },
         "canonicalHeads": { "type": "object", "maxProperties": 12, "propertyNames": { "$ref": "#/$defs/id" }, "additionalProperties": { "$ref": "#/$defs/hash" } },
         "inputs": { "type": "array", "maxItems": 16384, "items": { "$ref": "#/$defs/fingerprint" } },
@@ -339,13 +370,17 @@
         "recipe": { "$ref": "#/$defs/fingerprint" },
         "handoff": { "$ref": "#/$defs/fingerprint" },
         "outputs": { "type": "array", "maxItems": 16384, "items": { "$ref": "#/$defs/fingerprint" } },
+        "partialFiles": { "type": "array", "maxItems": 16384, "items": { "$ref": "#/$defs/fingerprint" } },
         "dependencies": { "type": "array", "maxItems": 16, "items": { "$ref": "#/$defs/fingerprint" } },
         "audioEvidence": { "$ref": "#/$defs/audioEvidence" },
         "stillEvidence": { "$ref": "#/$defs/stillEvidence" },
+        "interchangeEvidence": { "$ref": "#/$defs/interchangeEvidence" },
         "createdBytes": { "$ref": "#/$defs/count" },
         "detail": { "$ref": "#/$defs/text" },
         "eventHash": { "$ref": "#/$defs/hash" }
-      }
+      },
+      "if": { "required": ["partialFiles"] },
+      "then": { "properties": { "state": { "enum": ["outcome-unknown", "cancelled"] } } }
     },
     "eventIndex": {
       "type": "object", "additionalProperties": false,
