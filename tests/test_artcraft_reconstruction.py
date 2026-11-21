@@ -137,6 +137,15 @@ def test_reconstruction_retains_selected_native_job_and_its_journal(
     assert (
         verify_reconstruction_bundle(tmp_path)["bundleSha256"] == bundle["bundleSha256"]
     )
+    native_hash = file_fingerprint(native)
+    workspace.store("bmap").append_revision(
+        snapshot={"kind": "bmap", "selection": "changed"},
+        actor="fixture",
+        reason="Change the canonical beat map after freezing the bundle",
+    )
+    with pytest.raises(ReconstructionError, match="bmap.json"):
+        verify_reconstruction_bundle(tmp_path)
+    assert file_fingerprint(native) == native_hash
 
 
 def test_reconstruction_checks_a_selected_native_input_outside_the_video_root(
@@ -169,6 +178,14 @@ def test_reconstruction_checks_a_selected_native_input_outside_the_video_root(
     )
     assert bundle["externalArtCraftInputs"] == [file_fingerprint(separate_source)]
     assert prepared["job"]["document"] in {item["path"] for item in bundle["files"]}
+    assert verify_reconstruction_bundle(raw)["bundleSha256"] == bundle["bundleSha256"]
+    alias = tmp_path / "other-owner.anicraft"
+    alias.hardlink_to(separate_source)
+    try:
+        with pytest.raises(ReconstructionError, match="Retained ArtCraft file changed"):
+            verify_reconstruction_bundle(raw)
+    finally:
+        alias.unlink()
     assert verify_reconstruction_bundle(raw)["bundleSha256"] == bundle["bundleSha256"]
     separate_source.write_bytes(b"externally edited native source")
     with pytest.raises(ReconstructionError, match="Retained ArtCraft file changed"):
