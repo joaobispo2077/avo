@@ -1229,14 +1229,91 @@ def inspect_authoring(job_ref, *, expected_head, source_inspector=None):
     """Reconcile retained job evidence without changing files or starting an app."""
     store, job, head = _open_selected_job(job_ref, expected_head)
     result = _inspection_result(store, job, head)
+    if result["status"] == "stale":
+        result["changes"] = _describe_authoring_changes(
+            job, head, result["checks"], source_inspector
+        )
+        return result
     if (
         source_inspector is not None
-        and result["status"] == "current"
         and result["checks"]["nativeDocument"] == "returned-unverified"
     ):
         native = store.workspace / job["document"]
         result["sourceObservations"] = source_inspector(job, native)
     return result
+
+
+def _describe_authoring_changes(job, head, checks, source_inspector):
+    roots = job["roots"]
+    targets = _recorded_authoring_files(job, head)
+    actions = {
+        "project": ["revalidate-placement", "review-proof-context"],
+        "inputs": ["rebuild-from-current-inputs", "review-native-design"],
+        "nativeDocument": ["author-new-revision", "review-native-design"],
+        "outputs": ["rebuild-export", "review-export"],
+        "handoff": ["reconcile-operator-handoff"],
+    }
+    changes = []
+    for area, required in actions.items():
+        if checks.get(area) != "changed":
+            continue
+        files = [
+            item
+            for item in targets[area]
+            if item and not _retained_job_file(item, roots["read"])
+        ]
+        change = {"area": area, "recordedFiles": files, "actions": required}
+        if area == "nativeDocument" and files:
+            parameters = _inspect_edited_parameters(job, files[0], source_inspector)
+            if parameters:
+                change["parameterChanges"] = parameters
+        changes.append(change)
+    return changes
+
+
+def _recorded_authoring_files(job, head):
+    prior = []
+    if job.get("documentState") == "saved" and job["inputs"]:
+        owned_source = Path(job["workspace"]) / job["document"]
+        prior = [{**job["inputs"][0], "locator": str(owned_source)}]
+    return {
+        "project": [],  # Project or canonical revisions may have changed.
+        "inputs": job["inputs"],
+        "nativeDocument": [head.get("saved"), *prior],
+        "outputs": [
+            head.get("recipe"),
+            *head.get("outputs", []),
+            *head.get("dependencies", []),
+        ],
+        "handoff": [head.get("handoff")],
+    }
+
+
+def _inspect_edited_parameters(job, reference, source_inspector):
+    parameters = job.get("authoringParameters")
+    scope = job["decision"]["scope"]
+    if (
+        not parameters
+        or source_inspector is None
+        or scope != {"app": "anicraft", "operations": ["lower-third"]}
+    ):
+        return []
+    path = Path(reference["locator"])
+    owned = Path(job["workspace"]) / job["document"]
+    if path not in {owned, owned.parent / "revision" / owned.name}:
+        return []
+    try:
+        _bounded_path(
+            _owning_root(path, job["roots"]["write"]), path, "edited native document"
+        )
+        observed = source_inspector({**job, "authoringParameters": None}, path)
+    except (OSError, ValueError, RuntimeError):
+        return []
+    return [
+        {"name": field, "recorded": parameters[field], "observed": observed[name]}
+        for field, name in (("primaryText", "editableText"), ("font", "fontFamily"))
+        if observed.get(name) is not None and observed[name] != parameters[field]
+    ]
 
 
 def recover_authoring(job_ref, *, expected_head, action="inspect", adapter=None):
