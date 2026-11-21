@@ -356,6 +356,8 @@ def _render_retained_identity(monkeypatch, ani, instance, project, native, outpu
         artworkRef=selection,
         readRoots=[str(workspace.raw_dir)],
     )
+    with pytest.raises(artcraft.ArtCraftError, match="selected read roots"):
+        _prepare(artcraft, brief, {**spec, "readRoots": [str(native.parent)]}, adapter)
     with pytest.raises(artcraft.ArtCraftError, match="selected kit instance"):
         _prepare(
             artcraft,
