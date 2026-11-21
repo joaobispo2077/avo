@@ -230,7 +230,8 @@
       "type": "object", "additionalProperties": false, "required": ["primaryText", "font"],
       "properties": {
         "primaryText": { "type": "string", "minLength": 1, "maxLength": 64 },
-        "font": { "type": "string", "minLength": 1, "maxLength": 128 }
+        "font": { "type": "string", "minLength": 1, "maxLength": 128 },
+        "secondaryText": { "type": "string", "minLength": 1, "maxLength": 48 }
       }
     },
     "soundCue": {

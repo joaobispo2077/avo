@@ -142,6 +142,32 @@ def _lower_third_layout(output):
     return scale, offset
 
 
+def _lower_third_labels(parameters, scale, offset):
+    labels = [_speaker_label(parameters, scale, offset)]
+    if "secondaryText" not in parameters:
+        return labels
+    text = parameters["secondaryText"]
+    if (
+        not isinstance(text, str)
+        or not text.strip()
+        or len(text) > 48
+        or any(char in text for char in "\r\n\0—")
+    ):
+        raise ArtCraftError("Choose one nonempty secondary label within 48 characters")
+    labels.append(
+        _step(
+            "text.create",
+            text=text,
+            x=42 * scale,
+            y=306 * scale + offset,
+            font=parameters["font"],
+            size=14 * scale,
+            color="#e0ebf6",
+        )
+    )
+    return labels
+
+
 def lower_third_steps(output, parameters, source, white_directory):
     """Build the selected native commands, with frame numbers in the document clock."""
     _profile_clock(output)
@@ -156,7 +182,7 @@ def lower_third_steps(output, parameters, source, white_directory):
             radius=8 * scale,
             fill="#102c48",
         ),
-        _speaker_label(parameters, scale, offset),
+        *_lower_third_labels(parameters, scale, offset),
     ]
     return _slide_steps(
         output,
@@ -293,27 +319,52 @@ def _distinct_native_fields(pairs):
 
 
 def _native_source_profile(source, output, parameters, *, emblem_path=None):
-    paths, body = _native_document(source, output, path_count=1 if emblem_path else 2)
+    paths, body = _native_document(
+        source, output, path_counts=(1,) if emblem_path else (2, 3)
+    )
     if emblem_path is not None:
         return _inspect_emblem_source(paths, body, output, emblem_path)
     symbol = _native_symbol(body)
     _require_symbol_references(body["scenes"], symbol["id"], output["frameCount"])
-    text = _inspect_symbol_artwork(symbol)
-    _speaker_label({"primaryText": text["text"], "font": text["font"]}, 1, 0)
-    if parameters is not None and (
-        text["text"] != parameters["primaryText"] or text["font"] != parameters["font"]
-    ):
+    facts = _observed_lower_third(
+        _inspect_symbol_artwork(symbol, labels=len(paths) - 1), output
+    )
+    if parameters is not None and facts != parameters:
         raise ArtCraftError(
             "AniCraft saved editable text or font differs from the selected parameters"
         )
     return {
-        "editableText": text["text"],
-        "fontFamily": text["font"],
+        "editableText": facts["primaryText"],
+        "fontFamily": facts["font"],
+        **(
+            {"editableSecondaryText": facts["secondaryText"]}
+            if "secondaryText" in facts
+            else {}
+        ),
         "inlineVectorHash": content_hash(paths),
     }
 
 
-def _native_document(source, output, *, path_count):
+def _observed_lower_third(labels, output):
+    primary, *optional = labels
+    facts = {"primaryText": primary["text"], "font": primary["font"]}
+    if optional:
+        (secondary,) = optional
+        if secondary["font"] != primary["font"]:
+            raise ArtCraftError(
+                "AniCraft secondary text uses a different installed font"
+            )
+        scale, _ = _lower_third_layout(output)
+        width = secondary["box_width"]
+        _native_numbers((width,), 1)
+        if not 0 < width <= 244 * scale:
+            raise ArtCraftError("AniCraft secondary text exceeds its approved bounds")
+        facts["secondaryText"] = secondary["text"]
+    _lower_third_labels(facts, 1, 0)
+    return facts
+
+
+def _native_document(source, output, *, path_counts):
     _native_shape(source, "format version generator paths document")
     if (source["format"], source["version"], source["generator"]) != (
         "anicraft",
@@ -326,7 +377,7 @@ def _native_document(source, output, *, path_count):
     paths = source["paths"]
     if (
         not isinstance(paths, list)
-        or len(paths) != path_count
+        or len(paths) not in path_counts
         or any(
             not isinstance(path, str) or not _VECTOR_PATH.fullmatch(path)
             for path in paths
@@ -465,17 +516,23 @@ def _require_native_keyframes(timeline, count, layer_name):
         )
 
 
-def _inspect_symbol_artwork(symbol):
+def _inspect_symbol_artwork(symbol, *, labels):
     elements = list(_native_elements(symbol["timeline"]))
-    if len(elements) != 2:
+    if len(elements) != labels + 1:
         raise ArtCraftError("AniCraft source contains unexpected symbol artwork")
-    shape, text = elements
+    shape, *texts = elements
     _native_shape(shape, "Shape")
     _native_shape(shape["Shape"], "fill fill_rule path stroke")
     _native_shape(shape["Shape"]["fill"], "Solid")
     _native_rgba(shape["Shape"]["fill"]["Solid"])
     _native_shape(shape["Shape"]["stroke"], "color width")
     _native_rgba(shape["Shape"]["stroke"]["color"])
+    if shape["Shape"]["path"] != 0:
+        raise ArtCraftError("AniCraft source refers outside its retained plate shape")
+    return [_inspect_native_label(text, index) for index, text in enumerate(texts, 1)]
+
+
+def _inspect_native_label(text, index):
     _native_shape(text, "Text")
     native_text = text["Text"]
     _native_shape(
@@ -483,7 +540,7 @@ def _inspect_symbol_artwork(symbol):
         "align bold box_height box_width color font italic letter_spacing line_spacing outline size text width",
     )
     _native_rgba(native_text["color"])
-    if (shape["Shape"]["path"], native_text["outline"]) != (0, 1):
+    if native_text["outline"] != index:
         raise ArtCraftError(
             "AniCraft source refers outside its retained shape and text outlines"
         )
@@ -572,10 +629,14 @@ def revise_lower_third(
     original = inspect_lower_third_source(
         source, output, original_parameters, max_bytes=budget["bytes"]
     )
-    _speaker_label(parameters, *_lower_third_layout(output))
+    labels = _lower_third_labels(parameters, *_lower_third_layout(output))
     if parameters["font"] != original["fontFamily"]:
         raise ArtCraftError(
             "Changing the approved font requires a separately reviewed design"
+        )
+    if ("secondaryText" in parameters) != ("editableSecondaryText" in original):
+        raise ArtCraftError(
+            "Changing available text slots requires a separately reviewed design"
         )
     _require_new_output_directory(directory, budget, output["frameCount"])
     if source.is_relative_to(directory):
@@ -591,7 +652,10 @@ def revise_lower_third(
     _copy_native_source(working, original["fingerprint"])
     prior, target = _native_text_target(working)
     steps = _text_revision_steps(
-        target, parameters["primaryText"], native, output["frameCount"]
+        target,
+        [step["params"]["text"] for step in labels],
+        native,
+        output["frameCount"],
     )
     recipe = write_immutable_json(directory / "recipe.json", steps)
     _require_profile_budget(directory, budget)
@@ -613,27 +677,33 @@ def revise_lower_third(
 def _native_text_target(path):
     source = json.loads(path.read_bytes(), object_pairs_hook=_distinct_native_fields)
     symbol = _native_symbol(source["document"])
-    element = next(
+    elements = [
         element
         for layer in symbol["timeline"]["layers"]
         for frame in layer["keyframes"]
         for element in frame["elements"]
         if "Text" in element["kind"]
-    )
-    text = element["kind"]["Text"]
-    for key in ("text", "box_width"):
-        text.pop(key)
-    source["paths"][1] = ""
-    return source, (symbol["id"], element["id"])
+    ]
+    for element in elements:
+        text = element["kind"]["Text"]
+        source["paths"][text["outline"]] = ""
+        for key in ("text", "box_width"):
+            text.pop(key)
+    return source, (symbol["id"], [element["id"] for element in elements])
 
 
-def _text_revision_steps(target, label, native, count):
-    symbol, element = target
-    return [
+def _text_revision_steps(target, labels, native, count):
+    symbol, elements = target
+    steps = [
         _step("symbol.edit", symbol=symbol),
         _step("timeline.goto", frame=0),
-        _step("element.select", ids=[element]),
-        _step("text.edit", text=label),
+    ]
+    for element, label in zip(elements, labels, strict=True):
+        steps.extend(
+            (_step("element.select", ids=[element]), _step("text.edit", text=label))
+        )
+    return [
+        *steps,
         _step("symbol.exit", all=True),
         _step("file.save_as", path=str(native)),
         _step(

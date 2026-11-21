@@ -235,10 +235,20 @@ class ComponentInstanceService:
             raise ComponentInstanceError(
                 "Select a provider design reviewed with this font"
             )
-        text = resolved["primaryText"]
-        if not text.strip() or any(char in text for char in "\r\n\0—"):
-            raise ComponentInstanceError("Choose one nonempty lower-third label")
+        self._require_native_label_lines(resolved)
         return resolved
+
+    @staticmethod
+    def _require_native_label_lines(parameters):
+        for field, label in (
+            ("primaryText", "lower-third label"),
+            ("secondaryText", "secondary lower-third label"),
+        ):
+            text = parameters.get(field)
+            if text is not None and (
+                not text.strip() or any(char in text for char in "\r\n\0—")
+            ):
+                raise ComponentInstanceError(f"Choose one nonempty {label}")
 
     def _require_same_native_instance(self, path, document, evidence):
         if not path.is_file():

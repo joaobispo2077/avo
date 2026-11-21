@@ -486,6 +486,8 @@ def _require_effect_label(spec, document_state, mode):
         raise ArtCraftError(
             "EffectCraft requires an explicit installed Arial font source"
         )
+    if "secondaryText" in parameters:
+        raise ArtCraftError("The selected EffectCraft mask recipe supports one label")
     text = parameters.get("primaryText", "")
     if (document_state, mode) != ("empty", "cli") or not 1 <= len(text) <= 32:
         raise ArtCraftError(
@@ -1342,6 +1344,8 @@ def _require_still_contract(request, selected, document_state, mode):
         raise ArtCraftError(
             "VectorCraft card requires the explicit editable-vector-card behavior"
         )
+    if "secondaryText" in selected.get("authoringParameters", {}):
+        raise ArtCraftError("The selected VectorCraft card supports one editable label")
     output = selected["output"]
     shape = {key: output.get(key) for key in ("role", "format", "alpha", "color")}
     if shape != {
@@ -1612,11 +1616,18 @@ def _inspect_edited_parameters(job, reference, source_inspector):
         observed = source_inspector({**job, "authoringParameters": None}, path)
     except (OSError, ValueError, RuntimeError):
         return []
-    return [
+    changes = [
         {"name": field, "recorded": parameters[field], "observed": observed[name]}
         for field, name in (("primaryText", "editableText"), ("font", "fontFamily"))
         if observed.get(name) is not None and observed[name] != parameters[field]
     ]
+    recorded = parameters.get("secondaryText")
+    edited = observed.get("editableSecondaryText")
+    if recorded != edited:
+        changes.append(
+            {"name": "secondaryText", "recorded": recorded, "observed": edited}
+        )
+    return changes
 
 
 def recover_authoring(job_ref, *, expected_head, action="inspect", adapter=None):
