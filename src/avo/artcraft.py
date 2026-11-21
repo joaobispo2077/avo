@@ -58,10 +58,13 @@ _NATIVE_SUFFIXES = {
     "vectorcraft": ".vectorcraft",
     "filmcraft": ".fcproj",
     "photocraft": ".pcraft",
+    "figcraft": ".figcraft",
 }
 _SOUND_CUE_SCOPE = {"app": "soundcraft", "operations": ["isolated-cue"]}
 _STILL_CARD_SCOPE = {"app": "vectorcraft", "operations": ["vector-still"]}
 _PHOTO_CARD_SCOPE = {"app": "photocraft", "operations": ["layered-image-card"]}
+_FIG_VARIANT_SCOPE = {"app": "figcraft", "operations": ["editable-design-variant"]}
+_STILL_SCOPES = (_STILL_CARD_SCOPE, _PHOTO_CARD_SCOPE, _FIG_VARIANT_SCOPE)
 _VECTOR_EMBLEM_SCOPE = {"app": "vectorcraft", "operations": ["vector-emblem"]}
 _ANIMATED_EMBLEM_SCOPE = {"app": "anicraft", "operations": ["animate-vector-emblem"]}
 _FILM_RETURN_SCOPE = {
@@ -382,6 +385,7 @@ def _check_specialist_job(job, scope):
             job["request"], job, job["documentState"], job["observation"]["mode"]
         )
     _check_photo_job(job, scope)
+    _check_fig_job(job, scope)
     if scope == _FILM_RETURN_SCOPE:
         _check_film_job(job)
     if scope == _VECTOR_EMBLEM_SCOPE:
@@ -408,6 +412,45 @@ def _check_photo_job(job, scope):
     )
     if [item["locator"] for item in job["inputs"]] != [job["photoSource"]["source"]]:
         raise ContractError("PhotoCraft job requires its exact selected image")
+
+
+def _check_fig_job(job, scope):
+    if scope == _FIG_VARIANT_SCOPE:
+        _require_fig_contract(
+            job["request"], job, job["documentState"], job["observation"]["mode"]
+        )
+
+
+def _require_fig_contract(request, selected, document_state, mode):
+    if (document_state, mode) != ("empty", "cli"):
+        raise ArtCraftError("FigCraft requires an empty document and confined CLI mode")
+    if (
+        request["required"]
+        != {
+            "behavior": "editable-design-variant",
+            "outputRole": "generated-still",
+            "editable": True,
+        }
+        or selected["output"]
+        != {
+            "role": "generated-still",
+            "format": "png",
+            "alpha": "straight",
+            "color": "srgb",
+            "width": 320,
+            "height": 180,
+        }
+        or selected.get("inputs")
+        or {
+            "authoringParameters",
+            "soundCue",
+            "interchangeSource",
+            "photoSource",
+        }.intersection(selected)
+    ):
+        raise ArtCraftError(
+            "Select the editable FigCraft 320 × 180 design variant recipe"
+        )
 
 
 def _require_vector_emblem(request, configuration, document_state, mode):
@@ -763,6 +806,8 @@ def _require_preparation_profile(request, spec, scope):
     arguments = (request, spec, spec["document"]["state"], spec["mode"])
     if scope == _STILL_CARD_SCOPE:
         _require_still_contract(*arguments)
+    if scope == _FIG_VARIANT_SCOPE:
+        _require_fig_contract(*arguments)
     if scope == _VECTOR_EMBLEM_SCOPE:
         _require_vector_emblem(*arguments)
     if scope == _ANIMATED_EMBLEM_SCOPE:
@@ -1874,6 +1919,8 @@ def _select_job_author(adapter, scope):
         return adapter.author_vector_card
     if scope == _PHOTO_CARD_SCOPE:
         return adapter.author_photo_card
+    if scope == _FIG_VARIANT_SCOPE:
+        return adapter.author_fig_variant
     if scope == _VECTOR_EMBLEM_SCOPE:
         return adapter.author_vector_emblem
     if scope == _ANIMATED_EMBLEM_SCOPE:
@@ -1983,6 +2030,7 @@ def _require_prepared_authoring(store, job, head):
         _SOUND_CUE_SCOPE,
         _STILL_CARD_SCOPE,
         _PHOTO_CARD_SCOPE,
+        _FIG_VARIANT_SCOPE,
         _FILM_RETURN_SCOPE,
         _VECTOR_EMBLEM_SCOPE,
         _ANIMATED_EMBLEM_SCOPE,
@@ -2049,7 +2097,7 @@ def _verify_authoring_result(job, directory, result):
         return _verify_film_authoring_result(job, directory, result)
     if job["decision"]["scope"] == _SOUND_CUE_SCOPE:
         return _verify_sound_authoring_result(job, directory, result)
-    if job["decision"]["scope"] in (_STILL_CARD_SCOPE, _PHOTO_CARD_SCOPE):
+    if job["decision"]["scope"] in _STILL_SCOPES:
         return _verify_still_authoring_result(job, directory, result)
     if job["decision"]["scope"] == _VECTOR_EMBLEM_SCOPE:
         return _verify_emblem_authoring_result(job, directory, result)
@@ -2155,12 +2203,16 @@ def _verify_still_authoring_result(job, directory, result):
     }
     if any(evidence[key] != value for key, value in expected.items()):
         raise ArtCraftError("ArtCraft still evidence differs from the selected canvas")
-    photo = job["decision"]["scope"] == _PHOTO_CARD_SCOPE
+    app = job["decision"]["scope"]["app"]
+    still_name = {
+        "vectorcraft": "card.png",
+        "photocraft": "photo.png",
+        "figcraft": "design.png",
+    }[app]
     target_paths = {
-        "nativeSource": directory
-        / ("component.pcraft" if photo else "component.vectorcraft"),
+        "nativeSource": directory / ("component" + _NATIVE_SUFFIXES[app]),
         "recipe": directory / "recipe.json",
-        "media": directory / ("photo.png" if photo else "card.png"),
+        "media": directory / still_name,
     }
     for key, path in target_paths.items():
         item = result[key]
@@ -2212,7 +2264,7 @@ def _verify_retained_export(store, job, event):
                 "dependencies": event["dependencies"],
                 "audioEvidence": event["audioEvidence"],
             }
-        if job["decision"]["scope"] in (_STILL_CARD_SCOPE, _PHOTO_CARD_SCOPE):
+        if job["decision"]["scope"] in _STILL_SCOPES:
             (media,) = event["outputs"]
             media_evidence = {"media": media, "stillEvidence": event["stillEvidence"]}
         if job["decision"]["scope"] == _FILM_RETURN_SCOPE:
@@ -2271,6 +2323,10 @@ def _describe_still_review(job, event, job_ref):
         }
     else:
         standalone["admission"] = "standalone-review"
+    if job["decision"]["scope"] == _FIG_VARIANT_SCOPE:
+        standalone["losses"] = [
+            "The PNG holds a single static variant. The editable layout and click-to-switch prototype remain in the native design."
+        ]
     return {
         "reviewState": "pending-creator",
         "jobHash": job["jobHash"],
@@ -2313,7 +2369,7 @@ def describe_export_review(job_ref, *, expected_head):
                 **event["interchangeEvidence"],
             },
         }
-    if job["decision"]["scope"] in (_STILL_CARD_SCOPE, _PHOTO_CARD_SCOPE):
+    if job["decision"]["scope"] in _STILL_SCOPES:
         return _describe_still_review(job, event, job_ref)
     if job["decision"]["scope"] == _SOUND_CUE_SCOPE:
         reference = {
