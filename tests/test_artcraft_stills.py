@@ -8,6 +8,7 @@ import pytest
 from avo.timeline import artcraft_stills
 from avo.timeline.contracts import content_hash, file_fingerprint
 from avo.timeline.tracks import TrackError, resolve_tracks
+from tests.artcraft_fixtures import locked_tool_observation
 
 
 @pytest.fixture
@@ -27,7 +28,7 @@ def card_proof(tmp_path, monkeypatch):
         },
         "workspace": str(tmp_path),
         "output": {"role": "generated-still", "format": "png"},
-        "observation": {"app": "vectorcraft"},
+        "observation": locked_tool_observation(tmp_path, "vectorcraft"),
         "inputs": [],
     }
     event = {

@@ -9,7 +9,7 @@ import pytest
 from avo import artcraft, init_project
 from avo.timeline.contracts import file_fingerprint
 from avo.timeline.import_service import _filmcraft_reference_findings
-from tests.artcraft_fixtures import executable_observation, picture_output, request
+from tests.artcraft_fixtures import locked_tool_observation, picture_output, request
 from tests.test_artcraft_jobs import _prepare, job_spec
 
 
@@ -163,7 +163,7 @@ def vector_export(tmp_path, monkeypatch):
 
     def observe(*, scope, mode, roots, **_paths):
         return {
-            **executable_observation(tmp_path / "fixture-cli"),
+            **locked_tool_observation(tmp_path, scope["app"]),
             **scope,
             "mode": mode,
             "effectiveRoots": roots,
@@ -199,7 +199,13 @@ def _unexpected_app_access(**_selection):
 
 @pytest.mark.parametrize(
     "altered",
-    ["foreign-component", "wrong-head", "outside-read-roots", "changed-recipe"],
+    [
+        "foreign-component",
+        "wrong-head",
+        "outside-read-roots",
+        "changed-recipe",
+        "changed-tool",
+    ],
 )
 def test_animated_emblem_refuses_stale_or_unrelated_upstream_before_discovery(
     tmp_path, vector_export, altered
@@ -232,6 +238,13 @@ def test_animated_emblem_refuses_stale_or_unrelated_upstream_before_discovery(
             exported["jobRef"], expected_head=exported["head"]
         )
         Path(event["recipe"]["locator"]).write_bytes(b"externally changed")
+    if altered == "changed-tool":
+        job, _ = artcraft.read_authoring_export(
+            exported["jobRef"], expected_head=exported["head"]
+        )
+        Path(job["observation"]["executable"]["locator"]).write_bytes(
+            b"new executable build"
+        )
     with pytest.raises(artcraft.ArtCraftError):
         _prepare_animated_emblem(spec, SimpleNamespace(observe=_unexpected_app_access))
 
