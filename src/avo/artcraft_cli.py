@@ -58,6 +58,12 @@ def configure(sub):
     for field in ("project", "asset-id", "materialization"):
         review.add_argument(f"--{field}")
     review.add_argument("--json", action="store_true")
+    interchange = operations.add_parser(
+        "import-timeline", help="Validate the retained FilmCraft exchange"
+    )
+    for field in ("project", "job", "expected-head", "actor", "reason"):
+        interchange.add_argument(f"--{field}", required=True)
+    interchange.add_argument("--json", action="store_true")
     _provider_commands(operations)
 
 
@@ -395,6 +401,16 @@ def _read_job(args):
     )
 
 
+def _import_timeline(args):
+    from avo.artcraft import read_authoring_export
+    from avo.timeline_import_cli import create_service
+
+    job, event = read_authoring_export(args.job, expected_head=args.expected_head)
+    return create_service(args).prepare_filmcraft_return(
+        job, event, actor=args.actor, reason=args.reason
+    )
+
+
 def run(args):
     from avo.artcraft import ArtCraftError, assess_request, catalog
 
@@ -416,8 +432,9 @@ def run(args):
             )
         elif args.artcraft_operation == "register":
             result = _register_export(args)
-        elif args.artcraft_operation == "review":
-            result = _review_export(args)
+        elif args.artcraft_operation in {"review", "import-timeline"}:
+            handlers = {"review": _review_export, "import-timeline": _import_timeline}
+            result = handlers[args.artcraft_operation](args)
         elif args.artcraft_operation in {
             "provider-propose",
             "provider-publish",
