@@ -3,7 +3,7 @@
 from fractions import Fraction
 from pathlib import Path
 
-from avo.artcraft import read_authoring_export
+from avo.artcraft import read_authoring_export, require_artcraft_export_environment
 
 from .artcraft_binding import require_artcraft_media_scope
 from .contracts import content_hash, file_fingerprint, validate_document
@@ -34,6 +34,7 @@ def read_generated_still(reference):
         or "stillEvidence" not in event
     ):
         raise ValueError("Generated still requires a verified VectorCraft card")
+    require_artcraft_export_environment(job["observation"])
     if job["inputs"]:
         raise ValueError(
             "Generated VectorCraft card has unsupported external dependencies"

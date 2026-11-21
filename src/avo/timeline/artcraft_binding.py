@@ -11,6 +11,7 @@ from pathlib import Path
 from avo.artcraft import (
     ArtCraftError,
     read_authoring_export,
+    require_artcraft_export_environment,
     seal_record,
     validate_record,
 )
@@ -51,7 +52,7 @@ def freeze_export_binding(workspace, *, job_ref, expected_head):
     with fingerprint_stage(reuse_current=True, verify_on_exit=True):
         job, event = read_authoring_export(job_ref, expected_head=expected_head)
         canonical = _canonical_export_scope(workspace, job)
-        environment = _verified_export_environment(job["observation"])
+        environment = require_artcraft_export_environment(job["observation"])
         artwork = job.get("artworkRef")
         source = {
             "nativeSource": event["saved"],
@@ -195,35 +196,6 @@ def _canonical_export_scope(workspace, job):
             code="ARTCRAFT_SCOPE_CHANGED",
         )
     return canonical
-
-
-def _verified_export_environment(observation):
-    if observation["mode"] not in {"cli", "reuse"} or not observation.get(
-        "commandSchemaHash"
-    ):
-        raise ArtCraftError(
-            "ArtCraft export needs independent native command observations",
-            code="ARTCRAFT_ADMISSION_REQUIRED",
-        )
-    try:
-        _verify_selected_binary(observation["application"])
-        _verify_selected_binary(observation["executable"])
-    except (KeyError, OSError, ValueError) as exc:
-        raise ArtCraftError(
-            "ArtCraft selected installation has changed or is incomplete",
-            code="ARTCRAFT_SCOPE_CHANGED",
-        ) from exc
-    return observation
-
-
-def _verify_selected_binary(fingerprint):
-    path = Path(fingerprint["locator"])
-    if (
-        not path.is_absolute()
-        or path.resolve() != path
-        or file_fingerprint(path) != fingerprint
-    ):
-        raise ArtCraftError("ArtCraft selected native tool fingerprint changed")
 
 
 def build_artcraft_asset_record(binding, binding_ref, observed, *, asset_id):

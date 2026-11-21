@@ -3,7 +3,7 @@
 from fractions import Fraction
 from pathlib import Path
 
-from avo.artcraft import read_authoring_export
+from avo.artcraft import read_authoring_export, require_artcraft_export_environment
 
 from .artcraft_binding import require_artcraft_media_scope
 from .contracts import content_hash, file_fingerprint, validate_document
@@ -30,6 +30,7 @@ def resolve_generated_audio(reference):
         or job["observation"]["app"] != "soundcraft"
     ):
         raise ValueError("Generated audio requires a verified SoundCraft cue export")
+    require_artcraft_export_environment(job["observation"])
     return job, event
 
 

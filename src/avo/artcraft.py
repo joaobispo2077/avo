@@ -43,6 +43,7 @@ __all__ = [
     "prepare_authoring_reuse",
     "read_authoring_export",
     "recover_authoring",
+    "require_artcraft_export_environment",
     "require_eligible",
     "run_authoring",
     "seal_record",
@@ -776,6 +777,7 @@ def _artwork_export_inputs(request, reference, roots):
             "Vector artwork requires the selected VectorCraft emblem export"
         )
     _require_artwork_owner(request, job["request"])
+    require_artcraft_export_environment(job["observation"])
     if _inspection_result(store, job, event)["status"] != "current":
         raise ArtCraftError("The selected vector artwork evidence changed")
     _verify_retained_export(store, job, event)
@@ -1500,6 +1502,36 @@ def _retained_job_file(expected, roots):
         )
     except (OSError, ValueError, RuntimeError):
         return False
+
+
+def require_artcraft_export_environment(observation):
+    """Check the current selected tool bytes without probing or launching an app."""
+    if observation["mode"] not in {"cli", "reuse"} or not observation.get(
+        "commandSchemaHash"
+    ):
+        raise ArtCraftError(
+            "ArtCraft export needs independent native command observations",
+            code="ARTCRAFT_ADMISSION_REQUIRED",
+        )
+    try:
+        _verify_selected_binary(observation["application"])
+        _verify_selected_binary(observation["executable"])
+    except (KeyError, OSError, ValueError) as exc:
+        raise ArtCraftError(
+            "ArtCraft selected installation has changed or is incomplete",
+            code="ARTCRAFT_SCOPE_CHANGED",
+        ) from exc
+    return observation
+
+
+def _verify_selected_binary(fingerprint):
+    path = Path(fingerprint["locator"])
+    if (
+        not path.is_absolute()
+        or path.resolve() != path
+        or file_fingerprint(path) != fingerprint
+    ):
+        raise ArtCraftError("ArtCraft selected native tool fingerprint changed")
 
 
 def _owning_root(path, roots):
