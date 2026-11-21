@@ -60,14 +60,20 @@ _NATIVE_SUFFIXES = {
     "photocraft": ".pcraft",
     "figcraft": ".figcraft",
     "deckcraft": ".deckcraft",
+    "lightcraft": ".snap",
 }
 _SOUND_CUE_SCOPE = {"app": "soundcraft", "operations": ["isolated-cue"]}
 _STILL_CARD_SCOPE = {"app": "vectorcraft", "operations": ["vector-still"]}
 _PHOTO_CARD_SCOPE = {"app": "photocraft", "operations": ["layered-image-card"]}
+_LIGHT_TREATMENT_SCOPE = {
+    "app": "lightcraft",
+    "operations": ["reusable-photo-treatment"],
+}
+_PHOTO_SCOPES = (_PHOTO_CARD_SCOPE, _LIGHT_TREATMENT_SCOPE)
 _FIG_VARIANT_SCOPE = {"app": "figcraft", "operations": ["editable-design-variant"]}
 _DECK_SLIDE_SCOPE = {"app": "deckcraft", "operations": ["editable-explanation-slide"]}
 _FIXED_STILL_SCOPES = (_FIG_VARIANT_SCOPE, _DECK_SLIDE_SCOPE)
-_STILL_SCOPES = (_STILL_CARD_SCOPE, _PHOTO_CARD_SCOPE, *_FIXED_STILL_SCOPES)
+_STILL_SCOPES = (_STILL_CARD_SCOPE, *_PHOTO_SCOPES, *_FIXED_STILL_SCOPES)
 _VECTOR_EMBLEM_SCOPE = {"app": "vectorcraft", "operations": ["vector-emblem"]}
 _ANIMATED_EMBLEM_SCOPE = {"app": "anicraft", "operations": ["animate-vector-emblem"]}
 _FILM_RETURN_SCOPE = {
@@ -404,17 +410,19 @@ def _check_specialist_job(job, scope):
 
 
 def _check_photo_job(job, scope):
-    if scope != _PHOTO_CARD_SCOPE:
+    if scope not in _PHOTO_SCOPES:
         if "photoSource" in job:
             raise ContractError(
-                "Only PhotoCraft layered-image-card may consume a photo"
+                "Select a qualified PhotoCraft or LightCraft treatment to consume a photo"
             )
         return
     _require_photo_contract(
-        job["request"], job, job["documentState"], job["observation"]["mode"]
+        job["request"], job, scope, job["documentState"], job["observation"]["mode"]
     )
     if [item["locator"] for item in job["inputs"]] != [job["photoSource"]["source"]]:
-        raise ContractError("PhotoCraft job requires its exact selected image")
+        raise ContractError(
+            "ArtCraft photo treatment requires its exact selected image"
+        )
 
 
 def _check_fixed_still_job(job, scope):
@@ -1070,7 +1078,7 @@ def _preparation_source(spec, roots, document):
 
 
 def _preparation_media(request, spec, scope, roots):
-    if "photoSource" in spec or scope == _PHOTO_CARD_SCOPE:
+    if "photoSource" in spec or scope in _PHOTO_SCOPES:
         return "photoSource", _preparation_photo(request, spec, scope, roots)
     if "interchangeSource" in spec or scope == _FILM_RETURN_SCOPE:
         return "interchangeSource", _preparation_interchange(
@@ -1082,33 +1090,45 @@ def _preparation_media(request, spec, scope, roots):
 def _preparation_photo(request, spec, scope, roots):
     from .timeline.media_admission import FORBIDDEN_OUTPUT_CLASSES
 
-    if scope != _PHOTO_CARD_SCOPE:
-        raise ArtCraftError("Select PhotoCraft layered-image-card to consume a photo")
-    _require_photo_contract(request, spec, spec["document"]["state"], spec["mode"])
+    if scope not in _PHOTO_SCOPES:
+        raise ArtCraftError(
+            "Select a qualified PhotoCraft or LightCraft treatment to consume a photo"
+        )
+    _require_photo_contract(
+        request, spec, scope, spec["document"]["state"], spec["mode"]
+    )
+    label, extension, suffixes = _photo_source_format(scope)
     path = Path(spec["photoSource"]["source"])
-    path = _bounded_path(_owning_root(path, roots["read"]), path, "PhotoCraft photo")
+    path = _bounded_path(_owning_root(path, roots["read"]), path, f"{label} photo")
     if FORBIDDEN_OUTPUT_CLASSES.intersection(part.casefold() for part in path.parts):
-        raise ArtCraftError("PhotoCraft cannot use a program proof or delivery")
+        raise ArtCraftError(f"{label} cannot use a program proof or delivery")
     if (
         path.is_relative_to(roots["write"][0])
-        or path.suffix.lower() != ".png"
+        or path.suffix.lower() not in suffixes
         or not path.is_file()
     ):
-        raise ArtCraftError("PhotoCraft requires one external original PNG")
+        raise ArtCraftError(f"{label} requires one external original {extension}")
     metadata = path.stat()
     if metadata.st_nlink != 1 or metadata.st_size >= spec["budget"]["bytes"]:
         raise ArtCraftError(
-            "PhotoCraft photo must be unshared and within its byte budget"
+            f"{label} photo must be unshared and within its byte budget"
         )
     return file_fingerprint(path)
 
 
-def _require_photo_contract(request, spec, document_state, mode):
+def _photo_source_format(scope):
+    if scope == _PHOTO_CARD_SCOPE:
+        return "PhotoCraft", "PNG", (".png",)
+    return "LightCraft", "JPEG", (".jpg", ".jpeg")
+
+
+def _require_photo_contract(request, spec, scope, document_state, mode):
+    label, extension, _ = _photo_source_format(scope)
     output = spec["output"]
     if (
         request["required"]
         != {
-            "behavior": "layered-image-card",
+            "behavior": scope["operations"][0],
             "outputRole": "generated-still",
             "editable": True,
         }
@@ -1118,14 +1138,16 @@ def _require_photo_contract(request, spec, document_state, mode):
         or not 160 <= output["height"] <= 1920
     ):
         raise ArtCraftError(
-            "Select one editable PhotoCraft RGBA PNG card within its canvas range"
+            f"Select one editable {label} photo treatment within its canvas range"
         )
     if (
         (document_state, mode) != ("empty", "cli")
         or "photoSource" not in spec
         or {"authoringParameters", "interchangeSource", "soundCue"}.intersection(spec)
     ):
-        raise ArtCraftError("Select an empty PhotoCraft CLI job and its original PNG")
+        raise ArtCraftError(
+            f"Select an empty {label} CLI job and its original {extension}"
+        )
 
 
 def _preparation_interchange(request, spec, scope, roots):
@@ -1923,6 +1945,8 @@ def _select_job_author(adapter, scope):
         return adapter.author_vector_card
     if scope == _PHOTO_CARD_SCOPE:
         return adapter.author_photo_card
+    if scope == _LIGHT_TREATMENT_SCOPE:
+        return adapter.author_light_treatment
     if scope == _FIG_VARIANT_SCOPE:
         return adapter.author_fig_variant
     if scope == _DECK_SLIDE_SCOPE:
@@ -2036,6 +2060,7 @@ def _require_prepared_authoring(store, job, head):
         _SOUND_CUE_SCOPE,
         _STILL_CARD_SCOPE,
         _PHOTO_CARD_SCOPE,
+        _LIGHT_TREATMENT_SCOPE,
         _FIG_VARIANT_SCOPE,
         _DECK_SLIDE_SCOPE,
         _FILM_RETURN_SCOPE,
@@ -2214,6 +2239,7 @@ def _verify_still_authoring_result(job, directory, result):
     still_name = {
         "vectorcraft": "card.png",
         "photocraft": "photo.png",
+        "lightcraft": "photo.png",
         "figcraft": "design.png",
         "deckcraft": "slide.png",
     }[app]
@@ -2339,6 +2365,12 @@ def _describe_still_review(job, event, job_ref):
         standalone["losses"] = [
             "The PNG holds the midpoint of the selected fade. The editable slides, master layout and full transition remain in the native deck."
         ]
+    if job["decision"]["scope"] == _LIGHT_TREATMENT_SCOPE:
+        standalone["nativeLibrary"] = {
+            "restoreAs": "catalog.snap",
+            "original": job["inputs"][0],
+            "instruction": "Use the snapshot in a new LightCraft library with the exact original photo at its recorded location.",
+        }
     return {
         "reviewState": "pending-creator",
         "jobHash": job["jobHash"],

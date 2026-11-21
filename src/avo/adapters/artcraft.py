@@ -14,6 +14,7 @@ from avo.artcraft import (
     _DECK_SLIDE_SCOPE,
     _FIG_VARIANT_SCOPE,
     _FILM_RETURN_SCOPE,
+    _LIGHT_TREATMENT_SCOPE,
     _PHOTO_CARD_SCOPE,
     _SOUND_CUE_SCOPE,
     _STILL_CARD_SCOPE,
@@ -23,7 +24,7 @@ from avo.artcraft import (
 from avo.timeline.contracts import content_hash, file_fingerprint
 
 _VERSION = re.compile(
-    r"(?:(?:ani|sound|vector|film|photo|fig|deck)craft(?:-cli)?\s+)?v?(\d+\.\d+\.\d+(?:[-+][a-z0-9.-]+)?)(?: \((?:early alpha|windows x86_64|[a-f0-9]{7,40}, \d{4}-\d{2}-\d{2})\))?",
+    r"(?:(?:ani|sound|vector|film|photo|fig|deck|light)craft(?:-cli)?\s+)?v?(\d+\.\d+\.\d+(?:[-+][a-z0-9.-]+)?)(?: \((?:early alpha|windows x86_64|[a-f0-9]{7,40}, \d{4}-\d{2}-\d{2})\))?",
     re.IGNORECASE,
 )
 _PRODUCTS = {
@@ -34,6 +35,7 @@ _PRODUCTS = {
     "photocraft": "PhotoCraft",
     "figcraft": "FigCraft",
     "deckcraft": "DeckCraft",
+    "lightcraft": "LightCraft",
 }
 
 
@@ -260,7 +262,7 @@ def _installed_tools(product, cli_path, app_path):
 
 
 def _application_release(product, app):
-    if product in {"filmcraft", "photocraft", "figcraft", "deckcraft"}:
+    if product in {"filmcraft", "photocraft", "figcraft", "deckcraft", "lightcraft"}:
         from .artcraft_windows import windows_application_release
 
         return windows_application_release(app, _PRODUCTS[product])
@@ -294,6 +296,7 @@ class SelectedArtCraftAdapter:
             _SOUND_CUE_SCOPE,
             _STILL_CARD_SCOPE,
             _PHOTO_CARD_SCOPE,
+            _LIGHT_TREATMENT_SCOPE,
             _FIG_VARIANT_SCOPE,
             _DECK_SLIDE_SCOPE,
             _FILM_RETURN_SCOPE,
@@ -508,6 +511,14 @@ class SelectedArtCraftAdapter:
 
         return author_photo_card(job, directory=directory, invoke=invoke)
 
+    def author_light_treatment(self, job, directory):
+        from .artcraft_lightcraft import author_light_treatment
+
+        def invoke(workdir, *arguments, timeout):
+            return self._invoke_confined(job, workdir, arguments, timeout)
+
+        return author_light_treatment(job, directory=directory, invoke=invoke)
+
     def author_fig_variant(self, job, directory):
         from .artcraft_figcraft import author_fig_variant
 
@@ -635,6 +646,10 @@ def _supports_anicraft(scope, mode):
 
 def _specialist_profile(scope):
     product = scope["app"]
+    if product == "lightcraft":
+        from .artcraft_lightcraft import observe_lightcraft
+
+        return "LightCraft treatment", "0.21.1", observe_lightcraft
     if product == "deckcraft":
         from .artcraft_deckcraft import observe_deckcraft
 

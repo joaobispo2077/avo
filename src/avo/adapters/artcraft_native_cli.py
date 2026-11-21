@@ -9,7 +9,9 @@ from avo.artcraft import ArtCraftError
 from avo.timeline.contracts import content_hash, file_fingerprint
 
 
-def bounded_native_invocation(directory, budget, invoke, *, label):
+def bounded_native_invocation(
+    directory, budget, invoke, *, label, owned_directories=()
+):
     deadline = monotonic() + budget["seconds"]
 
     def call(*arguments):
@@ -17,7 +19,7 @@ def bounded_native_invocation(directory, budget, invoke, *, label):
         if remaining <= 0:
             raise ArtCraftError(f"{label} exhausted its time budget")
         result = invoke(directory, *arguments, timeout=remaining)
-        files = tuple(directory.iterdir())
+        files = tuple(_owned_files(directory, owned_directories, label))
         _require_owned_outputs(files, label)
         if (
             len(result) > 1024 * 1024
@@ -28,6 +30,16 @@ def bounded_native_invocation(directory, budget, invoke, *, label):
         return result
 
     return call
+
+
+def _owned_files(directory, allowed, label):
+    for item in directory.iterdir():
+        if item.name not in allowed:
+            yield item
+            continue
+        if item.resolve() != item or not item.is_dir():
+            raise ArtCraftError(f"{label} created an invalid owned directory")
+        yield from item.iterdir()
 
 
 def _require_owned_outputs(files, label):
