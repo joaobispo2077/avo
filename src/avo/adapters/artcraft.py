@@ -9,17 +9,23 @@ import subprocess
 import sys
 from pathlib import Path
 
-from avo.artcraft import _SOUND_CUE_SCOPE, _STILL_CARD_SCOPE, ArtCraftError
+from avo.artcraft import (
+    _FILM_RETURN_SCOPE,
+    _SOUND_CUE_SCOPE,
+    _STILL_CARD_SCOPE,
+    ArtCraftError,
+)
 from avo.timeline.contracts import content_hash, file_fingerprint
 
 _VERSION = re.compile(
-    r"(?:(?:ani|sound|vector)craft(?:-cli)?\s+)?v?(\d+\.\d+\.\d+(?:[-+][a-z0-9.-]+)?)(?: \((?:early alpha|windows x86_64)\))?",
+    r"(?:(?:ani|sound|vector|film)craft(?:-cli)?\s+)?v?(\d+\.\d+\.\d+(?:[-+][a-z0-9.-]+)?)(?: \((?:early alpha|windows x86_64)\))?",
     re.IGNORECASE,
 )
 _PRODUCTS = {
     "anicraft": "AniCraft",
     "soundcraft": "SoundCraft",
     "vectorcraft": "VectorCraft",
+    "filmcraft": "FilmCraft",
 }
 
 
@@ -222,7 +228,7 @@ def _installed_tools(product, cli_path, app_path):
         )
     lock, app_lock = file_fingerprint(cli), file_fingerprint(app)
     release = _release(cli)
-    if release != _release(app):
+    if release != _application_release(product, app):
         raise _not_ready(
             "The selected ArtCraft app and CLI report different releases",
             _installation_help(product),
@@ -238,6 +244,14 @@ def _installed_tools(product, cli_path, app_path):
         "release": release,
         "platform": platform,
     }
+
+
+def _application_release(product, app):
+    if product == "filmcraft":
+        from .artcraft_filmcraft import filmcraft_application_release
+
+        return filmcraft_application_release(app)
+    return _release(app)
 
 
 class SelectedArtCraftAdapter:
@@ -259,7 +273,7 @@ class SelectedArtCraftAdapter:
         return observed
 
     def observe(self, *, scope, mode, roots, cli_path, app_path):
-        if scope in (_SOUND_CUE_SCOPE, _STILL_CARD_SCOPE):
+        if scope in (_SOUND_CUE_SCOPE, _STILL_CARD_SCOPE, _FILM_RETURN_SCOPE):
             return self._observe_specialist(scope, mode, roots, cli_path, app_path)
         if (
             scope["app"] != "anicraft"
@@ -443,6 +457,14 @@ class SelectedArtCraftAdapter:
             invoke=invoke,
         )
 
+    def author_film_interchange(self, job, directory):
+        from .artcraft_filmcraft import author_interchange
+
+        def invoke(workdir, *arguments, timeout):
+            return self._invoke_confined(job, workdir, arguments, timeout)
+
+        return author_interchange(job, directory=directory, invoke=invoke)
+
     def author_vector_card(self, job, directory):
         from .artcraft_vectorcraft import author_vector_card
 
@@ -532,6 +554,10 @@ class SelectedArtCraftAdapter:
 
 
 def _specialist_profile(product):
+    if product == "filmcraft":
+        from .artcraft_filmcraft import observe_filmcraft
+
+        return "FilmCraft exchange", "0.20.1", observe_filmcraft
     if product == "soundcraft":
         from .artcraft_soundcraft import observe_soundcraft_profile
 

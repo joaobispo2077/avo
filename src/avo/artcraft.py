@@ -54,9 +54,14 @@ _NATIVE_SUFFIXES = {
     "anicraft": ".anicraft",
     "soundcraft": ".scraft",
     "vectorcraft": ".vectorcraft",
+    "filmcraft": ".fcproj",
 }
 _SOUND_CUE_SCOPE = {"app": "soundcraft", "operations": ["isolated-cue"]}
 _STILL_CARD_SCOPE = {"app": "vectorcraft", "operations": ["vector-still"]}
+_FILM_RETURN_SCOPE = {
+    "app": "filmcraft",
+    "operations": ["source-linked-timeline-return"],
+}
 _OPERATIONAL_FAILURES = frozenset(
     {"not-installed", "invalid-input", "permission-denied", "transient-error", "defect"}
 )
@@ -360,11 +365,31 @@ def _check_job_identity(job):
         )
     if job["output"]["role"] != request["required"]["outputRole"]:
         raise ContractError("ArtCraft output role does not match the request")
+    _check_specialist_job(job, scope)
+
+
+def _check_specialist_job(job, scope):
     if scope == _SOUND_CUE_SCOPE:
         _check_sound_job(job)
     if scope == _STILL_CARD_SCOPE:
         _require_still_contract(
-            request, job, job["documentState"], job["observation"]["mode"]
+            job["request"], job, job["documentState"], job["observation"]["mode"]
+        )
+    if scope == _FILM_RETURN_SCOPE:
+        _check_film_job(job)
+
+
+def _check_film_job(job):
+    selected = job.get("interchangeSource")
+    if (
+        selected is None
+        or len(job["inputs"]) != 1
+        or job["inputs"][0]["locator"] != selected["source"]
+    ):
+        raise ContractError("FilmCraft job requires its exact selected original")
+    if job["documentState"] != "empty" or job["observation"]["mode"] != "cli":
+        raise ContractError(
+            "FilmCraft job requires an empty document and confined CLI mode"
         )
 
 
@@ -594,8 +619,10 @@ def prepare_authoring(
     document = _owned_document(store, base, spec["jobId"], scope["app"])
     roots = _preparation_roots(spec, document.parent)
     source = _preparation_source(spec, roots, document)
-    cue_input = _preparation_audio(request, spec, scope, roots)
-    _require_preparation_capacity(store.workspace, spec["budget"], source or cue_input)
+    input_field, selected_input = _preparation_media(request, spec, scope, roots)
+    _require_preparation_capacity(
+        store.workspace, spec["budget"], source or selected_input
+    )
     observation = adapter.observe(
         scope=scope,
         mode=spec["mode"],
@@ -618,7 +645,7 @@ def prepare_authoring(
         "observation": observation,
         "document": document.relative_to(store.workspace).as_posix(),
         "documentState": spec["document"]["state"],
-        "inputs": [item for item in (source, cue_input) if item is not None],
+        "inputs": [item for item in (source, selected_input) if item is not None],
         "recipeHash": content_hash(recipe),
         "output": spec["output"],
         "budget": spec["budget"],
@@ -626,9 +653,9 @@ def prepare_authoring(
     }
     if authoring is not None:
         job["authoringParameters"] = authoring
-    if cue_input is not None:
-        job["soundCue"] = spec["soundCue"]
-        job["recipeHash"] = content_hash([*recipe, spec["soundCue"], cue_input])
+    if selected_input is not None:
+        job[input_field] = spec[input_field]
+        job["recipeHash"] = content_hash([*recipe, spec[input_field], selected_input])
     return _publish_preparation(store, job, document, source)
 
 
@@ -831,6 +858,56 @@ def _preparation_source(spec, roots, document):
             "ArtCraft native source exceeds the byte limit or has a file alias"
         )
     return file_fingerprint(source)
+
+
+def _preparation_media(request, spec, scope, roots):
+    if "interchangeSource" in spec or scope == _FILM_RETURN_SCOPE:
+        return "interchangeSource", _preparation_interchange(
+            request, spec, scope, roots
+        )
+    return "soundCue", _preparation_audio(request, spec, scope, roots)
+
+
+def _preparation_interchange(request, spec, scope, roots):
+    if scope != _FILM_RETURN_SCOPE or "soundCue" in spec:
+        raise ArtCraftError("Select only the FilmCraft timeline interchange profile")
+    if request["required"]["behavior"] != "source-linked-timeline-return":
+        raise ArtCraftError("FilmCraft requires explicit source-linked timeline return")
+    output = spec["output"]
+    if (output["role"], output["format"]) != ("timeline-interchange", "otio"):
+        raise ArtCraftError("FilmCraft return requires an OTIO timeline interchange")
+    if spec["document"]["state"] != "empty" or spec["mode"] != "cli":
+        raise ArtCraftError("Select an empty FilmCraft document and confined CLI mode")
+    selected = spec.get("interchangeSource")
+    if selected is None or "authoringParameters" in spec:
+        raise ArtCraftError(
+            "Select a fingerprinted original for the FilmCraft timeline"
+        )
+    return _film_source_fingerprint(Path(selected["source"]), roots, spec["budget"])
+
+
+def _film_source_fingerprint(path, roots, budget):
+    from .timeline.media_admission import FORBIDDEN_OUTPUT_CLASSES
+
+    path = _bounded_path(_owning_root(path, roots["read"]), path, "FilmCraft original")
+    if path.is_relative_to(roots["write"][0]) or path.suffix.lower() not in {
+        ".mp4",
+        ".mov",
+    }:
+        raise ArtCraftError("FilmCraft requires an external original MP4 or MOV")
+    if FORBIDDEN_OUTPUT_CLASSES.intersection(part.casefold() for part in path.parts):
+        raise ArtCraftError(
+            "FilmCraft cannot use a program proof or delivery as its original"
+        )
+    if (
+        not path.is_file()
+        or path.stat().st_nlink != 1
+        or path.stat().st_size >= budget["bytes"]
+    ):
+        raise ArtCraftError(
+            "FilmCraft original must be an unshared file within the byte budget"
+        )
+    return file_fingerprint(path)
 
 
 def _preparation_audio(request, spec, scope, roots):
@@ -1057,11 +1134,19 @@ def recover_authoring(job_ref, *, expected_head):
 def _recoverable_job_files(job, directory):
     budget = job["budget"]
     count = min(job["output"].get("frameCount", 0), budget["files"])
-    names = ("component.anicraft", "recipe.json", "handoff.json")
-    if job["decision"]["scope"] == _SOUND_CUE_SCOPE:
-        names = ("component.scraft", "recipe.json", "cue.wav", "Audio Files/source.wav")
-    if job["decision"]["scope"] == _STILL_CARD_SCOPE:
-        names = ("component.vectorcraft", "recipe.json", "card.png")
+    names = {
+        "soundcraft": (
+            "component.scraft",
+            "recipe.json",
+            "cue.wav",
+            "Audio Files/source.wav",
+        ),
+        "vectorcraft": ("component.vectorcraft", "recipe.json", "card.png"),
+        "filmcraft": ("component.fcproj", "recipe.json", "component.otio"),
+    }.get(
+        job["decision"]["scope"]["app"],
+        ("component.anicraft", "recipe.json", "handoff.json"),
+    )
     candidates = [directory / name for name in names]
     candidates.extend(
         directory / "alpha" / f"frame_{index:05d}.png" for index in range(1, count + 1)
@@ -1267,6 +1352,8 @@ def run_authoring(job_ref, *, expected_head, adapter):
 
 
 def _select_job_author(adapter, scope):
+    if scope == _FILM_RETURN_SCOPE:
+        return adapter.author_film_interchange
     if scope == _SOUND_CUE_SCOPE:
         return adapter.author_isolated_cue
     if scope == _STILL_CARD_SCOPE:
@@ -1368,7 +1455,7 @@ def _require_prepared_authoring(store, job, head):
             code="ARTCRAFT_OUTCOME_UNKNOWN",
         )
     scope = job["decision"]["scope"]
-    if scope not in (_SOUND_CUE_SCOPE, _STILL_CARD_SCOPE) and (
+    if scope not in (_SOUND_CUE_SCOPE, _STILL_CARD_SCOPE, _FILM_RETURN_SCOPE) and (
         scope != {"app": "anicraft", "operations": ["lower-third"]}
         or not job.get("authoringParameters")
     ):
@@ -1423,6 +1510,8 @@ def _execute_prepared_job(store, job, running, directory, produce):
 
 
 def _verify_authoring_result(job, directory, result):
+    if job["decision"]["scope"] == _FILM_RETURN_SCOPE:
+        return _verify_film_authoring_result(job, directory, result)
     if job["decision"]["scope"] == _SOUND_CUE_SCOPE:
         return _verify_sound_authoring_result(job, directory, result)
     if job["decision"]["scope"] == _STILL_CARD_SCOPE:
@@ -1533,6 +1622,29 @@ def _verify_still_authoring_result(job, directory, result):
     }
 
 
+def _verify_film_authoring_result(job, directory, result):
+    evidence = result["interchangeEvidence"]
+    validate_document(evidence, _schema("interchangeEvidence"))
+    for key, name in (
+        ("nativeSource", "component.fcproj"),
+        ("recipe", "recipe.json"),
+        ("media", "component.otio"),
+    ):
+        item = result[key]
+        if item["locator"] != str(directory / name) or not _retained_job_file(
+            item, job["roots"]["write"]
+        ):
+            raise ArtCraftError(
+                "FilmCraft interchange differs from its owned job artifacts"
+            )
+    return {
+        "saved": result["nativeSource"],
+        "recipe": result["recipe"],
+        "outputs": [result["media"]],
+        "interchangeEvidence": evidence,
+    }
+
+
 def _verify_retained_export(store, job, event):
     directory = _authoring_export_directory(store, job)
     try:
@@ -1547,6 +1659,12 @@ def _verify_retained_export(store, job, event):
         if job["decision"]["scope"] == _STILL_CARD_SCOPE:
             (media,) = event["outputs"]
             media_evidence = {"media": media, "stillEvidence": event["stillEvidence"]}
+        if job["decision"]["scope"] == _FILM_RETURN_SCOPE:
+            (media,) = event["outputs"]
+            media_evidence = {
+                "media": media,
+                "interchangeEvidence": event["interchangeEvidence"],
+            }
         _verify_authoring_result(
             job,
             directory,
@@ -1585,6 +1703,18 @@ def read_authoring_export(job_ref, *, expected_head):
 def describe_export_review(job_ref, *, expected_head):
     """Describe the exact standalone candidate for an independent creator review."""
     job, event = read_authoring_export(job_ref, expected_head=expected_head)
+    if job["decision"]["scope"] == _FILM_RETURN_SCOPE:
+        return {
+            "reviewState": "pending-creator",
+            "jobHash": job["jobHash"],
+            "exportHead": expected_head,
+            "nativeSource": event["saved"],
+            "outputContract": job["output"],
+            "standalone": {
+                "timeline": event["outputs"][0],
+                **event["interchangeEvidence"],
+            },
+        }
     if job["decision"]["scope"] == _STILL_CARD_SCOPE:
         reference = {
             "job": file_fingerprint(Path(job_ref)),
