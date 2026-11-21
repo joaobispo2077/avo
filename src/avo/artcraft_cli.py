@@ -105,6 +105,9 @@ def _provider_commands(operations):
         instantiate.add_argument(f"--{field}", required=True)
     instantiate.add_argument("--json", action="store_true")
     instantiate.add_argument("--supersedes", help="Explicitly upgrade a prior instance")
+    instantiate.add_argument(
+        "--source-provider", help="Explicitly select an approved sharing origin"
+    )
 
 
 def _distinct_keys(pairs):
@@ -366,6 +369,7 @@ def _instantiate_native_provider(args, source_observer):
             safe_area_bindings=bindings["safeAreaBindings"],
             source_observer=source_observer,
             supersedes_instance_id=args.supersedes,
+            source_provider=args.source_provider,
         )
     except (ComponentInstanceError, StoreError, WorkspaceError) as exc:
         raise ArtCraftError(str(exc), code="ARTCRAFT_INSTANCE_UNAVAILABLE") from exc
