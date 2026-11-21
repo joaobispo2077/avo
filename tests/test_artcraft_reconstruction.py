@@ -121,6 +121,21 @@ def test_reconstruction_retains_selected_native_job_and_its_journal(
         verify_reconstruction_bundle(tmp_path)["bundleSha256"] == bundle["bundleSha256"]
     )
 
+    for changed in (native, Path(event["recipe"]["locator"])):
+        predecessor = changed.read_bytes()
+        changed.write_bytes(b"modified retained evidence")
+        try:
+            with pytest.raises(
+                ReconstructionError, match="reconstruction file changed"
+            ) as error:
+                verify_reconstruction_bundle(tmp_path)
+            assert changed.name in str(error.value)
+        finally:
+            changed.write_bytes(predecessor)
+    assert (
+        verify_reconstruction_bundle(tmp_path)["bundleSha256"] == bundle["bundleSha256"]
+    )
+
 
 def test_reconstruction_checks_a_selected_native_input_outside_the_video_root(
     tmp_path, monkeypatch
