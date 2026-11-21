@@ -224,6 +224,79 @@ def _drawing(ws, source):
     return record
 
 
+def _check_editor_overlay(workspace, plan, record):
+    from tests.integration.test_editor_handoff_runtime import editor_request
+
+    from avo.adapters.media.fcp7_xml import parse_fcp7_xml
+    from avo.adapters.registry import build_editor_handoff
+    from avo.editing_craft import resolve_editing_craft_selection
+    from avo.timeline.editor_handoff import RESOLVE_AUDIO_VALIDATION
+    from avo.timeline.editor_retention import retained_editor_files
+
+    service = build_editor_handoff(workspace)
+    profile = RESOLVE_AUDIO_VALIDATION
+    request = editor_request(workspace)
+    request.update(
+        profileId=profile,
+        selection=resolve_editing_craft_selection(
+            invocation={"handoff": {"mode": "editor", "targetProfile": profile}}
+        ),
+        programRate={"num": 30, "den": 1},
+        window={"startFrame": 9, "endFrameExclusive": 27},
+    )
+    assert not Path(plan["output"]["path"]).exists()
+    assert all(
+        source["kind"] != "generated-alpha"
+        for source in service.prepare(request)["sources"]
+    )
+    request["generatedAlphaPlan"] = {
+        "id": plan["proofPlanId"],
+        "sha256": plan["proofPlanHash"],
+    }
+    result = service.prepare(request)
+    assert result["status"] == "validation-only"
+    (generated,) = (
+        source for source in result["sources"] if source["kind"] == "generated-alpha"
+    )
+    assert generated["generatedAsset"] == {
+        "id": record["assetId"],
+        "sha256": record["recordHash"],
+        "original": {
+            key: record["output"][key] for key in ("locator", "sizeBytes", "sha256")
+        },
+    }
+    compatible = Path(generated["locator"])
+    assert compatible.suffix == ".mov"
+    assert generated["sha256"] == file_fingerprint(compatible)["sha256"]
+    payload = (workspace.raw_dir / result["xmlRef"]["locator"]).read_bytes()
+    model = parse_fcp7_xml(payload, roots=[workspace.raw_dir])
+    pictures = [lane for lane in model["tracks"] if lane["kind"] == "video"]
+    (overlay,) = pictures[-1]["clips"]
+    assert (overlay["start"], overlay["end"], overlay["in"], overlay["out"]) == (
+        0,
+        15,
+        6,
+        21,
+    )
+    assert model["sources"][overlay["fileId"]]["locator"] == compatible
+    assert service.prepare(request)["handoffRef"] == result["handoffRef"]
+    retained = retained_editor_files(workspace)
+    assert retained[compatible] == generated["sha256"]
+    assert retained[Path(record["output"]["locator"])] == record["output"]["sha256"]
+    assert GeneratedAssetService(workspace).path(record["assetId"]) in retained
+    assert ProofPlanCompiler(workspace).path(plan["proofPlanId"]) in retained
+    with pytest.raises(ValueError, match="proof plan identity changed"):
+        service.prepare(
+            {
+                **request,
+                "generatedAlphaPlan": {
+                    **request["generatedAlphaPlan"],
+                    "sha256": "c" * 64,
+                },
+            }
+        )
+
+
 def test_real_canonical_drawing_has_exact_full_micro_pixels_and_original_pcm(tmp_path):
     if not runtime_readiness()["ready"] or not shutil.which("ffmpeg"):
         if os.environ.get("AVO_REQUIRE_CODE_DRAWN_RUNTIME") == "1":
@@ -269,6 +342,7 @@ def test_real_canonical_drawing_has_exact_full_micro_pixels_and_original_pcm(tmp
         "hyperframes" not in reference["adapterId"]
         for reference in plan["implementationRefs"]
     )
+    _check_editor_overlay(ws, plan, record)
     # Public services receive raw ports and must configure admitted generated inputs.
     media_inputs = canonical_proof_media_inputs(ws, plan)
     gate = render_proof_microproofs(

@@ -157,12 +157,26 @@ def test_native_proof_record_rejects_malformed_shape_even_with_rehashed_body(
         migration.inventory_historical_output_fingerprints(tmp_path)
 
 
-@pytest.mark.parametrize("kind", ["cut-proof", "proof-plan"])
-def test_deleted_canonical_output_stays_quarantined_after_copy_rename(tmp_path, kind):
+@pytest.mark.parametrize(
+    ("kind", "sound_review"),
+    [("cut-proof", False), ("proof-plan", False), ("proof-plan", True)],
+)
+def test_deleted_canonical_output_stays_quarantined_after_copy_rename(
+    tmp_path, kind, sound_review
+):
     relocated = tmp_path / "camera.mov"
     relocated.write_bytes(b"previously rendered picture and audio")
     output = {**file_fingerprint(relocated), "locator": str(tmp_path / "deleted.mkv")}
     record = _record(tmp_path, kind, output=output)
+    if sound_review:
+        record["soundMixReview"] = {"sampleRate": 48000, "events": []}
+        record["materializationHash"] = content_hash(
+            {
+                key: value
+                for key, value in record.items()
+                if key != "materializationHash"
+            }
+        )
     path = _write(tmp_path, record)
     known = migration.inventory_historical_output_fingerprints(tmp_path)
     assert len(known) == 1

@@ -136,8 +136,16 @@ def _cmap_source_ids(snapshot):
         if not source_id or source_id in source_ids:
             raise LineageError("CMap source IDs must be stable and unique")
         source_ids.add(source_id)
-        _require_raw_source(source)
+        _require_cmap_source(source, snapshot.get("layoutMode") == "placed")
     return source_ids
+
+
+def _require_cmap_source(source, placed):
+    if placed and source.get("kind") == "authorial":
+        if len(str((source.get("fingerprint") or {}).get("sha256") or "")) != 64:
+            raise LineageError("CMap authorial source requires SHA-256 fingerprint")
+    else:
+        _require_raw_source(source)
 
 
 def validate_cmap_snapshot(snapshot: dict[str, Any]) -> None:

@@ -7,13 +7,13 @@ from fractions import Fraction
 from pathlib import Path
 from typing import Any
 
+from . import track_rules as _track_rules
 from .contracts import file_fingerprint, validate_document
 from .store import serialized_timeline
+from .track_rules import TrackError, normalize_audio_track_layer
 from .workspace import TimelineWorkspace
 
-
-class TrackError(ValueError):
-    pass
+apply_event_role_defaults = _track_rules.apply_event_role_defaults
 
 
 class VideoTrackError(ValueError):
@@ -191,6 +191,8 @@ def resolve_tracks(
             layer_id = str(layer.get("layerId") or "")
             _validate_breath_layer(layer)
             _validate_generated_track_layer(layer, group, generated_instances)
+            _validate_generated_audio_track(layer)
+            _validate_generated_still_track(layer)
             if not layer_id or layer_id in seen:
                 raise TrackError("track layer IDs must be unique and stable")
             seen.add(layer_id)
@@ -228,6 +230,26 @@ def resolve_tracks(
     return result
 
 
+def _validate_generated_audio_track(layer):
+    if "generatedAudioRef" in layer:
+        from .artcraft_audio import require_generated_audio_layer
+
+        try:
+            require_generated_audio_layer(layer)
+        except (ValueError, OSError) as error:
+            raise TrackError(f"Invalid generated audio source: {error}") from error
+
+
+def _validate_generated_still_track(layer):
+    if "generatedStillRef" in layer:
+        from .artcraft_stills import require_generated_still_layer
+
+        try:
+            require_generated_still_layer(layer)
+        except (ValueError, OSError) as error:
+            raise TrackError(f"Invalid generated still source: {error}") from error
+
+
 def inspect_audio_hierarchy(layers: list[dict[str, Any]]) -> list[str]:
     findings = []
     dialogue = next((item for item in layers if item.get("role") == "dialogue"), None)
@@ -246,64 +268,6 @@ def inspect_audio_hierarchy(layers: list[dict[str, Any]]) -> list[str]:
     return findings
 
 
-_LAYOUT_CHANNELS = {"mono": 1, "stereo": 2}
-
-
-def normalize_audio_track_layer(layer: dict[str, Any]) -> dict[str, Any]:
-    """Require an explicit, valid channel map without changing source role."""
-    result = deepcopy(layer)
-    source_layout = str(result.get("sourceLayout") or "")
-    target_layout = str(result.get("targetLayout") or "")
-    source_channels = _LAYOUT_CHANNELS.get(source_layout)
-    target_channels = _LAYOUT_CHANNELS.get(target_layout)
-    mapping = result.get("channelMap")
-    if source_channels is None or target_channels is None:
-        raise TrackError("unsupported channel layout")
-    if not isinstance(mapping, list) or len(mapping) != target_channels:
-        raise TrackError("channel map must name every target channel")
-    if any(
-        isinstance(value, bool)
-        or not isinstance(value, int)
-        or value < 0
-        or value >= source_channels
-        for value in mapping
-    ):
-        raise TrackError("channel map references a missing source channel")
-    if result.get("role") not in {
-        "dialogue",
-        "source-audio",
-        "music",
-        "sfx",
-        "ambience",
-    }:
-        raise TrackError("unsupported audio role")
-    return result
-
-
-def apply_event_role_defaults(event: dict[str, Any]) -> dict[str, Any]:
-    """Apply conservative media-role defaults before event-clock resolution."""
-    result = deepcopy(event)
-    role = str(result.get("role") or "")
-    effects = list(result.get("entryEffectIds") or [])
-    if role == "main-scene" and effects and not result.get("syntheticEffectApproved"):
-        raise TrackError("main-scene cannot receive automatic overlay SFX")
-    if (
-        role in {"overlay-image", "overlay-video", "authored-graphic"}
-        and len(effects) > 1
-        and not result.get("orderedMultiEffect")
-    ):
-        raise TrackError("ordinary overlays allow at most one entry SFX")
-    if role == "comparison-only":
-        result["render"] = False
-    if role == "overlay-video":
-        audio = result.get("audio") or {}
-        audio.setdefault("retainSourceAudio", bool(result.get("sourceRef")))
-        result["audio"] = audio
-    result.setdefault("exitEffectIds", [])
-    result.setdefault("exitAudioEnabled", False)
-    return result
-
-
 def inspect_visual_hierarchy(layers: list[dict[str, Any]]) -> list[str]:
     findings = []
     for layer in layers:
@@ -317,6 +281,18 @@ def inspect_visual_hierarchy(layers: list[dict[str, Any]]) -> list[str]:
         } and not layer.get("faceAvoidance", False):
             findings.append("face-avoidance")
     return sorted(set(findings))
+
+
+def inspect_track_snapshot(snapshot):
+    """Summarize the selected Tracks revision without opening source media."""
+    audio = snapshot.get("audioTracks", {}).get("layers", [])
+    video = snapshot.get("videoTracks", {}).get("layers", [])
+    return {
+        "audioLayers": audio,
+        "videoLayers": video,
+        "audioFindings": inspect_audio_hierarchy(audio),
+        "visualFindings": inspect_visual_hierarchy(video),
+    }
 
 
 class TracksService:
@@ -337,11 +313,28 @@ class TracksService:
         }
         return basis, revision
 
-    @serialized_timeline(lambda self: self.workspace.timeline_dir)
-    def author(
-        self, snapshot: dict[str, Any], *, actor: str, reason: str
+    def prepare_authoring(
+        self,
+        snapshot: dict[str, Any],
+        *,
+        actor: str,
+        reason: str,
+        parents=None,
+        revision_id=None,
+        created_at=None,
+        evidence=None,
     ) -> dict[str, Any]:
-        basis, bmap_revision = self._basis()
+        if parents and "bmap" in parents:
+            bmap_revision = parents["bmap"]
+            basis = {
+                "artifactType": "bmap",
+                "artifactId": bmap_revision["artifactId"],
+                "revisionId": bmap_revision["revisionId"],
+                "sha256": bmap_revision["contentSha256"],
+                "state": "valid",
+            }
+        else:
+            basis, bmap_revision = self._basis()
         value = deepcopy(snapshot)
         value["basis"] = basis
         value["cmapBasis"] = deepcopy(bmap_revision["snapshot"]["basis"])
@@ -349,12 +342,25 @@ class TracksService:
             cue["cueId"]: cue for cue in bmap_revision["snapshot"].get("cues") or []
         }
         value = resolve_tracks(value, set(cue_map), cues=cue_map)
+        if "sourceMixAdjustments" in value["audioTracks"]:
+            from .source_mix import validate_source_mix_adjustments
+
+            cmap_index = self.workspace.require_active("cmap")
+            cmap = self.workspace.store("cmap").revision(cmap_index["headRevisionId"])[
+                "snapshot"
+            ]
+            try:
+                validate_source_mix_adjustments(
+                    cmap, value["audioTracks"]["sourceMixAdjustments"]
+                )
+            except ValueError as error:
+                raise TrackError(str(error)) from error
         _validate_generated_track_sources(value, Path(self.workspace.raw_dir))
         index = self.store.load_index()
         expected = None
         if index["headRevisionId"]:
             expected = self.store.revision(index["headRevisionId"])["contentHash"]
-        revision = self.store.append_revision(
+        return self.store.prepare_revision(
             snapshot=value,
             actor=actor,
             reason=reason,
@@ -367,6 +373,30 @@ class TracksService:
                 }
             ],
             expected_head_hash=expected,
+            revision_id=revision_id,
+            created_at=created_at,
+            evidence=evidence,
+        )
+
+    @serialized_timeline(lambda self: self.workspace.timeline_dir)
+    def author(self, snapshot, *, actor, reason, prepared=None):
+        expected = self.store.head_hash()
+        stamps = (
+            {}
+            if prepared is None
+            else {
+                "revision_id": prepared["revisionId"],
+                "created_at": prepared["createdAt"],
+                "evidence": prepared["inputEvidenceRefs"],
+            }
+        )
+        actual = self.prepare_authoring(snapshot, actor=actor, reason=reason, **stamps)
+        if prepared is not None and actual != prepared:
+            raise TrackError(
+                "Prepared Tracks differ from current basis, sources or target"
+            )
+        revision = self.store.append_prepared_revision(
+            actual, expected_head_hash=expected or "empty"
         )
         if expected and expected != revision["contentHash"]:
             self.workspace.invalidate_descendants(
@@ -387,11 +417,15 @@ class TracksService:
             "revisionId": revision["revisionId"],
             "revisionHash": revision["contentHash"],
             "basis": snapshot["basis"],
-            "audioLayers": snapshot["audioTracks"]["layers"],
-            "videoLayers": snapshot["videoTracks"]["layers"],
-            "audioFindings": inspect_audio_hierarchy(snapshot["audioTracks"]["layers"]),
-            "visualFindings": inspect_visual_hierarchy(
-                snapshot["videoTracks"]["layers"]
+            **inspect_track_snapshot(snapshot),
+            **(
+                {
+                    "sourceMixAdjustments": deepcopy(
+                        snapshot["audioTracks"]["sourceMixAdjustments"]
+                    )
+                }
+                if "sourceMixAdjustments" in snapshot["audioTracks"]
+                else {}
             ),
         }
 

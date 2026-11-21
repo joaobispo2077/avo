@@ -77,6 +77,12 @@ class CMapSchemaTests(unittest.TestCase):
         with self.assertRaises(ContractError):
             validate_document(document, "avo.cmap.schema.json")
 
+    def test_authorial_source_cannot_replace_contiguous_raw_media(self) -> None:
+        document = cmap_document()
+        document["revisions"][0]["snapshot"]["sources"][0]["kind"] = "authorial"
+        with self.assertRaises(ContractError):
+            validate_document(document, "avo.cmap.schema.json")
+
     def test_segment_requires_stable_id_and_reason(self) -> None:
         document = cmap_document()
         del document["revisions"][0]["snapshot"]["segments"][0]["segmentId"]

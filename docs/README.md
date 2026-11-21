@@ -74,3 +74,13 @@ Write for the **correct audience by file** — not by mixing tones in one file.
   loudness, true-peak, and delivery specs.
 - [`animation-delivery-specifications.md`](animation-delivery-specifications.md)
   — animation render and delivery specs.
+
+See [Editing craft preferences and motion review](editing-craft.md) for the current native interfaces and implementation scope.
+
+See [Provider sound favorites](sfx-provider-favorites.md) for explicit shared discovery preferences and opt-in scan behavior.
+
+See [Offline semantic SFX qualification](sfx-semantic-runtime.md) for separately provisioned models and the explicitly selected real-runtime test.
+
+See [Optional face detector runtime](visual-motion-runtime.md) for the pinned Windows CPU environment and explicit model readiness check.
+
+See [Source speech coverage](speech-coverage.md) for bound omission evidence and protection of uncertain speech during retake proposals.

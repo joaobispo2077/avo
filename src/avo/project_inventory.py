@@ -410,7 +410,7 @@ def _resolve_reconstruction_metadata(raw_dir: Path, *, project_path=None) -> lis
     return _fallback_reconstruction_metadata(raw_dir, timeline, workspace)
 
 
-def _fallback_timeline_files(root, imports):
+def _fallback_timeline_files(root, excluded):
     if not root.is_dir():
         return []
     return [
@@ -418,7 +418,8 @@ def _fallback_timeline_files(root, imports):
         for path in root.rglob("*")
         if path.is_file()
         and not path.is_symlink()
-        and not path.is_relative_to(imports)
+        and not path.is_relative_to(root / "editor-handoff")
+        and not any(path.is_relative_to(directory) for directory in excluded)
         and path.suffix.lower() in {".json", ".md"}
     ]
 
@@ -429,10 +430,26 @@ def _fallback_reconstruction_metadata(raw_dir, timeline, workspace):
         timeline,
         workspace.review_dir if workspace else raw_dir / "edit" / "review",
     )
+    excluded = [imports, roots[1] / "motion-plan"]
+    if workspace is not None:
+        # The repair journal and its pending attempts own this result directory.
+        excluded.append(timeline / "cutting" / "preparation-results")
     paths: list[Path] = []
     for root in roots:
-        paths.extend(_fallback_timeline_files(root, imports))
+        paths.extend(_fallback_timeline_files(root, excluded))
     paths.extend(_retained_import_metadata(workspace, timeline))
+    paths.extend(_retained_editor_metadata(workspace, timeline))
+    if workspace is not None:
+        from avo.timeline.motion_retention import retained_motion_paths
+        from avo.timeline.preparation_retention import retained_preparation_files
+
+        paths.extend(retained_motion_paths(workspace))
+        paths.extend(retained_preparation_files(workspace))
+    elif any(
+        (raw_dir / "edit/motion" / name).exists()
+        for name in ("proposals", "decisions", "receipts", "applications")
+    ):
+        raise PreservedSetViolation("Motion retention requires its declared project")
     # Living footage-root audits (not reconstruction-bundle graph members).
     # Listed as preserved metadata when no verified bundle is present so a
     # later edit/-only cleanup cannot treat them as skippable leftovers.
@@ -448,6 +465,19 @@ def _fallback_reconstruction_metadata(raw_dir, timeline, workspace):
         if path.is_file() and not path.is_symlink():
             paths.append(path)
     return sorted(set(paths))
+
+
+def _retained_editor_metadata(workspace, timeline):
+    directory = timeline / "editor-handoff"
+    if not directory.exists() and not directory.is_symlink():
+        return []
+    if workspace is None:
+        raise PreservedSetViolation(
+            "Editor handoff retention requires its declared project"
+        )
+    from avo.timeline.editor_retention import retained_editor_files
+
+    return list(retained_editor_files(workspace))
 
 
 def _import_storage_present(timeline):

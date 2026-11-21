@@ -2,6 +2,39 @@
   "$comment": "Model catalog for AVO transparency — options per job with resource/quality labels. Resolved via helpers/models.py.",
   "version": 1,
   "jobs": {
+    "face_detect": {
+      "adapter": "local-yunet",
+      "optional": true,
+      "default": "yunet-2023mar",
+      "options": [{
+        "id": "yunet-2023mar", "label": "Local YuNet 2023 face detector (optional)",
+        "speed": "unknown", "quality": "unknown",
+        "capabilities": ["face-observations"],
+        "notes": "Explicit prepared CPU environment and exact local model bytes required. Face boxes support geometric tracking."
+      }]
+    },
+    "audio_embed": {
+      "adapter": "local-clap",
+      "optional": true,
+      "default": "clap-htsat-unfused",
+      "options": [{
+        "id": "clap-htsat-unfused", "label": "Local CLAP audio encoder (optional)",
+        "speed": "unknown", "quality": "unknown", "hfRepo": "laion/clap-htsat-unfused",
+        "capabilities": ["audio-embedding"],
+        "notes": "Requires an explicitly provisioned, digest-pinned joint model and isolated runtime. Catalogue metadata is not runtime qualification. No download or default execution."
+      }]
+    },
+    "text_embed": {
+      "adapter": "local-clap",
+      "optional": true,
+      "default": "clap-htsat-unfused",
+      "options": [{
+        "id": "clap-htsat-unfused", "label": "Local CLAP text encoder (optional)",
+        "speed": "unknown", "quality": "unknown", "hfRepo": "laion/clap-htsat-unfused",
+        "capabilities": ["text-embedding"],
+        "notes": "Must use the same verified joint model, runtime and preprocessing identity as audio_embed; no automatic lexical fallback."
+      }]
+    },
     "transcribe": {
       "adapter": "faster-whisper",
       "default": "small",

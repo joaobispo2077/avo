@@ -1,0 +1,1 @@
+"""Packaged ArtCraft capability metadata."""

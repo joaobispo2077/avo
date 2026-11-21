@@ -1,0 +1,1213 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://avo.local/avo.motion-review.schema.json",
+  "title": "Derived motion review snapshot; never timeline or approval authority",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "snapshotHash",
+    "generator",
+    "videoId",
+    "provider",
+    "basisHeads",
+    "applicability",
+    "readiness",
+    "direction",
+    "options",
+    "items",
+    "storyboardCards",
+    "lanes",
+    "gaps",
+    "pendingRevisions",
+    "coverage",
+    "advisories"
+  ],
+  "allOf": [
+    {
+      "if": {"properties": {"generator": {"properties": {"version": {"enum": ["1.9.0", "1.10.0", "1.11.0", "1.12.0"]}}}}},
+      "then": {"required": ["contextBasis"]}
+    },
+    {"if": {"properties": {"generator": {"properties": {"version": {"const": "1.12.0"}}}}}, "then": {"required": ["trackReview"]}}
+  ],
+  "properties": {
+    "contextBasis": {"$ref": "#/$defs/contextBasis"},
+    "projectionSource": {"$ref": "#/$defs/projectionSource"},
+    "productionScope": {"$ref": "avo.editing-craft-run.schema.json#/$defs/productionScopePlan"},
+    "encodedReview": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["candidateSha256", "reviewSha256", "reviewPath", "links"],
+      "properties": {
+        "candidateSha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "reviewSha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "reviewPath": {"type": "string", "minLength": 1},
+        "links": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["itemId", "cueIds", "observedFrames", "findingIds"],
+            "properties": {
+              "itemId": {"type": "string", "minLength": 1},
+              "cueIds": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string"}},
+              "observedFrames": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "integer", "minimum": 0}},
+              "findingIds": {"type": "array", "uniqueItems": true, "items": {"type": "string"}}
+            }
+          }
+        }
+      }
+    },
+    "schemaVersion": {
+      "const": "1.0.0"
+    },
+    "snapshotHash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "generator": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "version"
+      ],
+      "properties": {
+        "id": {
+          "const": "avo.motion-review"
+        },
+        "version": {
+            "enum": ["1.1.0", "1.2.0", "1.3.0", "1.4.0", "1.5.0", "1.6.0", "1.7.0", "1.8.0", "1.9.0", "1.10.0", "1.11.0", "1.12.0"]
+        }
+      }
+    },
+    "videoId": {
+      "type": "string"
+    },
+    "provider": {
+      "type": "string"
+    },
+    "basisHeads": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "cmap",
+        "bmap",
+        "tracks",
+        "animation",
+        "sync-map"
+      ],
+      "properties": {
+        "cmap": {
+          "anyOf": [
+            {
+              "type": [
+                "object",
+                "null"
+              ],
+              "additionalProperties": false,
+              "required": [
+                "revisionId",
+                "sha256",
+                "activeState",
+                "approvedRevisionId"
+              ],
+              "properties": {
+                "revisionId": {
+                  "type": "string"
+                },
+                "sha256": {
+                  "type": "string",
+                  "pattern": "^[a-f0-9]{64}$"
+                },
+                "activeState": {
+                  "type": "string"
+                },
+                "approvedRevisionId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              }
+            },
+            {
+              "type": [
+                "object",
+                "null"
+              ],
+              "additionalProperties": false,
+              "required": [
+                "revisionId",
+                "sha256",
+                "activeState",
+                "approvedRevisionId",
+                "availability"
+              ],
+              "properties": {
+                "revisionId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "sha256": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "pattern": "^[a-f0-9]{64}$"
+                },
+                "activeState": {
+                  "type": "string"
+                },
+                "approvedRevisionId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "availability": {
+                  "const": "unavailable"
+                }
+              }
+            }
+          ]
+        },
+        "bmap": {
+          "anyOf": [
+            {
+              "type": [
+                "object",
+                "null"
+              ],
+              "additionalProperties": false,
+              "required": [
+                "revisionId",
+                "sha256",
+                "activeState",
+                "approvedRevisionId"
+              ],
+              "properties": {
+                "revisionId": {
+                  "type": "string"
+                },
+                "sha256": {
+                  "type": "string",
+                  "pattern": "^[a-f0-9]{64}$"
+                },
+                "activeState": {
+                  "type": "string"
+                },
+                "approvedRevisionId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              }
+            },
+            {
+              "type": [
+                "object",
+                "null"
+              ],
+              "additionalProperties": false,
+              "required": [
+                "revisionId",
+                "sha256",
+                "activeState",
+                "approvedRevisionId",
+                "availability"
+              ],
+              "properties": {
+                "revisionId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "sha256": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "pattern": "^[a-f0-9]{64}$"
+                },
+                "activeState": {
+                  "type": "string"
+                },
+                "approvedRevisionId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "availability": {
+                  "const": "unavailable"
+                }
+              }
+            }
+          ]
+        },
+        "tracks": {
+          "anyOf": [
+            {
+              "type": [
+                "object",
+                "null"
+              ],
+              "additionalProperties": false,
+              "required": [
+                "revisionId",
+                "sha256",
+                "activeState",
+                "approvedRevisionId"
+              ],
+              "properties": {
+                "revisionId": {
+                  "type": "string"
+                },
+                "sha256": {
+                  "type": "string",
+                  "pattern": "^[a-f0-9]{64}$"
+                },
+                "activeState": {
+                  "type": "string"
+                },
+                "approvedRevisionId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              }
+            },
+            {
+              "type": [
+                "object",
+                "null"
+              ],
+              "additionalProperties": false,
+              "required": [
+                "revisionId",
+                "sha256",
+                "activeState",
+                "approvedRevisionId",
+                "availability"
+              ],
+              "properties": {
+                "revisionId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "sha256": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "pattern": "^[a-f0-9]{64}$"
+                },
+                "activeState": {
+                  "type": "string"
+                },
+                "approvedRevisionId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "availability": {
+                  "const": "unavailable"
+                }
+              }
+            }
+          ]
+        },
+        "animation": {
+          "anyOf": [
+            {
+              "type": [
+                "object",
+                "null"
+              ],
+              "additionalProperties": false,
+              "required": [
+                "revisionId",
+                "sha256",
+                "activeState",
+                "approvedRevisionId"
+              ],
+              "properties": {
+                "revisionId": {
+                  "type": "string"
+                },
+                "sha256": {
+                  "type": "string",
+                  "pattern": "^[a-f0-9]{64}$"
+                },
+                "activeState": {
+                  "type": "string"
+                },
+                "approvedRevisionId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              }
+            },
+            {
+              "type": [
+                "object",
+                "null"
+              ],
+              "additionalProperties": false,
+              "required": [
+                "revisionId",
+                "sha256",
+                "activeState",
+                "approvedRevisionId",
+                "availability"
+              ],
+              "properties": {
+                "revisionId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "sha256": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "pattern": "^[a-f0-9]{64}$"
+                },
+                "activeState": {
+                  "type": "string"
+                },
+                "approvedRevisionId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "availability": {
+                  "const": "unavailable"
+                }
+              }
+            }
+          ]
+        },
+        "sync-map": {
+          "anyOf": [
+            {
+              "type": [
+                "object",
+                "null"
+              ],
+              "additionalProperties": false,
+              "required": [
+                "revisionId",
+                "sha256",
+                "activeState",
+                "approvedRevisionId"
+              ],
+              "properties": {
+                "revisionId": {
+                  "type": "string"
+                },
+                "sha256": {
+                  "type": "string",
+                  "pattern": "^[a-f0-9]{64}$"
+                },
+                "activeState": {
+                  "type": "string"
+                },
+                "approvedRevisionId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                }
+              }
+            },
+            {
+              "type": [
+                "object",
+                "null"
+              ],
+              "additionalProperties": false,
+              "required": [
+                "revisionId",
+                "sha256",
+                "activeState",
+                "approvedRevisionId",
+                "availability"
+              ],
+              "properties": {
+                "revisionId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "sha256": {
+                  "type": [
+                    "string",
+                    "null"
+                  ],
+                  "pattern": "^[a-f0-9]{64}$"
+                },
+                "activeState": {
+                  "type": "string"
+                },
+                "approvedRevisionId": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "availability": {
+                  "const": "unavailable"
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "applicability": {
+      "enum": [
+        "applicable",
+        "explicitly-skipped",
+        "unavailable-context"
+      ]
+    },
+    "readiness": {
+      "enum": [
+        "conceptual",
+        "timed-unresolved",
+        "resolved",
+        "stale",
+        "needs-judgment",
+        "unavailable"
+      ]
+    },
+    "direction": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "options": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "items": {
+      "type": "array",
+      "maxItems": 500,
+      "items": {
+        "$ref": "#/$defs/item"
+      }
+    },
+    "storyboardCards": {
+      "type": "array",
+      "maxItems": 500,
+      "items": {
+        "$ref": "#/$defs/card"
+      }
+    },
+    "lanes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "audio",
+        "video"
+      ],
+      "properties": {
+        "audio": {
+          "type": "array",
+          "items": {}
+        },
+        "video": {
+          "type": "array",
+          "items": {}
+        }
+      }
+    },
+    "trackReview": {
+      "type": "object", "additionalProperties": false,
+      "required": ["state", "audio", "video", "findings"],
+      "properties": {
+        "state": {"enum": ["declared", "stale", "unavailable"]},
+        "audio": {"type": "array", "items": {"$ref": "#/$defs/reviewLane"}},
+        "video": {"type": "array", "items": {"$ref": "#/$defs/reviewLane"}},
+        "findings": {"type": "object", "additionalProperties": false, "required": ["audio", "video"],
+          "properties": {
+            "audio": {"type": "array", "items": {"type": "string"}},
+            "video": {"type": "array", "items": {"type": "string"}}
+          }
+        }
+      }
+    },
+    "gaps": {
+      "type": "array",
+      "items": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "object"
+          }
+        ]
+      }
+    },
+    "pendingRevisions": {
+      "type": "array",
+      "items": {}
+    },
+    "coverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "shown",
+        "total",
+        "canonicalPartCount",
+        "proposalDefinitionCount",
+        "complete"
+      ],
+      "properties": {
+        "shown": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 500
+        },
+        "total": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "canonicalPartCount": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "proposalDefinitionCount": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "complete": {
+          "type": "boolean"
+        }
+      }
+    },
+    "advisories": {
+      "$ref": "#/$defs/advisories"
+    }
+  },
+  "$defs": {
+    "reviewLane": {
+      "type": "object", "additionalProperties": false,
+      "required": ["laneId", "role", "order", "pictureOrder", "state", "source", "gainDb", "channels", "regions"],
+      "properties": {
+        "laneId": {"type": "string"},
+        "role": {"type": "string"},
+        "order": {"type": "integer"},
+        "pictureOrder": {"type": ["integer", "null"]},
+        "state": {"enum": ["declared", "disabled", "muted", "unresolved"]},
+        "source": {"type": ["string", "null"]},
+        "gainDb": {"type": ["number", "null"]},
+        "channels": {"type": ["array", "null"], "items": {"type": "integer"}},
+        "regions": {"type": "array", "items": {"$ref": "#/$defs/reviewLaneRegion"}}
+      }
+    },
+    "reviewLaneRegion": {
+      "type": "object", "additionalProperties": false,
+      "required": ["regionId", "startTicks", "endTicks", "timebase", "gainDb", "cueIds", "itemIds", "componentRefs", "missingCueIds"],
+      "properties": {
+        "regionId": {"type": "string"},
+        "startTicks": {"type": "integer"},
+        "endTicks": {"type": "integer"},
+        "timebase": {"type": "object", "additionalProperties": false, "required": ["num", "den"],
+          "properties": {"num": {"type": "integer", "minimum": 1}, "den": {"type": "integer", "minimum": 1}}},
+        "gainDb": {"type": ["number", "null"]},
+        "cueIds": {"type": "array", "items": {"type": "string"}},
+        "itemIds": {"type": "array", "items": {"type": "string"}},
+        "componentRefs": {"type": "array", "items": {"type": "string"}},
+        "missingCueIds": {"type": "array", "items": {"type": "string"}}
+      }
+    },
+    "contextBasis": {
+      "type": "object", "additionalProperties": false,
+      "required": ["workHash", "inputHash", "directionRef", "complete"],
+      "properties": {
+        "workHash": {"$ref": "https://avo.local/avo.motion-proposal.schema.json#/$defs/sha256"},
+        "inputHash": {"$ref": "https://avo.local/avo.motion-proposal.schema.json#/$defs/sha256"},
+        "directionRef": {"oneOf": [{"type": "null"}, {"$ref": "https://avo.local/avo.motion-proposal.schema.json#/$defs/ref"}]},
+        "complete": {"type": "boolean"}
+      }
+    },
+    "projectionSource": {
+      "type": "object", "additionalProperties": false,
+      "required": ["kind", "proposalHash", "soundProposalRef"],
+      "properties": {
+        "kind": {"const": "pipeline"},
+        "proposalHash": {"oneOf": [{"type": "null"}, {"$ref": "https://avo.local/avo.motion-proposal.schema.json#/$defs/sha256"}]},
+        "soundProposalRef": {"oneOf": [{"type": "null"}, {"$ref": "https://avo.local/avo.motion-proposal.schema.json#/$defs/ref"}]}
+      }
+    },
+    "time": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ticks",
+        "timebase",
+        "domain"
+      ],
+      "properties": {
+        "ticks": {
+          "type": "integer"
+        },
+        "timebase": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "num",
+            "den"
+          ],
+          "properties": {
+            "num": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "den": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        },
+        "domain": {
+          "const": "cmap-output"
+        }
+      }
+    },
+    "item": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "itemId",
+        "label",
+        "sectionId",
+        "concept",
+        "purpose",
+        "treatment",
+        "timing",
+        "timingState",
+        "anchor",
+        "camera",
+        "sound",
+        "assets",
+        "assetReadiness",
+        "disposition",
+        "recordedDisposition",
+        "rebaseState",
+        "cueId",
+        "componentRef",
+        "targetLayerId",
+        "parts",
+        "identityConflicts",
+        "dominantFocus",
+        "supportingMotion",
+        "ambientMotion",
+        "readingIntent",
+        "depthIntent",
+        "continuityIntent",
+        "cameraIntent",
+        "soundIntent",
+        "density",
+        "layout"
+      ],
+      "properties": {
+        "itemId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "sectionId": {
+          "type": "string"
+        },
+        "concept": {
+          "type": "string"
+        },
+        "purpose": {
+          "type": "string"
+        },
+        "treatment": {
+          "type": "string"
+        },
+        "timing": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "start",
+                "end"
+              ],
+              "properties": {
+                "start": {
+                  "$ref": "#/$defs/time"
+                },
+                "end": {
+                  "$ref": "#/$defs/time"
+                }
+              }
+            }
+          ]
+        },
+        "timingState": {
+          "enum": [
+            "timed",
+            "provisional",
+            "split"
+          ]
+        },
+        "anchor": {
+          "type": "object",
+          "required": [
+            "type",
+            "spokenTrigger",
+            "rawAnchors"
+          ]
+        },
+        "camera": {},
+        "sound": {},
+        "assets": {
+          "type": "array",
+          "items": {}
+        },
+        "assetReadiness": {
+          "enum": [
+            "missing",
+            "declared",
+            "not-required",
+            "unresolved"
+          ]
+        },
+        "disposition": {
+          "type": "string"
+        },
+        "recordedDisposition": {
+          "type": "string"
+        },
+        "rebaseState": {
+          "enum": [
+            "preserved",
+            "shifted",
+            "split",
+            "removed",
+            "ambiguous",
+            "unsupported"
+          ]
+        },
+        "cueId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "componentRef": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "targetLayerId": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "parts": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/part"
+          }
+        },
+        "identityConflicts": {
+          "type": "array",
+          "items": {
+            "type": "object"
+          }
+        },
+        "dominantFocus": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 4096
+        },
+        "supportingMotion": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 4096
+        },
+        "ambientMotion": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 4096
+        },
+        "readingIntent": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 4000
+        },
+        "depthIntent": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 4000
+        },
+        "continuityIntent": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 4000
+        },
+        "cameraIntent": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 4096
+        },
+        "soundIntent": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 4096
+        },
+        "density": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 5
+        },
+        "layout": {
+          "type": [
+            "object",
+            "null"
+          ]
+        }
+      }
+    },
+    "card": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "itemId",
+        "label",
+        "concept",
+        "layers",
+        "layout",
+        "lifecycle",
+        "camera",
+        "sound",
+        "assets",
+        "evidence",
+        "unresolvedFields",
+        "dominantFocus",
+        "supportingMotion",
+        "ambientMotion",
+        "readingIntent",
+        "depthIntent",
+        "continuityIntent",
+        "cameraIntent",
+        "soundIntent",
+        "density"
+      ],
+      "properties": {
+        "itemId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "concept": {
+          "type": "string"
+        },
+        "layers": {},
+        "layout": {
+          "type": [
+            "object",
+            "null"
+          ]
+        },
+        "lifecycle": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "preEntry",
+            "entrance",
+            "hold",
+            "payoff",
+            "exit"
+          ],
+          "properties": {
+            "preEntry": {},
+            "entrance": {},
+            "hold": {},
+            "payoff": {},
+            "exit": {}
+          }
+        },
+        "camera": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "before",
+            "during",
+            "after"
+          ],
+          "properties": {
+            "before": {},
+            "during": {},
+            "after": {}
+          }
+        },
+        "sound": {},
+        "assets": {
+          "type": "array",
+          "items": {}
+        },
+        "evidence": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "type",
+            "status"
+          ],
+          "properties": {
+            "type": {
+              "enum": [
+                "concept",
+                "sketch",
+                "rendered-frame"
+              ]
+            },
+            "status": {
+              "const": "unverified"
+            },
+            "inspectionRef": {
+              "description": "Unverified caller-supplied reference; never native inspection, admission or approval evidence"
+            },
+            "basisStatus": {
+              "enum": [
+                "matches",
+                "stale",
+                "unavailable"
+              ]
+            }
+          }
+        },
+        "unresolvedFields": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string"
+          }
+        },
+        "dominantFocus": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 4096
+        },
+        "supportingMotion": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 4096
+        },
+        "ambientMotion": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 4096
+        },
+        "readingIntent": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 4000
+        },
+        "depthIntent": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 4000
+        },
+        "continuityIntent": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 4000
+        },
+        "cameraIntent": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 4096
+        },
+        "soundIntent": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "maxLength": 4096
+        },
+        "density": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 5
+        }
+      }
+    },
+    "part": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "cueId",
+        "timing",
+        "targetLayerId",
+        "componentRef",
+        "cue"
+      ],
+      "properties": {
+        "cueId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "timing": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "start",
+            "end"
+          ],
+          "properties": {
+            "start": {
+              "$ref": "#/$defs/time"
+            },
+            "end": {
+              "$ref": "#/$defs/time"
+            }
+          }
+        },
+        "targetLayerId": {
+          "type": "string"
+        },
+        "componentRef": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "cue": {
+          "$ref": "https://github.com/joaobispo2077/avo/schemas/avo.bmap.schema.json#/$defs/cue"
+        }
+      }
+    },
+    "canonicalCues": {
+      "type": "array",
+      "items": {
+        "allOf": [
+          {"$ref": "https://github.com/joaobispo2077/avo/schemas/avo.bmap.schema.json#/$defs/cue"},
+          {"properties": {"contentRef": {"properties": {"itemId": {"type": ["string", "null"], "maxLength": 128}}}}}
+        ]
+      }
+    },
+    "advisories": {
+      "type": "array",
+      "maxItems": 64,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "code",
+          "itemIds",
+          "message"
+        ],
+        "properties": {
+          "code": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 128
+          },
+          "itemIds": {
+            "type": "array",
+            "maxItems": 4096,
+            "uniqueItems": true,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 128
+            }
+          },
+          "message": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096
+          }
+        }
+      }
+    }
+  }
+}

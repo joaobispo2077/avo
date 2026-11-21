@@ -440,12 +440,10 @@ def test_lossless_codec_selection_requires_explicit_boolean_conformance(
 
 def _frozen_plan(execution, output):
     value = deepcopy(execution)
-    value["canonicalInputLock"].update(
-        {
-            key: content_hash({"fixture-canonical": key})
-            for key in ("cmap", "bmap", "tracks", "animation", "sync-map")
-        }
-    )
+    for key in ("cmap", "bmap", "tracks", "animation", "sync-map"):
+        value["canonicalInputLock"].setdefault(
+            key, content_hash({"fixture-canonical": key})
+        )
     plan = {
         "schemaVersion": "1.0.0",
         "proofPlanId": "fixture-generated-plan",

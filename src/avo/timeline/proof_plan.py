@@ -16,13 +16,52 @@ from .contracts import (
     document_hash_excluding,
     file_fingerprint,
     validate_document,
+    validate_proof_plan_document,
 )
 from .iterations import IterationLedgerService
 from .store import StoreError, write_immutable_json
 
 
 def _preview_declaration(request):
-    return {"previewOnly": request["previewOnly"]} if "previewOnly" in request else {}
+    return {
+        key: deepcopy(request[key])
+        for key in ("previewOnly", "importApproximation")
+        if key in request
+    }
+
+
+def _proof_contract_header(camera_operations):
+    if camera_operations:
+        return {
+            "schemaVersion": "2.0.0",
+            "requiredReaderCapabilities": ["camera-transform-v1"],
+        }
+    return {"schemaVersion": "1.0.0"}
+
+
+def _require_hyperframes_geometry(binding, parameters, output):
+    canvas = binding["canonicalCanvas"]
+    rate = output["frameRate"]
+    canonical_rate = binding["renderContract"]["frameRate"]
+    if Fraction(rate["num"], rate["den"]) != Fraction(
+        canonical_rate["num"], canonical_rate["den"]
+    ):
+        raise ValueError("HyperFrames proof changes the canonical frame rate")
+    scale = Fraction(output["width"], canvas["width"])
+    if scale != Fraction(output["height"], canvas["height"]):
+        raise ValueError("HyperFrames preview changes canonical canvas aspect ratio")
+    placement = {}
+    for key in ("x", "y", "width", "height"):
+        value = Fraction(binding["placement"][key]) * scale
+        if value.denominator != 1:
+            raise ValueError("HyperFrames placement is not preview-pixel aligned")
+        placement[key] = int(value)
+    if (
+        parameters["placement"] != placement
+        or parameters["zOrder"] != binding["placement"]["zOrder"]
+        or parameters["layerRole"] != binding["placement"]["layerRole"]
+    ):
+        raise ValueError("HyperFrames placement/order differs from canonical Tracks")
 
 
 class ProofPlanError(RuntimeError):
@@ -73,6 +112,20 @@ class ProofPlanCompiler:
         snapshot = revision["snapshot"]
         if snapshot.get("sourceAssemblyPolicy") != "preserve-import":
             return {}
+        from .resolve_export import require_renderable_import
+
+        try:
+            require_renderable_import(
+                snapshot,
+                approximation=request.get("importApproximation"),
+                preview_only=request.get("previewOnly", False),
+            )
+        except ValueError as exc:
+            raise ProofPlanError(
+                "PROOF_IMPORT_TREATMENT_UNSUPPORTED",
+                str(exc),
+                "Retained imported treatments need renderer support before a strict proof can be produced. Continue editing the structural draft in AVO.",
+            ) from exc
         self._verify_import_sources(revision)
         self._require_import_output(request["output"], snapshot["importOutput"])
         if request.get("checkpoint") == "cut-proof":
@@ -132,6 +185,7 @@ class ProofPlanCompiler:
             width=output["width"],
             height=output["height"],
             sample_rate=output["audioSampleRate"],
+            import_approximation=request.get("importApproximation"),
         )
         requested = deepcopy(request)
         for operation in requested["videoGraph"]["operations"]:
@@ -166,6 +220,88 @@ class ProofPlanCompiler:
                     "Restore current canonical authority and compile again",
                 )
             ]
+        return []
+
+    def _source_mix_graph(self, request, *, require_applied=False):
+        if request.get("checkpoint", "pre-master") == "cut-proof":
+            return deepcopy(request["audioGraph"])
+        index = self.workspace.require_active("tracks")
+        tracks = self.workspace.store("tracks").revision(index["headRevisionId"])[
+            "snapshot"
+        ]
+        audio = tracks.get("audioTracks") or {}
+        if "sourceMixAdjustments" not in audio:
+            return deepcopy(request["audioGraph"])
+        if audio["sourceMixAdjustments"] == []:
+            return deepcopy(request["audioGraph"])
+        from .initial_cut import initial_cut_proof_request
+        from .source_mix import apply_source_mix_adjustments
+
+        cmap_index = self.workspace.require_active("cmap")
+        cmap = self.workspace.store("cmap").revision(cmap_index["headRevisionId"])[
+            "snapshot"
+        ]
+        output = request["output"]
+        try:
+            base = initial_cut_proof_request(
+                self.workspace,
+                iteration_id=request["iterationId"],
+                output=Path(output["path"]),
+                frame_rate=output["frameRate"],
+                width=output["width"],
+                height=output["height"],
+                sample_rate=output["audioSampleRate"],
+            )
+            return apply_source_mix_adjustments(
+                cmap,
+                base["audioGraph"],
+                request["audioGraph"],
+                audio["sourceMixAdjustments"],
+                require_applied=require_applied,
+            )
+        except (ValueError, KeyError, TypeError) as error:
+            raise ProofPlanError(
+                "PROOF_SOURCE_MIX_INVALID",
+                str(error),
+                "Restore exact source-mix targets and compile once from the canonical base audio graph",
+            ) from error
+
+    def _source_mix_preflight(self, plan):
+        try:
+            self._source_mix_graph(plan, require_applied=True)
+        except (ValueError, RuntimeError, KeyError, TypeError) as error:
+            return [
+                self._blocker(
+                    "PROOF_SOURCE_MIX_INVALID",
+                    str(error),
+                    "Compile a fresh proof plan from the current canonical source mix",
+                )
+            ]
+        return []
+
+    def _sound_execution(self, execution, *, require_applied=False):
+        from .artcraft_audio import lock_generated_audio
+        from .sound_proof import compile_canonical_sound
+
+        try:
+            composed = compile_canonical_sound(
+                self.workspace, execution, require_applied=require_applied
+            )
+            return lock_generated_audio(
+                self.workspace, composed, require_applied=require_applied
+            )
+        except (ValueError, RuntimeError, OSError, KeyError, TypeError) as error:
+            raise ProofPlanError(
+                "PROOF_SOUND_INVALID",
+                str(error),
+                "Restore or reselect the exact canonical sound publication, visual anchor and dialogue routing",
+            ) from error
+
+    def _sound_preflight(self, plan):
+        try:
+            self._sound_execution(plan, require_applied=True)
+        except ProofPlanError as error:
+            return [error.to_dict()]
         return []
 
     @staticmethod
@@ -205,6 +341,114 @@ class ProofPlanCompiler:
         for source_id, sha256 in sorted(source_fingerprints.items()):
             lock[f"source:{source_id}"] = str(sha256)
         return lock
+
+    def _camera_operations(self, request, checkpoint, lock):
+        if checkpoint == "cut-proof":
+            return []
+        from .contracts import required_animation_readers
+
+        if any(
+            operation.get("kind") == "camera-transform"
+            for operation in request.get("videoGraph", {}).get("operations", [])
+        ):
+            raise ProofPlanError(
+                "PROOF_CAMERA_AUTHORITY",
+                "Camera operations must derive from the canonical selected strategy.",
+                "Revise the selected camera component instead of injecting execution operations.",
+            )
+        store = self.workspace.store("animation")
+        index = store.load_index()
+        if index["headRevisionId"] is None:
+            return []
+        snapshot = store.revision(index["headRevisionId"])["snapshot"]
+        if not required_animation_readers(snapshot):
+            return []
+        if (
+            self.registry.resolve(
+                "camera-transform-v1", implementation_id="impl-camera-transform"
+            )
+            is None
+        ):
+            raise ProofPlanError(
+                "PROOF_CAMERA_UNAVAILABLE",
+                "Selected camera intent requires the qualified camera proof implementation.",
+                "Keep the camera intent pending until source-picture execution is qualified; do not render a v1 no-op.",
+            )
+        self._camera_basis(snapshot, lock)
+        operations = self._compile_camera_operations(snapshot, request)
+        for operation in operations:
+            parameters = operation["parameters"]
+            if (
+                lock.get("source:" + parameters["sourceId"])
+                != parameters["sourceSha256"]
+            ):
+                raise ProofPlanError(
+                    "PROOF_CAMERA_SOURCE_CHANGED",
+                    "Camera source fingerprint differs from the exact proof source lock.",
+                    "Restore the selected original or revise the camera against its new source.",
+                )
+        return operations
+
+    def _face_preflight(self, plan):
+        from .face_analysis import read_face_anchor
+
+        blockers = []
+        for operation in (plan.get("videoGraph") or {}).get("operations", []):
+            binding = (operation.get("parameters") or {}).get("faceAnchor")
+            if operation.get("kind") != "camera-transform" or not binding:
+                continue
+            try:
+                read_face_anchor(self.workspace, binding)
+            except ValueError as error:
+                blockers.append(
+                    self._blocker(
+                        "PROOF_FACE_EVIDENCE_INVALID",
+                        str(error),
+                        "Restore the selected face observation or compile a new camera proof",
+                        entity_ref=operation.get("operationId"),
+                    )
+                )
+        return blockers
+
+    @staticmethod
+    def _camera_basis(snapshot, lock):
+        for name in ("cmap", "bmap", "tracks"):
+            if snapshot.get("dependencies", {}).get(name) != lock[name]:
+                raise ProofPlanError(
+                    "PROOF_CAMERA_BASIS_CHANGED",
+                    "Camera intent has a stale canonical " + name + " basis.",
+                    "Rebase and review the selected camera intent before compiling.",
+                )
+
+    def _compile_camera_operations(self, snapshot, request):
+        from .camera_plan import compile_camera_operations
+        from .face_analysis import read_face_treatment
+
+        def current(name):
+            store = self.workspace.store(name)
+            return store.revision(store.load_index()["headRevisionId"])["snapshot"]
+
+        try:
+            validate_document(
+                request["output"], "avo.proof-plan.v2.schema.json#/$defs/output"
+            )
+            return compile_camera_operations(
+                snapshot,
+                bmap=current("bmap"),
+                tracks=current("tracks"),
+                video_graph=request.get("videoGraph", {}),
+                output=request["output"],
+                selection=None,
+                read_face=lambda treatment: read_face_treatment(
+                    self.workspace, treatment
+                ),
+            )
+        except ValueError as error:
+            raise ProofPlanError(
+                "PROOF_CAMERA_INVALID",
+                str(error),
+                "Resolve the selected camera's frozen options, source geometry, cue and continuity.",
+            ) from error
 
     def _require_recorded_motion_implementation(self, implementation):
         if not implementation.adapter_id.startswith("hyperframes"):
@@ -349,28 +593,85 @@ class ProofPlanCompiler:
                 "Frozen input-lock reference differs from the generated receipt"
             )
 
-    def _generated_lock(self, graph: dict[str, Any]) -> dict[str, str]:
+    def _require_hyperframes_generated(self, operation, record, original, output):
+        from .hyperframes_binding import verify_binding
+
+        binding = original["binding"]
+        verify_binding(self.workspace, binding)
+        extension = record["parameters"]["hyperframes"]
+        parameters = operation["parameters"]
+        if (
+            extension["instanceHash"] != binding["instanceHash"]
+            or extension["canonicalInputLock"] != binding["canonicalInputLock"]
+            or extension["inputLockRef"] != parameters["inputLockRef"]
+            or operation["kind"] != "overlay-video"
+            or operation["outputRange"] != binding["range"]
+            or parameters["sourceRange"]
+            != {
+                "startFrame": 0,
+                "endFrameExclusive": binding["renderContract"]["frameCount"],
+            }
+        ):
+            raise ValueError("HyperFrames operation differs from canonical binding")
+        _require_hyperframes_geometry(binding, parameters, output)
+
+    def _generated_lock(
+        self, graph: dict[str, Any], output=None, *, checkpoint=None
+    ) -> dict[str, str]:
         """Bind generated receipts and original locks without rewriting them."""
-        lock = {}
+        from .artcraft_stills import generated_still_locks
+
+        lock = generated_still_locks(
+            self.workspace, graph, output, checkpoint=checkpoint
+        )
         for operation in graph.get("operations") or []:
             parameters = operation.get("parameters") or {}
             reference = parameters.get("generatedAssetRef")
             if not reference:
                 continue
             record = self._generated_receipt(reference)
-            original = self._generated_original_lock(parameters)
             self._require_generated_output(record, parameters)
+            lock["generated:" + record["assetId"]] = record["recordHash"]
+            if record.get("parameters", {}).get("artcraft"):
+                lock["input-lock:" + record["assetId"]] = (
+                    self._require_artcraft_generated(operation, record, output)
+                )
+                continue
+            original = self._generated_original_lock(parameters)
             if record.get("parameters", {}).get("codeDrawn"):
                 self._require_canonical_generated(operation, record, original)
-            lock["generated:" + record["assetId"]] = record["recordHash"]
+            if record.get("parameters", {}).get("hyperframes"):
+                self._require_hyperframes_generated(operation, record, original, output)
             lock["input-lock:" + original["instanceId"]] = original["inputLockHash"]
         return lock
+
+    def _require_artcraft_generated(self, operation, record, output):
+        from .artcraft_binding import (
+            read_artcraft_binding,
+            require_artcraft_operation_binding,
+            require_artcraft_output_geometry,
+        )
+
+        receipt = record["parameters"]["artcraft"]
+        binding = read_artcraft_binding(self.workspace, receipt["bindingRef"])
+        require_artcraft_operation_binding(operation, record, binding)
+        require_artcraft_output_geometry(operation, receipt["output"], output)
+        return binding["bindingHash"]
 
     def _generated_preflight(self, plan, readiness):
         blockers = []
         try:
-            current = self._generated_lock(plan["videoGraph"])
+            current = self._generated_lock(
+                plan["videoGraph"], plan["output"], checkpoint=plan.get("checkpoint")
+            )
             frozen = plan["canonicalInputLock"]
+            if any(
+                key.startswith("generated-still:") and key not in current
+                for key in frozen
+            ):
+                raise ValueError(
+                    "Proof generated still receipt has no current operation"
+                )
             if any(frozen.get(key) != value for key, value in current.items()):
                 raise ValueError(
                     "Generated receipt/input-lock differs from the frozen proof plan"
@@ -425,12 +726,32 @@ class ProofPlanCompiler:
         lock = self._canonical_lock(
             dict(request.get("sourceFingerprints") or {}), checkpoint=checkpoint
         )
+        camera_operations = self._camera_operations(request, checkpoint, lock)
+        request.setdefault("videoGraph", {}).setdefault("operations", []).extend(
+            camera_operations
+        )
+        audio_graph = self._source_mix_graph(request)
+        selected_audio = self._sound_execution(
+            {
+                "checkpoint": checkpoint,
+                "output": request["output"],
+                "audioGraph": audio_graph,
+                "events": deepcopy(request.get("events") or []),
+                "canonicalInputLock": lock,
+            }
+        )
+        audio_graph, lock = (
+            selected_audio["audioGraph"],
+            selected_audio["canonicalInputLock"],
+        )
         video_graph, resolution, implementation_refs = self._resolve_video_graph(
             dict(request.get("videoGraph") or {})
         )
-        lock.update(self._generated_lock(video_graph))
+        lock.update(
+            self._generated_lock(video_graph, request["output"], checkpoint=checkpoint)
+        )
         body: dict[str, Any] = {
-            "schemaVersion": "1.0.0",
+            **_proof_contract_header(camera_operations),
             "proofPlanId": "proof-plan-pending",
             "iterationId": iteration_id,
             "checkpoint": checkpoint,
@@ -443,8 +764,8 @@ class ProofPlanCompiler:
                 implementation_refs, key=lambda item: item["implementationId"]
             ),
             "videoGraph": video_graph,
-            "audioGraph": deepcopy(request["audioGraph"]),
-            "events": deepcopy(request.get("events") or []),
+            "audioGraph": audio_graph,
+            "events": selected_audio["events"],
             "validationPlan": deepcopy(request["validationPlan"]),
             "visionReviewPlanRef": deepcopy(request.get("visionReviewPlanRef")),
             "lineagePolicy": deepcopy(
@@ -479,7 +800,7 @@ class ProofPlanCompiler:
         body["proofPlanId"] = f"proof-plan-{content_hash(identity_seed)[:12]}"
         body["proofPlanHash"] = document_hash_excluding(body, "proofPlanHash")
         try:
-            validate_document(body, "avo.proof-plan.schema.json")
+            validate_proof_plan_document(body)
         except ContractError as exc:
             raise ProofPlanError(
                 "PROOF_PLAN_INVALID",
@@ -523,7 +844,7 @@ class ProofPlanCompiler:
                 entity_ref=str(value.get("proofPlanId") or ""),
             )
         try:
-            validate_document(value, "avo.proof-plan.schema.json")
+            validate_proof_plan_document(value)
         except ContractError as exc:
             raise ProofPlanError(
                 "PROOF_PLAN_INVALID",
@@ -649,7 +970,7 @@ class ProofPlanCompiler:
         plan: dict[str, Any],
         *,
         media_inputs: dict[str, Any],
-        tool_readiness: dict[str, bool],
+        tool_readiness: dict[str, Any],
     ) -> dict[str, Any]:
         """Return deterministic blockers before any microproof or full render."""
         blockers: list[dict[str, Any]] = []
@@ -664,6 +985,9 @@ class ProofPlanCompiler:
             )
         blockers.extend(self._canonical_preflight(plan))
         blockers.extend(self._import_preflight(plan))
+        blockers.extend(self._source_mix_preflight(plan))
+        blockers.extend(self._sound_preflight(plan))
+        blockers.extend(self._face_preflight(plan))
         blockers.extend(self._generated_preflight(plan, tool_readiness))
         lock = plan.get("canonicalInputLock") or {}
         resolved_paths: dict[str, Path] = {}
@@ -820,15 +1144,39 @@ class ProofPlanCompiler:
                 "inheritedApprovals": False,
             },
         }
+        self._bind_camera_environment(report, plan, tool_readiness)
         report["reportHash"] = content_hash(report)
         return report
+
+    def _bind_camera_environment(self, report, plan, tool_readiness):
+        if any(
+            operation.get("kind") == "camera-transform"
+            for operation in plan.get("videoGraph", {}).get("operations", [])
+        ):
+            environment = tool_readiness.get("cameraEnvironmentHash")
+            if (
+                tool_readiness.get("camera-runtime") is not True
+                or not isinstance(environment, str)
+                or len(environment) != 64
+                or any(character not in "0123456789abcdef" for character in environment)
+            ):
+                report["blockers"].append(
+                    self._blocker(
+                        "PROOF_CAMERA_RUNTIME_UNBOUND",
+                        "Selected camera runtime lacks an observed rendering environment",
+                        "Use the native camera renderer to inspect installed tools before preflight",
+                    )
+                )
+                report["status"] = "blocked"
+            else:
+                report["cameraEnvironmentHash"] = environment
 
     def require_preflight(
         self,
         plan: dict[str, Any],
         *,
         media_inputs: dict[str, Any],
-        tool_readiness: dict[str, bool],
+        tool_readiness: dict[str, Any],
     ) -> dict[str, Any]:
         report = self.preflight(
             plan,

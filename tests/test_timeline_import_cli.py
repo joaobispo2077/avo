@@ -90,9 +90,11 @@ def test_optional_project_context_does_not_initialize(tmp_path, capsys):
 
 
 def test_prepare_cli_stages_without_native_read_or_activation(
-    import_project, monkeypatch, capsys
+    import_project, monkeypatch, capsys, tmp_path
 ):
     project, provider, original = import_project
+    declarations = tmp_path / "strict.json"
+    declarations.write_text(json.dumps({"sourceOnly": True}))
     monkeypatch.setattr(
         "avo.timeline_import_cli.create_service",
         lambda args: TimelineImportService(args.project, provider_root=provider),
@@ -104,6 +106,8 @@ def test_prepare_cli_stages_without_native_read_or_activation(
                 "prepare",
                 "--input",
                 str(FIXTURE),
+                "--declarations",
+                str(declarations),
                 "--project",
                 str(project),
                 "--media-root",

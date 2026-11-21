@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
 import sys
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
@@ -194,22 +195,22 @@ def disclose_jobs(
     video_key: str | None = None,
     state: Mapping[str, Any] | None = None,
     invocation: Mapping[str, Any] | None = None,
+    jobs: tuple[str, ...] | None = None,
 ) -> dict[str, dict[str, Any]]:
     from avo.models import load_catalog
     from avo.paths import repo_root
 
     root = repo_root(root)
     catalog = load_catalog(root)
-    jobs = ("transcribe", "understand", "plan")
     out: dict[str, dict[str, Any]] = {}
-    for job in jobs:
-        job_key = job_catalog_key(job, label if job == "transcribe" else "local")
+    for job in jobs if jobs is not None else ("transcribe", "understand", "plan"):
+        job_key = job_catalog_key(job, label)
         if job_key not in (catalog.get("jobs") or {}):
             continue
         resolved = resolve_job(
             job,
             root=root,
-            label=label if job == "transcribe" else "local",
+            label=label,
             project=project,
             hardware_tier=hardware_tier,
             video_key=video_key,
@@ -217,7 +218,11 @@ def disclose_jobs(
             invocation=invocation if job == "understand" else None,
         )
         out[job] = disclosure_for(resolved)
-    if label == "paid" and "transcribe_paid" in (catalog.get("jobs") or {}):
+    if (
+        jobs is None
+        and label == "paid"
+        and "transcribe_paid" in (catalog.get("jobs") or {})
+    ):
         paid = resolve_job(
             "transcribe",
             root=root,
@@ -246,6 +251,11 @@ def disclosure_for(resolved: ResolvedJob) -> dict[str, Any]:
         "reuse": _reuse_status(resolved),
     }
     _disclosure_source_fields(payload, source)
+    if resolved.job in {"audio_embed", "text_embed", "face_detect"}:
+        payload["python"] = {
+            "executable": runtime.get("pythonEnv"),
+            "validation": "explicit-preflight-required",
+        }
     if resolved.job_key == "transcribe" or resolved.job == "transcribe":
         payload["python"] = {
             "executable": sys.executable,
@@ -263,6 +273,31 @@ def preflight(
     device_ok: DeviceOk | None = None,
     getenv: Getenv | None = None,
 ) -> None:
+    if resolved.job == "face_detect":
+        from avo.visual_motion_runtime import preflight_face_job
+
+        try:
+            preflight_face_job(resolved)
+        except (OSError, subprocess.SubprocessError, ValueError) as exc:
+            raise PreflightError(
+                "face_runtime_unavailable",
+                str(exc),
+                hint="Provision the pinned local YuNet model and isolated OpenCV CPU environment.",
+            ) from exc
+        return
+    if resolved.job in {"audio_embed", "text_embed"}:
+        from avo.embedding_manifest import EmbeddingError
+        from avo.embedding_runtime import preflight_embedding_job
+
+        try:
+            preflight_embedding_job(resolved)
+        except EmbeddingError as exc:
+            raise PreflightError(
+                "embedding_unavailable",
+                str(exc),
+                hint="Provision a pinned local CLAP manifest and isolated runtime; descriptor search is a separate explicit mode.",
+            ) from exc
+        return
     getenv = getenv or os.getenv
     source = _mapping(resolved.pin, "source")
     runtime = _mapping(resolved.pin, "runtime")
@@ -558,7 +593,7 @@ def _infer_transcribe_artifact(
 
 def _resolve_pin_paths(values: dict[str, Any], base: Path) -> None:
     source = values["source"]
-    for key in ("artifactPath", "cacheDir"):
+    for key in ("artifactPath", "cacheDir", "manifestPath"):
         if source.get(key):
             source[key] = str(
                 resolve_path_setting(str(source[key]), base=base, contain=False)
@@ -569,10 +604,12 @@ def _resolve_pin_paths(values: dict[str, Any], base: Path) -> None:
             resolve_path_setting(str(companion["mmproj"]), base=base, contain=False)
         )
     runtime = values.get("runtime")
-    if isinstance(runtime, dict) and runtime.get("pythonEnv"):
-        runtime["pythonEnv"] = str(
-            resolve_path_setting(str(runtime["pythonEnv"]), base=base, contain=False)
-        )
+    if isinstance(runtime, dict):
+        for key in ("pythonEnv", "ffmpegPath"):
+            if runtime.get(key):
+                runtime[key] = str(
+                    resolve_path_setting(str(runtime[key]), base=base, contain=False)
+                )
 
 
 def _reuse_status(resolved: ResolvedJob) -> str:
@@ -595,6 +632,9 @@ def _disclosure_source_fields(
         payload["artifactPath"] = artifact
     if source.get("cacheDir"):
         payload["cacheDir"] = source["cacheDir"]
+    if source.get("manifestPath"):
+        payload["manifestPath"] = source["manifestPath"]
+        payload["manifestSha256"] = source.get("manifestSha256")
     if companion.get("mmproj"):
         payload["companion"] = {"mmproj": companion["mmproj"]}
     if not endpoint.get("baseUrl"):

@@ -255,15 +255,27 @@ def test_lossless_placed_proof_preserves_every_frame_and_independent_pcm_join(tm
     assert result["audioMix"]["sampleCount"] == 192000
 
 
-def test_placed_microproof_is_exact_window_of_same_picture_and_pcm_graph(tmp_path):
+def test_placed_microproof_is_exact_window_of_same_picture_and_pcm_graph(
+    tmp_path, monkeypatch
+):
     execution, _ = _execution(tmp_path)
     execution["window"] = {"startFrame": 29, "endFrameExclusive": 73}
+    staged_counts = []
+    check = proof_placed._check_staged_picture
+
+    def checked(path, expected, fps):
+        if path.name.startswith("picture-"):
+            staged_counts.append(expected)
+        check(path, expected, fps)
+
+    monkeypatch.setattr(proof_placed, "_check_staged_picture", checked)
     output = tmp_path / "micro.mkv"
     proof_executor.execute_ffmpeg_proof(execution, output)
     np.testing.assert_allclose(_decoded(output), _expected_picture()[29:73], atol=1)
     np.testing.assert_allclose(
         _decoded(output, audio=True), _expected_audio()[58000:146000], atol=2e-7
     )
+    assert sorted(staged_counts) == [1, 12, 12, 19]
 
 
 @pytest.mark.parametrize(
@@ -292,9 +304,21 @@ def test_placed_executor_blocks_untrusted_graph_before_public_output(tmp_path, f
     assert not output.exists()
 
 
-def test_placed_inputs_are_rehashed_before_candidate_publication(tmp_path, monkeypatch):
+@pytest.mark.parametrize("scoped", [False, True])
+def test_placed_inputs_are_rehashed_before_candidate_publication(
+    tmp_path, monkeypatch, scoped
+):
+    from avo.adapters.media import proof_bounded
+
     execution, paths = _execution(tmp_path)
-    original = proof_executor._render_final
+    if scoped:
+        execution["window"] = {"startFrame": 0, "endFrameExclusive": 96}
+    owner, name = (
+        (proof_executor, "_render_final")
+        if scoped
+        else (proof_bounded, "_stream_picture")
+    )
+    original = getattr(owner, name)
 
     def change_source(*args, **kwargs):
         result = original(*args, **kwargs)
@@ -303,7 +327,7 @@ def test_placed_inputs_are_rehashed_before_candidate_publication(tmp_path, monke
         )
         return result
 
-    monkeypatch.setattr(proof_executor, "_render_final", change_source)
+    monkeypatch.setattr(owner, name, change_source)
     output = tmp_path / "blocked.mkv"
     with pytest.raises(RuntimeError, match="changed"):
         proof_executor.execute_ffmpeg_proof(execution, output)

@@ -6,7 +6,12 @@ from math import lcm
 from pathlib import Path
 
 from .event_clock import sample_rate_boundary
-from .import_layout import audio_sample_ranges, seconds, validate_layout
+from .import_layout import (
+    audio_sample_ranges,
+    picture_input_ids,
+    seconds,
+    validate_layout,
+)
 from .initial_cut import _native_sample_rate, _resample_operation, _source_selection
 
 
@@ -33,7 +38,7 @@ def _media(source, workspace, stream):
         "sha256": source["fingerprint"]["sha256"],
         "mediaClass": source.get("mediaClass", "source"),
         "ancestry": deepcopy(source.get("ancestry", [])),
-        "streamIndex": stream,
+        **({"streamIndex": stream} if stream is not None else {}),
     }
 
 
@@ -69,7 +74,7 @@ def _picture(snapshot, sources, tracks, workspace, fps, total_frames):
                 "source": _media(
                     sources[item["sourceId"]],
                     workspace,
-                    item["routing"]["videoStreamIndex"],
+                    item["routing"].get("videoStreamIndex"),
                 ),
                 "sourceRange": _raw_range(item),
                 "outputRange": {
@@ -78,6 +83,29 @@ def _picture(snapshot, sources, tracks, workspace, fps, total_frames):
                 },
                 "zOrder": track["order"],
                 "enabled": item["enabled"] and track["enabled"],
+                **{
+                    key: deepcopy(item[key])
+                    for key in (
+                        "pictureSampling",
+                        "pictureEndGapFrames",
+                        "pictureTransform",
+                        "pictureFade",
+                    )
+                    if key in item
+                },
+                **(
+                    {
+                        "title": deepcopy(item["title"]),
+                        "fontSource": {
+                            "sourceId": item["fontSourceId"],
+                            "source": _media(
+                                sources[item["fontSourceId"]], workspace, None
+                            ),
+                        },
+                    }
+                    if item["mediaKind"] == "title"
+                    else {}
+                ),
             }
         )
     return {
@@ -85,9 +113,17 @@ def _picture(snapshot, sources, tracks, workspace, fps, total_frames):
             {
                 "operationId": "source-layout-program",
                 "kind": "source-layout",
-                "inputs": sorted({item["sourceId"] for item in placements}),
+                "inputs": picture_input_ids(placements),
                 "outputRange": {"startFrame": 0, "endFrameExclusive": total_frames},
-                "parameters": {"background": "black", "placements": placements},
+                "parameters": {
+                    "background": "black",
+                    "placements": placements,
+                    **(
+                        {"privacyMasks": deepcopy(snapshot["layout"]["privacyMasks"])}
+                        if "privacyMasks" in snapshot["layout"]
+                        else {}
+                    ),
+                },
             }
         ]
     }
@@ -128,13 +164,21 @@ def _audio_source(item, source, workspace, ordinal, probe):
         },
         *_resample_operation(ordinal, node_id, native_rate, 48000, output_range),
     ]
-    if "gainDb" in item:
+    if "gainDb" in item or "audioPeakCeilingDbfs" in item:
         operations.append(
             {
                 "operationId": f"gain-audio-{ordinal:04d}",
                 "kind": "gain",
                 "range": output_range,
-                "parameters": {"nodeId": node_id, "gainDb": item["gainDb"]},
+                "parameters": {
+                    "nodeId": node_id,
+                    "gainDb": item.get("gainDb", 0),
+                    **(
+                        {"peakCeilingDbfs": item["audioPeakCeilingDbfs"]}
+                        if "audioPeakCeilingDbfs" in item
+                        else {}
+                    ),
+                },
             }
         )
     return node, operations
@@ -199,6 +243,8 @@ def _audio(snapshot, sources, tracks, workspace, total_samples, probe):
 
 def _validation_windows(layout, fps, total_frames):
     boundaries = {0, total_frames}
+    for region in layout.get("privacyMasks", {}).get("regions", []):
+        boundaries.update((region["startFrame"], region["endFrameExclusive"]))
     for item in [*layout["placements"], *layout["gaps"]]:
         for key in ("start", "end"):
             boundaries.add(min(total_frames, _boundary(seconds(item[key]) * fps, 1)))
@@ -223,8 +269,16 @@ def placed_cut_proof_request(
     height,
     sample_rate,
     sample_rate_probe,
+    import_approximation=None,
 ):
+    from .resolve_export import require_renderable_import
+
     validate_layout(snapshot)
+    require_renderable_import(
+        snapshot,
+        approximation=import_approximation,
+        preview_only=import_approximation is not None,
+    )
     layout, canonical = snapshot["layout"], snapshot["importOutput"]
     fps = Fraction(frame_rate["num"], frame_rate["den"])
     clock = layout["programClock"]["frameRate"]
@@ -245,6 +299,11 @@ def placed_cut_proof_request(
     tracks = {track["trackId"]: track for track in layout["tracks"]}
     return {
         "checkpoint": "cut-proof",
+        **(
+            {"previewOnly": True, "importApproximation": deepcopy(import_approximation)}
+            if import_approximation is not None
+            else {}
+        ),
         "iterationId": iteration_id,
         "sourceFingerprints": {
             key: source["fingerprint"]["sha256"] for key, source in sources.items()

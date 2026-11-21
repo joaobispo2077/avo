@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import subprocess
 import tempfile
+from contextvars import copy_context
 from fractions import Fraction
 from pathlib import Path
 from typing import Any
@@ -35,6 +36,33 @@ PROOF_AUDIO_BITRATE = "192k"
 
 
 def _run(arguments: list[str]) -> None:
+    long_filter = next(
+        (
+            index
+            for index, argument in enumerate(arguments[:-1])
+            if argument in {"-vf", "-filter_complex"}
+            and len(arguments[index + 1]) > 16000
+        ),
+        None,
+    )
+    if long_filter is not None:
+        with tempfile.TemporaryDirectory(prefix="avo-proof-filter-") as directory:
+            script = Path(directory) / "proof.ffgraph"
+            script.write_text(arguments[long_filter + 1], encoding="utf-8")
+            option = (
+                "-filter_script:v"
+                if arguments[long_filter] == "-vf"
+                else "-filter_complex_script"
+            )
+            _run(
+                [
+                    *arguments[:long_filter],
+                    option,
+                    str(script),
+                    *arguments[long_filter + 2 :],
+                ]
+            )
+        return
     result = subprocess.run(arguments, capture_output=True, text=True)
     if result.returncode:
         raise RuntimeError(f"ProofPlan ffmpeg failed: {result.stderr[-4000:]}")
@@ -128,7 +156,7 @@ def _source(
     audio_node: dict | None = None,
     literal_still: bool = False,
 ) -> tuple[Path, int]:
-    source, path, expected = _source_identity(parameters, lock)
+    source, path, expected = _proof_source_identity(parameters, lock, audio_node)
     key = str(path.resolve())
     if key not in cache:
         actual_hash = _observed_source_fingerprint(path, observe=file_fingerprint)[
@@ -166,16 +194,27 @@ def _source(
     return _selected_stream(source, path, cache[key]["streams"], audio_node)
 
 
+def _proof_source_identity(parameters, lock, audio_node):
+    if parameters.get("generatedAudioRef") is None:
+        return _source_identity(parameters, lock)
+    if audio_node is None:
+        raise RuntimeError("Generated audio is available only to an audio mix node")
+    from avo.timeline.artcraft_audio import resolve_generated_audio_trim
+
+    fingerprint = resolve_generated_audio_trim(parameters, lock, audio_node)
+    return parameters["source"], Path(fingerprint["locator"]), fingerprint["sha256"]
+
+
 def _clock_header_integer(value):
     return None if value in (None, "N/A", "") else int(value)
 
 
-def _verify_picture_clock(path, stream, cache, fps):
+def _verify_picture_clock(path, stream, cache, fps, *, end_gap_frames=0):
     from .video_clock import verify_video_clock
 
     source = cache[str(path.resolve())]
     clocks = source.setdefault("videoClocks", {})
-    key = (stream, fps)
+    key = (stream, fps, end_gap_frames)
     if key not in clocks:
         metadata = next(item for item in source["streams"] if item["index"] == stream)
         try:
@@ -187,7 +226,12 @@ def _verify_picture_clock(path, stream, cache, fps):
                 expected_sha256=source["sha256"],
                 expected_frames=_clock_header_integer(metadata.get("nb_frames")),
                 start_ticks=_clock_header_integer(metadata.get("start_pts")),
+                allow_end_gap=bool(end_gap_frames),
             )
+            if evidence.get("endGapFrames", 0) != end_gap_frames:
+                raise ValueError(
+                    "Original video end gap differs from its canonical declaration"
+                )
         except (ValueError, OSError, subprocess.SubprocessError) as exc:
             raise RuntimeError(
                 f"Original picture clock is unverified: {path}:{stream}: {exc}"
@@ -327,6 +371,20 @@ def _video_tail(
     }
 
 
+def _require_output_pixel_format(spec, conformance):
+    if "pixelFormat" not in spec:
+        return
+    supported = (
+        {"gbrp16le", "yuv420p", "yuv420p10le", "yuv444p10le"}
+        if conformance
+        else {"yuv420p"}
+    )
+    if spec["pixelFormat"] not in supported:
+        raise RuntimeError(
+            "ProofPlan pixel format is not qualified for selected output codec"
+        )
+
+
 def _output_settings(execution: dict) -> tuple:
     spec = execution["output"]
     fps = Fraction(spec["frameRate"]["num"], spec["frameRate"]["den"])
@@ -346,6 +404,7 @@ def _output_settings(execution: dict) -> tuple:
         valid = codecs[0] in {"libx264", "h264_nvenc"} and codecs[1] == "aac"
     if not valid:
         raise RuntimeError("Unsupported ProofPlan output codec")
+    _require_output_pixel_format(spec, conformance)
     if not execution["audioGraph"]["singleFinalEncode"]:
         raise RuntimeError("ProofPlan requires one final audio encode")
     return spec, fps, rate
@@ -406,7 +465,8 @@ def _validate_resampling(graph: dict, nodes: list[dict], rate: int) -> None:
     required = {
         n["nodeId"]
         for n in nodes
-        if n["kind"] == "source" and n["sourceSampleRate"] != rate
+        if n["kind"] in {"source", "music", "sfx", "ambience"}
+        and n["sourceSampleRate"] != rate
     }
     if set(operations) != required:
         raise RuntimeError("Missing or unused explicit resample operation")
@@ -542,14 +602,83 @@ def _base_parameters(operation, refs, registry):
         )
 
 
-def _segments(execution, node_by_range, audio_trims, fps, rate, nodes, generated):
+def _camera_groups(execution, registry):
+    if not any(
+        op["kind"] == "camera-transform" for op in execution["videoGraph"]["operations"]
+    ):
+        return {}
+    from .camera import camera_groups
+
+    return camera_groups(execution, registry)
+
+
+def _camera_piece_key(segment):
+    return segment[0], segment[1], segment[2], segment[3]
+
+
+def _bind_camera_picture(
+    operations, operation, picture, source_start, execution, cache, fps, bindings
+):
+    if not operations:
+        return
+    if bindings is None:
+        raise RuntimeError("camera execution requires its source staging context")
+    from .camera import bind_camera_source
+
+    path, stream = picture
+    observed = cache[str(path.resolve())]
+    metadata = next(item for item in observed["streams"] if item["index"] == stream)
+    clock = _verify_picture_clock(path, stream, cache, fps)
+    region = operation["outputRange"]
+    _require_camera_source_extent(operation, source_start, fps, clock)
+    binding = bind_camera_source(
+        operations,
+        metadata=metadata,
+        output=execution["output"],
+        source_sha256=observed["sha256"],
+        first_frame=region["startFrame"],
+        end_frame=region["endFrameExclusive"],
+    )
+    bindings[
+        (region["startFrame"], region["endFrameExclusive"], picture, source_start)
+    ] = binding
+
+
+def _require_camera_source_extent(operation, source_start, fps, clock):
+    region = operation["outputRange"]
+    source = operation["parameters"]["sourceRange"]
+    duration = _seconds(source["endTicks"] - source["startTicks"], source["timebase"])
+    frames = duration * fps
+    expected = region["endFrameExclusive"] - region["startFrame"]
+    if (
+        frames != expected
+        or (source_start * fps).denominator != 1
+        or (source_start + duration) * fps > clock["packetCount"]
+    ):
+        raise RuntimeError(
+            "Camera requires exact original frames without retiming or padding"
+        )
+
+
+def _segments(
+    execution,
+    node_by_range,
+    audio_trims,
+    fps,
+    rate,
+    nodes,
+    generated,
+    *,
+    camera_bindings=None,
+):
     operations = [
         item
         for item in execution["videoGraph"]["operations"]
-        if item["kind"] != "overlay-video"
+        if not _is_auxiliary_picture(item)
     ]
     registry = default_proof_capability_registry()
     refs = {item["implementationId"]: item for item in execution["implementationRefs"]}
+    camera = _camera_groups(execution, registry)
     audio_ranges = _audio_frame_ranges(node_by_range, fps, rate)
     cursor, segments, cache, used_audio = 0, [], {}, set()
     for operation in operations:
@@ -564,6 +693,16 @@ def _segments(execution, node_by_range, audio_trims, fps, rate, nodes, generated
         cursor = end
         picture, source_start, source_duration, tail = _picture_source(
             operation, generated, execution, cache, fps
+        )
+        _bind_camera_picture(
+            camera.get(operation["operationId"]),
+            operation,
+            picture,
+            source_start,
+            execution,
+            cache,
+            fps,
+            camera_bindings,
         )
         for astart, aend, node in audio_ranges:
             if max(astart, start) >= min(aend, end):
@@ -596,7 +735,15 @@ def _segments(execution, node_by_range, audio_trims, fps, rate, nodes, generated
     return cursor, segments
 
 
+def _is_auxiliary_picture(operation):
+    from .proof_generated import is_overlay
+
+    return operation["kind"] == "camera-transform" or is_overlay(operation)
+
+
 def _generated_inputs(execution, spec, fps, validator):
+    from avo.timeline.artcraft_stills import is_generated_still
+
     from . import proof_generated
 
     registry = default_proof_capability_registry()
@@ -606,11 +753,20 @@ def _generated_inputs(execution, spec, fps, validator):
     if observations is None:
         observations = {}
     for operation in execution["videoGraph"]["operations"]:
-        if operation["kind"] not in {"generated-clip", "overlay-video"}:
+        if operation["kind"] != "generated-clip" and not proof_generated.is_overlay(
+            operation
+        ):
             continue
         if operation["operationId"] in generated:
             raise RuntimeError("Duplicate generated operation identity")
         proof_generated.parameters(operation, refs, registry)
+        if is_generated_still(operation):
+            generated[operation["operationId"]] = (
+                proof_generated.inspect_generated_still(
+                    operation, execution["canonicalInputLock"], spec
+                )
+            )
+            continue
         asset = proof_generated.verify_cached(
             operation,
             execution["canonicalInputLock"],
@@ -630,7 +786,13 @@ def _validate_events(execution, generated=None):
     from .proof_rendered_events import bound_visual_event
 
     audio_events = validate_audio_events(execution)
-    visual = {"main-scene", "overlay-video", "authored-graphic", "caption"}
+    visual = {
+        "main-scene",
+        "overlay-video",
+        "overlay-image",
+        "authored-graphic",
+        "caption",
+    }
     ranges = [item["outputRange"] for item in execution["videoGraph"]["operations"]]
     for event in execution["events"]:
         if event.get("eventId") in audio_events:
@@ -657,13 +819,24 @@ def _revalidate_inputs(execution, generated, validator):
 
 
 def _revalidate_fresh_inputs(execution, generated, validator):
+    from avo.timeline.artcraft_stills import is_generated_still
+
     from . import proof_generated
 
     observed_sources = {}
+    audio_nodes = {
+        node["nodeId"]: node for node in execution["audioGraph"].get("nodes", [])
+    }
     for operation in (
         execution["videoGraph"]["operations"] + execution["audioGraph"]["operations"]
     ):
         parameters = operation.get("parameters", {})
+        if parameters.get("generatedAudioRef") is not None:
+            _proof_source_identity(
+                parameters,
+                execution["canonicalInputLock"],
+                audio_nodes.get(parameters.get("nodeId")),
+            )
         if "source" in parameters:
             source = parameters["source"]
             path = Path(source["locator"]).resolve()
@@ -677,6 +850,11 @@ def _revalidate_fresh_inputs(execution, generated, validator):
                 )
     checked_assets = {}
     for asset in generated.values():
+        if is_generated_still(asset["operation"]):
+            proof_generated.inspect_generated_still(
+                asset["operation"], execution["canonicalInputLock"], execution["output"]
+            )
+            continue
         proof_generated.verify_cached(
             asset["operation"],
             execution["canonicalInputLock"],
@@ -745,36 +923,65 @@ def _piece_stop(left, right, fps, preserve):
     return [] if preserve else ["-t", str(float(Fraction(right - left, 1) / fps))]
 
 
+def _piece_video_filter(segment, left, right, spec, fps, camera):
+    start, _, picture, _, source_duration, *rest = segment
+    tail = rest[-2]
+    pad_seconds = tail["padSeconds"] if tail else float(1 / fps)
+    prefix = f"[0:{picture[1]}]trim=duration={float(source_duration)},setpts=PTS-STARTPTS,fps={fps.numerator}/{fps.denominator},tpad=stop_mode=clone:stop_duration={pad_seconds},trim=start_frame={left - start}:end_frame={right - start},setpts=PTS-STARTPTS,"
+    if camera:
+        from .camera import camera_filter
+
+        chain = camera_filter(
+            camera["operations"],
+            metadata=camera["metadata"],
+            output=camera["output"],
+            source_sha256=camera["sourceSha256"],
+            first_frame=left,
+            end_frame=right,
+        )
+    else:
+        pixel_format = spec.get("pixelFormat") or (
+            "bgra" if spec.get("conformance") is True else "yuv420p"
+        )
+        chain = f"scale={spec['width']}:{spec['height']}:force_original_aspect_ratio=decrease,pad={spec['width']}:{spec['height']}:(ow-iw)/2:(oh-ih)/2,setsar=1,format={pixel_format}"
+    return prefix + chain + "[v]"
+
+
 def _render_piece(
-    segment, left, right, spec, fps, rate, piece, *, preserve_audio=False
+    segment, left, right, spec, fps, rate, piece, *, preserve_audio=False, camera=None
 ):
     (
-        start,
+        _start,
         _end,
         picture,
         source_start,
-        source_duration,
+        _source_duration,
         node,
         audio,
         fades,
         treatment_policy,
-        tail,
+        _tail,
         noise_policy,
     ) = segment
-    path, stream = picture
+    path, _stream = picture
+    picture_options = []
+    if camera:
+        from .camera import camera_input_arguments
+
+        picture_options = camera_input_arguments(_stream)
     arguments = [
         "ffmpeg",
         "-v",
         "error",
         "-nostdin",
         *local_source_arguments(path),
+        *picture_options,
         "-ss",
         str(float(source_start)),
         "-i",
         str(path),
     ]
-    pad_seconds = tail["padSeconds"] if tail else float(1 / fps)
-    vfilter = f"[0:{stream}]trim=duration={float(source_duration)},setpts=PTS-STARTPTS,fps={fps.numerator}/{fps.denominator},tpad=stop_mode=clone:stop_duration={pad_seconds},trim=start_frame={left - start}:end_frame={right - start},setpts=PTS-STARTPTS,scale={spec['width']}:{spec['height']}:force_original_aspect_ratio=decrease,pad={spec['width']}:{spec['height']}:(ow-iw)/2:(oh-ih)/2,setsar=1,format={'bgra' if spec.get('conformance') is True else 'yuv420p'}[v]"
+    vfilter = _piece_video_filter(segment, left, right, spec, fps, camera)
     target_start = round(Fraction(left, 1) / fps * rate)
     target_end = round(Fraction(right, 1) / fps * rate)
     length = target_end - target_start
@@ -837,9 +1044,41 @@ def _encode_arguments(spec, fps, count):
         str(count),
     ]
     if spec.get("conformance") is True:
-        return arguments + ["-pix_fmt", "bgra", "-f", "matroska"]
+        return arguments + [
+            "-pix_fmt",
+            spec.get("pixelFormat", "bgra"),
+            "-f",
+            "matroska",
+        ]
+    if spec["videoCodec"] == "h264_nvenc":
+        arguments += [
+            "-preset",
+            "p5",
+            "-tune",
+            "hq",
+            "-rc",
+            "vbr",
+            "-cq",
+            "19",
+            "-b:v",
+            "12M",
+            "-maxrate",
+            "18M",
+            "-bufsize",
+            "36M",
+            "-profile:v",
+            "high",
+        ]
     # MP4's default millisecond movie clock can truncate an AAC tail at a frame edge.
     return arguments + [
+        "-color_range",
+        "tv",
+        "-colorspace",
+        "bt709",
+        "-color_primaries",
+        "bt709",
+        "-color_trc",
+        "bt709",
         "-b:a",
         PROOF_AUDIO_BITRATE,
         "-movie_timescale",
@@ -849,17 +1088,31 @@ def _encode_arguments(spec, fps, count):
     ]
 
 
-def _render_final(
-    listing, candidate, overlays, spec, fps, wstart, wend, mixed_audio=None
+def _final_arguments(
+    picture_arguments, candidate, overlays, spec, fps, wstart, wend, mixed_audio=None
 ):
     from . import proof_generated
 
     extra, filters, metadata = proof_generated.overlay_filters(
-        overlays, fps, wstart, wend, conformance=spec.get("conformance") is True
+        overlays,
+        fps,
+        wstart,
+        wend,
+        conformance=spec.get("conformance") is True,
+        **(
+            {
+                "pixel_format": spec["pixelFormat"],
+                "canvas": (spec["width"], spec["height"]),
+            }
+            if "pixelFormat" in spec
+            else {}
+        ),
     )
     timebase = f"{fps.denominator}/{fps.numerator}"
-    video = f"[0:v:0]settb=expr={timebase},setpts=N,format=rgba[picture]"
-    audio_index = 1 + len(overlays) if mixed_audio is not None else 0
+    working_format = "gbrp16le" if "pixelFormat" in spec else "rgba"
+    display = ",setsar=1" if "pixelFormat" in spec else ""
+    video = f"[0:v:0]settb=expr={timebase},setpts=N,format={working_format}{display}[picture]"
+    audio_index = 1 + len(extra) // 2 if mixed_audio is not None else 0
     audio = f"[{audio_index}:a:0]asetpts=N/SR/TB[a]"
     encode_arguments = _encode_arguments(spec, fps, wend - wstart)
     # A frame-count output stop can discard a final PCM packet, including when
@@ -868,18 +1121,13 @@ def _render_final(
     del encode_arguments[stop : stop + 2]
     filters.append(f"[v]trim=end_frame={wend - wstart}[bounded-picture]")
     video_map = "[bounded-picture]"
-    _run(
+    return (
         [
             "ffmpeg",
             "-v",
             "error",
             "-nostdin",
-            "-f",
-            "concat",
-            "-safe",
-            "1",
-            "-i",
-            str(listing),
+            *picture_arguments,
             *extra,
             *(["-i", str(mixed_audio)] if mixed_audio is not None else []),
             "-filter_complex",
@@ -890,8 +1138,12 @@ def _render_final(
             "[a]",
             *encode_arguments,
             str(candidate),
-        ]
+        ],
+        metadata,
     )
+
+
+def _check_encoded(candidate, fps, count):
     media = json.loads(
         subprocess.run(
             [
@@ -910,10 +1162,27 @@ def _render_final(
         ).stdout
     )
     stream = next(item for item in media["streams"] if item["codec_type"] == "video")
-    count = int(stream.get("nb_read_frames") or stream.get("nb_frames") or 0)
-    if count != wend - wstart or Fraction(stream["r_frame_rate"]) != fps:
+    actual = int(stream.get("nb_read_frames") or stream.get("nb_frames") or 0)
+    if actual != count or Fraction(stream["r_frame_rate"]) != fps:
         raise RuntimeError("Encoded proof violates its exact frame contract")
-    return media, metadata
+    return media
+
+
+def _render_final(
+    listing, candidate, overlays, spec, fps, wstart, wend, mixed_audio=None
+):
+    arguments, metadata = _final_arguments(
+        ["-f", "concat", "-safe", "1", "-i", str(listing)],
+        candidate,
+        overlays,
+        spec,
+        fps,
+        wstart,
+        wend,
+        mixed_audio,
+    )
+    _run(arguments)
+    return _check_encoded(candidate, fps, wend - wstart), metadata
 
 
 def _render_media(
@@ -928,11 +1197,13 @@ def _render_media(
     verify_inputs,
     audio_mix=None,
     preserve_audio=False,
+    camera_bindings=None,
 ):
     if output.exists():
         raise RuntimeError(f"Refusing to replace existing proof: {output}")
     output.parent.mkdir(parents=True, exist_ok=True)
-    # Private segments disappear here and cannot belong to an enclosing exit guard.
+    # Originals retain the enclosing byte guard; disposable segments stay private.
+    verification_context = copy_context()
     with (
         fingerprint_stage(),
         tempfile.TemporaryDirectory(prefix="proof-plan-", dir=output.parent) as folder,
@@ -958,6 +1229,11 @@ def _render_media(
                 rate,
                 piece,
                 preserve_audio=preserve_audio,
+                **(
+                    {"camera": camera_bindings[_camera_piece_key(segment)]}
+                    if camera_bindings and _camera_piece_key(segment) in camera_bindings
+                    else {}
+                ),
             )
             pieces.append(piece)
         listing = directory / "concat.txt"
@@ -981,7 +1257,10 @@ def _render_media(
         media, metadata = _render_final(
             listing, candidate, overlays, spec, fps, wstart, wend, mixed_audio
         )
-        verify_inputs()
+        if in_proof_validation_batch():
+            verification_context.run(verify_inputs)
+        else:
+            verify_inputs()
         candidate.replace(output)
     return media, metadata
 
@@ -1005,11 +1284,9 @@ def _proof_window(execution, cursor, encodes, fps, rate):
 
 
 def _proof_overlays(generated, cursor):
-    overlays = [
-        asset
-        for asset in generated.values()
-        if asset["operation"]["kind"] == "overlay-video"
-    ]
+    from .proof_generated import is_overlay
+
+    overlays = [asset for asset in generated.values() if is_overlay(asset["operation"])]
     if any(
         asset["operation"]["outputRange"]["endFrameExclusive"] > cursor
         for asset in overlays
@@ -1024,10 +1301,23 @@ def execute_ffmpeg_proof(
     *,
     generated_asset_validator=None,
 ) -> dict[str, Any]:
+    from .camera_provenance import camera_render_provenance
+
+    camera = camera_render_provenance(execution)
     with fingerprint_stage(reuse_current=in_proof_validation_batch()):
-        return _execute_ffmpeg_proof(
+        rendered = _execute_ffmpeg_proof(
             execution, output, generated_asset_validator=generated_asset_validator
         )
+    if camera is not None:
+        if camera != camera_render_provenance(execution):
+            raise RuntimeError(
+                "Camera runtime, implementation or recipe changed during render"
+            )
+        rendered = {
+            **rendered,
+            "producer": {**(rendered.get("producer") or {}), "camera": camera},
+        }
+    return rendered
 
 
 def _import_audio_kinds(execution):
@@ -1065,6 +1355,14 @@ def _require_output_container(spec, output):
         raise RuntimeError("Lossless conformance output requires .mkv")
 
 
+def _camera_binding_arguments(execution):
+    if any(
+        op["kind"] == "camera-transform" for op in execution["videoGraph"]["operations"]
+    ):
+        return {"camera_bindings": {}}
+    return {}
+
+
 def _execute_ffmpeg_proof(
     execution: dict[str, Any], output: Path, *, generated_asset_validator=None
 ) -> dict[str, Any]:
@@ -1080,7 +1378,14 @@ def _execute_ffmpeg_proof(
     ):
         from .proof_placed import execute_placed_proof
 
-        return execute_placed_proof(execution, output, spec, fps, rate)
+        return execute_placed_proof(
+            execution,
+            output,
+            spec,
+            fps,
+            rate,
+            generated_asset_validator=generated_asset_validator,
+        )
     from .proof_audio_bridge import prepare_mix
 
     source_cache = {}
@@ -1096,8 +1401,16 @@ def _execute_ffmpeg_proof(
     audio_trims, encodes = _audio_operations(lead_execution["audioGraph"])
     generated = _generated_inputs(execution, spec, fps, generated_asset_validator)
     _validate_events(execution, generated)
+    camera_kwargs = _camera_binding_arguments(execution)
     cursor, segments = _segments(
-        execution, node_by_range, audio_trims, fps, rate, nodes, generated
+        execution,
+        node_by_range,
+        audio_trims,
+        fps,
+        rate,
+        nodes,
+        generated,
+        **camera_kwargs,
     )
     wstart, wend = _proof_window(execution, cursor, encodes, fps, rate)
     overlays = _proof_overlays(generated, cursor)
@@ -1113,6 +1426,7 @@ def _execute_ffmpeg_proof(
         lambda: _revalidate_inputs(execution, generated, generated_asset_validator),
         audio_mix,
         preserve_audio=execution.get("sourceAssemblyPolicy") == "preserve-import",
+        **camera_kwargs,
     )
     return {
         "status": "pass",

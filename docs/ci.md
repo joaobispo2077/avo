@@ -50,9 +50,44 @@ well as FFmpeg 7. Private proof segments use a local fingerprint stage so delete
 scratch files do not enter the enclosing canonical dependency guard; original
 and generated inputs are still revalidated before publication.
 
+Bounded Linux FFmpeg setup normalizes regional Ubuntu main-archive entries to
+the main HTTPS mirror before its existing apt retries. Security, ports and
+unrelated source entries remain intact. Offline setup fixtures cover Azure,
+EC2, direct main-archive and absent mirror-list inputs.
+
 Unit tests and coverage use two pytest workers with work stealing, matching the
-integration lane. This keeps native-reader coverage within the existing job time
-limits without changing test scope, coverage requirements, or quality thresholds.
+integration lane. The unit job has a bounded 60-minute budget, including setup,
+evidence upload, and post-test smokes, and reports its 20 slowest tests.
+At `76b8898`, [run 44227189622](https://github.com/joaobispo2077/avo/actions/runs/44227189622)
+selected 6,823 tests in both unit and coverage lanes. Coverage completed with
+6,812 passed and 11 skipped in 37 minutes 23.34 seconds, reaching 80.97% coverage;
+all software-quality gates passed. The unit lane still advanced at 92% after
+43 minutes 26.08 seconds of testing and hit the former 45-minute job limit.
+The 60-minute budget allows its observed slower pace plus setup/evidence/smokes;
+it does not assume the coverage lane's elapsed time predicts the other runner.
+The budget regression uses that unit observation and retains a 60-minute ceiling.
+Test scope, coverage requirements, mandatory readiness, evidence, worker count
+and quality thresholds remain unchanged.
+
+The Software quality job has a bounded 65-minute budget for setup, instrumented
+unit coverage, the remaining gates and evidence upload.
+[Run 44246128502](https://github.com/joaobispo2077/avo/actions/runs/44246128502)
+at `ea62c04` passed 6,834 unit tests with 19 skips in 31 minutes 7.78 seconds;
+integration and mutation also passed. Its separately instrumented coverage lane
+still advanced at 84% after 48 minutes 33 seconds before the 50-minute job limit.
+Projecting that measured pace plus four minutes for setup, remaining gates and
+evidence fits the bounded 65-minute budget. Coverage completion remains required;
+the incomplete run does not establish a coverage percentage or an all-green result.
+The two workers, work-stealing schedule, selected tests, 68% floor and other
+quality gates remain unchanged.
+
+Contract validation rereads current schema bytes on every call and reuses only
+the parsed registry for identical content, with at most four entries retained.
+A local warmed 50-cue validation profile took 1.98 seconds before this change
+and 1.26 seconds afterward. This measures that validation sample, not overall
+CI runtime. Same-size edits with restored timestamps, deleted/malformed refs
+and distinct roots remain covered by contract tests; document validation and
+the coverage/readiness gates still execute normally.
 
 Gate 1 also validates all GitHub Actions workflows with actionlint 1.7.12,
 including expression context availability. ShellCheck and Pyflakes are disabled
@@ -151,8 +186,14 @@ the `Software quality` job inside workflow **CI**.
 The integration lane runs the complete `tests/integration` population with two
 pytest worker processes and `--dist=worksteal`. The worker count is fixed to avoid
 unbounded browser/encoder concurrency. The existing runner, one combined JUnit
-report, execution receipt, and failure propagation remain in place. The job keeps
-its 20-minute timeout, including browser and dependency setup. The locked
+report, execution receipt, and failure propagation remain in place. The job has
+a bounded 30-minute timeout, including browser and dependency setup. At
+[`b981f30`](https://github.com/joaobispo2077/avo/commit/b981f30f8fef3f3a880dab6786993fa0d16f8123),
+[run 44131653746](https://github.com/joaobispo2077/avo/actions/runs/44131653746/job/134211262261)
+selected 424 integration cases and reached 84% with no reported failure before
+the former 20-minute job limit cancelled it. The additional budget lets this
+growing encoded/browser population finish without increasing worker contention,
+reducing coverage, or changing readiness requirements. The locked
 `pytest-xdist` dependency belongs only to the development extra. See the
 [pytest-xdist scheduling documentation](https://pytest-xdist.readthedocs.io/en/stable/distribution.html).
 
@@ -470,6 +511,7 @@ npm run validate:usability -- --ci
 | --- | --- |
 | `AVO_CI=1` | Set in workflows; reserved for future setup-script CI behavior |
 | `PY` / `PYTHON` | Override Python binary for gate scripts |
+| `ONNXRUNTIME_NODE_INSTALL_CUDA=skip` | CPU workflows that run `npm ci` skip the pinned `onnxruntime-node` installer's optional CUDA download. Bundled CPU support and other package lifecycle scripts remain enabled. This is a workflow setting; user installation preferences and package versions stay unchanged. |
 | `QUALITY_CHARTS_TOKEN` | Private uploader environment alias for the existing `GH_TOKEN` secret in `RELEASE`, not a new secret. Used only for trusted native dashboard uploads; fork PRs retain text and artifact downloads. |
 | `NODE_VERSION` | `24` in all workflows (npm/eslint/jscpd). GitHub-owned actions are Node 24 majors (`checkout@v6`, `setup-node@v6`, `setup-python@v6`, `cache@v5`, `upload-artifact@v7`). `astral-sh/setup-uv@v10.2.0` runs on Node 24 (`runs.using: node24` since v7). Workflows that already set `enable-cache: true` keep that explicit value. `FORCE_JAVASCRIPT_ACTIONS_TO_NODE24` covers leftover third-party JS actions. |
 | Linux runner | `ubuntu-24.04` on every Linux job under `.github/workflows/` (including the engine-binary Linux matrix entry). Pinned so those jobs do not follow `ubuntu-latest` onto Ubuntu 26. Windows stays `windows-latest`. Engine macOS stays `macos-14`. |

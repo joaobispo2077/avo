@@ -749,6 +749,74 @@ def _collect_render_artifacts(project: Path) -> list[Path]:
     return artifacts
 
 
+def _frozen_runtime_paths(project: Path, contract: Mapping[str, Any]) -> set[Path]:
+    from avo.timeline.contracts import file_fingerprint
+
+    directory = (Path(project) / "lib").resolve()
+    paths: set[Path] = set()
+    for item in contract.get("runtimeDependencies") or []:
+        path = Path(project) / item["path"]
+        path = path.resolve()
+        if (
+            not path.is_relative_to(directory)
+            or path.suffix != ".js"
+            or not path.is_file()
+            or path in paths
+            or file_fingerprint(path)["sha256"] != item["sha256"]
+        ):
+            raise HyperframesError(f"Frozen runtime dependency is invalid: {path}")
+        paths.add(path)
+    return paths
+
+
+def _validate_timeline_sources(project, contract):
+    runtimes = _frozen_runtime_paths(project, contract)
+    forbidden = (
+        "Math.random(",
+        "Date.now(",
+        "performance.now(",
+        "fetch(",
+        "http://",
+        "https://",
+    )
+    for path in [*Path(project).rglob("*.html"), *Path(project).rglob("*.js")]:
+        if path.resolve() in runtimes:
+            continue
+        source = path.read_text(encoding="utf-8", errors="replace")
+        if any(token in source for token in forbidden):
+            raise HyperframesError(f"nondeterministic/network animation source: {path}")
+
+
+def _timeline_options(contract, output_format):
+    check_options, render_options = ["--strict"], []
+    if output_format == "png-sequence":
+        check_options.append("--no-browser-gpu")
+        render_options.extend(
+            ["--format", "png-sequence", "--no-browser-gpu", "--no-best-effort"]
+        )
+    rate = (contract.get("renderContract") or {}).get("frameRate")
+    if rate:
+        render_options.extend(["--fps", f"{rate['num']}/{rate['den']}"])
+    return check_options, render_options
+
+
+def _timeline_output(output, output_format):
+    from avo.timeline.contracts import file_fingerprint
+
+    if output_format != "png-sequence":
+        if not Path(output).is_file():
+            raise HyperframesError(f"HyperFrames output missing: {output}")
+        return file_fingerprint(Path(output))
+    frames = sorted(Path(output).glob("*.png"))
+    if not frames:
+        raise HyperframesError(f"HyperFrames frame sequence missing: {output}")
+    return {
+        "format": "png-sequence",
+        "path": str(output),
+        "frames": [file_fingerprint(frame) for frame in frames],
+    }
+
+
 class HyperframesAdapter:
     routing_id = "hyperframes"
     operations: ClassVar[set[str]] = {"check", "snapshot", "preview", "render"}
@@ -757,6 +825,10 @@ class HyperframesAdapter:
         self.runner = runner
 
     def _binary(self, root: Path) -> list[str]:
+        module = root / "node_modules" / "hyperframes" / "bin" / "hyperframes.mjs"
+        node = shutil.which("node")
+        if module.is_file() and node:
+            return [node, str(module)]
         local = root / "node_modules" / ".bin" / "hyperframes"
         for candidate in (local.with_suffix(".cmd"), local.with_suffix(".ps1"), local):
             try:
@@ -799,22 +871,20 @@ class HyperframesAdapter:
             request.argv[0], Path(request.argv[1]), *request.argv[2:], root=request.root
         )
 
-    def render_timeline_instance(
+    def check_timeline_instance(
         self,
         *,
         project: Path,
-        output: Path,
         instance: Mapping[str, Any],
         component_contract: Mapping[str, Any],
         root: Path | None = None,
-        quality: str = "draft",
-    ) -> dict[str, Any]:
-        """Check then render one frozen, BMap-timed/Tracks-placed instance."""
+        output_format: str = "mp4",
+    ) -> JobResult:
+        """Validate the frozen instance/source contract and run strict native checks."""
         from avo.timeline.animation import (
             AnimationError,
             validate_visible_text_policy,
         )
-        from avo.timeline.contracts import file_fingerprint
 
         try:
             validate_visible_text_policy(
@@ -839,27 +909,37 @@ class HyperframesAdapter:
             )
         if not component_contract.get("lifecycle"):
             raise HyperframesError("animation component requires a declared lifecycle")
-        for path in list(Path(project).rglob("*.html")) + list(
-            Path(project).rglob("*.js")
-        ):
-            source = path.read_text(encoding="utf-8", errors="replace")
-            forbidden = (
-                "Math.random(",
-                "Date.now(",
-                "performance.now(",
-                "fetch(",
-                "http://",
-                "https://",
-            )
-            if any(token in source for token in forbidden):
-                raise HyperframesError(
-                    f"nondeterministic/network animation source: {path}"
-                )
-        checked = self.execute("check", project, "--strict", root=root)
+        if output_format not in {"mp4", "png-sequence"}:
+            raise HyperframesError("Unsupported timeline instance output format")
+        _validate_timeline_sources(project, component_contract)
+        check_options, _ = _timeline_options(component_contract, output_format)
+        checked = self.execute("check", project, *check_options, root=root)
         if checked.exit_code != 0:
             raise HyperframesError(
                 checked.stderr or checked.stdout or "HyperFrames check failed"
             )
+        return checked
+
+    def render_timeline_instance(
+        self,
+        *,
+        project: Path,
+        output: Path,
+        instance: Mapping[str, Any],
+        component_contract: Mapping[str, Any],
+        root: Path | None = None,
+        quality: str = "draft",
+        output_format: str = "mp4",
+    ) -> dict[str, Any]:
+        """Check then render one frozen, BMap-timed/Tracks-placed instance."""
+        self.check_timeline_instance(
+            project=project,
+            instance=instance,
+            component_contract=component_contract,
+            root=root,
+            output_format=output_format,
+        )
+        _, options = _timeline_options(component_contract, output_format)
         rendered = self.execute(
             "render",
             project,
@@ -867,17 +947,17 @@ class HyperframesAdapter:
             quality,
             "--output",
             str(output),
+            *options,
             root=root,
         )
         if rendered.exit_code != 0:
             raise HyperframesError(
                 rendered.stderr or rendered.stdout or "HyperFrames render failed"
             )
-        if not Path(output).is_file():
-            raise HyperframesError(f"HyperFrames output missing: {output}")
+        generated = _timeline_output(output, output_format)
         return {
             "status": "pass",
-            "output": file_fingerprint(Path(output)),
+            "output": generated,
             "componentRef": instance["componentRef"],
             "bmapCueId": instance["bmapCueId"],
             "placement": dict(instance["placement"]),

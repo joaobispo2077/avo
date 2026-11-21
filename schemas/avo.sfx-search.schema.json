@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://avo.local/schemas/avo.sfx-search.schema.json",
+  "title": "Bounded local SFX matching result",
+  "type": "object", "additionalProperties": false,
+  "required": ["schemaVersion", "status", "mode", "scoreMeaning", "generationId", "query", "filters", "results", "counts", "nextCursor", "warnings"],
+  "properties": {
+    "schemaVersion": {"const": "1.0.0"}, "status": {"enum": ["ok", "no-match", "unavailable"]}, "mode": {"enum": ["descriptor", "semantic"]},
+    "scoreMeaning": {"type": "string", "minLength": 1, "maxLength": 512}, "generationId": {"$ref": "avo.sfx-catalog.schema.json#/$defs/nullableSha"},
+    "query": {"type": "string", "minLength": 1, "maxLength": 512}, "filters": {"$ref": "#/$defs/filters"},
+    "results": {"type": "array", "maxItems": 100, "items": {"$ref": "#/$defs/result"}},
+    "counts": {"type": "object", "additionalProperties": false, "required": ["indexed", "unknownRights", "unavailable", "partialAnalysis"], "properties": {"indexed": {"$ref": "#/$defs/count"}, "unknownRights": {"$ref": "#/$defs/count"}, "unavailable": {"$ref": "#/$defs/count"}, "partialAnalysis": {"$ref": "#/$defs/count"}}},
+    "nextCursor": {"type": ["string", "null"], "maxLength": 8192}, "warnings": {"type": "array", "maxItems": 64, "items": {"type": "string", "maxLength": 1024}},
+    "jointSpace": {"$ref": "#/$defs/jointSpace"}
+  },
+  "$defs": {
+    "count": {"type": "integer", "minimum": 0, "maximum": 10000},
+    "strings": {"type": "array", "maxItems": 64, "uniqueItems": true, "items": {"type": "string", "minLength": 1, "maxLength": 64}},
+    "number": {"type": "number", "minimum": 0, "maximum": 1000000},
+    "jointSpace": {"type": "object", "additionalProperties": false, "required": ["id", "dimension", "normalization", "modelDigest", "preprocessingDigest", "runtimeDigest"], "properties": {
+      "id": {"type": "string", "minLength": 1, "maxLength": 512}, "dimension": {"type": "integer", "minimum": 1, "maximum": 65536}, "normalization": {"const": "l2"},
+      "modelDigest": {"$ref": "avo.sfx-catalog.schema.json#/$defs/sha"}, "preprocessingDigest": {"$ref": "avo.sfx-catalog.schema.json#/$defs/sha"}, "runtimeDigest": {"$ref": "avo.sfx-catalog.schema.json#/$defs/sha"}
+    }},
+    "semanticRanking": {"type": "object", "additionalProperties": false, "required": ["status", "warnings"], "properties": {
+      "status": {"enum": ["ready", "unavailable"]}, "warnings": {"type": "array", "maxItems": 64, "items": {"type": "string", "maxLength": 1024}},
+      "jointSpace": {"$ref": "#/$defs/jointSpace"},
+      "scores": {"type": "array", "maxItems": 10000, "items": {"type": "object", "additionalProperties": false, "required": ["entryId", "entryRevision", "score"], "properties": {"entryId": {"$ref": "avo.sfx-catalog.schema.json#/$defs/sha"}, "entryRevision": {"$ref": "avo.sfx-catalog.schema.json#/$defs/sha"}, "score": {"type": "number", "minimum": -1, "maximum": 1}}}}
+    }, "if": {"properties": {"status": {"const": "ready"}}}, "then": {"required": ["jointSpace", "scores"]}},
+    "filters": {"type": "object", "additionalProperties": false, "properties": {
+      "libraryIds": {"$ref": "#/$defs/strings"}, "rights": {"type": "array", "maxItems": 4, "uniqueItems": true, "items": {"enum": ["licensed", "unknown", "restricted", "stale"]}},
+      "favorite": {"type": "boolean"}, "material": {"type": "string", "minLength": 1, "maxLength": 512}, "tags": {"$ref": "#/$defs/strings"},
+      "category": {"type": "string", "minLength": 1, "maxLength": 512},
+      "minDurationSeconds": {"$ref": "#/$defs/number"}, "maxDurationSeconds": {"$ref": "#/$defs/number"}, "minCentroidHz": {"$ref": "#/$defs/number"}, "maxCentroidHz": {"$ref": "#/$defs/number"}, "maxAttackSeconds": {"$ref": "#/$defs/number"}
+    }},
+    "result": {
+      "type": "object", "additionalProperties": false,
+      "required": ["entryId", "entryRevision", "libraryId", "relativePath", "sourceSha256", "sourceState", "rightsState", "rights", "curation", "marker", "score", "reasons", "usefulDurationSeconds", "level", "anchorCandidates", "analysisCoverage", "audition"],
+      "properties": {
+        "entryId": {"$ref": "avo.sfx-catalog.schema.json#/$defs/sha"}, "entryRevision": {"$ref": "avo.sfx-catalog.schema.json#/$defs/sha"},
+        "libraryId": {"type": "string", "minLength": 1, "maxLength": 64}, "relativePath": {"type": "string", "minLength": 1, "maxLength": 4096},
+        "sourceSha256": {"$ref": "avo.sfx-catalog.schema.json#/$defs/sha"}, "sourceState": {"const": "available"}, "rightsState": {"enum": ["licensed", "unknown", "restricted", "stale"]},
+        "rights": {"$ref": "avo.sfx-catalog.schema.json#/$defs/rights"}, "curation": {"$ref": "avo.sfx-catalog.schema.json#/$defs/curation"},
+        "curationOrigin": {"$ref": "avo.sfx-provider.schema.json#/$defs/origin"},
+        "marker": {"oneOf": [{"type": "null"}, {"$ref": "avo.sfx-catalog.schema.json#/$defs/marker"}]},
+        "score": {"type": "number", "minimum": -1, "maximum": 1}, "reasons": {"type": "array", "maxItems": 512, "items": {"type": "string", "maxLength": 1024}},
+        "usefulDurationSeconds": {"type": "number", "minimum": 0}, "level": {"type": "object", "additionalProperties": false, "required": ["rms", "peak"], "properties": {"rms": {"type": "number", "minimum": 0}, "peak": {"type": "number", "minimum": 0}}},
+        "anchorCandidates": {"type": "array", "maxItems": 256, "items": {"type": "integer", "minimum": 0}}, "analysisCoverage": {"enum": ["complete", "partial"]},
+        "audition": {"type": "object", "additionalProperties": false, "required": ["libraryId", "relativePath", "sourceSha256", "sampleRate", "startSample", "endSampleExclusive"], "properties": {"libraryId": {"type": "string", "minLength": 1, "maxLength": 64}, "relativePath": {"type": "string", "minLength": 1, "maxLength": 4096}, "sourceSha256": {"$ref": "avo.sfx-catalog.schema.json#/$defs/sha"}, "sampleRate": {"type": "integer", "minimum": 1, "maximum": 192000}, "startSample": {"type": "integer", "minimum": 0}, "endSampleExclusive": {"type": "integer", "minimum": 0}}}
+      }
+    }
+  }
+}

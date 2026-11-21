@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from .contracts import content_hash, dependency_lock_hash, file_fingerprint
+from .editing_craft_qc import attach_craft_report
 from .ports import ToolError
 from .review import (
     EVIDENCE_PROFILES,
@@ -74,12 +75,33 @@ def _ranges_in_seconds(
     return normalized
 
 
+def _observed_windows(coverage):
+    if "observedWindows" in coverage:
+        return coverage["observedWindows"] or []
+    return coverage.get("windows") or []
+
+
+def _covered_window_count(coverage, required_windows):
+    frame_rate = coverage.get("frameRate") or {}
+    observed = _merged_ranges(
+        _ranges_in_seconds(_observed_windows(coverage), frame_rate)
+    )
+    required = _ranges_in_seconds(required_windows, frame_rate)
+    return sum(
+        any(
+            span["start"] <= window["start"] < window["end"] <= span["end"]
+            for span in observed
+        )
+        for window in required
+    )
+
+
 def actual_coverage(
     coverage: dict[str, Any], *, required_windows: list[dict[str, Any]]
 ) -> dict[str, Any]:
     """Compute coverage only from observed/decoded evidence, never nominal scope."""
     normalized = deepcopy(coverage)
-    inspected = list(coverage.get("inspectedRanges") or coverage.get("windows") or [])
+    inspected = coverage.get("inspectedRanges", _observed_windows(coverage)) or []
     partial = list(coverage.get("partiallyInspectedRanges") or [])
     deterministic = list(coverage.get("deterministicallyCheckedRanges") or [])
     duration = float(coverage.get("durationSeconds") or coverage.get("duration") or 0)
@@ -98,14 +120,13 @@ def actual_coverage(
         cursor = max(cursor, item["end"])
     if duration > cursor:
         uninspected.append({"start": cursor, "end": duration})
-    observed_windows = coverage.get("observedWindows") or coverage.get("windows") or []
     normalized.update(
         {
             "durationSeconds": duration,
             "reviewedSeconds": _range_seconds(reviewed_ranges),
             "deterministicallyCheckedSeconds": _range_seconds(checked_ranges),
             "requiredWindows": len(required_windows),
-            "reviewedWindows": len(observed_windows),
+            "reviewedWindows": _covered_window_count(coverage, required_windows),
             "inspectedRanges": reviewed_ranges,
             "deterministicallyCheckedRanges": checked_ranges,
             "uninspectedRanges": uninspected,
@@ -236,6 +257,19 @@ def _review_windows(
     return windows
 
 
+def _transcription_windows(
+    risk_windows: list[dict[str, Any]], qc: dict[str, Any]
+) -> list[dict[str, Any]]:
+    return _review_windows(
+        risk_windows,
+        {
+            "requiredWindows": qc.get(
+                "requiredTranscriptionWindows", qc.get("requiredWindows")
+            )
+        },
+    )
+
+
 def _watch_policy_values(
     policy: Any | None,
 ) -> tuple[dict[str, Any] | None, dict[str, Any]]:
@@ -265,8 +299,7 @@ def _validate_watch_coverage(
             False,
             "rerun full Watch",
         )
-    reviewed_windows = coverage.get("observedWindows") or coverage.get("windows") or []
-    if required_windows and len(reviewed_windows) < len(required_windows):
+    if _covered_window_count(coverage, required_windows) != len(required_windows):
         raise ToolError(
             "WATCH_SCOPE_INSUFFICIENT",
             "Watch did not cover every required join/changed/privacy/risk window",
@@ -292,20 +325,37 @@ def _materialization_dependencies(
     }
 
 
-def _active_revision_hashes(
+def _canonical_review_basis(
     workspace: Any | None, materialization: dict[str, Any] | None
 ) -> dict[str, str] | None:
     if materialization is None or workspace is None:
         return None
     if not hasattr(workspace, "active_dependency_snapshot"):
         return None
-    active = workspace.active_dependency_snapshot()
+    return workspace.active_dependency_snapshot()
+
+
+def _qc_revision_hashes(active: dict[str, str] | None) -> dict[str, str] | None:
+    if active is None:
+        return None
     return {
         "cmapRevisionHash": str(active.get("cmap") or ""),
         "syncRevisionHash": str(active.get("sync-map") or ""),
         "bmapRevisionHash": str(active.get("bmap") or ""),
         "tracksRevisionHash": str(active.get("tracks") or ""),
     }
+
+
+def _safe_fix_basis_current(workspace, candidate, identity, canonical_basis):
+    try:
+        if file_fingerprint(candidate)["sha256"] != identity["sha256"]:
+            return False
+        return (
+            canonical_basis is None
+            or workspace.active_dependency_snapshot() == canonical_basis
+        )
+    except (OSError, RuntimeError, ValueError):
+        return False
 
 
 def _normalized_watch_status(watch: dict[str, Any]) -> str:
@@ -327,7 +377,14 @@ def _watch_extra(watch: dict[str, Any]) -> dict[str, Any]:
         "visionCoverageManifest",
         "disposition",
     )
-    return {key: watch[key] for key in fields if key in watch}
+    extra = {key: watch[key] for key in fields if key in watch}
+    if isinstance(extra.get("reviewContext"), dict):
+        extra["reviewContext"] = {
+            key: value
+            for key, value in extra["reviewContext"].items()
+            if key != "craftChecks"
+        }
+    return extra
 
 
 def _automated_review_status(evidence: list[dict[str, Any]]) -> str | None:
@@ -856,11 +913,12 @@ class ReviewRunner:
             attempts,
         )
         review_windows = _review_windows(risk_windows, qc)
+        transcription_windows = _transcription_windows(risk_windows, qc)
         transcript = self._call(
             "transcription",
             lambda: self.transcription.transcribe(
                 candidate,
-                risk_windows=review_windows,
+                risk_windows=transcription_windows,
                 terms=terms,
                 names=names,
                 edit_dir=self.review_root.parent,
@@ -913,19 +971,26 @@ class ReviewRunner:
         evidence = self._qc_evidence(qc, identity, lock_hash, review_windows)
         evidence.append(
             self._transcript_evidence(
-                transcript, qc, identity, lock_hash, review_windows
+                transcript, qc, identity, lock_hash, transcription_windows
             )
         )
+        watch_evidence = self._watch_evidence(
+            watch,
+            qc,
+            identity,
+            lock_hash,
+            review_windows,
+            transcript,
+            terms,
+            names,
+        )
         evidence.append(
-            self._watch_evidence(
-                watch,
-                qc,
+            attach_craft_report(
+                watch_evidence,
+                self.workspace,
                 identity,
-                lock_hash,
-                review_windows,
-                transcript,
-                terms,
-                names,
+                materialization,
+                watch_evidence["coverage"],
             )
         )
         findings = [
@@ -1099,6 +1164,7 @@ class ReviewRunner:
         dependencies: dict[str, str],
         render_profile: str,
         identity: dict[str, Any],
+        canonical_basis: dict[str, str] | None,
         evidence: list[dict[str, Any]],
         attempts: list[dict[str, Any]],
         findings: list[dict[str, Any]],
@@ -1108,6 +1174,10 @@ class ReviewRunner:
             blocker = "safe findings require an owning-stage fix executor"
         elif fix_number >= self.max_fix_attempts:
             blocker = "maximum safe-fix attempts reached"
+        elif not _safe_fix_basis_current(
+            self.workspace, candidate, identity, canonical_basis
+        ):
+            blocker = "safe-fix candidate or canonical basis changed after inspection"
         if blocker:
             return {
                 "result": self._blocked(
@@ -1181,9 +1251,8 @@ class ReviewRunner:
         if self.watch_policy is not None:
             current_dependencies["watch-policy"] = str(self.watch_policy.policy_hash)
         current_dependencies.update(_materialization_dependencies(materialization))
-        current_revision_hashes = _active_revision_hashes(
-            self.workspace, materialization
-        )
+        canonical_basis = _canonical_review_basis(self.workspace, materialization)
+        current_revision_hashes = _qc_revision_hashes(canonical_basis)
         current_dependencies = dict(sorted(current_dependencies.items()))
         last_identity = candidate_identity(
             current_candidate, current_dependencies, render_profile
@@ -1234,6 +1303,7 @@ class ReviewRunner:
                 dependencies=current_dependencies,
                 render_profile=render_profile,
                 identity=identity,
+                canonical_basis=canonical_basis,
                 evidence=evidence,
                 attempts=attempts,
                 findings=findings,

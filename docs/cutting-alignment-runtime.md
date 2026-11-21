@@ -90,6 +90,18 @@ policy or generator code invalidates affected proposals. Missing measurements
 remain unknown. Runtime packages and real PT/EN inference are not validated by
 the generated-signal tests in the core suite.
 
+The opt-in recovery runtime test in
+`tests/integration/test_speech_recovery_runtime.py` additionally accepts a pinned
+`language` and optional `alignment` configuration through
+`AVO_TEST_SPEECH_RECOVERY_PIN`. It uses explicitly prepared local files and
+does not change ordinary project or user settings. An actual offline Windows
+CPU trial with WhisperX 3.8.6 and the pinned Portuguese model revision
+`634ac655299bcdc46c83bc01da9bab52d2987e4f` has exercised recovery, source-clock
+character/word alignment, evidence selection and replay on locally generated
+Portuguese speech. Individually unsupported words remain uncertain; this scoped
+execution result does not qualify English alignment, CUDA, real-footage accuracy,
+safe cut boundaries or human listening. Those need their own evidence.
+
 ## Worker contract
 
 The alignment adapter uses a bounded worker with an explicit CPU or CUDA device, local PCM input and

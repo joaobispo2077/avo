@@ -43,7 +43,37 @@ A pipeline initialization is not a completed motion proof. Use code-drawn in can
 
 **Durable state:** pipeline-run.json main/side state
 
+Default motion review also exposes requested motion/sound work from that run,
+including original item/event IDs, pending choices, completed decisions, partial
+publication and exact recovery inputs. Read `motionPlan.pendingRevisions` after a
+restart. Keep stale or unavailable work visible; do not replace its original scope
+with current defaults or claim a stage label proves publication. Reports never
+repair metadata or approve rendering/listening. See [requested work](../../../docs/craft-pending-work.md).
+
+Use `pipeline work-decide --request <absolute JSON>` for an explicit defer,
+dismiss, reopen or supersession of unresolved requested IDs. Copy the exact work
+reference/scope and current decision head from the view. This changes scheduling
+state without changing selected concepts, applied media or approvals. Applied
+contributions keep their normal revision commands. Retry an exact decision ID
+only for identical inputs; stale decision heads require current inspection.
+
 **Workflow steps:** Validate pipeline prerequisites → Run pipeline → Verify and report the pipeline result
+
+For selected motion sections, use `animation plan-show/plan-publish --scope-request
+<absolute JSON>` and place the same bounded partition in the explicit motion
+application request's `productionScope`. Preserve the complete programme clock
+and context graph. Produce only canonical-start-owned IDs; leave context-only
+items unchanged. Retiming across owners requires both chunks. Inspect actual
+per-ID receipts and pending work after restart. See
+[selected production](../../../docs/scoped-craft-production.md).
+
+For selected sound sections, add the same optional `productionScope` to the
+ordinary `sfx apply` request. Its owner follows actual audio start, including
+pre-roll, rather than visual impact. Preserve whole attacks/tails and the full
+context graph. Replacing across chunks requires both old and new owners;
+silence removes the existing audio owner's contribution. An incompatible
+retired clock requires the existing explicit unscoped removal route. Scope
+does not grant listening or full-film approval.
 
 **Approval or input gate:** Pause whenever required input or a human decision prevents the next declared step; report the exact reply or artifact needed.
 
@@ -131,6 +161,14 @@ render. Status output names the exact blocker and minimum remediation while
 keeping the expensive render unstarted.
 
 ## Optional artistic start
+
+At applicable planning/review boundaries, always present status `motionPlan`:
+the motion map, every-item linked storyboard, lane readiness, exact basis and
+gaps. Include provisional/static plans without enabling analysis or treatment.
+Use `animation plan-show` for a pure metadata inspection and `plan-publish` only
+when materializing the complete local review. Concepts and unverified images
+remain distinct from inspected renders and current creator approval. See the
+[motion planning workflow](motion.md#built-in-motion-map-and-linked-storyboard).
 
 Accept `--direction none|builtin:<id>@<version>|provider:<id>@r0001|references`, `--brief-context <json>` and repeatable `--direction-reference <descriptor-json>`. Delegate to native pipeline run/briefstart. No selector on an unbound project means raw startup; omission on a bound project retains its exact selected brief. A requested change stays proposed until an exact project decision; never auto-accept or silently choose latest. Present up to three material context questions and two or three concrete options (or a justified singleton), with the complete short view at most 600 visible words.
 

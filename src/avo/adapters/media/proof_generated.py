@@ -82,6 +82,8 @@ def parameters(operation, refs, registry):
         raise RuntimeError(
             f"Generated implementation is unsupported or stale: {operation['operationId']}"
         )
+    if _is_still(operation):
+        return operation["parameters"]
     fragment = (
         "overlayVideoParameters"
         if kind == "overlay-video"
@@ -137,9 +139,13 @@ def _record(operation, canonical_lock, validator):
 
 
 def _current_admission(record, reference, input_lock_ref, canonical_lock, validator):
-    if record["generator"]["adapterId"] == "code-drawn" and validator is None:
+    if (
+        record["generator"]["adapterId"] == "code-drawn"
+        or (record.get("parameters") or {}).get("hyperframes")
+        or (record.get("parameters") or {}).get("artcraft")
+    ) and validator is None:
         raise RuntimeError(
-            "Code-drawn generated asset requires current admission observations"
+            "Canonical generated asset requires current admission observations"
         )
     if validator is not None:
         admitted = validator(
@@ -154,6 +160,16 @@ def _input_lock(operation, record, canonical_lock):
     reference = params["inputLockRef"]
     _fingerprint(reference["path"], reference)
     lock = _json(reference["path"])
+    if (record.get("parameters") or {}).get("artcraft"):
+        from avo.timeline.artcraft_binding import require_artcraft_operation_binding
+
+        return require_artcraft_operation_binding(
+            operation, record, lock, canonical_lock
+        )
+    return _drawing_input_lock(operation, record, canonical_lock, lock, reference)
+
+
+def _drawing_input_lock(operation, record, canonical_lock, lock, reference):
     if lock.get("inputLockHash") != document_hash_excluding(lock, "inputLockHash"):
         raise RuntimeError(f"Generated input lock hash mismatch: {reference['path']}")
     declared = record["parameters"].get("codeDrawn", record["parameters"])
@@ -172,7 +188,19 @@ def _input_lock(operation, record, canonical_lock):
         raise RuntimeError(f"Generated canonical inputs changed: {reference['path']}")
     if record["generator"]["adapterId"] == "code-drawn":
         _code_drawn_lock(operation, record, lock)
+    if (record.get("parameters") or {}).get("hyperframes"):
+        _hyperframes_lock(lock, canonical_lock)
     return lock
+
+
+def _hyperframes_lock(lock, canonical_lock):
+    binding = lock.get("binding") or {}
+    expected = binding.get("canonicalInputLock") or {}
+    required = {"cmap", "bmap", "tracks", "animation", "sync-map"}
+    if set(expected) != required or any(
+        canonical_lock.get(key) != expected[key] for key in required
+    ):
+        raise RuntimeError("HyperFrames requires the exact complete canonical lock")
 
 
 def _code_drawn_lock(operation, record, lock):
@@ -240,6 +268,7 @@ def verify_cached(
     if (
         observations is not None
         and asset["record"]["generator"]["adapterId"] != "code-drawn"
+        and not (asset["record"].get("parameters") or {}).get("artcraft")
     ):
         observations[key] = {
             "canonicalLock": deepcopy(canonical_lock),
@@ -339,6 +368,15 @@ def _pixel_observation(asset, observations):
 def inspect(asset, spec, fps, *, observations=None):
     operation = asset["operation"]
     params = operation["parameters"]
+    artcraft = (asset["record"].get("parameters") or {}).get("artcraft")
+    if artcraft:
+        from avo.timeline.artcraft_binding import require_artcraft_output_geometry
+
+        require_artcraft_output_geometry(
+            operation,
+            artcraft["output"],
+            {**spec, "frameRate": {"num": fps.numerator, "den": fps.denominator}},
+        )
     video, opaque = _pixel_observation(asset, observations)
     if Fraction(video["r_frame_rate"]) != fps:
         raise RuntimeError("Generated asset frame rate differs from ProofPlan")
@@ -379,12 +417,44 @@ def validate_layers(assets):
     overlays = [
         asset["operation"]["parameters"]
         for asset in assets
-        if asset["operation"]["kind"] == "overlay-video"
+        if is_overlay(asset["operation"])
     ]
     captions = [item["zOrder"] for item in overlays if item["layerRole"] == "caption"]
     graphics = [item["zOrder"] for item in overlays if item["layerRole"] != "caption"]
     if captions and graphics and min(captions) <= max(graphics):
         raise RuntimeError("Frozen caption layers must composite after other graphics")
+
+
+def _is_still(operation):
+    from avo.timeline.artcraft_stills import is_generated_still
+
+    return is_generated_still(operation)
+
+
+def is_overlay(operation):
+    return operation["kind"] == "overlay-video" or _is_still(operation)
+
+
+def inspect_generated_still(operation, lock, output):
+    from avo.adapters.artcraft_vectorcraft import (
+        inspect_vector_card_native,
+        observe_vector_card_png,
+    )
+    from avo.timeline.artcraft_stills import resolve_generated_still_operation
+
+    job, event = resolve_generated_still_operation(operation, lock)
+    native = event["saved"]
+    observed = inspect_vector_card_native(
+        Path(native["locator"]), max_bytes=job["budget"]["bytes"]
+    )
+    path = Path(event["outputs"][0]["locator"])
+    pixels = observe_vector_card_png(path, job["output"])
+    if observed != native or pixels != event["stillEvidence"]:
+        raise RuntimeError(
+            "Generated VectorCraft still differs from its native receipt"
+        )
+    _placement(operation["parameters"]["placement"], output)
+    return {"path": path, "operation": operation}
 
 
 def _placement(placement, spec):
@@ -401,7 +471,22 @@ def _placement(placement, spec):
         raise RuntimeError("Overlay placement exceeds the frozen output canvas")
 
 
-def overlay_filters(assets, fps, wstart, wend, *, conformance):
+def overlay_filters(
+    assets, fps, wstart, wend, *, conformance, pixel_format=None, canvas=None
+):
+    output = (
+        (
+            f"scale=iw:ih:flags=bilinear,format={pixel_format}"
+            if pixel_format is not None
+            else "format=bgra"
+        )
+        if conformance
+        else "scale=in_range=full:out_range=limited:out_color_matrix=bt709,"
+        "format=yuv420p,setparams=range=tv:color_primaries=bt709:"
+        "color_trc=bt709:colorspace=bt709"
+    )
+    if pixel_format is not None:
+        return _precision_overlay_filters(assets, fps, wstart, wend, output, canvas)
     arguments, filters, metadata = [], [], []
     current = "picture"
     timebase = f"{fps.denominator}/{fps.numerator}"
@@ -422,11 +507,10 @@ def overlay_filters(assets, fps, wstart, wend, *, conformance):
             continue
         index = len(arguments) // 2 + 1
         arguments += ["-i", str(asset["path"])]
-        local = params["sourceRange"]["startFrame"] + left - region["startFrame"]
         offset = left - wstart
         p = params["placement"]
         filters.append(
-            f"[{index}:v:0]trim=start_frame={local}:end_frame={local + right - left},"
+            f"[{index}:v:0]{_overlay_trim(operation, left, right - left)},"
             f"settb=expr={timebase},setpts=N+{offset},scale={p['width']}:{p['height']},"
             f"format=rgba[alpha{index}]"
         )
@@ -435,8 +519,113 @@ def overlay_filters(assets, fps, wstart, wend, *, conformance):
             f"alpha=straight:eof_action=pass:repeatlast=0[picture{index}]"
         )
         current = f"picture{index}"
-    filters.append(f"[{current}]format={'bgra' if conformance else 'yuv420p'}[v]")
+    filters.append(f"[{current}]{output}[v]")
     return arguments, filters, metadata
+
+
+def _precision_overlay_filters(assets, fps, wstart, wend, output_filter, canvas):
+    arguments, filters, metadata = [], [], []
+    current = "picture"
+    for asset in sorted(assets, key=_overlay_order):
+        operation = asset["operation"]
+        region = operation["outputRange"]
+        left, right = (
+            max(region["startFrame"], wstart),
+            min(region["endFrameExclusive"], wend),
+        )
+        item = operation_metadata(operation)
+        item["appliedRange"] = (
+            {"startFrame": left, "endFrameExclusive": right} if left < right else None
+        )
+        metadata.append(item)
+        if left >= right:
+            continue
+        index = len(arguments) // 2 + 1
+        arguments += ["-i", str(asset["path"])]
+        filters.extend(
+            _precision_overlay_planes(
+                operation, index, fps, wstart, wend, left, right, canvas
+            )
+        )
+        output = f"picture{index}"
+        filters.append(
+            f"[{current}][color{index}][mask{index}]maskedmerge=planes=7[{output}]"
+        )
+        current = output
+    filters.append(f"[{current}]{output_filter}[v]")
+    return arguments, filters, metadata
+
+
+def _promote_alpha8(chain, identity):
+    # Convert channels independently: packed RGB promotion can introduce a
+    # colour-matrix round trip and turn fully opaque 8-bit alpha into 65532.
+    channels = ("g", "b", "r", "a")
+    extracted = "".join(f"[{identity}{channel}8]" for channel in channels)
+    promoted = ";".join(
+        f"[{identity}{channel}8]format=gray16le[{identity}{channel}16]"
+        for channel in channels
+    )
+    inputs = "".join(f"[{identity}{channel}16]" for channel in channels)
+    return (
+        f"{chain},extractplanes=g+b+r+a{extracted};{promoted};{inputs}mergeplanes="
+        "map0s=0:map0p=0:map1s=1:map1p=0:map2s=2:map2p=0:map3s=3:map3p=0:format=gbrap16le"
+    )
+
+
+def _visible_overlay_bounds(placement, canvas):
+    x, y = placement["x"], placement["y"]
+    return (
+        max(0, x),
+        max(0, y),
+        min(canvas[0], x + placement["width"]),
+        min(canvas[1], y + placement["height"]),
+    )
+
+
+def _precision_canvas_filter(placement, canvas):
+    left, top, right, bottom = _visible_overlay_bounds(placement, canvas)
+    visible_width, visible_height = right - left, bottom - top
+    width, height = placement["width"], placement["height"]
+    chain = f"scale={width}:{height}:flags=bilinear,format=gbrap16le,"
+    if (visible_width, visible_height) != (width, height):
+        x, y = left - placement["x"], top - placement["y"]
+        chain += f"crop={visible_width}:{visible_height}:{x}:{y}:exact=1,"
+    return chain + f"pad={canvas[0]}:{canvas[1]}:{left}:{top}:color=black@0,"
+
+
+def _precision_overlay_planes(
+    operation, index, fps, wstart, wend, left, right, canvas, *, alpha8=True
+):
+    params = operation["parameters"]
+    offset, count = left - wstart, right - left
+    placement = params["placement"]
+    timebase = f"{fps.denominator}/{fps.numerator}"
+    prefix = f"[{index}:v:0]{_overlay_trim(operation, left, count)},settb=expr={timebase},setpts=N"
+    if alpha8:
+        prefix = _promote_alpha8(prefix + ",format=gbrap", f"promotion{index}")
+    geometry = _precision_canvas_filter(placement, canvas)
+    return [
+        (
+            f"{prefix},{geometry}"
+            f"tpad=start={offset}:stop={wend - wstart - offset - count}:start_mode=add:stop_mode=add:color=black@0,"
+            f"trim=end_frame={wend - wstart},settb=expr={timebase},setpts=N,split=2[coloralpha{index}][alpha{index}]"
+        ),
+        f"[coloralpha{index}]mergeplanes=map0s=0:map0p=0:map1s=0:map1p=1:map2s=0:map2p=2:format=gbrp16le[color{index}]",
+        f"[alpha{index}]alphaextract,split=3[mg{index}][mb{index}][mr{index}]",
+        f"[mg{index}][mb{index}][mr{index}]mergeplanes=map0s=0:map0p=0:map1s=1:map1p=0:map2s=2:map2p=0:format=gbrp16le[mask{index}]",
+    ]
+
+
+def _overlay_trim(operation, left, count):
+    if _is_still(operation):
+        return f"loop=loop={count - 1}:size=1:start=0,trim=end_frame={count}"
+    region = operation["outputRange"]
+    local = (
+        operation["parameters"]["sourceRange"]["startFrame"]
+        + left
+        - region["startFrame"]
+    )
+    return f"trim=start_frame={local}:end_frame={local + count}"
 
 
 def _overlay_order(asset):
@@ -449,6 +638,7 @@ def operation_metadata(operation):
     params = operation["parameters"]
     keys = (
         "generatedAssetRef",
+        "generatedStillRef",
         "inputLockRef",
         "sourceRange",
         "placement",

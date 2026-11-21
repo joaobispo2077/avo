@@ -81,6 +81,14 @@ repeated by native execution; supported images are single-frame and literal,
 never expanded as sequences. Known non-square pixels and unsupported timing or
 treatment block this capability. The optional native reader remains isolated.
 
+Later checkpoints may append admitted `overlay-video` operations to the unique
+imported source-layout base. The base keeps its original placements, privacy
+masks and continuous source-audio graph; added audio remains explicit mixer
+nodes. Generated overlays use the existing compositor and fresh closing guard.
+Microproofs count only emitted overlay inputs when routing the final audio,
+including windows where every overlay is inactive. Cut-proof still requires the
+exact source-only canonical reconstruction.
+
 Microproof and full proof use the same graph. Both preflight/render paths close
 a fresh fingerprint-verification batch before publishing evidence, including
 retained inactive originals. Ephemeral same-plan media owns a separate fingerprint
@@ -544,6 +552,123 @@ See [agent cost continuity](docs/agent-cost-continuity.md),
 [feature-015 validation guide](specs/015-agent-cost-continuity/quickstart.md).
 
 
+## Optional ArtCraft provider authoring
+
+The ArtCraft assessment receives a closed request and the current invocation's
+intent separately. It resolves existing routes and pinned component evidence
+against the exact provider, component and required behavior. CLI and MCP share
+this assessment and the bundled capability catalog. An eligible decision
+records one app and its operations. The authoring boundary re-evaluates that
+same scope before tool access. Motion engine selection and canonical timeline
+ownership stay with the existing services.
+
+Provider job records live in a declared external workspace. The shared
+ArtCraft schema and timeline store primitives bind job and event content,
+serialize writes and compare the expected event head. An exact operation can
+recover after an interrupted index write. App observations, reusable source
+receipts and creator decisions carry distinct evidence. Legacy component
+commands reserve ArtCraft declarations for its qualified admission path.
+Packages include the AVO-owned catalog and schema. Users manage the selected
+app installation separately. The distribution smoke reads bundled metadata.
+
+Structured ArtCraft job tools invoke the same prepare, run, inspect and recover
+commands as the CLI. Inspection and recovery compare the selected event head
+with current evidence and read only the artifacts owned by the job. Recovery
+reports a next action and fingerprints bounded partial files for reference.
+An interrupted write retains its event and requires a fresh job before another
+attempt at authoring.
+
+The first AniCraft profile authors a Windows 0.2.1 lower third from a job-owned
+empty document. A supplied confined command runner executes the fixed native
+recipe and checks the exact saved stage and clock, installed font family and
+fresh-session pixels. The renderer reconstructs straight alpha from two native
+backings and verifies every channel against an independent third. Job events
+bind the saved native source, recipe and frame fingerprints. The guided route
+prepares the same native recipe under operator control and retains its returned
+files as references. Proof admission remains a separate decision boundary.
+
+An explicit host-MCP job stages a headless AniCraft launch descriptor and a
+version-specific operator recipe. It binds the installed files, owned empty
+document, command IDs, permitted roots and resource limits. The handoff requires
+the selected host to enforce those limits. AVO stages and inspects the handoff
+without connecting to the host or starting a server.
+
+AniCraft JSON-lines authoring uses an independently confined stdio runner and
+the same fixed recipe and verification as CLI batching. It checks the startup
+record and waits for the exact successful receipt at each step before sending
+the next command. The first failed or incomplete receipt leaves a recoverable
+job outcome and prevents subsequent commands.
+
+The explicitly selected SoundCraft cue profile accepts one external WAV and
+an exact 48 kHz stereo output contract. A confined Windows 0.20.1 CLI builds
+an owned session with one track and the built-in room reverb. The media
+adapter independently decodes the retained source and both bounces, checks
+the PCM clock, and compares the saved session's fresh bounce. The export event
+binds the editable session, recipe, retained audio dependency and decoded
+output for standalone review. Canonical proof admission has its own checks.
+
+Generated cue placement binds the export receipt and output fingerprint to an
+explicit SFX region in Tracks. Proof compilation seals both identities and
+verifies the current frame and sample ranges. Materialization and native
+execution recheck the receipt and its closure while resolving the audio.
+The native mixer adds the cue through the existing SFX node and final encode.
+
+The selected VectorCraft Windows 0.24.1 profile stages a fixed card recipe
+under a confined runner with plug-ins and preferences disabled. It retains
+the editable native source, its bounded inline resource envelope and the
+verified sRGB RGBA still. Tracks selects that exact static asset and its
+placement. Proof execution verifies the source, dimensions and decoded pixels
+before using the existing overlay layers for the exact requested frames.
+
+The explicitly selected video export binds the unchanged AniCraft source,
+recipe, app and CLI fingerprints, ordered alpha frames and current approved
+cut and sync to the logical component in Animation, BMap and Tracks. Proof
+composition observes the actual source and packs the frames into a silent
+lossless FFV1/BGRA clip. It checks each decoded frame and timestamp before
+registering the generated asset. The timeline service verifies the retained
+binding and recursively rejects forbidden output ancestry. Compilation and
+execution read the same source lock and use the existing `overlay-video`
+operation, preserving the canonical placement, alpha and local frame phase
+through full and window proofs. Creator review follows the existing gates.
+
+ArtCraft review pairs the retained standalone phase frames with an exact
+original-footage candidate when the caller selects its proof record. The
+review reader verifies the immutable plan, materialization, source binding
+and current candidate bytes, and links available source and edit logs. It
+reports the review as pending for the existing creator approval workflow.
+
+Native provider publication extends the existing animation catalog. The package
+reader checks its external root, byte fingerprints, declared source roles,
+review references, rights and local parameter schema before independent source
+inspection. An explicit approval against the current catalog version retains
+the verified bytes in a provider-scoped external store and publishes hash-only
+source provenance. An identical retry verifies the retained package and returns
+the existing promotion without adding an event.
+
+Native kit instantiation verifies the exact catalog version and rechecks the
+provider store's retained source, reviews and rights. The selected video's
+component instance records its parameters and project-owned source copies.
+An explicit upgrade creates a new version-pinned instance linked to the
+previous record. Its contextual review follows the existing video gates.
+
+The AniCraft lower-third profile authors 16:9 and 9:16 on their declared
+canvases. Both use the same phase clock and width-scaled typography. The
+portrait layout anchors the plate near three quarters of the canvas height
+and checks every visible alpha frame against its independently measured bounds.
+
+A saved-source text revision starts from an immutable job-owned copy and saves
+into a separate revision folder. The native adapter observes the selected edit
+command signatures and compares the new document with the preserved design.
+The receipt retains the original source, revision recipe and decoded output.
+
+Copy-only reuse binds a selected native export to a new project's exact
+provider, editable source bytes, parameters, render contract and installed
+tool fingerprints. It copies the verified component frames, native revision
+and recipe into the new job without an application session. The new proof
+receives its own canonical placement and source binding. Native label
+instances resolve omitted settings from the reviewed template and retain its
+qualified font.
+
 ## Motion engine selection and code-drawn capture (feature 012)
 
 HyperFrames remains the default. The pure shared motion policy resolves invocation, pinned run, project/video, provider/channel and global preferences, in that order. Strict saved IDs are hyperframes, remotion, and code-drawn; Remotion retains its existing unsupported execution adapter. A new default never rewrites a recorded animation revision or creator decision. Explicit new engine/source authoring uses existing revision invalidation. Installed motion and pipeline routers resolve current no-framework intent before loading engine-specific skills.
@@ -553,6 +678,73 @@ The advanced code-drawn route is model-neutral Canvas, SVG, or optional pinned s
 Canonical authority flows manifest/source snapshot → logical Animation + Tracks source reference → original input lock → generated receipt → frozen ProofPlan. CMap/Sync approvals and current BMap/Tracks/Animation dependencies are derived from real workspace stores. BMap/Tracks own timing and placement; source strategy has no clock and cannot point forward to output hashes. The injected outer composition observes the actual browser/driver/graphics/encoder environment. Timeline services consume observations or a trusted verifier callback and import no renderer. Direct and recursive admission reject stale bytes, bindings, implementations and prohibited output ancestry even when a file is renamed as a font or dependency. Standalone capture conveys no canonical admission or creator approval.
 
 The existing FFmpeg ProofPlan path handles generated-clip and overlay-video. It freezes receipt, lock, frame range, placement and stable z-order; partial proofs retain the original local-frame phase across cuts. Original source audio keeps its canonical graph and envelope. Unsupported mixing/event envelopes fail before output. Explicit FFV1/PCM Matroska conformance uses this same graph for exact decoded pixel and sample checks; normal delivery encoding stays separately checked. Reconstruction retains the complete declared source/dependency/receipt/lock closure and can remove only regenerable output under existing cleanup authority.
+
+Canonical HyperFrames instances use source-only component registrations referenced
+by logical Tracks generators and Animation components. The binding service derives
+the exact BMap cue, canonical canvas placement, original-media closure and all five
+current map heads without pointing Tracks forward to generated output hashes.
+The outer composition owns browser/encoder observations and lossless PNG-sequence
+materialization; timeline admission consumes fresh observations and imports no
+renderer. Frozen vendor scripts are admitted only with explicit local-library
+fingerprints; authored HTML/JavaScript retains deterministic-source checks.
+Generated receipts require unchanged source/tool identities, exact silent
+FFV1/BGRA output and matching seek/encoded-frame evidence. Proof compilation
+also verifies source range, ordering and exact canonical-to-preview geometry.
+
+Qualified HyperFrames browser observations are reused only inside one native
+proof validation batch, keyed by the complete binding, receipt, output and
+canonical lock. Every use still passes native admission. Original inputs,
+tools, output and receipt bytes are enrolled in the enclosing fresh closing
+guard, including dependencies observed by nested binding checks. Another batch
+captures again; no observation cache persists across proofs.
+
+Binding resolution and placed rendering share the enclosing fingerprint stage
+only inside that native batch. Every use still resolves current canonical
+authority, source membership and receipt admission; byte observations remain
+scoped to the batch and all enrolled dependencies receive a fresh closing hash.
+Standalone binding resolution and rendering retain their independent stages.
+Private per-window PCM uses a separate fingerprint scope; its cleanup must not
+leave a deleted temporary output in the enclosing dependency guard.
+Historical preview inventory also owns a separate fingerprint scope: these
+quarantine examples are negative evidence, not contributing inputs. Renaming a
+temporary export cannot enroll its old path in the closing source guard;
+copied preview ancestry and actual input mutations remain rejected.
+
+Canonical proof media resolution maps locked audio trim IDs to current Tracks
+audio-source fingerprints using both the exact digest and resolved locator.
+Several cues can share one original asset. Conflicting IDs or origin metadata
+are rejected; unowned, relabelled or unresolved media cannot gain admission.
+Resolution remains metadata-only, with byte and recursive ancestry checks in
+the normal preflight and executor.
+
+Canonical HyperFrames PNG production and independent seek observations use the
+same native snapshot raster backend, in separate browser contexts. Production
+captures every frame in bounded batches of at most 128 before silent lossless
+encoding. Independent forward/reverse captures and every encoded RGBA frame
+remain exact comparisons. The sealed tool environment names this raster backend;
+different browser capture paths are not assumed to have identical rounding.
+Original source, lifecycle and deterministic-authoring validation plus strict
+native checks remain prerequisites.
+
+Both paths use a private copy of the frozen source closure to initialize the seek
+runtime with the declared rational render frame rate.
+This compatibility bridge is needed when the installed snapshot command defaults
+to a different frame rate and exposes no frame-rate option. It changes neither
+registered source bytes nor vendor files. Temporary copies have an independently closed
+byte-verification guard before clock injection and cleanup; the enclosing proof
+guard retains responsibility for original sources and tools. The observed environment seals the bridge policy,
+and independent forward/reverse snapshots must match the corresponding encoded
+frames exactly. Missing or mismatched evidence rejects admission.
+
+Only a multi-window native microproof gate opts into ephemeral full-placement
+video stages. Their provenance binds the full plan, canonical heads, placement,
+source, render contract, implementation and tool bytes. Exact integer-frame
+slices preserve original sampling and fade phase; ordinary short proofs, stills,
+titles and full renders retain their existing paths. Insufficient disk space
+falls back to bounded direct rendering. Batch-owned stages survive the fresh
+closing guard and are removed only after checking their original resolved root
+and rejecting escaped, linked or unexpected contents. No stage is reused across
+batches or admitted as an original or prior-proof substitute.
 
 Validation is recorded in specs/012-code-drawn-motion/validation.md: schema/legacy compatibility, seven installed agent profiles, source and extracted native capture, current-environment admission, physical alpha/phase/audio checks, and source-only rematerialization. Local execution identifies Windows AMD64 and its actual graphics renderer; configured Linux/macOS lanes are not claimed as executed locally. See [code-drawn motion](docs/code-drawn-motion.md).
 
@@ -567,6 +759,14 @@ ProofPlan source aliases and their aggregate raw hash. Legacy assembly
 `rawFingerprints` retain their separate compatibility path. Neither format skips
 current-input, source-byte, graph or microproof validation. Coverage includes
 native cut regression approval and rejection of altered source bytes and locks.
+
+Checkpoint QC retains every required visual/cue window while optionally exposing
+separate `requiredTranscriptionWindows` from its original cut-risk and join
+requirements. ReviewRunner uses that explicit list, including an empty list,
+only for ASR word-risk analysis and its evidence scope. Watch still receives all
+required windows and QC evidence/statuses remain intact. Older QC producers that
+omit the field keep their existing routing. A silent graphic no longer implies
+that spoken words must occur there; real speech-risk obligations remain required.
 
 Cutting's existing runtime references now allow explicit CPU/CUDA execution for
 transcription and isolated WhisperX alignment. CPU remains the compatibility
@@ -595,6 +795,8 @@ Native ProofPlan mixing keeps the existing sequential source-cut dialogue path
 and adds explicitly declared music, SFX and ambience nodes in the absolute
 48 kHz sample domain. The media adapter validates every original through the
 same fingerprint, ancestry and channel-routing boundary before rendering. Audio
+resampling requirements cover source, music, SFX and ambience leaves equally;
+missing, unused or mismatched conversion operations remain errors. Audio
 events must identify their exact declared node and onset; unsupported effects,
 missing events and clock mismatches fail closed. The mix adapter accepts only
 finite ranges, literal gain, bounded fades and declared sidechain ducking. A
@@ -602,6 +804,15 @@ lossless same-plan dialogue intermediate supplies the lead without reading an
 earlier proof. Float PCM preserves headroom until the single final audio encode.
 Independent finite picture/audio inputs reach EOF so a video frame-count stop
 cannot discard the last PCM packet of a microproof.
+
+Post-cut source gain controls live in optional Tracks
+`audioTracks.sourceMixAdjustments`, not a replacement CMap or duplicate audio
+layer. Each control binds an enabled imported placement, original fingerprint,
+stream and channel selection. The ProofPlan compiler applies its gain/ceiling
+deltas once to the existing source node; preflight checks the exact result.
+Cut proofs retain the original CMap mix. Legacy assembly rendering rejects these
+controls rather than silently ignoring them. Existing Tracks without controls
+are unchanged; schema, source-binding and compile/preflight tests cover this path.
 
 Tracks regions may declare their rational timebase. Omitted timebases retain
 legacy milliseconds. Cue containment compares exact rational seconds rather
@@ -845,18 +1056,528 @@ real Resolve exports, long-source throughput and creator review remain separate
 qualification. Existing ordinary canonical layouts/default audio/engine and
 source-only import preservation remain distinct, with compatibility regressions.
 
-## Planned editing craft parity (feature 017, not implemented)
+## Editing craft parity (feature 017, implementation in progress)
 
 The local working design is `specs/017-editing-craft-parity/plan.md`; numbered
-working specs remain ignored by existing repository policy. This section records
-the proposed evolution and does not claim delivered capabilities.
+working specs remain ignored by existing repository policy. Scoped preferences,
+typed request freezing and the default motion-review projection are implemented.
+Untimed proposal/selection and recoverable canonical application use the existing
+timeline owners. The sound catalogue and descriptor search are local source-read
+and saved-metadata operations respectively; semantic execution has an explicit
+isolated optional boundary. Camera, visual analysis, sound placement and source
+preparation use explicit selections. Editor interchange exposes source-preserving
+validation, returned XML review and selected cuts through the normal trim owner.
+Its production targets await version-specific qualification.
 
-Motion map and linked lightweight storyboard become built-in, engine-independent
+Motion map and linked lightweight storyboard are built-in, engine-independent
 projections at applicable motion planning/review. They join the selected brief,
 untimed proposals and exact available CMap/BMap/Tracks/Animation/Sync heads,
 including absence/static/unresolved state. Status remains metadata-only and
 cannot initialize canonical records, run models or render. Explicit authoring
 and review publish immutable derived views; no second timeline is introduced.
+
+`MotionAuthoringService` freezes selected direction/options in existing run
+extensions, stores immutable concept/decision documents and projects them into
+the same default map. It prevalidates full prospective BMap/Tracks/Animation
+revisions under the timeline writer, then publishes through each owner with exact
+prepared identities. A narrowly scoped pending-application guard blocks unrelated
+canonical work until the same operation recovers. Receipts record staged,
+committing, committed or recovery-needed state; they do not transfer approval.
+
+Motion retention preserves legacy metadata that claims no head or revisions as
+opaque fingerprinted bytes. Claimed heads/revisions and their motion evidence
+remain strictly validated. This compatibility boundary grants no canonical read,
+render or approval authority to a legacy metadata stub.
+
+`SfxCatalogService` retains immutable project-local generations and separates
+source-bound measurement facts from manual curation, rights and reviewed markers.
+It reuses shared safe-path/library guards without invoking media organization.
+Warm descriptor searches perform no source enumeration, decode or model work.
+An explicit semantic operation injects a ranker and paired local CLAP worker;
+manifest/model/preprocessing/runtime identities must agree before cosine scores
+are accepted. The optional worker uses offline local files and bounded validated
+vectors; ordinary model defaults and proof capability registration stay unchanged.
+No model package or weights are an AVO core prerequisite. The distributions
+include separate Windows CPU wheel locks for CLAP and face analysis. Explicit
+local runtime qualification uses `AVO_TEST_CLAP_PIN` without changing ordinary
+job defaults;
+the real worker test records joint-space/manifest identity, normalized vectors,
+exact source-bound cache reuse and changed-source rejection. Human suitability
+and listening acceptance remain separate.
+
+Advanced camera strategy validation reserves a closed relative-behavior extension
+and publishes the revision reference with an index-v2 capability fence in one
+atomic replacement. Generic snapshot writers and metadata-only readers enforce
+the same guard; existing v1 snapshots do not cause an upgrade on inspection.
+The pure camera planner derives frames from BMap and binds moves to exact source
+occurrences, geometry, source bytes and frozen options. Camera proof compilation
+uses a strict v2 operation contract and requires a qualified native implementation;
+legacy proof contracts are unchanged. The selected native route verifies tool
+and input identity before executing and leaves creative approval to review.
+
+Selected untimed camera recipes expand inside `MotionAuthoringService` into
+strict relative paths with frozen options, source identity and display geometry.
+The pure recipe factory performs no source access or canonical writes. Stable
+concept IDs retain unchanged paths across revisions; publication rejects a path,
+option or component that differs from the selected concept. BMap and the existing
+camera compiler remain the only timing and source-occurrence authorities.
+
+The native camera sampler accepts sealed numeric paths over freshly verified
+original-source occurrences. Its frame expressions retain the complete cue
+interval during partial renders and run before independent captions or graphics.
+Contiguous and placed execution share this source-bound sampler. Explicit
+precision composition uses 16-bit RGB/alpha planes and bounded raw picture
+chunks; opaque alpha insertion/removal copies planes instead of introducing a
+libswscale RGB/RGBA matrix round trip. Legacy proofs retain their existing pixel
+path. Optional placed-stage reuse is disabled for the new precision profile
+until its complete camera recipe is qualified for caching.
+An accepted delivery profile keeps RGB16 through source sampling and independent
+composition, then performs one final BT.709 conversion with square output pixels.
+Unsupported timing, source geometry and fidelity combinations fail preflight. Runtime evidence and
+remaining activation requirements are documented in
+[`docs/source-picture-camera-rendering.md`](docs/source-picture-camera-rendering.md).
+
+Selected native camera execution records actual tool bytes/version identities,
+implementation code and the complete recipe in the existing producer record.
+The adapter binds its observed environment to preflight and verifies execution
+against it; the environment changes the microproof gate's preflight hash. Existing
+materialization and reconstruction owners retain these records without another
+source ledger. Packaged native implementations bind program bytes containing the
+embedded code, while checkout fingerprints include camera and precision modules.
+No runtime probe is added to ordinary metadata-only motion views.
+
+Explicit camera proposal/application bind the observed installed environment to
+selected recipes, exact dispositions and existing recoverable canonical owners.
+Application is confined to the selected picture components/layers, rejects
+duplicate scope identities and preserves unrelated graphics/dialogue/global
+settings. Generic plan application cannot bypass the selected camera runtime.
+Runtime inspection follows known Chocolatey launcher targets and fingerprints the
+final executable as well as launcher bytes; tools stay separately installed.
+Motion-review generator 1.2.0 derives planned/authored before/during/after states
+from the relative path and unambiguous component links, while retaining readable
+1.1.0 reports. Gate JSON joins existing reconstruction ancestry evidence; disposable
+proof clips and tool binaries are not reconstruction sources. Actual native
+fixtures verify full/window source sampling, independent overlays, color/depth,
+runtime identity and unsupported-profile rejection. These checks do not replace
+Watch, listening or creator suitability review.
+
+Sound candidate fitting is a pure timeline primitive over validated catalogue
+metadata and an explicit native-sample trim. Shared catalogue identities and
+validation live in `avo.sfx_contracts`; the existing catalogue imports those same
+unchanged checks, keeping source execution outside the planner. It reuses the existing event clock,
+keeps useful attacks/tails, and returns unresolved pre-roll/tail/rights/visibility
+cases instead of changing picture or audio ranges. Its derived hash binds clock,
+source/measurement and current annotation identities. It creates no source reads,
+canonical timing, selection, gain policy or listening approval. Publication and
+encoded contextual qualification belong to their existing owners.
+
+Optional catalogue descriptions and categories extend the existing strict
+curation contract. Generic annotation revision/expected-generation controls
+remain authoritative; descriptor ranking includes those labels and shared
+eligibility enforces exact category filters for descriptor and semantic modes.
+Missing fields preserve legacy entries without migration. No new index, runtime,
+source analysis or rights claim follows from these labels.
+
+`avo.sfx_preferences` explicitly promotes selected portable descriptors and a
+library/source-byte identity into bounded `routingOverrides.sfxFavorites` in the
+existing provider manifest. Existing preference schema/byte guards and writer
+locks preserve unrelated settings and recheck the current catalogue before
+publication. Native/MCP mutations bind exact request bytes and provider scope;
+they gain no canonical timeline authority. Selected scans alone seed new matching
+entries, freeze their preference snapshot through resume and expose origin hashes
+in catalogue/search metadata. Existing project choices and all source, rights,
+marker, measurement and approval owners remain independent. No second project
+state store, media copying or default provider lookup is added.
+
+Explicit sound proposals now reuse `MotionAuthoringService` head guards and
+`PipelineRunStore` option freezing, with strict bounded intent/proposal contracts
+and immutable metadata below `edit/motion/sound/`. The timeline service derives
+events only from current motion items and canonical cue timing, captures selected
+sound direction, and calls an injected catalogue for generation-bound candidates.
+Silence and unresolved anchors remain first-class outcomes. Native/MCP entry
+points share the same request and operation replay; they do not scan source media,
+provision models, publish audio or approve listening. Proposal validation precedes
+option freezing. Unregistered drafts do not enter reconstruction closure; canonical
+publication and typed evidence retention use their dedicated owners below.
+Pure per-event choice preparation reuses the existing overlay role and channel
+validators. It freezes entry/marker/mix identities and uses the same native event
+clock for before/after reports, while exposing repeated sources and coincident
+attacks. Explicit source peak/fade limits cannot establish combined-mix safety or
+listening acceptance; current source/catalogue/head checks stay with publication.
+The pure sound graph compiler translates frozen choices to existing native
+trim/gain/fade/duck nodes and timed events. It retains absolute program coordinates
+through cut windows and makes identical compilation idempotent. Existing source
+processing remains unchanged; extending a program mix requires its exact original
+node set and policy. Native execution still admits original source bytes and
+performs rendering. This qualification kernel is not a canonical sound publisher.
+Source-native fitting lives in the data-only `timeline.sound_fitting` module so
+canonical readers can reuse the same validation without importing authoring or
+persistence. `sound_planning` retains its existing fitting/error imports for
+compatibility; the moved fitting bodies and their failure semantics are unchanged.
+JSON budgets, track channel/overlay rules and frozen sound choice validation live
+in the data-only `motion_metadata`, `track_rules` and `sound_choices` modules.
+Existing review, Tracks and sound-planning imports remain available. Canonical
+readers reuse these rules without importing authoring, rendering or models.
+
+Optional camera-node sound anchors use the data-only `timeline.sound_anchors`
+resolver. It reads the actual current Animation component through its calling
+service, verifies the linked cue/target layer and exact camera path/source, then
+derives a phase on BMap's full canonical interval. Proposed camera descriptions
+grant no execution authority. Frozen sound opportunities retain the selected
+node; native proof admission recomputes it against canonical Animation. Checkout
+producer identity includes the sound anchor, admission, fitting and compilation
+sources; packaged engines continue to bind their executable bytes. This adds no
+timing owner, decoder, model or approval path.
+
+Sound choice advisories compare exact native-sample schedules as rational time,
+including retained siblings during per-ID publication. A bounded sweep reports
+overlapping event/role pairs and their half-open intervals with explicit report
+truncation. Equal-time impact comparisons also respect each output sample rate.
+These data-only observations leave source signal, gain/fades/ducking and frozen
+choice identities unchanged; they establish no masking measurement or approval.
+
+Selected sound Tracks carry a strict source/choice/cue/request binding and require
+the `sound-selection-v1` reader capability. Generic publication atomically updates
+the Tracks index to version 2 with its revision reference; unchanged legacy reads
+retain version 1. Animation version 2 keeps its separate camera capabilities.
+Invalid or resealed choices, changed source/channel/gain/clock bindings, duplicate
+contributions and untyped references fail closed. The legacy audio projection
+rejects these tracks rather than ignoring their native trim. New readers support
+both legacy and selected-sound data; published advanced history retains its reader
+fence on later revisions. The internal `timeline.sound_application` service now
+publishes explicit per-event selections through the existing BMap/Tracks owners
+under the shared timeline writer. Frozen choices bind actual local source bytes
+and an injected first-audio-stream probe. Exact owned cue/layer bindings and
+current visual contexts prevent replacement from altering unrelated content or
+borrowing ordered-layer approval. Silence removes only its selected contribution.
+Immutable requests, staged prepared revisions and linked receipts support exact
+retry after partial publication, including an interrupted initial operation log.
+Recovery rechecks heads, source/catalogue, direction and frozen options; pending
+markers remain blocking until the actual publication is reconciled. Completed
+replay reports historical heads separately from their currentness.
+
+`timeline.sound_retention` extends the existing bounded motion evidence ledger
+with selected sound proposals, their actual operations, receipt history, exact
+catalogue generations and pending recovery inputs. Unfinished publication keeps
+its actual current catalogue selector, including a stale basis; committed replay
+retains frozen metadata without adopting later curation. Catalogue reads share
+the data-only catalogue byte limit inside the unchanged total evidence budget.
+Canonical/history and explicitly requested work references drive retention; unrelated
+drafts and generated review caches do not. The timeline domain owns validation
+and publication; `adapters.registry` composes the optional explicit source probe
+using the existing ffprobe adapter. Metadata readers never execute it. Native and
+MCP apply share the strict saved request, canonical owner permissions and exact
+confirmation-byte binding. Recoverable errors report actual heads/receipt/state.
+See
+[`docs/sound-application.md`](docs/sound-application.md) for the boundary and checks.
+
+Typed sound application selectors preserve exact staged inputs even when staging
+is interrupted before its operation log or pending marker. Bounded discovery uses
+only the owned selector directory. Generic authoring retention excludes the typed
+sound draft collections, then adds their verified dependencies; adjacent creator
+notes remain authoring inputs. `timeline.sound_sources` registers current and
+still-staged external sound originals with reconstruction's existing
+`externalSources` contract and the native sound source identity. Existing
+fingerprinting verifies the selected files without copying or decoding a library.
+Project-local selected or staged sound assets join the fingerprinted bundle files,
+including staging before the first canonical owner write.
+The metadata/file coverage path grants no rendering or listening authority.
+
+`timeline.sound_proof` joins current selected Tracks, exact committed publication
+recipes and current visual anchors into ordinary proof compilation. It reuses the
+pure native graph compiler and adds no decoder, model or media-adapter dependency.
+Preflight recomputes the contribution and rejects omissions, altered events/mix,
+unpublished recipes and overlapping copies of a selected source. Cut proofs keep
+their source-only pass. Optional ducking binds current unmuted dialogue to actual
+source/stream/channel routing, including a selected microphone duplicated to
+stereo. Native source descriptors declare original ancestry explicitly for the
+existing strict media resolver. Physical admission and listening remain separate.
+Sound finalization/recovery accepts expected descendant staleness only after an
+actual published parent, while preserving unchanged revision and approval checks.
+It leaves Animation stale until its existing owner refreshes that dependency.
+
+`timeline.motion_sound_review` derives proposed and selected sound links for the
+built-in motion map and storyboard from bounded metadata. Generator 1.3 retains
+readable 1.1/1.2 reports. Selected sound adds no visual timing authority; stale
+opportunities become unresolved, and foreign or invalid context becomes a gap.
+Sound propose/apply reuse the existing report publisher without source/model
+execution. Presentation failure preserves valid canonical publication and is
+reported separately. Ordinary inspection remains read-only.
+
+Motion-review generator 1.4 projects applied plans against verified publication
+heads while preserving immutable proposal bodies and their original basis.
+The shared data-only basis comparator keeps authoring and review consistent;
+current dependency state and changed direction remain stale. Older 1.1/1.2/1.3
+reports remain readable. This presentation correction transfers no proof approval.
+
+Sound programme admission reuses native sequential frame rounding and preserves
+placed picture clocks. Existing BMap duration validation still bounds audio cues.
+Explicit silence can retire a previously owned contribution after its visual
+anchor disappears. Missing audio cues are permitted only for that removal;
+present bindings remain exact. Immutable parent Tracks supply historical recipe
+verification for replay, while remaining ordered sound contexts stay unchanged.
+
+`timeline.craft_work` links explicit proposal operations to at most 500 typed
+references in the existing `PipelineRunStore`, with original request/item/event
+scope and no new timing or approval authority. The built-in 1.5 review derives
+pending, partial, completed, recovery and unavailable states from exact existing
+decisions and receipts. Missing evidence keeps the recorded scope visible; changed
+heads, direction, catalogue or active request remain stale. Canonical head guards
+read canonical metadata directly instead of traversing these derived views.
+Requested pending proposals join the existing bounded reconstruction closure;
+unregistered drafts and generated reports remain disposable. Readers neither
+decode/hash source media nor execute optional models. Earlier 1.1 through 1.4
+reports remain readable. See [`docs/craft-pending-work.md`](docs/craft-pending-work.md).
+
+`timeline.craft_work` records reversible per-ID queue dispositions in the same
+run, with bounded append-only request hashes and per-work predecessor checks.
+Pure `timeline.craft_work_decisions` rules let lifecycle validation reject
+rewritten, detached or conflicting history without importing media execution.
+The 1.6 projection separates deferred/closed IDs from actual canonical completion;
+it transfers no concept, media or film approval. Native/MCP `pipeline work-decide`
+validate a bounded request before project/execution setup and reuse the existing
+report publisher. The ordinary pipeline flow remains behind its existing handler.
+Unknown scope, stale decision heads, unavailable evidence and partial publication
+block decisions. Applied contributions require their canonical revision owners.
+
+`timeline.motion_scope` provides pure exact visual comparisons after audio-only
+revisions. Motion review verifies retained canonical metadata with the existing
+contained, bounded, schema/hash/reader checks; recorded source/sync identities,
+selected direction and the exact Animation revision remain required. Applied
+timed visual items can retain direction while the full proposal, composite and
+Animation remain stale. No media caching or evidence/approval transfer is added.
+Changed visual assembly currently blocks this reuse for the whole assembly.
+See [`docs/motion-review-scope.md`](docs/motion-review-scope.md).
+
+`timeline.craft_scope` classifies one canonical-start owner and untrimmed
+intersecting context against a bounded complete partition. The native clock
+check is shared with sound planning; exact native rounding and placed rates are
+preserved. Optional scope views use the existing native/engine/MCP plan routes
+and generator 1.8, with no execution setup or approval authority.
+`timeline.motion_scope_application` freezes scope in existing immutable requests
+and receipts, protects unselected/shared IDs, requires previous owners for
+cross-chunk retiming, and records exact applied IDs. The existing run keeps a
+bounded typed application history, while existing retention verifies its closure.
+Legacy unscoped receipts retain their original meaning. Unique explicit cue
+references can associate legacy cues without altering canonical identity;
+conflicting claims remain unresolved. See
+[`docs/scoped-craft-production.md`](docs/scoped-craft-production.md).
+
+`timeline.sound_scope` applies the same bounded partition to explicit sound
+choices. Ownership uses exact scheduled sample time, with both original and
+replacement owners required across chunks. Existing immutable sound receipts
+freeze current/previous whole intervals and recompute ownership on replay and
+retention. Parent BMap validity and exact cut binding remain prerequisites;
+unscoped compatibility, source admission, full/window absolute evaluation and
+listening/approval boundaries are preserved. No sound state store is added.
+
+Canonical contract validation retains at most four parsed schema registries,
+keyed by the complete freshly read schema bytes. Every validation rereads the
+current schema files and validates its input document. Changed, missing or
+malformed references therefore invalidate parsed reuse without trusting file
+timestamps, caching validation results or refreshing media/review approvals.
+
+Motion-review generator 1.9 binds bounded requested-work and context identities
+separately from canonical picture/audio heads. Native reports record their
+explicit proposal origin and reconstruct current inputs through the same
+read-only pipeline context reader, reopening project preferences while retaining
+active frozen choices. Relevant sound context binds validated catalogue
+metadata. Missing or changed inputs retain historical report files without
+source analysis, canonical mutation or approval transfer. Older generators stay
+readable as historical views. Scope/report regeneration preserves an identical
+canonical ProofPlan; changed full proof dependencies still require normal
+reconstruction and owner review.
+
+Preparation coverage uses the pure `timeline.preparation` inspector over existing
+source/routing/Sync-bound acoustic and aligned-word facts. Cutting persists its
+strict document inside existing immutable source-analysis records and returns
+compact review references. The inspector neither decodes nor executes models;
+missing facts remain unavailable rather than an empty measured result. Outward
+source-tick uncertainty feeds the existing retake protection policy without a
+second timing owner or an automatic transcript/cut decision. Explicit editorial
+and pause-verification flows retain their current boundaries. Cutting producer
+identity includes the inspector and preparation schema.
+
+`timeline.preparation_recovery` freezes explicit source intervals and existing
+editing-craft recovery limits in typed cutting documents. The existing cutting
+journal serializes durable requests and source-stable attempt claims before
+inference. OS-owned per-interval locks prevent duplicate concurrent execution;
+immutable deterministic results survive interruption before journal publication.
+Exact replay reuses evidence while changed source/routing/Sync/original analysis,
+model or producer identities retain stale results without automatic retry.
+`CuttingAnalysisAdapter.recover` reuses routed native extraction, the existing
+local transcriber and optional isolated alignment. Actual source offsets and
+reduced context remain explicit; unavailable alignment preserves text without
+word-exact authority. No transcript replacement or CMap approval is granted.
+
+`preparation_cli` and the model-tool bridge expose metadata-only coverage and an
+explicit selected recovery operation. Coverage constructs no model adapter and
+does not verify source bytes. Recovery confirmation binds exact bounded request
+bytes. `timeline.preparation_retention` verifies a bounded transitive journal
+closure for reconstruction and fallback inventory, including unpublished durable
+results, without retaining extracted PCM or unreferenced drafts.
+
+`timeline.preparation_choices` records explicit original/recovered/reject/defer
+decisions in the same cutting journal, guarded by current-head CAS, complete
+overlapping predecessor identities and exact result/request scope. Immutable
+alternatives and superseded decisions remain reconstruction dependencies.
+`timeline.preparation_selected` derives a bounded source-unit view for existing
+cutting analysis. Pending/deferred, stale and unqualified timing ranges retain
+speech protection. Replaced word/character spans cannot silently cross selected
+boundaries, and recovered text drops affected pause certifications. Selection
+grants no cut approval, replaces no source transcript and starts no inference.
+Recovered choices revalidate source/model/execution bindings; choosing original,
+rejecting or deferring requires no model adapter. Cutting producer dependencies
+include the selected-evidence documents and implementation. Metadata-only
+coverage retains its existing no-source/no-model boundary. Disjoint measured
+windows preserve their unmeasured gaps rather than claiming envelope coverage.
+
+`timeline.preparation_facts` composes selected measured windows through the same
+pure coverage rules. Each incoming measurement needs its own observed facts and
+tool provenance; it cannot borrow missing original provenance. Valid original
+measurements and activity remain available, while unmeasured source time remains
+protected. A previously blocked analysis gains only the selected actual coverage,
+and unmeasured or affected pause certifications are not transferred. Cutting
+producer bindings include this composer. No media/model execution or new timing
+owner is introduced. Actual local alignment validation additionally verifies
+cutting consumes the selected facts without another analysis call.
+
+Explicit source-point consumers can select a contiguous CMap `segment_id` through
+the existing raw-to-output mapper. This identifies repeated occurrences without
+changing program offsets or the default mapping. The selected segment owns its
+native source clock; an unknown occurrence stays unresolved. Placed CMaps retain
+their placement/track selectors and reject the contiguous-only selector. This is
+a mapping primitive, not a second timeline or automatic spoken-sound trigger.
+
+Optional original-source sound anchors resolve through the existing CMap mapping
+primitive in `timeline.sound_anchors`. They bind the raw fingerprint, rational
+source point and exact segment/placement, reject ambiguous or unsupported inverse
+mapping, and require the derived output frame inside the linked cue. Proposals
+read current metadata only when this option is selected; canonical publication
+binds the unchanged heads and verifies originals. Native sound admission reuses
+the same resolver against current CMap and compares the frozen opportunity.
+Mapping implementation bytes join native producer identity, so cached proof
+evidence cannot survive an unqualified mapping change. Encoded full/window tests
+measure the selected transient while preserving source picture and the original
+CMap. This route does not infer spoken timing or grant listening approval.
+
+Current local speech dependency inspection lives in the shared
+`avo.speech_dependencies` metadata helper. The cutting adapter retains its
+existing interfaces, runtime selection and failure behavior while delegating
+dependency-byte/version checks. The helper imports no media adapter and loads
+no model; cutting and recovery producer identities bind its implementation.
+Before/after adapter and recovery tests preserve the existing behavior, including
+configured ASR with separate alignment and changed local dependency bytes.
+
+Optional word-timed sound remains a source anchor on the existing CMap clock.
+`timeline.preparation_words` qualifies an immutable word's measured, aligned and
+unprotected source time against current model facts. `timeline.sound_word_evidence`
+reuses CuttingStore/preparation selection and bounded retention; it binds exact
+original or selected-result provenance without a new mutable store. Shared speech
+dependency metadata reads package versions from the declared isolated environment
+without importing its runtimes. Actual initial analysis records dependencies
+before/after the pass and rejects changes. Proposals freeze concrete source time,
+word and selection hashes; publication, native sound admission and existing-plan
+approval recheck them. Exact analysis roots survive reconstruction without a
+recovery journal. Model packages and temporary PCM remain outside this metadata
+closure. Ordinary intents do no speech work. Unit, publication, actual encoded
+full/window and separately prepared Portuguese ASR/alignment tests cover these
+boundaries; listening and creator approval remain independent.
+
+The optional face detector uses the existing model-source scope resolver. Its
+explicit preflight seals the pinned local YuNet bytes and checks an isolated CPU
+Python worker. AVO packages the worker code and schemas. A separate hashed wheel
+list describes the qualified environment. Geometry association uses normalized
+boxes and native source ticks in pure code. Ambiguity, missing detections and
+sampling gaps require a new selection. Runtime readiness and observations are
+separate from camera application or proof approval.
+
+Face analysis binds the original stream, native clock origin, proxy digest,
+detector identity and selected measurements in one immutable record. Pure timeline
+code smooths its bounded trajectory and compiles it against one exact visible
+source occurrence and BMap cue. Recorded hold or static fallback choices handle
+uncertain output frames. The existing camera evaluator and native resampler consume
+the compiled path and check crop margins and protected regions on every frame.
+Proposal, application and proof admission verify the selected evidence. Historical
+face records referenced by proposals or Animation survive reconstruction. The
+linked map and storyboard read face readiness from metadata without running the
+detector. Existing non-face moves retain their recorded options and cue clock.
+
+For selected SFX, proof receipts bind the native combined sample peak and RMS
+to the exact output window, candidate and mixed PCM. An explicit ducking review
+margin adds a bounded, separate analysis pass on the prepared control signal
+and post-duck effect. Timeline review verifies the overlapping sample range and
+the frozen setting before deriving an attenuation suggestion. The analysis
+never contributes samples to the proof output. Native PCM fixtures verify
+bit-for-bit equivalence with the optional analysis on or off.
+
+Explicit reference analysis shares the bounded display proxy and isolated CPU
+vision runtime. It uses feature tracking without the face model, binds its
+partial-affine estimates and residuals to actual adjacent native timestamps,
+and exposes cut candidates and unmeasurable intervals separately. Reference
+measurements and labeled contact sheets form an immutable inspection record
+under the project. They enter editorial decisions through reviewed document
+references and keep proof source admission independent.
+
+Visual timing derives hold, reveal, fade and easing candidates from the sampled
+frame grid. With an explicit audio selection, the media adapter measures energy
+onsets on the original sample clock. The timeline may attach current prepared
+word evidence from the same route. It validates the source, scope and retained
+analysis before publication. These observations inform review and carry no
+rendering or source-admission authority.
+
+Reviewed reference decisions seal the selected measured aspects into a compact
+project-only `ReferenceDescriptor`. Briefstart consumes that document through
+its existing source loader and checks the inspection hash and project identity.
+The direction layer has no dependency on the vision runtime or reference media.
+
+Contextual asset review binds one motion proposal need, scoped local folders,
+fingerprinted options and an optional prepared background. The image adapter
+produces a numbered comparison sheet. Motion plan selection retains the chosen
+round and revalidates its precise source before canonical application. The
+storyboard bases declared readiness on a matching canonical cue fingerprint.
+Library promotion and media admission keep their existing owners.
+
+Spoken-note detection inspects prepared source evidence using an explicit
+language and delimiter convention. The cutting store retains the immutable
+report and separately tracks interpretation and speech choices. Iteration
+context exposes accepted interpretations only to their owning stage and
+rechecks the original source and transcript. Speech exclusion creates a
+normal editorial cutting proposal under the current cutting policy.
+
+The optional editor handoff assembles a bounded, original-source interchange
+example from the current canonical contiguous or placed timeline. The native
+command injects media inventory and the FCP7 XML adapter into the timeline
+service. The immutable manifest retains exact occurrence clocks, audio frame
+quantization, and affected ranges whose treatments stay in AVO. Returned XML
+is saved verbatim and compared with the retained export and current timeline.
+An explicit validation request can link a full-canvas generated alpha source
+from a current immutable proof plan. The native adapter reuses the normal
+generated-media admission checks and validates the editor transport copy against
+every decoded RGBA frame. The manifest retains both media fingerprints, the
+range, the generated receipt and the proof-plan identity for relinking.
+That comparison records separate field proposals and conflicts for review.
+Selected linked original-source trims become ordinary cutting proposals with
+their existing preview and editorial approval. The route retains its exact
+editor evidence, and ambiguous or unsupported fields stay available for manual
+review.
+Project-local target qualification binds operator observations and both XML
+identities to the exact app, OS, profile and implementation. Production export
+requires a qualified review reference that still verifies against its sources.
+See [editor handoff](docs/editor-handoff.md).
+
+The iteration ledger ties a proposed render workaround to the exact candidate,
+its matching reproduction evidence, affected program windows and the observed
+engine, runtime, profile and platform. Provider learning retains the summarized
+defect. Workaround details stay in the originating project review.
+
+Candidate craft review reads current BMap intent only after the proof
+materialization and canonical hashes match the encoded candidate. Sampled
+findings link to cues through cited frame numbers and half-open program
+intervals. The review package preserves playback and listening requirements.
+The wrap uses the approved master, candidate snapshot and retained ledger for
+provider learning. Project-only records stay out of direction suggestions.
+Provider animation decisions verify their own proposal and provider identity.
 
 Camera movement, face anchoring, sound matching, reference analysis, spoken
 notes/recovery and editor handoff are selected options resolved through existing
@@ -898,3 +1619,216 @@ Implementation validation requires default/no-option and legacy compatibility,
 pure frame/clock/merge rules, real encoded source-fidelity/audio checks,
 native/MCP/package parity, existing full software-quality gates and actual
 creator/target-editor acceptance. These remain future delivery gates.
+
+The implemented preference boundary is `editing_craft.py`, reusing the existing
+scoped settings merge and motion preference path/schema/CAS guards. Every supplied
+scope is validated before merging; video defaults retain distinct provenance.
+Typed run selections in `PipelineRunStore` preserve exact choices, direction and
+available-head references without changing canonical state or transferring review.
+
+`timeline/motion_review.py` reads available canonical snapshots and selected
+context, including explicit absence. It does not construct the initializing BMap
+or iteration-ledger services. Pipeline status, briefing and motion context expose
+the same deterministic map/card view; published-report freshness is separate from
+snapshot identity. Explicit publication writes immutable JSON/Markdown/HTML/CSS
+under the external project's review tree, verifies matching bytes and containment,
+and retains a historical report when heads race. Native motion authoring publishes
+the derived review after a successful canonical write; presentation failure stays
+visible and does not roll back the edit.
+
+Focused tests verify partial/static views, exact identities, no default execution
+or filesystem writes, request freezing, native/MCP parity, report tampering and
+publication failure. These checks do not establish human suitability, target-editor
+fidelity, optional model readiness or a finished master. See
+[`docs/editing-craft.md`](docs/editing-craft.md) for the current interface.
+
+### Explicit frame repetition in imported source placements
+
+Placed imports can declare `pictureSampling: "repeat-2x"` on an individual
+moving-picture mapping. The declaration is retained on the canonical placement
+and compiled into the same source-layout graph for microproof and full render.
+Source clocks are verified at half the program rate; trims must still land on
+native source frames. Native execution repeats each decoded source frame twice
+without changing wall-clock duration, audio samples, or placement boundaries.
+Undeclared rate conversion, unknown sampling modes, still/audio sampling and
+unverified variable-rate sources remain blocked.
+
+Normalizer 2.1.0 binds the new admission semantics to fresh packets. Sampling
+imports record `placed-sampling-1.0.0`; previous contiguous/placed capability
+versions remain valid for their immutable canonical history. Prior packets are
+not silently reinterpreted. The existing implementation fingerprint already
+includes admission-layout rules, canonical compilation and native execution.
+This extends the existing services and media adapter; no parallel timeline,
+framework, or renderer abstraction is introduced.
+
+Validation compares every repeated decoded frame and unchanged PCM, including
+a microproof beginning on the second copy of a source frame, and a real encoded
+30-to-60 fps trim. Synthetic activation and origin verification preserve the
+new capability while historical import provenance stays supported. This is a
+sampling capability, not qualification of Resolve transforms, titles, fades,
+audio-tail policy, or a particular video's fidelity.
+## Declared Resolve treatments
+
+Placed CMaps can retain explicit picture geometry, alpha fades, native decoded
+audio-tail gaps, and bounded static titles. Authorial title and font inputs are
+separate from raw audiovisual inputs and are admitted to title placements
+(or retained generator references in export-driven drafts);
+contiguous CMaps retain their raw-only rule. The existing initial-cut compiler
+and native placed proof adapter own execution. Titles use pinned local fonts
+with inert text data; exported Fusion code is never executed.
+
+The media adapter counts native audio samples using the existing bounded clock
+scanner. Core admission compares these facts with explicit declarations before
+creating a proposal. Disabled Resolve effects remain inert reference evidence;
+unknown and enabled effects remain blocking. All original and authorial inputs
+are fingerprinted and revalidated before proof publication. Native frame/PCM
+tests and canonical admission tests qualify the supported subset; a synthetic
+pass does not qualify an individual Resolve export or grant creator approval.
+
+## Export-driven Resolve draft import
+
+Ordinary pipeline and CLI preparation now derive a placed draft from OTIO,
+original media and an optional paired DRT. `import_auto` orchestrates existing
+probe/admission ports; the bounded `resolve_sidecar` media adapter reads sequence
+settings and literal static title metadata without starting Resolve or executing
+Fusion. Dependency direction remains entry points -> timeline services/pure rules
+-> injected media ports. No second timeline owner or renderer is introduced.
+
+`resolve_export` translates complete supported static parameter sets and retains
+all other effects as inert canonical `resolveEffects`. Unsupported generators
+retain their authorial export plus payload. An original whose packet clock is
+unverified can remain in an export-driven draft with explicit unverified clock
+metadata. Structural readiness permits normal explicit draft selection after
+Sync review; render readiness independently rejects active unresolved treatments,
+generators and video clocks. Both the initial-cut request builder and proof-plan
+compiler enforce that guard. Explicit source-only and declared-treatment routes
+remain strict, and historical packets are not rewritten.
+
+Normalizer 2.6.2 and `placed-export-driven-1.0.0` bind these semantics to new
+immutable packets. Exact local reference identity, source fingerprints, prohibited
+proof ancestry, provider isolation and optimistic activation locks still apply.
+Regression coverage exercises default pipeline/CLI preparation, opaque retention,
+clock warnings, strict-route compatibility, and refusal to render unresolved
+drafts. An actual export trial is staging-only and grants no creator approval.
+
+### Imported approximation previews and bounded picture end gaps
+
+Normalizer 2.7.0 adds explicit `pictureEndGapFrames` for one to three missing
+presentation positions immediately before the final packet. The native clock
+verifier requires an otherwise exact complete grid and a grid-aligned final PTS;
+interior irregularities and larger gaps remain unsupported. Strict verification
+is unchanged unless the bounded policy is requested. Canonical admission and
+native execution verify the exact declared gap and use timestamp-based holds
+before source trimming. `placed-end-gap-1.0.0` identifies the new contract.
+
+An explicitly authorized `importApproximation` records every unresolved effect
+pointer/name and requires `previewOnly: true`. Both canonical compilation paths
+reject stale omissions and refuse to waive unverified clocks or opaque generated
+sources. The existing preview-only materialization guard prevents promotion into
+a full proof. Original effect payloads and canonical edit intent remain intact;
+the preview is a supported-treatment projection, not fidelity certification.
+
+Placed microproof execution omits pictures outside the requested window and
+stores only each picture's intersection with that window. Sampling, transforms
+and fades run on the original clip clock before extraction, preserving fade
+phase, exact repetition and qualified end-gap holds without input seeking.
+The compositor renders only the window's local clock; privacy masks still
+evaluate absolute program frames. This avoids writing, decoding and compositing
+unneeded picture prefixes. Source admission, fingerprint checks, the canonical
+graph and continuous audio mix remain unchanged. Encoded frame/PCM and
+micro/full comparisons qualify the optimization; original media is never
+rewritten.
+
+Placed CMap layouts can declare `privacyMasks`: bounded opaque black rectangles
+on the canonical canvas with exact inclusive-start/exclusive-end program frames.
+Schema and semantic admission reject duplicate IDs, fractional coordinates,
+out-of-canvas regions and out-of-program intervals. The source-layout compiler
+freezes these decisions into its graph; import graph preservation rejects
+dropped or moved masks. Native FFmpeg draws them after all picture layers and
+fades, before window extraction, rounding scaled edges outward. Masks have no
+fade or opacity option and do not change source routing, audio or timing.
+Implementation hashing invalidates older proof execution locks when this
+renderer changes. Native full/micro frame and PCM comparisons cover privacy
+through imported overlay fades.
+
+Placed audio clips may explicitly set `audioPeakCeilingDbfs` (-12 to -1 dBFS).
+The source compiler binds it to the clip's gain operation. Native validation
+rejects unbounded values and applies the existing limiter with compensated
+lookahead after gain and before window extraction. Processing therefore retains
+the full node history for identical full/micro samples; other audio nodes and
+legacy gain-only calls remain unchanged. This is an opt-in sample-peak ceiling,
+not a true-peak delivery certificate. Encoded true peak requires separate QC.
+The shared limiter formatter is included in implementation fingerprint locks.
+
+### Bounded native placed rendering
+
+Full placed proofs use a private streaming executor behind the existing render
+port. Each admitted placement has one persistent decoder with the same complete
+sampling, transform and fade filters as scoped proofs. Small raw BGRA windows
+enter the existing compositor and absolute-frame privacy masks. Generated assets
+remain continuous inputs to one final encoder, preserving their local phase.
+The canonical graph, source admission and public CLI/schema remain unchanged.
+
+The native audio graph is mixed once before picture decoding. Source PCM scratch
+is released before picture work, and the exact resulting stereo mix supplies the
+continuous encoder. A private in-process observation boundary permits a job to
+qualify that mix before expensive picture work without modifying it.
+
+Picture windows are capped at 60 frames and 6 GiB of active scratch. Admission
+reserves the larger of the temporary source PCM plus complete mix, or the
+12 GiB candidate allowance plus complete mix, with 2 GiB of free headroom in
+each phase. Native source-PCM cleanup must succeed before picture begins.
+The picture phase rechecks actual available space with its already allocated
+mix, accounting for admitted layer dimensions and current disk availability.
+Consumed job-owned windows are
+removed immediately. Child errors, short/extra decoder output, frame mismatch,
+disk exhaustion and changed source fingerprints prevent publication. Diagnostics
+remain separate from ephemeral media. Publication follows validation and scratch
+cleanup, and existing project media is retained.
+
+Generic FFmpeg integration fixtures compare every decoded RGBA frame and stereo
+PCM sample with scoped legacy rendering across layers, titles, privacy edges,
+fades, repeated frames, generated animation phase and EOF failures. Unit tests
+cover process cleanup, partial pipes, storage accounting and failed publication.
+The new executor and stream utilities participate in implementation fingerprints.
+
+HyperFrames capture copies also reset eligible composition render trees after
+native pending-seek completion, before taking a screenshot. Identical final animation
+state can otherwise retain history-dependent Chromium paint-cache rounding.
+The capture-only hook hides each top-level composition, forces layout, restores
+the exact prior inline-style attribute, and forces final layout. It preserves
+the native completion callback's arguments, receiver, result and errors. The
+authoring project and its animation values remain unchanged. Roots with browser
+animation objects or CSS animation/transition declarations retain the existing
+capture path, avoiding animation restarts when rebuilding layout. This compatibility
+policy is recorded in the generator environment for the qualified installed
+runtime; changing it invalidates previous generated assets. Independent,
+reverse-order and production captures still require exact decoded pixel equality.
+
+Normal SDR proof encoding converts the composited full-range RGB picture to
+limited-range BT.709 YUV420P and declares matching matrix, primaries, transfer
+and range metadata in H.264. Untagged HD playback can otherwise select a
+different matrix from the RGB-to-YUV conversion and shift the approved colours
+between players. This is an explicit encoding contract, not a creative grade.
+Lossless FFV1/BGRA conformance output remains unchanged. Runtime fixtures verify
+colour patches, stream metadata, frame timing and audio independently; browser
+qualification checks the same encoded frames against canonical RGB references.
+
+An explicit `h264_nvenc` ProofPlan output uses NVIDIA H.264 encoding with the
+existing continuous encoder boundary. Its quality settings are p5/HQ, VBR,
+CQ 19, 12 Mb/s target, 18 Mb/s maximum, a 36 Mb buffer and High profile.
+Source decoding, placement filters, compositing and the continuous audio graph
+retain their existing owners. CPU H.264 and lossless FFV1 arguments are unchanged.
+There is no implicit hardware selection or CPU fallback. Encoder settings are
+part of the implementation lock, so switching encoders requires fresh native
+windows and final-file review. See [GPU proof encoding](docs/gpu-proof-encoding.md).
+
+Generated-media admission requests historical-output inventory lazily, after its
+complete contributor and generated-input closure is available. A conservative
+byte-size filter avoids reading historical files that cannot equal any inspected
+input. Missing, stale or incomplete input sizes, including one-shot ancestry
+iterators, retain full inventory. Matching files are freshly hashed in an
+independent stage on every admission; retained materialization hashes remain
+unconditional. This adds no negative-evidence cache or source-identity shortcut.
+The three HyperFrames generator implementations and their existing bindings are
+unchanged. See [generated-media admission](docs/generated-media-admission.md).

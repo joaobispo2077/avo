@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import copy
 import json
+import re
+import shlex
 import subprocess
 from pathlib import Path
 
@@ -370,6 +372,91 @@ def test_static_ci_triggers_remove_promotion_duplicates_but_keep_release_pushes(
     assert "github.event.pull_request.number" in concurrency
     assert "github.run_id" in concurrency
     assert "github.ref_name == 'release'" in concurrency
+
+
+def test_full_unit_lane_has_a_bounded_budget_for_its_measured_population():
+    root = Path(__file__).resolve().parents[1]
+    workflow = (root / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+    unit = workflow.split("  repo-unit-tests:\n", 1)[1].split(
+        "  repo-integration-tests:\n", 1
+    )[0]
+    budget = int(re.search(r"^    timeout-minutes: (\d+)$", unit, re.MULTILINE)[1])
+    # Run 43810109775: the same 6163-test coverage population took 24m47.53s.
+    # Run 44227189622: unit tests still advanced at 92% after 2606.08 seconds.
+    # Project that observed lane plus four minutes for setup/evidence/smokes.
+    assert 2606.08 / 0.92 + 4 * 60 <= budget * 60 <= 60 * 60
+    options = re.search(r"PYTEST_ADDOPTS: (.+)", unit)[1]
+    assert shlex.split(options) == [
+        "--junitxml=reports/quality/unit-tests.xml",
+        "-n",
+        "2",
+        "--dist=worksteal",
+        "--durations=20",
+    ]
+    invocation = re.search(r"run: (python scripts/ci/run_quality_gate.py[^\n]+)", unit)[
+        1
+    ]
+    assert shlex.split(invocation) == [
+        "python",
+        "scripts/ci/run_quality_gate.py",
+        "--gate",
+        "unit-tests",
+        "--artifact",
+        "reports/quality/unit-tests.xml",
+        "--",
+        "bash",
+        "scripts/ci/run-unit-tests.sh",
+    ]
+    runner = (root / "scripts/ci/run-unit-tests.sh").read_text(encoding="utf-8")
+    assert (
+        "exec pytest --ignore=tests/projects --ignore=tests/integration "
+        '-m "not project and not integration" "$@"'
+    ) in runner
+    assert "name: unit-test-evidence" in unit
+    assert "path: reports/quality" in unit
+    readiness = workflow.split("  ci-readiness:\n", 1)[1].split("    runs-on:", 1)[0]
+    assert "      - repo-unit-tests\n" in readiness
+    assert "CI_NEEDS_JSON: ${{ toJSON(needs) }}" in workflow
+    assert "run: python scripts/ci/check_ci_readiness.py" in workflow
+
+
+def test_coverage_lane_retains_its_measured_workload_and_bounded_workers():
+    root = Path(__file__).resolve().parents[1]
+    workflow = (root / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+    quality = workflow.split("  software-quality:\n", 1)[1].split(
+        "  mutation-light:\n", 1
+    )[0]
+    budget = int(re.search(r"^    timeout-minutes: (\d+)$", quality, re.MULTILINE)[1])
+    # Run44246128502: coverage advanced to84% in48m33s before its50m job limit.
+    # Keep four minutes for setup, remaining gates and evidence, at most65m total.
+    assert (48 * 60 + 33) / 0.84 + 4 * 60 <= budget * 60 <= 65 * 60
+    coverage = quality.split("id: q-coverage\n", 1)[1].split("      - name:", 1)[0]
+    assert shlex.split(re.search(r"PYTEST_ADDOPTS: (.+)", coverage)[1]) == [
+        "-n",
+        "2",
+        "--dist=worksteal",
+    ]
+    invocation = re.search(
+        r"run: (python scripts/ci/run_quality_gate.py[^\n]+)", coverage
+    )[1]
+    assert shlex.split(invocation) == [
+        "python",
+        "scripts/ci/run_quality_gate.py",
+        "--gate",
+        "coverage",
+        "--artifact",
+        "reports/quality/coverage.json",
+        "--",
+        "bash",
+        "scripts/ci/run-coverage.sh",
+    ]
+    runner = (root / "scripts/ci/run-coverage.sh").read_text(encoding="utf-8")
+    assert "--ignore=tests/projects" in runner
+    assert "--ignore=tests/integration" in runner
+    assert '"not project and not integration"' in runner
+    assert "--cov=avo" in runner
+    assert "--cov-report=json:reports/quality/coverage.json" in runner
+    assert 'exec "${ARGS[@]}" "$@"' in runner
 
 
 def test_engine_workflow_selects_pr_and_push_without_gating_release_builds():

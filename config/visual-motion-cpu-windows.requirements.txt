@@ -1,0 +1,3 @@
+# A separate Windows x64 Python 3.11 environment for the optional face detector.
+opencv-python-headless==4.12.0.88 --hash=sha256:86b413bdd6c6bf497832e346cd5371995de148e579b9774f8eba686dee3f5528
+numpy==2.2.6 --hash=sha256:e8213002e427c69c45a52bbd94163084025f533a55a59d6f9c5b820774ef3303

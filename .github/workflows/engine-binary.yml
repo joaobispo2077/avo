@@ -138,13 +138,8 @@ jobs:
 
       - name: Ensure FFmpeg and FFprobe (Linux)
         if: steps.code-drawn.outputs.enabled == 'true' && runner.os == 'Linux'
-        run: |
-          if ! command -v ffmpeg >/dev/null || ! command -v ffprobe >/dev/null; then
-            sudo apt-get update
-            sudo apt-get install -y ffmpeg
-          fi
-          ffmpeg -version
-          ffprobe -version
+        timeout-minutes: 12
+        run: bash scripts/ci/ensure-ffmpeg.sh
 
       - name: Ensure FFmpeg and FFprobe (macOS)
         if: steps.code-drawn.outputs.enabled == 'true' && runner.os == 'macOS'

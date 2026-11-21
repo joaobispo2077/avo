@@ -15,10 +15,21 @@ from avo.adapters.media.audio_tracks import (
     AudioGraphError,
     compile_continuous_audio_graph,
 )
+from avo.loudness_profiles import limiter_filter_for
 from avo.timeline.contracts import file_fingerprint, validate_document
 from avo.timeline.event_clock import sample_rate_boundary
 
 from .local_source import local_source_arguments
+from .proof_sound_balance import (
+    MAX_METER_SAMPLES,
+    MAX_METERS,
+    MIX_METER,
+    analyze_balance,
+    attach_meter,
+    balance_targets,
+    statistic,
+    statistics_filter,
+)
 
 
 def _bounds(value):
@@ -135,15 +146,28 @@ def _validate_sidechains(params, node_id, nodes):
 def _validate_effect_values(kind, params, length):
     if kind == "gain":
         _number(params.get("gainDb"), -120, 30)
+        if "peakCeilingDbfs" in params:
+            _peak_ceiling(params["peakCeilingDbfs"])
     elif kind == "duck":
         _number(params.get("attackMs", 20), 0.01, 2000)
         _number(params.get("releaseMs", 250), 0.01, 9000)
         _number(params.get("amountDb", 8), 1, 20)
+        if "minimumDialogueMarginDb" in params:
+            margin = params["minimumDialogueMarginDb"]
+            if type(margin) not in (int, float):
+                raise AudioGraphError("Dialogue review margin must be numeric")
+            _number(margin, 0, 120)
     elif kind == "fade":
         for key in ("fadeInSamples", "fadeOutSamples"):
             count = params.get(key, 0)
             if type(count) is not int or not 0 <= count <= length:
                 raise AudioGraphError("Fades require bounded integer sample counts")
+
+
+def _peak_ceiling(value):
+    if type(value) not in (int, float):
+        raise AudioGraphError("Peak ceiling must be a numeric value")
+    return _number(value, -12, -1)
 
 
 def _validate_effect(operation, nodes, lead_ids, allowed):
@@ -159,6 +183,10 @@ def _validate_effect(operation, nodes, lead_ids, allowed):
         )
     if kind == "duck":
         _validate_sidechains(params, node_id, nodes)
+        if "minimumDialogueMarginDb" in params and nodes[node_id]["kind"] != "sfx":
+            raise AudioGraphError(
+                "Dialogue review margin requires a selected sound effect"
+            )
     first, last = _bounds(nodes[node_id]["outputRange"])
     _validate_effect_values(kind, params, last - first)
     return node_id
@@ -168,9 +196,16 @@ def _effects(graph, lead_ids):
     nodes = {n["nodeId"]: n for n in graph["nodes"]}
     effects = {key: {} for key in nodes}
     allowed = {
-        "gain": {"nodeId", "gainDb"},
+        "gain": {"nodeId", "gainDb", "peakCeilingDbfs"},
         "fade": {"nodeId", "fadeInSamples", "fadeOutSamples"},
-        "duck": {"nodeId", "sidechainNodeIds", "amountDb", "attackMs", "releaseMs"},
+        "duck": {
+            "nodeId",
+            "sidechainNodeIds",
+            "amountDb",
+            "attackMs",
+            "releaseMs",
+            "minimumDialogueMarginDb",
+        },
     }
     for operation in graph["operations"]:
         kind, params = operation["kind"], operation["parameters"]
@@ -189,6 +224,7 @@ def _trim_fades(graph, effects, lead_ids):
         "nodeId",
         "sourceId",
         "source",
+        "generatedAudioRef",
         "fadeInSamples",
         "fadeOutSamples",
         "dialogueNoiseReductionPolicy",
@@ -373,6 +409,17 @@ def _validate_lead(lead_pcm, start, first, last):
         )
 
 
+def _gain_filter(gain):
+    if not gain:
+        return ""
+    result = f",volume={_number(gain['gainDb'], -120, 30)}dB"
+    if "peakCeilingDbfs" in gain:
+        result += "," + limiter_filter_for(
+            gain["peakCeilingDbfs"], latency_compensated=True
+        )
+    return result
+
+
 def _node_chain(node_id, node, ordinal, labels, effects, first, last):
     start, end = _bounds(node["outputRange"])
     length = end - start
@@ -386,9 +433,7 @@ def _node_chain(node_id, node, ordinal, labels, effects, first, last):
             raise AudioGraphError("Proof mix requires stereo target mapping")
         chain = f"[{labels[node_id]}]atrim=start_sample={a}:end_sample={b},asetpts=PTS-STARTPTS"
         chain += f",aresample=48000,pan=stereo|c0=c{mapping[0]}|c1=c{mapping[1]}"
-        gain = effects[node_id].get("gain", {})
-        if gain:
-            chain += f",volume={_number(gain['gainDb'], -120, 30)}dB"
+        chain += _gain_filter(effects[node_id].get("gain"))
         fade = effects[node_id].get("fade", {})
         for key, direction in [("fadeInSamples", "in"), ("fadeOutSamples", "out")]:
             count = fade.get(key, 0)
@@ -460,42 +505,72 @@ def _missing_sidechain_silence(effects, rendered, filters, count):
         rendered[key] = label
 
 
-def _mix_filters(rendered, effects, filters, first, last):
+def _duck_filters(filters, params, ordinal, side_labels, label, target, meter):
+    side, output = f"side{ordinal}", f"duck{ordinal}"
+    filters.append(
+        "".join(f"[{name}]" for name in side_labels)
+        + f"amix=inputs={len(side_labels)}:normalize=0[{side}]"
+    )
+    if meter is not None:
+        side = attach_meter(filters, side, meter + "_dialogue", target["localRange"])
+    attack = _number(params.get("attackMs", 20), 0.01, 2000)
+    release = _number(params.get("releaseMs", 250), 0.01, 9000)
+    ratio = _number(params.get("amountDb", 8), 1, 20)
+    filters.append(
+        f"[{label}][{side}]sidechaincompress=threshold=0.05:ratio={ratio}:attack={attack}:release={release}[{output}]"
+    )
+    if meter is not None:
+        output = attach_meter(filters, output, meter + "_effect", target["localRange"])
+    return output
+
+
+def _dialogue_meters(duck_sides, targets, count):
+    if count > MAX_METER_SAMPLES:
+        return {}
+    identifiers = [identifier for identifier in duck_sides if identifier in targets][
+        :MAX_METERS
+    ]
+    return {
+        identifier: f"avo_balance_{index}"
+        for index, identifier in enumerate(identifiers)
+    }
+
+
+def _mix_filters(rendered, effects, filters, first, last, targets):
     effects = {key: value for key, value in effects.items() if key in rendered}
     _missing_sidechain_silence(effects, rendered, filters, last - first)
     # Split each materialized stream once for all mix/sidechain consumers.
     mix_names = list(dict.fromkeys(rendered.values()))
     consumers = {name: [name + "mix"] for name in mix_names}
     duck_sides = _sidechain_routes(effects, rendered, consumers)
-    for name, targets in consumers.items():
+    meters = _dialogue_meters(duck_sides, targets, last - first)
+    for name, outputs in consumers.items():
         # Keep finite-input EOF beyond the requested window while sidechain
         # consumers drain. The final trim removes this verified-silence guard.
         filters.append(
-            f"[{name}]apad=whole_len={last - first + 48000},asplit={len(targets)}"
-            + "".join(f"[{t}]" for t in targets)
+            f"[{name}]apad=whole_len={last - first + 48000},asplit={len(outputs)}"
+            + "".join(f"[{target}]" for target in outputs)
         )
     for ordinal, (node_id, side_labels) in enumerate(duck_sides.items()):
-        params = effects[node_id]["duck"]
-        side = f"side{ordinal}"
-        filters.append(
-            "".join(f"[{x}]" for x in side_labels)
-            + f"amix=inputs={len(side_labels)}:normalize=0[{side}]"
+        label = rendered[node_id]
+        mix_names[mix_names.index(label)] = _duck_filters(
+            filters,
+            effects[node_id]["duck"],
+            ordinal,
+            side_labels,
+            label + "mix",
+            targets.get(node_id),
+            meters.get(node_id),
         )
-        label = rendered[node_id] + "mix"
-        attack = _number(params.get("attackMs", 20), 0.01, 2000)
-        release = _number(params.get("releaseMs", 250), 0.01, 9000)
-        ratio = _number(params.get("amountDb", 8), 1, 20)
-        filters.append(
-            f"[{label}][{side}]sidechaincompress=threshold=0.05:ratio={ratio}:attack={attack}:release={release}[duck{ordinal}]"
-        )
-        mix_names[mix_names.index(rendered[node_id])] = f"duck{ordinal}"
     final = [f"[{n}]" if n.startswith("duck") else f"[{n}mix]" for n in mix_names]
     filters.append(
         "".join(final)
         + f"amix=inputs={len(final)}:duration=longest:normalize=0:dropout_transition=0,"
         f"atrim=start_sample={first}:end_sample={last},asetpts=PTS-STARTPTS,"
-        "astats=metadata=0:reset=0[out]"
+        + statistics_filter(MIX_METER, "Peak_level+RMS_level")
+        + "[out]"
     )
+    return meters
 
 
 def _write_pcm(output, inputs, filters, sample_count):
@@ -550,10 +625,10 @@ def _write_pcm(output, inputs, filters, sample_count):
 
 
 def _astats_value(log, field):
-    values = re.findall(re.escape(field) + r":\s*([-+\w.]+)", log)
-    if not values:
-        raise AudioGraphError("PCM mix measurement missing: " + field)
-    value = float(values[-1])
+    try:
+        value = statistic(log, MIX_METER, field)
+    except ValueError as error:
+        raise AudioGraphError("PCM mix measurement missing: " + field) from error
     return value if math.isfinite(value) else None
 
 
@@ -610,9 +685,21 @@ def render_proof_audio_mix(
         rendered = _render_nodes(
             nodes, lead_ids, labels, effects, first, last, filters, lead_label
         )
-        _mix_filters(rendered, effects, filters, 0, last - first)
+        targets = balance_targets(nodes, effects, first, last)
+        review_filters = list(filters)
+        meters = (
+            _mix_filters(
+                dict(rendered), effects, review_filters, 0, last - first, targets
+            )
+            if targets
+            else {}
+        )
+        _mix_filters(rendered, effects, filters, 0, last - first, {})
         output = Path(output)
         measurement = _write_pcm(output, inputs, filters, last - first)
+        dialogue_balance = analyze_balance(
+            inputs, review_filters, targets, meters, directory
+        )
     return {
         "output": file_fingerprint(output),
         "sampleRate": 48000,
@@ -622,6 +709,7 @@ def render_proof_audio_mix(
         "audioEncodeCount": 0,
         "pcmCodec": "pcm_f32le",
         "measurement": measurement,
+        **({"dialogueBalance": dialogue_balance} if dialogue_balance else {}),
         "graphHash": compiled["graphHash"],
         "sourceNodeIds": admitted_source_ids,
         "ephemeralLeadNodeIds": sorted(lead_ids),

@@ -103,11 +103,39 @@ def _authoring_files(raw_dir: Path):
                 path.is_file()
                 and path.suffix.lower() in suffixes
                 and "node_modules" not in path.parts
+                and not _disposable_motion_path(raw_dir, path)
             ):
                 yield path.resolve()
     for path in (raw_dir / "avo.project.json", raw_dir / "edit" / "edl.json"):
         if path.is_file():
             yield path.resolve()
+
+
+def _disposable_motion_path(raw_dir: Path, path: Path) -> bool:
+    relative = path.relative_to(raw_dir / "edit")
+    if relative.parts[:2] == ("review", "motion-plan"):
+        return True
+    if relative.parts[:2] == ("motion", "sound"):
+        return len(relative.parts) > 3 and relative.parts[2] in {
+            "proposals",
+            "requests",
+            "receipts",
+            "operations",
+            "applications",
+        }
+    return (
+        len(relative.parts) > 1
+        and relative.parts[0] == "motion"
+        and relative.parts[1]
+        in {
+            "proposals",
+            "decisions",
+            "requests",
+            "receipts",
+            "operations",
+            "applications",
+        }
+    )
 
 
 def _human_final_inputs(raw_dir: Path) -> dict[Path, str]:
@@ -369,9 +397,18 @@ def _required_files(
     """Current local media plus authoring/delivery evidence, not disposable caches."""
     from avo.library.retention import library_paths
 
+    workspace = _canonical_workspace(raw_dir, canonical, workspace)
     required: dict[Path, str | None] = dict.fromkeys(_authoring_files(raw_dir))
     required.update(dict.fromkeys(library_paths(raw_dir)))
     required.update(_human_final_inputs(raw_dir))
+    if workspace is not None:
+        required.update(_motion_evidence_files(workspace))
+        from .editor_retention import retained_editor_files
+        from .preparation_retention import retained_preparation_files
+
+        required.update(retained_editor_files(workspace))
+        required.update(retained_preparation_files(workspace))
+        _retain_sound_files(raw_dir, required, workspace)
     for artifact in canonical:
         for ref in _head_media_refs(raw_dir, artifact):
             path = _local_media_path(raw_dir, ref)
@@ -388,6 +425,30 @@ def _required_files(
         dict.fromkeys(_import_evidence_paths(raw_dir, canonical, workspace))
     )
     return required
+
+
+def _retain_sound_files(raw_dir, required, workspace):
+    from .sound_sources import reconstruction_sound_sources
+
+    for source in reconstruction_sound_sources(workspace):
+        path = _local_media_path(raw_dir, {"locator": source["locator"]})
+        if path is None:
+            continue
+        expected = source["fingerprint"]["sha256"]
+        if required.get(path) not in (None, expected):
+            raise ReconstructionError(f"conflicting selected sound fingerprint: {path}")
+        required[path] = expected
+
+
+def _motion_evidence_files(workspace):
+    from .motion_retention import retained_motion_files
+
+    try:
+        return retained_motion_files(workspace)
+    except (OSError, ValueError, RuntimeError) as error:
+        raise ReconstructionError(
+            f"Cannot retain motion authoring evidence: {error}"
+        ) from error
 
 
 def _canonical_workspace(raw_dir, canonical, workspace=None, project_path=None):
@@ -444,6 +505,7 @@ def _import_evidence_paths(raw_dir, canonical, workspace):
 
 def _external_original_refs(workspace):
     from .contracts import fingerprint_stage
+    from .sound_sources import reconstruction_sound_sources
 
     if workspace is None:
         return []
@@ -451,6 +513,7 @@ def _external_original_refs(workspace):
     head = store.load_index()["headRevisionId"]
     sources = store.revision(head)["snapshot"].get("sources", []) if head else []
     try:
+        sources = sources + reconstruction_sound_sources(workspace)
         with fingerprint_stage(verify_on_exit=True):
             refs = [
                 _external_original(workspace.raw_dir.resolve(), source)
@@ -675,11 +738,13 @@ def _json_entries(raw_dir: Path, root: Path, role: str) -> list[dict[str, Any]]:
 def _lightweight_ancestry_entries(
     workspace: Any, raw_dir: Path
 ) -> list[dict[str, Any]]:
-    return _json_entries(
-        raw_dir,
-        workspace.timeline_dir / "materializations",
-        "ancestry-evidence",
-    )
+    return [
+        entry
+        for directory in ("materializations", "microproofs")
+        for entry in _json_entries(
+            raw_dir, workspace.timeline_dir / directory, "ancestry-evidence"
+        )
+    ]
 
 
 def _iteration_state_groups(

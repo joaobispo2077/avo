@@ -335,12 +335,20 @@ class TimelinePipeline:
                 "OTIO_TARGET_CONFLICT",
                 "Import service and pipeline must select the exact same project target",
             )
-        prepared = service.prepare(
+        prepare = (
+            service.prepare_automatic
+            if mappings is None and declarations is None
+            else service.prepare
+        )
+        prepared = prepare(
             input_path,
             timeline=timeline,
             media_roots=media_roots,
-            mappings=mappings,
-            declarations=declarations,
+            **(
+                {"mappings": mappings, "declarations": declarations}
+                if prepare == service.prepare
+                else {}
+            ),
             actor=actor,
             reason=reason,
         )
@@ -366,6 +374,7 @@ class TimelinePipeline:
         motion_selection: dict[str, Any] | None = None,
         request_id: str | None = None,
         new_request: bool = False,
+        craft_request: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         if self.workspace.authority != "canonical" or not self.run_store.path.is_file():
             self.workspace.initialize()
@@ -373,6 +382,8 @@ class TimelinePipeline:
             self.run_store.bind_motion_selection(
                 motion_selection, request_id=request_id, new_request=new_request
             )
+        if craft_request is not None:
+            self.run_store.bind_editing_craft_selection(**craft_request)
         return self.status()
 
     def status(self) -> dict[str, Any]:
@@ -383,6 +394,12 @@ class TimelinePipeline:
             else None
         )
         status["briefing"] = self.briefing_status()
+        status["motionPlan"] = status["briefing"]["motionPlan"]
+        from .motion_review import MotionReviewService
+
+        status["motionPlanReport"] = MotionReviewService(self.workspace).report_status(
+            status["motionPlan"]
+        )
         return status
 
     def briefing_status(self) -> dict[str, Any]:
@@ -397,12 +414,92 @@ class TimelinePipeline:
             if shown.get("selection")
             else {}
         )
-        return {**shown, "stageContexts": contexts}
+        motion_plan = contexts.get("motion", {}).get("motionPlan")
+        if motion_plan is None:
+            motion_plan = self.motion_plan()
+        return {**shown, "stageContexts": contexts, "motionPlan": motion_plan}
+
+    def _motion_context(
+        self,
+        *,
+        proposal_hash: str | None = None,
+        sound_proposal=None,
+    ) -> dict[str, Any]:
+        """Read live or frozen review inputs without publishing a report."""
+        from avo.direction.brief import BriefService
+        from avo.editing_craft import EditingCraftError, inspect_editing_craft
+
+        context = {
+            "direction": BriefService(self.workspace.project_path)
+            .show()
+            .get("selection"),
+            "soundProposal": sound_proposal,
+        }
+        run = self.run_store.load() if self.run_store.path.is_file() else {}
+        frozen = (run.get("executionChoices") or {}).get("editingCraft")
+        if frozen is not None:
+            context["options"] = frozen["selection"]
+        else:
+            try:
+                context["options"] = inspect_editing_craft(
+                    project=self.workspace.project_path
+                )["selection"]
+            except EditingCraftError as error:
+                context["options"] = None
+                context["gaps"] = [
+                    {"kind": "options-unavailable", "detail": str(error)}
+                ]
+        if proposal_hash or (run.get("extensions") or {}).get(
+            "motionProposalSelection"
+        ):
+            from .motion_authoring import MotionAuthoringError, MotionAuthoringService
+
+            service = MotionAuthoringService(self.workspace)
+            try:
+                context.update(service.review_context(service.show(proposal_hash)))
+            except MotionAuthoringError as error:
+                context.setdefault("gaps", []).append(
+                    {"kind": "motion-proposal-unavailable", "detail": str(error)}
+                )
+        return context
+
+    def motion_plan(
+        self,
+        *,
+        proposal_hash: str | None = None,
+        sound_proposal=None,
+        scope_request=None,
+    ) -> dict[str, Any]:
+        """Project current motion metadata without initializing an editorial record."""
+        from .motion_review import MotionReviewService
+
+        context = self._motion_context(
+            proposal_hash=proposal_hash, sound_proposal=sound_proposal
+        )
+        context["projectionSource"] = {
+            "kind": "pipeline",
+            "proposalHash": proposal_hash,
+            "soundProposalRef": None,
+        }
+        options = {} if scope_request is None else {"scope_request": scope_request}
+        return MotionReviewService(self.workspace).project(context, **options)
+
+    def publish_motion_plan(self, *, scope_request=None) -> dict[str, Any]:
+        """Explicitly publish derived views; this never selects or approves an edit."""
+        from .motion_review import MotionReviewService
+
+        options = {} if scope_request is None else {"scope_request": scope_request}
+        snapshot = self.motion_plan(**options)
+        return MotionReviewService(self.workspace).publish(
+            snapshot, expected_basis=snapshot["basisHeads"]
+        )
 
     def authoring_context(self, stage: str) -> dict[str, Any]:
         """Offer selected guidance, never edit/render approval or timeline changes."""
         from avo.direction.brief import BriefService
         from avo.direction.rules import DirectionError
+
+        from .iterations import pending_stage_notes
 
         service = BriefService(self.workspace.project_path)
         result = service.stage_context(
@@ -413,6 +510,11 @@ class TimelinePipeline:
                 "DIR_INVALID_REFERENCE",
                 "Selected brief and workspace video identity differ",
             )
+        if stage == "motion":
+            result = {**result, "motionPlan": self.motion_plan()}
+        notes = pending_stage_notes(self.workspace, stage)
+        if notes:
+            result = {**result, "spokenNotes": notes}
         return result
 
     @property

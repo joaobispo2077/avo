@@ -6,60 +6,15 @@ import time
 from pathlib import Path
 from threading import Lock
 
-from avo.adapters.media.cutting_acoustics import CuttingAcousticsAdapter
+from avo.adapters.media.cutting_acoustics import (
+    CuttingAcousticsAdapter,
+    _alignment_segments,
+)
 from avo.adapters.understand.cutting_alignment import CuttingAlignmentAdapter
 from avo.model_sources import PreflightError, preflight, resolve_job
+from avo.speech_dependencies import speech_dependency_bindings, transcription_runtime
 from avo.timeline.ports import ToolError
 from avo.transcribe import MODEL_FILES, LocalTranscriber, source_fingerprint
-
-
-def _dependency_files(paths):
-    """Read current local bytes without provisioning or importing model runtimes."""
-    files = {}
-    for path in paths:
-        path = Path(path)
-        try:
-            files[str(path.resolve())] = source_fingerprint(path)["sha256"]
-        except OSError:
-            files[str(path.resolve())] = None
-    return {
-        "status": "observed" if files and all(files.values()) else "unknown",
-        "files": files,
-    }
-
-
-def _alignment_config_complete(runtime, punkt_files):
-    models = runtime.get("models") or {}
-    return bool(
-        runtime.get("python")
-        and punkt_files
-        and models
-        and all(model.get("path") and model.get("files") for model in models.values())
-    )
-
-
-def _alignment_dependencies(runtime):
-    paths = []
-    if runtime.get("python"):
-        paths.append(Path(runtime["python"]))
-    paths.extend(_configured_model_files(runtime.get("models") or {}))
-    punkt = runtime.get("nltkData")
-    punkt_files = (
-        [path for path in Path(punkt).rglob("*") if path.is_file()] if punkt else []
-    )
-    paths.extend(punkt_files)
-    result = {"configured": runtime, **_dependency_files(paths)}
-    if not _alignment_config_complete(runtime, punkt_files):
-        result["status"] = "unknown"
-    return result
-
-
-def _configured_model_files(models):
-    paths = []
-    for model in models.values():
-        directory = Path(model.get("path") or ".")
-        paths.extend(directory / name for name in (model.get("files") or {}))
-    return paths
 
 
 class CuttingAnalysisAdapter:
@@ -71,39 +26,15 @@ class CuttingAnalysisAdapter:
         self._analysis_lock = Lock()
 
     def dependency_bindings(self):
-        runtime = (self.policy.effective.get("runtimeRefs") or {}).get(
-            "alignment"
-        ) or {}
-        try:
-            resolved = resolve_job("transcribe", project=self.workspace.project)
-            source = resolved.pin.get("source") or {}
-            if not source.get("artifactPath"):
-                raise ValueError("prepared local ASR artifact is unavailable")
-            directory = Path(source["artifactPath"])
-            transcription = {
-                "model": resolved.id,
-                "policyHash": resolved.policy_hash,
-                "runtime": self._transcription_runtime(),
-                **_dependency_files(directory / name for name in MODEL_FILES),
-            }
-        except (PreflightError, ToolError, OSError, RuntimeError, ValueError) as exc:
-            transcription = {"status": "unknown", "reason": str(exc)}
-        return {
-            "transcription": transcription,
-            "alignment": _alignment_dependencies(runtime),
-        }
+        return speech_dependency_bindings(
+            self.workspace.project,
+            self.policy.effective,
+            resolver=resolve_job,
+            runtime_reader=self._transcription_runtime,
+        )
 
     def _transcription_runtime(self):
-        runtime = (self.policy.effective.get("runtimeRefs") or {}).get(
-            "transcription"
-        ) or {}
-        device = runtime.get("device", "cpu")
-        if device not in {"cpu", "cuda"}:
-            raise ValueError("cutting transcription device must be cpu or cuda")
-        return {
-            "device": device,
-            "computeType": runtime.get("computeType", "int8"),
-        }
+        return transcription_runtime(self.policy.effective)
 
     def _transcriber(self, language):
         if language in self._transcribers:
@@ -193,6 +124,87 @@ class CuttingAnalysisAdapter:
         with self._analysis_lock:
             return self._analyze(source, **request)
 
+    def recover(self, source, **request):
+        """Revisit only the explicit crop; ASR text survives missing alignment."""
+        with self._analysis_lock:
+            language = request["language"]
+            result = CuttingAcousticsAdapter(
+                transcriber=self._transcriber(language)
+            ).analyze(source, **request)
+            alignment, issues = self._recover_alignment(result, language)
+            analysis = {
+                "sourceRef": {
+                    "locator": str(source),
+                    "sha256": request["fingerprint"]["sha256"],
+                },
+                "routing": request["selection"],
+                "syncRef": request["sync_ref"],
+                "preprocessing": {
+                    "sourceRange": request["source_range"],
+                    **result["bindings"],
+                },
+                "language": language,
+                "status": "pass" if alignment else "unknown",
+                "words": alignment["words"]
+                if alignment
+                else [
+                    {**word, "alignmentStatus": "unsupported", "eligibleEdge": False}
+                    for word in result["words"]
+                ],
+                "alignment": {
+                    "status": "pass" if alignment else "missing",
+                    "characters": alignment["chars"] if alignment else [],
+                },
+                "acousticRanges": result["waveform"]["frames"],
+                "vad": result["speechRanges"],
+                "coverage": result["coverage"],
+                "pauseCandidates": [],
+                "tools": [
+                    self._model_bindings[language],
+                    result["bindings"],
+                    alignment["bindings"] if alignment else {},
+                ],
+                "uncertainty": issues,
+                "recoveryContext": {
+                    "scope": "selected-interval-only",
+                    "previousText": False,
+                    "initialPrompt": None,
+                    "vadFilter": False,
+                    "wordTimestamps": True,
+                    "sourceStart": result["sourceStart"],
+                    "observedDuration": result["waveform"]["duration"],
+                },
+            }
+            return {"transcript": result["transcript"], "analysis": analysis}
+
+    def _recover_alignment(self, result, language):
+        if not result["words"]:
+            return None, [
+                "Recovery observed no words; possible speech remains unresolved"
+            ]
+        try:
+            aligner = self._alignment()
+            alignment = aligner.align(
+                Path(result["analysisPath"]),
+                segments=_alignment_segments(
+                    result["words"],
+                    result["sourceStart"],
+                    result["waveform"]["duration"],
+                ),
+                source_start=result["sourceStart"],
+                language=language,
+            )
+            if not alignment.get("words"):
+                raise ToolError(
+                    "recovery-alignment-empty", "Recovery alignment observed no words"
+                )
+            return alignment, ["Recovered text and timing require creator review"]
+        except (ToolError, OSError, RuntimeError, ValueError) as error:
+            return None, [
+                str(error),
+                "Recovered ASR words do not certify exact word anchors or safe cuts",
+            ]
+
     def _analyze(self, source, **request):
         language = (
             request.get("language") or self.policy.effective.get("language") or "pt-BR"
@@ -230,6 +242,7 @@ class CuttingAnalysisAdapter:
             return payload
         started = time.perf_counter()
         try:
+            dependencies = self.dependency_bindings()
             transcriber = self._transcriber(language)
             aligner = self._alignment()
             adapter = CuttingAcousticsAdapter(transcriber=transcriber, aligner=aligner)
@@ -239,8 +252,14 @@ class CuttingAnalysisAdapter:
                 raise ToolError(
                     "cutting-alignment-empty", "no aligned speech was observed"
                 )
+            if dependencies != self.dependency_bindings():
+                raise ToolError(
+                    "cutting-analysis-stale",
+                    "Speech dependencies changed during analysis",
+                )
             payload.update(
                 status="pass",
+                speechDependencies=dependencies,
                 words=alignment["words"],
                 acousticRanges=result["waveform"]["frames"],
                 vad=result["speechRanges"],

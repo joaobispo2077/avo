@@ -38,6 +38,10 @@ CORE_CLI_GROUPS: tuple[str, ...] = (
 
 # Remaining groups bridged in task-008.
 REMAINING_CLI_GROUPS: tuple[str, ...] = (
+    "artcraft",
+    "timeline-export",
+    "preparation",
+    "sfx",
     "costs",
     "direction",
     "briefstart",
@@ -148,6 +152,14 @@ def _core_bridge_defs() -> list[BridgeToolDef]:
             "pipeline",
             "verify-commands",
             "Verify the pipeline command registry (CLI: avo pipeline verify-commands).",
+        ),
+        _tool(
+            "avo_pipeline_work_decide",
+            "pipeline",
+            "work-decide",
+            "Record an explicit reversible defer, dismiss, reopen or supersession decision for requested craft work. "
+            "Preserves original scope/history and does not change selected concepts, applied media or approvals.",
+            extra_params=(ParamSpec("request", str, required=True),),
         ),
         _tool(
             "avo_pipeline_resume",
@@ -263,6 +275,134 @@ def _core_bridge_defs() -> list[BridgeToolDef]:
             ),
         ),
         # --- animation ---
+        _tool(
+            "avo_animation_face_analyze",
+            "animation",
+            "face-analyze",
+            "Run the selected local face detector on a bounded original source range. "
+            "Confirmation binds the exact request. Saves observations for review.",
+            destructive=True,
+            extra_params=(ParamSpec("request", str, required=True),),
+        ),
+        _tool(
+            "avo_animation_reference_analyze",
+            "animation",
+            "reference-analyze",
+            "Measure explicitly selected local reference ranges with the optional CPU runtime. "
+            "Confirmation binds the exact request. Saves an inspection-only record.",
+            destructive=True,
+            extra_params=(ParamSpec("request", str, required=True),),
+        ),
+        _tool(
+            "avo_animation_reference_decide",
+            "animation",
+            "reference-decide",
+            "Record a project-only decision for reviewed reference measurements. "
+            "Confirmation binds the exact request and optional direction descriptor.",
+            destructive=True,
+            extra_params=(ParamSpec("request", str, required=True),),
+        ),
+        _tool(
+            "avo_animation_asset_review",
+            "animation",
+            "asset-review",
+            "Review numbered local assets for an explicitly selected motion need. "
+            "Confirmation binds the exact original folders and options in the request.",
+            destructive=True,
+            extra_params=(ParamSpec("request", str, required=True),),
+        ),
+        _tool(
+            "avo_animation_camera_apply",
+            "animation",
+            "camera-apply",
+            _MUTATE_WARN + "Apply only selected camera treatments through canonical "
+            "owners with current heads, exact runtime and recoverable publication; "
+            "confirmation binds request bytes without approving a film.",
+            destructive=True,
+            extra_params=(ParamSpec("request", str, required=True),),
+        ),
+        _tool(
+            "avo_animation_camera_propose",
+            "animation",
+            "camera-propose",
+            "Validate explicitly selected camera recipes and installed native runtime; "
+            "write an immutable untimed proposal without applying edits or approving a film.",
+            extra_params=(ParamSpec("request", str, required=True),),
+        ),
+        _tool(
+            "avo_animation_plan_propose",
+            "animation",
+            "plan-propose",
+            "Writes an immutable motion concept proposal from a bounded typed request; "
+            "does not select an edit, run models or render media.",
+            extra_params=(ParamSpec("request", str, required=True),),
+        ),
+        _tool(
+            "avo_animation_plan_select",
+            "animation",
+            "plan-select",
+            "Records actual scoped concept dispositions from a typed request; "
+            "selection is distinct from canonical application and film approval.",
+            extra_params=(ParamSpec("request", str, required=True),),
+        ),
+        _tool(
+            "avo_animation_plan_apply",
+            "animation",
+            "plan-apply",
+            _MUTATE_WARN + "Apply a selected motion proposal through normal canonical "
+            "owners with expected heads and recoverable publication; confirmation "
+            "binds exact request bytes and does not approve a master.",
+            destructive=True,
+            extra_params=(ParamSpec("request", str, required=True),),
+        ),
+        _tool(
+            "avo_animation_plan_show",
+            "animation",
+            "plan-show",
+            "Read-only current motion map, linked storyboard and lane readiness; "
+            "never initializes canonical state, publishes reports or runs media/models.",
+            extra_params=(
+                ParamSpec("proposal_hash", str | None, default=None),
+                ParamSpec("scope_request", str | None, default=None),
+            ),
+        ),
+        _tool(
+            "avo_animation_plan_publish",
+            "animation",
+            "plan-publish",
+            "Writes immutable derived motion-map/storyboard review files for the "
+            "current basis; does not change canonical edits or grant approval.",
+            extra_params=(ParamSpec("scope_request", str | None, default=None),),
+        ),
+        _tool(
+            "avo_animation_options_show",
+            "animation",
+            "options-show",
+            "Read-only inspection of scoped craft preferences and built-in review "
+            "defaults; no media, model, render or filesystem writes.",
+            include_project=False,
+            extra_params=motion_context,
+        ),
+        _tool(
+            "avo_animation_options_set",
+            "animation",
+            "options-set",
+            "Writes only the explicitly selected craft preference scope from a "
+            "typed request and expected document identity; no model execution "
+            "or canonical edit (CLI: avo cli animation options-set).",
+            include_project=False,
+            extra_params=(*motion_context, ParamSpec("request", str, required=True)),
+        ),
+        _tool(
+            "avo_animation_options_reset",
+            "animation",
+            "options-reset",
+            "Resets only the explicitly selected craft preference scope from a "
+            "typed request and expected document identity; preserves unrelated "
+            "settings and canonical edits (CLI: avo cli animation options-reset).",
+            include_project=False,
+            extra_params=(*motion_context, ParamSpec("request", str, required=True)),
+        ),
         _tool(
             "avo_animation_engine_show",
             "animation",
@@ -863,12 +1003,7 @@ def _creative_bridge_defs():
 
 def _all_bridge_defs() -> list[BridgeToolDef]:
     """Core (task-007) + remaining (task-008) bridge defs."""
-    return (
-        _core_bridge_defs()
-        + _remaining_bridge_defs()
-        + _creative_bridge_defs()
-        + _cost_bridge_defs()
-    )
+    return _core_bridge_defs() + remaining_bridge_defs()
 
 
 def _cost_bridge_defs():
@@ -939,7 +1074,170 @@ def core_bridge_defs() -> list[BridgeToolDef]:
 
 def remaining_bridge_defs() -> list[BridgeToolDef]:
     """Return declarative defs for remaining CLI groups (task-008)."""
-    return _remaining_bridge_defs() + _creative_bridge_defs() + _cost_bridge_defs()
+    return (
+        _remaining_bridge_defs()
+        + _creative_bridge_defs()
+        + _cost_bridge_defs()
+        + _sfx_bridge_defs()
+        + _preparation_bridge_defs()
+        + _editor_handoff_bridge_defs()
+        + _artcraft_bridge_defs()
+    )
+
+
+def _artcraft_bridge_defs():
+    scope = (ParamSpec("app", str | None), ParamSpec("as_json", bool, default=True))
+    return [
+        _tool(
+            "avo_artcraft_assess",
+            "artcraft",
+            "assess",
+            "Assess one structured request against current ArtCraft selection rules. Reads metadata only.",
+            include_project=False,
+            extra_params=(
+                *scope,
+                ParamSpec("request", dict[str, Any], required=True),
+                ParamSpec("operation", list[str] | None),
+                ParamSpec("knowledge_only", bool, default=False),
+            ),
+        ),
+        _tool(
+            "avo_artcraft_catalog",
+            "artcraft",
+            "catalog",
+            "Read documented capabilities for one or more ArtCraft apps and operations.",
+            include_project=False,
+            extra_params=(*scope, ParamSpec("behavior", str | None)),
+        ),
+        *_artcraft_job_bridge_defs(),
+    ]
+
+
+def _artcraft_job_bridge_defs():
+    prepare = _tool(
+        "avo_artcraft_prepare",
+        "artcraft",
+        "prepare",
+        "Prepare one explicitly selected authoring job in its declared external workspace.",
+        include_project=False,
+        extra_params=(
+            ParamSpec("request", dict[str, Any], required=True),
+            ParamSpec("job_spec", dict[str, Any], required=True),
+            *(
+                ParamSpec(name, str, required=True)
+                for name in ("provider", "workspace", "app", "mode")
+            ),
+            ParamSpec("operation", list[str], required=True),
+            *(
+                ParamSpec(name, str | None)
+                for name in ("cli", "application", "reuse_job", "reuse_head")
+            ),
+            ParamSpec("as_json", bool, default=True),
+        ),
+    )
+    descriptions = {
+        "run": "Run the selected job at its exact head and write only its owned output.",
+        "inspect": "Read current or stale evidence for the selected job and expected head.",
+        "recover": "Inspect retained files and the next supported action after a job interruption.",
+    }
+    selected_job = (
+        ParamSpec("job", str, required=True),
+        ParamSpec("expected_head", str, required=True),
+        ParamSpec("as_json", bool, default=True),
+    )
+    return [
+        prepare,
+        *(
+            _tool(
+                f"avo_artcraft_{operation}",
+                "artcraft",
+                operation,
+                description,
+                include_project=False,
+                extra_params=selected_job,
+            )
+            for operation, description in descriptions.items()
+        ),
+    ]
+
+
+def _editor_handoff_bridge_defs() -> list[BridgeToolDef]:
+    descriptions = {
+        "prepare": "Create an explicitly selected, bounded original-media editor handoff. Unqualified profiles can generate validation examples only.",
+        "status": "Read editor target profiles and optionally check one retained handoff against the current timeline.",
+        "inspect-feedback": "Retain exact returned XML bytes and review source identities, unknown fields and supported interchange syntax.",
+        "propose-feedback": "Compare the retained handoff, current edit and returned XML. Save proposed fields, conflicts and unresolved identities for review.",
+        "apply-feedback": "Record exact selected editor fields. Route supported source trims to normal cutting review and preserve manual finishing choices.",
+        "qualify-target": "Record reviewed results from the exact editor and operating system. Production readiness requires a complete verified round trip.",
+    }
+    return [
+        _tool(
+            "avo_timeline_export_" + operation.replace("-", "_"),
+            "timeline-export",
+            operation,
+            description,
+            destructive=operation != "status",
+            extra_params=(ParamSpec("request", str, required=operation != "status"),),
+        )
+        for operation, description in descriptions.items()
+    ]
+
+
+def _preparation_bridge_defs() -> list[BridgeToolDef]:
+    descriptions = {
+        "coverage": "Inspect retained source speech-coverage facts against current source/routing/Sync metadata. No media decoding, source hashing, model execution or new journal.",
+        "recover": "Explicit bounded local retranscription of selected original-source intervals. Confirms exact request bytes and consumes durable attempts before inference. Preserves original/recovered alternatives; no cut or transcript selection approval.",
+        "recover-decide": "Explicitly choose original or recovered transcript evidence, reject an alternative or defer its source interval. Confirms exact request bytes and current decisions. Preserves immutable history and unresolved timing protection; no inference or cut approval.",
+        "notes-detect": "Inspect a selected prepared original transcript for the configured literal spoken-note convention. Saves source-bound review evidence without running transcription.",
+        "notes-decide": "Record an exact spoken note interpretation or independent speech decision. An exclusion can create an ordinary cutting proposal for later review.",
+    }
+    return [
+        _tool(
+            "avo_preparation_" + operation.replace("-", "_"),
+            "preparation",
+            operation,
+            description,
+            destructive=operation != "coverage",
+            extra_params=(ParamSpec("request", str, required=True),),
+        )
+        for operation, description in descriptions.items()
+    ]
+
+
+def _sfx_bridge_defs() -> list[BridgeToolDef]:
+    descriptions = {
+        "show": "Read a bounded saved sound catalogue excerpt. Metadata only; no source scan or model.",
+        "scan": "Explicitly scan declared sound roots and measure bounded audio into project metadata. Sources stay unchanged.",
+        "annotate": "Record curated sound tags, rights evidence or a reviewed marker against an exact catalogue generation.",
+        "search": "Search saved sound descriptors only. Metadata read; semantic execution cannot be selected through this tool.",
+        "search-semantic": "Explicit optional local model execution for semantic sound matching. Requires provisioned paired audio/text models; unavailable never falls back to descriptors.",
+        "propose": "Save bounded sound auditions against exact timeline heads and catalogue generation with explicitly enabled options. Metadata only; no scan, model provisioning, canonical application or listening approval.",
+        "apply": "Publish explicit per-event sound choices through BMap and Tracks against the exact saved proposal, heads and catalogue. Confirms the request bytes; listening acceptance stays pending. No catalogue scan or model execution.",
+        "favorites-show": "Inspect bounded provider sound favorites and their exact preference document identity. Metadata only; no library scan or model.",
+        "favorite-promote": "Explicitly share a sound identity and selected portable descriptors with the current provider against exact catalogue and preference identities. Confirms request bytes; no project media, rights, markers or approvals are transferred.",
+        "favorite-remove": "Explicitly stop sharing a selected provider sound favorite against its exact preference document. Confirms request bytes; existing project curation and sound remain unchanged.",
+    }
+    return [
+        _tool(
+            "avo_sfx_" + operation.replace("-", "_"),
+            "sfx",
+            operation,
+            description,
+            destructive=operation in {"apply", "favorite-promote", "favorite-remove"},
+            extra_params=(
+                (
+                    ParamSpec("generation", str | None),
+                    ParamSpec("offset", int, default=0),
+                    ParamSpec("limit", int, default=20),
+                )
+                if operation == "show"
+                else ()
+                if operation == "favorites-show"
+                else (ParamSpec("request", str, required=True),)
+            ),
+        )
+        for operation, description in descriptions.items()
+    ]
 
 
 def all_bridge_defs() -> list[BridgeToolDef]:
@@ -1038,15 +1336,56 @@ def _bridge_gate_error(exc):
 
 
 def _decision_gate_args(defn, bridge_args):
+    from avo.editing_craft_requests import MAX_REQUEST_BYTES
     from avo.mcp.bridge import normalize_cost_arguments
 
     normalize_cost_arguments(defn.cli_prefix, bridge_args)
-    if defn.cli_prefix not in {("direction", "decide"), ("briefstart", "decide")}:
+    editor_handoff = defn.cli_prefix[0] == "timeline-export"
+    if not editor_handoff and defn.cli_prefix not in {
+        ("preparation", "recover"),
+        ("preparation", "recover-decide"),
+        ("preparation", "notes-detect"),
+        ("preparation", "notes-decide"),
+        ("direction", "decide"),
+        ("briefstart", "decide"),
+        ("animation", "plan-apply"),
+        ("animation", "plan-select"),
+        ("animation", "camera-apply"),
+        ("animation", "face-analyze"),
+        ("animation", "reference-analyze"),
+        ("animation", "reference-decide"),
+        ("animation", "asset-review"),
+        ("sfx", "apply"),
+        ("sfx", "favorite-promote"),
+        ("sfx", "favorite-remove"),
+    }:
         return bridge_args
+    limit = (
+        MAX_REQUEST_BYTES
+        if editor_handoff
+        or defn.cli_prefix
+        in {
+            ("preparation", "recover"),
+            ("preparation", "recover-decide"),
+            ("preparation", "notes-detect"),
+            ("preparation", "notes-decide"),
+            ("animation", "plan-apply"),
+            ("animation", "plan-select"),
+            ("animation", "camera-apply"),
+            ("animation", "face-analyze"),
+            ("animation", "reference-analyze"),
+            ("animation", "reference-decide"),
+            ("animation", "asset-review"),
+            ("sfx", "apply"),
+            ("sfx", "favorite-promote"),
+            ("sfx", "favorite-remove"),
+        }
+        else 2 * 1024 * 1024
+    )
     with Path(bridge_args["request"]).expanduser().open("rb") as stream:
-        raw = stream.read(2 * 1024 * 1024 + 1)
-    if len(raw) > 2 * 1024 * 1024:
-        raise ValueError("Decision request exceeds 2 MiB")
+        raw = stream.read(limit + 1)
+    if len(raw) > limit:
+        raise ValueError(f"Decision request exceeds {limit // (1024 * 1024)} MiB")
     return {**bridge_args, "_decisionDocumentSha256": hashlib.sha256(raw).hexdigest()}
 
 

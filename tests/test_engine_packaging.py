@@ -51,10 +51,58 @@ def test_spec_bundles_direction_resources_and_new_schema_contracts() -> None:
         assert (ROOT / "schemas" / name).is_file()
 
 
+def test_bundled_editor_profiles_are_discoverable_and_unqualified():
+    import tomllib
+
+    from avo.engine_cli import PUBLIC_VERBS
+    from avo.timeline.editor_handoff import target_profiles
+
+    configuration = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    assert configuration["tool"]["setuptools"]["package-data"][
+        "avo.resources.interchange"
+    ] == ["*.json"]
+    assert 'collect_data_files("avo.resources.interchange")' in SPEC
+    assert (ROOT / "schemas" / "avo.editor-handoff.schema.json").is_file()
+    assert "timeline-export" in PUBLIC_VERBS
+    profiles = target_profiles()
+    assert {item["application"] for item in profiles} == {
+        "premiere-pro",
+        "davinci-resolve",
+    }
+    assert all(item["status"] == "unqualified" for item in profiles)
+
+
 def test_python_distribution_declares_runtime_schema_data() -> None:
     configuration = (ROOT / "pyproject.toml").read_text(encoding="utf-8")
     assert "[tool.setuptools.data-files]" in configuration
     assert '"share/avo/schemas" = ["schemas/*.json"]' in configuration
+
+
+def test_optional_craft_workers_are_package_files_and_models_stay_external():
+    import tomllib
+    from importlib.resources import files
+
+    configuration = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
+    worker_package = "avo.adapters.understand"
+    workers = configuration["tool"]["setuptools"]["package-data"][worker_package]
+    for worker in ("clap_embeddings_worker.py", "visual_motion_worker.py"):
+        assert worker in workers
+        assert files(worker_package).joinpath(worker).is_file()
+    dependencies = configuration["project"]["dependencies"]
+    assert not any(
+        item.startswith(("opencv", "torch", "transformers")) for item in dependencies
+    )
+    collected = {
+        value for operation, value in _packaging_calls() if operation == "_collect"
+    }
+    assert collected.isdisjoint({"cv2", "torch", "transformers"})
+    for schema in (
+        "avo.clap-manifest.schema.json",
+        "avo.motion-review.schema.json",
+        "avo.editor-handoff.schema.json",
+        "avo.timeline-learning.schema.json",
+    ):
+        assert (ROOT / "schemas" / schema).is_file()
 
 
 def test_library_review_resources_are_packaged_and_available():
@@ -70,6 +118,70 @@ def test_library_review_resources_are_packaged_and_available():
         assert assets.joinpath(name).is_file()
     assert (ROOT / "schemas/avo.library.schema.json").is_file()
     assert ("collect_data_files", "avo.templates.library_review") in _packaging_calls()
+
+
+def test_motion_review_templates_survive_an_actual_wheel_build(tmp_path):
+    import shutil
+    import subprocess
+    import sys
+    from zipfile import ZipFile
+
+    project = tmp_path / "distribution"
+    project.mkdir()
+    for name in ("pyproject.toml", "LICENSE", "src/avo/__init__.py"):
+        target = project / name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(ROOT / name, target)
+    templates = "src/avo/templates/motion_review"
+    shutil.copytree(ROOT / templates, project / templates)
+    schemas = project / "schemas"
+    schemas.mkdir()
+    shutil.copy2(ROOT / "schemas/avo.motion-review.schema.json", schemas)
+    output = tmp_path / "wheels"
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            (
+                "from setuptools.build_meta import build_wheel; "
+                "import sys; build_wheel(sys.argv[1])"
+            ),
+            str(output),
+        ],
+        cwd=project,
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    assert result.returncode == 0, result.stderr
+    wheels = list(output.glob("*.whl"))
+    assert len(wheels) == 1
+    with ZipFile(wheels[0]) as archive:
+        for name in ("review.html", "review.css"):
+            packaged = "avo/templates/motion_review/" + name
+            assert packaged in archive.namelist(), f"Missing wheel resource: {packaged}"
+            assert archive.read(packaged) == (ROOT / templates / name).read_bytes()
+
+
+def test_frozen_motion_review_templates_are_collected_from_the_package():
+    import pytest
+
+    pytest.importorskip("PyInstaller")
+    from PyInstaller.utils.hooks import collect_data_files
+
+    collected = collect_data_files("avo")
+    destinations = {
+        (Path(target).as_posix() + "/" + Path(source).name): Path(source)
+        for source, target in collected
+    }
+    assert ("_collect", "avo") in _packaging_calls()
+    for name in ("review.html", "review.css"):
+        destination = "avo/templates/motion_review/" + name
+        assert destination in destinations
+        assert (
+            destinations[destination].read_bytes()
+            == (ROOT / "src/avo/templates/motion_review" / name).read_bytes()
+        )
 
 
 def test_frozen_library_worker_has_native_dispatch_without_python_m(
@@ -241,7 +353,11 @@ def test_binary_capture_lane_provisions_encoder_and_only_browser_system_dependen
     workflow = (ROOT / ".github/workflows/engine-binary.yml").read_text(
         encoding="utf-8"
     )
-    for install in ("apt-get install", "brew install ffmpeg", "choco install ffmpeg"):
+    for install in (
+        "bash scripts/ci/ensure-ffmpeg.sh",
+        "brew install ffmpeg",
+        "choco install ffmpeg",
+    ):
         assert install in workflow, install
     assert "python -m playwright install-deps chromium" in workflow
     assert "python -m playwright install --with-deps" not in workflow

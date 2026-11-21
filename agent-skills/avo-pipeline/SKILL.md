@@ -37,6 +37,8 @@ HyperFrames remains the built-in default. Direct "no frameworks", "without a fra
 
 For code-drawn, load the portable [advanced code-drawn guide](references/code-drawn.md) and relevant topic sections before the router below. Do not load or initialize HyperFrames as a prerequisite. The advanced label explains author-owned seeking, assets, dependencies and QC; selection itself adds no human approval gate. Keep current run selection and recorded animation separate from future defaults.
 
+Select the [ArtCraft workflow](references/artcraft.md) only for a direct user choice, a required capability gap supported by current AVO and reuse contracts, or required rematerialization of the selected pinned version. Existing routes retain ordinary work and recoverable failures. The chosen app and operations bound discovery and authoring. ArtCraft uses separate app prerequisites and the existing motion, source admission and review gates.
+
 ## Command router
 
 | User invokes | Read |

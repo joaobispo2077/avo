@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 
 from avo.models import (
+    EXPLICIT_MODEL_JOBS,
     disclosure_summary,
     format_disclosure_line,
     list_alternatives,
@@ -30,7 +31,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_alt = sub.add_parser(
         "alternatives", help="List lighter/heavier options for one job"
     )
-    p_alt.add_argument("job", choices=["transcribe", "understand", "plan"])
+    p_alt.add_argument("job", choices=EXPLICIT_MODEL_JOBS)
     p_alt.add_argument("--label", default="local", choices=["local", "paid"])
     p_alt.add_argument("--root", type=Path, default=None)
     p_alt.add_argument("--json", action="store_true")
@@ -41,7 +42,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_pre.add_argument(
         "job",
         nargs="?",
-        choices=["transcribe", "understand", "plan"],
+        choices=EXPLICIT_MODEL_JOBS,
         default=None,
     )
     p_pre.add_argument("--label", default="local", choices=["local", "paid"])
@@ -99,6 +100,10 @@ def _preflight_entry(job: str, root, label: str) -> dict:
     entry: dict = {"job": job, "id": resolved.id, "ok": True}
     try:
         preflight(resolved)
+        if job == "face_detect":
+            entry.update(validation="artifact-and-runtime-verified", modelLoaded=True)
+        if job in {"audio_embed", "text_embed"}:
+            entry.update(validation="manifest-and-runtime-verified", modelLoaded=False)
     except PreflightError as exc:
         entry["ok"] = False
         entry["code"] = exc.code
@@ -118,7 +123,13 @@ def _cmd_preflight(args, root) -> int:
         _print_json(
             {
                 "preflight": reports,
-                "resolvedModelSources": disclose_jobs(root=root, label=args.label),
+                "resolvedModelSources": disclose_jobs(
+                    root=root,
+                    label=args.label,
+                    jobs=(args.job,)
+                    if args.job in {"audio_embed", "text_embed", "face_detect"}
+                    else None,
+                ),
             }
         )
         return 1 if failed else 0

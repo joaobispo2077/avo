@@ -2,6 +2,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
+from avo.adapters.transcribe.candidate import CandidateTranscriptionAdapter
 from avo.adapters.understand.watch_policy import resolve_watch_policy
 from avo.timeline.review_runner import (
     ReviewRunner,
@@ -19,6 +22,72 @@ class RecordingTranscript(FakeTranscript):
     def transcribe(self, candidate: Path, **options):
         self.calls.append({"candidate": candidate, **options})
         return super().transcribe(candidate, **options)
+
+
+@pytest.mark.parametrize(
+    ("asr_scope", "speech", "input_risks", "expected_windows", "expected_gaps"),
+    [
+        ("join", True, True, ["join"], []),
+        ("join", False, True, ["join"], ["transcript-gap-0.200"]),
+        ("empty", False, False, [], []),
+        ("empty", False, True, ["join"], ["transcript-gap-0.200"]),
+        ("absent", True, True, ["join", "cue:title"], ["transcript-gap-1.200"]),
+    ],
+)
+def test_native_transcription_scope_preserves_visual_windows(
+    tmp_path, asr_scope, speech, input_risks, expected_windows, expected_gaps
+):
+    join = {"start": 0.2, "end": 0.4, "reason": "join"}
+    cue = {"start": 1.2, "end": 1.4, "reason": "cue:title"}
+
+    class ScopedQc(FakeQc):
+        def check(self, candidate, **request):
+            result = super().check(candidate, **request)
+            result["requiredWindows"] = [join, cue]
+            if asr_scope != "absent":
+                result["requiredTranscriptionWindows"] = (
+                    [join] if asr_scope == "join" else []
+                )
+            return result
+
+    class SpeechPayload(FakeTranscript):
+        def transcribe(self, candidate, **request):
+            result = super().transcribe(candidate, **request)
+            result["words"] = (
+                [{"start": 0.1, "end": 0.5, "word": "oi", "probability": 1.0}]
+                if speech
+                else []
+            )
+            return result
+
+    candidate = tmp_path / "proof.mp4"
+    candidate.write_bytes(b"current candidate")
+    watch = FakeWatch()
+    result = ReviewRunner(
+        review_root=tmp_path / "review",
+        transcription=CandidateTranscriptionAdapter(runtime=SpeechPayload()),
+        watch=watch,
+        deterministic_qc=ScopedQc(),
+        clock=lambda: "2026-09-02T00:00:00Z",
+    ).run(
+        checkpoint="cut-proof",
+        candidate=candidate,
+        dependencies={"cmap": "b" * 64, "sync-map": "c" * 64},
+        render_profile="proof",
+        risk_windows=[join] if input_risks else [],
+    )
+    transcript = next(
+        e for e in result["evidence"] if e["kind"] == "transcript-analysis"
+    )
+    visual = next(e for e in result["evidence"] if e["kind"] == "watch")
+    technical = next(e for e in result["evidence"] if e["kind"] == "technical-qc")
+    assert [w["reason"] for w in transcript["scope"]["windows"]] == expected_windows
+    assert [f["id"] for f in transcript["findings"]] == expected_gaps
+    assert watch.requests[0]["windows"] == [join, cue]
+    assert visual["scope"]["windows"] == [join, cue]
+    assert visual["coverage"]["requiredWindows"] == 2
+    assert visual["coverage"]["reviewedWindows"] == 2
+    assert technical["scope"]["windows"] == [join, cue]
 
 
 def _run(tmp_path: Path, policy, watch: FakeWatch) -> dict:
@@ -143,6 +212,48 @@ def test_actual_coverage_accepts_observed_frame_ranges() -> None:
         {"start": 3.0, "end": 5.0},
         {"start": 6.0, "end": 10.0},
     ]
+
+
+def test_explicitly_empty_watch_observations_leave_the_entire_program_unobserved():
+    result = actual_coverage(
+        {
+            "mode": "full",
+            "durationSeconds": 10,
+            "windows": [{"start": 1, "end": 4}],
+            "observedWindows": [],
+            "inspectedRanges": [],
+        },
+        required_windows=[{"start": 1, "end": 4}],
+    )
+    assert result["reviewedSeconds"] == 0
+    assert result["reviewedWindows"] == 0
+    assert result["uninspectedRanges"] == [{"start": 0.0, "end": 10.0}]
+
+
+def test_watch_coverage_checks_exact_required_intervals():
+    import pytest
+
+    from avo.timeline.ports import ToolError
+    from avo.timeline.review_runner import _validate_watch_coverage
+
+    required = [{"start": 1.0, "end": 4.0}, {"start": 5.0, "end": 6.0}]
+    matching = {
+        "mode": "full",
+        "observedWindows": [
+            {"start": 0.0, "end": 2.0},
+            {"start": 2.0, "end": 4.0},
+            {"start": 5.0, "end": 6.0},
+        ],
+    }
+    _validate_watch_coverage(matching, required)
+    with pytest.raises(ToolError, match="did not cover every required"):
+        _validate_watch_coverage(
+            {**matching, "observedWindows": [{"start": 7, "end": 8}] * 2}, required
+        )
+    with pytest.raises(ToolError, match="did not cover every required"):
+        _validate_watch_coverage(
+            {**matching, "windows": required, "observedWindows": []}, required
+        )
 
 
 def test_evidence_fusion_routes_conflicts_to_exact_human_windows() -> None:

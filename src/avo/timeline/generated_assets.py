@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+from collections.abc import Callable
 from copy import deepcopy
 from pathlib import Path
 from typing import Any
@@ -12,9 +13,14 @@ from .contracts import (
     ContractError,
     document_hash_excluding,
     file_fingerprint,
+    fingerprint_stage,
     validate_document,
 )
-from .media_admission import is_code_drawn_asset, require_media_admission
+from .media_admission import (
+    is_artcraft_asset,
+    is_code_drawn_asset,
+    require_media_admission,
+)
 from .store import StoreError, write_immutable_json
 
 
@@ -26,6 +32,29 @@ class GeneratedAssetError(RuntimeError):
             "remediation": "regenerate and fingerprint the output before proof admission",
             "blocking": True,
         }
+
+
+def _candidate_size(value: dict[str, Any]) -> int:
+    fingerprint = value.get("fingerprint") or value.get("output") or value
+    size = fingerprint["sizeBytes"]
+    path = Path(value.get("locator") or fingerprint["locator"])
+    if (
+        type(size) is not int
+        or size < 0
+        or not path.is_file()
+        or path.stat().st_size != size
+    ):
+        raise ValueError("admission candidate size is incomplete or stale")
+    return size
+
+
+def _candidate_sizes(candidates) -> frozenset[int] | None:
+    if candidates is None:
+        return None
+    try:
+        return frozenset(_candidate_size(value) for value in candidates)
+    except (AttributeError, KeyError, OSError, TypeError, ValueError):
+        return None
 
 
 class GeneratedAssetService:
@@ -84,13 +113,20 @@ class GeneratedAssetService:
             raise GeneratedAssetError(f"invalid canonical output inventory: {path}")
         return document.get("output") or {}
 
-    def _known_outputs(self) -> list[dict[str, Any]]:
+    def _known_outputs(self) -> Callable[..., list[dict[str, Any]]]:
+        return self._inventory_outputs
+
+    def _inventory_outputs(self, *, candidates=None) -> list[dict[str, Any]]:
         from .migration import inventory_historical_output_fingerprints
 
         raw_dir = getattr(self.workspace, "raw_dir", None)
         if raw_dir is None:
             raise GeneratedAssetError("code-drawn canonical workspace is required")
-        known = inventory_historical_output_fingerprints(raw_dir)
+        # Quarantine examples are negative evidence, not contributing proof inputs.
+        with fingerprint_stage():
+            known = inventory_historical_output_fingerprints(
+                raw_dir, candidate_sizes=_candidate_sizes(candidates)
+            )
         for path in sorted(
             (Path(self.workspace.timeline_dir) / "materializations").rglob("*.json")
         ):
@@ -315,8 +351,29 @@ class GeneratedAssetService:
         return deepcopy(record)
 
     def _freshness(
-        self, record: dict[str, Any], environment: dict[str, Any] | None
+        self,
+        record: dict[str, Any],
+        environment: dict[str, Any] | None,
+        hyperframes_environment: dict[str, Any] | None = None,
+        artcraft_observations: dict[str, Any] | None = None,
     ) -> None:
+        if is_artcraft_asset(record):
+            self._verify_artcraft_admission(record, artcraft_observations)
+            return
+        if (record.get("parameters") or {}).get("hyperframes"):
+            if hyperframes_environment is None:
+                raise GeneratedAssetError(
+                    "HyperFrames admission requires fresh environment observations"
+                )
+            from .hyperframes_binding import verify_generated_record
+
+            try:
+                verify_generated_record(self.workspace, record, hyperframes_environment)
+            except (KeyError, ValueError, OSError) as error:
+                raise GeneratedAssetError(
+                    f"HyperFrames admission failed: {error}"
+                ) from error
+            return
         if not is_code_drawn_asset(record):
             return
         if environment is None:
@@ -345,11 +402,43 @@ class GeneratedAssetService:
                 f"code-drawn admission failed: {error}"
             ) from error
 
+    def _verify_artcraft_admission(
+        self, record: dict[str, Any], observations: dict[str, Any] | None
+    ) -> None:
+        if observations is None:
+            raise GeneratedAssetError(
+                "ArtCraft admission requires independent native observations"
+            )
+        from .artcraft_binding import verify_artcraft_asset_record
+
+        try:
+            context = self._context()
+            asset_id = record["assetId"]
+            context["generated_assets"][asset_id] = record
+            require_media_admission(
+                [
+                    {
+                        **record["output"],
+                        "nodeId": asset_id,
+                        "kind": "generated",
+                        "assetId": asset_id,
+                    }
+                ],
+                **context,
+                artcraft_verifier=lambda candidate: verify_artcraft_asset_record(
+                    self.workspace, candidate, observations
+                ),
+            )
+        except (KeyError, ValueError, RuntimeError, OSError) as error:
+            raise GeneratedAssetError(f"ArtCraft admission failed: {error}") from error
+
     def register(
         self,
         record: dict[str, Any],
         *,
         code_drawn_environment: dict[str, Any] | None = None,
+        hyperframes_environment: dict[str, Any] | None = None,
+        artcraft_observations: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         value = self._seal(record)
         if is_code_drawn_asset(value) and code_drawn_environment is None:
@@ -358,7 +447,12 @@ class GeneratedAssetService:
             )
         self._validate(value)
         self._output(value)
-        self._freshness(value, code_drawn_environment)
+        self._freshness(
+            value,
+            code_drawn_environment,
+            hyperframes_environment,
+            artcraft_observations,
+        )
         try:
             write_immutable_json(self.path(value["assetId"]), value)
         except StoreError as error:
@@ -381,7 +475,12 @@ class GeneratedAssetService:
         return deepcopy(value)
 
     def admit(
-        self, asset_id: str, *, code_drawn_environment: dict[str, Any] | None = None
+        self,
+        asset_id: str,
+        *,
+        code_drawn_environment: dict[str, Any] | None = None,
+        hyperframes_environment: dict[str, Any] | None = None,
+        artcraft_observations: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         value = self.load(asset_id)
         if value["reproducibility"] == "unverified":
@@ -389,5 +488,10 @@ class GeneratedAssetService:
                 f"generated asset {asset_id} is reference-only until reproducibility is verified"
             )
         self._output(value)
-        self._freshness(value, code_drawn_environment)
+        self._freshness(
+            value,
+            code_drawn_environment,
+            hyperframes_environment,
+            artcraft_observations,
+        )
         return deepcopy(value)

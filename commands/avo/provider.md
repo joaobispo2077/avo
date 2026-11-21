@@ -49,6 +49,15 @@ Provider setup only. Does not transcribe, cut, or render. Outputs a configured
 
 Configures the optional provider animation catalog pointer and performs only explicit creator-authorized sanitized promotion. Video or chapter approval never promotes a pattern.
 
+## Sound discovery preferences
+
+Explicit native/MCP `sfx favorite-promote` and `sfx favorite-remove` own only
+`routingOverrides.sfxFavorites` in the current provider manifest. Inspection uses
+`sfx favorites-show`. Requests bind the exact provider document and selected
+catalogue identity; they do not grant timeline writes or inherit project rights,
+markers, media or listening approval. Reuse requires an opt-in scan. See
+[provider sound favorites](../../docs/sfx-provider-favorites.md).
+
 ## Shared timeline gateway
 
 Uses shared timeline storage, transition guards, invalidation, and AI review services. It cannot maintain private CMap, BMap, sync, track, animation, or approval truth.

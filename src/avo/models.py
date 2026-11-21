@@ -18,6 +18,14 @@ CATALOG_FILE = "avo.model-catalog.json"
 CONFIG_FILE = "avo.config.json"
 SPEED_ORDER = ["fastest", "fast", "balanced", "slow", "slowest"]
 QUALITY_ORDER = ["low", "fair", "good", "high", "best"]
+EXPLICIT_MODEL_JOBS = (
+    "transcribe",
+    "understand",
+    "plan",
+    "audio_embed",
+    "text_embed",
+    "face_detect",
+)
 
 
 def _config_at(root: Path, name: str) -> Path:

@@ -51,6 +51,18 @@ def build_parser() -> argparse.ArgumentParser:
 
     configure_library(sub)
 
+    from avo.sfx_cli import configure as configure_sfx
+
+    configure_sfx(sub)
+
+    from avo.preparation_cli import configure as configure_preparation
+
+    configure_preparation(sub)
+
+    from avo.timeline_export_cli import configure as configure_timeline_export
+
+    configure_timeline_export(sub)
+
     from avo.costs_cli import configure as configure_costs
     from avo.costs_cli import cost_context_argument
 
@@ -68,6 +80,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     configure_timeline_import(sub)
 
+    from avo.artcraft_cli import configure as configure_artcraft
+
+    configure_artcraft(sub)
+
     _trim_parser(sub)
 
     pipeline = sub.add_parser("pipeline")
@@ -76,6 +92,10 @@ def build_parser() -> argparse.ArgumentParser:
         item = pipeline_sub.add_parser(name)
         _project_arg(item)
         _add_pipeline_entry_args(item, name)
+    pipeline_work = pipeline_sub.add_parser("work-decide")
+    _project_arg(pipeline_work)
+    pipeline_work.add_argument("--request", type=Path, required=True)
+    pipeline_work.add_argument("--request-sha256", help=argparse.SUPPRESS)
     pipeline_resume = pipeline_sub.add_parser("resume")
     _project_arg(pipeline_resume)
     pipeline_resume.add_argument("--actor", required=True)
@@ -542,6 +562,15 @@ def _pipeline_import(pipeline, args):
 
 
 def _pipeline(args: argparse.Namespace) -> int:
+    if args.pipeline_command == "work-decide":
+        from avo.motion_plan_cli import run_work_decision_command
+
+        return run_work_decision_command(args)
+
+    return _pipeline_command(args)
+
+
+def _pipeline_command(args: argparse.Namespace) -> int:
     from avo.timeline.command_registry import registry_document
     from avo.timeline.pipeline import TimelinePipeline
 
@@ -877,6 +906,11 @@ def _add_motion_preferences(subparsers) -> None:
             )
             if operation == "engine-set":
                 item.add_argument("--engine", choices=ENGINE_IDS, required=True)
+
+    from avo.motion_plan_cli import add_options_parsers, add_plan_parsers
+
+    add_options_parsers(subparsers)
+    add_plan_parsers(subparsers)
 
 
 def _add_code_drawn_commands(subparsers) -> None:
@@ -1266,6 +1300,9 @@ def _author_animation(args: argparse.Namespace) -> dict:
         actor=args.actor,
         reason=args.reason,
     )
+    from avo.motion_plan_cli import publish_after_authoring
+
+    result["motionPlanReport"] = publish_after_authoring(workspace)
     return result
 
 
@@ -1274,12 +1311,32 @@ def _is_code_drawn_command(operation):
 
 
 def _animation(args: argparse.Namespace) -> int:
-    if args.animation_command == "code-drawn-review":
-        return _code_drawn_review(args)
+    if args.animation_command in {
+        "options-show",
+        "options-set",
+        "options-reset",
+        "plan-show",
+        "plan-publish",
+        "plan-propose",
+        "plan-select",
+        "plan-apply",
+        "camera-propose",
+        "camera-apply",
+        "face-analyze",
+        "reference-analyze",
+        "reference-decide",
+        "asset-review",
+    }:
+        from avo.motion_plan_cli import run_craft_command
+
+        return run_craft_command(args)
     if args.animation_command.startswith("engine-"):
         return _motion_preferences(args)
     if _is_code_drawn_command(args.animation_command):
-        return _code_drawn(args)
+        handler = {"code-drawn-review": _code_drawn_review}.get(
+            args.animation_command, _code_drawn
+        )
+        return handler(args)
     from avo.timeline.animation import AnimationService
     from avo.timeline.provider_animation import ProviderAnimationService
 
@@ -2336,7 +2393,10 @@ def _proof(args: argparse.Namespace) -> int:
         )
         return 0
     if operation == "component-scaffold":
+        from avo.artcraft import guard_legacy_component_request
+
         request = _request(args.request)
+        guard_legacy_component_request(request)
         gap = request.get("capabilityGap") or {}
         if gap.get("status") != "unsupported":
             raise ProofPlanError(
@@ -2347,7 +2407,10 @@ def _proof(args: argparse.Namespace) -> int:
         _emit(ComponentInstanceService(workspace).scaffold(str(request["componentId"])))
         return 0
     if operation == "component-register":
+        from avo.artcraft import guard_legacy_component_request
+
         request = _request(args.request)
+        guard_legacy_component_request(request)
         if request.get("recordType") == "generated-asset":
             result = GeneratedAssetService(workspace).register(request["record"])
         else:
@@ -2523,6 +2586,18 @@ def _trim(args: argparse.Namespace) -> int:
 
 
 def _run_cli(args: argparse.Namespace) -> int:
+    if args.command == "timeline-export":
+        from avo.timeline_export_cli import run as timeline_export_run
+
+        return timeline_export_run(args)
+    if args.command == "preparation":
+        from avo.preparation_cli import run as preparation_run
+
+        return preparation_run(args)
+    if args.command == "sfx":
+        from avo.sfx_cli import run as sfx_run
+
+        return sfx_run(args)
     if args.command == "timeline-import":
         from avo.timeline_import_cli import run as timeline_import_run
 
@@ -2543,7 +2618,10 @@ def _run_cli(args: argparse.Namespace) -> int:
         from avo.breathing import run as breathing_run
 
         return breathing_run(args)
+    from avo.artcraft_cli import run as artcraft_run
+
     handlers = {
+        "artcraft": artcraft_run,
         "trim": _trim,
         "pipeline": _pipeline,
         "timeline": _timeline,

@@ -487,6 +487,8 @@ def _require_plan_sources(lock, dependencies, materialization):
 
 
 def _require_plan_current_inputs(workspace, plan, review, materialization):
+    from .sound_proof import require_current_word_sound
+
     dependencies = review["candidate"]["dependencies"]
     lock = plan["canonicalInputLock"]
     current = workspace.active_dependency_snapshot()
@@ -509,6 +511,7 @@ def _require_plan_current_inputs(workspace, plan, review, materialization):
         ):
             raise ValueError("proof-plan assembly binding is stale")
     _require_plan_sources(lock, dependencies, materialization)
+    require_current_word_sound(workspace, plan)
 
 
 def _require_regression_plan(workspace, snapshot, result, review, materialization=None):

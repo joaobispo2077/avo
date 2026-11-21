@@ -1,0 +1,541 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://avo.local/avo.visual-motion-analysis.schema.json",
+  "title": "Source-bound visual motion observations",
+  "$ref": "#/$defs/faceAssociationRequest",
+  "$defs": {
+    "unit": {"type": "number", "minimum": 0, "maximum": 1},
+    "positiveUnit": {"type": "number", "exclusiveMinimum": 0, "maximum": 1},
+    "sourceTick": {"type": "integer", "minimum": 0},
+    "streamOriginTicks": {"type": ["integer", "null"]},
+    "detectionIndex": {"type": "integer", "minimum": 0, "maximum": 31},
+    "faceBox": {
+      "type": "array", "minItems": 4, "maxItems": 4,
+      "description": "Left, top, width and height in fractions of the original display geometry.",
+      "prefixItems": [
+        {"$ref": "#/$defs/unit"}, {"$ref": "#/$defs/unit"},
+        {"$ref": "#/$defs/positiveUnit"}, {"$ref": "#/$defs/positiveUnit"}
+      ]
+    },
+    "detection": {
+      "type": "object", "additionalProperties": false, "required": ["box", "score"],
+      "properties": {
+        "box": {"$ref": "#/$defs/faceBox"},
+        "score": {"$ref": "#/$defs/unit"}
+      }
+    },
+    "faceSample": {
+      "type": "object", "additionalProperties": false, "required": ["sourceTick", "detections"],
+      "properties": {
+        "sourceTick": {"$ref": "#/$defs/sourceTick"},
+        "detections": {"type": "array", "maxItems": 32, "items": {"$ref": "#/$defs/detection"}}
+      }
+    },
+    "proxyContentRect": {
+      "type": "object", "additionalProperties": false, "required": ["x", "y", "width", "height"],
+      "properties": {
+        "x": {"type": "integer", "minimum": 0}, "y": {"type": "integer", "minimum": 0},
+        "width": {"type": "integer", "minimum": 1}, "height": {"type": "integer", "minimum": 1}
+      }
+    },
+    "proxyDetectionRows": {
+      "type": "array", "minItems": 1, "maxItems": 900,
+      "items": {
+        "type": "array", "maxItems": 32,
+        "items": {
+          "type": "object", "additionalProperties": false, "required": ["box", "score"],
+          "properties": {
+            "box": {"type": "array", "minItems": 4, "maxItems": 4, "items": {"type": "number"}},
+            "score": {"$ref": "#/$defs/unit"}
+          }
+        }
+      }
+    },
+    "sampledSourceTicks": {
+      "type": "array", "minItems": 1, "maxItems": 900, "items": {"$ref": "#/$defs/sourceTick"}
+    },
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "ratio": {
+      "type": "object", "additionalProperties": false, "required": ["num", "den"],
+      "properties": {"num": {"type": "integer", "minimum": 1}, "den": {"type": "integer", "minimum": 1}}
+    },
+    "sourceIdentity": {
+      "type": "object", "additionalProperties": false, "required": ["sourceId", "sha256", "sizeBytes"],
+      "properties": {
+        "sourceId": {"type": "string", "minLength": 1, "maxLength": 128},
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "sizeBytes": {"type": "integer", "minimum": 1}
+      }
+    },
+    "sourceRange": {
+      "type": "object", "additionalProperties": false, "required": ["startTicks", "endTicks", "timebase"],
+      "properties": {
+        "startTicks": {"$ref": "#/$defs/sourceTick"},
+        "endTicks": {"$ref": "#/$defs/sourceTick"},
+        "timebase": {"$ref": "#/$defs/ratio"}
+      }
+    },
+    "sourceGeometry": {
+      "type": "object", "additionalProperties": false, "required": ["width", "height", "rotation", "sampleAspectRatio"],
+      "properties": {
+        "width": {"type": "integer", "minimum": 1, "maximum": 65536},
+        "height": {"type": "integer", "minimum": 1, "maximum": 65536},
+        "rotation": {"enum": [0, 90, 180, 270]},
+        "sampleAspectRatio": {"$ref": "#/$defs/ratio"}
+      }
+    },
+    "proxyIdentity": {
+      "type": "object", "additionalProperties": false, "required": ["sha256", "width", "height", "content", "sourceTicks"],
+      "properties": {
+        "sha256": {"$ref": "#/$defs/sha256"},
+        "width": {"type": "integer", "minimum": 32, "maximum": 640},
+        "height": {"type": "integer", "minimum": 32, "maximum": 640},
+        "content": {"$ref": "#/$defs/proxyContentRect"},
+        "sourceTicks": {"allOf": [{"$ref": "#/$defs/sampledSourceTicks"}, {"maxItems": 300}]}
+      }
+    },
+    "detectorIdentity": {
+      "type": "object", "additionalProperties": false, "required": ["modelSha256", "device", "isolated", "versions"],
+      "properties": {
+        "modelSha256": {"$ref": "#/$defs/sha256"},
+        "device": {"const": "cpu"},
+        "isolated": {"const": true},
+        "versions": {
+          "type": "object", "additionalProperties": false, "required": ["opencv-python-headless", "numpy"],
+          "properties": {
+            "opencv-python-headless": {"type": "string", "minLength": 1, "maxLength": 128},
+            "numpy": {"type": "string", "minLength": 1, "maxLength": 128}
+          }
+        }
+      }
+    },
+    "faceObservationRequest": {
+      "type": "object", "additionalProperties": false,
+      "required": ["contractVersion", "source", "sourceRange", "geometry", "proxy", "seed", "minimumOverlap", "maximumGapTicks"],
+      "properties": {
+        "contractVersion": {"const": "1.0.0"},
+        "source": {"$ref": "#/$defs/sourceIdentity"},
+        "sourceRange": {"$ref": "#/$defs/sourceRange"},
+        "geometry": {"$ref": "#/$defs/sourceGeometry"},
+        "streamOriginTicks": {"$ref": "#/$defs/streamOriginTicks"},
+        "proxy": {"$ref": "#/$defs/proxyIdentity"},
+        "seed": {"$ref": "#/$defs/faceAssociationRequest/properties/seed"},
+        "minimumOverlap": {"$ref": "#/$defs/faceAssociationRequest/properties/minimumOverlap"},
+        "maximumGapTicks": {"$ref": "#/$defs/faceAssociationRequest/properties/maximumGapTicks"}
+      }
+    },
+    "faceAnalyzeRequest": {
+      "type": "object", "additionalProperties": false,
+      "required": ["contractVersion", "operation", "actor", "reason", "expectedBasis", "selection", "sourceId", "sourceSha256", "streamIndex", "sourceRange", "sampleEvery", "seed", "minimumOverlap", "maximumGapTicks"],
+      "properties": {
+        "contractVersion": {"const": "1.0.0"},
+        "operation": {"const": "face-analyze"},
+        "actor": {"type": "string", "minLength": 1, "maxLength": 256, "pattern": "\\S"},
+        "reason": {"type": "string", "minLength": 1, "maxLength": 4096, "pattern": "\\S"},
+        "expectedBasis": {"$ref": "avo.motion-review.schema.json#/properties/basisHeads"},
+        "selection": {"$ref": "avo.editing-craft.schema.json#/$defs/selection"},
+        "sourceId": {"$ref": "#/$defs/sourceIdentity/properties/sourceId"},
+        "sourceSha256": {"$ref": "#/$defs/sha256"},
+        "streamIndex": {"type": "integer", "minimum": 0},
+        "sourceRange": {"$ref": "#/$defs/sourceRange"},
+        "sampleEvery": {"type": "integer", "minimum": 1, "maximum": 120},
+        "seed": {"$ref": "#/$defs/faceAssociationRequest/properties/seed"},
+        "minimumOverlap": {"$ref": "#/$defs/faceAssociationRequest/properties/minimumOverlap"},
+        "maximumGapTicks": {"$ref": "#/$defs/faceAssociationRequest/properties/maximumGapTicks"}
+      }
+    },
+    "faceObservation": {
+      "type": "object", "additionalProperties": false,
+      "required": ["contractVersion", "request", "detector", "samples", "association", "coverage", "analysisHash"],
+      "properties": {
+        "contractVersion": {"const": "1.0.0"},
+        "request": {"$ref": "#/$defs/faceObservationRequest"},
+        "detector": {"$ref": "#/$defs/detectorIdentity"},
+        "samples": {"$ref": "#/$defs/faceAssociationRequest/properties/frames"},
+        "association": {"$ref": "#/$defs/faceAssociation"},
+        "coverage": {
+          "type": "object", "additionalProperties": false, "required": ["observedFrames", "selectedFrames"],
+          "properties": {
+            "observedFrames": {"type": "integer", "minimum": 1, "maximum": 300},
+            "selectedFrames": {"type": "integer", "minimum": 1, "maximum": 300}
+          }
+        },
+        "analysisHash": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "faceAnchor": {
+      "type": "object", "additionalProperties": false,
+      "required": ["observationRef", "trajectoryHash", "transitionFrames"],
+      "properties": {
+        "observationRef": {
+          "type": "object", "additionalProperties": false, "required": ["locator", "sha256"],
+          "properties": {
+            "locator": {"type": "string", "pattern": "^edit/motion/face/[0-9a-f]{64}\\.json$"},
+            "sha256": {"$ref": "#/$defs/sha256"}
+          }
+        },
+        "trajectoryHash": {"$ref": "#/$defs/sha256"},
+        "transitionFrames": {"type": "integer", "minimum": 1, "maximum": 60},
+        "fallbackReview": {
+          "type": "object", "additionalProperties": false, "required": ["actor", "reason"],
+          "properties": {
+            "actor": {"$ref": "#/$defs/faceAnalyzeRequest/properties/actor"},
+            "reason": {"$ref": "#/$defs/faceAnalyzeRequest/properties/reason"}
+          }
+        }
+      }
+    },
+    "faceTrajectory": {
+      "type": "object", "additionalProperties": false,
+      "required": ["contractVersion", "observationHash", "smoothing", "source", "sourceRange", "geometry", "streamOriginTicks", "points", "uncertainIntervals", "trajectoryHash"],
+      "properties": {
+        "contractVersion": {"const": "1.0.0"},
+        "observationHash": {"$ref": "#/$defs/sha256"},
+        "smoothing": {"const": "median-three-v1"},
+        "source": {"$ref": "#/$defs/sourceIdentity"},
+        "sourceRange": {"$ref": "#/$defs/sourceRange"},
+        "geometry": {"$ref": "#/$defs/sourceGeometry"},
+        "streamOriginTicks": {"$ref": "#/$defs/streamOriginTicks"},
+        "points": {
+          "type": "array", "minItems": 1, "maxItems": 300,
+          "items": {
+            "type": "object", "additionalProperties": false, "required": ["sourceTick", "box", "center"],
+            "properties": {
+              "sourceTick": {"$ref": "#/$defs/sourceTick"},
+              "box": {"$ref": "#/$defs/faceBox"},
+              "center": {"$ref": "https://avo.local/schemas/avo.camera-behavior.schema.json#/$defs/center"}
+            }
+          }
+        },
+        "uncertainIntervals": {
+          "type": "array", "maxItems": 301,
+          "items": {
+            "type": "object", "additionalProperties": false, "required": ["startTicks", "endTicks", "reason"],
+            "properties": {
+              "startTicks": {"$ref": "#/$defs/sourceTick"},
+              "endTicks": {"$ref": "#/$defs/sourceTick"},
+              "reason": {"enum": ["unobserved", "unselected", "lost", "ambiguous", "gap", "reseed-required"]}
+            }
+          }
+        },
+        "trajectoryHash": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "referencePairs": {
+      "type": "array", "minItems": 1, "maxItems": 299,
+      "items": {"$ref": "#/$defs/referencePair"}
+    },
+    "referenceAspects": {
+      "type": "array", "minItems": 1, "maxItems": 7, "uniqueItems": true,
+      "items": {"enum": ["global-motion", "element-motion", "scene-changes", "brightness", "hold-reveal", "easing", "audio-word-timing"]}
+    },
+    "referenceAudioSelection": {
+      "type": "object", "additionalProperties": false,
+      "required": ["streamIndex", "channelIndex", "energyThreshold"],
+      "properties": {
+        "streamIndex": {"$ref": "#/$defs/faceAnalyzeRequest/properties/streamIndex"},
+        "channelIndex": {"type": "integer", "minimum": 0, "maximum": 63},
+        "energyThreshold": {"type": "number", "minimum": 0.000001, "maximum": 1}
+      }
+    },
+    "referenceAudioTiming": {
+      "type": "object", "additionalProperties": false,
+      "required": ["status", "selection"],
+      "properties": {
+        "status": {"enum": ["observed", "unavailable"]},
+        "selection": {"$ref": "#/$defs/referenceAudioSelection"},
+        "reason": {"const": "unverified-audio-clock"},
+        "sampleRate": {"type": "integer", "minimum": 8000, "maximum": 96000},
+        "streamOriginSample": {"type": "integer"},
+        "startSample": {"type": "integer"},
+        "endSampleExclusive": {"type": "integer"},
+        "windowSamples": {"type": "integer", "minimum": 1},
+        "hopSamples": {"type": "integer", "minimum": 1},
+        "clockUncertaintySamples": {"type": "integer", "minimum": 1},
+        "onsetSamples": {"type": "array", "maxItems": 128, "items": {"type": "integer"}},
+        "truncated": {"type": "boolean"}
+      },
+      "allOf": [{
+        "if": {"properties": {"status": {"const": "observed"}}},
+        "then": {"required": ["sampleRate", "startSample", "endSampleExclusive", "windowSamples", "hopSamples", "clockUncertaintySamples", "onsetSamples", "truncated"], "properties": {"reason": false}},
+        "else": {"required": ["reason"], "properties": {"sampleRate": false, "streamOriginSample": false, "startSample": false, "endSampleExclusive": false, "windowSamples": false, "hopSamples": false, "clockUncertaintySamples": false, "onsetSamples": false, "truncated": false}}
+      }]
+    },
+    "referenceWordAnchor": {"allOf": [
+      {"$ref": "avo.sound-selection.schema.json#/$defs/sourceAnchor"},
+      {"required": ["spokenEvidence"]}
+    ]},
+    "referenceWordTiming": {"oneOf": [
+      {"type": "object", "additionalProperties": false,
+       "required": ["status", "anchor", "startSample", "clockUncertaintySamples", "revealWindows"],
+       "properties": {
+         "status": {"const": "observed"}, "anchor": {"$ref": "#/$defs/referenceWordAnchor"},
+         "startSample": {"type": "integer"}, "clockUncertaintySamples": {"type": "integer", "minimum": 1},
+         "revealWindows": {"type": "array", "maxItems": 299, "items": {
+           "type": "object", "additionalProperties": false, "required": ["startTicks", "endTicks"],
+           "properties": {"startTicks": {"$ref": "#/$defs/sourceTick"}, "endTicks": {"$ref": "#/$defs/sourceTick"}}
+         }}
+       }},
+      {"type": "object", "additionalProperties": false, "required": ["status", "reason"],
+       "properties": {"status": {"const": "unavailable"}, "reason": {"const": "unverified-word-evidence"}}}
+    ]},
+    "referenceAnalyzeRequest": {
+      "type": "object", "additionalProperties": false,
+      "required": ["contractVersion", "operation", "actor", "reason", "expectedBasis", "selection", "runtimePython", "clips"],
+      "properties": {
+        "contractVersion": {"const": "1.0.0"}, "operation": {"const": "reference-analyze"},
+        "actor": {"$ref": "#/$defs/faceAnalyzeRequest/properties/actor"},
+        "reason": {"$ref": "#/$defs/faceAnalyzeRequest/properties/reason"},
+        "expectedBasis": {"$ref": "avo.motion-review.schema.json#/properties/basisHeads"},
+        "selection": {"$ref": "avo.editing-craft.schema.json#/$defs/selection"},
+        "runtimePython": {"type": "string", "minLength": 1, "maxLength": 8192},
+        "budget": {
+          "type": "object", "additionalProperties": false, "required": ["maxClips", "maxTotalSeconds"],
+          "properties": {
+            "maxClips": {"type": "integer", "minimum": 1, "maximum": 20},
+            "maxTotalSeconds": {"type": "integer", "minimum": 1, "maximum": 600}
+          }
+        },
+        "clips": {
+          "type": "array", "minItems": 1, "maxItems": 20,
+          "items": {
+            "type": "object", "additionalProperties": false,
+            "required": ["clipId", "source", "locator", "streamIndex", "sourceRange", "sampleEvery", "aspects"],
+            "properties": {
+              "clipId": {"$ref": "#/$defs/sourceIdentity/properties/sourceId"},
+              "source": {"$ref": "#/$defs/sourceIdentity"},
+              "locator": {"type": "string", "minLength": 1, "maxLength": 8192},
+              "streamIndex": {"$ref": "#/$defs/faceAnalyzeRequest/properties/streamIndex"},
+              "sourceRange": {"$ref": "#/$defs/sourceRange"},
+              "sampleEvery": {"$ref": "#/$defs/faceAnalyzeRequest/properties/sampleEvery"},
+              "aspects": {"$ref": "#/$defs/referenceAspects"},
+              "audio": {"$ref": "#/$defs/referenceAudioSelection"},
+              "wordAnchors": {"type": "array", "minItems": 1, "maxItems": 16, "uniqueItems": true, "items": {"$ref": "#/$defs/referenceWordAnchor"}},
+              "attribution": {"type": "string", "minLength": 1, "maxLength": 2048}
+            },
+            "allOf": [
+              {"if": {"required": ["audio"]}, "then": {"properties": {"aspects": {"contains": {"const": "audio-word-timing"}}}}},
+              {"if": {"required": ["wordAnchors"]}, "then": {"required": ["audio"]}}
+            ]
+          }
+        }
+      }
+    },
+    "referenceObservationRequest": {
+      "type": "object", "additionalProperties": false,
+      "required": ["source", "sourceRange", "geometry", "proxy", "aspects"],
+      "properties": {
+        "source": {"$ref": "#/$defs/sourceIdentity"},
+        "sourceRange": {"$ref": "#/$defs/sourceRange"},
+        "geometry": {"$ref": "#/$defs/sourceGeometry"},
+        "proxy": {"$ref": "#/$defs/proxyIdentity"},
+        "aspects": {"$ref": "#/$defs/referenceAspects"}
+      }
+    },
+    "referenceDecisionRequest": {
+      "type": "object", "additionalProperties": false,
+      "required": ["contractVersion", "operation", "actor", "reason", "expectedBasis", "observationRef", "clipId", "disposition"],
+      "properties": {
+        "contractVersion": {"const": "1.0.0"}, "operation": {"const": "reference-decide"},
+        "actor": {"$ref": "#/$defs/faceAnalyzeRequest/properties/actor"},
+        "reason": {"$ref": "#/$defs/faceAnalyzeRequest/properties/reason"},
+        "expectedBasis": {"$ref": "avo.motion-review.schema.json#/properties/basisHeads"},
+        "observationRef": {
+          "type": "object", "additionalProperties": false, "required": ["locator", "sha256"],
+          "properties": {
+            "locator": {"type": "string", "pattern": "^edit/motion/references/[a-f0-9]{64}\\.json$"},
+            "sha256": {"$ref": "#/$defs/sha256"}
+          }
+        },
+        "clipId": {"$ref": "#/$defs/sourceIdentity/properties/sourceId"},
+        "disposition": {"enum": ["accept", "qualify", "reject"]},
+        "selectedAspects": {"$ref": "#/$defs/referenceAspects"},
+        "qualification": {"type": "string", "minLength": 1, "maxLength": 2048, "pattern": "\\S"}
+      },
+      "allOf": [
+        {"if": {"properties": {"disposition": {"const": "reject"}}},
+         "then": {"properties": {"selectedAspects": false}},
+         "else": {"required": ["selectedAspects"]}},
+        {"if": {"properties": {"disposition": {"const": "qualify"}}},
+         "then": {"required": ["qualification"]},
+         "else": {"properties": {"qualification": false}}}
+      ]
+    },
+    "referenceObservation": {
+      "type": "object", "additionalProperties": false,
+      "required": ["contractVersion", "request", "runtime", "coverage", "intervals", "interpretation", "analysisHash"],
+      "properties": {
+        "contractVersion": {"const": "1.0.0"},
+        "request": {"$ref": "#/$defs/referenceObservationRequest"},
+        "runtime": {
+          "type": "object", "additionalProperties": false, "required": ["isolated", "device", "versions", "method"],
+          "properties": {
+            "isolated": {"const": true}, "device": {"const": "cpu"},
+            "versions": {"$ref": "#/$defs/detectorIdentity/properties/versions"},
+            "method": {"const": "pyramidal-lk-partial-affine-v1"}
+          }
+        },
+        "coverage": {
+          "type": "object", "additionalProperties": false,
+          "required": ["sampledFrames", "pairCount", "minimumGapTicks", "maximumGapTicks"],
+          "properties": {
+            "sampledFrames": {"type": "integer", "minimum": 2, "maximum": 300},
+            "pairCount": {"type": "integer", "minimum": 1, "maximum": 299},
+            "minimumGapTicks": {"type": "integer", "minimum": 1},
+            "maximumGapTicks": {"type": "integer", "minimum": 1}
+          }
+        },
+        "intervals": {
+          "type": "array", "minItems": 1, "maxItems": 299,
+          "items": {
+            "type": "object", "additionalProperties": false, "required": ["startTicks", "endTicks"],
+            "properties": {
+              "startTicks": {"$ref": "#/$defs/sourceTick"}, "endTicks": {"$ref": "#/$defs/sourceTick"},
+              "brightness": {"$ref": "#/$defs/referencePair/properties/brightness"},
+              "motionStatus": {"$ref": "#/$defs/referencePair/properties/status"},
+              "reason": {"$ref": "#/$defs/referencePair/properties/reason"},
+              "global": {"$ref": "#/$defs/referencePair/properties/global"},
+              "coverage": {"$ref": "#/$defs/referencePair/properties/coverage"},
+              "residual": {"$ref": "#/$defs/referencePair/properties/residual"},
+              "cutCandidate": {"type": "boolean"}
+            }
+          }
+        },
+        "interpretation": {
+          "type": "object", "additionalProperties": false,
+          "required": ["easing", "availableEvidence"],
+          "properties": {
+            "easing": {"oneOf": [{"const": "uninterpreted"}, {
+              "type": "object", "additionalProperties": false,
+              "required": ["status", "curve", "axis", "startTicks", "endTicks", "progressRmse"],
+              "properties": {
+                "status": {"const": "approximate"},
+                "curve": {"enum": ["linear", "quadratic-in", "quadratic-out", "quadratic-in-out"]},
+                "axis": {"enum": ["translateX", "translateY", "scale"]},
+                "startTicks": {"$ref": "#/$defs/sourceTick"}, "endTicks": {"$ref": "#/$defs/sourceTick"},
+                "progressRmse": {"type": "number", "minimum": 0, "maximum": 0.08}
+              }
+            }]},
+            "timingCandidates": {
+              "type": "array", "maxItems": 299,
+              "items": {
+                "type": "object", "additionalProperties": false,
+                "required": ["kind", "startTicks", "endTicks", "evidence"],
+                "properties": {
+                  "kind": {"enum": ["hold", "reveal"]},
+                  "startTicks": {"$ref": "#/$defs/sourceTick"}, "endTicks": {"$ref": "#/$defs/sourceTick"},
+                  "evidence": {"enum": ["low-motion", "motion-onset", "candidate-cut"]}
+                }
+              }
+            },
+            "availableEvidence": {
+              "type": "object", "additionalProperties": false,
+              "properties": {"hold-reveal": {"enum": ["measured-candidates", "unavailable"]}, "audio-word-timing": {"enum": ["audio-candidates", "unavailable"]}, "prepared-words": {"enum": ["not-selected", "observed", "unavailable"]}}
+            },
+            "audioTiming": {"$ref": "#/$defs/referenceAudioTiming"},
+            "wordTiming": {"type": "array", "minItems": 1, "maxItems": 16, "items": {"$ref": "#/$defs/referenceWordTiming"}},
+            "fadeCandidates": {
+              "type": "array", "minItems": 1, "maxItems": 99,
+              "items": {
+                "type": "object", "additionalProperties": false,
+                "required": ["direction", "startTicks", "endTicks", "before", "after"],
+                "properties": {
+                  "direction": {"enum": ["brightening", "darkening"]},
+                  "startTicks": {"$ref": "#/$defs/sourceTick"}, "endTicks": {"$ref": "#/$defs/sourceTick"},
+                  "before": {"$ref": "#/$defs/unit"}, "after": {"$ref": "#/$defs/unit"}
+                }
+              }
+            },
+            "audioRevealRelationships": {
+              "type": "array", "maxItems": 299,
+              "items": {
+                "type": "object", "additionalProperties": false,
+                "required": ["startTicks", "endTicks", "onsetSamples"],
+                "properties": {
+                  "startTicks": {"$ref": "#/$defs/sourceTick"},
+                  "endTicks": {"$ref": "#/$defs/sourceTick"},
+                  "onsetSamples": {"type": "array", "minItems": 1, "maxItems": 128, "items": {"type": "integer"}}
+                }
+              }
+            }
+          }
+        },
+        "analysisHash": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "referencePair": {
+      "type": "object", "additionalProperties": false, "required": ["status", "brightness"],
+      "properties": {
+        "status": {"enum": ["measured", "cut-candidate", "unmeasurable"]},
+        "reason": {"enum": ["dark-frame", "insufficient-detail", "tracking-break-and-histogram-change", "unqualified-global-motion"]},
+        "brightness": {
+          "type": "object", "additionalProperties": false, "required": ["before", "after"],
+          "properties": {"before": {"$ref": "#/$defs/unit"}, "after": {"$ref": "#/$defs/unit"}}
+        },
+        "global": {
+          "description": "Partial affine estimate. Translation is the movement at frame center in fractions of display dimensions.",
+          "type": "object", "additionalProperties": false, "required": ["scale", "rotationDegrees", "translateX", "translateY"],
+          "properties": {
+            "scale": {"type": "number", "exclusiveMinimum": 0},
+            "rotationDegrees": {"type": "number", "minimum": -180, "maximum": 180},
+            "translateX": {"type": "number"}, "translateY": {"type": "number"}
+          }
+        },
+        "coverage": {
+          "type": "object", "additionalProperties": false, "required": ["tracked", "inliers", "spanX", "spanY"],
+          "properties": {
+            "tracked": {"type": "integer", "minimum": 12, "maximum": 160},
+            "inliers": {"type": "integer", "minimum": 12, "maximum": 160},
+            "spanX": {"$ref": "#/$defs/unit"}, "spanY": {"$ref": "#/$defs/unit"}
+          }
+        },
+        "residual": {
+          "type": "object", "additionalProperties": false, "required": ["p90DisplayDiagonal", "movingPoints"],
+          "properties": {
+            "p90DisplayDiagonal": {"type": "number", "minimum": 0},
+            "movingPoints": {"type": "integer", "minimum": 0, "maximum": 160}
+          }
+        }
+      },
+      "if": {"properties": {"status": {"const": "measured"}}},
+      "then": {"required": ["global", "coverage", "residual"], "properties": {"reason": false}},
+      "else": {"required": ["reason"], "properties": {"global": false, "coverage": false, "residual": false}}
+    },
+    "faceAssociationRequest": {
+      "type": "object", "additionalProperties": false,
+      "required": ["frames", "seed", "minimumOverlap", "maximumGapTicks"],
+      "properties": {
+        "frames": {
+          "type": "array", "minItems": 1, "maxItems": 900,
+          "items": {"$ref": "#/$defs/faceSample"}
+        },
+        "seed": {
+          "type": "object", "additionalProperties": false,
+          "required": ["sourceTick", "detectionIndex"],
+          "properties": {
+            "sourceTick": {"$ref": "#/$defs/sourceTick"},
+            "detectionIndex": {"$ref": "#/$defs/detectionIndex"}
+          }
+        },
+        "minimumOverlap": {"$ref": "#/$defs/positiveUnit"},
+        "maximumGapTicks": {"type": "integer", "minimum": 1}
+      }
+    },
+    "faceAssociation": {
+      "type": "array", "minItems": 1, "maxItems": 900,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["sourceTick", "status", "detectionIndex", "overlap"],
+        "properties": {
+          "sourceTick": {"$ref": "#/$defs/sourceTick"},
+          "status": {"enum": ["unselected", "selected", "lost", "ambiguous", "gap", "reseed-required"]},
+          "detectionIndex": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/detectionIndex"}]},
+          "overlap": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/unit"}]}
+        },
+        "if": {"properties": {"status": {"const": "selected"}}},
+        "then": {"properties": {"detectionIndex": {"$ref": "#/$defs/detectionIndex"}}},
+        "else": {"properties": {"detectionIndex": {"type": "null"}, "overlap": {"type": "null"}}}
+      }
+    }
+  }
+}

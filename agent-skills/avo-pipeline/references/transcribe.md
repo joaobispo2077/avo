@@ -37,3 +37,47 @@ Do **not** re-transcribe unless source file changed or `--force`. Hard Rule #9 i
 - Motion slots
 
 Next step is usually strategy conversation or `/avo.trim`.
+
+## Available speech-completeness evidence
+
+Cutting analysis now returns compact `coverage.speech` review links and retains
+strict `speechCoverage` beside its source-analysis words and acoustic evidence.
+Inspect those bound facts before asserting a missing take or an exact spoken
+trigger. Missing source/routing/Sync, model provenance or measured coverage stays
+unavailable; acoustic activity is possible speech and may be a false positive.
+Partial observation and unreliable word timing remain visible for review.
+
+Unresolved source intervals protect retake rejection through the existing cutting
+policy. The report does not replace a transcript or grant cut approval. Coverage
+inspection starts no decode, ASR or alignment and does not bypass this stage's
+cache rule. `avo preparation coverage --project <absolute manifest> --request
+<absolute request> --json` reinspects an exact retained analysis using metadata
+only. Explicit `preparation recover` freezes selected source intervals, language
+and enabled recovery options, consumes a durable attempt before local inference
+and preserves the original/recovered alternatives for review. Defaults are one
+attempt per interval, 30 seconds per interval and 120 seconds total; oversized
+scopes are rejected without clipping. Missing alignment preserves recovered text
+without exact word anchors or safe-cut certification. Restart reuses evidence;
+interrupted attempts do not run again automatically. `preparation recover-decide`
+records explicit original/recovered/reject/defer choices against the exact saved
+request, result, current journal and overlapping predecessor decisions. It starts
+no inference and grants no cut approval. Normal cutting consumes the selected
+view; pending/deferred intervals and unqualified word timing remain protected.
+Replaced words cannot inherit their original character alignment or affected
+pause certifications. Changed dependencies stale the affected recovered choice;
+restart and exact replay retain history without another attempt. See
+[source speech coverage](../../../docs/speech-coverage.md).
+
+## Optional spoken notes
+
+Enable `spokenNotes` and supply an opening phrase, closing phrase, language,
+and target conventions. `avo cli preparation notes-detect --project <absolute-project> --request <request.json> --json`
+reads a retained source analysis. It shows the wording including delimiters,
+the measured original range when available, and the proposed stage and target.
+Fuzzy, quoted, nested, unclosed, protected or unmeasured candidates require review.
+
+`preparation notes-decide` can accept, reject or defer the interpretation and
+independently keep, defer or propose excluding the speech. An accepted
+interpretation appears for review in its owning stage. With a configured cutting
+policy, a speech exclusion creates the normal editorial cutting proposal for a
+separate decision. A new explicit instruction takes precedence over a note.

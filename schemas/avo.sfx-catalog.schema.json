@@ -1,0 +1,674 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://avo.local/schemas/avo.sfx-catalog.schema.json",
+  "title": "Project-local SFX catalogue generation",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "generationId",
+    "parentGenerationId",
+    "roots",
+    "entries",
+    "operation",
+    "coverage",
+    "resume",
+    "warnings"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "1.0.0"
+    },
+    "generationId": {
+      "$ref": "#/$defs/nullableSha"
+    },
+    "parentGenerationId": {
+      "$ref": "#/$defs/nullableSha"
+    },
+    "roots": {
+      "type": "object",
+      "maxProperties": 32,
+      "propertyNames": {
+        "pattern": "^[a-zA-Z0-9][a-zA-Z0-9_-]{0,63}$"
+      },
+      "additionalProperties": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 32767
+      }
+    },
+    "entries": {
+      "type": "array",
+      "maxItems": 10000,
+      "items": {
+        "$ref": "#/$defs/entry"
+      }
+    },
+    "operation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "actor",
+        "reason"
+      ],
+      "properties": {
+        "favoritePreferencesHash": {"$ref": "#/$defs/sha"},
+        "kind": {
+          "enum": [
+            "empty",
+            "scan",
+            "annotate"
+          ]
+        },
+        "actor": {
+          "$ref": "#/$defs/text"
+        },
+        "reason": {
+          "$ref": "#/$defs/text"
+        }
+      }
+    },
+    "coverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "complete",
+        "processed",
+        "discovered",
+        "skipped",
+        "reason"
+      ],
+      "properties": {
+        "complete": {
+          "type": "boolean"
+        },
+        "processed": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10000
+        },
+        "discovered": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10000
+        },
+        "skipped": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 30000
+        },
+        "reason": {
+          "enum": [
+            "not-scanned",
+            "complete",
+            "cancelled",
+            "file-budget",
+            "byte-budget",
+            "time-budget",
+            "enumeration-budget"
+          ]
+        }
+      }
+    },
+    "resume": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "inventoryHash",
+            "offset",
+            "visitedIds"
+          ],
+          "properties": {
+            "favoritesHash": {"$ref": "#/$defs/sha"},
+            "inventoryHash": {
+              "$ref": "#/$defs/sha"
+            },
+            "offset": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 10000
+            },
+            "visitedIds": {
+              "type": "array",
+              "maxItems": 10000,
+              "uniqueItems": true,
+              "items": {
+                "$ref": "#/$defs/sha"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "warnings": {
+      "type": "array",
+      "maxItems": 30000,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "libraryId",
+          "kind"
+        ],
+        "properties": {
+          "libraryId": {
+            "type": "string",
+            "maxLength": 64
+          },
+          "kind": {
+            "enum": [
+              "linked-source",
+              "enumeration-budget",
+              "entry-budget",
+              "analysis-unavailable"
+            ]
+          },
+          "detail": {
+            "type": "string",
+            "maxLength": 512
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "sha": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "nullableSha": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "#/$defs/sha"
+        }
+      ]
+    },
+    "text": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "nullableText": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "#/$defs/text"
+        }
+      ]
+    },
+    "nonnegative": {
+      "type": "number",
+      "minimum": 0
+    },
+    "nullableNumber": {
+      "oneOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "#/$defs/nonnegative"
+        }
+      ]
+    },
+    "range": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "startSample",
+        "endSampleExclusive"
+      ],
+      "properties": {
+        "startSample": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "endSampleExclusive": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "analyzer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "version",
+        "maxSeconds"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/text"
+        },
+        "version": {
+          "$ref": "#/$defs/text"
+        },
+        "maxSeconds": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 300
+        },
+        "decoder": {
+          "$ref": "#/$defs/text"
+        },
+        "maxDecodedBytes": {
+          "type": "integer",
+          "minimum": 4096,
+          "maximum": 67108864
+        },
+        "channelPolicy": {
+          "const": "sum-squared"
+        },
+        "thresholdRatio": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 1
+        },
+        "spectralWindowSamples": {
+          "const": 4096
+        }
+      }
+    },
+    "measurementFacts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sourceSha256",
+        "analyzer",
+        "sampleRate",
+        "channels",
+        "sourceSamples",
+        "analyzedSamples",
+        "coverage",
+        "durationSeconds",
+        "usefulRange",
+        "onsets",
+        "energyPeaks",
+        "attackSeconds",
+        "decaySeconds",
+        "rms",
+        "peak",
+        "spectralCentroidHz",
+        "silence",
+        "onsetCount",
+        "onsetCoverage"
+      ],
+      "properties": {
+        "sourceSha256": {
+          "$ref": "#/$defs/sha"
+        },
+        "analyzer": {
+          "$ref": "#/$defs/analyzer"
+        },
+        "measurementHash": {
+          "$ref": "#/$defs/sha"
+        },
+        "sampleRate": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 192000
+        },
+        "channels": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 8
+        },
+        "sourceSamples": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "analyzedSamples": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "coverage": {
+          "enum": [
+            "complete",
+            "partial"
+          ]
+        },
+        "durationSeconds": {
+          "$ref": "#/$defs/nullableNumber"
+        },
+        "usefulRange": {
+          "$ref": "#/$defs/range"
+        },
+        "onsets": {
+          "type": "array",
+          "maxItems": 256,
+          "items": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "energyPeaks": {
+          "type": "array",
+          "maxItems": 256,
+          "items": {
+            "type": "integer",
+            "minimum": 0
+          }
+        },
+        "attackSeconds": {
+          "$ref": "#/$defs/nullableNumber"
+        },
+        "decaySeconds": {
+          "$ref": "#/$defs/nullableNumber"
+        },
+        "rms": {
+          "$ref": "#/$defs/nonnegative"
+        },
+        "peak": {
+          "$ref": "#/$defs/nonnegative"
+        },
+        "spectralCentroidHz": {
+          "$ref": "#/$defs/nullableNumber"
+        },
+        "silence": {
+          "type": "boolean"
+        },
+        "onsetCount": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "onsetCoverage": {
+          "enum": [
+            "complete",
+            "partial"
+          ]
+        }
+      }
+    },
+    "curation": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "$ref": "#/$defs/nullableText"
+        },
+        "category": {
+          "$ref": "#/$defs/nullableText"
+        },
+        "material": {
+          "$ref": "#/$defs/nullableText"
+        },
+        "tags": {
+          "type": "array",
+          "maxItems": 64,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 64
+          }
+        },
+        "favorite": {
+          "type": "boolean"
+        },
+        "variantGroup": {
+          "$ref": "#/$defs/nullableText"
+        }
+      }
+    },
+    "rights": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "enum": [
+            "licensed",
+            "unknown",
+            "restricted"
+          ]
+        },
+        "license": {
+          "$ref": "#/$defs/nullableText"
+        },
+        "evidenceRef": {
+          "$ref": "#/$defs/nullableText"
+        },
+        "sourceSha256": {
+          "$ref": "#/$defs/nullableSha"
+        }
+      }
+    },
+    "marker": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sample",
+        "reviewerRef"
+      ],
+      "properties": {
+        "sample": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "reviewerRef": {
+          "$ref": "#/$defs/text"
+        },
+        "sourceSha256": {
+          "$ref": "#/$defs/nullableSha"
+        }
+      }
+    },
+    "annotationPatch": {
+      "type": "object",
+      "minProperties": 1,
+      "additionalProperties": false,
+      "properties": {
+        "curation": {
+          "$ref": "#/$defs/curation"
+        },
+        "rights": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/rights"
+            }
+          ],
+          "not": {
+            "required": [
+              "sourceSha256"
+            ]
+          }
+        },
+        "marker": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "allOf": [
+                {
+                  "$ref": "#/$defs/marker"
+                }
+              ],
+              "not": {
+                "required": [
+                  "sourceSha256"
+                ]
+              }
+            }
+          ]
+        }
+      }
+    },
+    "entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "entryId",
+        "entryRevision",
+        "libraryId",
+        "relativePath",
+        "source",
+        "measurement",
+        "curation",
+        "rights",
+        "marker",
+        "annotationRevision",
+        "conflicts"
+      ],
+      "properties": {
+        "curationOrigin": {"$ref": "avo.sfx-provider.schema.json#/$defs/origin"},
+        "entryId": {
+          "$ref": "#/$defs/sha"
+        },
+        "entryRevision": {
+          "$ref": "#/$defs/sha"
+        },
+        "libraryId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64
+        },
+        "relativePath": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096
+        },
+        "source": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "sha256",
+            "sizeBytes",
+            "state"
+          ],
+          "properties": {
+            "sha256": {
+              "$ref": "#/$defs/nullableSha"
+            },
+            "sizeBytes": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "state": {
+              "enum": [
+                "available",
+                "missing",
+                "unavailable"
+              ]
+            }
+          }
+        },
+        "measurement": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/storedMeasurement"
+            }
+          ]
+        },
+        "curation": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/curation"
+            }
+          ],
+          "required": [
+            "material",
+            "tags",
+            "favorite",
+            "variantGroup"
+          ]
+        },
+        "rights": {
+          "allOf": [
+            {
+              "$ref": "#/$defs/rights"
+            }
+          ],
+          "required": [
+            "status",
+            "license",
+            "evidenceRef",
+            "sourceSha256"
+          ]
+        },
+        "marker": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "allOf": [
+                {
+                  "$ref": "#/$defs/marker"
+                }
+              ],
+              "required": [
+                "sourceSha256"
+              ]
+            }
+          ]
+        },
+        "annotationRevision": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "conflicts": {
+          "type": "array",
+          "maxItems": 1000,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "kind",
+              "previousSha256",
+              "currentSha256",
+              "annotationRevision"
+            ],
+            "properties": {
+              "kind": {
+                "const": "source-changed"
+              },
+              "previousSha256": {
+                "$ref": "#/$defs/sha"
+              },
+              "currentSha256": {
+                "$ref": "#/$defs/sha"
+              },
+              "annotationRevision": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          }
+        }
+      }
+    },
+    "storedMeasurement": {
+      "type": "object",
+      "required": [
+        "measurementHash"
+      ],
+      "properties": {
+        "measurementHash": {
+          "$ref": "#/$defs/sha"
+        }
+      },
+      "allOf": [
+        {
+          "$ref": "#/$defs/measurementFacts"
+        }
+      ]
+    }
+  }
+}

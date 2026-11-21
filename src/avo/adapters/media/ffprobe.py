@@ -17,7 +17,9 @@ from .still_probe import _SUFFIXES
 INVENTORY_ENTRIES = (
     "format=duration:stream=index,codec_name,codec_type,width,height,time_base,"
     "r_frame_rate,avg_frame_rate,duration_ts,duration,start_pts,start_time,"
-    "sample_rate,channels,channel_layout,sample_aspect_ratio,nb_frames:stream_tags=DURATION"
+    "sample_rate,channels,channel_layout,sample_aspect_ratio,nb_frames,pix_fmt,"
+    "bits_per_raw_sample,color_range,color_space,color_transfer,color_primaries:"
+    "stream_tags=DURATION,rotate:stream_side_data=rotation"
 )
 
 
@@ -64,6 +66,14 @@ def _video_stream(stream):
     }
 
 
+def _has_display_rotation(stream):
+    values = [entry.get("rotation") for entry in stream.get("side_data_list") or []]
+    values.append((stream.get("tags") or {}).get("rotate"))
+    return any(
+        value is not None and _number_or_none(value, float) != 0 for value in values
+    )
+
+
 def _audio_stream(stream):
     return {
         "index": int(stream.get("index", 0)),
@@ -80,6 +90,17 @@ def _audio_stream(stream):
 
 
 class FfprobeMediaAdapter:
+    def __init__(self, *, include_display_rotation=False):
+        self.include_display_rotation = include_display_rotation
+
+    @staticmethod
+    def verify_audio_sample_count(path, stream_index, *, expected_sha256):
+        from .audio_clock import verify_audio_sample_count
+
+        return verify_audio_sample_count(
+            path, stream_index, expected_sha256=expected_sha256
+        )
+
     """Inventory muxed sources and expose hash, streams, clocks, and sync risk."""
 
     def fingerprint(self, path: Path) -> dict[str, Any]:
@@ -96,6 +117,7 @@ class FfprobeMediaAdapter:
         expected_frames=None,
         start_ticks=None,
         cache=None,
+        allow_end_gap=False,
     ):
         from .video_clock import verify_video_clock
 
@@ -108,6 +130,7 @@ class FfprobeMediaAdapter:
             expected_frames=expected_frames,
             start_ticks=start_ticks,
             cache=cache,
+            allow_end_gap=allow_end_gap,
         )
 
     def inventory(self, paths: list[Path]) -> dict[str, Any]:
@@ -178,7 +201,10 @@ class FfprobeMediaAdapter:
         for stream in probe.get("streams") or []:
             codec = stream.get("codec_type")
             if codec == "video":
-                video.append(_video_stream(stream))
+                measured = _video_stream(stream)
+                if self.include_display_rotation:
+                    measured["hasDisplayRotation"] = _has_display_rotation(stream)
+                video.append(measured)
             elif codec == "audio":
                 audio.append(_audio_stream(stream))
         duration = float((probe.get("format") or {}).get("duration") or 0)

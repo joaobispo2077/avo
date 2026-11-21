@@ -504,7 +504,11 @@ def _structured_items(value: dict) -> list:
     ):
         records = value.get(key, [])
         for i, record in enumerate(records if isinstance(records, list) else []):
-            if isinstance(record, dict) and record.get("summary"):
+            if (
+                isinstance(record, dict)
+                and record.get("summary")
+                and record.get("learningScope") != "project-only"
+            ):
                 items.append(
                     (
                         str(record.get("id", f"{key}-{i}")),
