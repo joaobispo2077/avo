@@ -223,6 +223,14 @@ Use the instance's selected parameters and the package's exact output contract.
 Run the selected qualified confined CLI profile. AVO keeps the original and
 saves a separate revision with its recipe and edit-command evidence.
 
+For optional sound, first place the verified SoundCraft export on an unmuted
+SFX layer in Tracks. Link its region to the kit's picture cue in BMap. When
+pinning the kit, add an `eventBindings` entry with `slot: "sound-cue"`, the
+Tracks `regionId` as `eventId`, and the active Tracks hash as `revisionHash`.
+When registering a proof from an identity kit selected through `artworkRef`,
+AVO rechecks that selection and requires the sound to start during the kit's
+picture cue. The existing Tracks placement owns the sound mix.
+
 For a byte-identical repeat, use `--mode reuse` with `--reuse-job` and
 `--reuse-head` from the verified saved-source run. Keep the same provider,
 editable source, parameters and output contract. The new run copies the
