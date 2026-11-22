@@ -208,14 +208,28 @@ def native_instance_artwork_inputs(
     workspace, request, selection, source, settings, *, read_roots
 ):
     """Select the exact marked kit copied into this video's canonical instance."""
+    _, dependencies, artwork = native_instance_source_inputs(
+        workspace, request, selection, source, settings, read_roots=read_roots
+    )
+    if artwork is None:
+        raise ArtCraftError(
+            "ArtCraft kit artwork differs from the selected kit instance"
+        )
+    return [artwork, *(item for item in dependencies if item != artwork)]
+
+
+def native_instance_source_inputs(
+    workspace, request, selection, source, settings, *, read_roots
+):
+    """Verify the exact reviewed native source and project-local instance closure."""
     with fingerprint_stage(reuse_current=True, verify_on_exit=True):
-        record, instance = _read_artwork_instance(workspace, selection, read_roots)
+        record, instance = _read_native_instance(workspace, selection, read_roots)
         if (instance["kitId"], instance["parameters"]) != (
             request["componentId"],
             settings["authoringParameters"],
         ):
             raise ArtCraftError(
-                "ArtCraft artwork differs from the selected kit instance"
+                "ArtCraft parameters or component differs from the selected kit instance"
             )
         package, manifest, files = _retained_native_instance_package(
             instance, workspace.raw_dir, request["provider"]
@@ -224,22 +238,16 @@ def native_instance_artwork_inputs(
             entry["role"]: fingerprint
             for entry, fingerprint in zip(package["files"], files, strict=True)
         }
-        artwork = roles.get(_IDENTITY_ARTWORK)
-        if (
-            artwork is None
-            or roles["native-source"] != source
-            or package["output"] != settings["output"]
-        ):
-            raise ArtCraftError("ArtCraft kit artwork, native source or output differs")
-    return [
-        artwork,
-        record,
-        manifest,
-        *(item for item in files if item not in (source, artwork)),
-    ]
+        if roles["native-source"] != source or package["output"] != settings["output"]:
+            raise ArtCraftError("ArtCraft kit native source or output differs")
+    return (
+        instance,
+        [record, manifest, *(item for item in files if item != source)],
+        roles.get(_IDENTITY_ARTWORK),
+    )
 
 
-def _read_artwork_instance(workspace, selection, read_roots):
+def _read_native_instance(workspace, selection, read_roots):
     from .component_instances import ComponentInstanceService
 
     service = ComponentInstanceService(workspace)
@@ -263,9 +271,7 @@ def _read_artwork_instance(workspace, selection, read_roots):
         or path.stat().st_nlink != 1
         or path.stat().st_size > 256 * 1024
     ):
-        raise ArtCraftError(
-            "ArtCraft artwork requires an exact component instance record"
-        )
+        raise ArtCraftError("ArtCraft requires an exact component instance record")
     record = file_fingerprint(path)
     instance = service.load(selection["instanceId"])
     if (
@@ -273,7 +279,7 @@ def _read_artwork_instance(workspace, selection, read_roots):
         instance["instanceHash"],
         instance.get("nativePackage", {}).get("app"),
     ) != (selection["instanceId"], selection["instanceHash"], "anicraft"):
-        raise ArtCraftError("ArtCraft artwork differs from the selected kit instance")
+        raise ArtCraftError("ArtCraft reference differs from the selected kit instance")
     return record, instance
 
 

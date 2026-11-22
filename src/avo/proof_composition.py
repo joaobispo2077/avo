@@ -96,7 +96,9 @@ def create_generated_asset_validator(workspace):
     return validator
 
 
-def register_artcraft_export(workspace, *, job_ref, expected_head, output, asset_id):
+def register_artcraft_export(
+    workspace, *, job_ref, expected_head, output, asset_id, kit_instance_ref=None
+):
     """Register one explicitly selected native export after observing source and alpha."""
     from avo.adapters.media.artcraft_alpha import pack_alpha_sequence
     from avo.timeline.artcraft_binding import (
@@ -110,7 +112,10 @@ def register_artcraft_export(workspace, *, job_ref, expected_head, output, asset
     service = GeneratedAssetService(workspace)
     service.path(asset_id)
     binding = freeze_export_binding(
-        workspace, job_ref=job_ref, expected_head=expected_head
+        workspace,
+        job_ref=job_ref,
+        expected_head=expected_head,
+        kit_instance_ref=kit_instance_ref,
     )
     _observe_artcraft_source(binding)
     output_root = workspace.raw_dir.resolve() / "edit" / "derived"

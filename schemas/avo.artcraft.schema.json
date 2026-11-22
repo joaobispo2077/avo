@@ -284,17 +284,15 @@
         "exportHead": { "$ref": "#/$defs/hash" }
       }
     },
+    "kitInstanceRef": {
+      "type": "object", "additionalProperties": false, "required": ["instanceId", "instanceHash"],
+      "properties": {
+        "instanceId": { "$ref": "#/$defs/id" },
+        "instanceHash": { "$ref": "#/$defs/hash" }
+      }
+    },
     "artworkRef": {
-      "oneOf": [
-        { "$ref": "#/$defs/exportRef" },
-        {
-          "type": "object", "additionalProperties": false, "required": ["instanceId", "instanceHash"],
-          "properties": {
-            "instanceId": { "$ref": "#/$defs/id" },
-            "instanceHash": { "$ref": "#/$defs/hash" }
-          }
-        }
-      ]
+      "oneOf": [{ "$ref": "#/$defs/exportRef" }, { "$ref": "#/$defs/kitInstanceRef" }]
     },
     "stillEvidence": {
       "type": "object", "additionalProperties": false,

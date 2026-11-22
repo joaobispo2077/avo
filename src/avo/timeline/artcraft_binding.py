@@ -21,6 +21,7 @@ from .contracts import (
     document_hash_excluding,
     file_fingerprint,
     fingerprint_stage,
+    validate_document,
 )
 
 __all__ = [
@@ -47,7 +48,7 @@ def require_artcraft_media_scope(workspace, job, media_name):
         raise ValueError(f"{media_name} belongs to a different video or project")
 
 
-def freeze_export_binding(workspace, *, job_ref, expected_head):
+def freeze_export_binding(workspace, *, job_ref, expected_head, kit_instance_ref=None):
     """Bind native source and rendered source frames to one current video scope."""
     with fingerprint_stage(reuse_current=True, verify_on_exit=True):
         job, event = read_authoring_export(job_ref, expected_head=expected_head)
@@ -71,8 +72,11 @@ def freeze_export_binding(workspace, *, job_ref, expected_head):
             source["inputSources"] = job["inputs"]
         if job["observation"]["mode"] == "reuse":
             source["reusedExport"] = job["observation"]["reuseSource"]
+        instance = _explicit_kit_source(workspace, job, kit_instance_ref, source)
         placement = _canonical_overlay(workspace, job, canonical["heads"])
-        cue_binding = _pinned_kit_sound(workspace, job, placement, canonical["heads"])
+        cue_binding = _pinned_kit_sound(
+            workspace, job, placement, canonical["heads"], instance=instance
+        )
         components = {
             "version": 1,
             "jobRef": file_fingerprint(Path(job_ref)),
@@ -93,16 +97,48 @@ def freeze_export_binding(workspace, *, job_ref, expected_head):
         return {**components, "bindingHash": content_hash(components)}
 
 
-def _pinned_kit_sound(workspace, job, placement, heads):
-    selection = job.get("artworkRef") or {}
-    if "instanceId" not in selection:
+def _explicit_kit_source(workspace, job, selection, source):
+    if selection is None:
         return None
+    from .artcraft_packages import native_instance_source_inputs
+
+    validate_document(selection, "avo.artcraft.schema.json#/$defs/kitInstanceRef")
+    if (
+        job["documentState"] != "saved"
+        or not job["inputs"]
+        or not job.get("authoringParameters")
+    ):
+        raise ArtCraftError("ArtCraft kit selection requires its saved native source")
+    instance, dependencies, artwork = native_instance_source_inputs(
+        workspace,
+        job["request"],
+        selection,
+        job["inputs"][0],
+        job,
+        read_roots=job["roots"]["read"],
+    )
+    if artwork is not None and job.get("artworkRef") != selection:
+        raise ArtCraftError(
+            "ArtCraft kit identity artwork requires its matching job artworkRef"
+        )
+    source["kitInstanceRef"] = selection
+    if artwork is None:
+        source["inputSources"] = [*job["inputs"], *dependencies]
+    return instance
+
+
+def _pinned_kit_sound(workspace, job, placement, heads, *, instance=None):
+    if instance is None:
+        selection = job.get("artworkRef") or {}
+        if "instanceId" not in selection:
+            return None
+        from .artcraft_packages import _read_native_instance
+
+        _, instance = _read_native_instance(workspace, selection, job["roots"]["read"])
 
     from .artcraft_audio import select_kit_sound
-    from .artcraft_packages import _read_artwork_instance
     from .event_clock import frame_range_to_samples
 
-    _, instance = _read_artwork_instance(workspace, selection, job["roots"]["read"])
     cue_binding = select_kit_sound(workspace, instance, job["output"])
     if cue_binding is None:
         return None
@@ -328,6 +364,7 @@ def read_artcraft_binding(workspace, reference):
         workspace,
         job_ref=stored["jobRef"]["locator"],
         expected_head=stored["exportHead"],
+        kit_instance_ref=stored.get("kitInstanceRef"),
     )
     if stored != current:
         raise ArtCraftError(
