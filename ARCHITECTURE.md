@@ -648,6 +648,9 @@ The optional AniCraft lower-third identity mark uses the same verified
 VectorCraft receipt. Its inline shape and readable text width are checked in
 the native source. Saved-source text edits and copy-only reuse retain the exact
 artwork closure. Switching that artwork requires a fresh render and proof.
+Copy-only reuse also retains the selected predecessor's job and event journal,
+editable export, recipe and frames. Inspection and reconstruction recheck the
+recorded fingerprints. Any change requires a new verified export before reuse.
 Native provider publication can retain that SVG as optional identity artwork.
 The package validator binds it to the exact native shape, design review and
 per-file rights before the package and video instance retain its bytes.

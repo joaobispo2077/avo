@@ -240,6 +240,9 @@ For a byte-identical repeat, use `--mode reuse` with `--reuse-job` and
 editable source, parameters and output contract. The new run copies the
 verified component frames and native revision. Use the new video's canonical
 placement and review before adopting the result.
+Keep the selected run's job and event journal, editable export, recipe and
+frames. Inspection and reconstruction verify those files against their recorded
+fingerprints. If any of them changes, verify a new export before reusing it.
 
 Before any native authoring, identify the effective roots, owner of the job's
 document, output contract and bounds. A provider-only component has a declared
