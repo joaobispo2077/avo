@@ -433,7 +433,7 @@ def _assert_pinned_native_source(
                     "assetBindings": [],
                     "eventBindings": [],
                     "safeAreaBindings": {
-                        "faces": [],
+                        "faces": [{"x": 0, "y": 0, "width": 16, "height": 16}],
                         "captions": [],
                         "evidence": [],
                         "ui": [],
@@ -453,6 +453,9 @@ def _assert_pinned_native_source(
     assert copy.is_relative_to(raw)
     assert copy.read_bytes() == native.read_bytes()
     assert selected["parameters"]["primaryText"] == "Mar\u00eda"
+    assert selected["safeAreaBindings"]["faces"] == [
+        {"x": 0, "y": 0, "width": 16, "height": 16}
+    ]
     if artwork is not None:
         retained = copy.parent / artwork.name
         assert retained.read_bytes() == artwork.read_bytes()

@@ -275,6 +275,61 @@ def test_reuse_refuses_wrong_provider_manifest_and_unbounded_parameters(
     assert not own.path("speaker-first-use").exists()
 
 
+def _observe_with_bounds(path, contract, parameters, *, max_bytes):
+    return {
+        **_observe_fixture(path, contract, parameters, max_bytes=max_bytes),
+        "occupiedBounds": (20, 800, 800, 980),
+    }
+
+
+@pytest.mark.parametrize(
+    ("category", "region", "message"),
+    [
+        ("faces", {"x": 22, "y": 810, "width": 20, "height": 20}, "overlaps"),
+        ("captions", {"x": 0, "y": 970, "width": 200, "height": 30}, "overlaps"),
+        ("evidence", {"x": 1900, "y": 0, "width": 21, "height": 20}, "outside"),
+        ("ui", {"x": False, "y": 0, "width": 20, "height": 20}, "pixel rectangle"),
+        ("ui", {"x": 0, "y": 0, "width": 0, "height": 20}, "pixel rectangle"),
+    ],
+)
+def test_native_kit_rejects_invalid_or_covered_protected_regions(
+    tmp_path, native_library, category, region, message
+):
+    service = _video_components(tmp_path / "protected-video")
+    protected = {key: [] for key in ("faces", "captions", "evidence", "ui")}
+    protected[category] = [region]
+    with pytest.raises(ComponentInstanceError, match=message):
+        _resolve(
+            service,
+            native_library,
+            safe_area_bindings=protected,
+            source_observer=_observe_with_bounds,
+        )
+    assert not service.path("speaker-first-use").exists()
+    assert not (service.workspace.raw_dir / "edit/derived/provider-components").exists()
+
+
+def test_native_kit_pins_protected_regions_only_with_inspected_clearance(
+    tmp_path, native_library
+):
+    service = _video_components(tmp_path / "clearance-video")
+    reserved = {
+        "faces": [{"x": 20, "y": 0, "width": 20, "height": 800}],
+        "captions": [{"x": 0, "y": 980, "width": 1920, "height": 100}],
+        "evidence": [],
+        "ui": [],
+    }
+    with pytest.raises(ComponentInstanceError, match="inspected overlay bounds"):
+        _resolve(service, native_library, safe_area_bindings=reserved)
+    instance = _resolve(
+        service,
+        native_library,
+        safe_area_bindings=reserved,
+        source_observer=_observe_with_bounds,
+    )
+    assert instance["safeAreaBindings"] == reserved
+
+
 def test_native_instance_applies_an_approved_secondary_slot_default(tmp_path):
     service = _video_components(tmp_path / "second-line-video")
     evidence = {
