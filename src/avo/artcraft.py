@@ -1075,24 +1075,9 @@ def _require_reuse_match(request, spec, original):
 
 def _reusable_native_export(job_ref, expected_head):
     store, job, event = _open_selected_job(job_ref, expected_head)
-    observation = job["observation"]
-    profile = (
-        event["state"],
-        job["documentState"],
-        job["decision"]["scope"],
-    )
-    expected = (
-        "exported",
-        "saved",
-        {"app": "anicraft", "operations": ["lower-third"]},
-    )
-    if (
-        profile != expected
-        or observation["mode"] == "reuse"
-        or not _qualified_export_mode(observation)
-        or not {"application", "executable", "commandSchemaHash"} <= observation.keys()
-    ):
+    if event["state"] != "exported":
         raise ArtCraftError("Select a qualified native saved-source export for reuse")
+    _require_reusable_job(job)
     if (
         _inspect_job_inputs(job) != "current"
         or _inspect_job_document(store, job, event) != "current"
@@ -1100,10 +1085,22 @@ def _reusable_native_export(job_ref, expected_head):
         raise ArtCraftError("ArtCraft reusable source or export changed")
     _verify_retained_export(store, job, event)
     for key in ("application", "executable"):
-        expected = observation[key]
+        expected = job["observation"][key]
         if not _retained_job_file(expected, [str(Path(expected["locator"]).parent)]):
             raise ArtCraftError("ArtCraft reusable tool environment changed")
     return job, event
+
+
+def _require_reusable_job(job):
+    observation = job["observation"]
+    if (
+        job["documentState"] != "saved"
+        or job["decision"]["scope"] != _IDENTITY_LABEL_SCOPE
+        or observation["mode"] == "reuse"
+        or not _qualified_export_mode(observation)
+        or not {"application", "executable", "commandSchemaHash"} <= observation.keys()
+    ):
+        raise ArtCraftError("Select a qualified native saved-source export for reuse")
 
 
 def _preparation_workspace(request, spec):
@@ -1592,6 +1589,28 @@ def _recorded_authoring_files(job, head):
 
 def retained_authoring_files(job_ref, *, expected_head=None):
     """Return exact local and external files needed to retain a native job."""
+    job, files = _retained_job_files(job_ref, expected_head=expected_head)
+    selected = job["observation"].get("reuseSource")
+    if selected is not None:
+        files.extend(_retained_reuse_source(job, selected))
+    return job, files
+
+
+def _retained_reuse_source(job, selected):
+    reference = selected["jobRef"]
+    path = Path(reference["locator"])
+    if not _retained_job_file(reference, [str(path.parent)]):
+        raise ArtCraftError(f"ArtCraft retained reuse receipt changed: {path}")
+    predecessor, files = _retained_job_files(path, expected_head=selected["exportHead"])
+    if reference not in files:
+        raise ArtCraftError(f"ArtCraft retained reuse receipt changed: {path}")
+    _require_reusable_job(predecessor)
+    _require_reuse_match(job["request"], job, predecessor)
+    _require_reuse_source_input(job, predecessor)
+    return files
+
+
+def _retained_job_files(job_ref, *, expected_head):
     store, job, head = _selected_job(job_ref)
     if expected_head is not None and (head["eventHash"], head["state"]) != (
         expected_head,
@@ -2088,17 +2107,14 @@ def _owning_root(path, roots):
 
 
 def _inspect_job_inputs(job):
-    if "artworkRef" in job:
-        original = job["inputs"][:1] if job["documentState"] == "saved" else []
+    selected = job["observation"].get("reuseSource")
+    if selected is not None:
         try:
-            inputs = _artwork_dependencies(
-                job["request"], job, job["roots"], next(iter(original), None)
-            )
+            _retained_reuse_source(job, selected)
         except (OSError, ValueError, RuntimeError):
             return "changed"
-        if any(not _retained_job_file(item, job["roots"]["read"]) for item in original):
-            return "changed"
-        return "current" if [*original, *inputs] == job["inputs"] else "changed"
+    if "artworkRef" in job:
+        return _inspect_job_artwork_inputs(job)
     return (
         "current"
         if all(
@@ -2109,6 +2125,19 @@ def _inspect_job_inputs(job):
         )
         else "changed"
     )
+
+
+def _inspect_job_artwork_inputs(job):
+    original = job["inputs"][:1] if job["documentState"] == "saved" else []
+    try:
+        inputs = _artwork_dependencies(
+            job["request"], job, job["roots"], next(iter(original), None)
+        )
+    except (OSError, ValueError, RuntimeError):
+        return "changed"
+    if any(not _retained_job_file(item, job["roots"]["read"]) for item in original):
+        return "changed"
+    return "current" if [*original, *inputs] == job["inputs"] else "changed"
 
 
 def _inspect_job_outputs(job, head):
@@ -2238,6 +2267,16 @@ def _select_job_still_author(adapter, scope):
     return adapter.author_deck_slide
 
 
+def _require_reuse_source_input(job, prior):
+    if not job["inputs"] or not prior["inputs"]:
+        raise ArtCraftError("ArtCraft reuse requires both retained editable inputs")
+    expected = {**prior["inputs"][0], "locator": job["inputs"][0]["locator"]}
+    if job["inputs"][0] != expected:
+        raise ArtCraftError(
+            "ArtCraft prepared editable source differs from the reusable source"
+        )
+
+
 def _copy_reusable_export(job, directory):
     selected = job["observation"]["reuseSource"]
     prior_ref = Path(selected["jobRef"]["locator"])
@@ -2245,11 +2284,7 @@ def _copy_reusable_export(job, directory):
         raise ArtCraftError("ArtCraft retained reuse receipt changed")
     prior, exported = _reusable_native_export(prior_ref, selected["exportHead"])
     _require_reuse_match(job["request"], job, prior)
-    expected = {**prior["inputs"][0], "locator": job["inputs"][0]["locator"]}
-    if job["inputs"][0] != expected:
-        raise ArtCraftError(
-            "ArtCraft prepared editable source differs from the reusable source"
-        )
+    _require_reuse_source_input(job, prior)
     native = directory / "component.anicraft"
     recipe = directory / "recipe.json"
     frames = [
