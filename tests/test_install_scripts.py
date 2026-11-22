@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import hashlib
 import subprocess
 import unittest
 from pathlib import Path
+from zipfile import ZIP_DEFLATED, ZipFile
 
 import pytest
 
@@ -249,3 +251,118 @@ def test_fallback_installer_copies_organize_route_and_local_guidance(tmp_path, p
         assert (Path(paths["commands"]) / "organize.md").read_bytes() == (
             ROOT / "commands/avo/organize.md"
         ).read_bytes()
+
+
+def _install_engine_archive(home, archive, platform, asset):
+    return subprocess.run(
+        [
+            "node",
+            "-e",
+            """
+const fs = require('fs');
+const vm = require('vm');
+const [filename, home, archive, platform, asset, checksum] = process.argv.slice(1);
+const base = 'https://github.com/joaobispo2077/avo/releases/download/v1.2.3/';
+const requests = [];
+const sandbox = {
+  __filename: filename,
+  module: {exports:{}},
+  console: {log:message=>logs.push(message), error:console.error},
+  process: {platform, arch:platform === 'darwin' ? 'arm64' : 'x64', env:{AVO_ENGINE_VERSION:'1.2.3'}},
+  Buffer,
+  require: name => name === 'os' ? {homedir:()=>home} : require(name),
+  fetch: async url => {
+    requests.push(url);
+    if (url === base + 'SHA256SUMS') {
+      return {ok:true, arrayBuffer:async()=>Buffer.from(`${checksum}  ${asset}\\n`)};
+    }
+    if (url === base + asset) return {ok:true, arrayBuffer:async()=>fs.readFileSync(archive)};
+    throw new Error(`Unexpected request ${url}`);
+  },
+};
+const logs = [];
+vm.runInNewContext(fs.readFileSync(filename, 'utf8') + '\\nglobalThis.install=installEngine;', sandbox, {filename});
+sandbox.install({}).then(
+  () => console.log(JSON.stringify({requests, logs})),
+  error => {console.error(error.message); process.exitCode = 1;},
+);
+""",
+            str(ROOT / "bin/install.cjs"),
+            str(home),
+            str(archive),
+            platform,
+            asset,
+            hashlib.sha256(archive.read_bytes()).hexdigest(),
+        ],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        timeout=15,
+        check=False,
+    )
+
+
+@pytest.mark.parametrize(
+    ("platform", "slug", "launcher", "archive_root", "previous_install"),
+    [
+        ("win32", "windows-x64", "avo.exe", "avo", False),
+        ("win32", "windows-x64", "avo.exe", "avo", True),
+        ("linux", "linux-x64", "avo", "avo", False),
+        ("darwin", "macos-arm64", "avo", "avo", False),
+        ("win32", "windows-x64", "avo.exe", "bin", True),
+    ],
+)
+def test_installer_places_engine_and_runtime_at_launcher_path(
+    tmp_path, platform, slug, launcher, archive_root, previous_install
+):
+    import json
+
+    prefix = tmp_path / ".avo"
+    installed = prefix / "bin" / launcher
+    if previous_install:
+        installed.parent.mkdir(parents=True)
+        installed.write_bytes(b"previous launcher")
+        (installed.parent / "unrelated.txt").write_bytes(b"keep")
+    asset = f"avo-1.2.3-{slug}.zip"
+    archive = tmp_path / asset
+    with ZipFile(archive, "w", compression=ZIP_DEFLATED) as fixture:
+        fixture.writestr(f"{archive_root}/{launcher}", b"new launcher")
+        fixture.writestr(f"{archive_root}/_internal/engine-data", b"runtime data")
+        fixture.writestr(f"{archive_root}/providers/avo.provider.schema.json", b"{}")
+
+    result = _install_engine_archive(tmp_path, archive, platform, asset)
+
+    assert result.returncode == 0, result.stderr
+    output = json.loads(result.stdout)
+    assert [url.rsplit("/", 1)[-1] for url in output["requests"]] == [
+        "SHA256SUMS",
+        asset,
+    ]
+    assert output["logs"][-1] == f"engine: {installed}"
+    assert installed.read_bytes() == b"new launcher"
+    assert (installed.parent / "_internal/engine-data").read_bytes() == b"runtime data"
+    assert (installed.parent / "providers/avo.provider.schema.json").is_file()
+    assert not (prefix / "avo").exists()
+    if previous_install:
+        assert (installed.parent / "unrelated.txt").read_bytes() == b"keep"
+
+
+def test_installer_rejects_archive_without_launcher_before_replacing_files(tmp_path):
+    bin_dir = tmp_path / ".avo" / "bin"
+    installed_data = bin_dir / "_internal" / "engine-data"
+    installed_data.parent.mkdir(parents=True)
+    installed_data.write_bytes(b"previous runtime")
+    launcher = bin_dir / "avo.exe"
+    launcher.write_bytes(b"previous launcher")
+    asset = "avo-1.2.3-windows-x64.zip"
+    archive = tmp_path / asset
+    with ZipFile(archive, "w") as fixture:
+        fixture.writestr("bin/_internal/engine-data", b"incomplete runtime")
+
+    result = _install_engine_archive(tmp_path, archive, "win32", asset)
+
+    assert result.returncode != 0
+    assert "missing launcher" in result.stderr
+    assert launcher.read_bytes() == b"previous launcher"
+    assert installed_data.read_bytes() == b"previous runtime"
