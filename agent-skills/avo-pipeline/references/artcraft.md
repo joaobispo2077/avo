@@ -206,6 +206,13 @@ design review and include a rights entry for each of the native document and
 SVG. When granting reuse to another provider, both rights entries must name
 that recipient. The kit and each selected video instance keep byte-exact copies.
 
+To reserve space in a video, supply `safeAreaBindings` for `faces`, `captions`,
+`evidence` and `ui` when pinning an AniCraft kit. Each region is a rectangle
+with integer `x`, `y`, `width` and `height` in the reviewed kit canvas. AVO
+rejects regions outside the canvas or inside the lower third's allowed
+visible bounds, including its entrance and exit. Use empty arrays when the
+video has no regions to reserve.
+
 For a saved-source text revision, set `document.state` to `saved` and
 `document.source` to the selected project-owned `.anicraft` copy. Include
 the source directory in `readRoots` and choose the instance's text and approved
