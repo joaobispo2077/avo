@@ -655,8 +655,9 @@ An explicit instance ID and hash can bind a saved-source label job to that
 video-local package. The job verifies the selected original, parameters,
 output contract, artwork and rights through the existing input closure.
 An optional kit sound binding pins a generated SFX region on the active
-Tracks revision. Video proof admission checks its BMap cue and timing for
-the selected identity kit. Tracks retains ownership of the actual mix.
+Tracks revision. Video proof admission checks its BMap cue and timing.
+An explicit registration selector can bind a plain kit through the same
+verified native source and immutable instance. Tracks owns the mix.
 
 The selected FilmCraft Windows 0.20.1 profile saves and reopens a native
 project and exports an OTIO timeline linked to the exact original. AVO checks

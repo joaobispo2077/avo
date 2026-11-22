@@ -227,9 +227,13 @@ For optional sound, first place the verified SoundCraft export on an unmuted
 SFX layer in Tracks. Link its region to the kit's picture cue in BMap. When
 pinning the kit, add an `eventBindings` entry with `slot: "sound-cue"`, the
 Tracks `regionId` as `eventId`, and the active Tracks hash as `revisionHash`.
-When registering a proof from an identity kit selected through `artworkRef`,
-AVO rechecks that selection and requires the sound to start during the kit's
-picture cue. The existing Tracks placement owns the sound mix.
+Register an identity kit selected through `artworkRef` as usual. For a plain
+kit, pass `--kit-instance-json` with its `instanceId` and `instanceHash` to
+`artcraft register`. When preparing the saved-source job, include the exact
+video-local kit folder and instance record directory in `readRoots`.
+AVO verifies the pinned source, checks the current sound selection and requires
+the sound to start during the kit's picture cue. The Tracks placement owns
+the sound mix.
 
 For a byte-identical repeat, use `--mode reuse` with `--reuse-job` and
 `--reuse-head` from the verified saved-source run. Keep the same provider,
