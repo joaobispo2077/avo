@@ -285,12 +285,14 @@ def _revise_identity_label(specification, context, initial, rendered, adapter):
     return reuse, reused
 
 
+@pytest.mark.parametrize("with_sound", [False, True], ids=["silent", "sound-cue"])
 def test_native_vector_identity_survives_an_editable_lower_third_revision(
-    tmp_path, monkeypatch
+    tmp_path, monkeypatch, with_sound
 ):
     from avo.adapters.artcraft_anicraft import inspect_lower_third_source
 
     vector, ani = _tools()
+    sound = _installed_sound() if with_sound else None
     _, _, record, standalone, rendered = _registered_emblem(
         tmp_path, monkeypatch, vector, ani, identity_label=True
     )
@@ -317,8 +319,17 @@ def test_native_vector_identity_survives_an_editable_lower_third_revision(
         parameters=job["authoringParameters"],
         artwork=artwork,
     )
+    event_bindings = (
+        _identity_sound_track(tmp_path, monkeypatch, sound) if sound else []
+    )
     instance, project, retained_native = _assert_pinned_native_source(
-        tmp_path, catalog.path, store, event, native, artwork=artwork
+        tmp_path,
+        catalog.path,
+        store,
+        event,
+        native,
+        artwork=artwork,
+        event_bindings=event_bindings,
     )
     Path(standalone["vectorArtwork"]["locator"]).write_bytes(b"changed artwork")
     inspection = artcraft.inspect_authoring(
@@ -328,6 +339,68 @@ def test_native_vector_identity_survives_an_editable_lower_third_revision(
     _render_retained_identity(
         monkeypatch, ani, instance, project, retained_native, job["output"]
     )
+
+
+def _identity_sound_track(tmp_path, monkeypatch, sound):
+    from types import SimpleNamespace
+
+    sound_root = tmp_path / "kit-sound"
+    sound_root.mkdir()
+    _, _, _, _, exported = _prepare_native_cue(
+        sound_root, monkeypatch, sound, provider="first-channel"
+    )
+    review = artcraft.describe_export_review(
+        exported["jobRef"], expected_head=exported["head"]
+    )["standalone"]
+    video = tmp_path / "video-for-native-component"
+    snapshots = _overlay_snapshots(start_frame=0, frame_count=24)
+    track_hash = "c" * 64
+    snapshots["tracks"]["audioTracks"] = {
+        "layers": [
+            {
+                "layerId": "label-sound",
+                "role": "sfx",
+                "source": review["audio"],
+                "generatedAudioRef": review["generatedAudioRef"],
+                "regions": [
+                    {
+                        "regionId": "label-sound-region",
+                        "cueIds": ["speaker-cue"],
+                        "startTicks": 3,
+                        "endTicks": 24,
+                        "timebase": {"num": 1, "den": 24},
+                    }
+                ],
+            }
+        ]
+    }
+    original_store = TimelineWorkspace.store
+    original_active = TimelineWorkspace.require_active
+
+    def store(workspace, name):
+        if workspace.raw_dir == video and name in ("tracks", "bmap"):
+            return SimpleNamespace(
+                revision=lambda _: {
+                    "snapshot": snapshots[name],
+                    "contentHash": track_hash,
+                }
+            )
+        return original_store(workspace, name)
+
+    def active(workspace, name):
+        if workspace.raw_dir == video and name in ("tracks", "bmap"):
+            return {"headRevisionId": "selected"}
+        return original_active(workspace, name)
+
+    monkeypatch.setattr(TimelineWorkspace, "store", store)
+    monkeypatch.setattr(TimelineWorkspace, "require_active", active)
+    return [
+        {
+            "slot": "sound-cue",
+            "eventId": "label-sound-region",
+            "revisionHash": track_hash,
+        }
+    ]
 
 
 def _render_retained_identity(monkeypatch, ani, instance, project, native, output):
@@ -387,6 +460,17 @@ def _render_retained_identity(monkeypatch, ani, instance, project, native, outpu
         asset_id="retained-identity",
     )
     assert artwork in [item["fingerprint"] for item in record["inputs"]]
+    proof_lock = (
+        workspace.raw_dir / "edit" / "derived" / "retained-identity.source.json"
+    )
+    binding = json.loads(proof_lock.read_bytes())
+    if instance["eventBindings"]:
+        assert (
+            binding["soundCue"]["regionId"] == instance["eventBindings"][0]["eventId"]
+        )
+        assert binding["soundCue"]["startSample"] == 6000
+    else:
+        assert "soundCue" not in binding
     mark.write_bytes(b"changed retained SVG")
     assert (
         artcraft.inspect_authoring(rendered["jobRef"], expected_head=rendered["head"])[

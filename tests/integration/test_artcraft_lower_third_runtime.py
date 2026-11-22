@@ -391,7 +391,7 @@ def _publish_fixture_package(
 
 
 def _assert_pinned_native_source(
-    tmp_path, catalog_path, store, event, native, *, artwork=None
+    tmp_path, catalog_path, store, event, native, *, artwork=None, event_bindings=()
 ):
     from avo.mcp.bridge import run_cli
 
@@ -431,7 +431,7 @@ def _assert_pinned_native_source(
                 {
                     "parameters": {"primaryText": "Mar\u00eda", "font": "Arial"},
                     "assetBindings": [],
-                    "eventBindings": [],
+                    "eventBindings": list(event_bindings),
                     "safeAreaBindings": {
                         "faces": [{"x": 0, "y": 0, "width": 16, "height": 16}],
                         "captions": [],

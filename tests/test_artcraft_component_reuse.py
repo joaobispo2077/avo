@@ -330,6 +330,126 @@ def test_native_kit_pins_protected_regions_only_with_inspected_clearance(
     assert instance["safeAreaBindings"] == reserved
 
 
+def _sound_selection(service, monkeypatch, *, track_hash, component="speaker-label"):
+    from avo.timeline import artcraft_audio
+
+    reference = {"job": {"sha256": "b" * 64}, "exportHead": "c" * 64}
+    source = {"sha256": "d" * 64, "locator": "selected-cue.wav", "sizeBytes": 48}
+    region = {
+        "regionId": "label-sound",
+        "cueIds": ["speaker-cue"],
+        "startTicks": 0,
+        "endTicks": 30,
+        "timebase": {"num": 1001, "den": 24000},
+    }
+    layer = {
+        "layerId": "sound-layer",
+        "role": "sfx",
+        "generatedAudioRef": reference,
+        "source": source,
+        "regions": [region],
+    }
+    revisions = {
+        "tracks": {
+            "contentHash": track_hash,
+            "snapshot": {"audioTracks": {"layers": [layer]}},
+        },
+        "bmap": {
+            "snapshot": {"cues": [{"cueId": "speaker-cue", "componentRef": component}]}
+        },
+    }
+    service.workspace.require_active = lambda name: {"headRevisionId": name}
+    service.workspace.store = lambda name: SimpleNamespace(
+        revision=lambda revision_id: revisions[revision_id]
+    )
+    monkeypatch.setattr(
+        artcraft_audio,
+        "require_generated_audio_layer",
+        lambda selected: (
+            {},
+            {"outputs": [selected["source"]], "audioEvidence": {"sampleCount": 96_000}},
+        ),
+    )
+    monkeypatch.setattr(artcraft_audio, "_require_cue_scope", lambda *_: None)
+    return layer, region
+
+
+@pytest.mark.parametrize(
+    "fault", [None, "stale", "muted", "unlinked", "wrong-component", "duplicate"]
+)
+def test_native_kit_pins_only_a_current_sound_region_for_its_picture_cue(
+    tmp_path, native_library, monkeypatch, fault
+):
+    service = _video_components(tmp_path / "sound-video")
+    track_hash = "a" * 64
+    layer, region = _sound_selection(
+        service,
+        monkeypatch,
+        track_hash=track_hash,
+        component="other-label" if fault == "wrong-component" else "speaker-label",
+    )
+    binding = {
+        "slot": "sound-cue",
+        "eventId": "label-sound",
+        "revisionHash": track_hash,
+    }
+    if fault == "stale":
+        binding["revisionHash"] = "f" * 64
+    if fault == "muted":
+        layer["mute"] = True
+    if fault == "unlinked":
+        region["cueIds"] = []
+    if fault == "duplicate":
+        layer["regions"].append(deepcopy(region))
+    if fault:
+        with pytest.raises(ComponentInstanceError, match="sound cue"):
+            _resolve(service, native_library, event_bindings=[binding])
+        assert not service.path("speaker-first-use").exists()
+    else:
+        result = _resolve(service, native_library, event_bindings=[binding])
+        assert result["eventBindings"] == [binding]
+
+
+@pytest.mark.parametrize("change", [None, "wrong-cue", "stale-tracks", "starts-after"])
+def test_pinned_kit_proof_checks_the_sound_cue_against_picture_placement(
+    tmp_path, native_library, monkeypatch, change
+):
+    from avo.artcraft import ArtCraftError
+    from avo.timeline.artcraft_binding import _pinned_kit_sound
+
+    service = _video_components(tmp_path / "sound-proof")
+    track_hash = "a" * 64
+    _, audio_region = _sound_selection(service, monkeypatch, track_hash=track_hash)
+    instance = _resolve(
+        service,
+        native_library,
+        event_bindings=[
+            {"slot": "sound-cue", "eventId": "label-sound", "revisionHash": track_hash}
+        ],
+    )
+    job = {
+        "artworkRef": {key: instance[key] for key in ("instanceId", "instanceHash")},
+        "output": picture_output(),
+        "roots": {"read": [str(service.workspace.raw_dir)]},
+    }
+    placement = {
+        "cueId": "different-cue" if change == "wrong-cue" else "speaker-cue",
+        "range": {"startFrame": 0, "endFrameExclusive": 72},
+    }
+    heads = {"tracks": "b" * 64 if change == "stale-tracks" else track_hash}
+    if change == "starts-after":
+        audio_region.update(startTicks=72, endTicks=101)
+
+    if change:
+        with pytest.raises(ArtCraftError, match="start during its BMap placement"):
+            _pinned_kit_sound(service.workspace, job, placement, heads)
+    else:
+        bound = _pinned_kit_sound(service.workspace, job, placement, heads)
+        assert bound["regionId"] == "label-sound"
+        assert bound["startSample"] == 0
+        assert bound["source"]["sha256"] == "d" * 64
+
+
 def test_native_instance_applies_an_approved_secondary_slot_default(tmp_path):
     service = _video_components(tmp_path / "second-line-video")
     evidence = {
