@@ -106,6 +106,38 @@ class FfprobeMediaAdapter:
     def fingerprint(self, path: Path) -> dict[str, Any]:
         return file_fingerprint(Path(path))
 
+    @staticmethod
+    def video_stream_sha256(path: Path, *, timeout: float) -> str:
+        """Hash the first picture stream without container metadata or decoding."""
+        result = subprocess.run(
+            [
+                "ffmpeg",
+                "-v",
+                "error",
+                "-nostdin",
+                "-xerror",
+                *local_source_arguments(path),
+                "-i",
+                str(path),
+                "-map",
+                "0:V:0",
+                "-c",
+                "copy",
+                "-f",
+                "streamhash",
+                "-hash",
+                "SHA256",
+                "-",
+            ],
+            check=True,
+            capture_output=True,
+            timeout=timeout,
+        )
+        match = re.fullmatch(rb"0,v,SHA256=([0-9a-f]{64})", result.stdout.strip())
+        if match is None:
+            raise ValueError("Expected one local picture stream fingerprint")
+        return match[1].decode("ascii")
+
     def verify_video_clock(
         self,
         path,

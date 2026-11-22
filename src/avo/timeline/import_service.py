@@ -12,6 +12,7 @@ from collections import Counter
 from copy import deepcopy
 from fractions import Fraction
 from pathlib import Path
+from time import monotonic
 from urllib.parse import urlsplit
 from urllib.request import url2pathname
 from uuid import uuid4
@@ -849,6 +850,20 @@ def _filmcraft_declarations(job):
     }
 
 
+def _retained_picture_paths(raw_dir, historical):
+    edit_dir = raw_dir / "edit"
+    for output in historical:
+        path = Path(output["locator"])
+        if (
+            path.is_relative_to(edit_dir)
+            and path.suffix.lower() in {".mp4", ".mov", ".mkv"}
+            and path.resolve() == path
+            and path.is_file()
+            and file_fingerprint(path)["sha256"] == output["sha256"]
+        ):
+            yield path
+
+
 class TimelineImportService:
     def __init__(
         self,
@@ -862,6 +877,7 @@ class TimelineImportService:
         clock_probe=None,
         audio_clock_probe=None,
         metadata_reader=None,
+        picture_probe=None,
     ):
         self.workspace = TimelineWorkspace.from_project(Path(project_path))
         self.provider = str(self.workspace.project.get("provider") or "")
@@ -905,6 +921,7 @@ class TimelineImportService:
         self.reader, self.probe = reader, probe
         self.still_probe = still_probe
         self.metadata_reader = metadata_reader
+        self.picture_probe = picture_probe
         self.clock_probe = _clock_port(probe, clock_probe)
         self.audio_clock_probe = _clock_port(
             probe, audio_clock_probe, "verify_audio_sample_count"
@@ -1256,6 +1273,12 @@ class TimelineImportService:
         )
         if differences:
             return {"status": "reference-only", "findings": differences}
+        try:
+            self._reject_remuxed_filmcraft_source(
+                original, job["inputs"][0], job["budget"]["seconds"]
+            )
+        except ImportError as exc:
+            return {"status": "reference-only", "findings": [_finding(exc)]}
         prepared = self.prepare(
             exchange,
             expected_source_sha256=event["outputs"][0]["sha256"],
@@ -1279,6 +1302,51 @@ class TimelineImportService:
                 "findings": validated["findings"],
             }
         return validated
+
+    def _reject_remuxed_filmcraft_source(self, original, expected, seconds):
+        try:
+            with fingerprint_stage(verify_on_exit=True):
+                match = self._filmcraft_picture_match(original, expected, seconds)
+        except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as exc:
+            raise ImportError(
+                "OTIO_SOURCE_PROHIBITED",
+                f"Cannot verify FilmCraft picture provenance for {original}: {exc}",
+            ) from exc
+        if match is not None:
+            raise ImportError(
+                "OTIO_SOURCE_PROHIBITED",
+                f"Prohibited original {original}: picture matches the retained output {match}",
+            )
+
+    def _filmcraft_picture_match(self, original, expected, seconds):
+        from .migration import inventory_historical_output_fingerprints
+
+        raw_dir = self.workspace.raw_dir
+        if file_fingerprint(original) != expected:
+            raise ValueError("the selected FilmCraft original changed")
+        historical = inventory_historical_output_fingerprints(
+            raw_dir, timeline_dir=self.workspace.timeline_dir
+        )
+        if any(item["sha256"] == expected["sha256"] for item in historical):
+            # The existing byte check retains its normal packet and finding.
+            return None
+        prior = list(_retained_picture_paths(raw_dir, historical))
+        if not prior:
+            return None
+        if self.picture_probe is None:
+            raise ValueError("the picture fingerprint probe is unavailable")
+        deadline = monotonic() + seconds
+
+        def digest(path):
+            remaining = deadline - monotonic()
+            if remaining <= 0:
+                raise TimeoutError(
+                    "the FilmCraft picture check exceeded the job budget"
+                )
+            return self.picture_probe(path, timeout=remaining)
+
+        picture = digest(original)
+        return next((path for path in prior if digest(path) == picture), None)
 
     def _persist_prepared_packet(self, session, snapshot, data):
         import_id = session["importId"]

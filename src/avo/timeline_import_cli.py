@@ -71,13 +71,15 @@ def create_service(args):
     from avo.adapters.media.still_probe import verify_literal_still
     from avo.timeline.import_service import TimelineImportService
 
+    media = FfprobeMediaAdapter()
     return TimelineImportService(
         args.project,
         provider=getattr(args, "provider", None),
         reader=read_otio,
-        probe=FfprobeMediaAdapter().inventory,
+        probe=media.inventory,
         still_probe=verify_literal_still,
         metadata_reader=read_resolve_sidecar,
+        picture_probe=media.video_stream_sha256,
     )
 
 
