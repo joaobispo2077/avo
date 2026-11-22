@@ -450,6 +450,55 @@ def test_pinned_kit_proof_checks_the_sound_cue_against_picture_placement(
         assert bound["source"]["sha256"] == "d" * 64
 
 
+@pytest.mark.parametrize(
+    "fault", [None, "wrong-source", "wrong-output", "outside-roots"]
+)
+def test_plain_kit_proof_selects_exact_native_package_without_artwork(
+    tmp_path, native_library, fault
+):
+    from avo.artcraft import ArtCraftError
+    from avo.timeline.artcraft_binding import _explicit_kit_source
+
+    service = _video_components(tmp_path / "plain-proof")
+    instance = _resolve(service, native_library)
+    kept = next(
+        item
+        for item in instance["generatedFiles"]
+        if item["path"].endswith(".anicraft")
+    )
+    original = file_fingerprint(Path(kept["path"]))
+    ref = {key: instance[key] for key in ("instanceId", "instanceHash")}
+    owned = service.workspace.raw_dir
+    job = {
+        "documentState": "saved",
+        "request": {"componentId": "speaker-label", "provider": "first-channel"},
+        "authoringParameters": instance["parameters"],
+        "output": picture_output(),
+        "inputs": [original],
+        "roots": {"read": [str(owned)]},
+    }
+    if fault == "wrong-source":
+        job["inputs"] = [file_fingerprint(native_library[3])]
+    elif fault == "wrong-output":
+        job["output"] = picture_output(width=1080, height=1920)
+    elif fault == "outside-roots":
+        job["roots"]["read"] = [str(Path(kept["path"]).parent)]
+    source = {"inputSources": job["inputs"]}
+    if fault:
+        with pytest.raises(ArtCraftError, match="kit.*(differs|read roots)"):
+            _explicit_kit_source(service.workspace, job, ref, source)
+    else:
+        assert _explicit_kit_source(service.workspace, job, ref, source) == instance
+        assert source["kitInstanceRef"] == ref
+        inputs = source["inputSources"]
+        assert inputs[0] == original
+        assert any(
+            x["locator"] == str(service.path(instance["instanceId"])) for x in inputs
+        )
+        assert any(Path(x["locator"]).name == "manifest.json" for x in inputs)
+        assert len({item["locator"] for item in inputs}) == len(inputs)
+
+
 def test_native_instance_applies_an_approved_secondary_slot_default(tmp_path):
     service = _video_components(tmp_path / "second-line-video")
     evidence = {

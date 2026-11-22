@@ -491,6 +491,106 @@ def test_native_vector_emblem_becomes_an_editable_animation_and_proof_asset(
         )
 
 
+def test_plain_native_kit_registers_its_selected_sound_cue(tmp_path, monkeypatch):
+    from avo.adapters.artcraft_anicraft import inspect_lower_third_source
+    from avo.mcp.bridge import run_cli
+
+    selected = os.environ.get("AVO_ARTCRAFT_ANICRAFT_TEST_CLI")
+    if not selected:
+        pytest.skip("Select the installed AniCraft CLI")
+    ani = Path(selected).resolve(strict=True)
+    sound = _installed_sound()
+    origin = tmp_path / "plain-origin"
+    origin.mkdir()
+    monkeypatch.setattr(init_project, "load_provider", lambda slug: {"slug": slug})
+    adapter, _, _ = _selected_adapter(origin, ani)
+    parameters = {"primaryText": "Presenter", "font": "Arial"}
+    spec = job_spec(
+        origin,
+        provider="first-channel",
+        cliPath=str(ani),
+        authoringParameters=parameters,
+    )
+    spec["output"].update(
+        width=640,
+        height=360,
+        frameCount=24,
+        frameRate={"numerator": 24, "denominator": 1},
+    )
+    brief = request(provider="first-channel", componentId="speaker-label")
+    authored = _run(_prepare(artcraft, brief, spec, adapter), adapter)
+    _, exported = artcraft.read_authoring_export(
+        authored["jobRef"], expected_head=authored["head"]
+    )
+    package_root = tmp_path / "plain-package"
+    package_root.mkdir()
+    native = Path(
+        shutil.copyfile(exported["saved"]["locator"], package_root / "label.anicraft")
+    )
+    shutil.copyfile(exported["recipe"]["locator"], package_root / "recipe.json")
+    catalog, store, published = _publish_fixture_package(
+        tmp_path,
+        native,
+        spec["output"],
+        inspect_lower_third_source,
+        parameters=parameters,
+    )
+    instance, project, retained = _assert_pinned_native_source(
+        tmp_path,
+        catalog.path,
+        store,
+        published,
+        native,
+        event_bindings=_identity_sound_track(tmp_path, monkeypatch, sound),
+    )
+    _, workspace, context = _video_context(
+        project.parent,
+        monkeypatch,
+        workspace=TimelineWorkspace.from_project(project),
+        component=instance["kitId"],
+    )
+    adapter, _, _ = _selected_adapter(workspace.raw_dir, ani)
+    revised = job_spec(
+        workspace.raw_dir,
+        provider="first-channel",
+        cliPath=str(ani),
+        document={"state": "saved", "source": str(retained)},
+        authoringParameters=instance["parameters"],
+        output=spec["output"],
+        readRoots=[str(workspace.raw_dir)],
+    )
+    rendered = _run(
+        _prepare(artcraft, {**brief, "context": context}, revised, adapter), adapter
+    )
+    output = workspace.raw_dir / "edit/derived/plain-kit.mkv"
+    selection = {key: instance[key] for key in ("instanceId", "instanceHash")}
+    result = run_cli(
+        [
+            "artcraft",
+            "register",
+            "--project",
+            str(project),
+            "--job",
+            str(rendered["jobRef"]),
+            "--expected-head",
+            rendered["head"],
+            "--asset-id",
+            "plain-kit",
+            "--output",
+            str(output),
+            "--kit-instance-json",
+            json.dumps(selection),
+            "--json",
+        ]
+    )
+    assert result.ok, result.stderr
+    lock = json.loads(output.with_suffix(".source.json").read_bytes())
+    assert lock["kitInstanceRef"] == selection
+    assert lock["soundCue"]["regionId"] == "label-sound-region"
+    assert lock["soundCue"]["startSample"] == 6000
+    assert "artworkRef" not in lock["parameters"]
+
+
 def test_emblem_and_optional_sound_render_through_one_original_footage_proof(
     tmp_path, monkeypatch
 ):
