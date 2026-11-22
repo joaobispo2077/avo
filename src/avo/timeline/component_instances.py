@@ -232,6 +232,7 @@ class ComponentInstanceService:
         )
         with timeline_writer(self.workspace.timeline_dir):
             self._check_native_upgrade(document)
+            self._require_native_sound(document, package["output"])
             retained = self._require_same_native_instance(
                 instance_path, document, evidence
             )
@@ -239,6 +240,14 @@ class ComponentInstanceService:
                 package, evidence, project_root=root, target=target
             )
             return self._write_instance(retained)
+
+    def _require_native_sound(self, document, output):
+        from .artcraft_audio import select_kit_sound
+
+        try:
+            select_kit_sound(self.workspace, document, output)
+        except (OSError, ValueError) as exc:
+            raise ComponentInstanceError(str(exc)) from exc
 
     @staticmethod
     def _require_native_clearance(protected, canvas, occupied):
