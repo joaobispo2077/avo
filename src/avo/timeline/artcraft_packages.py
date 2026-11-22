@@ -472,6 +472,7 @@ def _observe_package(package, roles, source_observer, byte_limit):
         "provenance": provenance,
         "parameterSchema": parameter_schema,
         "fixtureParameters": fixture,
+        "occupiedBounds": observed.get("occupiedBounds"),
         "rights": rights,
     }
 

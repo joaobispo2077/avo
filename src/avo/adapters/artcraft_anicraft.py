@@ -404,6 +404,7 @@ def _inspect_label_source(paths, body, output, parameters, identity_outline):
     return {
         "editableText": facts["primaryText"],
         "fontFamily": facts["font"],
+        "occupiedBounds": _allowed_alpha_bounds(_lower_third_bounds(output)),
         **({"identityVectorHash": content_hash(identity_outline)} if identity else {}),
         **({"motion": "hold"} if hold else {}),
         **(
@@ -1231,13 +1232,15 @@ def _lower_third_bounds(output):
     )
 
 
+def _allowed_alpha_bounds(bounds):
+    left, top, right, bottom = bounds
+    return left - 2, top - 2, right + 2, bottom + 2
+
+
 def _require_safe_area(boxes, output, bounds):
-    expected = bounds or _lower_third_bounds(output)
+    left, top, right, bottom = _allowed_alpha_bounds(
+        bounds or _lower_third_bounds(output)
+    )
     for box in filter(None, boxes):
-        if (
-            box[0] < expected[0] - 2
-            or box[1] < expected[1] - 2
-            or box[2] > expected[2] + 2
-            or box[3] > expected[3] + 2
-        ):
+        if box[0] < left or box[1] < top or box[2] > right or box[3] > bottom:
             raise ArtCraftError("AniCraft label exceeds its inspected safe area")
