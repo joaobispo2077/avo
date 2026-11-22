@@ -192,6 +192,108 @@ def test_reconstruction_checks_a_selected_native_input_outside_the_video_root(
         verify_reconstruction_bundle(raw)
 
 
+def test_reconstruction_retains_the_external_predecessor_of_copy_only_reuse(
+    tmp_path, monkeypatch
+):
+    raw = tmp_path / "video"
+    origin = tmp_path / "provider-source"
+    raw.mkdir()
+    origin.mkdir()
+    workspace, master = canonical_project(raw)
+    monkeypatch.setattr(init_project, "load_provider", lambda slug: {"slug": slug})
+    environment = locked_tool_observation(origin, "anicraft")
+
+    class SourceExporter(AuthoringApp):
+        def observe(self, *, roots, **_arguments):
+            return {**environment, "effectiveRoots": roots}
+
+        def author_lower_third(self, job, directory):
+            return {
+                **super().author_lower_third(job, directory),
+                "revisionCommandSchemaHash": "b" * 64,
+            }
+
+    source = origin / "approved.anicraft"
+    source.write_bytes(b"original editable lower third")
+    spec = job_spec(
+        origin,
+        provider=workspace.project["provider"],
+        document={"state": "saved", "source": str(source)},
+        readRoots=[str(origin)],
+        authoringParameters={"primaryText": "Speaker", "font": "Arial"},
+        output=picture_output(frameCount=24),
+    )
+    brief = request(provider=spec["provider"])
+    adapter = SourceExporter(origin)
+    prepared = _prepare(artcraft, brief, spec, adapter)
+    exported = artcraft.run_authoring(
+        prepared["jobRef"], expected_head=prepared["head"], adapter=adapter
+    )
+    _, source_record = artcraft.read_authoring_export(
+        exported["jobRef"], expected_head=exported["head"]
+    )
+    selected = {
+        **brief,
+        "context": {
+            "kind": "video",
+            "project": str(workspace.project_path),
+            "videoId": workspace.video_id,
+        },
+    }
+    intent = artcraft.ArtCraftIntent("explicit", "anicraft", ("lower-third",))
+    reuse = artcraft.prepare_authoring_reuse(
+        selected,
+        {**spec, "jobId": "copied-label", "mode": "reuse", "workspace": str(raw)},
+        from_job=exported["jobRef"],
+        from_head=exported["head"],
+        intent=intent,
+        decision=artcraft.assess_request(selected, intent=intent),
+    )
+    result = artcraft.run_authoring(
+        reuse["jobRef"], expected_head=reuse["head"], adapter=None
+    )
+    bundle = build_reconstruction_bundle(
+        workspace, master_basename=master, actor="fixture"
+    )
+    external = {record["locator"] for record in bundle["externalArtCraftInputs"]}
+    predecessor = Path(exported["jobRef"])
+    prior_recipe = Path(source_record["recipe"]["locator"])
+    assert {
+        str(predecessor),
+        str(predecessor.with_name("events.json")),
+        str(predecessor.with_name("event-verify-run.json")),
+        str(prior_recipe),
+        source_record["saved"]["locator"],
+        source_record["outputs"][0]["locator"],
+    } <= external
+    assert (
+        not {environment[key]["locator"] for key in ("application", "executable")}
+        & external
+    )
+    saved_recipe = prior_recipe.read_bytes()
+    prior_recipe.write_bytes(b"changed predecessor recipe")
+    try:
+        with pytest.raises(ReconstructionError, match="Retained ArtCraft file changed"):
+            verify_reconstruction_bundle(raw)
+        changed = artcraft.inspect_authoring(
+            result["jobRef"], expected_head=result["head"]
+        )
+        assert changed["status"] == "stale" and changed["checks"]["inputs"] == "changed"
+        with pytest.raises(artcraft.ArtCraftError, match="export evidence is stale"):
+            artcraft.read_authoring_export(
+                result["jobRef"], expected_head=result["head"]
+            )
+    finally:
+        prior_recipe.write_bytes(saved_recipe)
+    assert verify_reconstruction_bundle(raw)["bundleSha256"] == bundle["bundleSha256"]
+    assert (
+        artcraft.read_authoring_export(result["jobRef"], expected_head=result["head"])[
+            1
+        ]["state"]
+        == "exported"
+    )
+
+
 def test_reconstruction_requires_the_exact_selected_effectcraft_font(
     tmp_path, monkeypatch
 ):
