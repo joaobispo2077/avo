@@ -72,7 +72,7 @@ def freeze_export_binding(workspace, *, job_ref, expected_head):
         if job["observation"]["mode"] == "reuse":
             source["reusedExport"] = job["observation"]["reuseSource"]
         placement = _canonical_overlay(workspace, job, canonical["heads"])
-        sound = _pinned_kit_sound(workspace, job, placement, canonical["heads"])
+        cue_binding = _pinned_kit_sound(workspace, job, placement, canonical["heads"])
         components = {
             "version": 1,
             "jobRef": file_fingerprint(Path(job_ref)),
@@ -87,7 +87,7 @@ def freeze_export_binding(workspace, *, job_ref, expected_head):
             "nativeByteBudget": job["budget"]["bytes"],
             "placement": placement,
             "frames": event["outputs"],
-            **({"soundCue": sound} if sound else {}),
+            **({"soundCue": cue_binding} if cue_binding else {}),
             **source,
         }
         return {**components, "bindingHash": content_hash(components)}
@@ -103,8 +103,8 @@ def _pinned_kit_sound(workspace, job, placement, heads):
     from .event_clock import frame_range_to_samples
 
     _, instance = _read_artwork_instance(workspace, selection, job["roots"]["read"])
-    sound = select_kit_sound(workspace, instance, job["output"])
-    if sound is None:
+    cue_binding = select_kit_sound(workspace, instance, job["output"])
+    if cue_binding is None:
         return None
     rate = job["output"]["frameRate"]
     start, end = frame_range_to_samples(
@@ -114,14 +114,14 @@ def _pinned_kit_sound(workspace, job, placement, heads):
         frame_rate_den=rate["denominator"],
     )
     if (
-        sound["tracksRevisionHash"] != heads.get("tracks")
-        or sound["cueId"] != placement["cueId"]
-        or not start <= sound["startSample"] < end
+        cue_binding["tracksRevisionHash"] != heads.get("tracks")
+        or cue_binding["cueId"] != placement["cueId"]
+        or not start <= cue_binding["startSample"] < end
     ):
         raise ArtCraftError(
             "The provider kit sound cue must start during its BMap placement"
         )
-    return sound
+    return cue_binding
 
 
 def _canonical_overlay(workspace, job, expected_heads):
