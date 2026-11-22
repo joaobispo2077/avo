@@ -154,6 +154,9 @@ the exact job head, target project, actor and reason to prepare and validate the
 import for review. Reported losses, unsupported treatments or a former proof
 leave the return reference-only. Activation follows the existing sync and
 creator gates.
+FilmCraft also compares the original's picture stream with retained local MP4,
+MOV and Matroska outputs. A match leaves the return reference-only and names
+the retained output, including when its container differs from the input.
 
 For a video job with a verified export, select an Animation component, its BMap
 cue and the linked Tracks overlay before authoring. Register the exact exported

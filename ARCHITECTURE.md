@@ -669,6 +669,10 @@ import service verifies the retained exchange and original fingerprint before
 mapping relative references. The existing import, sync and approval workflow
 owns any later activation. Declared exchange losses, unsupported treatments
 and prohibited original ancestry leave the return as reference material.
+Before staging a FilmCraft return, the import service can compare the original's
+compressed picture stream with retained local outputs through the media probe.
+It uses the selected job's time budget and reports matching streams across
+containers as prohibited ancestry.
 
 The explicitly selected video export binds the unchanged AniCraft source,
 recipe, app and CLI fingerprints, ordered alpha frames and current approved
