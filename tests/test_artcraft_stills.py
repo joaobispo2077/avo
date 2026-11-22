@@ -7,6 +7,8 @@ import pytest
 
 from avo.timeline import artcraft_stills
 from avo.timeline.contracts import content_hash, file_fingerprint
+from avo.timeline.tracks import TrackError, resolve_tracks
+from tests.artcraft_fixtures import locked_tool_observation
 
 
 @pytest.fixture
@@ -20,9 +22,13 @@ def card_proof(tmp_path, monkeypatch):
         "sizeBytes": 32,
     }
     job = {
-        "request": {"provider": "neutral-channel"},
-        "output": {"role": "generated-still"},
-        "observation": {"app": "vectorcraft"},
+        "request": {
+            "provider": "neutral-channel",
+            "context": {"kind": "provider-only"},
+        },
+        "workspace": str(tmp_path),
+        "output": {"role": "generated-still", "format": "png"},
+        "observation": locked_tool_observation(tmp_path, "vectorcraft"),
         "inputs": [],
     }
     event = {
@@ -48,6 +54,9 @@ def card_proof(tmp_path, monkeypatch):
         store=lambda _: store,
         require_active=lambda _: {"headRevisionId": "tracks-one"},
         project={"provider": "neutral-channel"},
+        raw_dir=tmp_path,
+        project_path=tmp_path / "avo.project.json",
+        video_id="current-video",
     )
     operation = {
         "kind": "overlay-image",
@@ -101,4 +110,26 @@ def test_generated_still_cannot_inherit_dynamic_or_unclosed_source_behavior(card
         )
     job["inputs"] = [{"locator": "external-prototype.fig"}]
     with pytest.raises(ValueError, match="external dependencies"):
+        artcraft_stills.require_generated_still_layer(layer)
+
+
+def test_generated_still_proof_rejects_a_foreign_video_and_svg_interchange(card_proof):
+    workspace, job, layer, operation = card_proof
+    context = {
+        "kind": "video",
+        "videoId": workspace.video_id,
+        "project": str(workspace.project_path),
+    }
+    job["request"]["context"] = context
+    graph = {"operations": [operation]}
+    output = {"frameRate": {"num": 24, "den": 1}}
+    assert artcraft_stills.generated_still_locks(workspace, graph, output)
+    job["request"]["context"] = {**context, "videoId": "other-video"}
+    with pytest.raises(TrackError, match="different video"):
+        resolve_tracks({"videoTracks": {"layers": [layer]}}, set(), workspace=workspace)
+    with pytest.raises(ValueError, match="different video"):
+        artcraft_stills.generated_still_locks(workspace, graph, output)
+    job["request"]["context"] = context
+    job["output"]["format"] = "svg"
+    with pytest.raises(ValueError, match="verified VectorCraft card"):
         artcraft_stills.require_generated_still_layer(layer)

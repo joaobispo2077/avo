@@ -131,17 +131,23 @@ def register_artcraft_export(workspace, *, job_ref, expected_head, output, asset
 
 
 def _observe_artcraft_source(binding):
-    from avo.adapters.artcraft_anicraft import inspect_lower_third_source
+    from avo.adapters.artcraft_anicraft import (
+        inspect_animated_emblem_source,
+        inspect_lower_third_source,
+    )
 
     if binding["environment"]["app"] != "anicraft":
         raise ValueError(
             "No verified ArtCraft source profile is available for this app"
         )
     source = binding["nativeSource"]
-    observed = inspect_lower_third_source(
+    profile, parameters = inspect_lower_third_source, binding["parameters"]
+    if "artworkRef" in parameters:
+        profile, parameters = inspect_animated_emblem_source, binding["inputSources"][0]
+    observed = profile(
         Path(source["locator"]),
         binding["outputContract"],
-        binding["parameters"],
+        parameters,
         max_bytes=binding["nativeByteBudget"],
     )
     if observed["fingerprint"] != source:

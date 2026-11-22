@@ -58,3 +58,20 @@ def executable_observation(path):
         "executable": {"locator": str(path), "sizeBytes": 8, "sha256": "e" * 64},
         "operations": ["lower-third"],
     }
+
+
+def locked_tool_observation(workspace, app):
+    from avo.timeline.contracts import file_fingerprint
+
+    application, executable = (
+        workspace / name for name in (f"{app}.exe", f"{app}-cli.exe")
+    )
+    application.write_bytes(b"selected synthetic application")
+    executable.write_bytes(b"selected synthetic CLI")
+    return {
+        **executable_observation(executable),
+        "app": app,
+        "application": file_fingerprint(application),
+        "executable": file_fingerprint(executable),
+        "commandSchemaHash": "a" * 64,
+    }

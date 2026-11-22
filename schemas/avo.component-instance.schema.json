@@ -11,6 +11,7 @@
       "required": ["provider", "app", "packageHash"],
       "properties": {
         "provider": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
+        "sharedWith": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" },
         "app": { "$ref": "https://avo.local/schemas/avo.artcraft.schema.json#/$defs/app" },
         "packageHash": { "$ref": "#/$defs/sha256" }
       }

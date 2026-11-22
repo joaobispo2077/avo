@@ -24,6 +24,7 @@ _ROLES = frozenset(
         "rights",
     }
 )
+_PACKAGE_STAGING_PREFIX = "artcraft-package-"
 
 
 def verify_provider_package(
@@ -47,9 +48,7 @@ def read_retained_provider_package(
     store_root, *, provider, package_hash, source_observer
 ):
     """Resolve one exact provider package from the separately owned source store."""
-    if not re.fullmatch(r"[a-z0-9][a-z0-9-]*", provider) or not re.fullmatch(
-        r"[a-f0-9]{64}", package_hash
-    ):
+    if not _provider_slug(provider) or not re.fullmatch(r"[a-f0-9]{64}", package_hash):
         raise ArtCraftError("ArtCraft retained package has an invalid owner or hash")
     root = _require_external_root(store_root)
     target = root / provider / package_hash
@@ -112,9 +111,8 @@ def retain_provider_package(package, evidence, store_root):
 def _verify_retained_package(package, target):
     if _read_retained_manifest(target) != package:
         raise ArtCraftError("Immutable ArtCraft package manifest has changed")
-    for item in package["files"]:
-        root = target / "files"
-        _verify_file(root / item["path"], root, item)
+    root = target / "files"
+    return [_verify_file(root / item["path"], root, item) for item in package["files"]]
 
 
 def _read_retained_manifest(target):
@@ -141,9 +139,141 @@ def retain_native_instance_sources(package, evidence, *, project_root, target):
         _retain_new_package(package, evidence, target)
 
 
+def native_instance_identity(package, recipient):
+    pin = {key: package[key] for key in ("provider", "app", "packageHash")}
+    if recipient != pin["provider"]:
+        pin["sharedWith"] = recipient
+    return pin
+
+
+def require_native_sharing(owner, recipient, rights):
+    if owner != recipient and not (
+        rights and all(recipient in _sharing_providers(entry) for entry in rights)
+    ):
+        raise ArtCraftError(
+            "Native package has no sharing rights for this video provider"
+        )
+
+
+def retained_native_instance_files(instance, project_root, provider):
+    """Verify the video-local copy of the exact pinned native package."""
+    raw = _require_external_root(project_root)
+    base = raw / "edit" / "derived" / "provider-components"
+    target = base / instance["instanceId"]
+    if target.resolve() != target or not target.is_relative_to(base):
+        raise ArtCraftError("ArtCraft instance source escaped its owning video")
+    package = _read_retained_manifest(target)
+    pin = instance["nativePackage"]
+    identity = native_instance_identity(package, provider)
+    selected_kit = (instance["kitId"], instance["kitVersion"])
+    if pin != identity or selected_kit != (
+        package["componentId"],
+        package["componentVersion"],
+    ):
+        raise ArtCraftError("ArtCraft package differs from the pinned video instance")
+    with fingerprint_stage(reuse_current=True, verify_on_exit=True):
+        sources = _verify_retained_package(package, target)
+        if "sharedWith" in identity:
+            _verify_retained_sharing(package, sources, provider)
+        manifest = file_fingerprint(target / "manifest.json")
+    declared = [{"path": item["locator"], "sha256": item["sha256"]} for item in sources]
+    if declared != instance["generatedFiles"]:
+        raise ArtCraftError(
+            "ArtCraft package file list differs from the pinned video instance"
+        )
+    return [manifest, *sources]
+
+
+def _verify_retained_sharing(package, sources, recipient):
+    roles = {
+        entry["role"]: (entry, fingerprint)
+        for entry, fingerprint in zip(package["files"], sources, strict=True)
+    }
+    reference = _selected_evidence(package, roles, "rightsRef", "rights")
+    rights = _check_rights(reference, roles["native-source"][0])
+    require_native_sharing(package["provider"], recipient, rights)
+
+
+def shared_native_package_paths(edit_directory):
+    """Find verified immutable provider packages stored inside a cleanup tree."""
+    root = Path(edit_directory)
+    if root.resolve() != root:
+        raise ArtCraftError(
+            "Native library scan requires an unaliased cleanup directory"
+        )
+    _reject_unsealed_shared_versions(root)
+    for manifest in sorted(root.rglob("manifest.json")):
+        target = manifest.parent
+        if not re.fullmatch(r"[a-f0-9]{64}", target.name):
+            continue
+        package = _shared_package_manifest(manifest)
+        if package is None:
+            continue
+        yield manifest
+        yield from (
+            Path(item["locator"]) for item in _verify_retained_package(package, target)
+        )
+
+
+def _reject_unsealed_shared_versions(root):
+    for files in root.rglob("files"):
+        target = files.parent
+        if (
+            not re.fullmatch(r"[a-f0-9]{64}", target.name)
+            or not files.is_dir()
+            or (target / "manifest.json").is_file()
+        ):
+            continue
+        if _contains_native_source(files):
+            raise ArtCraftError(
+                f"Shared native version is missing its manifest: {target}"
+            )
+
+
+def _contains_native_source(files):
+    return any(entry.suffix.casefold() == ".anicraft" for entry in files.rglob("*"))
+
+
+def _shared_package_manifest(manifest):
+    if (
+        manifest.resolve() != manifest
+        or not manifest.is_file()
+        or manifest.stat().st_size > 256 * 1024
+    ):
+        raise ArtCraftError(
+            "Possible ArtCraft library manifest is missing, oversized or escaped"
+        )
+    document = json.loads(manifest.read_text(encoding="utf-8"))
+    markers = {"packageHash", "sourceReviewRef", "designReviewRef"}
+    if not isinstance(document, dict) or not markers <= document.keys():
+        if _contains_native_source(manifest.parent / "files"):
+            raise ArtCraftError(
+                f"Shared native version has an invalid manifest: {manifest}"
+            )
+        return None
+    target = manifest.parent
+    package = _read_retained_manifest(target)
+    if (package["provider"], package["packageHash"]) != (
+        target.parent.name,
+        target.name,
+    ):
+        raise ArtCraftError(
+            "ArtCraft provider library path differs from its immutable package"
+        )
+    return package
+
+
+def is_native_publication_stage(relative_path):
+    return any(
+        part.startswith(_PACKAGE_STAGING_PREFIX) for part in relative_path.parts[:-1]
+    )
+
+
 def _retain_new_package(package, evidence, target):
     source_root = evidence["sourceRoot"]
-    with TemporaryDirectory(prefix="artcraft-package-", dir=target.parent) as directory:
+    with TemporaryDirectory(
+        prefix=_PACKAGE_STAGING_PREFIX, dir=target.parent
+    ) as directory:
         stage = Path(directory)
         if stage.resolve() != stage or stage.parent != target.parent:
             raise ArtCraftError(
@@ -307,6 +437,8 @@ def _check_rights(reference, native):
     rights = _read_json(reference, list)
     if not all(isinstance(item, dict) for item in rights):
         raise ArtCraftError("ArtCraft package rights must be typed records")
+    for item in rights:
+        _sharing_providers(item)
     try:
         ProviderAnimationService.validate_rights(rights)
     except AnimationError as exc:
@@ -318,6 +450,34 @@ def _check_rights(reference, native):
             "ArtCraft rights must cover the package's exact native source"
         )
     return rights
+
+
+def _sharing_providers(entry):
+    if "sharing" not in entry:
+        return ()
+    sharing = entry["sharing"]
+    if not isinstance(sharing, dict) or sharing.keys() != {"providers", "evidenceRef"}:
+        raise ArtCraftError("ArtCraft sharing rights need named providers and evidence")
+    providers, evidence = sharing["providers"], sharing["evidenceRef"]
+    if (
+        not isinstance(providers, list)
+        or not providers
+        or not all(map(_provider_slug, providers))
+    ):
+        raise ArtCraftError("ArtCraft sharing rights need exact provider names")
+    if (
+        len(set(providers)) != len(providers)
+        or not isinstance(evidence, str)
+        or not evidence.strip()
+    ):
+        raise ArtCraftError(
+            "ArtCraft sharing rights need unique providers and evidence"
+        )
+    return providers
+
+
+def _provider_slug(value):
+    return isinstance(value, str) and bool(re.fullmatch(r"[a-z0-9][a-z0-9-]*", value))
 
 
 def _parameter_schema(reference, fixture):

@@ -9,27 +9,38 @@
       "claimedState": "documented-only",
       "release": "not-pinned",
       "platform": "not-pinned",
+      "qualifiedProfiles": [
+        {"behavior": "editable-lower-third", "operation": "lower-third", "release": "0.2.1", "platform": "windows", "mode": "cli", "verifiedOn": "2026-11-21", "requiredAuthority": "independently-confined"},
+        {"behavior": "editable-lower-third", "operation": "lower-third", "release": "0.2.1", "platform": "windows", "mode": "guided", "verifiedOn": "2026-11-20", "requiredAuthority": "operator"},
+        {"behavior": "editable-lower-third", "operation": "lower-third", "release": "0.2.1", "platform": "windows", "mode": "host-mcp", "verifiedOn": "2026-11-20", "requiredAuthority": "operator"},
+        {"behavior": "editable-lower-third", "operation": "lower-third", "release": "0.2.1", "platform": "windows", "mode": "json-lines", "verifiedOn": "2026-11-20", "requiredAuthority": "independently-confined"},
+        {"behavior": "animate-vector-emblem", "operation": "animate-vector-emblem", "release": "0.2.1", "platform": "windows", "mode": "cli", "verifiedOn": "2026-11-21", "requiredAuthority": "independently-confined"}
+      ],
       "sources": ["https://craft.wiki/apps/anicraft/overview/","https://craft.wiki/apps/anicraft/ai-agents/","https://github.com/storytold/anicraft/blob/main/docs/mcp.md"],
-      "documentedModes": ["cli","host-mcp","json-lines","live","guided"],
+      "documentedModes": ["cli", "host-mcp", "json-lines", "live", "guided"],
       "unverifiedModes": ["action"],
       "families": ["vector-drawing","stage-tools","keyframes","classic-shape-tweens","easing","symbols","nested-scenes","masks-guides","native-adobe-import","svg-import","frame-sprite-lottie-video-export"],
-      "operations": ["editable-lower-third","editable-animated-badge"],
+      "operations": ["editable-lower-third", "editable-animated-badge", "animate-vector-emblem"],
       "inputFormats": ["native-project","svg"],
       "outputFormats": ["native-project","png-sequence","sprite-sheet","lottie","video"],
       "limitations": "CLI range flags and engine command frame parameters use different bases. The documented live bridge uses a per-run token and requires independent platform and operation checks. Execution inherits the selected environment's OS permissions.",
       "cli": "anicraft-cli",
       "prerequisites": "Separately installed matching app and CLI, a permitted selected mode, and task-specific inputs.",
-      "verification": "No local operation qualification recorded."
+      "verification": "Installed Windows fixtures verified the exact listed profiles. Other operations and modes remain documented or unverified."
     },
     {
       "app": "effectcraft",
       "name": "EffectCraft",
+      "retrievedOn": "2026-11-21",
       "claimedState": "documented-only",
       "release": "not-pinned",
       "platform": "not-pinned",
+      "qualifiedProfiles": [
+        {"behavior": "editable-masked-lower-third", "operation": "editable-masked-lower-third", "release": "0.24.1", "platform": "windows", "mode": "cli", "verifiedOn": "2026-11-21", "requiredAuthority": "independently-confined"}
+      ],
       "sources": ["https://craft.wiki/apps/effectcraft/overview/","https://craft.wiki/apps/effectcraft/ai-agents/"],
-      "documentedModes": ["cli","host-mcp","live","script","guided"],
-      "unverifiedModes": ["action","json-lines"],
+      "documentedModes": ["cli", "host-mcp", "live", "script", "guided"],
+      "unverifiedModes": ["action", "json-lines"],
       "families": ["layered-composition","parenting","mattes","blending","keyframes","expressions","shapes","masks","text","effects-styles","cameras-lights-3d","tracking-stabilization-rotoscope","render-queue"],
       "operations": ["editable-masked-lower-third"],
       "inputFormats": ["native-project","media"],
@@ -37,7 +48,7 @@
       "limitations": "Constrained background MCP disables scripts. Verify support for the selected effects and transparent export in the exact release.",
       "cli": "effectcraft-cli",
       "prerequisites": "Separately installed matching app and CLI, a permitted selected mode, and task-specific inputs.",
-      "verification": "No local operation qualification recorded."
+      "verification": "Windows 0.24.1 fixture verified editable-masked-lower-third through CLI with a pinned Windows Arial font and a six-frame transparent standalone review span. Other modes and broader render or interruption behavior remain unverified."
     },
     {
       "app": "filmcraft",
@@ -45,9 +56,12 @@
       "claimedState": "documented-only",
       "release": "not-pinned",
       "platform": "not-pinned",
+      "qualifiedProfiles": [
+        {"behavior": "source-linked-timeline-return", "operation": "source-linked-timeline-return", "release": "0.20.1", "platform": "windows", "mode": "cli", "verifiedOn": "2026-11-21", "requiredAuthority": "independently-confined"}
+      ],
       "sources": ["https://craft.wiki/apps/filmcraft/overview/","https://craft.wiki/apps/filmcraft/ai-agents/"],
-      "documentedModes": ["host-mcp","live","guided"],
-      "unverifiedModes": ["cli","script","action","json-lines"],
+      "documentedModes": ["host-mcp", "live", "guided", "cli"],
+      "unverifiedModes": ["script", "action", "json-lines"],
       "families": ["timeline-editing","nesting","multicam","color-scopes","clip-effects-motion","audio-effects-mix-automation","titles-captions","export","timeline-interchange"],
       "operations": ["source-linked-timeline-return"],
       "inputFormats": ["native-project","original-media"],
@@ -55,7 +69,7 @@
       "limitations": "Use a single project writer and explicit save. Live control uses a per-session token. The supplied agent guide does not establish confined standalone rendering.",
       "cli": "filmcraft-cli",
       "prerequisites": "Separately installed matching app and CLI, a permitted selected mode, and task-specific inputs.",
-      "verification": "No local operation qualification recorded."
+      "verification": "Installed Windows fixtures verified the exact listed profiles. Other operations and modes remain documented or unverified."
     },
     {
       "app": "soundcraft",
@@ -63,9 +77,12 @@
       "claimedState": "documented-only",
       "release": "not-pinned",
       "platform": "not-pinned",
+      "qualifiedProfiles": [
+        {"behavior": "editable-isolated-cue", "operation": "isolated-cue", "release": "0.20.1", "platform": "windows", "mode": "cli", "verifiedOn": "2026-11-21", "requiredAuthority": "independently-confined"}
+      ],
       "sources": ["https://craft.wiki/apps/soundcraft/overview/","https://craft.wiki/apps/soundcraft/ai-agents/"],
-      "documentedModes": ["cli","host-mcp","live","guided"],
-      "unverifiedModes": ["script","action","json-lines"],
+      "documentedModes": ["cli", "host-mcp", "live", "guided"],
+      "unverifiedModes": ["script", "action", "json-lines"],
       "families": ["audio-editing-playlists","mixing-routing","parameter-automation","built-in-external-effects","instruments-midi","recording","video-reference","audio-bounce"],
       "operations": ["editable-isolated-cue"],
       "inputFormats": ["native-session","audio","midi"],
@@ -73,7 +90,7 @@
       "limitations": "Background file roots do not constrain a live attachment. MIDI-controller recording and AAF/OMF session exchange have documented limitations.",
       "cli": "soundcraft-cli",
       "prerequisites": "Separately installed matching app and CLI, a permitted selected mode, and task-specific inputs.",
-      "verification": "No local operation qualification recorded."
+      "verification": "Installed Windows fixtures verified the exact listed profiles. Other operations and modes remain documented or unverified."
     },
     {
       "app": "vectorcraft",
@@ -81,27 +98,35 @@
       "claimedState": "documented-only",
       "release": "not-pinned",
       "platform": "not-pinned",
+      "qualifiedProfiles": [
+        {"behavior": "vector-emblem", "operation": "vector-emblem", "release": "0.24.1", "platform": "windows", "mode": "cli", "verifiedOn": "2026-11-21", "requiredAuthority": "independently-confined"},
+        {"behavior": "editable-vector-card", "operation": "vector-still", "release": "0.24.1", "platform": "windows", "mode": "cli", "verifiedOn": "2026-11-21", "requiredAuthority": "independently-confined"}
+      ],
       "sources": ["https://craft.wiki/apps/vectorcraft/ai-agents/","https://craft.wiki/apps/vectorcraft/write-command-steps/"],
-      "documentedModes": ["cli","host-mcp","live","script","json-lines","guided"],
+      "documentedModes": ["cli", "host-mcp", "live", "script", "json-lines", "guided"],
       "unverifiedModes": ["action"],
       "families": ["drawing-brushes-width","path-edit-combine","paint-color-materials","live-3d-effects","type-spelling","artboards-layout-perspective","symbols","data-graphs-variables","slices-tracing","screen-print-package","commands-scripts"],
-      "operations": ["editable-vector-emblem"],
+      "operations": ["editable-vector-emblem", "vector-emblem", "editable-vector-card"],
       "inputFormats": ["native-document","svg"],
       "outputFormats": ["native-document","svg","png"],
       "limitations": "Automatic mode discovery can attach to a live app. A failed command step can leave earlier file exports and document changes.",
       "cli": "vectorcraft-cli",
       "prerequisites": "Separately installed matching app and CLI, a permitted selected mode, and task-specific inputs.",
-      "verification": "No local operation qualification recorded."
+      "verification": "Installed Windows fixtures verified the exact listed profiles. Other operations and modes remain documented or unverified."
     },
     {
       "app": "photocraft",
       "name": "PhotoCraft",
+      "retrievedOn": "2026-11-21",
       "claimedState": "documented-only",
       "release": "not-pinned",
       "platform": "not-pinned",
+      "qualifiedProfiles": [
+        {"behavior": "layered-image-card", "operation": "layered-image-card", "release": "0.23.1", "platform": "windows", "mode": "cli", "verifiedOn": "2026-11-21", "requiredAuthority": "independently-confined"}
+      ],
       "sources": ["https://craft.wiki/apps/photocraft/overview/","https://craft.wiki/apps/photocraft/automation/"],
-      "documentedModes": ["cli","host-mcp","live","action","guided"],
-      "unverifiedModes": ["script","json-lines"],
+      "documentedModes": ["cli", "host-mcp", "live", "action", "guided"],
+      "unverifiedModes": ["script", "json-lines"],
       "families": ["layers-masks-smart-objects","nondestructive-adjustment","selection","layer-style","type-shapes-paths","painting-retouching","filters","color-depth-profiles"],
       "operations": ["layered-image-card"],
       "inputFormats": ["native-document","image"],
@@ -109,17 +134,21 @@
       "limitations": "Background MCP requires read and write roots. Live control has its own protocol and enabled app setting. Verify export color and bit depth.",
       "cli": "photocraft-cli",
       "prerequisites": "Separately installed matching app and CLI, a permitted selected mode, and task-specific inputs.",
-      "verification": "No local operation qualification recorded."
+      "verification": "Windows 0.23.1 fixture verified the layered-image-card CLI recipe with independently confined execution required. This scope produces standalone review PNGs. Other operations and modes remain documented or unverified."
     },
     {
       "app": "lightcraft",
       "name": "LightCraft",
+      "retrievedOn": "2026-11-21",
       "claimedState": "documented-only",
       "release": "not-pinned",
       "platform": "not-pinned",
+      "qualifiedProfiles": [
+        {"behavior": "reusable-photo-treatment", "operation": "reusable-photo-treatment", "release": "0.21.1", "platform": "windows", "mode": "cli", "verifiedOn": "2026-11-21", "requiredAuthority": "independently-confined"}
+      ],
       "sources": ["https://craft.wiki/apps/lightcraft/overview/","https://craft.wiki/apps/lightcraft/ai-agents/"],
-      "documentedModes": ["host-mcp","live","guided"],
-      "unverifiedModes": ["cli","script","action","json-lines"],
+      "documentedModes": ["host-mcp", "live", "guided", "cli"],
+      "unverifiedModes": ["script", "action", "json-lines"],
       "families": ["organization-search","culling","development-color-detail","masking","retouching","crop-geometry","presets-profiles","merge","photo-contact-sheet-print-slideshow"],
       "operations": ["reusable-photo-treatment"],
       "inputFormats": ["native-library","photo"],
@@ -127,17 +156,21 @@
       "limitations": "Use an isolated library with one owner and matching app/CLI releases. Local live control has no password. Supported RAW decoding varies.",
       "cli": "lightcraft-cli",
       "prerequisites": "Separately installed matching app and CLI, a permitted selected mode, and task-specific inputs.",
-      "verification": "No local operation qualification recorded."
+      "verification": "Windows 0.21.1 fixture verified reusable-photo-treatment through CLI for one RGB JPEG. Its retained catalog and original reopen in a fresh library. The PNG is standalone review. RAW and connected modes remain unverified."
     },
     {
       "app": "figcraft",
       "name": "FigCraft",
+      "retrievedOn": "2026-11-21",
       "claimedState": "documented-only",
       "release": "not-pinned",
       "platform": "not-pinned",
+      "qualifiedProfiles": [
+        {"behavior": "editable-design-variant", "operation": "editable-design-variant", "release": "0.18.1", "platform": "windows", "mode": "cli", "verifiedOn": "2026-11-21", "requiredAuthority": "independently-confined"}
+      ],
       "sources": ["https://craft.wiki/apps/figcraft/overview/","https://craft.wiki/apps/figcraft/ai-agents/"],
-      "documentedModes": ["cli","host-mcp","live","guided"],
-      "unverifiedModes": ["script","action","json-lines"],
+      "documentedModes": ["cli", "host-mcp", "live", "guided"],
+      "unverifiedModes": ["script", "action", "json-lines"],
       "families": ["layout-constraints","components-variants-properties","styles-variables","vectors","paints-effects","rich-text","prototypes","developer-handoff","boards"],
       "operations": ["editable-design-variant"],
       "inputFormats": ["native-document","image"],
@@ -145,7 +178,7 @@
       "limitations": "Attached file limits are configured on application startup. Inspect the loss of interaction in static exchange and verify import fidelity.",
       "cli": "figcraft-cli",
       "prerequisites": "Separately installed matching app and CLI, a permitted selected mode, and task-specific inputs.",
-      "verification": "No local operation qualification recorded."
+      "verification": "Windows 0.18.1 fixture verified editable-design-variant through CLI with owned batch roots. Independent confinement is required for automatic execution. Static review exposes the compact variant and declares the prototype loss."
     },
     {
       "app": "texturecraft",
@@ -153,9 +186,10 @@
       "claimedState": "documented-only",
       "release": "not-pinned",
       "platform": "not-pinned",
+      "qualifiedProfiles": [],
       "sources": ["https://craft.wiki/apps/texturecraft/overview/","https://craft.wiki/apps/texturecraft/ai-agents/"],
-      "documentedModes": ["cli","host-mcp","live","json-lines","guided"],
-      "unverifiedModes": ["script","action"],
+      "documentedModes": ["cli", "host-mcp", "live", "json-lines", "guided"],
+      "unverifiedModes": ["script", "action"],
       "families": ["3d-uv-painting","channel-layers-masks","materials","mesh-map-baking","texture-channel-packed-export","preview-render"],
       "operations": ["editable-material"],
       "inputFormats": ["native-project","mesh","image"],
@@ -163,17 +197,21 @@
       "limitations": "Selected CLI and background MCP have their own root flags. Live uses a token. Some bake operations write in place and color inputs use different transfers.",
       "cli": "texturecraft-cli",
       "prerequisites": "Separately installed matching app and CLI, a permitted selected mode, and task-specific inputs.",
-      "verification": "No local operation qualification recorded."
+      "verification": "The selected Windows CLI was unavailable for local qualification. A matching separately installed application and CLI are required."
     },
     {
       "app": "deckcraft",
       "name": "DeckCraft",
+      "retrievedOn": "2026-11-21",
       "claimedState": "documented-only",
       "release": "not-pinned",
       "platform": "not-pinned",
+      "qualifiedProfiles": [
+        {"behavior": "editable-explanation-slide", "operation": "editable-explanation-slide", "release": "0.18.1", "platform": "windows", "mode": "cli", "verifiedOn": "2026-11-21", "requiredAuthority": "independently-confined"}
+      ],
       "sources": ["https://craft.wiki/apps/deckcraft/overview/","https://craft.wiki/apps/deckcraft/ai-agents/"],
-      "documentedModes": ["cli","host-mcp","live","guided"],
-      "unverifiedModes": ["script","action","json-lines"],
+      "documentedModes": ["cli", "host-mcp", "live", "guided"],
+      "unverifiedModes": ["script", "action", "json-lines"],
       "families": ["masters-layouts-themes","shapes-drawing","text","tables-charts-media","transitions-animation","presenter-tools","comments-accessibility-review"],
       "operations": ["editable-explanation-slide"],
       "inputFormats": ["native-deck","media"],
@@ -181,7 +219,7 @@
       "limitations": "Background file roots do not constrain a live connection. Slide indexes begin at zero. A frame export preserves a still representation of slide motion.",
       "cli": "deckcraft-cli",
       "prerequisites": "Separately installed matching app and CLI, a permitted selected mode, and task-specific inputs.",
-      "verification": "No local operation qualification recorded."
+      "verification": "Windows 0.18.1 fixture verified editable-explanation-slide through CLI, including its custom master layout and zero-based fade destination. The selected midpoint PNG is standalone review. Automatic use requires independent confinement."
     }
   ]
 }

@@ -10,6 +10,8 @@ ArtCraft apps and their compatible CLIs are separately user-installed tools.
 AVO distributes its own integration logic, knowledge metadata and guides only;
 it does not bundle, download, install or update ArtCraft runtimes, CLI binaries,
 installers or third-party plugins. Only the selected task's app/CLI is required.
+The release smoke check inspects each engine ZIP for known vendor apps, CLIs,
+macOS bundles and installers before unpacking it.
 If absent, readiness reports official separate-installation guidance rather
 than performing setup or asking for the whole suite.
 
@@ -42,7 +44,7 @@ Each family's individual operations must acquire an explicit support disposition
 | EffectCraft | Layered compositions/parenting/mattes/blending; animated properties/expressions; shape/mask/text treatment; effects/styles; cameras/lights/3D; tracking/stabilization/roto; render queue | Editable masked lower third with declared easing and qualified transparent export | [Overview](https://craft.wiki/apps/effectcraft/overview/), [agents](https://craft.wiki/apps/effectcraft/ai-agents/) |
 | FilmCraft | Timeline editing, nesting and multicam; color/scopes; clip effects/motion; audio effects/mix/automation; titles/captions; export; timeline interchange | Save/reopen a bounded edited segment; inspect exchange fidelity and return through existing AVO import rules | [Overview](https://craft.wiki/apps/filmcraft/overview/), [agents](https://craft.wiki/apps/filmcraft/ai-agents/) |
 | VectorCraft | Drawing/brushes/width; path reshape/edit/combine; paint/color/materials; live/3D effects; type/spelling; artboards/layout/perspective; reusable symbols; data/graphs/variables; slices/tracing; screen/print/package output; commands/scripts | Parameterized brand emblem or label artwork with editable paths and inspected SVG/PNG exchange | [Agents](https://craft.wiki/apps/vectorcraft/ai-agents/), [command steps](https://craft.wiki/apps/vectorcraft/write-command-steps/) |
-| PhotoCraft | Layers/masks/smart objects; nondestructive adjustments; selection; layer styles; type/shapes/paths; painting/retouching; filters; color/depth/profile handling | Layered branded image card: change copy, save/reopen and inspect composited output | [Overview](https://craft.wiki/apps/photocraft/overview/), [automation](https://craft.wiki/apps/photocraft/automation/) |
+| PhotoCraft | Layers/masks/smart objects; nondestructive adjustments; selection; layer styles; type/shapes/paths; painting/retouching; filters; color/depth/profile handling | Layered image card with an editable Curves adjustment and a verified composite for review | [Overview](https://craft.wiki/apps/photocraft/overview/), [automation](https://craft.wiki/apps/photocraft/automation/) |
 | LightCraft | Photo organization/search; culling; development/color/detail; masking; retouching; crop/geometry; presets/profiles; merge; photo/contact-sheet/print/slideshow output | Apply a reusable provider photo treatment in an isolated library and inspect the exported image | [Overview](https://craft.wiki/apps/lightcraft/overview/), [agents](https://craft.wiki/apps/lightcraft/ai-agents/) |
 | FigCraft | Frames/layout/constraints; components/variants/properties; styles/variables; vectors; paints/effects; rich text; prototype behavior; developer handoff; boards | Brand card with editable layout, content variants and inspected static output; record interactivity lost in export | [Overview](https://craft.wiki/apps/figcraft/overview/), [agents](https://craft.wiki/apps/figcraft/ai-agents/) |
 | TextureCraft | 3D/UV painting; per-channel layers/masks; reusable materials; mesh-map baking; texture/channel-packed exports; preview rendering | Reusable textured object/material with native project, dependency mesh and inspected texture/preview output | [Overview](https://craft.wiki/apps/texturecraft/overview/), [agents](https://craft.wiki/apps/texturecraft/ai-agents/) |
@@ -84,6 +86,10 @@ protocols. Common naming does not imply common switches or permissions.
   those restrictions scripts are disabled. Expressions and native project
   imports must therefore be assessed against the actual execution mode. Alpha
   maturity and advertised effects do not qualify a specific renderer.
+  The selected Windows 0.24.1 CLI profile retains editable Arial text and a
+  closed backing mask. It renders the six-frame span beginning at index 3 and
+  ending before index 9. Independent frame-index and seconds requests agree
+  on the first transparent frame. The span is for standalone review.
 - **FilmCraft**: Background and desktop copies must not write the same project;
   background work needs an explicit save. The live protocol requires an
   ephemeral shared token. The guide warns of broad filesystem access; it does
@@ -93,18 +99,37 @@ protocols. Common naming does not imply common switches or permissions.
   background/live auto-discovery means actual mode must be checked after
   connection. Command-step failure can follow successful earlier steps: undo or
   process exit is not proof that prior file exports were rolled back.
+  The installed 0.24.1 CLI qualification reopened and revised an editable
+  two-series chart, reproduced decoded PNG pixels, and inspected SVG exchange.
+  AVO runs selected emblem and text-card recipes. The chart is an app-level
+  qualification fixture.
 - **PhotoCraft**: Background MCP requires explicit read/write roots; without
   them it has no filesystem access. Imported document text is untrusted input.
   Live control has separate developer documentation and an app preference.
   Preserve native layers and validate color/depth conversion for each export.
+  The selected `layered-image-card` profile was exercised on Windows 0.23.1
+  through the CLI with synthetic files. It retains the original pixel layer
+  and an editable fixed Curves adjustment in `.pcraft`. Its standalone PNG
+  preserves the source's 8-bit RGBA geometry, alpha and embedded sRGB profile.
+  The reviewed PNG flattens layers. Automatic execution requires an
+  independently confined runner.
 - **LightCraft**: App and CLI should match releases. A library cannot be open
   in both background and desktop processes. Live control is local but has no
   password per the guide, so a loopback address alone does not prove exclusive
   access. RAW decoding varies by camera and may use embedded previews.
+  The selected Windows 0.21.1 CLI profile develops one original RGB JPEG in a
+  fresh library. A retained catalog snapshot and its fingerprinted original
+  reproduced the same exposure and sRGB image in a second library. This
+  qualification covers JPEG and the standalone PNG review.
 - **FigCraft**: Background automation roots are supplied to MCP. In attached
   mode, equivalent limits must instead be supplied when starting the app; they
   are not compatible CLI `--attach` options. Imports and live collaboration have
   early-alpha limitations. A prototype export must declare lost behavior.
+  The selected Windows 0.18.1 CLI recipe uses a blank document to build a
+  two-variant component set with auto layout and a prototype click-to-switch.
+  The editable native file retains both variants and the interaction. The
+  standalone PNG contains the compact variant. Batches also use the native
+  root flags observed in that release.
 - **TextureCraft**: Background roots use `--read-root`/`--write-root`, unlike
   the automation-prefixed switches elsewhere; without them filesystem work is
   unavailable. Live app file handling is separate and the bridge uses a token.
@@ -114,8 +139,27 @@ protocols. Common naming does not imply common switches or permissions.
   work and cannot be combined with `--connect`. Slide render indexes start at
   zero; output scale uses points rather than assumed video pixels. Frame export
   is not evidence that a complete animated slide can be reconstructed.
+  The selected Windows 0.18.1 CLI profile retains a custom master layout, its
+  editable placeholder and a 600 ms fade into slide index 1. The 960 by 540
+  point deck yields a verified 320 by 180 pixel midpoint for standalone review.
+  The native deck keeps the complete transition.
 
 ## Qualification model and bounded scope
+
+The bundled catalog lists `qualifiedProfiles` for the exact operation,
+release, platform and mode tested against an installed application. A
+profile also states which execution authority must enforce its file boundary.
+The catalog reads this evidence without probing the machine. An empty list
+means local qualification is pending. Wider capability families describe
+what the vendor documents.
+
+Run the opt-in installed qualification cases with
+`python -m pytest -m native_artcraft`. Supply each explicitly selected CLI
+through its `AVO_ARTCRAFT_<APP>_TEST_CLI` variable. Cases with missing
+prerequisites skip and remain unqualified on that installation. Tests use
+synthetic external workspaces and record the exact selected operations.
+Keep the temporary directory outside the repository when setting
+`--basetemp` explicitly.
 
 The required operation dispositions are **documented-only**, **locally verified**,
 **unavailable** and **unsupported**. Availability and trust remain distinct from

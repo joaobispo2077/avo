@@ -392,7 +392,11 @@ def _retain_code_drawn_files(raw_dir: Path, required: dict) -> None:
 
 
 def _required_files(
-    raw_dir: Path, canonical: list[dict[str, Any]], *, workspace=None
+    raw_dir: Path,
+    canonical: list[dict[str, Any]],
+    *,
+    workspace=None,
+    external_artcraft=None,
 ) -> dict[Path, str | None]:
     """Current local media plus authoring/delivery evidence, not disposable caches."""
     from avo.library.retention import library_paths
@@ -409,6 +413,7 @@ def _required_files(
         required.update(retained_editor_files(workspace))
         required.update(retained_preparation_files(workspace))
         _retain_sound_files(raw_dir, required, workspace)
+        _retain_artcraft_sources(raw_dir, required, workspace, external_artcraft)
     for artifact in canonical:
         for ref in _head_media_refs(raw_dir, artifact):
             path = _local_media_path(raw_dir, ref)
@@ -425,6 +430,25 @@ def _required_files(
         dict.fromkeys(_import_evidence_paths(raw_dir, canonical, workspace))
     )
     return required
+
+
+def _retain_artcraft_sources(raw_dir, required, workspace, external):
+    from .artcraft_retention import retained_artcraft_files
+
+    try:
+        references = retained_artcraft_files(workspace)
+    except (OSError, ValueError, RuntimeError) as exc:
+        raise ReconstructionError(f"Cannot retain ArtCraft sources: {exc}") from exc
+    for reference in references:
+        path = Path(reference["locator"])
+        if path.is_relative_to(raw_dir):
+            if required.get(path) not in (None, reference["sha256"]):
+                raise ReconstructionError(
+                    f"Conflicting ArtCraft source fingerprint: {path}"
+                )
+            required[path] = reference["sha256"]
+        elif external is not None:
+            external.append(reference)
 
 
 def _retain_sound_files(raw_dir, required, workspace):
@@ -560,11 +584,15 @@ def _bundled_path(raw_dir: Path, relative: str) -> Path:
 
 
 def _required_entries(
-    raw_dir: Path, canonical: list[dict[str, Any]], *, workspace=None
+    raw_dir: Path,
+    canonical: list[dict[str, Any]],
+    *,
+    workspace=None,
+    external_artcraft=None,
 ) -> list[dict[str, Any]]:
     entries = []
     for path, expected in _required_files(
-        raw_dir, canonical, workspace=workspace
+        raw_dir, canonical, workspace=workspace, external_artcraft=external_artcraft
     ).items():
         entry = _entry(raw_dir, path, "reconstruction-input")
         if expected is not None and entry["sha256"] != expected:
@@ -578,8 +606,12 @@ def _verify_coverage(raw_dir: Path, bundle: dict[str, Any], *, project_path=None
         raw_dir, bundle["canonicalArtifacts"], project_path=project_path
     )
     files = {entry["path"]: entry for entry in bundle["files"]}
+    external_artcraft = []
     for path, expected in _required_files(
-        raw_dir, bundle["canonicalArtifacts"], workspace=workspace
+        raw_dir,
+        bundle["canonicalArtifacts"],
+        workspace=workspace,
+        external_artcraft=external_artcraft,
     ).items():
         relative = path.relative_to(raw_dir).as_posix()
         entry = files.get(relative)
@@ -587,6 +619,10 @@ def _verify_coverage(raw_dir: Path, bundle: dict[str, Any], *, project_path=None
             raise ReconstructionError(
                 f"reconstruction coverage missing or stale: {relative}"
             )
+    if external_artcraft != bundle.get("externalArtCraftInputs", []):
+        raise ReconstructionError(
+            "Reconstruction bundle external ArtCraft inputs changed"
+        )
     if _external_original_refs(workspace) != bundle.get("externalSources", []):
         raise ReconstructionError(
             "External original reference coverage is missing or stale"
@@ -886,9 +922,12 @@ def build_reconstruction_bundle(
     for entries in state_groups.values():
         graph_files.extend(entries)
     graph_paths = {entry["path"] for entry in graph_files}
+    external_artcraft = []
     graph_files.extend(
         entry
-        for entry in _required_entries(raw_dir, canonical, workspace=workspace)
+        for entry in _required_entries(
+            raw_dir, canonical, workspace=workspace, external_artcraft=external_artcraft
+        )
         if entry["path"] not in graph_paths
     )
 
@@ -910,7 +949,7 @@ def build_reconstruction_bundle(
         "master": master_entry,
         "finalTranscript": transcript_entry,
         "rawSources": raw_entries,
-        **({"externalSources": external} if external else {}),
+        **_bundle_external_inputs(external, external_artcraft),
         "canonicalArtifacts": canonical,
         "reviewEvidence": review_entries,
         **state_groups,
@@ -921,6 +960,11 @@ def build_reconstruction_bundle(
     path = workspace.timeline_dir / "reconstruction-bundle.json"
     atomic_write_json(path, body)
     return body
+
+
+def _bundle_external_inputs(originals, artcraft):
+    references = {"externalSources": originals, "externalArtCraftInputs": artcraft}
+    return {key: values for key, values in references.items() if values}
 
 
 def _require_original_inventory(local, external):

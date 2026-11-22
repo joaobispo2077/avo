@@ -3,6 +3,12 @@
 Begin with the requested component's purpose, required editable behavior, media
 output, provider and project context. For a capability question, inspect the
 focused bundled catalog with `avo cli artcraft catalog --app <app> --json`.
+
+Open the guide for the selected operation when it is needed.
+
+- PhotoCraft, LightCraft, FigCraft and DeckCraft standalone reviews. [Still review profiles](artcraft/still-review.md)
+- EffectCraft masked lower third with a bounded transparent span. [EffectCraft review profile](artcraft/effectcraft-mask.md)
+- TextureCraft material and packed-texture exchange when qualification is requested. [TextureCraft prerequisites and file handling](artcraft/texturecraft.md)
 Catalog entries report documented behavior and the scope of its evidence.
 
 ## Assess one request
@@ -41,6 +47,18 @@ and opaque PNG sequence stay reference-only until separately qualified. For the
 initial lower third, inspection validates the editable label, font family,
 timings, selected graphic and inline paths directly from the native document.
 The selected app's installed command signatures are captured at preparation.
+
+Set `authoringParameters.secondaryText` to add an optional editable second
+line to a new AniCraft lower third. Use one line of up to 48 characters.
+Both lines use the selected installed font, and the adapter checks that the
+secondary line fits the plate. A saved-source revision can change the text in
+the approved design's existing slots.
+
+For a reduced-motion AniCraft lower third, set `authoringParameters.motion`
+to `"hold"`. AVO verifies a fixed plate with clear starts and ends. Omit
+`motion` for the current slide. Text revisions preserve the selected motion.
+To change it, approve and select a separate native design.
+
 The current lower-third profile supports declared 16:9 and 9:16 canvases.
 Review the text size, face and caption clearance within the selected format.
 Automated authoring uses a confined runner and verifies the saved document's
@@ -49,11 +67,20 @@ Use `avo cli artcraft inspect --job <absolute-job-record> --expected-head
 <event-hash> --json` to compare the retained job document, inputs and output
 records against the current files. A video job also checks the project and
 canonical revisions. Inspection is read-only and can run in a fresh session.
+If evidence changed, inspection reports the affected files and the relevant
+rebuild or review actions. The AniCraft lower-third profile can also report
+edited text or font values from the selected native document.
 
 Use `avo cli artcraft recover --job <absolute-job-record> --expected-head
 <event-hash> --json` after an interrupted run. Recovery reports the next action
-and identifies any partial job files as references. Prepare a fresh job when
-the previous run's outcome is unknown. The AVO MCP tools
+and compares retained files with the recorded partial fingerprints. Use
+`--action retry` for an unchanged prepared job or to recover its exact completed
+result after a lost response. Use `--action cancel` before authoring starts.
+Active CLI cancellation requires its confined runner to own the exact running
+job and confirm that its processes and writes have stopped. The cancellation
+receipt keeps partial files as inspection references. For an operator-owned
+handoff, have the operator resolve the writer's state before recovery.
+The AVO MCP tools
 `avo_artcraft_prepare`, `avo_artcraft_run`, `avo_artcraft_inspect` and
 `avo_artcraft_recover` use the same job controls and exact event heads.
 Pass the request and job specification as structured objects in MCP.
@@ -71,8 +98,10 @@ a runner that independently confines the chosen roots and supports bounded
 stdin/stdout. AVO sends one fixed native command at a time, checks its reply,
 and stops before the next command on failure. The run explicitly saves a fresh
 native document and verifies reopened frames and alpha against the same
-contract as CLI batching. When the confined runner is unavailable, use the
-explicit guided route for an operator-owned handoff.
+contract as CLI batching. A verified lower-third export from this profile can
+enter the ordinary proof admission and saved-source reuse paths. When the
+confined runner is unavailable, use the explicit guided route for an
+operator-owned handoff.
 
 For an editable isolated SoundCraft cue, use `--app soundcraft --operation
 isolated-cue --mode cli` with the selected Windows 0.20.1 tools and a confined
@@ -101,6 +130,30 @@ Use the review's `still` fingerprint and `generatedStillRef` on a Tracks overlay
 layer. The proof's `overlay-image` operation uses the same receipt, layer,
 native dimensions, placement and frame range. It holds the image on those
 frames and preserves the original audio.
+
+For an animated emblem, explicitly select `vectorcraft` with operation and
+request behavior `vector-emblem` in confined CLI mode. The Windows 0.24.1
+profile authors one editable 128 × 128 star and verifies its straight-alpha
+sRGB SVG export. Use the review's `artworkRef` as the `artworkRef` in a second
+job for the same provider and component. Explicitly select `anicraft` with
+operation and request behavior `animate-vector-emblem` in confined CLI mode.
+Its Windows 0.2.1 profile produces a 320 × 180 straight-alpha sRGB PNG sequence
+of 24 frames at 24 fps. Include the upstream records and output in the selected
+read roots. The prepared motion job retains both editable sources. Add a
+separately selected SoundCraft cue with the existing SFX Tracks workflow when
+the video needs sound.
+
+For a source-linked FilmCraft return, explicitly select `--app filmcraft
+--operation source-linked-timeline-return --mode cli` using the selected
+Windows 0.20.1 tools and a confined runner. Use a blank document, an
+`interchangeSource` containing one original MP4 or MOV with its canvas size,
+and a `timeline-interchange` OTIO output with the frame rate and frame count.
+The selected profile retains a native project, recipe and one picture and
+stereo audio clip linked to that original. Run `artcraft import-timeline` with
+the exact job head, target project, actor and reason to prepare and validate the
+import for review. Reported losses, unsupported treatments or a former proof
+leave the return reference-only. Activation follows the existing sync and
+creator gates.
 
 For a video job with a verified export, select an Animation component, its BMap
 cue and the linked Tracks overlay before authoring. Register the exact exported
@@ -132,6 +185,13 @@ and the typed parameter and binding object. AVO preserves project-owned copies
 of the native source and its evidence. For a deliberate upgrade, select the
 newer version and pass `--supersedes` with the earlier instance ID.
 Use the reviewed template's font. Omitted fields inherit its approved values.
+
+For an explicitly shared kit, the origin provider publishes a version whose
+native-source rights entry names the recipient and references the rights evidence.
+Add a `sharing` object with `providers`, a list of exact provider slugs, and
+`evidenceRef`, the reference covering that permission. Select the published kit
+from the recipient's project using `--source-provider` with the origin slug.
+The project instance retains the origin, recipient and fingerprinted rights.
 
 For a saved-source text revision, set `document.state` to `saved` and
 `document.source` to the selected project-owned `.anicraft` copy. Include

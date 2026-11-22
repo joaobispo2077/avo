@@ -9,7 +9,7 @@ import pytest
 from avo import artcraft, init_project
 from avo.adapters import artcraft as native
 from avo.timeline.contracts import file_fingerprint
-from tests.artcraft_fixtures import picture_output, request
+from tests.artcraft_fixtures import locked_tool_observation, picture_output, request
 from tests.test_artcraft_jobs import _prepare, job_spec
 
 HEADLESS = b"  anicraft-cli mcp [file|--sample] Model Context Protocol on stdin/stdout"
@@ -132,6 +132,32 @@ def test_missing_headless_mcp_capability_does_not_fall_back(tmp_path, operator_p
     assert failure.value.code == "ARTCRAFT_NOT_READY"
     assert len(observed) == 1
     assert not list(tmp_path.glob("**/job.json"))
+
+
+def test_verified_json_lines_can_register_only_the_selected_lower_third(tmp_path):
+    observation = {
+        **locked_tool_observation(tmp_path, "anicraft"),
+        "app": "anicraft",
+        "operations": ["lower-third"],
+        "mode": "json-lines",
+        "platform": "windows",
+        "release": "0.2.1",
+        "effectiveRoots": {"read": [], "write": [str(tmp_path)]},
+    }
+    assert artcraft.require_artcraft_export_environment(observation) == observation
+    for different in (
+        {"mode": "host-mcp"},
+        {"app": "vectorcraft"},
+        {"operations": ["animate-vector-emblem"]},
+        {"release": "0.2.2"},
+        {"platform": "linux"},
+        {"effectiveRoots": None},
+    ):
+        with pytest.raises(artcraft.ArtCraftError, match="native command observations"):
+            artcraft.require_artcraft_export_environment({**observation, **different})
+    Path(observation["executable"]["locator"]).write_bytes(b"changed CLI fixture")
+    with pytest.raises(artcraft.ArtCraftError, match="installation has changed"):
+        artcraft.require_artcraft_export_environment(observation)
 
 
 def test_json_lines_requires_its_own_confined_stream(tmp_path, operator_profile):
