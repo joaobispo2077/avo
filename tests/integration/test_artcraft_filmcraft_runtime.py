@@ -63,6 +63,7 @@ def test_native_filmcraft_returns_exact_source_timeline_for_sync_review(
         provider_root=provider_dir,
         reader=read_otio,
         probe=FfprobeMediaAdapter().inventory,
+        picture_probe=FfprobeMediaAdapter.video_stream_sha256,
     )
     monkeypatch.setattr(init_project, "load_provider", lambda slug: {"slug": slug})
 
@@ -123,6 +124,32 @@ def test_native_filmcraft_returns_exact_source_timeline_for_sync_review(
     assert cli_result.ok, cli_result.stderr
     assert cli_result.parsed_json["importId"] == result["importId"]
     assert cli_result.parsed_json["status"] == "awaiting-sync"
+    prior_proof = service.workspace.raw_dir / "edit/proof/previous.mov"
+    prior_proof.parent.mkdir(parents=True, exist_ok=True)
+    subprocess.run(
+        [
+            "ffmpeg",
+            "-v",
+            "error",
+            "-i",
+            str(original),
+            "-map",
+            "0",
+            "-c",
+            "copy",
+            str(prior_proof),
+        ],
+        check=True,
+    )
+    assert file_fingerprint(prior_proof)["sha256"] != fingerprint["sha256"]
+    remuxed = service.prepare_filmcraft_return(
+        job, event, actor="fixture", reason="Reject matching picture in a new container"
+    )
+    assert remuxed["status"] == "reference-only"
+    assert remuxed["findings"][0]["code"] == "OTIO_SOURCE_PROHIBITED"
+    assert str(prior_proof) in remuxed["findings"][0]["message"]
+    assert file_fingerprint(original) == fingerprint
+    assert not service.workspace.artifact_path("cmap").exists()
     prohibited = {
         **fingerprint,
         "locator": str(service.workspace.raw_dir / "edit/proof/previous.mp4"),
