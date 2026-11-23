@@ -1,11 +1,14 @@
-"""Pin the selected PhotoCraft profile and its original input boundary."""
+"""Validate selected ArtCraft profiles and their native job boundaries."""
 
 import json
+from contextlib import contextmanager
+from os import scandir
 from zipfile import ZipFile
 
 import pytest
 
 from avo import artcraft, init_project
+from avo.adapters import artcraft_native_cli
 from avo.adapters.artcraft import SelectedArtCraftAdapter
 from avo.adapters.artcraft_photocraft import _read_rgba, _require_package
 from tests.artcraft_fixtures import request
@@ -235,3 +238,102 @@ def test_effectcraft_requires_a_selected_font_source(tmp_path, monkeypatch):
     monkeypatch.setattr(init_project, "load_provider", lambda slug: {"slug": slug})
     with pytest.raises(artcraft.ArtCraftError, match="EffectCraft.*Arial font source"):
         prepare_effect(effect_spec(tmp_path), None)
+
+
+@pytest.mark.parametrize(
+    ("late", "message"),
+    [
+        (False, "exceeded its receipt, file or byte budget"),
+        (True, "exhausted its time budget"),
+    ],
+    ids=["oversized-receipt", "late-reply"],
+)
+def test_native_cli_invalid_reply_skips_scratch_audit(
+    tmp_path, monkeypatch, late, message
+):
+    elapsed = 0
+    monkeypatch.setattr(artcraft_native_cli, "monotonic", lambda: elapsed)
+
+    def invoke(*_args, timeout):
+        nonlocal elapsed
+        assert timeout == 5
+        if late:
+            elapsed = 5
+            return b"receipt"
+        return b"x" * (1024 * 1024 + 1)
+
+    def unexpected_scratch(*_args):
+        pytest.fail("Rejected replies must not inspect scratch")
+
+    monkeypatch.setattr(artcraft_native_cli, "_owned_files", unexpected_scratch)
+    call = artcraft_native_cli.bounded_native_invocation(
+        tmp_path, {"seconds": 5, "files": 1, "bytes": 8}, invoke, label="Native job"
+    )
+
+    with pytest.raises(artcraft.ArtCraftError, match=message):
+        call("mock-command")
+
+
+@pytest.mark.parametrize("limit", ["files", "bytes"])
+def test_native_cli_scratch_audit_stops_at_first_excess(tmp_path, monkeypatch, limit):
+    for name in ("first.bin", "second.bin"):
+        (tmp_path / name).write_bytes(b"x")
+
+    def owned_files(directory, _allowed, _label):
+        yield directory / "first.bin"
+        yield directory / "second.bin"
+        pytest.fail("Scratch audit must stop at the first over-budget file")
+
+    monkeypatch.setattr(artcraft_native_cli, "_owned_files", owned_files)
+    budget = {"seconds": 5, "files": 5, "bytes": 5}
+    budget[limit] = 1
+    call = artcraft_native_cli.bounded_native_invocation(
+        tmp_path.resolve(),
+        budget,
+        lambda *_args, **_kwargs: b"receipt",
+        label="Native job",
+    )
+
+    with pytest.raises(
+        artcraft.ArtCraftError, match="exceeded its receipt, file or byte budget"
+    ):
+        call("mock-command")
+
+
+def test_native_cli_closes_directory_scans_at_scratch_limit(tmp_path, monkeypatch):
+    workspace = tmp_path.resolve()
+    scratch = workspace / "scratch"
+    scratch.mkdir()
+    for index in range(3):
+        (scratch / f"{index}.bin").write_bytes(b"x")
+    visited, closed = [], []
+
+    @contextmanager
+    def watch_scan(directory):
+        with scandir(directory) as entries:
+
+            def observed_entries():
+                for entry in entries:
+                    visited.append(directory)
+                    yield entry
+
+            try:
+                yield observed_entries()
+            finally:
+                closed.append(directory)
+
+    monkeypatch.setattr(artcraft_native_cli, "scandir", watch_scan, raising=False)
+    call = artcraft_native_cli.bounded_native_invocation(
+        workspace,
+        {"seconds": 5, "files": 1, "bytes": 5},
+        lambda *_args, **_kwargs: b"receipt",
+        label="Native job",
+        owned_directories=("scratch",),
+    )
+
+    with pytest.raises(
+        artcraft.ArtCraftError, match="exceeded its receipt, file or byte budget"
+    ):
+        call("mock-command")
+    assert visited == [workspace, scratch, scratch]
+    assert closed == [scratch, workspace]
