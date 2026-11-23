@@ -9,19 +9,30 @@ install_ffmpeg() {
     -o Acquire::http::No-Cache=true
   )
   sudo timeout --kill-after=30s 2m apt-get "${apt_options[@]}" update --error-on=any &&
-    sudo timeout --kill-after=30s 8m apt-get "${apt_options[@]}" install -y --no-install-recommends ffmpeg
+    sudo timeout --kill-after=30s 8m apt-get "${apt_options[@]}" install -y --no-install-recommends "$@" ffmpeg
 }
 
 if ! command -v ffmpeg >/dev/null || ! command -v ffprobe >/dev/null \
   || ! ffmpeg -version >/dev/null 2>&1 || ! ffprobe -version >/dev/null 2>&1; then
   if ! install_ffmpeg; then
     printf '%s\n' 'FFmpeg setup failed. Refreshing package indexes and retrying once.' >&2
+    repair_options=()
+    if [[ -n "$(timeout 5s dpkg --audit)" ]]; then
+      printf '%s\n' 'Configuring packages left by the interrupted installation.' >&2
+      configure_status=0
+      sudo timeout --kill-after=5s 40s dpkg --configure -a || configure_status=$?
+      # An incomplete unpack can leave dependencies for the APT retry to finish.
+      if (( configure_status > 1 )); then
+        exit "$configure_status"
+      fi
+      repair_options=(--fix-broken)
+    fi
     # Retry via the canonical archive when a hosted regional mirror fails.
     if [[ -f /etc/apt/apt-mirrors.txt ]]; then
       sudo sed -i 's#https\?://\([[:alnum:]-]\+\.\)*archive\.ubuntu\.com/ubuntu#https://archive.ubuntu.com/ubuntu#g' \
         /etc/apt/apt-mirrors.txt
     fi
-    install_ffmpeg
+    install_ffmpeg "${repair_options[@]}"
   fi
 fi
 ffmpeg -version
