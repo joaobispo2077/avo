@@ -581,6 +581,10 @@ publishing an export, including copy-only reuse. Late or oversized results
 enter reconciliation with their bounded recoverable files.
 The shared specialist CLI runner checks each reply before scanning scratch.
 It stops the scan at the first exceeded file, byte, or time limit.
+ArtCraft readiness rejects duplicate, missing, or malformed selected command
+signatures. A prepared saved-source job becomes stale when its revision path
+is already occupied. This check runs before validating the native app or
+reserving a run in the journal.
 An interrupted write retains its event and requires a fresh job before another
 attempt at authoring.
 
