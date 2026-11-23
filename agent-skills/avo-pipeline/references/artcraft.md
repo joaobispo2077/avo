@@ -99,6 +99,8 @@ stdin/stdout. AVO sends one fixed native command at a time and stops on an
 invalid or failed reply. Both batch and JSON-lines check each result and the
 acknowledged save destination before accepting a new document. AVO verifies
 reopened frames and alpha against the same contract in either mode.
+A reply arriving after its deadline is rejected before AVO inspects scratch.
+The selected profile audits the owned frame folders under the same limits.
 A verified lower-third export from this profile can
 enter the ordinary proof admission and saved-source reuse paths. When the
 confined runner is unavailable, use the explicit guided route for an
