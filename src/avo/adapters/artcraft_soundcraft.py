@@ -157,10 +157,10 @@ def _run_results(response, identifiers):
     try:
         for line in response.decode("utf-8").splitlines():
             if line.startswith("{"):
-                records.append(json.loads(line))
+                records.append(_read_result(line))
             else:
                 identifier, payload = line.split(": ", 1)
-                commands.append((identifier, json.loads(payload)))
+                commands.append((identifier, _read_result(payload)))
     except ValueError as exc:
         raise ArtCraftError("SoundCraft returned an invalid command result") from exc
     if tuple(item[0] for item in commands) != identifiers:
@@ -168,6 +168,13 @@ def _run_results(response, identifiers):
             "SoundCraft returned incomplete or reordered command results"
         )
     return [result for _, result in commands], records
+
+
+def _read_result(payload):
+    result = json.loads(payload)
+    if not isinstance(result, dict) or "error" in result:
+        raise ValueError("Expected a successful SoundCraft result object")
+    return result
 
 
 def _import_source(call, steps, original, dry):
@@ -181,8 +188,13 @@ def _import_source(call, steps, original, dry):
         "--compact",
     )
     commands, records = _run_results(response, ("session.new", "file.import_audio"))
-    imported = commands[1]["imported"]
-    if len(imported) != 1 or len(records) != 2 or not original.is_file():
+    session, imported = commands[0], commands[1]["imported"]
+    if (
+        session.get("sample_rate") != steps["session.new"]["sample_rate"]
+        or len(imported) != 1
+        or len(records) != 2
+        or not original.is_file()
+    ):
         raise ArtCraftError("SoundCraft did not save one exact imported audio track")
     found = imported[0]
     _require_session_sources(records[-1], found, dry)

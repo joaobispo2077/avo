@@ -13,12 +13,12 @@ from .artcraft_native_cli import (
     selected_native_command_signatures,
 )
 
-_COMMANDS = {
-    "file.newProject",
-    "file.import",
-    "file.saveAs",
-    "file.newSequence",
-    "file.exportInterchange",
+_REQUIRED_RESULT_FIELDS = {
+    "file.newProject": {"name": str},
+    "file.import": {"errors": list, "items": list},
+    "file.saveAs": {"bytes": int, "path": str},
+    "file.newSequence": {"sequence": int},
+    "file.exportInterchange": {"bytes": int, "path": str, "report": list},
 }
 
 
@@ -40,10 +40,11 @@ def observe_filmcraft(executable, environment):
         ) from exc
     if len(result.stdout) > 4 * 1024 * 1024:
         raise ArtCraftError("FilmCraft command registry exceeds its byte limit")
+    required = _REQUIRED_RESULT_FIELDS.keys()
     commands = selected_native_command_signatures(
-        result.stdout, _COMMANDS, label="FilmCraft"
+        result.stdout, required, label="FilmCraft"
     )
-    if commands.keys() != _COMMANDS or file_fingerprint(path) != executable:
+    if commands.keys() != required or file_fingerprint(path) != executable:
         raise ArtCraftError(
             "FilmCraft exchange command scope or executable changed",
             code="ARTCRAFT_NOT_READY",
@@ -127,14 +128,62 @@ def _batch(call, script, steps, *options):
         "".join(json.dumps(step, ensure_ascii=False) + "\n" for step in steps),
         encoding="utf-8",
     )
-    rows = [json.loads(line) for line in call(*options, "run", script).splitlines()]
+    response = call(*options, "run", script)
+    try:
+        rows = [
+            json.loads(line.decode("utf-8"), object_pairs_hook=_distinct_receipt_fields)
+            for line in response.splitlines()
+        ]
+    except (ValueError, RecursionError) as exc:
+        raise ArtCraftError("FilmCraft returned malformed command receipts") from exc
     if len(rows) != len(steps) or any(
-        (row.get("id"), row.get("line")) != (step["id"], index)
-        or row.get("ok") is not True
+        not _valid_batch_receipt(row, step, index)
         for index, (row, step) in enumerate(zip(rows, steps, strict=True), start=1)
     ):
         raise ArtCraftError("FilmCraft returned incomplete or failed command receipts")
     return [row["result"] for row in rows]
+
+
+def _distinct_receipt_fields(pairs):
+    fields = dict(pairs)
+    if len(fields) != len(pairs):
+        raise ValueError("duplicate FilmCraft receipt field")
+    return fields
+
+
+def _valid_batch_receipt(row, step, index):
+    if (
+        not isinstance(row, dict)
+        or row.get("id") != step["id"]
+        or type(row.get("line")) is not int
+        or row["line"] != index
+        or row.get("ok") is not True
+        or "error" in row
+        or not isinstance(row.get("result"), dict)
+    ):
+        return False
+    return _valid_batch_result(row["result"], step)
+
+
+def _valid_batch_result(result, step):
+    command = step["id"]
+    fields = _REQUIRED_RESULT_FIELDS.get(command)
+    if (
+        fields is None
+        or "error" in result
+        or any(
+            type(result.get(field)) is not expected
+            for field, expected in fields.items()
+        )
+    ):
+        return False
+    if command == "file.newProject":
+        return result["name"] == step["params"]["name"]
+    if command == "file.import":
+        return all(item is not None for item in result["items"])
+    if command in {"file.saveAs", "file.exportInterchange"}:
+        return bool(result["path"]) and result["bytes"] >= 0
+    return True
 
 
 def _require_saved(receipt, target):

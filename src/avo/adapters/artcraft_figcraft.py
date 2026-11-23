@@ -166,6 +166,7 @@ def _valid_script_receipt(row, index, command):
         and row["step"] == index
         and row.get("command") == command
         and row.get("ok") is True
+        and "error" not in row
         and "result" in row
     )
 

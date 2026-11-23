@@ -256,9 +256,26 @@ def _card_invocation(directory, budget, invoke):
 
     def call(*arguments):
         rows = run("--safe-mode", *arguments)
-        return [json.loads(line) for line in rows.splitlines()]
+        return _read_receipts(rows)
 
     return call
+
+
+def _read_receipts(raw):
+    error = "VectorCraft returned an invalid command result"
+    try:
+        rows = [json.loads(line) for line in raw.splitlines()]
+    except ValueError as exc:
+        raise ArtCraftError(error) from exc
+    if any(
+        not isinstance(row, dict)
+        or "error" in row
+        or not isinstance(row.get("result"), dict)
+        or "error" in row["result"]
+        for row in rows
+    ):
+        raise ArtCraftError(error)
+    return rows
 
 
 def _require_authored_steps(rows, commands):
@@ -289,7 +306,9 @@ def _require_saved_path(receipt, expected, format_name):
 
 
 def _require_reopened_artwork(rows, output, image, format_name):
-    if [row.get("step") for row in rows] != ["open", "cmd", "export"]:
+    if [row.get("step") for row in rows] != ["open", "cmd", "export"] or rows[1].get(
+        "command"
+    ) != _INSPECT:
         raise ArtCraftError("VectorCraft reopened card has incomplete receipts")
     opened, inspected = (row["result"] for row in rows[:2])
     if (
