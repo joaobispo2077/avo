@@ -4,16 +4,21 @@ import json
 import os
 import subprocess
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import contextmanager
 from hashlib import sha256
 from pathlib import Path
 from threading import Event, Lock
 from time import monotonic, sleep
+from types import SimpleNamespace
 
 import pytest
 from PIL import Image
 from tests.artcraft_fixtures import request
 from tests.integration.test_artcraft_lower_third_runtime import _job_contract
-from tests.integration.test_artcraft_modes_runtime import _fixture_command
+from tests.integration.test_artcraft_modes_runtime import (
+    _fixture_command,
+    _fixture_stream,
+)
 from tests.test_artcraft_jobs import _prepare, job_spec
 from tests.test_artcraft_profiles import effect_spec, prepare_effect
 from tests.test_reconstruction_bundle import canonical_project
@@ -98,6 +103,117 @@ def test_installed_anicraft_save_is_retained_when_the_runner_loses_its_reply(
             adapter=None,
         )
     assert calls == ["new", "exec", "run"]
+
+
+def test_installed_anicraft_json_lines_disconnect_preserves_the_saved_revision(
+    tmp_path, monkeypatch
+):
+    cli = _installed_cli()
+    monkeypatch.setattr(init_project, "load_provider", lambda slug: {"slug": slug})
+    batch_adapter = SelectedArtCraftAdapter(
+        observe_confinement=lambda _tool, roots: roots, run_confined=_fixture_command
+    )
+    output = _job_contract()
+    baseline_spec = job_spec(
+        tmp_path,
+        cliPath=str(cli),
+        output=output,
+        authoringParameters={"primaryText": "Approved speaker", "font": "Arial"},
+    )
+    baseline = _prepare(artcraft, request(), baseline_spec, batch_adapter)
+    baseline_export = artcraft.run_authoring(
+        baseline["jobRef"], expected_head=baseline["head"], adapter=batch_adapter
+    )
+    _, previous = artcraft.read_authoring_export(
+        baseline_export["jobRef"], expected_head=baseline_export["head"]
+    )
+    original = Path(previous["saved"]["locator"])
+    calls, commands, disconnected = [], [], []
+
+    def record_command(*args, **kwargs):
+        calls.append(args[3][0])
+        return _fixture_command(*args, **kwargs)
+
+    @contextmanager
+    def disconnect_after_save(*args, **kwargs):
+        directory = args[2]
+        calls.append("serve")
+        with _fixture_stream(*args, **kwargs) as stream:
+            native = directory / "component.anicraft"
+
+            def send_line(message, *, timeout):
+                commands.append(json.loads(message))
+                stream.send_line(message, timeout=timeout)
+
+            def read_line(*, max_bytes, timeout):
+                reply = stream.read_line(max_bytes=max_bytes, timeout=timeout)
+                if not commands or commands[-1]["cmd"] != "file.save_as":
+                    return reply
+                assert commands[-1]["params"]["path"] == str(native)
+                receipt = json.loads(reply)
+                assert receipt["id"] == commands[-1]["id"] and receipt["ok"] is True
+                assert native.is_file()
+                process = stream._process
+                assert process.poll() is None
+                process.terminate()
+                process.wait(timeout=min(timeout, 3))
+                disconnected.append((native, process.returncode))
+                return stream.read_line(max_bytes=max_bytes, timeout=timeout)
+
+            yield SimpleNamespace(send_line=send_line, read_line=read_line)
+
+    adapter = SelectedArtCraftAdapter(
+        observe_confinement=lambda _tool, roots: roots,
+        run_confined=record_command,
+        open_confined=disconnect_after_save,
+    )
+    revised = {
+        **baseline_spec,
+        "jobId": "speaker-label-disconnected",
+        "mode": "json-lines",
+        "document": {"state": "saved", "source": str(original)},
+        "readRoots": [str(original.parent)],
+        "authoringParameters": {"primaryText": "Revised speaker", "font": "Arial"},
+    }
+    prepared = _prepare(artcraft, request(), revised, adapter)
+    with pytest.raises(artcraft.ArtCraftError) as interrupted:
+        artcraft.run_authoring(
+            prepared["jobRef"], expected_head=prepared["head"], adapter=adapter
+        )
+    assert interrupted.value.code == "ARTCRAFT_OUTCOME_UNKNOWN"
+    assert "JSON-lines reply" in str(interrupted.value.__cause__)
+    ((native, returncode),) = disconnected
+    assert returncode != 0 and commands[-1]["cmd"] == "file.save_as"
+    store = artcraft.ArtCraftJobStore(tmp_path)
+    pending = store.head(revised["jobId"])
+    assert pending["state"] == "outcome-unknown" and "outputs" not in pending
+    inspected = inspect_lower_third_source(
+        native,
+        output,
+        revised["authoringParameters"],
+        max_bytes=revised["budget"]["bytes"],
+    )
+    assert inspected["editableText"] == "Revised speaker"
+    recovery = artcraft.recover_authoring(
+        prepared["jobRef"], expected_head=pending["eventHash"]
+    )["recovery"]
+    assert inspected["fingerprint"] in recovery["retainedFiles"]
+    assert recovery["artifactState"] == "reference-only"
+    dispatches = list(calls)
+    with pytest.raises(artcraft.ArtCraftError, match="requires reconciliation"):
+        artcraft.recover_authoring(
+            prepared["jobRef"],
+            expected_head=pending["eventHash"],
+            action="retry",
+            adapter=adapter,
+        )
+    assert calls == dispatches and store.head(revised["jobId"]) == pending
+    assert (
+        artcraft.read_authoring_export(
+            baseline_export["jobRef"], expected_head=baseline_export["head"]
+        )[1]
+        == previous
+    )
 
 
 def test_installed_anicraft_stale_source_reports_the_edited_title_through_cli(
