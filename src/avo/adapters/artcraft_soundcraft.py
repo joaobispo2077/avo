@@ -13,7 +13,10 @@ from avo.artcraft import ArtCraftError, _copy_native_source
 from avo.timeline.contracts import content_hash, file_fingerprint
 from avo.timeline.store import write_immutable_json
 
-from .artcraft_native_cli import selected_native_command_signatures
+from .artcraft_native_cli import (
+    require_native_scratch_budget,
+    selected_native_command_signatures,
+)
 from .media.local_source import local_source_arguments
 
 ROOM_REVERB = "room_reverb"
@@ -121,21 +124,16 @@ def _require_unchanged_bounce(locked, native, media, reopened):
 def _job_invocation(directory, budget, invoke, deadline):
     def call(*arguments):
         response = invoke(directory, *arguments, timeout=_remaining(deadline))
+        _remaining(deadline)
         if len(response) > 1024 * 1024:
             raise ArtCraftError("SoundCraft response exceeds the cue budget")
-        size = count = 0
-        for path in directory.rglob("*"):
-            if path.resolve() != path:
-                raise ArtCraftError("SoundCraft created an external path alias")
-            if path.is_dir():
-                continue
-            details = path.stat()
-            if not path.is_file() or details.st_nlink != 1:
-                raise ArtCraftError("SoundCraft created a nonregular or shared file")
-            count += 1
-            size += details.st_size
-            if count > budget["files"] or size > budget["bytes"]:
-                raise ArtCraftError("SoundCraft exhausted its cue file or byte budget")
+        require_native_scratch_budget(
+            directory,
+            budget,
+            label="SoundCraft cue",
+            check_time=lambda: _remaining(deadline),
+            owned_directories=("Audio Files",),
+        )
         return response
 
     return call

@@ -26,14 +26,31 @@ def bounded_native_invocation(
     def call(*arguments):
         result = invoke(directory, *arguments, timeout=remaining_time())
         remaining_time()
-        if len(result) <= 1024 * 1024:
-            with closing(_owned_files(directory, owned_directories, label)) as files:
-                if _owned_outputs_fit(files, budget, label, remaining_time):
-                    remaining_time()
-                    return result
-        raise ArtCraftError(f"{label} exceeded its receipt, file or byte budget")
+        if len(result) > 1024 * 1024:
+            raise ArtCraftError(f"{label} exceeded its receipt, file or byte budget")
+        require_native_scratch_budget(
+            directory,
+            budget,
+            label=label,
+            check_time=remaining_time,
+            owned_directories=owned_directories,
+        )
+        return result
 
     return call
+
+
+def require_native_scratch_budget(
+    directory, budget, *, label, check_time, owned_directories=()
+):
+    """Check the owned output tree and return the total bytes of regular files."""
+    check_time()
+    if directory.resolve() != directory or not directory.is_dir():
+        raise ArtCraftError(f"{label} workspace is missing or redirected")
+    with closing(_owned_files(directory, owned_directories, label)) as files:
+        size = _owned_output_bytes(files, budget, label, check_time)
+    check_time()
+    return size
 
 
 def _owned_files(directory, allowed, label):
@@ -49,12 +66,12 @@ def _owned_files(directory, allowed, label):
                 yield from (Path(child.path) for child in children)
 
 
-def _owned_outputs_fit(files, budget, label, check_time):
-    remaining_bytes = budget["bytes"]
+def _owned_output_bytes(files, budget, label, check_time):
+    size = 0
     for count, item in enumerate(files, 1):
         check_time()
         if count > budget["files"]:
-            return False
+            break
         metadata = item.lstat()
         if (
             item.resolve() != item
@@ -62,10 +79,12 @@ def _owned_outputs_fit(files, budget, label, check_time):
             or metadata.st_nlink != 1
         ):
             raise ArtCraftError(f"{label} created a linked or external file")
-        remaining_bytes -= metadata.st_size
-        if remaining_bytes < 0:
-            return False
-    return True
+        size += metadata.st_size
+        if size > budget["bytes"]:
+            break
+    else:
+        return size
+    raise ArtCraftError(f"{label} exceeded its receipt, file or byte budget")
 
 
 def observe_native_command_schema(

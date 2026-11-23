@@ -15,8 +15,11 @@ from avo.artcraft import ArtCraftError
 from avo.timeline.contracts import content_hash, file_fingerprint
 from avo.timeline.store import write_immutable_json
 
+from .artcraft_native_cli import require_native_scratch_budget
+
 MATTE_CHECK_RGB = (55, 113, 174)
 _VECTOR_PATH = re.compile(r"[MmZzLlHhVvCcSsQqTtAaEe0-9+.,\s-]+\Z", re.ASCII)
+_RENDER_DIRECTORIES = ("white", "reopened", "black", "check", "alpha")
 
 LOWER_THIRD_COMMANDS = frozenset(
     {
@@ -691,7 +694,7 @@ def run_lower_third(
     call = _profile_invocation(directory, budget, invoke, deadline)
     outline = None if artwork is None else _prepare_identity(artwork, identity, call)
     recipe = write_immutable_json(directory / "recipe.json", steps)
-    _require_profile_budget(directory, budget)
+    _require_profile_budget(directory, budget, deadline)
     empty = directory / "empty.anicraft"
     _initialize_document(call, empty, output, parameters["font"])
     replies = _apply_recipe(
@@ -823,7 +826,7 @@ def revise_lower_third(
         output["frameCount"],
     )
     recipe = write_immutable_json(directory / "recipe.json", steps)
-    _require_profile_budget(directory, budget)
+    _require_profile_budget(directory, budget, deadline)
     _require_font(call, working, parameters["font"])
     _apply_recipe(call, working, native, recipe, steps, open_stream, budget, deadline)
     result = _verified_export(
@@ -926,7 +929,7 @@ def _verified_export(
         safe_bounds=safe_bounds,
         hold=source.get("motion") == "hold",
     )
-    _require_profile_budget(directory, budget)
+    _require_profile_budget(directory, budget, deadline)
     if file_fingerprint(native) != locked_source:
         raise ArtCraftError("AniCraft saved document changed after reopening")
     return {
@@ -959,7 +962,7 @@ def _profile_invocation(directory, budget, invoke, deadline):
         payload = invoke(directory, *arguments, timeout=remaining)
         if len(payload) > 2 * 1024 * 1024:
             raise ArtCraftError("AniCraft command response exceeded the profile budget")
-        _require_profile_budget(directory, budget)
+        _require_profile_budget(directory, budget, deadline)
         return payload
 
     return call
@@ -972,21 +975,14 @@ def _remaining(deadline):
     return remaining
 
 
-def _require_profile_budget(directory, budget):
-    count = size = 0
-    for path in directory.rglob("*"):
-        if path.resolve() != path:
-            raise ArtCraftError("AniCraft created an external path alias")
-        if path.is_dir():
-            continue
-        metadata = path.stat()
-        if not path.is_file() or metadata.st_nlink != 1:
-            raise ArtCraftError("AniCraft created a nonregular or shared file")
-        count += 1
-        size += metadata.st_size
-        if count > budget["files"] or size > budget["bytes"]:
-            raise ArtCraftError("AniCraft job exceeded its file or byte budget")
-    return size
+def _require_profile_budget(directory, budget, deadline):
+    return require_native_scratch_budget(
+        directory,
+        budget,
+        label="AniCraft job",
+        check_time=lambda: _remaining(deadline),
+        owned_directories=_RENDER_DIRECTORIES,
+    )
 
 
 def _initialize_document(call, empty, output, font):
@@ -1057,7 +1053,8 @@ def _run_json_lines(open_stream, document, native, steps, *, budget, deadline):
             session.send_line(message + b"\n", timeout=_remaining(deadline))
             reply = _json_lines_record(session, deadline)
             _require_json_lines_reply(reply, index, step)
-            _require_profile_budget(native.parent, budget)
+            _require_profile_budget(native.parent, budget, deadline)
+    _remaining(deadline)
     if not native.is_file():
         raise ArtCraftError(
             "AniCraft JSON-lines recipe did not save its native document"
@@ -1067,6 +1064,7 @@ def _run_json_lines(open_stream, document, native, steps, *, budget, deadline):
 def _json_lines_record(session, deadline):
     limit = 2 * 1024 * 1024
     raw = session.read_line(max_bytes=limit + 1, timeout=_remaining(deadline))
+    _remaining(deadline)
     if len(raw) > limit or not raw.endswith(b"\n"):
         raise ArtCraftError(
             "AniCraft JSON-lines reply exceeded its frame budget or was incomplete"
@@ -1167,7 +1165,7 @@ def _render_matte(
             "AniCraft render sequence differs from its exact frame range"
         )
     target.mkdir()
-    used_bytes = _require_profile_budget(directory, budget)
+    used_bytes = _require_profile_budget(directory, budget, deadline)
     dimensions = output["width"], output["height"]
     rendered, maximum, boxes = [], 0, []
     for name in names:
