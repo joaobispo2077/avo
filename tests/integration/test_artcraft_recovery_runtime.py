@@ -24,9 +24,10 @@ from tests.test_artcraft_profiles import effect_spec, prepare_effect
 from tests.test_reconstruction_bundle import canonical_project
 
 from avo import artcraft, init_project
-from avo.adapters.artcraft import SelectedArtCraftAdapter
+from avo.adapters.artcraft import SelectedArtCraftAdapter, _runtime_environment
 from avo.adapters.artcraft_anicraft import inspect_lower_third_source
 from avo.mcp.bridge import run_cli
+from avo.timeline.contracts import file_fingerprint
 from avo.timeline.reconstruction import (
     build_reconstruction_bundle,
     verify_reconstruction_bundle,
@@ -214,6 +215,75 @@ def test_installed_anicraft_json_lines_disconnect_preserves_the_saved_revision(
         )[1]
         == previous
     )
+
+
+def test_installed_anicraft_refuses_a_revision_saved_by_another_headless_process(
+    tmp_path, monkeypatch
+):
+    cli = _installed_cli()
+    monkeypatch.setattr(init_project, "load_provider", lambda slug: {"slug": slug})
+    adapter = SelectedArtCraftAdapter(
+        observe_confinement=lambda _tool, roots: roots, run_confined=_fixture_command
+    )
+    source = tmp_path / "selected-original.anicraft"
+    binary = {"locator": str(cli)}
+    environment = _runtime_environment()
+    _fixture_command(
+        binary,
+        {"write": [str(tmp_path)]},
+        tmp_path,
+        ("new", "--out", source),
+        env=environment,
+        timeout=10,
+    )
+    original = file_fingerprint(source)
+    spec = job_spec(
+        tmp_path,
+        cliPath=str(cli),
+        document={"state": "saved", "source": str(source)},
+        readRoots=[str(tmp_path)],
+        output=_job_contract(),
+        authoringParameters={"primaryText": "Speaker", "font": "Arial"},
+    )
+    prepared = _prepare(artcraft, request(), spec, adapter)
+    workspace = tmp_path / prepared["job"]["document"]
+    revision = workspace.parent / "revision"
+    revision.mkdir()
+    other_source = revision / "original.anicraft"
+    other_source.write_bytes(source.read_bytes())
+    occupied = revision / "component.anicraft"
+    command = {"id": 1, "cmd": "file.save_as", "params": {"path": str(occupied)}}
+
+    def unexpected(*_args, **_kwargs):
+        pytest.fail("The occupied revision must not reach native validation")
+
+    monkeypatch.setattr(adapter, "validate_run", unexpected)
+    with _fixture_stream(
+        binary,
+        {"write": [str(revision)]},
+        revision,
+        ("serve", other_source),
+        env=environment,
+        timeout=10,
+    ) as writer:
+        assert writer.read_line(max_bytes=65536, timeout=10)
+        writer.send_line(json.dumps(command).encode("utf-8") + b"\n", timeout=10)
+        receipt = json.loads(writer.read_line(max_bytes=65536, timeout=10))
+        assert receipt["id"] == 1 and receipt["ok"] is True
+        saved = file_fingerprint(occupied)
+
+        with pytest.raises(artcraft.ArtCraftError, match="stale"):
+            artcraft.run_authoring(
+                prepared["jobRef"], expected_head=prepared["head"], adapter=adapter
+            )
+
+        assert writer._process.poll() is None
+        assert file_fingerprint(occupied) == saved
+    head = artcraft.ArtCraftJobStore(tmp_path).head(spec["jobId"])
+    assert head["state"] == "prepared" and head["eventHash"] == prepared["head"]
+    assert not (revision / "recipe.json").exists()
+    assert file_fingerprint(source) == original
+    assert workspace.read_bytes() == source.read_bytes()
 
 
 def test_installed_anicraft_stale_source_reports_the_edited_title_through_cli(

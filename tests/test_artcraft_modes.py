@@ -240,6 +240,49 @@ def test_changed_authority_or_document_refuses_before_dispatch(
     assert current["state"] == "prepared"
 
 
+def test_occupied_saved_revision_refuses_before_tool_validation(
+    tmp_path, monkeypatch, operator_profile
+):
+    def unexpected(*_args, **_kwargs):
+        pytest.fail("An occupied saved revision must not reach native validation")
+
+    source = tmp_path / "source.anicraft"
+    source.write_bytes(b"selected editable source")
+    adapter = native.SelectedArtCraftAdapter(
+        observe_confinement=lambda _installation, roots: roots,
+        run_confined=unexpected,
+    )
+    spec = job_spec(
+        tmp_path,
+        document={"state": "saved", "source": str(source)},
+        readRoots=[str(tmp_path)],
+        authoringParameters={"primaryText": "Speaker", "font": "Arial"},
+        output=picture_output(),
+    )
+    prepared = _prepare(artcraft, request(), spec, adapter)
+    document = tmp_path / prepared["job"]["document"]
+    occupied = document.parent / "revision" / "component.anicraft"
+    occupied.parent.mkdir()
+    occupied.write_bytes(b"owned by another writer")
+    prior = file_fingerprint(occupied)
+    monkeypatch.setattr(adapter, "validate_run", unexpected)
+
+    current = artcraft.inspect_authoring(
+        prepared["jobRef"], expected_head=prepared["head"]
+    )
+    with pytest.raises(artcraft.ArtCraftError, match="stale"):
+        artcraft.run_authoring(
+            prepared["jobRef"], expected_head=prepared["head"], adapter=adapter
+        )
+
+    assert current["status"] == "stale"
+    assert current["checks"]["nativeDocument"] == "changed"
+    head = artcraft.ArtCraftJobStore(tmp_path).head(spec["jobId"])
+    assert head["state"] == "prepared" and head["eventHash"] == prepared["head"]
+    assert file_fingerprint(occupied) == prior
+    assert document.read_bytes() == source.read_bytes() == b"selected editable source"
+
+
 @pytest.mark.parametrize(
     "reply",
     [
