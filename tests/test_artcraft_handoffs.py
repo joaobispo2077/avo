@@ -1,5 +1,6 @@
 """Selected specialist exchanges preserve exact dependencies and timeline authority."""
 
+import json
 from contextlib import contextmanager
 from copy import deepcopy
 from os import scandir
@@ -10,7 +11,7 @@ import pytest
 
 from avo import artcraft, init_project
 from avo.adapters import artcraft_native_cli
-from avo.adapters.artcraft_filmcraft import author_interchange
+from avo.adapters.artcraft_filmcraft import _batch, author_interchange
 from avo.adapters.artcraft_vectorcraft import author_vector_emblem
 from avo.timeline.contracts import file_fingerprint
 from avo.timeline.import_service import _filmcraft_reference_findings
@@ -99,6 +100,98 @@ def test_filmcraft_rejects_complete_proof_before_launch(tmp_path, monkeypatch):
     spec = film_spec(tmp_path, original)
     with pytest.raises(artcraft.ArtCraftError, match="program proof"):
         _prepare(artcraft, film_request(spec["provider"]), spec, None, intent=intent)
+
+
+@pytest.mark.parametrize(
+    "receipt",
+    [
+        b"[]",
+        b"invalid JSON",
+        b"\xff",
+        b'{"line":1,"id":"file.saveAs","ok":true}',
+        (
+            b'{"line":1,"id":"file.saveAs","ok":false,"ok":true,'
+            b'"result":{"path":"saved.fcproj","bytes":1}}'
+        ),
+        {"line": True},
+        {"line": 1.0},
+        {"id": "file.newProject"},
+        {"ok": False},
+        {"ok": 1},
+        {"error": "save failed"},
+        {"result": None},
+        {"result": []},
+        {"result": {"path": "saved.fcproj", "bytes": True}},
+        {"result": {"path": "saved.fcproj", "bytes": 1, "error": "save failed"}},
+    ],
+)
+def test_filmcraft_rejects_invalid_batch_receipt(tmp_path, receipt):
+    target = str(tmp_path / "component.fcproj")
+    step = {"id": "file.saveAs", "params": {"path": target}}
+    if isinstance(receipt, dict):
+        receipt = json.dumps(
+            {
+                "line": 1,
+                "id": step["id"],
+                "ok": True,
+                "result": {"path": target, "bytes": 1},
+                **receipt,
+            }
+        ).encode()
+    with pytest.raises(artcraft.ArtCraftError, match="command receipts"):
+        _batch(lambda *_: receipt, tmp_path / "save.jsonl", [step])
+
+
+@pytest.mark.parametrize(
+    ("command", "params", "result"),
+    [
+        ("file.newProject", {"name": "AVO source timeline"}, {}),
+        ("file.import", {}, {"errors": {}, "items": ["source-id"]}),
+        ("file.import", {}, {"errors": [], "items": [None]}),
+        ("file.newSequence", {}, {"sequence": None}),
+        ("file.newSequence", {}, {"sequence": True}),
+        ("file.exportInterchange", {}, {"path": "component.otio", "bytes": 10}),
+    ],
+)
+def test_filmcraft_rejects_partial_command_result(tmp_path, command, params, result):
+    receipt = json.dumps(
+        {"line": 1, "id": command, "ok": True, "result": result}
+    ).encode()
+    with pytest.raises(artcraft.ArtCraftError, match="command receipts"):
+        _batch(
+            lambda *_: receipt,
+            tmp_path / "commands.jsonl",
+            [{"id": command, "params": params}],
+        )
+
+
+def test_filmcraft_preserves_results_from_complete_ordered_batch(tmp_path):
+    commands = [
+        (
+            "file.newProject",
+            {"name": "AVO edição"},
+            {"name": "AVO edição", "revision": 0},
+        ),
+        ("file.import", {}, {"errors": [], "items": ["source-id"]}),
+        ("file.saveAs", {}, {"path": "component.fcproj", "bytes": 10}),
+        ("file.newSequence", {}, {"sequence": 1}),
+        (
+            "file.exportInterchange",
+            {},
+            {"path": "component.otio", "bytes": 10, "report": []},
+        ),
+    ]
+    receipts = "\n".join(
+        json.dumps(
+            {"line": index, "id": command, "ok": True, "result": result},
+            ensure_ascii=False,
+        )
+        for index, (command, _, result) in enumerate(commands, 1)
+    ).encode()
+    steps = [{"id": command, "params": params} for command, params, _ in commands]
+    assert _batch(lambda *_: receipts, tmp_path / "commands.jsonl", steps) == [
+        result for _, _, result in commands
+    ]
 
 
 @pytest.mark.parametrize("app", ["filmcraft", "vectorcraft"])

@@ -433,3 +433,45 @@ def test_native_json_lines_stops_before_export_when_save_reply_names_another_fil
         )
     assert sent == [{"id": 1, **steps[0]}]
     assert target.is_file()
+
+
+@pytest.mark.parametrize(
+    "row",
+    [
+        {"command": "develop.set", "ok": True, "result": {"error": "failed"}},
+        {"command": "develop.set", "ok": True, "result": None, "error": "failed"},
+        {"command": "develop.set", "ok": True},
+        {"command": "develop.get", "ok": True, "result": None},
+    ],
+)
+def test_lightcraft_rejects_incomplete_or_failed_command_results(row):
+    from avo.adapters.artcraft_lightcraft import _receipts
+
+    with pytest.raises(artcraft.ArtCraftError, match="every selected command"):
+        _receipts(json.dumps(row).encode("utf-8"), (row["command"],))
+
+
+@pytest.mark.parametrize("result", [None, {"error": "failed"}])
+def test_soundcraft_rejects_failed_session_creation_receipts(result):
+    from avo.adapters.artcraft_soundcraft import _run_results
+
+    reply = f"session.new: {json.dumps(result)}\n".encode()
+    with pytest.raises(artcraft.ArtCraftError, match="invalid command result"):
+        _run_results(reply, ("session.new",))
+
+
+@pytest.mark.parametrize("result", [None, {"error": "failed"}])
+def test_vectorcraft_rejects_failed_intermediate_command_receipts(tmp_path, result):
+    from avo.adapters.artcraft_vectorcraft import _card_invocation
+
+    def invoke(directory, *arguments, timeout):
+        assert directory == tmp_path
+        assert arguments == ("--safe-mode", "run")
+        assert timeout > 0
+        return json.dumps(
+            {"step": "cmd", "command": "paint.setFill", "result": result}
+        ).encode("utf-8")
+
+    call = _card_invocation(tmp_path, {"bytes": 1024, "files": 2, "seconds": 5}, invoke)
+    with pytest.raises(artcraft.ArtCraftError, match="invalid command result"):
+        call("run")

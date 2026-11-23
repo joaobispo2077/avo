@@ -11,8 +11,14 @@ import pytest
 from avo import artcraft, init_project
 from avo.adapters import artcraft_native_cli
 from avo.adapters.artcraft import SelectedArtCraftAdapter
+from avo.adapters.artcraft_deckcraft import _receipts as _deck_receipts
+from avo.adapters.artcraft_effectcraft import _save_project as _save_effect_project
 from avo.adapters.artcraft_figcraft import _run_script
-from avo.adapters.artcraft_photocraft import _read_rgba, _require_package
+from avo.adapters.artcraft_photocraft import (
+    _create_editable_photo,
+    _read_rgba,
+    _require_package,
+)
 from avo.timeline.contracts import content_hash, file_fingerprint
 from tests.artcraft_fixtures import request
 from tests.test_artcraft_jobs import _prepare, job_spec
@@ -31,6 +37,7 @@ EFFECT_OPERATION = "editable-masked-lower-third"
         {"step": 0.0, "command": "node.get", "ok": True, "result": {}},
         {"step": 0, "command": "node.get", "ok": 1, "result": {}},
         {"step": 0, "command": "node.get", "ok": True},
+        {"step": 0, "command": "node.get", "ok": True, "result": {}, "error": "failed"},
         [],
     ],
 )
@@ -40,6 +47,65 @@ def test_figcraft_rejects_incomplete_or_ambiguous_script_receipts(tmp_path, rece
 
     with pytest.raises(artcraft.ArtCraftError, match="every selected script step"):
         _run_script(call, tmp_path, "inspect", [{"command": "node.get"}])
+
+
+@pytest.mark.parametrize("result", [None, {"layer": 1, "error": "failed"}])
+def test_photocraft_rejects_failed_curves_result(tmp_path, result):
+    def call(*args):
+        return json.dumps(
+            {"command": "layer.newAdjustmentLayer.curves", "result": result}
+        )
+
+    with pytest.raises(artcraft.ArtCraftError, match="editable Curves layer"):
+        _create_editable_photo(call, tmp_path / "source.png", tmp_path / "card.pcraft")
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        "view.closeMaster → null\nunrecognized response",
+        "slide.inspect → null",
+        'slide.inspect → {"index":1,"transition":{},"error":"native command failed"}',
+        'slide.new → {"id":12,"index":true}',
+        "shape.fill → true",
+    ],
+)
+def test_deckcraft_rejects_invalid_command_stdout(line):
+    with pytest.raises(artcraft.ArtCraftError, match="DeckCraft"):
+        _deck_receipts((line + "\n").encode("utf-8"))
+
+
+def test_deckcraft_accepts_native_null_and_integer_results():
+    output = "view.closeMaster → null\nslide.rename → null\nshape.fill → 7\n"
+    assert _deck_receipts(output.encode("utf-8")) == [
+        ("view.closeMaster", None),
+        ("slide.rename", None),
+        ("shape.fill", 7),
+    ]
+
+
+@pytest.mark.parametrize(
+    "partial",
+    [
+        {},
+        {"result": {"comp": 1, "error": "native command failed"}},
+        {"result": {"comp": True}},
+    ],
+)
+def test_effectcraft_rejects_incomplete_batch_even_when_saved(tmp_path, partial):
+    def call(*args):
+        recipe, target = args[3], args[5]
+        target.write_bytes(b"saved native document")
+        steps = json.loads(recipe.read_text(encoding="utf-8"))
+        rows = [
+            {"command": step["command"], "result": {key: 1}}
+            for step, key in zip(steps, ("comp", "layer", "mask", "layer"), strict=True)
+        ]
+        rows[0] = {"command": steps[0]["command"], **partial}
+        return json.dumps({"saved": str(target), "result": rows}).encode("utf-8")
+
+    with pytest.raises(artcraft.ArtCraftError, match="EffectCraft"):
+        _save_effect_project(call, tmp_path, "Speaker")
 
 
 def photo_request(provider="fixture-provider"):
