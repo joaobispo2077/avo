@@ -579,6 +579,8 @@ Preparation checks the combined input file and byte counts before app
 discovery. The run checks its retained output counts and elapsed time before
 publishing an export, including copy-only reuse. Late or oversized results
 enter reconciliation with their bounded recoverable files.
+The shared specialist CLI runner checks each reply before scanning scratch.
+It stops the scan at the first exceeded file, byte, or time limit.
 An interrupted write retains its event and requires a fresh job before another
 attempt at authoring.
 
