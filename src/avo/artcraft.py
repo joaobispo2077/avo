@@ -2182,9 +2182,14 @@ def _inspect_job_document(store, job, head):
             {**job["inputs"][0], "locator": str(path)}, roots
         ):
             return "changed"
+        revision = _authoring_export_directory(store, job)
         if saved is None:
-            return "current"
-        path = _authoring_export_directory(store, job) / "component.anicraft"
+            return (
+                "changed"
+                if head["state"] == "prepared" and os.path.lexists(revision)
+                else "current"
+            )
+        path = revision / "component.anicraft"
     if saved is None:
         return _inspect_unrecorded_document(path, head.get("handoff"))
     return (
