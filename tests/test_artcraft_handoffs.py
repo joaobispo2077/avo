@@ -159,6 +159,10 @@ def _prepare_animated_emblem(spec, adapter, **changes):
 
 @pytest.fixture
 def vector_export(tmp_path, monkeypatch):
+    return make_vector_export(tmp_path, monkeypatch)
+
+
+def make_vector_export(tmp_path, monkeypatch, *, provider="neutral-channel"):
     monkeypatch.setattr(init_project, "load_provider", lambda slug: {"slug": slug})
 
     def observe(*, scope, mode, roots, **_paths):
@@ -183,7 +187,9 @@ def vector_export(tmp_path, monkeypatch):
     selected = SimpleNamespace(
         observe=observe, validate_run=lambda _job: None, author_vector_emblem=author
     )
-    prepared = _prepare_emblem(emblem_spec(tmp_path), selected)
+    prepared = _prepare_emblem(
+        emblem_spec(tmp_path, provider=provider), selected, provider=provider
+    )
     exported = artcraft.run_authoring(
         prepared["jobRef"], expected_head=prepared["head"], adapter=selected
     )

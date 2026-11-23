@@ -1,5 +1,6 @@
 """Proof reuse requires current retained native tool and media evidence."""
 
+import json
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -20,9 +21,15 @@ from avo.timeline.reconstruction import (
     verify_reconstruction_bundle,
 )
 from tests.artcraft_fixtures import locked_tool_observation, picture_output, request
+from tests.test_artcraft_handoffs import (
+    _prepare_animated_emblem,
+    animated_emblem_spec,
+    make_vector_export,
+)
 from tests.test_artcraft_jobs import AuthoringApp, _prepare, job_spec
 from tests.test_artcraft_profiles import EFFECT_OPERATION, effect_spec
 from tests.test_artcraft_provider_packages import (
+    _change_package_evidence,
     _observe_fixture,
     _package_from_retained_source,
 )
@@ -294,6 +301,51 @@ def test_reconstruction_retains_the_external_predecessor_of_copy_only_reuse(
     )
 
 
+def test_reconstruction_rechecks_prohibited_output_ancestry_of_linked_artwork(
+    tmp_path, monkeypatch
+):
+    raw = tmp_path / "video"
+    origin = tmp_path / "provider-artwork"
+    raw.mkdir()
+    origin.mkdir()
+    workspace, master = canonical_project(raw)
+    provider = workspace.project["provider"]
+    adapter, exported, reference = make_vector_export(
+        origin, monkeypatch, provider=provider
+    )
+    _, event = artcraft.read_authoring_export(
+        exported["jobRef"], expected_head=exported["head"]
+    )
+    artwork = event["outputs"][0]
+    context = {
+        "kind": "video",
+        "project": str(workspace.project_path),
+        "videoId": workspace.video_id,
+    }
+    _prepare_animated_emblem(
+        animated_emblem_spec(
+            raw, reference, readRoots=[str(origin)], provider=provider
+        ),
+        adapter,
+        context=context,
+        provider=provider,
+    )
+    bundle = build_reconstruction_bundle(
+        workspace, master_basename=master, actor="fixture"
+    )
+    assert artwork in bundle["externalArtCraftInputs"]
+
+    previous = raw / "edit" / "previews" / "previous-review.svg"
+    previous.parent.mkdir(parents=True, exist_ok=True)
+    source = Path(artwork["locator"])
+    previous.write_bytes(source.read_bytes())
+    with pytest.raises(ReconstructionError, match="PROOF_FORBIDDEN_ANCESTOR") as error:
+        verify_reconstruction_bundle(raw)
+    assert str(source) in str(error.value)
+    assert file_fingerprint(source) == artwork
+    assert file_fingerprint(previous)["sha256"] == artwork["sha256"]
+
+
 def test_reconstruction_requires_the_exact_selected_effectcraft_font(
     tmp_path, monkeypatch
 ):
@@ -363,7 +415,7 @@ def _approved_package(source, provider):
     return package, evidence
 
 
-def test_reconstruction_refuses_changed_rights_in_the_pinned_video_package(tmp_path):
+def _pin_reconstruction_package(tmp_path):
     raw = tmp_path / "video"
     raw.mkdir()
     workspace, master = canonical_project(raw)
@@ -374,7 +426,7 @@ def test_reconstruction_refuses_changed_rights_in_the_pinned_video_package(tmp_p
     target = raw / "edit" / "derived" / "provider-components" / instance_id
     retain_native_instance_sources(package, evidence, project_root=raw, target=target)
     service = ComponentInstanceService(workspace)
-    service._write_instance(
+    instance = service._write_instance(
         service._seal(
             {
                 "instanceId": instance_id,
@@ -401,15 +453,50 @@ def test_reconstruction_refuses_changed_rights_in_the_pinned_video_package(tmp_p
             }
         )
     )
+    return workspace, master, target, package, service.path(instance_id), instance
+
+
+@pytest.mark.parametrize("reference", ["rightsRef", "designReviewRef"])
+def test_reconstruction_refuses_changed_review_evidence_in_the_pinned_package(
+    tmp_path, reference
+):
+    workspace, master, target, package, _, _ = _pin_reconstruction_package(tmp_path)
     bundle = build_reconstruction_bundle(
         workspace, master_basename=master, actor="fixture"
     )
-    assert verify_reconstruction_bundle(raw)["bundleSha256"] == bundle["bundleSha256"]
+    assert (
+        verify_reconstruction_bundle(workspace.raw_dir)["bundleSha256"]
+        == bundle["bundleSha256"]
+    )
 
-    rights = target / "files" / package["rightsRef"]
-    rights.write_bytes(b"changed rights evidence in pinned copy")
+    evidence = target / "files" / package[reference]
+    evidence.write_bytes(b"changed review evidence in pinned copy")
     with pytest.raises(ReconstructionError, match="ArtCraft package"):
         build_reconstruction_bundle(workspace, master_basename=master, actor="fixture")
+
+
+def test_reconstruction_rejects_a_resealed_package_with_an_unqualified_plugin(tmp_path):
+    workspace, master, target, package, instance_path, instance = (
+        _pin_reconstruction_package(tmp_path)
+    )
+    build_reconstruction_bundle(workspace, master_basename=master, actor="fixture")
+    before = {path: file_fingerprint(path) for path in (target / "files").iterdir()}
+    altered = _change_package_evidence(target / "files", package, "binary-dependency")
+    (target / "manifest.json").write_text(json.dumps(altered), encoding="utf-8")
+    plugin = altered["files"][-1]
+    instance["nativePackage"]["packageHash"] = altered["packageHash"]
+    instance["generatedFiles"].append(
+        {"path": str(target / "files" / plugin["path"]), "sha256": plugin["sha256"]}
+    )
+    instance_path.write_text(
+        json.dumps(ComponentInstanceService._seal(instance)), encoding="utf-8"
+    )
+
+    with pytest.raises(
+        ReconstructionError, match="requires the exact supported source roles"
+    ):
+        build_reconstruction_bundle(workspace, master_basename=master, actor="fixture")
+    assert {path: file_fingerprint(path) for path in before} == before
 
 
 def test_cleanup_preserves_shared_native_provider_library_below_another_videos_edit(
