@@ -2392,6 +2392,13 @@ def _run_operator_handoff(store, job, head, inspection, adapter):
     if head["state"] == "ready" and inspection["checks"].get("handoff") == "current":
         return inspection
     directory = _require_prepared_authoring(store, job, head)
+    minimum_files = job["output"]["frameCount"] + 4
+    if job["budget"]["files"] < minimum_files:
+        raise ArtCraftError(
+            f"ArtCraft operator handoff needs a file budget of at least {minimum_files} "
+            "for the handoff, recipe, two native documents and planned frames",
+            code="ARTCRAFT_NOT_READY",
+        )
     plan = adapter.plan_lower_third(job, directory)
     directory.mkdir(parents=True, exist_ok=True)
     recipe = _bounded_path(directory, directory / "recipe.json", "operator recipe")
@@ -2405,14 +2412,11 @@ def _run_operator_handoff(store, job, head, inspection, adapter):
             "mode": job["observation"]["mode"],
             "artifactState": "reference-only",
             "operatorRoots": job["roots"],
+            "operatorBudget": job["budget"],
             "nativeDocument": str(directory / "component.anicraft"),
             "recipe": file_fingerprint(recipe),
             "commands": plan["commands"],
-            **(
-                {"host": plan["host"], "operatorBudget": job["budget"]}
-                if "host" in plan
-                else {}
-            ),
+            **({"host": plan["host"]} if "host" in plan else {}),
         },
     )
     event = store.append(
