@@ -9,11 +9,15 @@ import subprocess
 import xml.etree.ElementTree as ET
 from base64 import b64decode
 from pathlib import Path
-from time import monotonic
 
 from avo.artcraft import ArtCraftError
 from avo.timeline.contracts import content_hash, file_fingerprint
 from avo.timeline.store import write_immutable_json
+
+from .artcraft_native_cli import (
+    bounded_native_invocation,
+    selected_native_command_signatures,
+)
 
 _SAVE = "file.save"
 _INSPECT = "document.inspect"
@@ -49,11 +53,9 @@ def observe_vectorcraft(executable, env, *, required=_COMMANDS):
         ) from exc
     if len(result.stdout) > 4 * 1024 * 1024:
         raise ArtCraftError("VectorCraft command registry exceeds its byte limit")
-    commands = {
-        row["id"]: row["params"]
-        for row in json.loads(result.stdout)
-        if row["id"] in required
-    }
+    commands = selected_native_command_signatures(
+        result.stdout, required, label="VectorCraft"
+    )
     if commands.keys() != required or file_fingerprint(selected) != executable:
         raise ArtCraftError(
             "VectorCraft card command scope or selected executable changed",
@@ -250,27 +252,30 @@ def author_vector_card(output, parameters, *, directory, budget, invoke):
 
 
 def _card_invocation(directory, budget, invoke):
-    deadline = monotonic() + budget["seconds"]
+    run = bounded_native_invocation(directory, budget, invoke, label="VectorCraft card")
 
     def call(*arguments):
-        remaining = deadline - monotonic()
-        if remaining <= 0:
-            raise ArtCraftError("VectorCraft card exhausted its time budget")
-        rows = invoke(directory, "--safe-mode", *arguments, timeout=remaining)
-        if len(rows) > 1024 * 1024:
-            raise ArtCraftError("VectorCraft card receipts exceed their byte limit")
-        files = list(directory.iterdir())
-        size = sum(item.stat().st_size for item in files)
-        if len(files) > budget["files"] or size > budget["bytes"]:
-            raise ArtCraftError("VectorCraft card exceeded its file or byte budget")
-        if any(
-            item.resolve() != item or not item.is_file() or item.stat().st_nlink != 1
-            for item in files
-        ):
-            raise ArtCraftError("VectorCraft card created a linked or external file")
-        return [json.loads(line) for line in rows.splitlines()]
+        rows = run("--safe-mode", *arguments)
+        return _read_receipts(rows)
 
     return call
+
+
+def _read_receipts(raw):
+    error = "VectorCraft returned an invalid command result"
+    try:
+        rows = [json.loads(line) for line in raw.splitlines()]
+    except ValueError as exc:
+        raise ArtCraftError(error) from exc
+    if any(
+        not isinstance(row, dict)
+        or "error" in row
+        or not isinstance(row.get("result"), dict)
+        or "error" in row["result"]
+        for row in rows
+    ):
+        raise ArtCraftError(error)
+    return rows
 
 
 def _require_authored_steps(rows, commands):
@@ -301,7 +306,9 @@ def _require_saved_path(receipt, expected, format_name):
 
 
 def _require_reopened_artwork(rows, output, image, format_name):
-    if [row.get("step") for row in rows] != ["open", "cmd", "export"]:
+    if [row.get("step") for row in rows] != ["open", "cmd", "export"] or rows[1].get(
+        "command"
+    ) != _INSPECT:
         raise ArtCraftError("VectorCraft reopened card has incomplete receipts")
     opened, inspected = (row["result"] for row in rows[:2])
     if (

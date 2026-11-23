@@ -95,13 +95,21 @@ are reference material until separately qualified.
 
 For the selected Windows 0.2.1 runtime, `--mode json-lines` uses `serve` through
 a runner that independently confines the chosen roots and supports bounded
-stdin/stdout. AVO sends one fixed native command at a time, checks its reply,
-and stops before the next command on failure. The run explicitly saves a fresh
-native document and verifies reopened frames and alpha against the same
-contract as CLI batching. A verified lower-third export from this profile can
+stdin/stdout. AVO sends one fixed native command at a time and stops on an
+invalid or failed reply. Both batch and JSON-lines check each result and the
+acknowledged save destination before accepting a new document. AVO verifies
+reopened frames and alpha against the same contract in either mode.
+A reply arriving after its deadline is rejected before AVO inspects scratch.
+The selected profile audits the owned frame folders under the same limits.
+A verified lower-third export from this profile can
 enter the ordinary proof admission and saved-source reuse paths. When the
 confined runner is unavailable, use the explicit guided route for an
 operator-owned handoff.
+
+Selected specialist jobs run fixed recipes and validate the app-specific
+results before accepting saved work. PhotoCraft's editable Curves profile uses
+`run` with its selected commands. Recorded action sets, batch folders and
+droplets remain outside that qualified profile.
 
 For an editable isolated SoundCraft cue, use `--app soundcraft --operation
 isolated-cue --mode cli` with the selected Windows 0.20.1 tools and a confined
@@ -154,6 +162,9 @@ the exact job head, target project, actor and reason to prepare and validate the
 import for review. Reported losses, unsupported treatments or a former proof
 leave the return reference-only. Activation follows the existing sync and
 creator gates.
+FilmCraft also compares the original's picture stream with retained local MP4,
+MOV and Matroska outputs. A match leaves the return reference-only and names
+the retained output, including when its container differs from the input.
 
 For a video job with a verified export, select an Animation component, its BMap
 cue and the linked Tracks overlay before authoring. Register the exact exported
@@ -193,22 +204,71 @@ Add a `sharing` object with `providers`, a list of exact provider slugs, and
 from the recipient's project using `--source-provider` with the origin slug.
 The project instance retains the origin, recipient and fingerprinted rights.
 
+To add an optional identity mark to a lower-third job, select its verified
+VectorCraft emblem with `artworkRef` in the AniCraft CLI job specification.
+Use the same provider and component and authorize the upstream export and
+native evidence in the job's read roots. The mark stays editable beside the
+label. Carry the same `artworkRef` through saved-source text edits and exact
+copy-only reuse.
+
+A provider kit can retain the corresponding SVG as `identity-artwork` in
+its file manifest. Add the SVG fingerprint as `identityArtworkSha256` in the
+design review and include a rights entry for each of the native document and
+SVG. When granting reuse to another provider, both rights entries must name
+that recipient. The kit and each selected video instance keep byte-exact copies.
+
+To reserve space in a video, supply `safeAreaBindings` for `faces`, `captions`,
+`evidence` and `ui` when pinning an AniCraft kit. Each region is a rectangle
+with integer `x`, `y`, `width` and `height` in the reviewed kit canvas. AVO
+rejects regions outside the canvas or inside the lower third's allowed
+visible bounds, including its entrance and exit. Use empty arrays when the
+video has no regions to reserve.
+
 For a saved-source text revision, set `document.state` to `saved` and
 `document.source` to the selected project-owned `.anicraft` copy. Include
 the source directory in `readRoots` and choose the instance's text and approved
-font. Run the selected qualified confined CLI profile. AVO keeps the original
-and saves a separate revision with its recipe and edit-command evidence.
+font. For a kit with retained identity artwork, use `artworkRef` with the
+`instanceId` and `instanceHash` returned by `provider-instantiate`. Include
+the video-local kit directory and the instance record directory in `readRoots`.
+Use the instance's selected parameters and the package's exact output contract.
+Run the selected qualified confined CLI profile. AVO keeps the original and
+saves a separate revision with its recipe and edit-command evidence.
+
+For optional sound, first place the verified SoundCraft export on an unmuted
+SFX layer in Tracks. Link its region to the kit's picture cue in BMap. When
+pinning the kit, add an `eventBindings` entry with `slot: "sound-cue"`, the
+Tracks `regionId` as `eventId`, and the active Tracks hash as `revisionHash`.
+Register an identity kit selected through `artworkRef` as usual. For a plain
+kit, pass `--kit-instance-json` with its `instanceId` and `instanceHash` to
+`artcraft register`. When preparing the saved-source job, include the exact
+video-local kit folder and instance record directory in `readRoots`.
+AVO verifies the pinned source, checks the current sound selection and requires
+the sound to start during the kit's picture cue. The Tracks placement owns
+the sound mix.
 
 For a byte-identical repeat, use `--mode reuse` with `--reuse-job` and
 `--reuse-head` from the verified saved-source run. Keep the same provider,
 editable source, parameters and output contract. The new run copies the
 verified component frames and native revision. Use the new video's canonical
 placement and review before adopting the result.
+Keep the selected run's job and event journal, editable export, recipe and
+frames. Inspection and reconstruction verify those files against their recorded
+fingerprints. If any of them changes, verify a new export before reusing it.
+Reconstruction checks linked VectorCraft artwork against retained outputs and
+reports matching proof or preview ancestry. A pinned lower-third package must
+contain only its supported source roles. An added plug-in blocks the rebuild.
 
 Before any native authoring, identify the effective roots, owner of the job's
 document, output contract and bounds. A provider-only component has a declared
 external source workspace. A real video keeps canonical decisions under
 `<rawDir>/edit/timeline/` and uses its existing component and media owners.
+The file and byte limits apply to the combined selected inputs and separately
+to the retained export. An export that exceeds those limits or misses the job
+deadline goes to reconciliation.
+PhotoCraft, LightCraft, FigCraft, DeckCraft, and EffectCraft also check each
+command reply and stop scanning scratch as soon as a job limit is exceeded.
+Readiness requires one valid signature for each selected command. A saved-source
+job needs a free revision path before it can open the selected app.
 Keep editable source, fonts, media, plugins, recipe, tool identity and rights
 with the exact version. Inspect actual exported frames, samples or exchange
 behavior, and obtain the current design and contextual video decisions through

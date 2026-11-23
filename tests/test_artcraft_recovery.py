@@ -1,5 +1,6 @@
 """An acknowledged or interrupted native operation must never run twice."""
 
+import re
 from concurrent.futures import ThreadPoolExecutor
 from threading import Event
 
@@ -110,6 +111,48 @@ def test_interrupted_native_run_seals_partial_files_without_publishing_them(nati
         )
     assert retry.value.code == "ARTCRAFT_OUTCOME_UNKNOWN"
     assert len(interrupted.executions) == 2 and store.head(spec["jobId"]) == unknown
+
+
+@pytest.mark.parametrize(
+    ("limit", "message"),
+    [
+        ("files", "output.*budget"),
+        ("bytes", "output.*budget"),
+        ("seconds", "time budget"),
+    ],
+)
+def test_authoring_does_not_publish_valid_looking_results_beyond_budget(
+    native_job, monkeypatch, limit, message
+):
+    baseline, spec, _ = native_job
+    elapsed = 0
+    monkeypatch.setattr(artcraft, "monotonic", lambda: elapsed)
+
+    class OverBudget(AuthoringApp):
+        def author_lower_third(self, job, directory):
+            nonlocal elapsed
+            result = super().author_lower_third(job, directory)
+            if limit == "seconds":
+                elapsed = 2
+            return result
+
+    selected = {
+        **spec,
+        "jobId": "over-budget",
+        "budget": {**spec["budget"], limit: 1},
+    }
+    adapter = OverBudget(baseline.workspace)
+    prepared = _prepare(artcraft, request(), selected, adapter)
+    with pytest.raises(artcraft.ArtCraftError) as failure:
+        artcraft.run_authoring(
+            prepared["jobRef"], expected_head=prepared["head"], adapter=adapter
+        )
+    assert failure.value.code == "ARTCRAFT_OUTCOME_UNKNOWN"
+    assert failure.value.__cause__ is not None
+    assert re.search(message, str(failure.value.__cause__))
+    state = artcraft.ArtCraftJobStore(adapter.workspace).head(selected["jobId"])
+    assert state["state"] == "outcome-unknown" and "outputs" not in state
+    assert (adapter.workspace / prepared["job"]["document"]).is_file()
 
 
 def test_only_unstarted_job_can_be_cancelled_via_the_cli(native_job):

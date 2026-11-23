@@ -113,6 +113,10 @@ protocols. Common naming does not imply common switches or permissions.
   preserves the source's 8-bit RGBA geometry, alpha and embedded sRGB profile.
   The reviewed PNG flattens layers. Automatic execution requires an
   independently confined runner.
+  A disposable Windows 0.23.1 desktop accepted authenticated inspection of a
+  synthetic image. It refused a read outside its configured root and a save
+  with no write root. Live authoring still requires exclusive document ownership
+  and recovery evidence. [PhotoCraft 0.23.1 control protocol](https://github.com/storytold/photocraft/blob/v0.23.1/docs/control-protocol.md)
 - **LightCraft**: App and CLI should match releases. A library cannot be open
   in both background and desktop processes. Live control is local but has no
   password per the guide, so a loopback address alone does not prove exclusive
@@ -152,6 +156,30 @@ profile also states which execution authority must enforce its file boundary.
 The catalog reads this evidence without probing the machine. An empty list
 means local qualification is pending. Wider capability families describe
 what the vendor documents.
+
+### Installed Windows evidence, November 21, 2026
+
+The reported operations were exercised in isolated synthetic projects against
+the selected installed releases. Use the catalog to check the exact executable
+profile for the current request.
+
+| App and release | Observed scope | Pending or unavailable |
+| --- | --- | --- |
+| AniCraft 0.2.1 | CLI lower third and vector emblem. Lower third also exercised in guided, headless host MCP and JSON-lines modes. Editable identity artwork survived revision, publication and proof from a pinned video instance. | Attached desktop, other recipes and actual creator decisions. |
+| EffectCraft 0.24.1 | CLI masked lower third and an owned CLI render cancellation with preserved source. | Attached desktop and other effects. |
+| FilmCraft 0.20.1 | CLI source-linked native sequence and OTIO return. | Attached desktop and other timeline treatments. |
+| SoundCraft 0.20.1 | CLI isolated cue and matching 48 kHz stereo PCM in an AVO proof. | Attached desktop, other signal chains and creator listening. |
+| VectorCraft 0.24.1 | CLI editable SVG emblem and PNG text card. A direct installed CLI fixture also reopened an editable two-series chart and reproduced its PNG. | The chart remains a fixture. Background MCP, attached desktop and other artwork families remain unqualified. |
+| PhotoCraft 0.23.1 | CLI layered Curves card with preserved 8-bit RGBA and sRGB profile. Authenticated desktop inspection and file-root denials passed in a fixture. | Live authoring and recovery, higher bit depths, linked objects and alternate color profiles. |
+| LightCraft 0.21.1 | CLI treatment of an RGB JPEG and recovery from its retained library snapshot and original. | Camera RAW, plugins and attached desktop. |
+| FigCraft 0.18.1 | CLI editable two-state component and static PNG. | Attached desktop, prototype playback and imported formats. |
+| TextureCraft | Unavailable on the local Windows installation. The catalog entry is documented-only. | Native material, safe bake, channel packing, reopening and output checks require a separately installed matching app and CLI. |
+| DeckCraft 0.18.1 | CLI editable master, slide placeholder and fade. The PNG captures the midpoint. | Attached desktop and other transition and export families. |
+
+No attached desktop mode is qualified. Automatic authoring still requires
+independently enforced file boundaries and each workflow retains its normal
+creator and contextual review gates. An upgrade needs verification of the
+selected operation and mode against the new release.
 
 Run the opt-in installed qualification cases with
 `python -m pytest -m native_artcraft`. Supply each explicitly selected CLI

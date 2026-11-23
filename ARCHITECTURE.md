@@ -575,6 +575,28 @@ Structured ArtCraft job tools invoke the same prepare, run, inspect and recover
 commands as the CLI. Inspection and recovery compare the selected event head
 with current evidence and read only the artifacts owned by the job. Recovery
 reports a next action and fingerprints bounded partial files for reference.
+Preparation checks the combined input file and byte counts before app
+discovery. The run checks its retained output counts and elapsed time before
+publishing an export, including copy-only reuse. Late or oversized results
+enter reconciliation with their bounded recoverable files.
+The shared specialist CLI runner checks each reply before scanning scratch.
+It stops the scan at the first exceeded file, byte, or time limit.
+AniCraft and SoundCraft share this audit for their known output folders.
+The audit refuses a missing or redirected workspace before opening it and
+counts the retained files in the declared subdirectories. AniCraft checks the
+same deadline after each streamed reply and before inspecting its files.
+ArtCraft readiness rejects duplicate, missing, or malformed selected command
+signatures. A prepared saved-source job becomes stale when its revision path
+is already occupied. This check runs before validating the native app or
+reserving a run in the journal.
+AniCraft CLI preparation requires both a root observer and a command runner.
+Its batch and JSON-lines recipes verify each command's result and the exact
+acknowledged save destination. FigCraft script replies must identify the exact
+step and command and report a boolean success. FilmCraft and VectorCraft use
+the shared CLI budget check before and during scratch inspection.
+Specialist recipes validate partial results using the selected app's response
+format. The adapter checks native save and reopen evidence before publishing
+an export and accepts only commands built from the selected recipe.
 An interrupted write retains its event and requires a fresh job before another
 attempt at authoring.
 
@@ -644,6 +666,28 @@ verifies its reopened alpha frames. Proof admission rechecks that dependency
 through the existing generated-asset binding. Optional sound enters through its
 own SFX region on the same canonical timeline.
 
+The optional AniCraft lower-third identity mark uses the same verified
+VectorCraft receipt. Its inline shape and readable text width are checked in
+the native source. Saved-source text edits and copy-only reuse retain the exact
+artwork closure. Switching that artwork requires a fresh render and proof.
+Copy-only reuse also retains the selected predecessor's job and event journal,
+editable export, recipe and frames. Inspection and reconstruction recheck the
+recorded fingerprints. Any change requires a new verified export before reuse.
+Reconstruction matches linked VectorCraft artwork to its selected export and
+checks its bytes against the video's retained proof and preview inventory.
+Video-local native packages reapply the published source-role checks when
+reconstruction reads them. Unsupported plug-ins block that reconstruction.
+Native provider publication can retain that SVG as optional identity artwork.
+The package validator binds it to the exact native shape, design review and
+per-file rights before the package and video instance retain its bytes.
+An explicit instance ID and hash can bind a saved-source label job to that
+video-local package. The job verifies the selected original, parameters,
+output contract, artwork and rights through the existing input closure.
+An optional kit sound binding pins a generated SFX region on the active
+Tracks revision. Video proof admission checks its BMap cue and timing.
+An explicit registration selector can bind a plain kit through the same
+verified native source and immutable instance. Tracks owns the mix.
+
 The selected FilmCraft Windows 0.20.1 profile saves and reopens a native
 project and exports an OTIO timeline linked to the exact original. AVO checks
 the application version resource without starting the desktop editor. The
@@ -651,6 +695,10 @@ import service verifies the retained exchange and original fingerprint before
 mapping relative references. The existing import, sync and approval workflow
 owns any later activation. Declared exchange losses, unsupported treatments
 and prohibited original ancestry leave the return as reference material.
+Before staging a FilmCraft return, the import service can compare the original's
+compressed picture stream with retained local outputs through the media probe.
+It uses the selected job's time budget and reports matching streams across
+containers as prohibited ancestry.
 
 The explicitly selected video export binds the unchanged AniCraft source,
 recipe, app and CLI fingerprints, ordered alpha frames and current approved

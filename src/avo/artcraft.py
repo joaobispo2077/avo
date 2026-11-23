@@ -84,6 +84,7 @@ _STILL_OUTPUT_NAMES = {
 }
 _VECTOR_EMBLEM_SCOPE = {"app": "vectorcraft", "operations": ["vector-emblem"]}
 _ANIMATED_EMBLEM_SCOPE = {"app": "anicraft", "operations": ["animate-vector-emblem"]}
+_IDENTITY_LABEL_SCOPE = {"app": "anicraft", "operations": ["lower-third"]}
 _EFFECT_MASK_SCOPE = {
     "app": "effectcraft",
     "operations": ["editable-masked-lower-third"],
@@ -420,7 +421,7 @@ def _check_specialist_job(job, scope):
             job["request"], job, job["documentState"], job["observation"]["mode"]
         )
     elif "artworkRef" in job:
-        raise ContractError("Only the animated emblem may consume vector artwork")
+        _require_label_artwork(scope, job["observation"]["mode"], job)
 
 
 def _check_photo_job(job, scope):
@@ -590,6 +591,7 @@ def _require_animated_emblem(request, configuration, document_state, mode):
             "frameCount": 24,
         }
         or "artworkRef" not in configuration
+        or "instanceId" in configuration["artworkRef"]
         or {"authoringParameters", "interchangeSource", "soundCue"}.intersection(
             configuration
         )
@@ -846,7 +848,11 @@ def prepare_authoring(
     roots = _preparation_roots(spec, document.parent)
     source = _preparation_source(spec, roots, document)
     input_field, selected_input = _preparation_media(request, spec, scope, roots)
-    dependencies = _prepared_artwork(request, spec, roots, scope)
+    dependencies = _prepared_artwork(request, spec, roots, source)
+    inputs = [
+        item for item in (source, selected_input) if item is not None
+    ] + dependencies
+    _require_input_budget(inputs, spec["budget"])
     _require_preparation_capacity(
         store.workspace, spec["budget"], source or selected_input
     )
@@ -872,8 +878,7 @@ def prepare_authoring(
         "observation": observation,
         "document": document.relative_to(store.workspace).as_posix(),
         "documentState": spec["document"]["state"],
-        "inputs": [item for item in (source, selected_input) if item is not None]
-        + dependencies,
+        "inputs": inputs,
         "recipeHash": content_hash(recipe),
         "output": spec["output"],
         "budget": spec["budget"],
@@ -901,17 +906,60 @@ def _require_preparation_profile(request, spec, scope):
     if scope == _ANIMATED_EMBLEM_SCOPE:
         _require_animated_emblem(*arguments)
     elif "artworkRef" in spec:
+        _require_label_artwork(scope, spec["mode"], spec)
+
+
+def _require_label_artwork(scope, mode, specification):
+    if (
+        scope != _IDENTITY_LABEL_SCOPE
+        or mode not in {"cli", "reuse"}
+        or not specification.get("authoringParameters")
+    ):
         raise ArtCraftError(
-            "Select AniCraft animate-vector-emblem to consume vector artwork"
+            "Select the AniCraft CLI lower-third label or animated emblem for vector artwork"
         )
 
 
-def _prepared_artwork(request, spec, roots, scope):
-    if scope != _ANIMATED_EMBLEM_SCOPE:
+def _prepared_artwork(request, spec, roots, source):
+    if "artworkRef" not in spec:
         return []
-    inputs = _artwork_export_inputs(request, spec["artworkRef"], roots)
+    inputs = _artwork_dependencies(request, spec, roots, source)
     if inputs[0]["sizeBytes"] >= spec["budget"]["bytes"]:
         raise ArtCraftError("Vector artwork exceeds the selected motion budget")
+    return inputs
+
+
+def _artwork_dependencies(request, settings, roots, source):
+    reference = settings["artworkRef"]
+    if "instanceId" not in reference:
+        return _artwork_export_inputs(request, reference, roots)
+
+    from .timeline.artcraft_packages import native_instance_artwork_inputs
+    from .timeline.workspace import TimelineWorkspace
+
+    context = request["context"]
+    if source is None or context["kind"] != "video":
+        raise ArtCraftError(
+            "ArtCraft kit artwork requires a saved video-local instance"
+        )
+    project = Path(context["project"])
+    if not project.is_absolute() or project.resolve() != project:
+        raise ArtCraftError("ArtCraft requires the exact absolute project path")
+    workspace = TimelineWorkspace.from_project(project)
+    if (workspace.video_id, workspace.project.get("provider")) != (
+        context["videoId"],
+        request["provider"],
+    ):
+        raise ArtCraftError(
+            "ArtCraft kit artwork belongs to a different video or provider"
+        )
+    inputs = native_instance_artwork_inputs(
+        workspace, request, reference, source, settings, read_roots=roots["read"]
+    )
+    if not all(_retained_job_file(item, roots["read"]) for item in inputs):
+        raise ArtCraftError(
+            "ArtCraft kit artwork and evidence must stay in the selected read roots"
+        )
     return inputs
 
 
@@ -938,6 +986,15 @@ def _artwork_export_inputs(request, reference, roots):
             "Vector artwork and editable source must stay in the selected read roots"
         )
     return inputs
+
+
+def selected_vector_artwork(inputs):
+    artwork = [
+        item for item in inputs if Path(item["locator"]).suffix.casefold() == ".svg"
+    ]
+    if len(artwork) != 1:
+        raise ArtCraftError("ArtCraft needs one exact selected vector artwork source")
+    return artwork[0]
 
 
 def _require_artwork_owner(request, upstream):
@@ -1010,32 +1067,20 @@ def _require_reuse_match(request, spec, original):
         raise ArtCraftError(
             "ArtCraft reusable export belongs to a different provider component"
         )
-    if any(spec.get(key) != original[key] for key in ("output", "authoringParameters")):
+    if any(
+        spec.get(key) != original.get(key)
+        for key in ("output", "authoringParameters", "artworkRef")
+    ):
         raise ArtCraftError(
-            "ArtCraft selected parameters or output contract changed and needs rendering"
+            "ArtCraft selected parameters, artwork or output contract changed and needs rendering"
         )
 
 
 def _reusable_native_export(job_ref, expected_head):
     store, job, event = _open_selected_job(job_ref, expected_head)
-    observation = job["observation"]
-    profile = (
-        event["state"],
-        job["documentState"],
-        job["decision"]["scope"],
-    )
-    expected = (
-        "exported",
-        "saved",
-        {"app": "anicraft", "operations": ["lower-third"]},
-    )
-    if (
-        profile != expected
-        or observation["mode"] == "reuse"
-        or not _qualified_export_mode(observation)
-        or not {"application", "executable", "commandSchemaHash"} <= observation.keys()
-    ):
+    if event["state"] != "exported":
         raise ArtCraftError("Select a qualified native saved-source export for reuse")
+    _require_reusable_job(job)
     if (
         _inspect_job_inputs(job) != "current"
         or _inspect_job_document(store, job, event) != "current"
@@ -1043,10 +1088,22 @@ def _reusable_native_export(job_ref, expected_head):
         raise ArtCraftError("ArtCraft reusable source or export changed")
     _verify_retained_export(store, job, event)
     for key in ("application", "executable"):
-        expected = observation[key]
+        expected = job["observation"][key]
         if not _retained_job_file(expected, [str(Path(expected["locator"]).parent)]):
             raise ArtCraftError("ArtCraft reusable tool environment changed")
     return job, event
+
+
+def _require_reusable_job(job):
+    observation = job["observation"]
+    if (
+        job["documentState"] != "saved"
+        or job["decision"]["scope"] != _IDENTITY_LABEL_SCOPE
+        or observation["mode"] == "reuse"
+        or not _qualified_export_mode(observation)
+        or not {"application", "executable", "commandSchemaHash"} <= observation.keys()
+    ):
+        raise ArtCraftError("Select a qualified native saved-source export for reuse")
 
 
 def _preparation_workspace(request, spec):
@@ -1384,6 +1441,21 @@ def _require_preparation_capacity(workspace, budget, source):
         )
 
 
+def _exceeds_file_budget(files, budget):
+    return (
+        len(files) > budget["files"]
+        or sum(item["sizeBytes"] for item in files) > budget["bytes"]
+    )
+
+
+def _require_input_budget(inputs, budget):
+    if _exceeds_file_budget(inputs, budget):
+        raise ArtCraftError(
+            "ArtCraft job inputs exceed the selected file or byte budget",
+            code="ARTCRAFT_NOT_READY",
+        )
+
+
 def _require_preparation_observation(observation, spec, roots):
     validate_document(observation, _schema("observation"))
     if spec["mode"] == "reuse":
@@ -1535,6 +1607,28 @@ def _recorded_authoring_files(job, head):
 
 def retained_authoring_files(job_ref, *, expected_head=None):
     """Return exact local and external files needed to retain a native job."""
+    job, files = _retained_job_files(job_ref, expected_head=expected_head)
+    selected = job["observation"].get("reuseSource")
+    if selected is not None:
+        files.extend(_retained_reuse_source(job, selected))
+    return job, files
+
+
+def _retained_reuse_source(job, selected):
+    reference = selected["jobRef"]
+    path = Path(reference["locator"])
+    if not _retained_job_file(reference, [str(path.parent)]):
+        raise ArtCraftError(f"ArtCraft retained reuse receipt changed: {path}")
+    predecessor, files = _retained_job_files(path, expected_head=selected["exportHead"])
+    if reference not in files:
+        raise ArtCraftError(f"ArtCraft retained reuse receipt changed: {path}")
+    _require_reusable_job(predecessor)
+    _require_reuse_match(job["request"], job, predecessor)
+    _require_reuse_source_input(job, predecessor)
+    return files
+
+
+def _retained_job_files(job_ref, *, expected_head):
     store, job, head = _selected_job(job_ref)
     if expected_head is not None and (head["eventHash"], head["state"]) != (
         expected_head,
@@ -2031,14 +2125,14 @@ def _owning_root(path, roots):
 
 
 def _inspect_job_inputs(job):
-    if "artworkRef" in job:
+    selected = job["observation"].get("reuseSource")
+    if selected is not None:
         try:
-            inputs = _artwork_export_inputs(
-                job["request"], job["artworkRef"], job["roots"]
-            )
+            _retained_reuse_source(job, selected)
         except (OSError, ValueError, RuntimeError):
             return "changed"
-        return "current" if inputs == job["inputs"] else "changed"
+    if "artworkRef" in job:
+        return _inspect_job_artwork_inputs(job)
     return (
         "current"
         if all(
@@ -2049,6 +2143,19 @@ def _inspect_job_inputs(job):
         )
         else "changed"
     )
+
+
+def _inspect_job_artwork_inputs(job):
+    original = job["inputs"][:1] if job["documentState"] == "saved" else []
+    try:
+        inputs = _artwork_dependencies(
+            job["request"], job, job["roots"], next(iter(original), None)
+        )
+    except (OSError, ValueError, RuntimeError):
+        return "changed"
+    if any(not _retained_job_file(item, job["roots"]["read"]) for item in original):
+        return "changed"
+    return "current" if [*original, *inputs] == job["inputs"] else "changed"
 
 
 def _inspect_job_outputs(job, head):
@@ -2075,9 +2182,14 @@ def _inspect_job_document(store, job, head):
             {**job["inputs"][0], "locator": str(path)}, roots
         ):
             return "changed"
+        revision = _authoring_export_directory(store, job)
         if saved is None:
-            return "current"
-        path = _authoring_export_directory(store, job) / "component.anicraft"
+            return (
+                "changed"
+                if head["state"] == "prepared" and os.path.lexists(revision)
+                else "current"
+            )
+        path = revision / "component.anicraft"
     if saved is None:
         return _inspect_unrecorded_document(path, head.get("handoff"))
     return (
@@ -2114,6 +2226,7 @@ def run_authoring(job_ref, *, expected_head, adapter):
         if head["state"] == "exported":
             _verify_retained_export(store, job, head)
             return inspection
+        _require_input_budget(job["inputs"], job["budget"])
         if job["observation"]["mode"] in {"guided", "host-mcp"}:
             return _run_operator_handoff(store, job, head, inspection, adapter)
         directory = _require_prepared_authoring(store, job, head)
@@ -2178,6 +2291,16 @@ def _select_job_still_author(adapter, scope):
     return adapter.author_deck_slide
 
 
+def _require_reuse_source_input(job, prior):
+    if not job["inputs"] or not prior["inputs"]:
+        raise ArtCraftError("ArtCraft reuse requires both retained editable inputs")
+    expected = {**prior["inputs"][0], "locator": job["inputs"][0]["locator"]}
+    if job["inputs"][0] != expected:
+        raise ArtCraftError(
+            "ArtCraft prepared editable source differs from the reusable source"
+        )
+
+
 def _copy_reusable_export(job, directory):
     selected = job["observation"]["reuseSource"]
     prior_ref = Path(selected["jobRef"]["locator"])
@@ -2185,11 +2308,7 @@ def _copy_reusable_export(job, directory):
         raise ArtCraftError("ArtCraft retained reuse receipt changed")
     prior, exported = _reusable_native_export(prior_ref, selected["exportHead"])
     _require_reuse_match(job["request"], job, prior)
-    expected = {**prior["inputs"][0], "locator": job["inputs"][0]["locator"]}
-    if job["inputs"][0] != expected:
-        raise ArtCraftError(
-            "ArtCraft prepared editable source differs from the reusable source"
-        )
+    _require_reuse_source_input(job, prior)
     native = directory / "component.anicraft"
     recipe = directory / "recipe.json"
     frames = [
@@ -2198,10 +2317,7 @@ def _copy_reusable_export(job, directory):
     ]
     sources = [exported["saved"], exported["recipe"], *exported["outputs"]]
     budget = job["budget"]
-    if (
-        len(sources) > budget["files"]
-        or sum(item["sizeBytes"] for item in sources) > budget["bytes"]
-    ):
+    if _exceeds_file_budget(sources, budget):
         raise ArtCraftError(
             "ArtCraft retained output exceeds the selected reuse budget"
         )
@@ -2312,9 +2428,12 @@ def _authoring_export_directory(store, job):
 
 
 def _execute_prepared_job(store, job, running, directory, produce):
+    deadline = monotonic() + job["budget"]["seconds"]
     try:
         result = produce(job, directory)
+        _require_authoring_time(deadline)
         evidence = _verify_authoring_result(job, directory, result)
+        _require_output_budget(evidence, job["budget"])
         if (
             _inspect_job_project(store, job) == "changed"
             or _inspect_job_inputs(job) != "current"
@@ -2322,6 +2441,7 @@ def _execute_prepared_job(store, job, running, directory, produce):
             raise ArtCraftError(
                 "ArtCraft input or project evidence changed while it was running"
             )
+        _require_authoring_time(deadline)
     except Exception as exc:
         pending, applied = _finish_authoring_run(
             store,
@@ -2345,6 +2465,22 @@ def _execute_prepared_job(store, job, running, directory, produce):
         {"operationId": "verify-run", "state": "exported", **evidence},
     )
     return _inspection_result(store, job, completed)
+
+
+def _require_authoring_time(deadline):
+    if monotonic() >= deadline:
+        raise ArtCraftError("ArtCraft authoring exceeded the selected time budget")
+
+
+def _require_output_budget(evidence, budget):
+    files = [
+        evidence["saved"],
+        evidence["recipe"],
+        *evidence["outputs"],
+        *evidence.get("dependencies", ()),
+    ]
+    if _exceeds_file_budget(files, budget):
+        raise ArtCraftError("ArtCraft output exceeds the selected file or byte budget")
 
 
 def _finish_authoring_run(store, job, running, directory, event):

@@ -6,6 +6,7 @@ from types import SimpleNamespace
 import pytest
 
 from avo import artcraft, init_project
+from avo.adapters import artcraft_native_cli, artcraft_soundcraft
 from avo.breath_control import resolve_control
 from avo.timeline import artcraft_audio
 from avo.timeline.contracts import content_hash, file_fingerprint
@@ -59,6 +60,48 @@ def test_soundcraft_refuses_a_cue_outside_selected_read_roots(isolated_cue):
     spec["readRoots"] = []
     with pytest.raises(artcraft.ArtCraftError, match="outside"):
         _prepare(artcraft, brief, spec, None, intent=intent)
+
+
+def test_soundcraft_rejects_late_reply_before_scanning(tmp_path, monkeypatch):
+    now = 0
+    monkeypatch.setattr(artcraft_soundcraft, "monotonic", lambda: now)
+
+    def unexpected_scan(*_args):
+        pytest.fail("A late SoundCraft reply must be rejected before scanning scratch")
+
+    monkeypatch.setattr(artcraft_native_cli, "scandir", unexpected_scan)
+
+    def invoke(_directory, *_args, timeout):
+        nonlocal now
+        assert timeout == 5
+        now = 5
+        return b"receipt"
+
+    call = artcraft_soundcraft._job_invocation(
+        tmp_path.resolve(), {"files": 1, "bytes": 1}, invoke, 5
+    )
+    with pytest.raises(artcraft.ArtCraftError, match="time budget"):
+        call("run")
+
+
+def test_soundcraft_counts_owned_audio_files_toward_scratch_budget(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setattr(artcraft_soundcraft, "monotonic", lambda: 0)
+    workspace = tmp_path.resolve()
+    dependency = workspace / "Audio Files" / "source.wav"
+    dependency.parent.mkdir()
+    dependency.write_bytes(b"x")
+    (workspace / "component.scraft").write_bytes(b"x")
+    budget = {"files": 2, "bytes": 2}
+    call = artcraft_soundcraft._job_invocation(
+        workspace, budget, lambda *_args, **_kwargs: b"receipt", 5
+    )
+    assert call("run") == b"receipt"
+
+    dependency.write_bytes(b"xx")
+    with pytest.raises(artcraft.ArtCraftError, match="byte budget"):
+        call("run")
 
 
 def test_soundcraft_generated_audio_refuses_relabelled_input_and_wrong_pcm(

@@ -3,7 +3,11 @@
 from fractions import Fraction
 from pathlib import Path
 
-from avo.artcraft import read_authoring_export, require_artcraft_export_environment
+from avo.artcraft import (
+    ArtCraftError,
+    read_authoring_export,
+    require_artcraft_export_environment,
+)
 
 from .artcraft_binding import require_artcraft_media_scope
 from .contracts import content_hash, file_fingerprint, validate_document
@@ -12,6 +16,7 @@ from .media_admission import FORBIDDEN_OUTPUT_CLASSES
 
 _REF = "avo.artcraft.schema.json#/$defs/generatedAudioRef"
 _PREFIX = "generated-audio:"
+KIT_SOUND_SLOT = "sound-cue"
 
 
 def resolve_generated_audio(reference):
@@ -59,6 +64,84 @@ def _region_samples(region, rate):
     return frame_range_to_samples(
         int(start), int(end), frame_rate_num=rate["num"], frame_rate_den=rate["den"]
     )
+
+
+def select_kit_sound(workspace, instance, output):
+    """Check one opt-in kit association against existing canonical cue placement."""
+    selections = [
+        item for item in instance["eventBindings"] if item["slot"] == KIT_SOUND_SLOT
+    ]
+    if not selections:
+        return None
+    if len(selections) != 1:
+        raise ArtCraftError("Select one provider kit sound cue")
+    selected = selections[0]
+    tracks = _active_revision(workspace, "tracks")
+    if tracks["contentHash"] != selected["revisionHash"]:
+        raise ArtCraftError(
+            "The selected provider kit sound cue uses a stale Tracks revision"
+        )
+    layer, region = _kit_sound_region(tracks["snapshot"], selected["eventId"])
+    cue = _kit_picture_cue(workspace, instance["kitId"], region)
+    job, event = require_generated_audio_layer(layer)
+    _require_cue_scope(workspace, job, event)
+    rate = output["frameRate"]
+    start, end = _region_samples(
+        region, {"num": rate["numerator"], "den": rate["denominator"]}
+    )
+    if end - start > event["audioEvidence"]["sampleCount"]:
+        raise ArtCraftError(
+            "The selected provider kit sound cue exceeds the verified export"
+        )
+    return {
+        "tracksRevisionHash": tracks["contentHash"],
+        "layerId": layer["layerId"],
+        "regionId": region["regionId"],
+        "cueId": cue["cueId"],
+        "startSample": start,
+        "endSampleExclusive": end,
+        "generatedAudioRef": layer["generatedAudioRef"],
+        "source": event["outputs"][0],
+    }
+
+
+def _active_revision(workspace, artifact):
+    index = workspace.require_active(artifact)
+    return workspace.store(artifact).revision(index["headRevisionId"])
+
+
+def _kit_sound_region(snapshot, region_id):
+    matches = [
+        (layer, region)
+        for layer in (snapshot.get("audioTracks") or {}).get("layers", [])
+        for region in layer["regions"]
+        if region["regionId"] == region_id
+    ]
+    if len(matches) != 1:
+        raise ArtCraftError(
+            "The selected provider kit sound cue region is missing or ambiguous"
+        )
+    ((layer, region),) = matches
+    if layer.get("mute") or layer.get("generatedAudioRef") is None:
+        raise ArtCraftError(
+            "The selected provider kit sound cue needs an unmuted generated SFX layer"
+        )
+    return layer, region
+
+
+def _kit_picture_cue(workspace, component_id, region):
+    bmap = _active_revision(workspace, "bmap")["snapshot"]
+    matches = [
+        cue
+        for cue in bmap["cues"]
+        if cue["cueId"] in region.get("cueIds", [])
+        and cue.get("componentRef") == component_id
+    ]
+    if len(matches) != 1:
+        raise ArtCraftError(
+            "The selected provider kit sound cue needs one BMap cue for its component"
+        )
+    return matches[0]
 
 
 def _cue_placements(workspace, rate):

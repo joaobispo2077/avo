@@ -1,13 +1,25 @@
-"""Pin the selected PhotoCraft profile and its original input boundary."""
+"""Validate selected ArtCraft profiles and their native job boundaries."""
 
 import json
+from contextlib import contextmanager
+from os import scandir
+from types import SimpleNamespace
 from zipfile import ZipFile
 
 import pytest
 
 from avo import artcraft, init_project
+from avo.adapters import artcraft_native_cli
 from avo.adapters.artcraft import SelectedArtCraftAdapter
-from avo.adapters.artcraft_photocraft import _read_rgba, _require_package
+from avo.adapters.artcraft_deckcraft import _receipts as _deck_receipts
+from avo.adapters.artcraft_effectcraft import _save_project as _save_effect_project
+from avo.adapters.artcraft_figcraft import _run_script
+from avo.adapters.artcraft_photocraft import (
+    _create_editable_photo,
+    _read_rgba,
+    _require_package,
+)
+from avo.timeline.contracts import content_hash, file_fingerprint
 from tests.artcraft_fixtures import request
 from tests.test_artcraft_jobs import _prepare, job_spec
 
@@ -16,6 +28,84 @@ FIG_OPERATION = "editable-design-variant"
 DECK_OPERATION = "editable-explanation-slide"
 LIGHT_OPERATION = "reusable-photo-treatment"
 EFFECT_OPERATION = "editable-masked-lower-third"
+
+
+@pytest.mark.parametrize(
+    "receipt",
+    [
+        {"step": False, "command": "node.get", "ok": True, "result": {}},
+        {"step": 0.0, "command": "node.get", "ok": True, "result": {}},
+        {"step": 0, "command": "node.get", "ok": 1, "result": {}},
+        {"step": 0, "command": "node.get", "ok": True},
+        {"step": 0, "command": "node.get", "ok": True, "result": {}, "error": "failed"},
+        [],
+    ],
+)
+def test_figcraft_rejects_incomplete_or_ambiguous_script_receipts(tmp_path, receipt):
+    def call(*args):
+        return json.dumps(receipt)
+
+    with pytest.raises(artcraft.ArtCraftError, match="every selected script step"):
+        _run_script(call, tmp_path, "inspect", [{"command": "node.get"}])
+
+
+@pytest.mark.parametrize("result", [None, {"layer": 1, "error": "failed"}])
+def test_photocraft_rejects_failed_curves_result(tmp_path, result):
+    def call(*args):
+        return json.dumps(
+            {"command": "layer.newAdjustmentLayer.curves", "result": result}
+        )
+
+    with pytest.raises(artcraft.ArtCraftError, match="editable Curves layer"):
+        _create_editable_photo(call, tmp_path / "source.png", tmp_path / "card.pcraft")
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        "view.closeMaster → null\nunrecognized response",
+        "slide.inspect → null",
+        'slide.inspect → {"index":1,"transition":{},"error":"native command failed"}',
+        'slide.new → {"id":12,"index":true}',
+        "shape.fill → true",
+    ],
+)
+def test_deckcraft_rejects_invalid_command_stdout(line):
+    with pytest.raises(artcraft.ArtCraftError, match="DeckCraft"):
+        _deck_receipts((line + "\n").encode("utf-8"))
+
+
+def test_deckcraft_accepts_native_null_and_integer_results():
+    output = "view.closeMaster → null\nslide.rename → null\nshape.fill → 7\n"
+    assert _deck_receipts(output.encode("utf-8")) == [
+        ("view.closeMaster", None),
+        ("slide.rename", None),
+        ("shape.fill", 7),
+    ]
+
+
+@pytest.mark.parametrize(
+    "partial",
+    [
+        {},
+        {"result": {"comp": 1, "error": "native command failed"}},
+        {"result": {"comp": True}},
+    ],
+)
+def test_effectcraft_rejects_incomplete_batch_even_when_saved(tmp_path, partial):
+    def call(*args):
+        recipe, target = args[3], args[5]
+        target.write_bytes(b"saved native document")
+        steps = json.loads(recipe.read_text(encoding="utf-8"))
+        rows = [
+            {"command": step["command"], "result": {key: 1}}
+            for step, key in zip(steps, ("comp", "layer", "mask", "layer"), strict=True)
+        ]
+        rows[0] = {"command": steps[0]["command"], **partial}
+        return json.dumps({"saved": str(target), "result": rows}).encode("utf-8")
+
+    with pytest.raises(artcraft.ArtCraftError, match="EffectCraft"):
+        _save_effect_project(call, tmp_path, "Speaker")
 
 
 def photo_request(provider="fixture-provider"):
@@ -235,3 +325,205 @@ def test_effectcraft_requires_a_selected_font_source(tmp_path, monkeypatch):
     monkeypatch.setattr(init_project, "load_provider", lambda slug: {"slug": slug})
     with pytest.raises(artcraft.ArtCraftError, match="EffectCraft.*Arial font source"):
         prepare_effect(effect_spec(tmp_path), None)
+
+
+@pytest.fixture
+def observe_native_registry(tmp_path, monkeypatch):
+    executable = tmp_path / "fixture-cli"
+    executable.write_bytes(b"selected CLI fixture")
+
+    def observe(stdout, *, json_registry):
+        monkeypatch.setattr(
+            artcraft_native_cli.subprocess,
+            "run",
+            lambda *args, **kwargs: SimpleNamespace(stdout=stdout),
+        )
+        return artcraft_native_cli.observe_native_command_schema(
+            file_fingerprint(executable),
+            {},
+            needed={"document.save"},
+            label="Fixture profile",
+            json_registry=json_registry,
+        )
+
+    return observe
+
+
+@pytest.mark.parametrize(
+    ("stdout", "json_registry"),
+    [
+        (
+            (
+                b'[{"id":"document.save","params":"{}"},'
+                b'{"id":"document.save","params":"{}"}]'
+            ),
+            True,
+        ),
+        ("document.save — ()\ndocument.save — ()\n".encode(), False),
+        (b'[{"id":"document.save","params":null}]', True),
+        (b'[{"id":"document.save","params":{}}]', True),
+        (b'[{"id":"document.save","params":"  "}]', True),
+        ("document.save — \n".encode(), False),
+    ],
+    ids=[
+        "duplicate-json",
+        "duplicate-text",
+        "null-json-params",
+        "object-json-params",
+        "blank-json-params",
+        "empty-text",
+    ],
+)
+def test_native_registry_rejects_ambiguous_or_missing_signatures(
+    observe_native_registry, stdout, json_registry
+):
+    with pytest.raises(artcraft.ArtCraftError) as rejected:
+        observe_native_registry(stdout, json_registry=json_registry)
+    assert rejected.value.code == "ARTCRAFT_NOT_READY"
+
+
+@pytest.mark.parametrize(
+    ("stdout", "json_registry", "signature"),
+    [
+        (
+            (
+                b'[{"id":"unrelated.open","params":"{}"},'
+                b'{"id":"document.save","params":"{path: string}"}]'
+            ),
+            True,
+            "{path: string}",
+        ),
+        ("unrelated.open — ()\ndocument.save — (path)\n".encode(), False, "(path)"),
+    ],
+    ids=["json", "text"],
+)
+def test_native_registry_hashes_only_the_selected_signature(
+    observe_native_registry, stdout, json_registry, signature
+):
+    assert observe_native_registry(stdout, json_registry=json_registry) == content_hash(
+        {"document.save": signature}
+    )
+
+
+@pytest.mark.parametrize(
+    ("late", "message"),
+    [
+        (False, "exceeded its receipt, file or byte budget"),
+        (True, "exhausted its time budget"),
+    ],
+    ids=["oversized-receipt", "late-reply"],
+)
+def test_native_cli_invalid_reply_skips_scratch_audit(
+    tmp_path, monkeypatch, late, message
+):
+    elapsed = 0
+    monkeypatch.setattr(artcraft_native_cli, "monotonic", lambda: elapsed)
+
+    def invoke(*_args, timeout):
+        nonlocal elapsed
+        assert timeout == 5
+        if late:
+            elapsed = 5
+            return b"receipt"
+        return b"x" * (1024 * 1024 + 1)
+
+    def unexpected_scratch(*_args):
+        pytest.fail("Rejected replies must not inspect scratch")
+
+    monkeypatch.setattr(artcraft_native_cli, "_owned_files", unexpected_scratch)
+    call = artcraft_native_cli.bounded_native_invocation(
+        tmp_path, {"seconds": 5, "files": 1, "bytes": 8}, invoke, label="Native job"
+    )
+
+    with pytest.raises(artcraft.ArtCraftError, match=message):
+        call("mock-command")
+
+
+def test_native_cli_refuses_redirected_workspace_before_scanning(tmp_path, monkeypatch):
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    target = tmp_path / "outside"
+    target.mkdir()
+    resolve = type(workspace).resolve
+
+    def invoke(*args, **kwargs):
+        def redirected(path, *args, **kwargs):
+            return target if path == workspace else resolve(path, *args, **kwargs)
+
+        monkeypatch.setattr(type(workspace), "resolve", redirected)
+        return b"receipt"
+
+    def unexpected_scan(*args):
+        pytest.fail("A redirected workspace must not be opened by the audit")
+
+    monkeypatch.setattr(artcraft_native_cli, "scandir", unexpected_scan)
+    call = artcraft_native_cli.bounded_native_invocation(
+        workspace, {"seconds": 5, "files": 1, "bytes": 8}, invoke, label="Native job"
+    )
+    with pytest.raises(artcraft.ArtCraftError, match="workspace"):
+        call("mock-command")
+
+
+@pytest.mark.parametrize("limit", ["files", "bytes"])
+def test_native_cli_scratch_audit_stops_at_first_excess(tmp_path, monkeypatch, limit):
+    for name in ("first.bin", "second.bin"):
+        (tmp_path / name).write_bytes(b"x")
+
+    def owned_files(directory, _allowed, _label):
+        yield directory / "first.bin"
+        yield directory / "second.bin"
+        pytest.fail("Scratch audit must stop at the first over-budget file")
+
+    monkeypatch.setattr(artcraft_native_cli, "_owned_files", owned_files)
+    budget = {"seconds": 5, "files": 5, "bytes": 5}
+    budget[limit] = 1
+    call = artcraft_native_cli.bounded_native_invocation(
+        tmp_path.resolve(),
+        budget,
+        lambda *_args, **_kwargs: b"receipt",
+        label="Native job",
+    )
+
+    with pytest.raises(
+        artcraft.ArtCraftError, match="exceeded its receipt, file or byte budget"
+    ):
+        call("mock-command")
+
+
+def test_native_cli_closes_directory_scans_at_scratch_limit(tmp_path, monkeypatch):
+    workspace = tmp_path.resolve()
+    scratch = workspace / "scratch"
+    scratch.mkdir()
+    for index in range(3):
+        (scratch / f"{index}.bin").write_bytes(b"x")
+    visited, closed = [], []
+
+    @contextmanager
+    def watch_scan(directory):
+        with scandir(directory) as entries:
+
+            def observed_entries():
+                for entry in entries:
+                    visited.append(directory)
+                    yield entry
+
+            try:
+                yield observed_entries()
+            finally:
+                closed.append(directory)
+
+    monkeypatch.setattr(artcraft_native_cli, "scandir", watch_scan, raising=False)
+    call = artcraft_native_cli.bounded_native_invocation(
+        workspace,
+        {"seconds": 5, "files": 1, "bytes": 5},
+        lambda *_args, **_kwargs: b"receipt",
+        label="Native job",
+        owned_directories=("scratch",),
+    )
+
+    with pytest.raises(
+        artcraft.ArtCraftError, match="exceeded its receipt, file or byte budget"
+    ):
+        call("mock-command")
+    assert visited == [workspace, scratch, scratch]
+    assert closed == [scratch, workspace]

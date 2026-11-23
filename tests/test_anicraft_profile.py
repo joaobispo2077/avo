@@ -7,6 +7,54 @@ from avo.artcraft import ArtCraftError
 from tests.artcraft_fixtures import picture_output
 
 
+def test_anicraft_cli_rejects_an_expired_reply_before_auditing_scratch(
+    tmp_path, monkeypatch
+):
+    from avo.adapters import artcraft_anicraft, artcraft_native_cli
+
+    now = 0
+    monkeypatch.setattr(artcraft_anicraft, "monotonic", lambda: now)
+
+    def invoke(directory, *args, timeout):
+        nonlocal now
+        assert directory == tmp_path
+        assert timeout == 5
+        now = 5
+        return b"{}"
+
+    def unexpected_scan(*args):
+        pytest.fail("A late reply must not trigger the scratch audit")
+
+    monkeypatch.setattr(type(tmp_path), "rglob", unexpected_scan)
+    monkeypatch.setattr(artcraft_native_cli, "scandir", unexpected_scan)
+    call = artcraft_anicraft._profile_invocation(
+        tmp_path, {"files": 5, "bytes": 1024}, invoke, 5
+    )
+    with pytest.raises(ArtCraftError, match="time budget"):
+        call("info")
+
+
+def test_anicraft_json_lines_rejects_a_successful_record_after_its_deadline(
+    monkeypatch,
+):
+    from types import SimpleNamespace
+
+    from avo.adapters import artcraft_anicraft
+
+    now = 0
+    monkeypatch.setattr(artcraft_anicraft, "monotonic", lambda: now)
+
+    def read_line(*, max_bytes, timeout):
+        nonlocal now
+        assert timeout == 5
+        assert max_bytes > 16
+        now = 5
+        return b'{"ok":true}\n'
+
+    with pytest.raises(ArtCraftError, match="time budget"):
+        artcraft_anicraft._json_lines_record(SimpleNamespace(read_line=read_line), 5)
+
+
 def _contract(**overrides):
     return picture_output(
         **{
@@ -80,6 +128,28 @@ def test_lower_third_can_hold_at_a_fixed_position_without_tweens(tmp_path):
     ] == [3, 23]
     plate = next(step["params"] for step in steps if step["cmd"] == "draw.rect")
     assert plate["x"] == 48
+
+
+def test_lower_third_can_place_a_selected_editable_identity_mark(tmp_path):
+    from avo.adapters.artcraft_anicraft import lower_third_steps
+
+    svg = tmp_path / "identity.svg"
+    steps = lower_third_steps(
+        _contract(),
+        {"primaryText": "Clara", "font": "Arial", "motion": "hold"},
+        tmp_path / "native.anicraft",
+        tmp_path / "white",
+        identity_svg=svg,
+    )
+    logo = next(step["params"] for step in steps if step["cmd"] == "file.import")
+    text = next(step["params"] for step in steps if step["cmd"] == "text.create")
+    scale = next(
+        step["params"] for step in steps if step["cmd"] == "element.set_transform"
+    )
+    assert logo["path"] == str(svg) and logo["layer"] == "active"
+    assert logo["x"] == scale["x"] == 59
+    assert scale["sx"] == scale["sy"] == 0.18
+    assert text["x"] > logo["x"] + 24
 
 
 def test_lower_third_rejects_blank_or_multiline_secondary_text(tmp_path):
