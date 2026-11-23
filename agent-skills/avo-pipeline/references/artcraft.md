@@ -254,6 +254,9 @@ Before any native authoring, identify the effective roots, owner of the job's
 document, output contract and bounds. A provider-only component has a declared
 external source workspace. A real video keeps canonical decisions under
 `<rawDir>/edit/timeline/` and uses its existing component and media owners.
+The file and byte limits apply to the combined selected inputs and separately
+to the retained export. An export that exceeds those limits or misses the job
+deadline goes to reconciliation.
 Keep editable source, fonts, media, plugins, recipe, tool identity and rights
 with the exact version. Inspect actual exported frames, samples or exchange
 behavior, and obtain the current design and contextual video decisions through

@@ -575,6 +575,10 @@ Structured ArtCraft job tools invoke the same prepare, run, inspect and recover
 commands as the CLI. Inspection and recovery compare the selected event head
 with current evidence and read only the artifacts owned by the job. Recovery
 reports a next action and fingerprints bounded partial files for reference.
+Preparation checks the combined input file and byte counts before app
+discovery. The run checks its retained output counts and elapsed time before
+publishing an export, including copy-only reuse. Late or oversized results
+enter reconciliation with their bounded recoverable files.
 An interrupted write retains its event and requires a fresh job before another
 attempt at authoring.
 
