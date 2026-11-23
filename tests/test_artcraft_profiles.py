@@ -3,6 +3,7 @@
 import json
 from contextlib import contextmanager
 from os import scandir
+from types import SimpleNamespace
 from zipfile import ZipFile
 
 import pytest
@@ -11,6 +12,7 @@ from avo import artcraft, init_project
 from avo.adapters import artcraft_native_cli
 from avo.adapters.artcraft import SelectedArtCraftAdapter
 from avo.adapters.artcraft_photocraft import _read_rgba, _require_package
+from avo.timeline.contracts import content_hash, file_fingerprint
 from tests.artcraft_fixtures import request
 from tests.test_artcraft_jobs import _prepare, job_spec
 
@@ -238,6 +240,84 @@ def test_effectcraft_requires_a_selected_font_source(tmp_path, monkeypatch):
     monkeypatch.setattr(init_project, "load_provider", lambda slug: {"slug": slug})
     with pytest.raises(artcraft.ArtCraftError, match="EffectCraft.*Arial font source"):
         prepare_effect(effect_spec(tmp_path), None)
+
+
+@pytest.fixture
+def observe_native_registry(tmp_path, monkeypatch):
+    executable = tmp_path / "fixture-cli"
+    executable.write_bytes(b"selected CLI fixture")
+
+    def observe(stdout, *, json_registry):
+        monkeypatch.setattr(
+            artcraft_native_cli.subprocess,
+            "run",
+            lambda *args, **kwargs: SimpleNamespace(stdout=stdout),
+        )
+        return artcraft_native_cli.observe_native_command_schema(
+            file_fingerprint(executable),
+            {},
+            needed={"document.save"},
+            label="Fixture profile",
+            json_registry=json_registry,
+        )
+
+    return observe
+
+
+@pytest.mark.parametrize(
+    ("stdout", "json_registry"),
+    [
+        (
+            (
+                b'[{"id":"document.save","params":"{}"},'
+                b'{"id":"document.save","params":"{}"}]'
+            ),
+            True,
+        ),
+        ("document.save — ()\ndocument.save — ()\n".encode(), False),
+        (b'[{"id":"document.save","params":null}]', True),
+        (b'[{"id":"document.save","params":{}}]', True),
+        (b'[{"id":"document.save","params":"  "}]', True),
+        ("document.save — \n".encode(), False),
+    ],
+    ids=[
+        "duplicate-json",
+        "duplicate-text",
+        "null-json-params",
+        "object-json-params",
+        "blank-json-params",
+        "empty-text",
+    ],
+)
+def test_native_registry_rejects_ambiguous_or_missing_signatures(
+    observe_native_registry, stdout, json_registry
+):
+    with pytest.raises(artcraft.ArtCraftError) as rejected:
+        observe_native_registry(stdout, json_registry=json_registry)
+    assert rejected.value.code == "ARTCRAFT_NOT_READY"
+
+
+@pytest.mark.parametrize(
+    ("stdout", "json_registry", "signature"),
+    [
+        (
+            (
+                b'[{"id":"unrelated.open","params":"{}"},'
+                b'{"id":"document.save","params":"{path: string}"}]'
+            ),
+            True,
+            "{path: string}",
+        ),
+        ("unrelated.open — ()\ndocument.save — (path)\n".encode(), False, "(path)"),
+    ],
+    ids=["json", "text"],
+)
+def test_native_registry_hashes_only_the_selected_signature(
+    observe_native_registry, stdout, json_registry, signature
+):
+    assert observe_native_registry(stdout, json_registry=json_registry) == content_hash(
+        {"document.save": signature}
+    )
 
 
 @pytest.mark.parametrize(
