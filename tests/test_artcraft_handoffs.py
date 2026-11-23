@@ -1,12 +1,17 @@
 """Selected specialist exchanges preserve exact dependencies and timeline authority."""
 
+from contextlib import contextmanager
 from copy import deepcopy
+from os import scandir
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
 from avo import artcraft, init_project
+from avo.adapters import artcraft_native_cli
+from avo.adapters.artcraft_filmcraft import author_interchange
+from avo.adapters.artcraft_vectorcraft import author_vector_emblem
 from avo.timeline.contracts import file_fingerprint
 from avo.timeline.import_service import _filmcraft_reference_findings
 from tests.artcraft_fixtures import locked_tool_observation, picture_output, request
@@ -94,6 +99,64 @@ def test_filmcraft_rejects_complete_proof_before_launch(tmp_path, monkeypatch):
     spec = film_spec(tmp_path, original)
     with pytest.raises(artcraft.ArtCraftError, match="program proof"):
         _prepare(artcraft, film_request(spec["provider"]), spec, None, intent=intent)
+
+
+@pytest.mark.parametrize("app", ["filmcraft", "vectorcraft"])
+@pytest.mark.parametrize("limit", ["time", "files"])
+def test_native_exchange_stops_at_its_budget(tmp_path, monkeypatch, app, limit):
+    workspace = tmp_path.resolve() / app
+    budget = {"seconds": 5, "files": 6, "bytes": 16_384}
+    elapsed = 0
+    visited = []
+    monkeypatch.setattr(artcraft_native_cli, "monotonic", lambda: elapsed)
+
+    @contextmanager
+    def watch_scan(directory):
+        assert limit == "files", (
+            "A late reply must be rejected before the scratch audit"
+        )
+        assert directory == workspace
+        with scandir(directory) as entries:
+
+            def observe_entries():
+                for entry in entries:
+                    visited.append(entry.name)
+                    yield entry
+
+            yield observe_entries()
+
+    monkeypatch.setattr(artcraft_native_cli, "scandir", watch_scan)
+
+    def invoke(directory, *arguments, timeout):
+        nonlocal elapsed
+        assert directory == workspace
+        assert 0 < timeout <= budget["seconds"]
+        if app == "vectorcraft":
+            assert arguments[:2] == ("--safe-mode", "run")
+        else:
+            assert arguments[0] == "run"
+        if limit == "time":
+            elapsed = budget["seconds"]
+        else:
+            for index in range(budget["files"] + 2):
+                (workspace / f"scratch-{index}.bin").write_bytes(b"x")
+        return b"{}"
+
+    message = "time budget" if limit == "time" else "file or byte budget"
+    with pytest.raises(artcraft.ArtCraftError, match=message):
+        if app == "filmcraft":
+            author_interchange(
+                {
+                    "budget": budget,
+                    "inputs": [{"locator": str(tmp_path / "original.mov")}],
+                },
+                directory=workspace,
+                invoke=invoke,
+            )
+        else:
+            author_vector_emblem({}, directory=workspace, budget=budget, invoke=invoke)
+
+    assert len(visited) == (0 if limit == "time" else budget["files"] + 1)
 
 
 def emblem_request(operation, output_role, **changes):

@@ -175,6 +175,24 @@ def test_json_lines_requires_its_own_confined_stream(tmp_path, operator_profile)
     assert observed == []
 
 
+def test_cli_requires_a_confined_runner_before_observing_roots(
+    tmp_path, operator_profile
+):
+    _, observed, _ = operator_profile
+
+    def unexpected_observation(*_):
+        pytest.fail("Root observations alone cannot make a CLI job ready")
+
+    adapter = native.SelectedArtCraftAdapter(observe_confinement=unexpected_observation)
+    with pytest.raises(
+        artcraft.ArtCraftError, match="confined command runner"
+    ) as failure:
+        _prepare(artcraft, request(), job_spec(tmp_path, mode="cli"), adapter)
+    assert failure.value.code == "ARTCRAFT_NOT_READY"
+    assert observed == []
+    assert not list(tmp_path.rglob("job.json"))
+
+
 @pytest.mark.parametrize("mode", ["live", "script", "action"])
 def test_unqualified_transport_refuses_before_native_probe(
     tmp_path, monkeypatch, operator_profile, mode
