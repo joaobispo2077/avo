@@ -113,7 +113,9 @@ def _verify_retained_package(package, target):
     if _read_retained_manifest(target) != package:
         raise ArtCraftError("Immutable ArtCraft package manifest has changed")
     root = target / "files"
-    return [_verify_file(root / item["path"], root, item) for item in package["files"]]
+    entries = package["files"]
+    _require_source_roles(entries)
+    return [_verify_file(root / item["path"], root, item) for item in entries]
 
 
 def _read_retained_manifest(target):
@@ -401,6 +403,17 @@ def _verify_files(package, root, file_limit, byte_limit):
         or sum(item["sizeBytes"] for item in entries) > byte_limit
     ):
         raise ArtCraftError("ArtCraft package exceeds its selected file or byte limit")
+    _require_source_roles(entries)
+    files, roles = {}, {}
+    for item in entries:
+        path = root / item["path"]
+        observed = _verify_file(path, root, item)
+        files[item["path"]] = path
+        roles[item["role"]] = (item, observed)
+    return files, roles
+
+
+def _require_source_roles(entries):
     if len({item["path"].casefold() for item in entries}) != len(entries):
         raise ArtCraftError("ArtCraft package has conflicting file aliases")
     selected_roles = {item.get("role") for item in entries}
@@ -411,13 +424,6 @@ def _verify_files(package, root, file_limit, byte_limit):
         raise ArtCraftError(
             "ArtCraft lower-third package requires the exact supported source roles"
         )
-    files, roles = {}, {}
-    for item in entries:
-        path = root / item["path"]
-        observed = _verify_file(path, root, item)
-        files[item["path"]] = path
-        roles[item["role"]] = (item, observed)
-    return files, roles
 
 
 def _verify_file(path, root, expected):
