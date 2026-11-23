@@ -2,6 +2,7 @@
 
 import json
 from pathlib import Path
+from time import monotonic
 from types import SimpleNamespace
 
 import pytest
@@ -308,11 +309,12 @@ def test_occupied_saved_revision_refuses_before_tool_validation(
         b'{"id":2,"ok":true,"result":{}}\n',
         b'{"id":1,"ok":true,"ok":false,"result":{}}\n',
         b'{"id":1,"ok":true}\n',
+        b'{"id":1,"ok":true,"result":null}\n',
+        b'{"id":1,"ok":true,"result":{"error":"failed command"}}\n',
     ],
 )
 def test_native_json_lines_stops_before_sending_next_command(tmp_path, reply):
     from contextlib import contextmanager
-    from time import monotonic
 
     from avo.adapters.artcraft_anicraft import _run_json_lines
 
@@ -327,7 +329,7 @@ def test_native_json_lines_stops_before_sending_next_command(tmp_path, reply):
         assert document == source
         assert 0 < timeout <= 5
         yield SimpleNamespace(
-            read_line=lambda **_: next(responses),
+            read_line=lambda **_: next(responses, b""),
             send_line=lambda message, **_: sent.append(json.loads(message)),
         )
 
@@ -346,3 +348,88 @@ def test_native_json_lines_stops_before_sending_next_command(tmp_path, reply):
         )
     assert sent == [{"id": 1, **steps[0]}]
     assert not target.exists()
+
+
+@pytest.mark.parametrize(
+    ("partial", "save_name"),
+    [
+        (None, "component.anicraft"),
+        ({"error": "failed command"}, "component.anicraft"),
+        ({"index": 0}, "different.anicraft"),
+    ],
+)
+def test_native_batch_rejects_invalid_partial_result_even_with_saved_file(
+    tmp_path, partial, save_name
+):
+    from avo.adapters.artcraft_anicraft import _apply_recipe
+
+    source = tmp_path / "empty.anicraft"
+    target = tmp_path / "component.anicraft"
+    recipe = tmp_path / "recipe.json"
+    steps = [
+        {"cmd": "layer.new", "params": {"name": "Label"}},
+        {"cmd": "file.save_as", "params": {"path": str(target)}},
+    ]
+
+    def call(command, document, script):
+        assert (command, document, script) == ("run", source, recipe)
+        target.write_bytes(b"partial native document")
+        return json.dumps([partial, {"saved": str(tmp_path / save_name)}]).encode(
+            "utf-8"
+        )
+
+    with pytest.raises(artcraft.ArtCraftError, match="AniCraft"):
+        _apply_recipe(call, source, target, recipe, steps, None, {}, monotonic() + 5)
+
+
+def test_native_json_lines_stops_before_export_when_save_reply_names_another_file(
+    tmp_path,
+):
+    from contextlib import contextmanager
+
+    from avo.adapters.artcraft_anicraft import _run_json_lines
+
+    source = tmp_path / "empty.anicraft"
+    source.write_bytes(b"native fixture")
+    target = tmp_path / "component.anicraft"
+    other = tmp_path / "different.anicraft"
+    reply = {"id": 1, "ok": True, "result": {"saved": str(other)}}
+    steps = [
+        {"cmd": "file.save_as", "params": {"path": str(target)}},
+        {
+            "cmd": "file.export_png_sequence",
+            "params": {"dir": str(tmp_path / "white"), "from": 0, "to": 23},
+        },
+    ]
+    sent = []
+
+    def send_line(message, **_):
+        sent.append(json.loads(message))
+        if len(sent) == 1:
+            target.write_bytes(b"partial native document")
+
+    @contextmanager
+    def open_stream(document, *, timeout):
+        assert document == source
+        assert 0 < timeout <= 5
+        replies = iter(
+            [
+                b'{"app":"AniCraft","ready":true,"version":"0.2.1"}\n',
+                json.dumps(reply).encode("utf-8") + b"\n",
+            ]
+        )
+        yield SimpleNamespace(
+            read_line=lambda **_: next(replies, b""), send_line=send_line
+        )
+
+    with pytest.raises(artcraft.ArtCraftError, match="AniCraft JSON-lines"):
+        _run_json_lines(
+            open_stream,
+            source,
+            target,
+            steps,
+            budget={"files": 12, "bytes": 4096},
+            deadline=monotonic() + 5,
+        )
+    assert sent == [{"id": 1, **steps[0]}]
+    assert target.is_file()

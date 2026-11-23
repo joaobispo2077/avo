@@ -11,6 +11,7 @@ import pytest
 from avo import artcraft, init_project
 from avo.adapters import artcraft_native_cli
 from avo.adapters.artcraft import SelectedArtCraftAdapter
+from avo.adapters.artcraft_figcraft import _run_script
 from avo.adapters.artcraft_photocraft import _read_rgba, _require_package
 from avo.timeline.contracts import content_hash, file_fingerprint
 from tests.artcraft_fixtures import request
@@ -21,6 +22,24 @@ FIG_OPERATION = "editable-design-variant"
 DECK_OPERATION = "editable-explanation-slide"
 LIGHT_OPERATION = "reusable-photo-treatment"
 EFFECT_OPERATION = "editable-masked-lower-third"
+
+
+@pytest.mark.parametrize(
+    "receipt",
+    [
+        {"step": False, "command": "node.get", "ok": True, "result": {}},
+        {"step": 0.0, "command": "node.get", "ok": True, "result": {}},
+        {"step": 0, "command": "node.get", "ok": 1, "result": {}},
+        {"step": 0, "command": "node.get", "ok": True},
+        [],
+    ],
+)
+def test_figcraft_rejects_incomplete_or_ambiguous_script_receipts(tmp_path, receipt):
+    def call(*args):
+        return json.dumps(receipt)
+
+    with pytest.raises(artcraft.ArtCraftError, match="every selected script step"):
+        _run_script(call, tmp_path, "inspect", [{"command": "node.get"}])
 
 
 def photo_request(provider="fixture-provider"):
