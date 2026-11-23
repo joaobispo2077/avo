@@ -585,6 +585,11 @@ ArtCraft readiness rejects duplicate, missing, or malformed selected command
 signatures. A prepared saved-source job becomes stale when its revision path
 is already occupied. This check runs before validating the native app or
 reserving a run in the journal.
+AniCraft CLI preparation requires both a root observer and a command runner.
+Its batch and JSON-lines recipes verify each command's result and the exact
+acknowledged save destination. FigCraft script replies must identify the exact
+step and command and report a boolean success. FilmCraft and VectorCraft use
+the shared CLI budget check before and during scratch inspection.
 An interrupted write retains its event and requires a fresh job before another
 attempt at authoring.
 

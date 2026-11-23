@@ -95,10 +95,11 @@ are reference material until separately qualified.
 
 For the selected Windows 0.2.1 runtime, `--mode json-lines` uses `serve` through
 a runner that independently confines the chosen roots and supports bounded
-stdin/stdout. AVO sends one fixed native command at a time, checks its reply,
-and stops before the next command on failure. The run explicitly saves a fresh
-native document and verifies reopened frames and alpha against the same
-contract as CLI batching. A verified lower-third export from this profile can
+stdin/stdout. AVO sends one fixed native command at a time and stops on an
+invalid or failed reply. Both batch and JSON-lines check each result and the
+acknowledged save destination before accepting a new document. AVO verifies
+reopened frames and alpha against the same contract in either mode.
+A verified lower-third export from this profile can
 enter the ordinary proof admission and saved-source reuse paths. When the
 confined runner is unavailable, use the explicit guided route for an
 operator-owned handoff.
