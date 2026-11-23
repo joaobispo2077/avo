@@ -115,8 +115,10 @@ protocols. Common naming does not imply common switches or permissions.
   independently confined runner.
   A disposable Windows 0.23.1 desktop accepted authenticated inspection of a
   synthetic image. It refused a read outside its configured root and a save
-  with no write root. Live authoring still requires exclusive document ownership
-  and recovery evidence. [PhotoCraft 0.23.1 control protocol](https://github.com/storytold/photocraft/blob/v0.23.1/docs/control-protocol.md)
+  with no write root. A separate fixture disconnected during a pending save,
+  observed a competing client's busy response, and verified the saved PSD
+  after reconnecting. Production live authoring still requires exclusive
+  document ownership. [PhotoCraft 0.23.1 control protocol](https://github.com/storytold/photocraft/blob/v0.23.1/docs/control-protocol.md)
 - **LightCraft**: App and CLI should match releases. A library cannot be open
   in both background and desktop processes. Live control is local but has no
   password per the guide, so a loopback address alone does not prove exclusive
@@ -170,7 +172,7 @@ profile for the current request.
 | FilmCraft 0.20.1 | CLI source-linked native sequence and OTIO return. | Attached desktop and other timeline treatments. |
 | SoundCraft 0.20.1 | CLI isolated cue and matching 48 kHz stereo PCM in an AVO proof. | Attached desktop, other signal chains and creator listening. |
 | VectorCraft 0.24.1 | CLI editable SVG emblem and PNG text card. A direct installed CLI fixture also reopened an editable two-series chart and reproduced its PNG. | The chart remains a fixture. Background MCP, attached desktop and other artwork families remain unqualified. |
-| PhotoCraft 0.23.1 | CLI layered Curves card with preserved 8-bit RGBA and sRGB profile. Authenticated desktop inspection and file-root denials passed in a fixture. | Live authoring and recovery, higher bit depths, linked objects and alternate color profiles. |
+| PhotoCraft 0.23.1 | CLI layered Curves card with preserved 8-bit RGBA and sRGB profile. Desktop fixtures verified authenticated inspection, file-root denials and a pending save across reconnect. | Production live authoring, higher bit depths, linked objects and alternate color profiles. |
 | LightCraft 0.21.1 | CLI treatment of an RGB JPEG and recovery from its retained library snapshot and original. | Camera RAW, plugins and attached desktop. |
 | FigCraft 0.18.1 | CLI editable two-state component and static PNG. | Attached desktop, prototype playback and imported formats. |
 | TextureCraft | Unavailable on the local Windows installation. The catalog entry is documented-only. | Native material, safe bake, channel packing, reopening and output checks require a separately installed matching app and CLI. |
