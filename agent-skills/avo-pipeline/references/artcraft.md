@@ -104,6 +104,11 @@ enter the ordinary proof admission and saved-source reuse paths. When the
 confined runner is unavailable, use the explicit guided route for an
 operator-owned handoff.
 
+Selected specialist jobs run fixed recipes and validate the app-specific
+results before accepting saved work. PhotoCraft's editable Curves profile uses
+`run` with its selected commands. Recorded action sets, batch folders and
+droplets remain outside that qualified profile.
+
 For an editable isolated SoundCraft cue, use `--app soundcraft --operation
 isolated-cue --mode cli` with the selected Windows 0.20.1 tools and a confined
 runner. Select a source WAV using `soundCue.source` and choose the built-in

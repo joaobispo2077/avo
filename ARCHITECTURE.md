@@ -590,6 +590,9 @@ Its batch and JSON-lines recipes verify each command's result and the exact
 acknowledged save destination. FigCraft script replies must identify the exact
 step and command and report a boolean success. FilmCraft and VectorCraft use
 the shared CLI budget check before and during scratch inspection.
+Specialist recipes validate partial results using the selected app's response
+format. The adapter checks native save and reopen evidence before publishing
+an export and accepts only commands built from the selected recipe.
 An interrupted write retains its event and requires a fresh job before another
 attempt at authoring.
 
