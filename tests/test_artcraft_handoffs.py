@@ -279,3 +279,29 @@ def test_animated_emblem_closes_inputs_and_detects_later_source_change(
             expected_head=animated["head"],
             adapter=SimpleNamespace(),
         )
+
+
+@pytest.mark.parametrize("limit", ["files", "bytes"])
+def test_animated_emblem_checks_the_combined_input_budget_before_discovery(
+    tmp_path, vector_export, limit
+):
+    _, exported, reference = vector_export
+    _, event = artcraft.read_authoring_export(
+        exported["jobRef"], expected_head=exported["head"]
+    )
+    dependencies = [
+        reference["job"],
+        event["saved"],
+        event["recipe"],
+        *event["outputs"],
+    ]
+    specs = animated_emblem_spec(tmp_path, reference)
+    spec_budget = specs["budget"]
+    spec_budget[limit] = (
+        len(dependencies) - 1
+        if limit == "files"
+        else sum(item["sizeBytes"] for item in dependencies) - 1
+    )
+    with pytest.raises(artcraft.ArtCraftError, match="inputs exceed.*budget"):
+        _prepare_animated_emblem(specs, SimpleNamespace(observe=_unexpected_app_access))
+    assert not (tmp_path / "artcraft-jobs" / "job-animated-emblem").exists()
