@@ -2,7 +2,10 @@
 
 import json
 import subprocess
+from contextlib import closing
+from os import scandir
 from pathlib import Path
+from stat import S_ISREG
 from time import monotonic
 
 from avo.artcraft import ArtCraftError
@@ -14,40 +17,55 @@ def bounded_native_invocation(
 ):
     deadline = monotonic() + budget["seconds"]
 
-    def call(*arguments):
+    def remaining_time():
         remaining = deadline - monotonic()
         if remaining <= 0:
             raise ArtCraftError(f"{label} exhausted its time budget")
-        result = invoke(directory, *arguments, timeout=remaining)
-        files = tuple(_owned_files(directory, owned_directories, label))
-        _require_owned_outputs(files, label)
-        if (
-            len(result) > 1024 * 1024
-            or len(files) > budget["files"]
-            or sum(item.stat().st_size for item in files) > budget["bytes"]
-        ):
-            raise ArtCraftError(f"{label} exceeded its receipt, file or byte budget")
-        return result
+        return remaining
+
+    def call(*arguments):
+        result = invoke(directory, *arguments, timeout=remaining_time())
+        remaining_time()
+        if len(result) <= 1024 * 1024:
+            with closing(_owned_files(directory, owned_directories, label)) as files:
+                if _owned_outputs_fit(files, budget, label, remaining_time):
+                    remaining_time()
+                    return result
+        raise ArtCraftError(f"{label} exceeded its receipt, file or byte budget")
 
     return call
 
 
 def _owned_files(directory, allowed, label):
-    for item in directory.iterdir():
-        if item.name not in allowed:
-            yield item
-            continue
-        if item.resolve() != item or not item.is_dir():
-            raise ArtCraftError(f"{label} created an invalid owned directory")
-        yield from item.iterdir()
+    with scandir(directory) as entries:
+        for entry in entries:
+            item = Path(entry.path)
+            if entry.name not in allowed:
+                yield item
+                continue
+            if item.resolve() != item or not item.is_dir():
+                raise ArtCraftError(f"{label} created an invalid owned directory")
+            with scandir(item) as children:
+                yield from (Path(child.path) for child in children)
 
 
-def _require_owned_outputs(files, label):
-    if any(
-        item.resolve() != item or not item.is_file() or item.stat().st_nlink != 1
-        for item in files
-    ):
-        raise ArtCraftError(f"{label} created a linked or external file")
+def _owned_outputs_fit(files, budget, label, check_time):
+    remaining_bytes = budget["bytes"]
+    for count, item in enumerate(files, 1):
+        check_time()
+        if count > budget["files"]:
+            return False
+        metadata = item.lstat()
+        if (
+            item.resolve() != item
+            or not S_ISREG(metadata.st_mode)
+            or metadata.st_nlink != 1
+        ):
+            raise ArtCraftError(f"{label} created a linked or external file")
+        remaining_bytes -= metadata.st_size
+        if remaining_bytes < 0:
+            return False
+    return True
 
 
 def observe_native_command_schema(
