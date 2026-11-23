@@ -9,13 +9,15 @@ import subprocess
 import xml.etree.ElementTree as ET
 from base64 import b64decode
 from pathlib import Path
-from time import monotonic
 
 from avo.artcraft import ArtCraftError
 from avo.timeline.contracts import content_hash, file_fingerprint
 from avo.timeline.store import write_immutable_json
 
-from .artcraft_native_cli import selected_native_command_signatures
+from .artcraft_native_cli import (
+    bounded_native_invocation,
+    selected_native_command_signatures,
+)
 
 _SAVE = "file.save"
 _INSPECT = "document.inspect"
@@ -250,24 +252,10 @@ def author_vector_card(output, parameters, *, directory, budget, invoke):
 
 
 def _card_invocation(directory, budget, invoke):
-    deadline = monotonic() + budget["seconds"]
+    run = bounded_native_invocation(directory, budget, invoke, label="VectorCraft card")
 
     def call(*arguments):
-        remaining = deadline - monotonic()
-        if remaining <= 0:
-            raise ArtCraftError("VectorCraft card exhausted its time budget")
-        rows = invoke(directory, "--safe-mode", *arguments, timeout=remaining)
-        if len(rows) > 1024 * 1024:
-            raise ArtCraftError("VectorCraft card receipts exceed their byte limit")
-        files = list(directory.iterdir())
-        size = sum(item.stat().st_size for item in files)
-        if len(files) > budget["files"] or size > budget["bytes"]:
-            raise ArtCraftError("VectorCraft card exceeded its file or byte budget")
-        if any(
-            item.resolve() != item or not item.is_file() or item.stat().st_nlink != 1
-            for item in files
-        ):
-            raise ArtCraftError("VectorCraft card created a linked or external file")
+        rows = run("--safe-mode", *arguments)
         return [json.loads(line) for line in rows.splitlines()]
 
     return call

@@ -344,9 +344,9 @@ class SelectedArtCraftAdapter:
             return self._operator_observation(installed, scope, mode)
         if mode == "json-lines":
             self._require_confined_stream(installed)
-        if self._observe_confinement is None:
+        elif self._observe_confinement is None or self._run_confined is None:
             raise _not_ready(
-                "AniCraft CLI file confinement is unverified in this environment",
+                "AniCraft CLI requires a confined command runner and verified file confinement",
                 "Use an independently confined authoring runtime for the selected read and write roots.",
             )
         effective = self._observe_confinement(installed, roots)

@@ -3,13 +3,15 @@
 import json
 import subprocess
 from pathlib import Path
-from time import monotonic
 
 from avo.artcraft import ArtCraftError
 from avo.timeline.contracts import content_hash, file_fingerprint
 from avo.timeline.store import write_immutable_json
 
-from .artcraft_native_cli import selected_native_command_signatures
+from .artcraft_native_cli import (
+    bounded_native_invocation,
+    selected_native_command_signatures,
+)
 
 _COMMANDS = {
     "file.newProject",
@@ -56,7 +58,9 @@ def author_interchange(job, *, directory, invoke):
     if budget["files"] < 6:
         raise ArtCraftError("FilmCraft exchange requires six job files")
     directory.mkdir(parents=True)
-    call = _job_runner(directory, budget, invoke)
+    call = bounded_native_invocation(
+        directory, budget, invoke, label="FilmCraft exchange"
+    )
     source = job["inputs"][0]
     original = Path(source["locator"])
     stage = directory / "imported.fcproj"
@@ -116,32 +120,6 @@ def author_interchange(job, *, directory, invoke):
 
 def _step(identifier, **options):
     return {"id": identifier, "params": options}
-
-
-def _job_runner(directory, budget, invoke):
-    deadline = monotonic() + budget["seconds"]
-
-    def call(*arguments):
-        remaining = deadline - monotonic()
-        if remaining <= 0:
-            raise ArtCraftError("FilmCraft exchange exceeded its time budget")
-        response = invoke(directory, *arguments, timeout=remaining)
-        files = list(directory.iterdir())
-        if any(
-            path.resolve() != path or not path.is_file() or path.stat().st_nlink != 1
-            for path in files
-        ):
-            raise ArtCraftError("FilmCraft created an unowned or nonregular artifact")
-        if (
-            len(files) > budget["files"]
-            or sum(path.stat().st_size for path in files) > budget["bytes"]
-        ):
-            raise ArtCraftError("FilmCraft exchange exceeded its file or byte budget")
-        if len(response) > 1024 * 1024:
-            raise ArtCraftError("FilmCraft exchange receipts exceed their byte limit")
-        return response
-
-    return call
 
 
 def _batch(call, script, steps, *options):

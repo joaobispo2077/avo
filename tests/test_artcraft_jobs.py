@@ -284,7 +284,12 @@ def test_selected_identity_checks_only_matching_installed_tools(
 
     monkeypatch.setattr("subprocess.run", run)
     spec = job_spec(workspace, cliPath=str(cli), appPath=str(app))
-    adapter = SelectedArtCraftAdapter(confinement)
+    adapter = SelectedArtCraftAdapter(
+        observe_confinement=confinement,
+        run_confined=lambda *args, **kwargs: pytest.fail(
+            "Preparation invoked authoring"
+        ),
+    )
     if app_release == "0.4.1":
         result = _prepare(api, request(), spec, adapter)
         observation = result["job"]["observation"]
