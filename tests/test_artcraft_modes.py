@@ -64,6 +64,7 @@ def test_selected_host_mcp_stages_only_the_owned_document_and_script(
             frameRate={"numerator": 24, "denominator": 1},
         ),
     )
+    spec["budget"]["files"] = spec["output"]["frameCount"] + 4
     prepared = _prepare(artcraft, request(), spec, adapter)
     observation = prepared["job"]["observation"]
     assert observation["authority"] == "operator"
@@ -117,6 +118,67 @@ def test_selected_host_mcp_stages_only_the_owned_document_and_script(
         == "inspect-operator-return"
     )
     assert len(observed) == 1
+
+
+@pytest.mark.parametrize("mode", ["guided", "host-mcp"])
+def test_operator_handoff_rejects_insufficient_files_before_planning(
+    tmp_path, monkeypatch, operator_profile, mode
+):
+    _, _, advertise = operator_profile
+    advertise(HEADLESS)
+    adapter = native.SelectedArtCraftAdapter()
+    spec = job_spec(
+        tmp_path,
+        mode=mode,
+        authoringParameters={"primaryText": "Speaker", "font": "Arial"},
+    )
+    spec["budget"]["files"] = spec["output"]["frameCount"] + 3
+    prepared = _prepare(artcraft, request(), spec, adapter)
+
+    def unexpected_plan(*_args):
+        pytest.fail("An undersized file budget must fail before planning the handoff")
+
+    monkeypatch.setattr(adapter, "plan_lower_third", unexpected_plan)
+    with pytest.raises(
+        artcraft.ArtCraftError, match="operator handoff.*file budget"
+    ) as failure:
+        artcraft.run_authoring(
+            prepared["jobRef"], expected_head=prepared["head"], adapter=adapter
+        )
+    assert failure.value.code == "ARTCRAFT_NOT_READY"
+    workspace = Path(prepared["job"]["roots"]["write"][0])
+    assert not (workspace / "recipe.json").exists()
+    assert not (workspace / "handoff.json").exists()
+    assert (
+        artcraft.inspect_authoring(prepared["jobRef"], expected_head=prepared["head"])[
+            "state"
+        ]
+        == "prepared"
+    )
+
+
+def test_guided_handoff_accepts_exact_file_budget(tmp_path, operator_profile):
+    adapter = native.SelectedArtCraftAdapter()
+    spec = job_spec(
+        tmp_path,
+        mode="guided",
+        authoringParameters={"primaryText": "Speaker", "font": "Arial"},
+    )
+    spec["budget"]["files"] = spec["output"]["frameCount"] + 4
+    prepared = _prepare(artcraft, request(), spec, adapter)
+    ready = artcraft.run_authoring(
+        prepared["jobRef"], expected_head=prepared["head"], adapter=adapter
+    )
+    assert ready["state"] == "ready"
+    manifest = json.loads(Path(ready["handoff"]["locator"]).read_text(encoding="utf-8"))
+    assert manifest["operatorBudget"] == spec["budget"]
+    assert "host" not in manifest
+    assert (
+        artcraft.run_authoring(
+            prepared["jobRef"], expected_head=ready["head"], adapter=adapter
+        )
+        == ready
+    )
 
 
 def test_missing_headless_mcp_capability_does_not_fall_back(tmp_path, operator_profile):
