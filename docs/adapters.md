@@ -33,6 +33,15 @@ Exit codes: `0` success, `1` adapter failure, `2` config/user error.
 3. Add tests under `tests/test_adapters_*.py`.
 4. Prefer subprocess to bundled scripts or external CLIs.
 
+## Selected ArtCraft authoring
+
+The ArtCraft coordinator builds a scoped job before the selected adapter sees
+the request. The adapter verifies the installed application and CLI versions,
+their byte fingerprints and the scoped command schema. Automatic execution
+requires an independently confined runner. Operator returns are inspected
+against the staged native document and outputs. The timeline owns canonical
+proof binding and creator review. [ArtCraft integration strategy](artcraft-integration-strategy.md)
+
 ## Model metadata
 
 Adapters populate `JobResult.models_used` (e.g. `{"transcribe": "faster-whisper:small"}`).

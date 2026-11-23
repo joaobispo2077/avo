@@ -171,6 +171,7 @@ def resolve_tracks(
     cue_ids: set[str],
     *,
     cues: dict[str, dict[str, Any]] | None = None,
+    workspace: TimelineWorkspace | None = None,
 ) -> dict[str, Any]:
     result = deepcopy(snapshot)
     for group in ("audioTracks", "videoTracks"):
@@ -191,8 +192,8 @@ def resolve_tracks(
             layer_id = str(layer.get("layerId") or "")
             _validate_breath_layer(layer)
             _validate_generated_track_layer(layer, group, generated_instances)
-            _validate_generated_audio_track(layer)
-            _validate_generated_still_track(layer)
+            _validate_generated_audio_track(layer, workspace)
+            _validate_generated_still_track(layer, workspace)
             if not layer_id or layer_id in seen:
                 raise TrackError("track layer IDs must be unique and stable")
             seen.add(layer_id)
@@ -230,22 +231,22 @@ def resolve_tracks(
     return result
 
 
-def _validate_generated_audio_track(layer):
+def _validate_generated_audio_track(layer, workspace):
     if "generatedAudioRef" in layer:
         from .artcraft_audio import require_generated_audio_layer
 
         try:
-            require_generated_audio_layer(layer)
+            require_generated_audio_layer(layer, workspace=workspace)
         except (ValueError, OSError) as error:
             raise TrackError(f"Invalid generated audio source: {error}") from error
 
 
-def _validate_generated_still_track(layer):
+def _validate_generated_still_track(layer, workspace):
     if "generatedStillRef" in layer:
         from .artcraft_stills import require_generated_still_layer
 
         try:
-            require_generated_still_layer(layer)
+            require_generated_still_layer(layer, workspace=workspace)
         except (ValueError, OSError) as error:
             raise TrackError(f"Invalid generated still source: {error}") from error
 
@@ -341,7 +342,9 @@ class TracksService:
         cue_map = {
             cue["cueId"]: cue for cue in bmap_revision["snapshot"].get("cues") or []
         }
-        value = resolve_tracks(value, set(cue_map), cues=cue_map)
+        value = resolve_tracks(
+            value, set(cue_map), cues=cue_map, workspace=self.workspace
+        )
         if "sourceMixAdjustments" in value["audioTracks"]:
             from .source_mix import validate_source_mix_adjustments
 

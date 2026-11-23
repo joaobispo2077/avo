@@ -9,17 +9,35 @@ import subprocess
 import sys
 from pathlib import Path
 
-from avo.artcraft import _SOUND_CUE_SCOPE, _STILL_CARD_SCOPE, ArtCraftError
+from avo.artcraft import (
+    _ANIMATED_EMBLEM_SCOPE,
+    _DECK_SLIDE_SCOPE,
+    _EFFECT_MASK_SCOPE,
+    _FIG_VARIANT_SCOPE,
+    _FILM_RETURN_SCOPE,
+    _LIGHT_TREATMENT_SCOPE,
+    _PHOTO_CARD_SCOPE,
+    _SOUND_CUE_SCOPE,
+    _STILL_CARD_SCOPE,
+    _VECTOR_EMBLEM_SCOPE,
+    ArtCraftError,
+)
 from avo.timeline.contracts import content_hash, file_fingerprint
 
 _VERSION = re.compile(
-    r"(?:(?:ani|sound|vector)craft(?:-cli)?\s+)?v?(\d+\.\d+\.\d+(?:[-+][a-z0-9.-]+)?)(?: \((?:early alpha|windows x86_64)\))?",
+    r"(?:(?:ani|sound|vector|film|photo|fig|deck|light|effect)craft(?:-cli)?\s+)?v?(\d+\.\d+\.\d+(?:[-+][a-z0-9.-]+)?)(?: \((?:early alpha|windows x86_64|[a-f0-9]{7,40}, \d{4}-\d{2}-\d{2})\))?",
     re.IGNORECASE,
 )
 _PRODUCTS = {
     "anicraft": "AniCraft",
     "soundcraft": "SoundCraft",
     "vectorcraft": "VectorCraft",
+    "filmcraft": "FilmCraft",
+    "photocraft": "PhotoCraft",
+    "figcraft": "FigCraft",
+    "deckcraft": "DeckCraft",
+    "lightcraft": "LightCraft",
+    "effectcraft": "EffectCraft",
 }
 
 
@@ -129,8 +147,12 @@ def _runtime_environment(app="anicraft"):
     return environment
 
 
-def _command_schema_hash(executable):
-    from .artcraft_anicraft import observe_command_schema
+def _command_schema_hash(executable, *, emblem=False):
+    from .artcraft_anicraft import (
+        EMBLEM_COMMANDS,
+        LOWER_THIRD_COMMANDS,
+        observe_command_schema,
+    )
 
     path = Path(executable["locator"])
     try:
@@ -164,7 +186,8 @@ def _command_schema_hash(executable):
         raise _not_ready(
             "AniCraft CLI changed during command inspection", _installation_help()
         )
-    return content_hash(observe_command_schema(records))
+    required = EMBLEM_COMMANDS if emblem else LOWER_THIRD_COMMANDS
+    return content_hash(observe_command_schema(records, required=required))
 
 
 def _require_headless_transport(executable, mode):
@@ -222,7 +245,7 @@ def _installed_tools(product, cli_path, app_path):
         )
     lock, app_lock = file_fingerprint(cli), file_fingerprint(app)
     release = _release(cli)
-    if release != _release(app):
+    if release != _application_release(product, app):
         raise _not_ready(
             "The selected ArtCraft app and CLI report different releases",
             _installation_help(product),
@@ -240,32 +263,78 @@ def _installed_tools(product, cli_path, app_path):
     }
 
 
+def _application_release(product, app):
+    if product in {
+        "filmcraft",
+        "photocraft",
+        "figcraft",
+        "deckcraft",
+        "lightcraft",
+        "effectcraft",
+    }:
+        from .artcraft_windows import windows_application_release
+
+        return windows_application_release(app, _PRODUCTS[product])
+    return _release(app)
+
+
 class SelectedArtCraftAdapter:
     """Observe the selected installation and require independently verified confinement."""
 
-    def __init__(self, observe_confinement=None, run_confined=None, open_confined=None):
+    def __init__(
+        self,
+        observe_confinement=None,
+        run_confined=None,
+        open_confined=None,
+        claim_confined_cancellation=None,
+    ):
         self._observe_confinement = observe_confinement
         self._run_confined = run_confined
         self._open_confined = open_confined
+        self._claim_confined_cancellation = claim_confined_cancellation
         self._registry_observation = None
+
+    def claim_cancellation(self, job, running, directory):
+        """Obtain a stop callback for this exact supervised run without stopping it yet.
+
+        A callback returns "settled" only after the reserved run can no longer
+        start a command, its owned processes are gone, and its writes have stopped.
+        """
+        if (
+            self._run_confined is None
+            or self._claim_confined_cancellation is None
+            or job["observation"]["mode"] != "cli"
+        ):
+            return None
+        return self._claim_confined_cancellation(job, running, directory)
 
     def _selected_registry(self, installed, scope, mode):
         key = content_hash({"installation": installed, "scope": scope, "mode": mode})
         previous = self._registry_observation
         if previous is not None and previous[0] == key:
             return previous[1]
-        observed = _command_schema_hash(installed["executable"])
+        observe = _command_schema_hash
+        if scope == _ANIMATED_EMBLEM_SCOPE:
+            observed = observe(installed["executable"], emblem=True)
+        else:
+            observed = observe(installed["executable"])
         self._registry_observation = key, observed
         return observed
 
     def observe(self, *, scope, mode, roots, cli_path, app_path):
-        if scope in (_SOUND_CUE_SCOPE, _STILL_CARD_SCOPE):
-            return self._observe_specialist(scope, mode, roots, cli_path, app_path)
-        if (
-            scope["app"] != "anicraft"
-            or scope["operations"] != ["lower-third"]
-            or mode not in {"cli", "guided", "host-mcp", "json-lines"}
+        if scope in (
+            _SOUND_CUE_SCOPE,
+            _STILL_CARD_SCOPE,
+            _PHOTO_CARD_SCOPE,
+            _LIGHT_TREATMENT_SCOPE,
+            _FIG_VARIANT_SCOPE,
+            _DECK_SLIDE_SCOPE,
+            _EFFECT_MASK_SCOPE,
+            _FILM_RETURN_SCOPE,
+            _VECTOR_EMBLEM_SCOPE,
         ):
+            return self._observe_specialist(scope, mode, roots, cli_path, app_path)
+        if not _supports_anicraft(scope, mode):
             raise _not_ready(
                 "The selected ArtCraft operation or mode has no qualified profile",
                 "Use the catalog for documented operations and mode limits.",
@@ -327,7 +396,7 @@ class SelectedArtCraftAdapter:
 
     def _observe_specialist(self, scope, mode, roots, cli_path, app_path):
         product = scope["app"]
-        label, release, observer = _specialist_profile(product)
+        label, release, observer = _specialist_profile(scope)
         if mode != "cli" or not all((self._observe_confinement, self._run_confined)):
             raise _not_ready(
                 f"{label} requires a confined CLI runner",
@@ -443,6 +512,14 @@ class SelectedArtCraftAdapter:
             invoke=invoke,
         )
 
+    def author_film_interchange(self, job, directory):
+        from .artcraft_filmcraft import author_interchange
+
+        def invoke(workdir, *arguments, timeout):
+            return self._invoke_confined(job, workdir, arguments, timeout)
+
+        return author_interchange(job, directory=directory, invoke=invoke)
+
     def author_vector_card(self, job, directory):
         from .artcraft_vectorcraft import author_vector_card
 
@@ -452,6 +529,70 @@ class SelectedArtCraftAdapter:
         return author_vector_card(
             job["output"],
             job["authoringParameters"],
+            directory=directory,
+            budget=job["budget"],
+            invoke=invoke,
+        )
+
+    def author_photo_card(self, job, directory):
+        from .artcraft_photocraft import author_photo_card
+
+        def invoke(workdir, *arguments, timeout):
+            return self._invoke_confined(job, workdir, arguments, timeout)
+
+        return author_photo_card(job, directory=directory, invoke=invoke)
+
+    def author_light_treatment(self, job, directory):
+        from .artcraft_lightcraft import author_light_treatment
+
+        def invoke(workdir, *arguments, timeout):
+            return self._invoke_confined(job, workdir, arguments, timeout)
+
+        return author_light_treatment(job, directory=directory, invoke=invoke)
+
+    def author_fig_variant(self, job, directory):
+        from .artcraft_figcraft import author_fig_variant
+
+        def invoke(workdir, *arguments, timeout):
+            return self._invoke_confined(job, workdir, arguments, timeout)
+
+        return author_fig_variant(job, directory=directory, invoke=invoke)
+
+    def author_deck_slide(self, job, directory):
+        from .artcraft_deckcraft import author_deck_slide
+
+        def invoke(workdir, *arguments, timeout):
+            return self._invoke_confined(job, workdir, arguments, timeout)
+
+        return author_deck_slide(job, directory=directory, invoke=invoke)
+
+    def author_effect_mask(self, job, directory):
+        from .artcraft_effectcraft import author_effect_mask
+
+        def invoke(workdir, *arguments, timeout):
+            return self._invoke_confined(job, workdir, arguments, timeout)
+
+        return author_effect_mask(job, directory=directory, invoke=invoke)
+
+    def author_vector_emblem(self, job, directory):
+        from .artcraft_vectorcraft import author_vector_emblem
+
+        def invoke(workdir, *arguments, timeout):
+            return self._invoke_confined(job, workdir, arguments, timeout)
+
+        return author_vector_emblem(
+            job["output"], directory=directory, budget=job["budget"], invoke=invoke
+        )
+
+    def author_animated_emblem(self, job, directory):
+        from .artcraft_anicraft import run_animated_emblem
+
+        def invoke(workdir, *arguments, timeout):
+            return self._invoke_confined(job, workdir, arguments, timeout)
+
+        return run_animated_emblem(
+            job["output"],
+            job["inputs"][0],
             directory=directory,
             budget=job["budget"],
             invoke=invoke,
@@ -531,11 +672,51 @@ class SelectedArtCraftAdapter:
         )
 
 
-def _specialist_profile(product):
+def _supports_anicraft(scope, mode):
+    if scope == _ANIMATED_EMBLEM_SCOPE:
+        return mode == "cli"
+    return scope == {"app": "anicraft", "operations": ["lower-third"]} and mode in {
+        "cli",
+        "guided",
+        "host-mcp",
+        "json-lines",
+    }
+
+
+def _specialist_profile(scope):
+    product = scope["app"]
+    if product == "effectcraft":
+        from .artcraft_effectcraft import observe_effectcraft
+
+        return "EffectCraft masked lower third", "0.24.1", observe_effectcraft
+    if product == "lightcraft":
+        from .artcraft_lightcraft import observe_lightcraft
+
+        return "LightCraft treatment", "0.21.1", observe_lightcraft
+    if product == "deckcraft":
+        from .artcraft_deckcraft import observe_deckcraft
+
+        return "DeckCraft explanation slide", "0.18.1", observe_deckcraft
+    if product == "figcraft":
+        from .artcraft_figcraft import observe_figcraft
+
+        return "FigCraft design variant", "0.18.1", observe_figcraft
+    if product == "photocraft":
+        from .artcraft_photocraft import observe_photocraft
+
+        return "PhotoCraft card", "0.23.1", observe_photocraft
+    if product == "filmcraft":
+        from .artcraft_filmcraft import observe_filmcraft
+
+        return "FilmCraft exchange", "0.20.1", observe_filmcraft
     if product == "soundcraft":
         from .artcraft_soundcraft import observe_soundcraft_profile
 
         return "SoundCraft cue", "0.20.1", observe_soundcraft_profile
+    if scope == _VECTOR_EMBLEM_SCOPE:
+        from .artcraft_vectorcraft import observe_vector_emblem
+
+        return "VectorCraft emblem", "0.24.1", observe_vector_emblem
     from .artcraft_vectorcraft import observe_vectorcraft
 
     return "VectorCraft card", "0.24.1", observe_vectorcraft

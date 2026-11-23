@@ -3,8 +3,9 @@
 from fractions import Fraction
 from pathlib import Path
 
-from avo.artcraft import read_authoring_export
+from avo.artcraft import read_authoring_export, require_artcraft_export_environment
 
+from .artcraft_binding import require_artcraft_media_scope
 from .contracts import content_hash, file_fingerprint, validate_document
 from .media_admission import FORBIDDEN_OUTPUT_CLASSES
 
@@ -27,11 +28,13 @@ def read_generated_still(reference):
     ):
         raise ValueError("Generated still job receipt changed or uses an alias")
     job, event = read_authoring_export(path, expected_head=reference["exportHead"])
+    profile = job["output"]["role"], job["output"]["format"], job["observation"]["app"]
     if (
-        job["output"]["role"] != "generated-still"
-        or job["observation"]["app"] != "vectorcraft"
+        profile != ("generated-still", "png", "vectorcraft")
+        or "stillEvidence" not in event
     ):
         raise ValueError("Generated still requires a verified VectorCraft card")
+    require_artcraft_export_environment(job["observation"])
     if job["inputs"]:
         raise ValueError(
             "Generated VectorCraft card has unsupported external dependencies"
@@ -43,7 +46,7 @@ def read_generated_still(reference):
     return job, event
 
 
-def require_generated_still_layer(layer):
+def require_generated_still_layer(layer, *, workspace=None):
     if (
         layer.get("role") != "overlay"
         or "source" not in layer
@@ -53,10 +56,12 @@ def require_generated_still_layer(layer):
         raise ValueError(
             "Generated still needs its own static overlay layer and placement"
         )
-    _, event = read_generated_still(layer["generatedStillRef"])
+    job, event = read_generated_still(layer["generatedStillRef"])
     if layer["source"] != event["outputs"][0]:
         raise ValueError("Tracks generated still differs from its verified PNG")
     _require_intrinsic_geometry(layer["placement"], event["stillEvidence"])
+    if workspace is not None:
+        require_artcraft_media_scope(workspace, job, "Generated still")
 
 
 def _require_intrinsic_geometry(placement, evidence):
@@ -129,7 +134,7 @@ def generated_still_locks(workspace, graph, output, *, checkpoint=None):
     locks, occupied = {}, set()
     for operation in operations:
         job, _ = _require_static_operation(operation)
-        _require_still_scope(workspace, job)
+        require_artcraft_media_scope(workspace, job, "Generated still")
         layer = layers[operation["parameters"]["layerId"]]
         _match_still_layer(operation, layer, output["frameRate"])
         identity = (layer["layerId"], content_hash(operation["outputRange"]))
@@ -138,13 +143,6 @@ def generated_still_locks(workspace, graph, output, *, checkpoint=None):
         occupied.add(identity)
         locks["generated-still:" + operation["operationId"]] = content_hash(operation)
     return locks
-
-
-def _require_still_scope(workspace, job):
-    if job["request"]["provider"] != workspace.project["provider"]:
-        raise ValueError("Generated still belongs to a different provider")
-    if job.get("videoId") is not None and job["videoId"] != workspace.video_id:
-        raise ValueError("Generated still belongs to a different video")
 
 
 def resolve_generated_still_operation(operation, lock):

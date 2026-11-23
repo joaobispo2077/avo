@@ -27,7 +27,7 @@ from avo.timeline.materialize import canonical_proof_media_inputs
 from avo.timeline.proof_plan import ProofPlanCompiler
 from avo.timeline.tracks import TracksService
 
-pytestmark = pytest.mark.integration
+pytestmark = [pytest.mark.integration, pytest.mark.native_artcraft]
 
 
 def _installed_cli():

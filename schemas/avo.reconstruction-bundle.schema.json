@@ -123,6 +123,19 @@
       "type": "string",
       "pattern": "^[a-f0-9]{64}$"
     },
+    "externalArtCraftInputs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["locator", "sha256", "sizeBytes"],
+        "properties": {
+          "locator": {"type": "string", "minLength": 1},
+          "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+          "sizeBytes": {"type": "integer", "minimum": 0}
+        }
+      }
+    },
     "externalSources": {
       "type": "array",
       "items": {

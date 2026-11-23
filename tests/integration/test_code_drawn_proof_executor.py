@@ -438,7 +438,7 @@ def test_lossless_codec_selection_requires_explicit_boolean_conformance(
     assert not output.exists()
 
 
-def _frozen_plan(execution, output):
+def _frozen_plan(execution, output, *, events=()):
     value = deepcopy(execution)
     for key in ("cmap", "bmap", "tracks", "animation", "sync-map"):
         value["canonicalInputLock"].setdefault(
@@ -472,7 +472,7 @@ def _frozen_plan(execution, output):
         "implementationRefs": value["implementationRefs"],
         "videoGraph": value["videoGraph"],
         "audioGraph": value["audioGraph"],
-        "events": [],
+        "events": list(events),
         "validationPlan": {
             "preflight": [],
             "microproof": [],

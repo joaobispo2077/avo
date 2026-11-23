@@ -450,7 +450,8 @@ or AI-generated visuals when viewers could mistake them for direct evidence.
 
 ## Optional ArtCraft Authoring
 
-ArtCraft is an optional specialist authoring route, currently under specification.
+ArtCraft is an optional specialist authoring route. Use the packaged catalog
+to see which selected operations, releases and modes have been qualified.
 Use it only for a direct user request, an evidenced required capability gap after
 checking existing approved reuse and supported AVO routes, or necessary rebuilding
 of an explicitly selected pinned component. Native setup, permission, input,

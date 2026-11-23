@@ -599,6 +599,11 @@ record and waits for the exact successful receipt at each step before sending
 the next command. The first failed or incomplete receipt leaves a recoverable
 job outcome and prevents subsequent commands.
 
+The qualified Windows AniCraft 0.2.1 JSON-lines lower-third export can enter
+the same proof binding and exact copy-only reuse paths as CLI batching. The
+binding still requires current app and CLI fingerprints, the retained recipe,
+and the exact video placement and timeline revisions.
+
 The explicitly selected SoundCraft cue profile accepts one external WAV and
 an exact 48 kHz stereo output contract. A confined Windows 0.20.1 CLI builds
 an owned session with one track and the built-in room reverb. The media
@@ -613,12 +618,39 @@ verifies the current frame and sample ranges. Materialization and native
 execution recheck the receipt and its closure while resolving the audio.
 The native mixer adds the cue through the existing SFX node and final encode.
 
+Generated ArtCraft cues and stills use their recorded provider and video scope
+at Tracks authoring and proof compilation. A video-scoped receipt must match
+the exact project, video identity and raw workspace. Provider-level receipts
+can serve multiple videos within that provider. Static-card admission verifies
+the PNG representation of the selected source.
+
+ArtCraft proof admission and vector handoff recheck the exact installed
+application and CLI fingerprints from the selected job. This file validation
+is independent of command registry discovery and follows the retained artwork
+dependency when an animation uses it.
+
 The selected VectorCraft Windows 0.24.1 profile stages a fixed card recipe
 under a confined runner with plug-ins and preferences disabled. It retains
 the editable native source, its bounded inline resource envelope and the
 verified sRGB RGBA still. Tracks selects that exact static asset and its
 placement. Proof execution verifies the source, dimensions and decoded pixels
 before using the existing overlay layers for the exact requested frames.
+
+The selected VectorCraft emblem and AniCraft motion profiles run as explicit
+jobs. AniCraft accepts one exact same-provider, same-component emblem export.
+The motion job binds the upstream job head, editable source, recipe and SVG.
+It imports a bounded inline polygon, preserves it as an editable symbol, and
+verifies its reopened alpha frames. Proof admission rechecks that dependency
+through the existing generated-asset binding. Optional sound enters through its
+own SFX region on the same canonical timeline.
+
+The selected FilmCraft Windows 0.20.1 profile saves and reopens a native
+project and exports an OTIO timeline linked to the exact original. AVO checks
+the application version resource without starting the desktop editor. The
+import service verifies the retained exchange and original fingerprint before
+mapping relative references. The existing import, sync and approval workflow
+owns any later activation. Declared exchange losses, unsupported treatments
+and prohibited original ancestry leave the return as reference material.
 
 The explicitly selected video export binds the unchanged AniCraft source,
 recipe, app and CLI fingerprints, ordered alpha frames and current approved
@@ -637,6 +669,66 @@ review reader verifies the immutable plan, materialization, source binding
 and current candidate bytes, and links available source and edit logs. It
 reports the review as pending for the existing creator approval workflow.
 
+ArtCraft job recovery resolves an exact retry through its prepared, run and
+result events. A completed retry rereads the saved source and verified export.
+An interrupted write retains bounded file fingerprints as reference material.
+Cancellation of an unstarted job uses the same event compare-and-swap and
+preserves the source copy. Owner reconciliation is required for active work.
+
+An active CLI job can be cancelled when its confined runner claims the exact
+job, running event and output directory. AVO records the request before
+signalling and keeps partial files as reference evidence. A cancelled event
+requires a settled runner and writes. Concurrent retries reuse the recorded
+request or result. Operator-owned and unverified writers retain their current
+state.
+
+The ArtCraft inspection response lists changed recorded files and the review
+actions for each affected area. A checked AniCraft lower-third document also
+reports differences in its editable text and font. These observations leave
+the existing job and creator decision records intact.
+
+Reconstruction retains native job journals, declared editable sources, recipes,
+and selected ArtCraft exports. It follows generated Track references and the
+selected artwork dependency. Video-local provider packages retain their exact
+manifest, rights and review files. A bundle records the fingerprints of selected
+ArtCraft inputs outside the raw workspace. The installed editor can rebuild from
+the retained native source after the temporary render backing is discarded.
+
+Cleanup verifies shared ArtCraft package versions within the selected edit tree
+and includes their manifests and declared files in the preservation set. The
+same cleanup check protects a package owned by a different provider. Native
+publication staging stays protected while the package writer owns it.
+
+PhotoCraft's selected layered image card uses a separately installed Windows
+0.23.1 CLI through the confined-runner port. The native package embeds the
+original raster and ICC profile separately from its editable Curves layer. The
+adapter checks the embedded asset inventory, original pixels with the
+adjustment hidden, and two independent PNG exports. Its flattened PNG is a
+standalone review artifact.
+
+FigCraft's selected Windows 0.18.1 layout recipe builds and reopens an editable
+component set with auto layout and a variant-switch interaction. The batch
+commands use the owned directory as their permitted read and write root. Static
+export runs through the confined-runner port. The standalone review carries
+the compact sRGB PNG and declares the interaction retained in its native file.
+
+DeckCraft's selected Windows 0.18.1 recipe retains a custom master layout and
+the editable slide transition. The adapter checks 960 by 540 point geometry,
+the zero-based destination index and the fade duration. Two fresh midpoint
+renders must agree before the still is retained for independent review.
+
+LightCraft's selected Windows 0.21.1 treatment uses a fresh single-owner
+library and pins the original JPEG. The adapter retains the native snapshot
+with its exposure adjustment and rebuilds it into a fresh library to verify
+the color profile and exact rendered pixels. Standalone review exposes the
+snapshot and its required original location.
+
+EffectCraft's selected Windows 0.24.1 recipe retains the native composition,
+editable label, backing mask and exact installed Arial dependency. Its
+standalone sequence covers a half-open window on the verified 24 fps source
+clock. The first frame rendered by time and by source frame index must agree
+with the partial render before the review export is retained.
+
 Native provider publication extends the existing animation catalog. The package
 reader checks its external root, byte fingerprints, declared source roles,
 review references, rights and local parameter schema before independent source
@@ -651,10 +743,25 @@ component instance records its parameters and project-owned source copies.
 An explicit upgrade creates a new version-pinned instance linked to the
 previous record. Its contextual review follows the existing video gates.
 
+Native kit sharing requires explicit selection of the origin provider and exact
+recipient names in the published source rights. The project copy records both
+identities. Reconstruction verifies the copied rights, their package hashes
+and the current project provider before accepting the shared source closure.
+
 The AniCraft lower-third profile authors 16:9 and 9:16 on their declared
 canvases. Both use the same phase clock and width-scaled typography. The
 portrait layout anchors the plate near three quarters of the canvas height
 and checks every visible alpha frame against its independently measured bounds.
+
+The optional AniCraft secondary label is a second native text element in
+the same animated symbol. Source inspection checks its outline, font and
+measured width. An approved revision can change either recorded label while
+preserving the source and the selected design's text slots.
+
+The opt-in AniCraft fixed hold uses the same readable plate position with
+clear frames at the start and end. Source inspection binds its exact keyframe
+spans, and export verification requires identical frames through the visible
+hold. Saved-source text revisions preserve the reviewed motion profile.
 
 A saved-source text revision starts from an immutable job-owned copy and saves
 into a separate revision folder. The native adapter observes the selected edit

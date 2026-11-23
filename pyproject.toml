@@ -1,6 +1,6 @@
 [project]
 name = "avo"
-version = "1.22.0"
+version = "1.23.0"
 description = "Local-first Python helpers for AVO — transcription, captions, grading, render, and telemetry on your machine."
 license = { file = "LICENSE" }
 requires-python = ">=3.11"
@@ -85,6 +85,7 @@ norecursedirs = [
 markers = [
     "slow: downloads models or heavy IO (orchestrator-smoke only)",
     "integration: crosses script/subprocess boundaries",
+    "native_artcraft: opt-in execution against an installed ArtCraft application",
     "project: footage-project or spec-scoped edit tests (excluded from default CI)",
 ]
 

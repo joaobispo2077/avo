@@ -126,6 +126,9 @@ def test_artcraft_job_bridge_shares_structured_prepare_and_exact_head_lifecycle(
     assert recovered.parsed_json["recovery"]["nextAction"] == "run-prepared-job"
     rendered = call("run", selector)
     assert rendered.ok, rendered.stderr
+    retried = call("recover", {**selector, "action": "retry"})
+    assert retried.ok, retried.stderr
+    assert retried.parsed_json == rendered.parsed_json
     stale = call("inspect", selector)
     assert not stale.ok
     selected = {**selector, "expected_head": rendered.parsed_json["head"]}

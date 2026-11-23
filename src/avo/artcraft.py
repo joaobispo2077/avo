@@ -43,7 +43,9 @@ __all__ = [
     "prepare_authoring_reuse",
     "read_authoring_export",
     "recover_authoring",
+    "require_artcraft_export_environment",
     "require_eligible",
+    "retained_authoring_files",
     "run_authoring",
     "seal_record",
     "validate_record",
@@ -54,9 +56,43 @@ _NATIVE_SUFFIXES = {
     "anicraft": ".anicraft",
     "soundcraft": ".scraft",
     "vectorcraft": ".vectorcraft",
+    "filmcraft": ".fcproj",
+    "photocraft": ".pcraft",
+    "figcraft": ".figcraft",
+    "deckcraft": ".deckcraft",
+    "lightcraft": ".snap",
+    "effectcraft": ".ecproj",
 }
 _SOUND_CUE_SCOPE = {"app": "soundcraft", "operations": ["isolated-cue"]}
 _STILL_CARD_SCOPE = {"app": "vectorcraft", "operations": ["vector-still"]}
+_PHOTO_CARD_SCOPE = {"app": "photocraft", "operations": ["layered-image-card"]}
+_LIGHT_TREATMENT_SCOPE = {
+    "app": "lightcraft",
+    "operations": ["reusable-photo-treatment"],
+}
+_PHOTO_SCOPES = (_PHOTO_CARD_SCOPE, _LIGHT_TREATMENT_SCOPE)
+_FIG_VARIANT_SCOPE = {"app": "figcraft", "operations": ["editable-design-variant"]}
+_DECK_SLIDE_SCOPE = {"app": "deckcraft", "operations": ["editable-explanation-slide"]}
+_FIXED_STILL_SCOPES = (_FIG_VARIANT_SCOPE, _DECK_SLIDE_SCOPE)
+_STILL_SCOPES = (_STILL_CARD_SCOPE, *_PHOTO_SCOPES, *_FIXED_STILL_SCOPES)
+_STILL_OUTPUT_NAMES = {
+    "vectorcraft": "card.png",
+    "photocraft": "photo.png",
+    "lightcraft": "photo.png",
+    "figcraft": "design.png",
+    "deckcraft": "slide.png",
+}
+_VECTOR_EMBLEM_SCOPE = {"app": "vectorcraft", "operations": ["vector-emblem"]}
+_ANIMATED_EMBLEM_SCOPE = {"app": "anicraft", "operations": ["animate-vector-emblem"]}
+_EFFECT_MASK_SCOPE = {
+    "app": "effectcraft",
+    "operations": ["editable-masked-lower-third"],
+}
+_EFFECT_SOURCE_WINDOW = {"startFrame": 3, "endFrameExclusive": 9}
+_FILM_RETURN_SCOPE = {
+    "app": "filmcraft",
+    "operations": ["source-linked-timeline-return"],
+}
 _OPERATIONAL_FAILURES = frozenset(
     {"not-installed", "invalid-input", "permission-denied", "transient-error", "defect"}
 )
@@ -360,11 +396,220 @@ def _check_job_identity(job):
         )
     if job["output"]["role"] != request["required"]["outputRole"]:
         raise ContractError("ArtCraft output role does not match the request")
+    _check_specialist_job(job, scope)
+
+
+def _check_specialist_job(job, scope):
     if scope == _SOUND_CUE_SCOPE:
         _check_sound_job(job)
     if scope == _STILL_CARD_SCOPE:
         _require_still_contract(
-            request, job, job["documentState"], job["observation"]["mode"]
+            job["request"], job, job["documentState"], job["observation"]["mode"]
+        )
+    _check_photo_job(job, scope)
+    _check_fixed_still_job(job, scope)
+    _check_effect_job(job, scope)
+    if scope == _FILM_RETURN_SCOPE:
+        _check_film_job(job)
+    if scope == _VECTOR_EMBLEM_SCOPE:
+        _require_vector_emblem(
+            job["request"], job, job["documentState"], job["observation"]["mode"]
+        )
+    if scope == _ANIMATED_EMBLEM_SCOPE:
+        _require_animated_emblem(
+            job["request"], job, job["documentState"], job["observation"]["mode"]
+        )
+    elif "artworkRef" in job:
+        raise ContractError("Only the animated emblem may consume vector artwork")
+
+
+def _check_photo_job(job, scope):
+    if scope not in _PHOTO_SCOPES:
+        if "photoSource" in job:
+            raise ContractError(
+                "Select a qualified PhotoCraft or LightCraft treatment to consume a photo"
+            )
+        return
+    _require_photo_contract(
+        job["request"], job, scope, job["documentState"], job["observation"]["mode"]
+    )
+    if [item["locator"] for item in job["inputs"]] != [job["photoSource"]["source"]]:
+        raise ContractError(
+            "ArtCraft photo treatment requires its exact selected image"
+        )
+
+
+def _check_effect_job(job, scope):
+    if scope != _EFFECT_MASK_SCOPE:
+        if "effectFont" in job:
+            raise ContractError(
+                "Only the selected EffectCraft mask recipe may pin its font"
+            )
+        return
+    _require_effect_contract(
+        job["request"], job, job["documentState"], job["observation"]["mode"]
+    )
+    if [entry["locator"] for entry in job["inputs"]] != [job["effectFont"]]:
+        raise ContractError("EffectCraft job requires its exact selected font file")
+
+
+def _require_effect_contract(request, spec, document_state, mode):
+    _require_effect_label(spec, document_state, mode)
+    if (
+        request["required"]
+        != {
+            "behavior": "editable-masked-lower-third",
+            "outputRole": "overlay-video",
+            "editable": True,
+        }
+        or spec["output"]
+        != {
+            "role": "overlay-video",
+            "format": "png-sequence",
+            "width": 320,
+            "height": 180,
+            "alpha": "straight",
+            "color": "srgb",
+            "frameRate": {"numerator": 24, "denominator": 1},
+            "frameCount": 6,
+        }
+        or {"interchangeSource", "photoSource", "soundCue"}.intersection(spec)
+    ):
+        raise ArtCraftError(
+            "Select the exact six-frame EffectCraft mask review profile"
+        )
+
+
+def _require_effect_label(spec, document_state, mode):
+    parameters = spec.get("authoringParameters", {})
+    if "effectFont" not in spec or parameters.get("font") != "Arial":
+        raise ArtCraftError(
+            "EffectCraft requires an explicit installed Arial font source"
+        )
+    if "secondaryText" in parameters:
+        raise ArtCraftError("The selected EffectCraft mask recipe supports one label")
+    if "motion" in parameters:
+        raise ArtCraftError("The selected EffectCraft mask recipe has fixed motion")
+    text = parameters.get("primaryText", "")
+    if (document_state, mode) != ("empty", "cli") or not 1 <= len(text) <= 32:
+        raise ArtCraftError(
+            "Select an empty EffectCraft CLI job with a short editable label"
+        )
+    if not (text.isascii() and text.isprintable() and text.strip()):
+        raise ArtCraftError(
+            "EffectCraft label requires printable text supported by the pinned font"
+        )
+
+
+def _check_fixed_still_job(job, scope):
+    if scope in _FIXED_STILL_SCOPES:
+        _require_fixed_still_contract(
+            scope, job["request"], job, job["documentState"], job["observation"]["mode"]
+        )
+
+
+def _require_fixed_still_contract(scope, request, selected, document_state, mode):
+    product = {"figcraft": "FigCraft", "deckcraft": "DeckCraft"}[scope["app"]]
+    if (document_state, mode) != ("empty", "cli"):
+        raise ArtCraftError(
+            f"{product} requires an empty document and confined CLI mode"
+        )
+    if (
+        request["required"]
+        != {
+            "behavior": scope["operations"][0],
+            "outputRole": "generated-still",
+            "editable": True,
+        }
+        or selected["output"]
+        != {
+            "role": "generated-still",
+            "format": "png",
+            "alpha": "straight",
+            "color": "srgb",
+            "width": 320,
+            "height": 180,
+        }
+        or selected.get("inputs")
+        or {
+            "authoringParameters",
+            "soundCue",
+            "interchangeSource",
+            "photoSource",
+        }.intersection(selected)
+    ):
+        raise ArtCraftError(f"Select the editable {product} 320 × 180 review recipe")
+
+
+def _require_vector_emblem(request, configuration, document_state, mode):
+    expected_output = {
+        "role": "generated-still",
+        "format": "svg",
+        "width": 128,
+        "height": 128,
+        "alpha": "straight",
+        "color": "srgb",
+    }
+    if (
+        (document_state, mode) != ("empty", "cli")
+        or request["required"]
+        != {
+            "behavior": "vector-emblem",
+            "outputRole": "generated-still",
+            "editable": True,
+        }
+        or configuration["output"] != expected_output
+        or "authoringParameters" in configuration
+        or configuration.get("inputs")
+    ):
+        raise ArtCraftError(
+            "VectorCraft requires the editable 128 × 128 SVG emblem profile"
+        )
+
+
+def _require_animated_emblem(request, configuration, document_state, mode):
+    output = configuration["output"]
+    required = request["required"]
+    if (
+        (document_state, mode) != ("empty", "cli")
+        or required
+        != {
+            "behavior": "animate-vector-emblem",
+            "outputRole": "overlay-video",
+            "editable": True,
+        }
+        or output
+        != {
+            "role": "overlay-video",
+            "format": "png-sequence",
+            "width": 320,
+            "height": 180,
+            "alpha": "straight",
+            "color": "srgb",
+            "frameRate": {"numerator": 24, "denominator": 1},
+            "frameCount": 24,
+        }
+        or "artworkRef" not in configuration
+        or {"authoringParameters", "interchangeSource", "soundCue"}.intersection(
+            configuration
+        )
+    ):
+        raise ArtCraftError(
+            "Select an exact VectorCraft emblem export and the 320 × 180 motion profile"
+        )
+
+
+def _check_film_job(job):
+    selected = job.get("interchangeSource")
+    if (
+        selected is None
+        or len(job["inputs"]) != 1
+        or job["inputs"][0]["locator"] != selected["source"]
+    ):
+        raise ContractError("FilmCraft job requires its exact selected original")
+    if job["documentState"] != "empty" or job["observation"]["mode"] != "cli":
+        raise ContractError(
+            "FilmCraft job requires an empty document and confined CLI mode"
         )
 
 
@@ -501,6 +746,13 @@ class ArtCraftJobStore:
             raise ArtCraftError("ArtCraft event index and record do not match")
         return event
 
+    def _committed_operation(self, job, operation_id):
+        directory = self._job_dir(job["jobId"])
+        operation = self._index(directory)["operations"].get(operation_id)
+        if operation is None:
+            return None
+        return self._indexed_event(directory, operation_id, operation, job["jobHash"])
+
     def head(self, job_id: str) -> dict[str, Any] | None:
         job = self.load(job_id)
         directory = self._job_dir(job_id)
@@ -589,13 +841,15 @@ def prepare_authoring(
     validate_document(spec, _schema("jobSpec"))
     store, base, project_facts = _preparation_workspace(request, spec)
     scope = selected["scope"]
-    if scope == _STILL_CARD_SCOPE:
-        _require_still_contract(request, spec, spec["document"]["state"], spec["mode"])
+    _require_preparation_profile(request, spec, scope)
     document = _owned_document(store, base, spec["jobId"], scope["app"])
     roots = _preparation_roots(spec, document.parent)
     source = _preparation_source(spec, roots, document)
-    cue_input = _preparation_audio(request, spec, scope, roots)
-    _require_preparation_capacity(store.workspace, spec["budget"], source or cue_input)
+    input_field, selected_input = _preparation_media(request, spec, scope, roots)
+    dependencies = _prepared_artwork(request, spec, roots, scope)
+    _require_preparation_capacity(
+        store.workspace, spec["budget"], source or selected_input
+    )
     observation = adapter.observe(
         scope=scope,
         mode=spec["mode"],
@@ -618,7 +872,8 @@ def prepare_authoring(
         "observation": observation,
         "document": document.relative_to(store.workspace).as_posix(),
         "documentState": spec["document"]["state"],
-        "inputs": [item for item in (source, cue_input) if item is not None],
+        "inputs": [item for item in (source, selected_input) if item is not None]
+        + dependencies,
         "recipeHash": content_hash(recipe),
         "output": spec["output"],
         "budget": spec["budget"],
@@ -626,10 +881,75 @@ def prepare_authoring(
     }
     if authoring is not None:
         job["authoringParameters"] = authoring
-    if cue_input is not None:
-        job["soundCue"] = spec["soundCue"]
-        job["recipeHash"] = content_hash([*recipe, spec["soundCue"], cue_input])
+    if selected_input is not None:
+        job[input_field] = spec[input_field]
+        job["recipeHash"] = content_hash([*recipe, spec[input_field], selected_input])
+    if dependencies:
+        job["artworkRef"] = spec["artworkRef"]
+        job["recipeHash"] = content_hash([*recipe, job["artworkRef"], dependencies])
     return _publish_preparation(store, job, document, source)
+
+
+def _require_preparation_profile(request, spec, scope):
+    arguments = (request, spec, spec["document"]["state"], spec["mode"])
+    if scope == _STILL_CARD_SCOPE:
+        _require_still_contract(*arguments)
+    if scope in _FIXED_STILL_SCOPES:
+        _require_fixed_still_contract(scope, *arguments)
+    if scope == _VECTOR_EMBLEM_SCOPE:
+        _require_vector_emblem(*arguments)
+    if scope == _ANIMATED_EMBLEM_SCOPE:
+        _require_animated_emblem(*arguments)
+    elif "artworkRef" in spec:
+        raise ArtCraftError(
+            "Select AniCraft animate-vector-emblem to consume vector artwork"
+        )
+
+
+def _prepared_artwork(request, spec, roots, scope):
+    if scope != _ANIMATED_EMBLEM_SCOPE:
+        return []
+    inputs = _artwork_export_inputs(request, spec["artworkRef"], roots)
+    if inputs[0]["sizeBytes"] >= spec["budget"]["bytes"]:
+        raise ArtCraftError("Vector artwork exceeds the selected motion budget")
+    return inputs
+
+
+def _artwork_export_inputs(request, reference, roots):
+    read_roots = roots["read"]
+    locator = reference["job"]["locator"]
+    if not _retained_job_file(reference["job"], read_roots):
+        raise ArtCraftError(
+            "Vector artwork job must match its selected receipt and read roots"
+        )
+    store, job, event = _open_selected_job(locator, reference["exportHead"])
+    if job["decision"]["scope"] != _VECTOR_EMBLEM_SCOPE or event["state"] != "exported":
+        raise ArtCraftError(
+            "Vector artwork requires the selected VectorCraft emblem export"
+        )
+    _require_artwork_owner(request, job["request"])
+    require_artcraft_export_environment(job["observation"])
+    if _inspection_result(store, job, event)["status"] != "current":
+        raise ArtCraftError("The selected vector artwork evidence changed")
+    _verify_retained_export(store, job, event)
+    inputs = [event["outputs"][0], reference["job"], event["saved"], event["recipe"]]
+    if not all(_retained_job_file(item, read_roots) for item in inputs):
+        raise ArtCraftError(
+            "Vector artwork and editable source must stay in the selected read roots"
+        )
+    return inputs
+
+
+def _require_artwork_owner(request, upstream):
+    if any(request[key] != upstream[key] for key in ("provider", "componentId")):
+        raise ArtCraftError(
+            "Vector artwork belongs to a different provider or component"
+        )
+    if (
+        upstream["context"]["kind"] != "provider-only"
+        and upstream["context"] != request["context"]
+    ):
+        raise ArtCraftError("Vector artwork belongs to a different video")
 
 
 def prepare_authoring_reuse(request, spec, *, from_job, from_head, decision, intent):
@@ -703,16 +1023,16 @@ def _reusable_native_export(job_ref, expected_head):
         event["state"],
         job["documentState"],
         job["decision"]["scope"],
-        observation["mode"],
     )
     expected = (
         "exported",
         "saved",
         {"app": "anicraft", "operations": ["lower-third"]},
-        "cli",
     )
     if (
         profile != expected
+        or observation["mode"] == "reuse"
+        or not _qualified_export_mode(observation)
         or not {"application", "executable", "commandSchemaHash"} <= observation.keys()
     ):
         raise ArtCraftError("Select a qualified native saved-source export for reuse")
@@ -833,6 +1153,145 @@ def _preparation_source(spec, roots, document):
     return file_fingerprint(source)
 
 
+def _preparation_media(request, spec, scope, roots):
+    if "effectFont" in spec or scope == _EFFECT_MASK_SCOPE:
+        return "effectFont", _preparation_effect_font(request, spec, scope, roots)
+    if "photoSource" in spec or scope in _PHOTO_SCOPES:
+        return "photoSource", _preparation_photo(request, spec, scope, roots)
+    if "interchangeSource" in spec or scope == _FILM_RETURN_SCOPE:
+        return "interchangeSource", _preparation_interchange(
+            request, spec, scope, roots
+        )
+    return "soundCue", _preparation_audio(request, spec, scope, roots)
+
+
+def _preparation_effect_font(request, spec, scope, roots):
+    if scope != _EFFECT_MASK_SCOPE:
+        raise ArtCraftError("Select the EffectCraft mask recipe to pin its font")
+    _require_effect_contract(request, spec, spec["document"]["state"], spec["mode"])
+    font = Path(spec["effectFont"])
+    font = _bounded_path(_owning_root(font, roots["read"]), font, "EffectCraft font")
+    if not _is_effect_system_font(font) or not font.is_file():
+        raise ArtCraftError("EffectCraft requires the Windows system Arial font")
+    if font.stat().st_size >= spec["budget"]["bytes"]:
+        raise ArtCraftError("EffectCraft font exceeds the selected byte budget")
+    return file_fingerprint(font)
+
+
+def _is_effect_system_font(path):
+    windows = Path(os.environ.get("SystemRoot") or ".")
+    return (
+        os.name == "nt"
+        and windows.is_absolute()
+        and path == windows / "Fonts" / "arial.ttf"
+    )
+
+
+def _preparation_photo(request, spec, scope, roots):
+    from .timeline.media_admission import FORBIDDEN_OUTPUT_CLASSES
+
+    if scope not in _PHOTO_SCOPES:
+        raise ArtCraftError(
+            "Select a qualified PhotoCraft or LightCraft treatment to consume a photo"
+        )
+    _require_photo_contract(
+        request, spec, scope, spec["document"]["state"], spec["mode"]
+    )
+    label, extension, suffixes = _photo_source_format(scope)
+    path = Path(spec["photoSource"]["source"])
+    path = _bounded_path(_owning_root(path, roots["read"]), path, f"{label} photo")
+    if FORBIDDEN_OUTPUT_CLASSES.intersection(part.casefold() for part in path.parts):
+        raise ArtCraftError(f"{label} cannot use a program proof or delivery")
+    if (
+        path.is_relative_to(roots["write"][0])
+        or path.suffix.lower() not in suffixes
+        or not path.is_file()
+    ):
+        raise ArtCraftError(f"{label} requires one external original {extension}")
+    metadata = path.stat()
+    if metadata.st_nlink != 1 or metadata.st_size >= spec["budget"]["bytes"]:
+        raise ArtCraftError(
+            f"{label} photo must be unshared and within its byte budget"
+        )
+    return file_fingerprint(path)
+
+
+def _photo_source_format(scope):
+    if scope == _PHOTO_CARD_SCOPE:
+        return "PhotoCraft", "PNG", (".png",)
+    return "LightCraft", "JPEG", (".jpg", ".jpeg")
+
+
+def _require_photo_contract(request, spec, scope, document_state, mode):
+    label, extension, _ = _photo_source_format(scope)
+    output = spec["output"]
+    if (
+        request["required"]
+        != {
+            "behavior": scope["operations"][0],
+            "outputRole": "generated-still",
+            "editable": True,
+        }
+        or (output["role"], output["format"], output.get("alpha"), output.get("color"))
+        != ("generated-still", "png", "straight", "srgb")
+        or not 240 <= output["width"] <= 1920
+        or not 160 <= output["height"] <= 1920
+    ):
+        raise ArtCraftError(
+            f"Select one editable {label} photo treatment within its canvas range"
+        )
+    if (
+        (document_state, mode) != ("empty", "cli")
+        or "photoSource" not in spec
+        or {"authoringParameters", "interchangeSource", "soundCue"}.intersection(spec)
+    ):
+        raise ArtCraftError(
+            f"Select an empty {label} CLI job and its original {extension}"
+        )
+
+
+def _preparation_interchange(request, spec, scope, roots):
+    if scope != _FILM_RETURN_SCOPE or "soundCue" in spec:
+        raise ArtCraftError("Select only the FilmCraft timeline interchange profile")
+    if request["required"]["behavior"] != "source-linked-timeline-return":
+        raise ArtCraftError("FilmCraft requires explicit source-linked timeline return")
+    output = spec["output"]
+    if (output["role"], output["format"]) != ("timeline-interchange", "otio"):
+        raise ArtCraftError("FilmCraft return requires an OTIO timeline interchange")
+    if spec["document"]["state"] != "empty" or spec["mode"] != "cli":
+        raise ArtCraftError("Select an empty FilmCraft document and confined CLI mode")
+    selected = spec.get("interchangeSource")
+    if selected is None or "authoringParameters" in spec:
+        raise ArtCraftError(
+            "Select a fingerprinted original for the FilmCraft timeline"
+        )
+    return _film_source_fingerprint(Path(selected["source"]), roots, spec["budget"])
+
+
+def _film_source_fingerprint(path, roots, budget):
+    from .timeline.media_admission import FORBIDDEN_OUTPUT_CLASSES
+
+    path = _bounded_path(_owning_root(path, roots["read"]), path, "FilmCraft original")
+    if path.is_relative_to(roots["write"][0]) or path.suffix.lower() not in {
+        ".mp4",
+        ".mov",
+    }:
+        raise ArtCraftError("FilmCraft requires an external original MP4 or MOV")
+    if FORBIDDEN_OUTPUT_CLASSES.intersection(part.casefold() for part in path.parts):
+        raise ArtCraftError(
+            "FilmCraft cannot use a program proof or delivery as its original"
+        )
+    if (
+        not path.is_file()
+        or path.stat().st_nlink != 1
+        or path.stat().st_size >= budget["bytes"]
+    ):
+        raise ArtCraftError(
+            "FilmCraft original must be an unshared file within the byte budget"
+        )
+    return file_fingerprint(path)
+
+
 def _preparation_audio(request, spec, scope, roots):
     selected = spec.get("soundCue")
     if scope != _SOUND_CUE_SCOPE:
@@ -886,6 +1345,10 @@ def _require_still_contract(request, selected, document_state, mode):
     if request["required"]["behavior"] != "editable-vector-card":
         raise ArtCraftError(
             "VectorCraft card requires the explicit editable-vector-card behavior"
+        )
+    if {"secondaryText", "motion"} & selected.get("authoringParameters", {}).keys():
+        raise ArtCraftError(
+            "The selected VectorCraft card supports one editable label with fixed placement"
         )
     output = selected["output"]
     shape = {key: output.get(key) for key in ("role", "format", "alpha", "color")}
@@ -1010,9 +1473,13 @@ def inspect_authoring(job_ref, *, expected_head, source_inspector=None):
     """Reconcile retained job evidence without changing files or starting an app."""
     store, job, head = _open_selected_job(job_ref, expected_head)
     result = _inspection_result(store, job, head)
+    if result["status"] == "stale":
+        result["changes"] = _describe_authoring_changes(
+            job, head, result["checks"], source_inspector
+        )
+        return result
     if (
         source_inspector is not None
-        and result["status"] == "current"
         and result["checks"]["nativeDocument"] == "returned-unverified"
     ):
         native = store.workspace / job["document"]
@@ -1020,8 +1487,289 @@ def inspect_authoring(job_ref, *, expected_head, source_inspector=None):
     return result
 
 
-def recover_authoring(job_ref, *, expected_head):
-    """Locate bounded retained evidence after an interrupted native operation."""
+def _describe_authoring_changes(job, head, checks, source_inspector):
+    roots = job["roots"]
+    targets = _recorded_authoring_files(job, head)
+    actions = {
+        "project": ["revalidate-placement", "review-proof-context"],
+        "inputs": ["rebuild-from-current-inputs", "review-native-design"],
+        "nativeDocument": ["author-new-revision", "review-native-design"],
+        "outputs": ["rebuild-export", "review-export"],
+        "handoff": ["reconcile-operator-handoff"],
+    }
+    changes = []
+    for area, required in actions.items():
+        if checks.get(area) != "changed":
+            continue
+        files = [
+            item
+            for item in targets[area]
+            if item and not _retained_job_file(item, roots["read"])
+        ]
+        change = {"area": area, "recordedFiles": files, "actions": required}
+        if area == "nativeDocument" and files:
+            parameters = _inspect_edited_parameters(job, files[0], source_inspector)
+            if parameters:
+                change["parameterChanges"] = parameters
+        changes.append(change)
+    return changes
+
+
+def _recorded_authoring_files(job, head):
+    prior = []
+    if job.get("documentState") == "saved" and job["inputs"]:
+        owned_source = Path(job["workspace"]) / job["document"]
+        prior = [{**job["inputs"][0], "locator": str(owned_source)}]
+    return {
+        "project": [],  # Project or canonical revisions may have changed.
+        "inputs": job["inputs"],
+        "nativeDocument": [head.get("saved"), *prior],
+        "outputs": [
+            head.get("recipe"),
+            *head.get("outputs", []),
+            *head.get("dependencies", []),
+        ],
+        "handoff": [head.get("handoff")],
+    }
+
+
+def retained_authoring_files(job_ref, *, expected_head=None):
+    """Return exact local and external files needed to retain a native job."""
+    store, job, head = _selected_job(job_ref)
+    if expected_head is not None and (head["eventHash"], head["state"]) != (
+        expected_head,
+        "exported",
+    ):
+        raise _changed_job_head()
+    roots = job["roots"]
+    declared = _recorded_authoring_files(job, head)
+    owned = [
+        *declared["nativeDocument"],
+        *declared["outputs"],
+        *declared["handoff"],
+        *head.get("partialFiles", []),
+    ]
+    _require_retained_artifacts(
+        declared["inputs"], roots["read"], allow_system_font="effectFont" in job
+    )
+    _require_retained_artifacts(owned, roots["write"])
+    return job, [
+        *_retained_job_records(store, job, head),
+        *declared["inputs"],
+        *(item for item in owned if item),
+    ]
+
+
+def _require_retained_artifacts(references, roots, *, allow_system_font=False):
+    for reference in references:
+        if reference is not None and not _retained_job_file(
+            reference, roots, allow_system_font=allow_system_font
+        ):
+            raise ArtCraftError(
+                f"Retained ArtCraft file changed or is missing: {reference['locator']}"
+            )
+
+
+def _retained_job_records(store, job, head):
+    directory = store.reference(job["jobId"]).parent
+    index_path = store._index_path(directory)
+    index_fingerprint = file_fingerprint(index_path)
+    index = store._index(directory)
+    if index["operations"].get(index["head"]) != head["eventHash"]:
+        raise _changed_job_head()
+    records = [file_fingerprint(store.reference(job["jobId"])), index_fingerprint]
+    predecessors = {}
+    for operation, event_hash in index["operations"].items():
+        event = store._indexed_event(directory, operation, event_hash, job["jobHash"])
+        predecessors[event_hash] = event["predecessorHash"]
+        records.append(file_fingerprint(directory / f"event-{operation}.json"))
+    _require_retained_job_chain(head["eventHash"], predecessors)
+    if file_fingerprint(index_path) != index_fingerprint:
+        raise _changed_job_head()
+    return records
+
+
+def _require_retained_job_chain(head_hash, predecessors):
+    while head_hash is not None:
+        if head_hash not in predecessors:
+            raise ArtCraftError(
+                "Retained ArtCraft journal has an incomplete event chain"
+            )
+        head_hash = predecessors.pop(head_hash)
+    if predecessors:
+        raise ArtCraftError("Retained ArtCraft journal has an unrelated event")
+
+
+def _inspect_edited_parameters(job, reference, source_inspector):
+    parameters = job.get("authoringParameters")
+    scope = job["decision"]["scope"]
+    if (
+        not parameters
+        or source_inspector is None
+        or scope != {"app": "anicraft", "operations": ["lower-third"]}
+    ):
+        return []
+    path = Path(reference["locator"])
+    owned = Path(job["workspace"]) / job["document"]
+    if path not in {owned, owned.parent / "revision" / owned.name}:
+        return []
+    try:
+        _bounded_path(
+            _owning_root(path, job["roots"]["write"]), path, "edited native document"
+        )
+        observed = source_inspector({**job, "authoringParameters": None}, path)
+    except (OSError, ValueError, RuntimeError):
+        return []
+    return _changed_label_parameters(parameters, observed)
+
+
+def _changed_label_parameters(parameters, observed):
+    changes = []
+    for field, name in (
+        ("primaryText", "editableText"),
+        ("font", "fontFamily"),
+        ("secondaryText", "editableSecondaryText"),
+        ("motion", "motion"),
+    ):
+        recorded, edited = parameters.get(field), observed.get(name)
+        if field in {"primaryText", "font"} and edited is None:
+            continue
+        if recorded != edited:
+            changes.append({"name": field, "recorded": recorded, "observed": edited})
+    return changes
+
+
+def recover_authoring(job_ref, *, expected_head, action="inspect", adapter=None):
+    """Inspect retained evidence, retry exactly, or cancel known owned work."""
+    if action == "retry":
+        return run_authoring(job_ref, expected_head=expected_head, adapter=adapter)
+    if action == "cancel":
+        return _cancel_authoring(job_ref, expected_head, adapter)
+    if action != "inspect":
+        raise ArtCraftError(
+            "Select inspect, retry, or cancel to recover the ArtCraft job"
+        )
+    return _summarize_recovery(job_ref, expected_head)
+
+
+def _cancel_authoring(job_ref, expected_head, adapter):
+    store, job, head = _selected_job(job_ref)
+    if _active_cancel_replay(store, job, head, expected_head):
+        return _inspection_result(store, job, head)
+    if head["state"] != "running":
+        return _cancel_prepared_authoring(job_ref, expected_head)
+    return _cancel_active_authoring(store, job, expected_head, adapter)
+
+
+def _cancel_active_authoring(store, job, expected_head, adapter):
+    with store.writer():
+        head = store.head(job["jobId"])
+        if _active_cancel_replay(store, job, head, expected_head):
+            return _inspection_result(store, job, head)
+        if head["eventHash"] != expected_head:
+            raise _changed_job_head()
+        stop, directory = _claim_active_writer(store, job, head, adapter)
+        requested = store.append(
+            job["jobId"],
+            expected_head=expected_head,
+            event={"operationId": "request-cancel", "state": "cancel-requested"},
+        )
+    return _settle_active_cancellation(store, job, requested, directory, stop)
+
+
+def _claim_active_writer(store, job, head, adapter):
+    directory = _bounded_path(
+        store.workspace, _authoring_export_directory(store, job), "active job output"
+    )
+    claim = getattr(adapter, "claim_cancellation", None)
+    stop = None
+    if job["observation"]["mode"] == "cli" and callable(claim):
+        stop = claim(job, head, directory)
+    if not callable(stop):
+        _require_cancel_head(head, head["eventHash"])
+    return stop, directory
+
+
+def _active_cancel_replay(store, job, head, expected_head):
+    if head["operationId"] not in {"request-cancel", "cancel", "reconcile-cancel"}:
+        return False
+    request = store._committed_operation(job, "request-cancel")
+    return (
+        request is not None
+        and request["state"] == "cancel-requested"
+        and request["eventHash"] in {head["eventHash"], head["predecessorHash"]}
+        and expected_head
+        in {head["eventHash"], request["eventHash"], request["predecessorHash"]}
+    )
+
+
+def _settle_active_cancellation(store, job, request, directory, stop):
+    try:
+        outcome = stop(min(job["budget"]["seconds"], 5))
+    except Exception:
+        outcome = None
+    operation, state = (
+        ("cancel", "cancelled")
+        if outcome == "settled"
+        else ("reconcile-cancel", "outcome-unknown")
+    )
+    head = store.append(
+        job["jobId"],
+        expected_head=request["eventHash"],
+        event={
+            "operationId": operation,
+            "state": state,
+            "partialFiles": _recoverable_job_files(job, directory),
+        },
+    )
+    return _inspection_result(store, job, head)
+
+
+def _cancel_prepared_authoring(job_ref, expected_head):
+    store, _, head = _selected_job(job_ref)
+    _require_cancel_head(head, expected_head)
+    with store.writer():
+        _, job, head = _selected_job(job_ref)
+        _require_cancel_head(head, expected_head)
+        result = _inspection_result(store, job, head)
+        if head["state"] == "cancelled":
+            return result
+        if result["status"] != "current":
+            raise _changed_job_head()
+        event = store.append(
+            job["jobId"],
+            expected_head=expected_head,
+            event={"operationId": "cancel", "state": "cancelled"},
+        )
+        return _inspection_result(store, job, event)
+
+
+def _require_cancel_head(head, expected_head):
+    if (head["operationId"], head["state"]) == (
+        "cancel",
+        "cancelled",
+    ) and expected_head in {head["eventHash"], head["predecessorHash"]}:
+        return
+    if head["eventHash"] != expected_head:
+        raise _changed_job_head()
+    if head["state"] == "ready":
+        raise ArtCraftError(
+            "Reconcile the operator-owned ArtCraft handoff before cancellation",
+            code="ARTCRAFT_OWNERSHIP_CONFLICT",
+        )
+    if head["state"] in {"running", "cancel-requested", "outcome-unknown"}:
+        raise ArtCraftError(
+            "Reconcile the active ArtCraft writer before cancellation",
+            code="ARTCRAFT_OUTCOME_UNKNOWN",
+        )
+    if head["state"] != "prepared":
+        raise ArtCraftError(
+            "ArtCraft cancellation requires an unstarted job",
+            code="ARTCRAFT_NOT_ELIGIBLE",
+        )
+
+
+def _summarize_recovery(job_ref, expected_head):
     store, job, head = _open_selected_job(job_ref, expected_head)
     result = _inspection_result(store, job, head)
     state = head["state"]
@@ -1038,6 +1786,8 @@ def recover_authoring(job_ref, *, expected_head):
         "prepared": "run-prepared-job",
         "ready": "inspect-operator-return",
         "running": "inspect-current-owner",
+        "cancel-requested": "inspect-current-owner",
+        "cancelled": "keep-cancelled",
     }
     action = actions.get(state, "prepare-fresh-job")
     if result["status"] == "stale" and state in {"prepared", "ready", "exported"}:
@@ -1047,35 +1797,70 @@ def recover_authoring(job_ref, *, expected_head):
         "recovery": {
             "nextAction": action,
             "artifactState": "reference-only",
-            "retainedFiles": _recoverable_job_files(
-                job, _authoring_export_directory(store, job)
-            ),
+            **_recovery_files(job, _authoring_export_directory(store, job), head),
         },
     }
+
+
+def _recovery_files(job, directory, head):
+    files = _recoverable_job_files(job, directory)
+    locked = head.get("partialFiles")
+    if locked is None:
+        return {"retainedFiles": files}
+    by_locator = {item["locator"]: item for item in files}
+    retained, changed = [], []
+    for fingerprint in locked:
+        matches = by_locator.get(fingerprint["locator"]) == fingerprint
+        (retained if matches else changed).append(fingerprint)
+    return {"retainedFiles": retained, "changedPartialFiles": changed}
 
 
 def _recoverable_job_files(job, directory):
     budget = job["budget"]
     count = min(job["output"].get("frameCount", 0), budget["files"])
-    names = ("component.anicraft", "recipe.json", "handoff.json")
-    if job["decision"]["scope"] == _SOUND_CUE_SCOPE:
-        names = ("component.scraft", "recipe.json", "cue.wav", "Audio Files/source.wav")
-    if job["decision"]["scope"] == _STILL_CARD_SCOPE:
-        names = ("component.vectorcraft", "recipe.json", "card.png")
-    candidates = [directory / name for name in names]
-    candidates.extend(
-        directory / "alpha" / f"frame_{index:05d}.png" for index in range(1, count + 1)
-    )
     observed, used = [], 0
-    for path in candidates[: budget["files"]]:
-        if path.resolve() != path or not path.is_file():
+    for relative in _recoverable_output_paths(job["decision"]["scope"], count):
+        if len(observed) >= budget["files"]:
+            break
+        fingerprint = _recoverable_file(directory / relative, budget["bytes"] - used)
+        if fingerprint is None:
             continue
-        info = path.stat()
-        if info.st_nlink != 1 or used + info.st_size > budget["bytes"]:
-            continue
-        observed.append(file_fingerprint(path))
-        used += info.st_size
+        observed.append(fingerprint)
+        used += fingerprint["sizeBytes"]
     return observed
+
+
+def _recoverable_output_paths(scope, frame_count):
+    app = scope["app"]
+    yield "component" + _NATIVE_SUFFIXES.get(app, ".anicraft")
+    yield "recipe.json"
+    yield from {
+        "anicraft": ("handoff.json",),
+        "soundcraft": ("cue.wav", "Audio Files/source.wav"),
+        "filmcraft": ("component.otio",),
+        "vectorcraft": (_STILL_OUTPUT_NAMES["vectorcraft"], "emblem.svg"),
+    }.get(app, [_STILL_OUTPUT_NAMES[app]] if app in _STILL_OUTPUT_NAMES else [])
+    if scope == _EFFECT_MASK_SCOPE:
+        source_start = _EFFECT_SOURCE_WINDOW["startFrame"]
+        for index in range(source_start, source_start + frame_count):
+            yield f"alpha/partial_{index:05d}.png"
+    for index in range(1, frame_count + 1):
+        yield f"alpha/frame_{index:05d}.png"
+
+
+def _recoverable_file(path, remaining):
+    try:
+        if path.resolve() != path or not path.is_file():
+            return None
+        metadata = path.stat()
+        if metadata.st_nlink != 1 or metadata.st_size > remaining:
+            return None
+        fingerprint = file_fingerprint(path)
+        if fingerprint["sizeBytes"] == metadata.st_size:
+            return fingerprint
+    except (OSError, RuntimeError):
+        return None
+    return None
 
 
 def _inspection_result(store, job, head):
@@ -1114,6 +1899,20 @@ def _inspect_handoff(store, job, handoff):
 
 
 def _open_selected_job(job_ref, expected_head):
+    store, job, head = _selected_job(job_ref)
+    if head["eventHash"] != expected_head:
+        raise _changed_job_head()
+    return store, job, head
+
+
+def _changed_job_head():
+    return ArtCraftError(
+        "ArtCraft expected job event head changed or is missing",
+        code="ARTCRAFT_SCOPE_CHANGED",
+    )
+
+
+def _selected_job(job_ref):
     path = Path(job_ref)
     if (
         not path.is_absolute()
@@ -1131,11 +1930,8 @@ def _open_selected_job(job_ref, expected_head):
         )
     stored = store.load(record["jobId"])
     head = store.head(record["jobId"])
-    if stored != record or head is None or head["eventHash"] != expected_head:
-        raise ArtCraftError(
-            "ArtCraft expected job event head changed or is missing",
-            code="ARTCRAFT_SCOPE_CHANGED",
-        )
+    if stored != record or head is None:
+        raise _changed_job_head()
     return store, stored, head
 
 
@@ -1167,17 +1963,64 @@ def _inspect_job_project(store, job):
     return "current"
 
 
-def _retained_job_file(expected, roots):
+def _retained_job_file(expected, roots, *, allow_system_font=False):
     path = Path(expected["locator"])
     try:
         path = _bounded_path(_owning_root(path, roots), path, "retained file")
         return (
             path.is_file()
-            and path.stat().st_nlink == 1
+            and (
+                path.stat().st_nlink == 1
+                or (allow_system_font and _is_effect_system_font(path))
+            )
             and file_fingerprint(path) == expected
         )
     except (OSError, ValueError, RuntimeError):
         return False
+
+
+def require_artcraft_export_environment(observation):
+    """Check the current selected tool bytes without probing or launching an app."""
+    if not _qualified_export_mode(observation) or not observation.get(
+        "commandSchemaHash"
+    ):
+        raise ArtCraftError(
+            "ArtCraft export needs independent native command observations",
+            code="ARTCRAFT_ADMISSION_REQUIRED",
+        )
+    try:
+        _verify_selected_binary(observation["application"])
+        _verify_selected_binary(observation["executable"])
+    except (KeyError, OSError, ValueError) as exc:
+        raise ArtCraftError(
+            "ArtCraft selected installation has changed or is incomplete",
+            code="ARTCRAFT_SCOPE_CHANGED",
+        ) from exc
+    return observation
+
+
+def _qualified_export_mode(observation):
+    if observation["mode"] in {"cli", "reuse"}:
+        return True
+    return (
+        observation["mode"],
+        observation.get("app"),
+        observation.get("operations"),
+        observation.get("platform"),
+        observation.get("release"),
+    ) == ("json-lines", "anicraft", ["lower-third"], "windows", "0.2.1") and bool(
+        observation.get("effectiveRoots")
+    )
+
+
+def _verify_selected_binary(fingerprint):
+    path = Path(fingerprint["locator"])
+    if (
+        not path.is_absolute()
+        or path.resolve() != path
+        or file_fingerprint(path) != fingerprint
+    ):
+        raise ArtCraftError("ArtCraft selected native tool fingerprint changed")
 
 
 def _owning_root(path, roots):
@@ -1188,9 +2031,22 @@ def _owning_root(path, roots):
 
 
 def _inspect_job_inputs(job):
+    if "artworkRef" in job:
+        try:
+            inputs = _artwork_export_inputs(
+                job["request"], job["artworkRef"], job["roots"]
+            )
+        except (OSError, ValueError, RuntimeError):
+            return "changed"
+        return "current" if inputs == job["inputs"] else "changed"
     return (
         "current"
-        if all(_retained_job_file(item, job["roots"]["read"]) for item in job["inputs"])
+        if all(
+            _retained_job_file(
+                item, job["roots"]["read"], allow_system_font="effectFont" in job
+            )
+            for item in job["inputs"]
+        )
         else "changed"
     )
 
@@ -1239,9 +2095,17 @@ def _inspect_unrecorded_document(path, handoff):
 
 def run_authoring(job_ref, *, expected_head, adapter):
     """Reserve the exact job once, then record inspected output or an unknown outcome."""
-    store, _, _ = _open_selected_job(job_ref, expected_head)
+    store, job, head = _selected_job(job_ref)
+    _require_current_or_replayed_authoring(store, job, head, expected_head)
     with store.writer():
-        _, job, head = _open_selected_job(job_ref, expected_head)
+        _, job, head = _selected_job(job_ref)
+        _require_current_or_replayed_authoring(store, job, head, expected_head)
+        if head["state"] in {"running", "outcome-unknown", "cancel-requested"}:
+            raise ArtCraftError(
+                "ArtCraft job requires reconciliation before another operation",
+                code="ARTCRAFT_OUTCOME_UNKNOWN",
+                remediation=f"Inspect the retained job at head {head['eventHash']} before attempting recovery.",
+            )
         inspection = _inspection_result(store, job, head)
         if inspection["status"] != "current":
             raise ArtCraftError(
@@ -1266,12 +2130,52 @@ def run_authoring(job_ref, *, expected_head, adapter):
     return _execute_prepared_job(store, job, running, directory, produce)
 
 
+def _require_current_or_replayed_authoring(store, job, head, expected_head):
+    if head["eventHash"] == expected_head:
+        return
+    outcome = head["operationId"], head["state"]
+    if (
+        outcome in {("run", "running"), ("guide", "ready")}
+        and head["predecessorHash"] == expected_head
+    ):
+        return
+    if outcome in {("verify-run", "exported"), ("reconcile-run", "outcome-unknown")}:
+        running = store._committed_operation(job, "run")
+        if running is not None and (
+            running["state"],
+            running["predecessorHash"],
+            running["eventHash"],
+        ) == ("running", expected_head, head["predecessorHash"]):
+            return
+    raise _changed_job_head()
+
+
 def _select_job_author(adapter, scope):
+    if scope in _STILL_SCOPES:
+        return _select_job_still_author(adapter, scope)
+    if scope == _FILM_RETURN_SCOPE:
+        return adapter.author_film_interchange
     if scope == _SOUND_CUE_SCOPE:
         return adapter.author_isolated_cue
+    if scope == _VECTOR_EMBLEM_SCOPE:
+        return adapter.author_vector_emblem
+    if scope == _ANIMATED_EMBLEM_SCOPE:
+        return adapter.author_animated_emblem
+    if scope == _EFFECT_MASK_SCOPE:
+        return adapter.author_effect_mask
+    return adapter.author_lower_third
+
+
+def _select_job_still_author(adapter, scope):
     if scope == _STILL_CARD_SCOPE:
         return adapter.author_vector_card
-    return adapter.author_lower_third
+    if scope == _PHOTO_CARD_SCOPE:
+        return adapter.author_photo_card
+    if scope == _LIGHT_TREATMENT_SCOPE:
+        return adapter.author_light_treatment
+    if scope == _FIG_VARIANT_SCOPE:
+        return adapter.author_fig_variant
+    return adapter.author_deck_slide
 
 
 def _copy_reusable_export(job, directory):
@@ -1362,13 +2266,28 @@ def _run_operator_handoff(store, job, head, inspection, adapter):
 
 
 def _require_prepared_authoring(store, job, head):
+    if head["state"] == "cancelled":
+        raise ArtCraftError(
+            "ArtCraft job was cancelled before launch", code="ARTCRAFT_NOT_ELIGIBLE"
+        )
     if head["state"] != "prepared":
         raise ArtCraftError(
             "ArtCraft job requires reconciliation before another operation",
             code="ARTCRAFT_OUTCOME_UNKNOWN",
         )
     scope = job["decision"]["scope"]
-    if scope not in (_SOUND_CUE_SCOPE, _STILL_CARD_SCOPE) and (
+    if scope not in (
+        _SOUND_CUE_SCOPE,
+        _STILL_CARD_SCOPE,
+        _PHOTO_CARD_SCOPE,
+        _LIGHT_TREATMENT_SCOPE,
+        _FIG_VARIANT_SCOPE,
+        _DECK_SLIDE_SCOPE,
+        _FILM_RETURN_SCOPE,
+        _VECTOR_EMBLEM_SCOPE,
+        _ANIMATED_EMBLEM_SCOPE,
+        _EFFECT_MASK_SCOPE,
+    ) and (
         scope != {"app": "anicraft", "operations": ["lower-third"]}
         or not job.get("authoringParameters")
     ):
@@ -1404,30 +2323,75 @@ def _execute_prepared_job(store, job, running, directory, produce):
                 "ArtCraft input or project evidence changed while it was running"
             )
     except Exception as exc:
-        pending = store.append(
-            job["jobId"],
-            expected_head=running["eventHash"],
-            event={"operationId": "reconcile-run", "state": "outcome-unknown"},
+        pending, applied = _finish_authoring_run(
+            store,
+            job,
+            running,
+            directory,
+            {"operationId": "reconcile-run", "state": "outcome-unknown"},
         )
+        if not applied:
+            return _inspection_result(store, job, pending)
         raise ArtCraftError(
             "ArtCraft authoring did not produce independently verified job outputs",
             code="ARTCRAFT_OUTCOME_UNKNOWN",
             remediation=f"Inspect the retained job at head {pending['eventHash']} before attempting recovery.",
         ) from exc
-    completed = store.append(
-        job["jobId"],
-        expected_head=running["eventHash"],
-        event={"operationId": "verify-run", "state": "exported", **evidence},
+    completed, _ = _finish_authoring_run(
+        store,
+        job,
+        running,
+        directory,
+        {"operationId": "verify-run", "state": "exported", **evidence},
     )
     return _inspection_result(store, job, completed)
 
 
+def _finish_authoring_run(store, job, running, directory, event):
+    expected = running["eventHash"]
+    current = store.head(job["jobId"])
+    if _active_cancel_replay(store, job, current, expected):
+        return current, False
+    with store.writer():
+        current = store.head(job["jobId"])
+        if current["eventHash"] != expected:
+            if _active_cancel_replay(store, job, current, expected):
+                return current, False
+            raise _changed_job_head()
+        if event["state"] == "outcome-unknown":
+            event = {**event, "partialFiles": _recoverable_job_files(job, directory)}
+        return store.append(job["jobId"], expected_head=expected, event=event), True
+
+
 def _verify_authoring_result(job, directory, result):
+    if job["decision"]["scope"] == _FILM_RETURN_SCOPE:
+        return _verify_film_authoring_result(job, directory, result)
     if job["decision"]["scope"] == _SOUND_CUE_SCOPE:
         return _verify_sound_authoring_result(job, directory, result)
-    if job["decision"]["scope"] == _STILL_CARD_SCOPE:
+    if job["decision"]["scope"] in _STILL_SCOPES:
         return _verify_still_authoring_result(job, directory, result)
+    if job["decision"]["scope"] == _VECTOR_EMBLEM_SCOPE:
+        return _verify_emblem_authoring_result(job, directory, result)
     return _verify_sequence_authoring_result(job, directory, result)
+
+
+def _verify_emblem_authoring_result(job, directory, result):
+    retained = (
+        (result["nativeSource"], directory / "component.vectorcraft"),
+        (result["recipe"], directory / "recipe.json"),
+        (result["media"], directory / "emblem.svg"),
+    )
+    if any(
+        evidence["locator"] != str(path)
+        or not _retained_job_file(evidence, job["roots"]["write"])
+        for evidence, path in retained
+    ):
+        raise ArtCraftError("VectorCraft emblem evidence differs from its owned files")
+    return {
+        "saved": result["nativeSource"],
+        "recipe": result["recipe"],
+        "outputs": [result["media"]],
+    }
 
 
 def _verify_sequence_authoring_result(job, directory, result):
@@ -1438,7 +2402,11 @@ def _verify_sequence_authoring_result(job, directory, result):
     if len(frames) != job["output"]["frameCount"]:
         raise ArtCraftError("ArtCraft output does not contain the selected frame count")
     references = [
-        (native, directory / "component.anicraft"),
+        (
+            native,
+            directory
+            / ("component" + _NATIVE_SUFFIXES[job["decision"]["scope"]["app"]]),
+        ),
         (recipe, directory / "recipe.json"),
     ]
     references.extend(
@@ -1509,13 +2477,12 @@ def _verify_still_authoring_result(job, directory, result):
         for key in ("width", "height", "format", "color", "alpha")
     }
     if any(evidence[key] != value for key, value in expected.items()):
-        raise ArtCraftError(
-            "VectorCraft still evidence differs from the selected canvas"
-        )
+        raise ArtCraftError("ArtCraft still evidence differs from the selected canvas")
+    app = job["decision"]["scope"]["app"]
     target_paths = {
-        "nativeSource": directory / "component.vectorcraft",
+        "nativeSource": directory / ("component" + _NATIVE_SUFFIXES[app]),
         "recipe": directory / "recipe.json",
-        "media": directory / "card.png",
+        "media": directory / _STILL_OUTPUT_NAMES[app],
     }
     for key, path in target_paths.items():
         item = result[key]
@@ -1523,13 +2490,36 @@ def _verify_still_authoring_result(job, directory, result):
             item, job["roots"]["write"]
         ):
             raise ArtCraftError(
-                "VectorCraft still must use the exact retained output files"
+                "ArtCraft still must use the exact retained output files"
             )
     return {
         "saved": result["nativeSource"],
         "recipe": result["recipe"],
         "outputs": [result["media"]],
         "stillEvidence": evidence,
+    }
+
+
+def _verify_film_authoring_result(job, directory, result):
+    evidence = result["interchangeEvidence"]
+    validate_document(evidence, _schema("interchangeEvidence"))
+    for key, name in (
+        ("nativeSource", "component.fcproj"),
+        ("recipe", "recipe.json"),
+        ("media", "component.otio"),
+    ):
+        item = result[key]
+        if item["locator"] != str(directory / name) or not _retained_job_file(
+            item, job["roots"]["write"]
+        ):
+            raise ArtCraftError(
+                "FilmCraft interchange differs from its owned job artifacts"
+            )
+    return {
+        "saved": result["nativeSource"],
+        "recipe": result["recipe"],
+        "outputs": [result["media"]],
+        "interchangeEvidence": evidence,
     }
 
 
@@ -1544,9 +2534,18 @@ def _verify_retained_export(store, job, event):
                 "dependencies": event["dependencies"],
                 "audioEvidence": event["audioEvidence"],
             }
-        if job["decision"]["scope"] == _STILL_CARD_SCOPE:
+        if job["decision"]["scope"] in _STILL_SCOPES:
             (media,) = event["outputs"]
             media_evidence = {"media": media, "stillEvidence": event["stillEvidence"]}
+        if job["decision"]["scope"] == _FILM_RETURN_SCOPE:
+            (media,) = event["outputs"]
+            media_evidence = {
+                "media": media,
+                "interchangeEvidence": event["interchangeEvidence"],
+            }
+        if job["decision"]["scope"] == _VECTOR_EMBLEM_SCOPE:
+            (media,) = event["outputs"]
+            media_evidence = {"media": media}
         _verify_authoring_result(
             job,
             directory,
@@ -1582,26 +2581,88 @@ def read_authoring_export(job_ref, *, expected_head):
     return job, event
 
 
+def _describe_still_review(job, event, job_ref):
+    standalone = {
+        "still": event["outputs"][0],
+        "stillEvidence": event["stillEvidence"],
+    }
+    if job["decision"]["scope"] == _STILL_CARD_SCOPE:
+        standalone["generatedStillRef"] = {
+            "job": file_fingerprint(Path(job_ref)),
+            "exportHead": event["eventHash"],
+        }
+    else:
+        standalone["admission"] = "standalone-review"
+    if job["decision"]["scope"] == _FIG_VARIANT_SCOPE:
+        standalone["losses"] = [
+            "The PNG holds a single static variant. The editable layout and click-to-switch prototype remain in the native design."
+        ]
+    if job["decision"]["scope"] == _DECK_SLIDE_SCOPE:
+        standalone["losses"] = [
+            "The PNG holds the midpoint of the selected fade. The editable slides, master layout and full transition remain in the native deck."
+        ]
+    if job["decision"]["scope"] == _LIGHT_TREATMENT_SCOPE:
+        standalone["nativeLibrary"] = {
+            "restoreAs": "catalog.snap",
+            "original": job["inputs"][0],
+            "instruction": "Use the snapshot in a new LightCraft library with the exact original photo at its recorded location.",
+        }
+    return {
+        "reviewState": "pending-creator",
+        "jobHash": job["jobHash"],
+        "exportHead": event["eventHash"],
+        "componentId": job["request"]["componentId"],
+        "viewerPurpose": job["request"]["purpose"],
+        "nativeSource": event["saved"],
+        "outputContract": job["output"],
+        "standalone": standalone,
+    }
+
+
 def describe_export_review(job_ref, *, expected_head):
     """Describe the exact standalone candidate for an independent creator review."""
     job, event = read_authoring_export(job_ref, expected_head=expected_head)
-    if job["decision"]["scope"] == _STILL_CARD_SCOPE:
-        reference = {
-            "job": file_fingerprint(Path(job_ref)),
-            "exportHead": expected_head,
-        }
+    if job["decision"]["scope"] == _VECTOR_EMBLEM_SCOPE:
         return {
             "reviewState": "pending-creator",
             "jobHash": job["jobHash"],
-            "exportHead": event["eventHash"],
-            "componentId": job["request"]["componentId"],
-            "viewerPurpose": job["request"]["purpose"],
+            "exportHead": expected_head,
             "nativeSource": event["saved"],
             "outputContract": job["output"],
             "standalone": {
-                "still": event["outputs"][0],
-                "stillEvidence": event["stillEvidence"],
-                "generatedStillRef": reference,
+                "vectorArtwork": event["outputs"][0],
+                "artworkRef": {
+                    "job": file_fingerprint(Path(job_ref)),
+                    "exportHead": expected_head,
+                },
+            },
+        }
+    if job["decision"]["scope"] == _FILM_RETURN_SCOPE:
+        return {
+            "reviewState": "pending-creator",
+            "jobHash": job["jobHash"],
+            "exportHead": expected_head,
+            "nativeSource": event["saved"],
+            "outputContract": job["output"],
+            "standalone": {
+                "timeline": event["outputs"][0],
+                **event["interchangeEvidence"],
+            },
+        }
+    if job["decision"]["scope"] in _STILL_SCOPES:
+        return _describe_still_review(job, event, job_ref)
+    if job["decision"]["scope"] == _EFFECT_MASK_SCOPE:
+        return {
+            "reviewState": "pending-creator",
+            "jobHash": job["jobHash"],
+            "exportHead": expected_head,
+            "nativeSource": event["saved"],
+            "outputContract": job["output"],
+            "standalone": {
+                "admission": "standalone-review",
+                "sequence": event["outputs"],
+                "sourceWindow": dict(_EFFECT_SOURCE_WINDOW),
+                "font": job["inputs"][0],
             },
         }
     if job["decision"]["scope"] == _SOUND_CUE_SCOPE:
@@ -1625,7 +2686,10 @@ def describe_export_review(job_ref, *, expected_head):
                 "sourceId": "artcraft-audio-" + content_hash(reference)[:24],
             },
         }
-    if job["decision"]["scope"] != {"app": "anicraft", "operations": ["lower-third"]}:
+    if job["decision"]["scope"] not in (
+        _ANIMATED_EMBLEM_SCOPE,
+        {"app": "anicraft", "operations": ["lower-third"]},
+    ):
         raise ArtCraftError("The selected job has no qualified review profile")
     count = job["output"]["frameCount"]
     phases = {
@@ -1644,6 +2708,7 @@ def describe_export_review(job_ref, *, expected_head):
         "editableBehavior": job["request"]["required"]["behavior"],
         "nativeSource": event["saved"],
         "outputContract": job["output"],
+        **({"artworkRef": job["artworkRef"]} if "artworkRef" in job else {}),
         "standalone": {
             "frames": [
                 {"phase": phase, "localFrame": frame, "output": event["outputs"][frame]}
