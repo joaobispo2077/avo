@@ -246,6 +246,9 @@ placement and review before adopting the result.
 Keep the selected run's job and event journal, editable export, recipe and
 frames. Inspection and reconstruction verify those files against their recorded
 fingerprints. If any of them changes, verify a new export before reusing it.
+Reconstruction checks linked VectorCraft artwork against retained outputs and
+reports matching proof or preview ancestry. A pinned lower-third package must
+contain only its supported source roles. An added plug-in blocks the rebuild.
 
 Before any native authoring, identify the effective roots, owner of the job's
 document, output contract and bounds. A provider-only component has a declared

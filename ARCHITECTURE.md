@@ -651,6 +651,10 @@ artwork closure. Switching that artwork requires a fresh render and proof.
 Copy-only reuse also retains the selected predecessor's job and event journal,
 editable export, recipe and frames. Inspection and reconstruction recheck the
 recorded fingerprints. Any change requires a new verified export before reuse.
+Reconstruction matches linked VectorCraft artwork to its selected export and
+checks its bytes against the video's retained proof and preview inventory.
+Video-local native packages reapply the published source-role checks when
+reconstruction reads them. Unsupported plug-ins block that reconstruction.
 Native provider publication can retain that SVG as optional identity artwork.
 The package validator binds it to the exact native shape, design review and
 per-file rights before the package and video instance retain its bytes.
