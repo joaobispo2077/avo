@@ -15,6 +15,8 @@ from avo.artcraft import ArtCraftError
 from avo.timeline.contracts import content_hash, file_fingerprint
 from avo.timeline.store import write_immutable_json
 
+from .artcraft_native_cli import selected_native_command_signatures
+
 _SAVE = "file.save"
 _INSPECT = "document.inspect"
 _COMMANDS = {
@@ -49,11 +51,9 @@ def observe_vectorcraft(executable, env, *, required=_COMMANDS):
         ) from exc
     if len(result.stdout) > 4 * 1024 * 1024:
         raise ArtCraftError("VectorCraft command registry exceeds its byte limit")
-    commands = {
-        row["id"]: row["params"]
-        for row in json.loads(result.stdout)
-        if row["id"] in required
-    }
+    commands = selected_native_command_signatures(
+        result.stdout, required, label="VectorCraft"
+    )
     if commands.keys() != required or file_fingerprint(selected) != executable:
         raise ArtCraftError(
             "VectorCraft card command scope or selected executable changed",

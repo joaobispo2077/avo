@@ -85,7 +85,6 @@ def observe_native_command_schema(
         )
         if len(result.stdout) > 4 * 1024 * 1024:
             raise ValueError("command registry exceeds its byte limit")
-        commands = _selected_registry_rows(result.stdout, needed, json_registry)
     except (
         OSError,
         subprocess.SubprocessError,
@@ -97,6 +96,9 @@ def observe_native_command_schema(
             f"Could not inspect the selected {label} commands",
             code="ARTCRAFT_NOT_READY",
         ) from exc
+    commands = selected_native_command_signatures(
+        result.stdout, needed, label=label, json_registry=json_registry
+    )
     if commands.keys() != needed or file_fingerprint(path) != executable:
         raise ArtCraftError(
             f"The selected {label} command scope or executable changed",
@@ -105,16 +107,35 @@ def observe_native_command_schema(
     return content_hash(commands)
 
 
-def _selected_registry_rows(stdout, needed, json_registry):
+def selected_native_command_signatures(stdout, needed, *, label, json_registry=True):
+    """Seal only the selected command signatures, without ambiguous entries."""
+    selected = {}
+    try:
+        for command, signature in _registry_rows(stdout, json_registry):
+            if command not in needed:
+                continue
+            if (
+                command in selected
+                or not isinstance(signature, str)
+                or not signature.strip()
+            ):
+                raise ValueError(
+                    f"Duplicate or invalid selected signature for {command}"
+                )
+            selected[command] = signature
+    except (ValueError, KeyError, TypeError) as exc:
+        raise ArtCraftError(
+            f"Could not inspect the selected {label} commands",
+            code="ARTCRAFT_NOT_READY",
+        ) from exc
+    return selected
+
+
+def _registry_rows(stdout, json_registry):
     if json_registry:
-        return {
-            item["id"]: item["params"]
-            for item in json.loads(stdout)
-            if item["id"] in needed
-        }
+        rows = json.loads(stdout)
+        if not isinstance(rows, list):
+            raise ValueError("Expected a native command registry list")
+        return ((item["id"], item.get("params")) for item in rows)
     rows = (line.partition(" — ") for line in stdout.decode("utf-8").splitlines())
-    return {
-        command: spec
-        for command, delimiter, spec in rows
-        if delimiter and command in needed
-    }
+    return ((command, spec) for command, delimiter, spec in rows if delimiter)

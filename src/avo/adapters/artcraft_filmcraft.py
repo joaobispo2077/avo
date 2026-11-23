@@ -9,6 +9,8 @@ from avo.artcraft import ArtCraftError
 from avo.timeline.contracts import content_hash, file_fingerprint
 from avo.timeline.store import write_immutable_json
 
+from .artcraft_native_cli import selected_native_command_signatures
+
 _COMMANDS = {
     "file.newProject",
     "file.import",
@@ -36,11 +38,9 @@ def observe_filmcraft(executable, environment):
         ) from exc
     if len(result.stdout) > 4 * 1024 * 1024:
         raise ArtCraftError("FilmCraft command registry exceeds its byte limit")
-    commands = {
-        row["id"]: row["params"]
-        for row in json.loads(result.stdout)
-        if row["id"] in _COMMANDS
-    }
+    commands = selected_native_command_signatures(
+        result.stdout, _COMMANDS, label="FilmCraft"
+    )
     if commands.keys() != _COMMANDS or file_fingerprint(path) != executable:
         raise ArtCraftError(
             "FilmCraft exchange command scope or executable changed",

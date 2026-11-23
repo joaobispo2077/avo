@@ -13,6 +13,7 @@ from avo.artcraft import ArtCraftError, _copy_native_source
 from avo.timeline.contracts import content_hash, file_fingerprint
 from avo.timeline.store import write_immutable_json
 
+from .artcraft_native_cli import selected_native_command_signatures
 from .media.local_source import local_source_arguments
 
 ROOM_REVERB = "room_reverb"
@@ -43,10 +44,9 @@ def observe_soundcraft_profile(executable, environment):
             raise ArtCraftError("SoundCraft observation exceeds its byte budget")
         return result.stdout
 
-    commands = json.loads(inspect("commands", "--json", "--compact"))
-    signatures = {
-        row["id"]: row["params"] for row in commands if row["id"] in _CUE_COMMANDS
-    }
+    signatures = selected_native_command_signatures(
+        inspect("commands", "--json", "--compact"), _CUE_COMMANDS, label="SoundCraft"
+    )
     plugins = [
         line.split(maxsplit=1)[0]
         for line in inspect("plugins").decode().splitlines()
