@@ -849,6 +849,10 @@ def prepare_authoring(
     source = _preparation_source(spec, roots, document)
     input_field, selected_input = _preparation_media(request, spec, scope, roots)
     dependencies = _prepared_artwork(request, spec, roots, source)
+    inputs = [
+        item for item in (source, selected_input) if item is not None
+    ] + dependencies
+    _require_input_budget(inputs, spec["budget"])
     _require_preparation_capacity(
         store.workspace, spec["budget"], source or selected_input
     )
@@ -874,8 +878,7 @@ def prepare_authoring(
         "observation": observation,
         "document": document.relative_to(store.workspace).as_posix(),
         "documentState": spec["document"]["state"],
-        "inputs": [item for item in (source, selected_input) if item is not None]
-        + dependencies,
+        "inputs": inputs,
         "recipeHash": content_hash(recipe),
         "output": spec["output"],
         "budget": spec["budget"],
@@ -1434,6 +1437,21 @@ def _require_preparation_capacity(workspace, budget, source):
     if source is not None and source["sizeBytes"] >= budget["bytes"]:
         raise ArtCraftError(
             "ArtCraft budget leaves no space for the selected output",
+            code="ARTCRAFT_NOT_READY",
+        )
+
+
+def _exceeds_file_budget(files, budget):
+    return (
+        len(files) > budget["files"]
+        or sum(item["sizeBytes"] for item in files) > budget["bytes"]
+    )
+
+
+def _require_input_budget(inputs, budget):
+    if _exceeds_file_budget(inputs, budget):
+        raise ArtCraftError(
+            "ArtCraft job inputs exceed the selected file or byte budget",
             code="ARTCRAFT_NOT_READY",
         )
 
@@ -2203,6 +2221,7 @@ def run_authoring(job_ref, *, expected_head, adapter):
         if head["state"] == "exported":
             _verify_retained_export(store, job, head)
             return inspection
+        _require_input_budget(job["inputs"], job["budget"])
         if job["observation"]["mode"] in {"guided", "host-mcp"}:
             return _run_operator_handoff(store, job, head, inspection, adapter)
         directory = _require_prepared_authoring(store, job, head)
@@ -2293,10 +2312,7 @@ def _copy_reusable_export(job, directory):
     ]
     sources = [exported["saved"], exported["recipe"], *exported["outputs"]]
     budget = job["budget"]
-    if (
-        len(sources) > budget["files"]
-        or sum(item["sizeBytes"] for item in sources) > budget["bytes"]
-    ):
+    if _exceeds_file_budget(sources, budget):
         raise ArtCraftError(
             "ArtCraft retained output exceeds the selected reuse budget"
         )
@@ -2407,9 +2423,12 @@ def _authoring_export_directory(store, job):
 
 
 def _execute_prepared_job(store, job, running, directory, produce):
+    deadline = monotonic() + job["budget"]["seconds"]
     try:
         result = produce(job, directory)
+        _require_authoring_time(deadline)
         evidence = _verify_authoring_result(job, directory, result)
+        _require_output_budget(evidence, job["budget"])
         if (
             _inspect_job_project(store, job) == "changed"
             or _inspect_job_inputs(job) != "current"
@@ -2417,6 +2436,7 @@ def _execute_prepared_job(store, job, running, directory, produce):
             raise ArtCraftError(
                 "ArtCraft input or project evidence changed while it was running"
             )
+        _require_authoring_time(deadline)
     except Exception as exc:
         pending, applied = _finish_authoring_run(
             store,
@@ -2440,6 +2460,22 @@ def _execute_prepared_job(store, job, running, directory, produce):
         {"operationId": "verify-run", "state": "exported", **evidence},
     )
     return _inspection_result(store, job, completed)
+
+
+def _require_authoring_time(deadline):
+    if monotonic() >= deadline:
+        raise ArtCraftError("ArtCraft authoring exceeded the selected time budget")
+
+
+def _require_output_budget(evidence, budget):
+    files = [
+        evidence["saved"],
+        evidence["recipe"],
+        *evidence["outputs"],
+        *evidence.get("dependencies", ()),
+    ]
+    if _exceeds_file_budget(files, budget):
+        raise ArtCraftError("ArtCraft output exceeds the selected file or byte budget")
 
 
 def _finish_authoring_run(store, job, running, directory, event):
