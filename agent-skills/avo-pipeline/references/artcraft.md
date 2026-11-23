@@ -92,6 +92,9 @@ operator roots and budgets. The native MCP script uses `command` and `params`
 for each step. Check its step results and saved document, then run AVO
 `artcraft inspect` at the handoff head. Operator-returned source and PNG files
 are reference material until separately qualified.
+Both guided and host MCP descriptors include the operator budget. The file
+limit must cover the recipe, handoff, empty and saved documents, and every
+requested PNG frame.
 
 For the selected Windows 0.2.1 runtime, `--mode json-lines` uses `serve` through
 a runner that independently confines the chosen roots and supports bounded
