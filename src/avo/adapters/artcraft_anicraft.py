@@ -1008,16 +1008,36 @@ def _apply_recipe(call, document, native, recipe, steps, open_stream, budget, de
             open_stream, document, native, steps, budget=budget, deadline=deadline
         )
         return
-    responses = json.loads(call("run", document, recipe))
+    error = (
+        "AniCraft did not report every authoring operation or save its native document"
+    )
+    raw = call("run", document, recipe)
+    try:
+        responses = json.loads(raw, object_pairs_hook=_distinct_native_fields)
+    except ValueError as exc:
+        raise ArtCraftError(error) from exc
     if (
         not isinstance(responses, list)
         or len(responses) != len(steps)
         or not native.is_file()
-    ):
-        raise ArtCraftError(
-            "AniCraft did not report every authoring operation or save its native document"
+        or any(
+            not _valid_recipe_result(result, step)
+            for result, step in zip(responses, steps, strict=True)
         )
+    ):
+        raise ArtCraftError(error)
     return responses
+
+
+def _valid_recipe_result(result, step):
+    return (
+        isinstance(result, dict)
+        and "error" not in result
+        and (
+            step["cmd"] != "file.save_as"
+            or result.get("saved") == step["params"]["path"]
+        )
+    )
 
 
 def _run_json_lines(open_stream, document, native, steps, *, budget, deadline):
@@ -1036,7 +1056,7 @@ def _run_json_lines(open_stream, document, native, steps, *, budget, deadline):
             )
             session.send_line(message + b"\n", timeout=_remaining(deadline))
             reply = _json_lines_record(session, deadline)
-            _require_json_lines_reply(reply, index)
+            _require_json_lines_reply(reply, index, step)
             _require_profile_budget(native.parent, budget)
     if not native.is_file():
         raise ArtCraftError(
@@ -1057,13 +1077,14 @@ def _json_lines_record(session, deadline):
         raise ArtCraftError("AniCraft JSON-lines returned invalid JSON") from exc
 
 
-def _require_json_lines_reply(reply, index):
+def _require_json_lines_reply(reply, index, step):
     if (
         not isinstance(reply, dict)
         or type(reply.get("id")) is not int
         or reply["id"] != index
         or reply.get("ok") is not True
-        or "result" not in reply
+        or "error" in reply
+        or not _valid_recipe_result(reply.get("result"), step)
     ):
         raise ArtCraftError(
             f"AniCraft JSON-lines command {index} failed or had an invalid receipt"

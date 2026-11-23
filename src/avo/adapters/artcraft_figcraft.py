@@ -146,13 +146,28 @@ def _run_script(call, directory, stem, steps, *options):
         directory,
         *options,
     )
-    rows = [json.loads(line) for line in receipt.splitlines()]
+    error = "FigCraft did not report every selected script step"
+    try:
+        rows = [json.loads(line) for line in receipt.splitlines()]
+    except json.JSONDecodeError as exc:
+        raise ArtCraftError(error) from exc
     if len(rows) != len(steps) or any(
-        (row["step"], row["command"], row["ok"]) != (index, step["command"], True)
+        not _valid_script_receipt(row, index, step["command"])
         for index, (row, step) in enumerate(zip(rows, steps, strict=True))
     ):
-        raise ArtCraftError("FigCraft did not report every selected script step")
+        raise ArtCraftError(error)
     return [row["result"] for row in rows]
+
+
+def _valid_script_receipt(row, index, command):
+    return (
+        isinstance(row, dict)
+        and type(row.get("step")) is int
+        and row["step"] == index
+        and row.get("command") == command
+        and row.get("ok") is True
+        and "result" in row
+    )
 
 
 def _require_native_members(path, byte_limit):
