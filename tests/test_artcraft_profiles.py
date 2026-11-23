@@ -439,6 +439,31 @@ def test_native_cli_invalid_reply_skips_scratch_audit(
         call("mock-command")
 
 
+def test_native_cli_refuses_redirected_workspace_before_scanning(tmp_path, monkeypatch):
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    target = tmp_path / "outside"
+    target.mkdir()
+    resolve = type(workspace).resolve
+
+    def invoke(*args, **kwargs):
+        def redirected(path, *args, **kwargs):
+            return target if path == workspace else resolve(path, *args, **kwargs)
+
+        monkeypatch.setattr(type(workspace), "resolve", redirected)
+        return b"receipt"
+
+    def unexpected_scan(*args):
+        pytest.fail("A redirected workspace must not be opened by the audit")
+
+    monkeypatch.setattr(artcraft_native_cli, "scandir", unexpected_scan)
+    call = artcraft_native_cli.bounded_native_invocation(
+        workspace, {"seconds": 5, "files": 1, "bytes": 8}, invoke, label="Native job"
+    )
+    with pytest.raises(artcraft.ArtCraftError, match="workspace"):
+        call("mock-command")
+
+
 @pytest.mark.parametrize("limit", ["files", "bytes"])
 def test_native_cli_scratch_audit_stops_at_first_excess(tmp_path, monkeypatch, limit):
     for name in ("first.bin", "second.bin"):

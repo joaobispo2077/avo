@@ -7,6 +7,54 @@ from avo.artcraft import ArtCraftError
 from tests.artcraft_fixtures import picture_output
 
 
+def test_anicraft_cli_rejects_an_expired_reply_before_auditing_scratch(
+    tmp_path, monkeypatch
+):
+    from avo.adapters import artcraft_anicraft, artcraft_native_cli
+
+    now = 0
+    monkeypatch.setattr(artcraft_anicraft, "monotonic", lambda: now)
+
+    def invoke(directory, *args, timeout):
+        nonlocal now
+        assert directory == tmp_path
+        assert timeout == 5
+        now = 5
+        return b"{}"
+
+    def unexpected_scan(*args):
+        pytest.fail("A late reply must not trigger the scratch audit")
+
+    monkeypatch.setattr(type(tmp_path), "rglob", unexpected_scan)
+    monkeypatch.setattr(artcraft_native_cli, "scandir", unexpected_scan)
+    call = artcraft_anicraft._profile_invocation(
+        tmp_path, {"files": 5, "bytes": 1024}, invoke, 5
+    )
+    with pytest.raises(ArtCraftError, match="time budget"):
+        call("info")
+
+
+def test_anicraft_json_lines_rejects_a_successful_record_after_its_deadline(
+    monkeypatch,
+):
+    from types import SimpleNamespace
+
+    from avo.adapters import artcraft_anicraft
+
+    now = 0
+    monkeypatch.setattr(artcraft_anicraft, "monotonic", lambda: now)
+
+    def read_line(*, max_bytes, timeout):
+        nonlocal now
+        assert timeout == 5
+        assert max_bytes > 16
+        now = 5
+        return b'{"ok":true}\n'
+
+    with pytest.raises(ArtCraftError, match="time budget"):
+        artcraft_anicraft._json_lines_record(SimpleNamespace(read_line=read_line), 5)
+
+
 def _contract(**overrides):
     return picture_output(
         **{
