@@ -157,6 +157,77 @@ def test_operator_handoff_rejects_insufficient_files_before_planning(
     )
 
 
+@pytest.mark.parametrize("mode", ["guided", "host-mcp"])
+def test_operator_handoff_rejects_insufficient_bytes_before_writing(
+    tmp_path, operator_profile, mode
+):
+    _, _, advertise = operator_profile
+    advertise(HEADLESS)
+    adapter = native.SelectedArtCraftAdapter()
+    spec = job_spec(
+        tmp_path,
+        mode=mode,
+        authoringParameters={"primaryText": "Café", "font": "Arial"},
+    )
+    spec["budget"]["bytes"] = 1
+    prepared = _prepare(artcraft, request(), spec, adapter)
+
+    with pytest.raises(
+        artcraft.ArtCraftError, match="operator handoff.*byte budget"
+    ) as exc:
+        artcraft.run_authoring(
+            prepared["jobRef"], expected_head=prepared["head"], adapter=adapter
+        )
+
+    assert exc.value.code == "ARTCRAFT_NOT_READY"
+    workspace = Path(prepared["job"]["roots"]["write"][0])
+    assert not (workspace / "recipe.json").exists()
+    assert not (workspace / "handoff.json").exists()
+    assert (
+        artcraft.inspect_authoring(prepared["jobRef"], expected_head=prepared["head"])[
+            "state"
+        ]
+        == "prepared"
+    )
+
+
+def test_guided_handoff_reuses_recipe_after_interrupted_staging(
+    tmp_path, operator_profile, monkeypatch
+):
+    adapter = native.SelectedArtCraftAdapter()
+    spec = job_spec(
+        tmp_path,
+        mode="guided",
+        authoringParameters={"primaryText": "Café", "font": "Arial"},
+    )
+    prepared = _prepare(artcraft, request(), spec, adapter)
+    write = artcraft.write_immutable_json
+
+    def interrupt_handoff(path, value):
+        if path.name == "handoff.json":
+            raise OSError("fixture interrupted the handoff write")
+        return write(path, value)
+
+    def run():
+        return artcraft.run_authoring(
+            prepared["jobRef"], expected_head=prepared["head"], adapter=adapter
+        )
+
+    with monkeypatch.context() as interrupted:
+        interrupted.setattr(artcraft, "write_immutable_json", interrupt_handoff)
+        with pytest.raises(OSError, match="interrupted"):
+            run()
+
+    recipe = Path(prepared["job"]["roots"]["write"][0]) / "recipe.json"
+    fingerprint = file_fingerprint(recipe)
+    ready = run()
+    descriptor = json.loads(
+        Path(ready["handoff"]["locator"]).read_text(encoding="utf-8")
+    )
+    assert ready["state"] == "ready"
+    assert descriptor["recipe"] == fingerprint == file_fingerprint(recipe)
+
+
 def test_guided_handoff_accepts_exact_file_budget(tmp_path, operator_profile):
     adapter = native.SelectedArtCraftAdapter()
     spec = job_spec(
