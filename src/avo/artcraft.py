@@ -25,6 +25,7 @@ from avo.timeline.contracts import (
 from avo.timeline.store import (
     StoreError,
     atomic_write_json,
+    immutable_json_text,
     timeline_writer,
     write_immutable_json,
 )
@@ -2400,35 +2401,59 @@ def _run_operator_handoff(store, job, head, inspection, adapter):
             code="ARTCRAFT_NOT_READY",
         )
     plan = adapter.plan_lower_third(job, directory)
-    directory.mkdir(parents=True, exist_ok=True)
-    recipe = _bounded_path(directory, directory / "recipe.json", "operator recipe")
-    write_immutable_json(recipe, plan["steps"])
-    handoff = _bounded_path(directory, directory / "handoff.json", "operator handoff")
-    write_immutable_json(
-        handoff,
-        {
-            "version": 1,
-            "jobHash": job["jobHash"],
-            "mode": job["observation"]["mode"],
-            "artifactState": "reference-only",
-            "operatorRoots": job["roots"],
-            "operatorBudget": job["budget"],
-            "nativeDocument": str(directory / "component.anicraft"),
-            "recipe": file_fingerprint(recipe),
-            "commands": plan["commands"],
-            **({"host": plan["host"]} if "host" in plan else {}),
-        },
-    )
+    handoff_fingerprint = _stage_operator_handoff(job, directory, plan)
     event = store.append(
         job["jobId"],
         expected_head=head["eventHash"],
         event={
             "operationId": "guide",
             "state": "ready",
-            "handoff": file_fingerprint(handoff),
+            "handoff": handoff_fingerprint,
         },
     )
     return _inspection_result(store, job, event)
+
+
+def _stage_operator_handoff(job, directory, plan):
+    recipe = _bounded_path(directory, directory / "recipe.json", "operator recipe")
+    handoff = _bounded_path(directory, directory / "handoff.json", "operator handoff")
+    steps = plan["steps"]
+    recipe_bytes = immutable_json_text(steps).encode("utf-8")
+    descriptor = {
+        "version": 1,
+        "jobHash": job["jobHash"],
+        "mode": job["observation"]["mode"],
+        "artifactState": "reference-only",
+        "operatorRoots": job["roots"],
+        "operatorBudget": job["budget"],
+        "nativeDocument": str(directory / "component.anicraft"),
+        "recipe": {
+            "locator": str(recipe),
+            "sha256": sha256(recipe_bytes).hexdigest(),
+            "sizeBytes": len(recipe_bytes),
+        },
+        "commands": plan["commands"],
+        **({"host": plan["host"]} if "host" in plan else {}),
+    }
+    handoff_bytes = immutable_json_text(descriptor).encode("utf-8")
+    required = len(recipe_bytes) + len(handoff_bytes)
+    if required > job["budget"]["bytes"]:
+        raise ArtCraftError(
+            f"ArtCraft operator handoff needs a byte budget of at least {required} "
+            "for the recipe and handoff alone",
+            code="ARTCRAFT_NOT_READY",
+        )
+    for path, payload in ((recipe, recipe_bytes), (handoff, handoff_bytes)):
+        if path.exists():
+            with path.open("rb") as stream:
+                if stream.read(len(payload) + 1) != payload:
+                    raise ArtCraftError(
+                        "ArtCraft staged operator file changed",
+                        code="ARTCRAFT_SCOPE_CHANGED",
+                    )
+    write_immutable_json(recipe, steps)
+    write_immutable_json(handoff, descriptor)
+    return file_fingerprint(handoff)
 
 
 def _require_prepared_authoring(store, job, head):
