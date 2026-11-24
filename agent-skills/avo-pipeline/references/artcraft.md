@@ -98,6 +98,8 @@ requested PNG frame.
 Before staging, AVO checks that the byte budget covers the serialized UTF-8
 recipe and handoff. The operator also needs space for the native documents
 and frames produced during authoring.
+When inspecting a returned AniCraft document, AVO checks the combined file
+count and bytes in the handoff folder, including the `white` frame folder.
 
 For the selected Windows 0.2.1 runtime, `--mode json-lines` uses `serve` through
 a runner that independently confines the chosen roots and supports bounded
