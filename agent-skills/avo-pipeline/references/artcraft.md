@@ -95,6 +95,9 @@ are reference material until separately qualified.
 Both guided and host MCP descriptors include the operator budget. The file
 limit must cover the recipe, handoff, empty and saved documents, and every
 requested PNG frame.
+Before staging, AVO checks that the byte budget covers the serialized UTF-8
+recipe and handoff. The operator also needs space for the native documents
+and frames produced during authoring.
 
 For the selected Windows 0.2.1 runtime, `--mode json-lines` uses `serve` through
 a runner that independently confines the chosen roots and supports bounded
