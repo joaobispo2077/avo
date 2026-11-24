@@ -228,6 +228,66 @@ def test_guided_handoff_reuses_recipe_after_interrupted_staging(
     assert descriptor["recipe"] == fingerprint == file_fingerprint(recipe)
 
 
+@pytest.mark.parametrize(("limit", "maximum"), [("files", 3), ("bytes", 8)])
+def test_operator_return_checks_combined_workspace_before_reading_native(
+    tmp_path, monkeypatch, limit, maximum
+):
+    from avo.adapters import artcraft_anicraft
+
+    document = tmp_path / "component.anicraft"
+    document.write_bytes(b"data")
+    (tmp_path / "recipe.json").write_bytes(b"{}")
+    (tmp_path / "handoff.json").write_bytes(b"{}")
+    frames = tmp_path / "white"
+    frames.mkdir()
+    (frames / "frame_00001.png").write_bytes(b"frame")
+    budget = {"seconds": 5, "files": 5, "bytes": 32, limit: maximum}
+    job = {
+        "decision": {"scope": {"app": "anicraft", "operations": ["lower-third"]}},
+        "observation": {"mode": "guided"},
+        "budget": budget,
+        "output": {},
+        "authoringParameters": {},
+    }
+
+    def unexpected_inspection(*args, **kwargs):
+        pytest.fail(
+            "The native source must not be decoded after its workspace exceeds the budget"
+        )
+
+    monkeypatch.setattr(
+        artcraft_anicraft, "inspect_lower_third_source", unexpected_inspection
+    )
+    with pytest.raises(artcraft.ArtCraftError, match="file or byte budget"):
+        native.SelectedArtCraftAdapter().inspect_returned_source(job, document)
+
+
+def test_operator_return_rejects_late_source_observations(tmp_path, monkeypatch):
+    from avo.adapters import artcraft_anicraft
+
+    document = tmp_path / "component.anicraft"
+    document.write_bytes(b"data")
+    job = {
+        "decision": {"scope": {"app": "anicraft", "operations": ["lower-third"]}},
+        "observation": {"mode": "host-mcp"},
+        "budget": {"seconds": 5, "files": 5, "bytes": 32},
+        "output": {},
+        "authoringParameters": {},
+    }
+    now = 0
+
+    def inspect(*args, max_bytes, **kwargs):
+        nonlocal now
+        assert max_bytes == 4
+        now = 5
+        return {"editableText": "Speaker"}
+
+    monkeypatch.setattr(native, "monotonic", lambda: now)
+    monkeypatch.setattr(artcraft_anicraft, "inspect_lower_third_source", inspect)
+    with pytest.raises(artcraft.ArtCraftError, match="time budget"):
+        native.SelectedArtCraftAdapter().inspect_returned_source(job, document)
+
+
 def test_guided_handoff_accepts_exact_file_budget(tmp_path, operator_profile):
     adapter = native.SelectedArtCraftAdapter()
     spec = job_spec(
