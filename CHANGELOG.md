@@ -1,3 +1,33 @@
+# [1.24.0](https://github.com/joaobispo2077/avo/compare/v1.23.0...v1.24.0) (2026-11-27)
+
+
+### Bug Fixes
+
+* **artcraft:** avoid masking dead-code findings ([c2568bd](https://github.com/joaobispo2077/avo/commit/c2568bd8adec0953d1eaa96f4276bb21b21f1aa3))
+* **artcraft:** bound native scratch audits ([e4317df](https://github.com/joaobispo2077/avo/commit/e4317df1d45d823543595709f95ee90fcb9f400b))
+* **artcraft:** bound specialist scratch scans ([91c3196](https://github.com/joaobispo2077/avo/commit/91c3196d8b71fa3610af57796970444ac571ff67))
+* **artcraft:** enforce authoring budgets ([87ccd04](https://github.com/joaobispo2077/avo/commit/87ccd04b7b1e804f1be67fea748bd9ecd8c4bc8e))
+* **artcraft:** enforce kit read roots first ([0d1f702](https://github.com/joaobispo2077/avo/commit/0d1f70278f1ea74ecb8aebea67971e88080e3914))
+* **install:** place engine at launcher path ([fc70294](https://github.com/joaobispo2077/avo/commit/fc7029462edbb861b116f66187843affc5b4c930))
+* **artcraft:** reject ambiguous registries ([5333747](https://github.com/joaobispo2077/avo/commit/5333747f5fbf98d3243f6c03535c38c39a4a8092))
+* **artcraft:** reject occupied revisions ([fde51ef](https://github.com/joaobispo2077/avo/commit/fde51efffa39c4be6c124a868e39c1bb536da1ef))
+* **filmcraft:** reject remuxed proof sources ([2766822](https://github.com/joaobispo2077/avo/commit/2766822331eddd2609097425498e15cab4195f9d))
+* **artcraft:** require bounded CLI execution ([4405d8e](https://github.com/joaobispo2077/avo/commit/4405d8e13e24ad775c492aba8462e4cd83cfb552))
+* **artcraft:** retain copy-only export ancestry ([b418186](https://github.com/joaobispo2077/avo/commit/b4181867c0f93e7ec31cd5f6da3170593041ec2e))
+* **artcraft:** validate native receipts ([a4bc823](https://github.com/joaobispo2077/avo/commit/a4bc82396f787723752324333b1c4fa902b8acf5))
+* **artcraft:** validate retained source closure ([66d9799](https://github.com/joaobispo2077/avo/commit/66d97996a361ebbfa5ef336de38b04650778185f))
+* **artcraft:** validate specialist command results ([a620c0b](https://github.com/joaobispo2077/avo/commit/a620c0b1c0b82054c5954e59ac3d6fcb23ca229c))
+
+
+### Features
+
+* **artcraft:** add optional lower-third artwork ([09a823a](https://github.com/joaobispo2077/avo/commit/09a823aa4da6cb69090179fdd259823e095bbe6f))
+* **artcraft:** bind optional kit sound cues ([dc0e341](https://github.com/joaobispo2077/avo/commit/dc0e3412b5dfdaf30ff19ac980a72d0985b5fe4b))
+* **artcraft:** register plain native kits ([877fadf](https://github.com/joaobispo2077/avo/commit/877fadf7f231217366d6df6a8306cc039776cb30))
+* **artcraft:** render from pinned identity kits ([46de7b6](https://github.com/joaobispo2077/avo/commit/46de7b6ebda53b28e0c3c8badfb99bff7bdef499))
+* **artcraft:** retain licensed kit artwork ([ba7c5a9](https://github.com/joaobispo2077/avo/commit/ba7c5a9d18ea74f1dce33233d44ad09744799a4d))
+* **artcraft:** validate kit safe areas ([5f8d07d](https://github.com/joaobispo2077/avo/commit/5f8d07daa02c2073a9e88ee1a08e282b2d03ef9f))
+
 # [1.23.0](https://github.com/joaobispo2077/avo/compare/v1.22.0...v1.23.0) (2026-11-22)
 
 

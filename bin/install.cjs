@@ -451,6 +451,38 @@ function mergeDir(src, dst) {
   }
 }
 
+function installEngineArchive(zipBuf, prefix, launcherHint, zipName) {
+  fs.mkdirSync(prefix, { recursive: true });
+  const staging = fs.mkdtempSync(path.join(prefix, '.staging-'));
+  try {
+    extractZipBuffer(zipBuf, staging);
+    const releaseEngine = path.join(staging, 'avo');
+    const launcherName = path.basename(launcherHint);
+    const hasLauncher = (directory, name) =>
+      fs
+        .statSync(path.join(directory, name), { throwIfNoEntry: false })
+        ?.isFile();
+    if (hasLauncher(releaseEngine, launcherName)) {
+      // Keep the frozen runtime and resources beside their launcher.
+      mergeDir(releaseEngine, path.dirname(launcherHint));
+      return launcherHint;
+    }
+    const stagedBin = path.join(staging, 'bin');
+    const legacyName = hasLauncher(stagedBin, launcherName)
+      ? launcherName
+      : 'avo';
+    if (!hasLauncher(stagedBin, legacyName)) {
+      throw new Error(
+        `Engine archive ${zipName} is missing launcher ${launcherName}.`,
+      );
+    }
+    mergeDir(staging, prefix);
+    return path.join(prefix, 'bin', legacyName);
+  } finally {
+    fs.rmSync(staging, { recursive: true, force: true });
+  }
+}
+
 async function installEngine(opts) {
   if (opts.uninstall || process.env.AVO_SKIP_ENGINE === '1') return;
   const detected = detectEngineArch();
@@ -490,19 +522,13 @@ async function installEngine(opts) {
   ) {
     die(`Engine SHA256 mismatch for ${parsed.zipName}; previous install kept.`);
   }
-  const staging = path.join(prefix, '.staging');
-  fs.rmSync(staging, { recursive: true, force: true });
-  fs.mkdirSync(staging, { recursive: true });
-  try {
-    extractZipBuffer(zipBuf, staging);
-    mergeDir(staging, prefix);
-  } finally {
-    fs.rmSync(staging, { recursive: true, force: true });
-  }
-  const launcher = fs.existsSync(path.join(prefix, 'bin', 'avo.exe'))
-    ? path.join(prefix, 'bin', 'avo.exe')
-    : path.join(prefix, 'bin', 'avo');
-  if (process.platform !== 'win32' && fs.existsSync(launcher)) {
+  const launcher = installEngineArchive(
+    zipBuf,
+    prefix,
+    launcherHint,
+    parsed.zipName,
+  );
+  if (process.platform !== 'win32') {
     // eslint-disable-next-line sonarjs/file-permissions -- Unix engine launcher must be executable
     fs.chmodSync(launcher, 0o755);
   }

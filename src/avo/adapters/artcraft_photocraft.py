@@ -93,12 +93,20 @@ def _create_editable_photo(call, source, native):
             native,
         )
     )
-    if (
-        receipt.get("command") != _ADD_CURVES
-        or type(receipt.get("result", {}).get("layer")) is not int
-    ):
+    if not _created_curves(receipt):
         raise ArtCraftError("PhotoCraft did not report an editable Curves layer")
     return receipt["result"]["layer"]
+
+
+def _created_curves(receipt):
+    return (
+        isinstance(receipt, dict)
+        and receipt.get("command") == _ADD_CURVES
+        and "error" not in receipt
+        and isinstance(receipt.get("result"), dict)
+        and "error" not in receipt["result"]
+        and type(receipt["result"].get("layer")) is int
+    )
 
 
 def _verify_original_layer(call, native, base, adjustment):

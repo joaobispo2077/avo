@@ -96,7 +96,9 @@ def create_generated_asset_validator(workspace):
     return validator
 
 
-def register_artcraft_export(workspace, *, job_ref, expected_head, output, asset_id):
+def register_artcraft_export(
+    workspace, *, job_ref, expected_head, output, asset_id, kit_instance_ref=None
+):
     """Register one explicitly selected native export after observing source and alpha."""
     from avo.adapters.media.artcraft_alpha import pack_alpha_sequence
     from avo.timeline.artcraft_binding import (
@@ -110,7 +112,10 @@ def register_artcraft_export(workspace, *, job_ref, expected_head, output, asset
     service = GeneratedAssetService(workspace)
     service.path(asset_id)
     binding = freeze_export_binding(
-        workspace, job_ref=job_ref, expected_head=expected_head
+        workspace,
+        job_ref=job_ref,
+        expected_head=expected_head,
+        kit_instance_ref=kit_instance_ref,
     )
     _observe_artcraft_source(binding)
     output_root = workspace.raw_dir.resolve() / "edit" / "derived"
@@ -135,6 +140,7 @@ def _observe_artcraft_source(binding):
         inspect_animated_emblem_source,
         inspect_lower_third_source,
     )
+    from avo.artcraft import selected_vector_artwork
 
     if binding["environment"]["app"] != "anicraft":
         raise ValueError(
@@ -142,13 +148,20 @@ def _observe_artcraft_source(binding):
         )
     source = binding["nativeSource"]
     profile, parameters = inspect_lower_third_source, binding["parameters"]
-    if "artworkRef" in parameters:
+    options = {}
+    if "artworkRef" in parameters and "primaryText" in parameters:
+        options["artwork"] = selected_vector_artwork(binding["inputSources"])
+        parameters = {
+            field: value for field, value in parameters.items() if field != "artworkRef"
+        }
+    elif "artworkRef" in parameters:
         profile, parameters = inspect_animated_emblem_source, binding["inputSources"][0]
     observed = profile(
         Path(source["locator"]),
         binding["outputContract"],
         parameters,
         max_bytes=binding["nativeByteBudget"],
+        **options,
     )
     if observed["fingerprint"] != source:
         raise ValueError("ArtCraft native source changed during observation")

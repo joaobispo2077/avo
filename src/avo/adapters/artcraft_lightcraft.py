@@ -151,12 +151,32 @@ def _reopen_exports(call, directory, native, output):
 
 
 def _receipts(result, commands):
-    rows = [json.loads(line) for line in result.splitlines()]
-    if tuple(row["command"] for row in rows) != commands or any(
-        row["ok"] is not True for row in rows
+    error = "LightCraft did not report every selected command"
+    try:
+        rows = [json.loads(line) for line in result.splitlines()]
+    except ValueError as exc:
+        raise ArtCraftError(error) from exc
+    if len(rows) != len(commands) or any(
+        not _valid_receipt(row, command)
+        for row, command in zip(rows, commands, strict=True)
     ):
-        raise ArtCraftError("LightCraft did not report every selected command")
+        raise ArtCraftError(error)
     return [row["result"] for row in rows]
+
+
+def _valid_receipt(row, command):
+    if (
+        not isinstance(row, dict)
+        or row.get("command") != command
+        or row.get("ok") is not True
+        or "error" in row
+        or "result" not in row
+    ):
+        return False
+    result = row["result"]
+    if command == _SET:
+        return result is None
+    return isinstance(result, dict) and "error" not in result
 
 
 def _export_command(path):

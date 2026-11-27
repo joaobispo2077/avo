@@ -13,6 +13,10 @@ from avo.artcraft import ArtCraftError, _copy_native_source
 from avo.timeline.contracts import content_hash, file_fingerprint
 from avo.timeline.store import write_immutable_json
 
+from .artcraft_native_cli import (
+    require_native_scratch_budget,
+    selected_native_command_signatures,
+)
 from .media.local_source import local_source_arguments
 
 ROOM_REVERB = "room_reverb"
@@ -43,10 +47,9 @@ def observe_soundcraft_profile(executable, environment):
             raise ArtCraftError("SoundCraft observation exceeds its byte budget")
         return result.stdout
 
-    commands = json.loads(inspect("commands", "--json", "--compact"))
-    signatures = {
-        row["id"]: row["params"] for row in commands if row["id"] in _CUE_COMMANDS
-    }
+    signatures = selected_native_command_signatures(
+        inspect("commands", "--json", "--compact"), _CUE_COMMANDS, label="SoundCraft"
+    )
     plugins = [
         line.split(maxsplit=1)[0]
         for line in inspect("plugins").decode().splitlines()
@@ -121,21 +124,16 @@ def _require_unchanged_bounce(locked, native, media, reopened):
 def _job_invocation(directory, budget, invoke, deadline):
     def call(*arguments):
         response = invoke(directory, *arguments, timeout=_remaining(deadline))
+        _remaining(deadline)
         if len(response) > 1024 * 1024:
             raise ArtCraftError("SoundCraft response exceeds the cue budget")
-        size = count = 0
-        for path in directory.rglob("*"):
-            if path.resolve() != path:
-                raise ArtCraftError("SoundCraft created an external path alias")
-            if path.is_dir():
-                continue
-            details = path.stat()
-            if not path.is_file() or details.st_nlink != 1:
-                raise ArtCraftError("SoundCraft created a nonregular or shared file")
-            count += 1
-            size += details.st_size
-            if count > budget["files"] or size > budget["bytes"]:
-                raise ArtCraftError("SoundCraft exhausted its cue file or byte budget")
+        require_native_scratch_budget(
+            directory,
+            budget,
+            label="SoundCraft cue",
+            check_time=lambda: _remaining(deadline),
+            owned_directories=("Audio Files",),
+        )
         return response
 
     return call
@@ -157,10 +155,10 @@ def _run_results(response, identifiers):
     try:
         for line in response.decode("utf-8").splitlines():
             if line.startswith("{"):
-                records.append(json.loads(line))
+                records.append(_read_result(line))
             else:
                 identifier, payload = line.split(": ", 1)
-                commands.append((identifier, json.loads(payload)))
+                commands.append((identifier, _read_result(payload)))
     except ValueError as exc:
         raise ArtCraftError("SoundCraft returned an invalid command result") from exc
     if tuple(item[0] for item in commands) != identifiers:
@@ -168,6 +166,13 @@ def _run_results(response, identifiers):
             "SoundCraft returned incomplete or reordered command results"
         )
     return [result for _, result in commands], records
+
+
+def _read_result(payload):
+    result = json.loads(payload)
+    if not isinstance(result, dict) or "error" in result:
+        raise ValueError("Expected a successful SoundCraft result object")
+    return result
 
 
 def _import_source(call, steps, original, dry):
@@ -181,8 +186,13 @@ def _import_source(call, steps, original, dry):
         "--compact",
     )
     commands, records = _run_results(response, ("session.new", "file.import_audio"))
-    imported = commands[1]["imported"]
-    if len(imported) != 1 or len(records) != 2 or not original.is_file():
+    session, imported = commands[0], commands[1]["imported"]
+    if (
+        session.get("sample_rate") != steps["session.new"]["sample_rate"]
+        or len(imported) != 1
+        or len(records) != 2
+        or not original.is_file()
+    ):
         raise ArtCraftError("SoundCraft did not save one exact imported audio track")
     found = imported[0]
     _require_session_sources(records[-1], found, dry)

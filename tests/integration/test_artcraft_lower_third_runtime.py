@@ -323,7 +323,14 @@ def test_installed_anicraft_saves_reopens_and_reconstructs_a_transparent_label(
 
 
 def _publish_fixture_package(
-    tmp_path, native, output, inspect_source, *, version="1.0.0", parameters=None
+    tmp_path,
+    native,
+    output,
+    inspect_source,
+    *,
+    version="1.0.0",
+    parameters=None,
+    artwork=None,
 ):
     from tests.test_artcraft_provider_packages import (
         _native_pattern,
@@ -338,6 +345,7 @@ def _publish_fixture_package(
         native,
         output,
         parameters or {"primaryText": "Clara Caf\u00e9", "font": "Arial"},
+        artwork=artwork,
     )
     if version != package["componentVersion"]:
         del package["packageHash"]
@@ -382,7 +390,9 @@ def _publish_fixture_package(
     return service, store, event
 
 
-def _assert_pinned_native_source(tmp_path, catalog_path, store, event, native):
+def _assert_pinned_native_source(
+    tmp_path, catalog_path, store, event, native, *, artwork=None, event_bindings=()
+):
     from avo.mcp.bridge import run_cli
 
     raw = tmp_path / "video-for-native-component"
@@ -421,9 +431,9 @@ def _assert_pinned_native_source(tmp_path, catalog_path, store, event, native):
                 {
                     "parameters": {"primaryText": "Mar\u00eda", "font": "Arial"},
                     "assetBindings": [],
-                    "eventBindings": [],
+                    "eventBindings": list(event_bindings),
                     "safeAreaBindings": {
-                        "faces": [],
+                        "faces": [{"x": 0, "y": 0, "width": 16, "height": 16}],
                         "captions": [],
                         "evidence": [],
                         "ui": [],
@@ -443,6 +453,17 @@ def _assert_pinned_native_source(tmp_path, catalog_path, store, event, native):
     assert copy.is_relative_to(raw)
     assert copy.read_bytes() == native.read_bytes()
     assert selected["parameters"]["primaryText"] == "Mar\u00eda"
+    assert selected["safeAreaBindings"]["faces"] == [
+        {"x": 0, "y": 0, "width": 16, "height": 16}
+    ]
+    if artwork is not None:
+        retained = copy.parent / artwork.name
+        assert retained.read_bytes() == artwork.read_bytes()
+        assert {
+            "path": str(retained),
+            "sha256": file_fingerprint(artwork)["sha256"],
+        } in selected["generatedFiles"]
+    return selected, project, copy
 
 
 def test_installed_anicraft_guided_job_round_trips_through_avo_commands(
