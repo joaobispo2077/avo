@@ -7,6 +7,7 @@ import os
 import re
 import stat
 from dataclasses import dataclass
+from hashlib import sha256
 from importlib.resources import files
 from pathlib import Path
 from tempfile import NamedTemporaryFile
@@ -24,6 +25,7 @@ from avo.timeline.contracts import (
 from avo.timeline.store import (
     StoreError,
     atomic_write_json,
+    immutable_json_text,
     timeline_writer,
     write_immutable_json,
 )
@@ -1912,15 +1914,17 @@ def _recovery_files(job, directory, head):
 def _recoverable_job_files(job, directory):
     budget = job["budget"]
     count = min(job["output"].get("frameCount", 0), budget["files"])
-    observed, used = [], 0
+    deadline = monotonic() + budget["seconds"]
+    observed, remaining = [], budget["bytes"]
     for relative in _recoverable_output_paths(job["decision"]["scope"], count):
-        if len(observed) >= budget["files"]:
+        if len(observed) >= budget["files"] or monotonic() >= deadline:
             break
-        fingerprint = _recoverable_file(directory / relative, budget["bytes"] - used)
-        if fingerprint is None:
-            continue
-        observed.append(fingerprint)
-        used += fingerprint["sizeBytes"]
+        fingerprint, charged = _recoverable_file(
+            directory / relative, remaining, deadline
+        )
+        remaining -= charged
+        if fingerprint is not None:
+            observed.append(fingerprint)
     return observed
 
 
@@ -1942,19 +1946,62 @@ def _recoverable_output_paths(scope, frame_count):
         yield f"alpha/frame_{index:05d}.png"
 
 
-def _recoverable_file(path, remaining):
+def _recoverable_file(path, remaining, deadline):
     try:
-        if path.resolve() != path or not path.is_file():
-            return None
-        metadata = path.stat()
-        if metadata.st_nlink != 1 or metadata.st_size > remaining:
-            return None
-        fingerprint = file_fingerprint(path)
-        if fingerprint["sizeBytes"] == metadata.st_size:
-            return fingerprint
+        if path.resolve() != path:
+            return None, 0
+        metadata = path.lstat()
     except (OSError, RuntimeError):
+        return None, 0
+    if (
+        not stat.S_ISREG(metadata.st_mode)
+        or metadata.st_nlink != 1
+        or metadata.st_size > remaining
+    ):
+        return None, 0
+    try:
+        fingerprint = _hash_recoverable_file(path, metadata, deadline)
+    except (OSError, RuntimeError):
+        fingerprint = None
+    return fingerprint, metadata.st_size
+
+
+def _hash_recoverable_file(path, metadata, deadline):
+    expected = _recovery_file_identity(metadata)
+    unread = metadata.st_size
+    digest = sha256()
+    with path.open("rb", buffering=0) as source:
+        if _recovery_file_identity(os.fstat(source.fileno())) != expected:
+            return None
+        while unread and monotonic() < deadline:
+            chunk = source.read(min(unread, 1024 * 1024))
+            if not chunk:
+                return None
+            unread -= len(chunk)
+            digest.update(chunk)
+    if (
+        unread
+        or monotonic() >= deadline
+        or _recovery_file_identity(path.lstat()) != expected
+    ):
         return None
-    return None
+    return {
+        "sha256": digest.hexdigest(),
+        "sizeBytes": metadata.st_size,
+        "locator": str(path),
+    }
+
+
+def _recovery_file_identity(metadata):
+    return (
+        metadata.st_dev,
+        metadata.st_ino,
+        metadata.st_mode,
+        metadata.st_nlink,
+        metadata.st_size,
+        metadata.st_mtime_ns,
+        metadata.st_ctime_ns,
+    )
 
 
 def _inspection_result(store, job, head):
@@ -2346,39 +2393,67 @@ def _run_operator_handoff(store, job, head, inspection, adapter):
     if head["state"] == "ready" and inspection["checks"].get("handoff") == "current":
         return inspection
     directory = _require_prepared_authoring(store, job, head)
+    minimum_files = job["output"]["frameCount"] + 4
+    if job["budget"]["files"] < minimum_files:
+        raise ArtCraftError(
+            f"ArtCraft operator handoff needs a file budget of at least {minimum_files} "
+            "for the handoff, recipe, two native documents and planned frames",
+            code="ARTCRAFT_NOT_READY",
+        )
     plan = adapter.plan_lower_third(job, directory)
-    directory.mkdir(parents=True, exist_ok=True)
-    recipe = _bounded_path(directory, directory / "recipe.json", "operator recipe")
-    write_immutable_json(recipe, plan["steps"])
-    handoff = _bounded_path(directory, directory / "handoff.json", "operator handoff")
-    write_immutable_json(
-        handoff,
-        {
-            "version": 1,
-            "jobHash": job["jobHash"],
-            "mode": job["observation"]["mode"],
-            "artifactState": "reference-only",
-            "operatorRoots": job["roots"],
-            "nativeDocument": str(directory / "component.anicraft"),
-            "recipe": file_fingerprint(recipe),
-            "commands": plan["commands"],
-            **(
-                {"host": plan["host"], "operatorBudget": job["budget"]}
-                if "host" in plan
-                else {}
-            ),
-        },
-    )
+    handoff_fingerprint = _stage_operator_handoff(job, directory, plan)
     event = store.append(
         job["jobId"],
         expected_head=head["eventHash"],
         event={
             "operationId": "guide",
             "state": "ready",
-            "handoff": file_fingerprint(handoff),
+            "handoff": handoff_fingerprint,
         },
     )
     return _inspection_result(store, job, event)
+
+
+def _stage_operator_handoff(job, directory, plan):
+    recipe = _bounded_path(directory, directory / "recipe.json", "operator recipe")
+    handoff = _bounded_path(directory, directory / "handoff.json", "operator handoff")
+    steps = plan["steps"]
+    recipe_bytes = immutable_json_text(steps).encode("utf-8")
+    descriptor = {
+        "version": 1,
+        "jobHash": job["jobHash"],
+        "mode": job["observation"]["mode"],
+        "artifactState": "reference-only",
+        "operatorRoots": job["roots"],
+        "operatorBudget": job["budget"],
+        "nativeDocument": str(directory / "component.anicraft"),
+        "recipe": {
+            "locator": str(recipe),
+            "sha256": sha256(recipe_bytes).hexdigest(),
+            "sizeBytes": len(recipe_bytes),
+        },
+        "commands": plan["commands"],
+        **({"host": plan["host"]} if "host" in plan else {}),
+    }
+    handoff_bytes = immutable_json_text(descriptor).encode("utf-8")
+    required = len(recipe_bytes) + len(handoff_bytes)
+    if required > job["budget"]["bytes"]:
+        raise ArtCraftError(
+            f"ArtCraft operator handoff needs a byte budget of at least {required} "
+            "for the recipe and handoff alone",
+            code="ARTCRAFT_NOT_READY",
+        )
+    for path, payload in ((recipe, recipe_bytes), (handoff, handoff_bytes)):
+        if path.exists():
+            with path.open("rb") as stream:
+                if stream.read(len(payload) + 1) != payload:
+                    raise ArtCraftError(
+                        "ArtCraft staged operator file changed",
+                        code="ARTCRAFT_SCOPE_CHANGED",
+                    )
+    write_immutable_json(recipe, steps)
+    write_immutable_json(handoff, descriptor)
+    return file_fingerprint(handoff)
 
 
 def _require_prepared_authoring(store, job, head):

@@ -480,6 +480,59 @@ def test_run_records_unknown_outcome_and_refuses_to_repeat_a_partial_write(autho
     assert len(adapter.executions) == 2
 
 
+@pytest.mark.parametrize("fault", ["growing-file", "elapsed-deadline"])
+def test_partial_recovery_bounds_reads_while_a_writer_is_active(
+    authoring, monkeypatch, fault
+):
+    api, directory, _ = authoring
+    native = directory / "component.anicraft"
+    original_size = 1024 * 1024 + 8
+    native.write_bytes(b"x" * original_size)
+    (directory / "recipe.json").write_bytes(b"{}")
+    job = {
+        **job_spec(
+            directory, budget={"seconds": 1, "files": 2, "bytes": original_size}
+        ),
+        "decision": {"scope": {"app": "anicraft", "operations": ["lower-third"]}},
+    }
+    clock = 0
+    reads = []
+    original_open = type(native).open
+
+    class ActiveReader:
+        def __init__(self, handle):
+            self.handle = handle
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            self.handle.close()
+
+        def fileno(self):
+            return self.handle.fileno()
+
+        def read(self, count):
+            nonlocal clock
+            reads.append(count)
+            if fault == "elapsed-deadline":
+                clock = 2
+            elif len(reads) == 1:
+                with original_open(native, "ab") as writer:
+                    writer.write(b"y" * original_size)
+            return self.handle.read(count)
+
+    def open_selected(path, *args, **kwargs):
+        opened = original_open(path, *args, **kwargs)
+        return ActiveReader(opened) if path == native else opened
+
+    monkeypatch.setattr(type(native), "open", open_selected)
+    monkeypatch.setattr(api, "monotonic", lambda: clock)
+    assert api._recoverable_job_files(job, directory) == []
+    expected = [1024 * 1024, 8] if fault == "growing-file" else [1024 * 1024]
+    assert reads == expected
+
+
 def test_guided_job_returns_replayable_native_steps_without_starting_authoring(
     authoring,
 ):

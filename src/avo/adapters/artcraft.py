@@ -8,6 +8,7 @@ import re
 import subprocess
 import sys
 from pathlib import Path
+from time import monotonic
 
 from avo.artcraft import (
     _ANIMATED_EMBLEM_SCOPE,
@@ -673,15 +674,38 @@ class SelectedArtCraftAdapter:
                 "The returned document has no checked ArtCraft source profile",
                 "Inspect the selected task against its app-specific native contract.",
             )
-        return inspect_lower_third_source(
+        budget = job["budget"]
+        deadline = monotonic() + budget["seconds"]
+        operator_return = job["observation"]["mode"] in {"guided", "host-mcp"}
+        max_bytes = budget["bytes"]
+        if operator_return:
+            from .artcraft_native_cli import require_native_scratch_budget
+
+            max_bytes = min(max_bytes, native.lstat().st_size)
+            require_native_scratch_budget(
+                native.parent,
+                budget,
+                label="AniCraft operator return",
+                check_time=lambda: _require_return_time(deadline),
+                owned_directories=("white",),
+            )
+        result = inspect_lower_third_source(
             native,
             job["output"],
             job["authoringParameters"],
-            max_bytes=job["budget"]["bytes"],
+            max_bytes=max_bytes,
             artwork=selected_vector_artwork(job["inputs"])
             if "artworkRef" in job
             else None,
         )
+        if operator_return:
+            _require_return_time(deadline)
+        return result
+
+
+def _require_return_time(deadline):
+    if monotonic() >= deadline:
+        raise ArtCraftError("AniCraft operator return exceeded its time budget")
 
 
 def _supports_anicraft(scope, mode):
