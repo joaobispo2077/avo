@@ -264,11 +264,15 @@ def atomic_write_json(path: Path, value: Any) -> Path:
     return path
 
 
+def immutable_json_text(value: Any) -> str:
+    return json.dumps(value, indent=2, ensure_ascii=False, sort_keys=True) + "\n"
+
+
 def write_immutable_json(path: Path, value: Any) -> Path:
     """Create one immutable JSON document, allowing only byte-equivalent retries."""
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    payload = json.dumps(value, indent=2, ensure_ascii=False, sort_keys=True) + "\n"
+    payload = immutable_json_text(value)
     temp = path.with_name(f".{path.name}.{uuid4().hex}.tmp")
     try:
         with temp.open("x", encoding="utf-8", newline="\n") as stream:

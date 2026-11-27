@@ -14,6 +14,14 @@ from types import SimpleNamespace
 import pytest
 from PIL import Image
 from tests.artcraft_fixtures import request
+from tests.integration.artcraft_photocraft_desktop_fixture import (
+    VERSION as PHOTOCRAFT_VERSION,
+)
+from tests.integration.artcraft_photocraft_desktop_fixture import (
+    names_selected_file,
+    photocraft_desktop,
+    require,
+)
 from tests.integration.test_artcraft_lower_third_runtime import _job_contract
 from tests.integration.test_artcraft_modes_runtime import (
     _fixture_command,
@@ -284,6 +292,83 @@ def test_installed_anicraft_refuses_a_revision_saved_by_another_headless_process
     assert not (revision / "recipe.json").exists()
     assert file_fingerprint(source) == original
     assert workspace.read_bytes() == source.read_bytes()
+
+
+def test_installed_photocraft_reconnects_to_pending_save_after_bridge_loss():
+    with photocraft_desktop() as desktop:
+        size = (4096, 3072)
+        source = desktop.inputs / "synthetic-predecessor.png"
+        with Image.frombytes("RGB", size, os.urandom(size[0] * size[1] * 3)) as image:
+            image.save(source, compress_level=1)
+            expected_pixels = sha256(image.tobytes()).digest()
+        original = file_fingerprint(source)
+        target = desktop.outputs / "disconnected-save.psd"
+        competing = desktop.outputs / "competing-save.psd"
+
+        with desktop.bridge() as peer, desktop.bridge() as writer:
+            initial = peer.call("ui_inspect")
+            require(
+                initial["updates"]["currentVersion"] == PHOTOCRAFT_VERSION
+                and not initial["session"]["documents"],
+                "The selected desktop release or initial document state differed.",
+            )
+            opened = writer.call("doc_open", {"path": source.name})
+            require(
+                names_selected_file(opened.get("path"), source),
+                "The desktop opened a different source.",
+            )
+            document = writer.call("doc_inspect")
+            require(
+                (document.get("width"), document.get("height")) == size,
+                "The opened synthetic document has unexpected dimensions.",
+            )
+            pending = writer.begin_save(target.name)
+            job = pending.get("job")
+            require(
+                pending.get("pending") is True
+                and type(job) is int
+                and not target.exists(),
+                "PhotoCraft did not return a dispatched, uncommitted save.",
+            )
+            # Terminate this owned bridge without waiting for the native job's outcome.
+            require(writer.process.poll() is None, "The writer bridge exited early.")
+            writer.process.terminate()
+            writer.process.wait(timeout=4)
+            require(
+                not target.exists(),
+                "Inconclusive interruption fixture: the save settled before disconnect.",
+            )
+            peer.begin_save(competing.name, expect_busy=True)
+            require(not competing.exists(), "The competing client created an output.")
+
+        require(
+            desktop.owned_listener(),
+            "The original desktop listener did not survive bridge loss.",
+        )
+        with desktop.bridge() as reconnected:
+            deadline = monotonic() + 20
+            observed = reconnected.job(job)
+            while (
+                observed.get("state") not in {"done", "failed", "cancelled"}
+                and monotonic() < deadline
+            ):
+                sleep(0.1)
+                observed = reconnected.job(job)
+            require(
+                observed.get("state") == "done",
+                "The disconnected native save was not reconciled.",
+            )
+            receipt = observed.get("result")
+            require(
+                isinstance(receipt, dict)
+                and names_selected_file(receipt.get("path"), target)
+                and target.is_file(),
+                "The recovered save did not identify its intended output.",
+            )
+        assert file_fingerprint(source) == original
+        with Image.open(target, formats=["PSD"]) as saved:
+            assert saved.size == size
+            assert sha256(saved.convert("RGB").tobytes()).digest() == expected_pixels
 
 
 def test_installed_anicraft_stale_source_reports_the_edited_title_through_cli(
