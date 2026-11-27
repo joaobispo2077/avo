@@ -1,12 +1,18 @@
 """Selected specialist exchanges preserve exact dependencies and timeline authority."""
 
+import json
+from contextlib import contextmanager
 from copy import deepcopy
+from os import scandir
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
 from avo import artcraft, init_project
+from avo.adapters import artcraft_native_cli
+from avo.adapters.artcraft_filmcraft import _batch, author_interchange
+from avo.adapters.artcraft_vectorcraft import author_vector_emblem
 from avo.timeline.contracts import file_fingerprint
 from avo.timeline.import_service import _filmcraft_reference_findings
 from tests.artcraft_fixtures import locked_tool_observation, picture_output, request
@@ -96,6 +102,156 @@ def test_filmcraft_rejects_complete_proof_before_launch(tmp_path, monkeypatch):
         _prepare(artcraft, film_request(spec["provider"]), spec, None, intent=intent)
 
 
+@pytest.mark.parametrize(
+    "receipt",
+    [
+        b"[]",
+        b"invalid JSON",
+        b"\xff",
+        b'{"line":1,"id":"file.saveAs","ok":true}',
+        (
+            b'{"line":1,"id":"file.saveAs","ok":false,"ok":true,'
+            b'"result":{"path":"saved.fcproj","bytes":1}}'
+        ),
+        {"line": True},
+        {"line": 1.0},
+        {"id": "file.newProject"},
+        {"ok": False},
+        {"ok": 1},
+        {"error": "save failed"},
+        {"result": None},
+        {"result": []},
+        {"result": {"path": "saved.fcproj", "bytes": True}},
+        {"result": {"path": "saved.fcproj", "bytes": 1, "error": "save failed"}},
+    ],
+)
+def test_filmcraft_rejects_invalid_batch_receipt(tmp_path, receipt):
+    target = str(tmp_path / "component.fcproj")
+    step = {"id": "file.saveAs", "params": {"path": target}}
+    if isinstance(receipt, dict):
+        receipt = json.dumps(
+            {
+                "line": 1,
+                "id": step["id"],
+                "ok": True,
+                "result": {"path": target, "bytes": 1},
+                **receipt,
+            }
+        ).encode()
+    with pytest.raises(artcraft.ArtCraftError, match="command receipts"):
+        _batch(lambda *_: receipt, tmp_path / "save.jsonl", [step])
+
+
+@pytest.mark.parametrize(
+    ("command", "params", "result"),
+    [
+        ("file.newProject", {"name": "AVO source timeline"}, {}),
+        ("file.import", {}, {"errors": {}, "items": ["source-id"]}),
+        ("file.import", {}, {"errors": [], "items": [None]}),
+        ("file.newSequence", {}, {"sequence": None}),
+        ("file.newSequence", {}, {"sequence": True}),
+        ("file.exportInterchange", {}, {"path": "component.otio", "bytes": 10}),
+    ],
+)
+def test_filmcraft_rejects_partial_command_result(tmp_path, command, params, result):
+    receipt = json.dumps(
+        {"line": 1, "id": command, "ok": True, "result": result}
+    ).encode()
+    with pytest.raises(artcraft.ArtCraftError, match="command receipts"):
+        _batch(
+            lambda *_: receipt,
+            tmp_path / "commands.jsonl",
+            [{"id": command, "params": params}],
+        )
+
+
+def test_filmcraft_preserves_results_from_complete_ordered_batch(tmp_path):
+    commands = [
+        (
+            "file.newProject",
+            {"name": "AVO edição"},
+            {"name": "AVO edição", "revision": 0},
+        ),
+        ("file.import", {}, {"errors": [], "items": ["source-id"]}),
+        ("file.saveAs", {}, {"path": "component.fcproj", "bytes": 10}),
+        ("file.newSequence", {}, {"sequence": 1}),
+        (
+            "file.exportInterchange",
+            {},
+            {"path": "component.otio", "bytes": 10, "report": []},
+        ),
+    ]
+    receipts = "\n".join(
+        json.dumps(
+            {"line": index, "id": command, "ok": True, "result": result},
+            ensure_ascii=False,
+        )
+        for index, (command, _, result) in enumerate(commands, 1)
+    ).encode()
+    steps = [{"id": command, "params": params} for command, params, _ in commands]
+    assert _batch(lambda *_: receipts, tmp_path / "commands.jsonl", steps) == [
+        result for _, _, result in commands
+    ]
+
+
+@pytest.mark.parametrize("app", ["filmcraft", "vectorcraft"])
+@pytest.mark.parametrize("limit", ["time", "files"])
+def test_native_exchange_stops_at_its_budget(tmp_path, monkeypatch, app, limit):
+    workspace = tmp_path.resolve() / app
+    budget = {"seconds": 5, "files": 6, "bytes": 16_384}
+    elapsed = 0
+    visited = []
+    monkeypatch.setattr(artcraft_native_cli, "monotonic", lambda: elapsed)
+
+    @contextmanager
+    def watch_scan(directory):
+        assert limit == "files", (
+            "A late reply must be rejected before the scratch audit"
+        )
+        assert directory == workspace
+        with scandir(directory) as entries:
+
+            def observe_entries():
+                for entry in entries:
+                    visited.append(entry.name)
+                    yield entry
+
+            yield observe_entries()
+
+    monkeypatch.setattr(artcraft_native_cli, "scandir", watch_scan)
+
+    def invoke(directory, *arguments, timeout):
+        nonlocal elapsed
+        assert directory == workspace
+        assert 0 < timeout <= budget["seconds"]
+        if app == "vectorcraft":
+            assert arguments[:2] == ("--safe-mode", "run")
+        else:
+            assert arguments[0] == "run"
+        if limit == "time":
+            elapsed = budget["seconds"]
+        else:
+            for index in range(budget["files"] + 2):
+                (workspace / f"scratch-{index}.bin").write_bytes(b"x")
+        return b"{}"
+
+    message = "time budget" if limit == "time" else "file or byte budget"
+    with pytest.raises(artcraft.ArtCraftError, match=message):
+        if app == "filmcraft":
+            author_interchange(
+                {
+                    "budget": budget,
+                    "inputs": [{"locator": str(tmp_path / "original.mov")}],
+                },
+                directory=workspace,
+                invoke=invoke,
+            )
+        else:
+            author_vector_emblem({}, directory=workspace, budget=budget, invoke=invoke)
+
+    assert len(visited) == (0 if limit == "time" else budget["files"] + 1)
+
+
 def emblem_request(operation, output_role, **changes):
     return request(
         componentId="emblem",
@@ -159,6 +315,10 @@ def _prepare_animated_emblem(spec, adapter, **changes):
 
 @pytest.fixture
 def vector_export(tmp_path, monkeypatch):
+    return make_vector_export(tmp_path, monkeypatch)
+
+
+def make_vector_export(tmp_path, monkeypatch, *, provider="neutral-channel"):
     monkeypatch.setattr(init_project, "load_provider", lambda slug: {"slug": slug})
 
     def observe(*, scope, mode, roots, **_paths):
@@ -183,7 +343,9 @@ def vector_export(tmp_path, monkeypatch):
     selected = SimpleNamespace(
         observe=observe, validate_run=lambda _job: None, author_vector_emblem=author
     )
-    prepared = _prepare_emblem(emblem_spec(tmp_path), selected)
+    prepared = _prepare_emblem(
+        emblem_spec(tmp_path, provider=provider), selected, provider=provider
+    )
     exported = artcraft.run_authoring(
         prepared["jobRef"], expected_head=prepared["head"], adapter=selected
     )
@@ -273,3 +435,29 @@ def test_animated_emblem_closes_inputs_and_detects_later_source_change(
             expected_head=animated["head"],
             adapter=SimpleNamespace(),
         )
+
+
+@pytest.mark.parametrize("limit", ["files", "bytes"])
+def test_animated_emblem_checks_the_combined_input_budget_before_discovery(
+    tmp_path, vector_export, limit
+):
+    _, exported, reference = vector_export
+    _, event = artcraft.read_authoring_export(
+        exported["jobRef"], expected_head=exported["head"]
+    )
+    dependencies = [
+        reference["job"],
+        event["saved"],
+        event["recipe"],
+        *event["outputs"],
+    ]
+    specs = animated_emblem_spec(tmp_path, reference)
+    spec_budget = specs["budget"]
+    spec_budget[limit] = (
+        len(dependencies) - 1
+        if limit == "files"
+        else sum(item["sizeBytes"] for item in dependencies) - 1
+    )
+    with pytest.raises(artcraft.ArtCraftError, match="inputs exceed.*budget"):
+        _prepare_animated_emblem(specs, SimpleNamespace(observe=_unexpected_app_access))
+    assert not (tmp_path / "artcraft-jobs" / "job-animated-emblem").exists()

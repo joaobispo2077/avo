@@ -10,7 +10,9 @@ The engine zip includes AVO's Python runtime, code-drawn adapter/templates and
 its pinned Playwright driver with an internal Node executable. It excludes the
 separately managed browser, FFmpeg/FFprobe, HyperFrames, watch-skill, CUDA and model
 weights. No separate user-managed Node capture worker is required. Unused when
-this AVO repo is the opened folder. Windows launcher: `%USERPROFILE%\.avo\bin\avo`.
+this AVO repo is the opened folder. The Windows launcher is
+`%USERPROFILE%\.avo\bin\avo.exe`. The installer keeps the frozen runtime and
+public schemas alongside the launcher on each supported platform.
 
 1. **Override** — user said MCP / self-build / clone-python. Honor it. Do not silently use the zip.
 2. **Opened folder is an AVO checkout** — `pyproject.toml` name `avo` **and** `src/avo/` **and** `AGENTS.md` contains `<!-- avo:orchestrator:start -->` → `python -m avo.*`. Do **not** use `~/.avo/bin/avo`.

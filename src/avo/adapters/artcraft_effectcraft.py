@@ -21,12 +21,17 @@ _BACKING = "Masked backing"
 _MASK = [[24, 108], [296, 108], [296, 160], [24, 160]]
 _RATE = 24
 _FONT_SIZE = 25
-_COMMANDS = {"comp.new", "layer.newSolid", "mask.new", "layer.newText"}
+_COMMAND_RESULTS = {
+    "comp.new": "comp",
+    "layer.newSolid": "layer",
+    "mask.new": "mask",
+    "layer.newText": "layer",
+}
 
 
 def observe_effectcraft(executable, environment):
     return observe_native_command_schema(
-        executable, environment, needed=_COMMANDS, label="EffectCraft"
+        executable, environment, needed=set(_COMMAND_RESULTS), label="EffectCraft"
     )
 
 
@@ -85,16 +90,39 @@ def _save_project(call, directory, label):
         ),
     ]
     recipe = write_immutable_json(directory / "recipe.json", steps)
-    result = json.loads(
-        call("--empty", "run", "--commands", recipe, "--save-as", native, "--json")
+    response = call(
+        "--empty", "run", "--commands", recipe, "--save-as", native, "--json"
     )
-    if result["saved"] != str(native) or [
-        row["command"] for row in result["result"]
-    ] != [step["command"] for step in steps]:
+    try:
+        result = json.loads(response)
+    except ValueError as exc:
+        raise ArtCraftError("EffectCraft returned malformed command output") from exc
+    if (
+        not isinstance(result, dict)
+        or "error" in result
+        or result.get("saved") != str(native)
+        or not isinstance(rows := result.get("result"), list)
+        or len(rows) != len(steps)
+        or any(
+            not _valid_command_result(row, step["command"])
+            for row, step in zip(rows, steps, strict=True)
+        )
+    ):
         raise ArtCraftError(
             "EffectCraft did not save every selected lower-third command"
         )
     return native, recipe
+
+
+def _valid_command_result(row, command):
+    return (
+        isinstance(row, dict)
+        and row.keys() == {"command", "result"}
+        and row["command"] == command
+        and isinstance(result := row["result"], dict)
+        and "error" not in result
+        and type(result.get(_COMMAND_RESULTS[command])) is int
+    )
 
 
 def _step(command, **params):

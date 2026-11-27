@@ -53,6 +53,9 @@ def configure(sub):
     )
     for field in ("project", "job", "expected-head", "asset-id", "output"):
         register.add_argument(f"--{field}", required=True)
+    register.add_argument(
+        "--kit-instance-json", help="Select the exact video-local native kit instance"
+    )
     register.add_argument("--json", action="store_true")
     review = operations.add_parser(
         "review", help="Inspect standalone and contextual ArtCraft review evidence"
@@ -389,6 +392,11 @@ def _register_export(args):
             expected_head=args.expected_head,
             output=args.output,
             asset_id=args.asset_id,
+            kit_instance_ref=(
+                _decode_object(args.kit_instance_json)
+                if args.kit_instance_json is not None
+                else None
+            ),
         )
     except (GeneratedAssetError, StoreError, WorkspaceError) as exc:
         raise ArtCraftError(str(exc), code="ARTCRAFT_ADMISSION_REQUIRED") from exc

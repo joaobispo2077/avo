@@ -23,6 +23,16 @@ _SLIDE = 1
 _FADE_MS = 600
 _START = "#164E63"
 _END = "#BE123C"
+_COMMAND_RESULT_FIELDS = {
+    "view.slideMaster": {"kind": str, "master": int},
+    "master.insertLayout": {"id": int},
+    "master.insertPlaceholder": {"id": int},
+    "slide.layout": {"layout": int},
+    "shape.insert": {"id": int},
+    "slide.new": {"id": int, "index": int},
+    "transition.set": {"kind": str},
+    "slide.inspect": {"index": int, "transition": dict},
+}
 
 
 def _steps():
@@ -103,8 +113,33 @@ def _create_deck(call, directory, output, budget):
 
 
 def _receipts(response):
-    rows = (line.partition(" → ") for line in response.decode("utf-8").splitlines())
-    return [(name, json.loads(facts)) for name, delimiter, facts in rows if delimiter]
+    rows = []
+    try:
+        for line in response.decode("utf-8").splitlines():
+            name, delimiter, facts = line.partition(" → ")
+            if not delimiter:
+                raise ArtCraftError("DeckCraft returned unrecognized command output")
+            result = json.loads(facts)
+            if not _valid_receipt(name, result):
+                raise ArtCraftError("DeckCraft returned an invalid command result")
+            rows.append((name, result))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise ArtCraftError("DeckCraft returned malformed command output") from exc
+    return rows
+
+
+def _valid_receipt(name, result):
+    if name in {"view.closeMaster", "slide.rename"}:
+        return result is None
+    if name == "shape.fill":
+        return type(result) is int
+    required = _COMMAND_RESULT_FIELDS.get(name)
+    return (
+        required is not None
+        and isinstance(result, dict)
+        and "error" not in result
+        and all(type(result.get(key)) is kind for key, kind in required.items())
+    )
 
 
 def _require_native_members(path, byte_limit):

@@ -142,7 +142,7 @@ def package_source(tmp_path):
     return root, _package_from_retained_source(native, picture_output(), {})
 
 
-def _package_from_retained_source(native, output, parameter_values):
+def _package_from_retained_source(native, output, parameter_values, *, artwork=None):
     from avo.artcraft import seal_record
     from avo.timeline.contracts import file_fingerprint
 
@@ -212,6 +212,14 @@ def _package_from_retained_source(native, output, parameter_values):
             **_bytes_identity(root / "recipe.json"),
         },
     ]
+    if artwork is not None:
+        identity = _bytes_identity(artwork)
+        files["design-review.json"][1]["identityArtworkSha256"] = identity["sha256"]
+        rights = files["rights.json"][1]
+        rights.append(
+            {**rights[0], "dependencyId": artwork.name, "sha256": identity["sha256"]}
+        )
+        entries.append({"path": artwork.name, "role": "identity-artwork", **identity})
     for name, (role, body) in files.items():
         path = root / name
         path.write_text(json.dumps(body), encoding="utf-8")
@@ -270,6 +278,94 @@ def test_provider_package_verifies_byte_exact_source_design_and_rights(package_s
         == _bytes_identity(root / "design-review.json")["sha256"]
     )
     assert evidence["parameterSchema"]["type"] == "object"
+
+
+def test_identity_artwork_is_retained_and_observed_from_the_selected_package(
+    tmp_path, package_source
+):
+    from avo.artcraft import ArtCraftError
+    from avo.timeline.artcraft_packages import (
+        read_retained_provider_package,
+        retain_provider_package,
+        verify_provider_package,
+    )
+    from avo.timeline.contracts import file_fingerprint
+
+    root, original = package_source
+    mark = root / "mark.svg"
+    mark.write_bytes(b'<svg xmlns="http://www.w3.org/2000/svg"/>')
+    package = _package_from_retained_source(
+        root / "component.anicraft", original["output"], {}, artwork=mark
+    )
+    observations = []
+
+    def observe(path, contract, parameters, *, max_bytes, artwork):
+        assert file_fingerprint(Path(artwork["locator"])) == artwork
+        observations.append(artwork)
+        return _observe_fixture(path, contract, parameters, max_bytes=max_bytes)
+
+    evidence = verify_provider_package(
+        package, root, provider="first-channel", source_observer=observe
+    )
+    assert observations == [file_fingerprint(mark)]
+    assert {entry["dependencyId"] for entry in evidence["rights"]} == {
+        "component.anicraft",
+        "mark.svg",
+    }
+    store = tmp_path / "retained"
+    store.mkdir()
+    target = (
+        store / retain_provider_package(package, evidence, store) / "files" / mark.name
+    )
+    assert target.read_bytes() == mark.read_bytes()
+    options = {
+        "provider": "first-channel",
+        "package_hash": package["packageHash"],
+        "source_observer": observe,
+    }
+    read_retained_provider_package(store, **options)
+    assert observations[-1] == file_fingerprint(target)
+    target.write_bytes(b"changed SVG")
+    with pytest.raises(ArtCraftError, match="changed"):
+        read_retained_provider_package(store, **options)
+
+
+@pytest.mark.parametrize(
+    ("metadata", "message"),
+    [
+        ("rights.json", "exact native source and any identity artwork"),
+        ("design-review.json", "design review does not approve"),
+    ],
+)
+def test_identity_artwork_requires_exact_rights_and_design_review(
+    package_source, metadata, message
+):
+    from avo.artcraft import ArtCraftError, seal_record
+    from avo.timeline.artcraft_packages import verify_provider_package
+
+    root, original = package_source
+    mark = root / "mark.svg"
+    mark.write_bytes(b'<svg xmlns="http://www.w3.org/2000/svg"/>')
+    package = _package_from_retained_source(
+        root / "component.anicraft", original["output"], {}, artwork=mark
+    )
+    path = root / metadata
+    body = json.loads(path.read_bytes())
+    if metadata == "rights.json":
+        body.pop()
+    else:
+        del body["identityArtworkSha256"]
+    path.write_text(json.dumps(body), encoding="utf-8")
+    metadata_entry = next(
+        entry for entry in package["files"] if entry["path"] == metadata
+    )
+    metadata_entry.update(_bytes_identity(path))
+    del package["packageHash"]
+    package = seal_record("package", package)
+    with pytest.raises(ArtCraftError, match=message):
+        verify_provider_package(
+            package, root, provider="first-channel", source_observer=_observe_fixture
+        )
 
 
 def test_provider_publishes_exact_native_bytes_and_recovers_idempotently(

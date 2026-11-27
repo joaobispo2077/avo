@@ -27,6 +27,16 @@ done
 if [[ "$AVO_TEST_APT_FAILURE" == always ]]; then
   exit 100
 fi
+if [[ "$operation" == install && "$AVO_TEST_APT_FAILURE" == interrupted ]]; then
+  if [[ ! -f "{work / "interrupted"}" ]]; then
+    touch "{work / "interrupted"}"
+    exit 124
+  fi
+  if [[ ! -f "{work / "configured"}" || "$*" != *--fix-broken* ]]; then
+    printf '%s\n' 'dpkg was interrupted or has unresolved dependencies' >&2
+    exit 100
+  fi
+fi
 if [[ "$operation" == "$AVO_TEST_APT_FAILURE" && ! -f "{work / "failed"}" ]]; then
   touch "{work / "failed"}"
   exit 100
@@ -34,6 +44,20 @@ fi
 if [[ "$operation" == install ]]; then
   touch "{installed}"
 fi
+""",
+            "dpkg": f"""
+case "$*" in
+  --audit)
+    if [[ -f "{work / "interrupted"}" && ! -f "{work / "configured"}" ]]; then
+      printf '%s\n' 'Some packages are unpacked but not configured'
+    fi
+    ;;
+  '--configure -a')
+    printf '%s\n' 'configure' >> "{calls}"
+    touch "{work / "configured"}"
+    exit 1
+    ;;
+esac
 """,
             "ffmpeg": f'test -f "{installed}"',
             "ffprobe": f'test -f "{installed}"',
@@ -61,7 +85,7 @@ fi
             text=True,
         )
         attempts = [
-            "update" if "update" in line else "install"
+            "update" if "update" in line else line if line == "configure" else "install"
             for line in calls.read_text(encoding="utf-8").splitlines()
         ]
         return result, attempts
@@ -130,6 +154,16 @@ fi
 
             self.assertEqual(result.returncode, 100, result.stderr)
             self.assertEqual(attempts, ["update", "update"])
+
+    def test_interrupted_install_repairs_packages_before_retry(self):
+        with tempfile.TemporaryDirectory() as directory:
+            work = Path(directory)
+            result, attempts = self._run_installer(work, work / "absent", "interrupted")
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(
+                attempts, ["update", "install", "configure", "update", "install"]
+            )
 
 
 if __name__ == "__main__":

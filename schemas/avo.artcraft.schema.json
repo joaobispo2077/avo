@@ -44,7 +44,7 @@
         "path": { "$ref": "#/$defs/relativePath" },
         "sizeBytes": { "$ref": "#/$defs/count" },
         "sha256": { "$ref": "#/$defs/hash" },
-        "role": { "enum": ["native-source", "image", "audio", "video", "font", "mesh", "plugin", "script", "recipe", "rights", "parameter-schema", "source-review", "design-review"] },
+        "role": { "enum": ["native-source", "identity-artwork", "image", "audio", "video", "font", "mesh", "plugin", "script", "recipe", "rights", "parameter-schema", "source-review", "design-review"] },
         "rightsRef": { "$ref": "#/$defs/text" }
       }
     },
@@ -284,6 +284,16 @@
         "exportHead": { "$ref": "#/$defs/hash" }
       }
     },
+    "kitInstanceRef": {
+      "type": "object", "additionalProperties": false, "required": ["instanceId", "instanceHash"],
+      "properties": {
+        "instanceId": { "$ref": "#/$defs/id" },
+        "instanceHash": { "$ref": "#/$defs/hash" }
+      }
+    },
+    "artworkRef": {
+      "oneOf": [{ "$ref": "#/$defs/exportRef" }, { "$ref": "#/$defs/kitInstanceRef" }]
+    },
     "stillEvidence": {
       "type": "object", "additionalProperties": false,
       "required": ["format", "color", "alpha", "width", "height", "rgbaSha256"],
@@ -323,7 +333,7 @@
         "photoSource": { "$ref": "#/$defs/photoSource" },
         "effectFont": { "$ref": "#/$defs/text" },
         "interchangeSource": { "$ref": "#/$defs/interchangeSource" },
-        "artworkRef": { "$ref": "#/$defs/exportRef" },
+        "artworkRef": { "$ref": "#/$defs/artworkRef" },
         "output": { "$ref": "#/$defs/output" },
         "budget": { "$ref": "#/$defs/budget" }
       }
@@ -346,7 +356,7 @@
         "photoSource": { "$ref": "#/$defs/photoSource" },
         "effectFont": { "$ref": "#/$defs/text" },
         "interchangeSource": { "$ref": "#/$defs/interchangeSource" },
-        "artworkRef": { "$ref": "#/$defs/exportRef" },
+        "artworkRef": { "$ref": "#/$defs/artworkRef" },
         "projectFingerprint": { "$ref": "#/$defs/fingerprint" },
         "canonicalHeads": { "type": "object", "maxProperties": 12, "propertyNames": { "$ref": "#/$defs/id" }, "additionalProperties": { "$ref": "#/$defs/hash" } },
         "inputs": { "type": "array", "maxItems": 16384, "items": { "$ref": "#/$defs/fingerprint" } },

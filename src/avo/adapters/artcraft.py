@@ -344,9 +344,9 @@ class SelectedArtCraftAdapter:
             return self._operator_observation(installed, scope, mode)
         if mode == "json-lines":
             self._require_confined_stream(installed)
-        if self._observe_confinement is None:
+        elif self._observe_confinement is None or self._run_confined is None:
             raise _not_ready(
-                "AniCraft CLI file confinement is unverified in this environment",
+                "AniCraft CLI requires a confined command runner and verified file confinement",
                 "Use an independently confined authoring runtime for the selected read and write roots.",
             )
         effective = self._observe_confinement(installed, roots)
@@ -467,6 +467,11 @@ class SelectedArtCraftAdapter:
             )
 
         open_stream = stream if job["observation"]["mode"] == "json-lines" else None
+        from avo.artcraft import selected_vector_artwork
+
+        artwork = (
+            selected_vector_artwork(job["inputs"]) if "artworkRef" in job else None
+        )
         if job["documentState"] == "saved":
             return revise_lower_third(
                 job["output"],
@@ -477,6 +482,7 @@ class SelectedArtCraftAdapter:
                 budget=job["budget"],
                 invoke=invoke,
                 open_stream=open_stream,
+                artwork=artwork,
             )
         return run_lower_third(
             job["output"],
@@ -485,6 +491,7 @@ class SelectedArtCraftAdapter:
             budget=job["budget"],
             invoke=invoke,
             open_stream=open_stream,
+            artwork=artwork,
         )
 
     def _invoke_confined(self, job, directory, arguments, timeout):
@@ -654,6 +661,8 @@ class SelectedArtCraftAdapter:
 
     @staticmethod
     def inspect_returned_source(job, native):
+        from avo.artcraft import selected_vector_artwork
+
         from .artcraft_anicraft import inspect_lower_third_source
 
         if job["decision"]["scope"] != {
@@ -669,6 +678,9 @@ class SelectedArtCraftAdapter:
             job["output"],
             job["authoringParameters"],
             max_bytes=job["budget"]["bytes"],
+            artwork=selected_vector_artwork(job["inputs"])
+            if "artworkRef" in job
+            else None,
         )
 
 

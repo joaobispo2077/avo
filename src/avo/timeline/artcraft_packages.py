@@ -24,6 +24,7 @@ _ROLES = frozenset(
         "rights",
     }
 )
+_IDENTITY_ARTWORK = "identity-artwork"
 _PACKAGE_STAGING_PREFIX = "artcraft-package-"
 
 
@@ -112,7 +113,9 @@ def _verify_retained_package(package, target):
     if _read_retained_manifest(target) != package:
         raise ArtCraftError("Immutable ArtCraft package manifest has changed")
     root = target / "files"
-    return [_verify_file(root / item["path"], root, item) for item in package["files"]]
+    entries = package["files"]
+    _require_source_roles(entries)
+    return [_verify_file(root / item["path"], root, item) for item in entries]
 
 
 def _read_retained_manifest(target):
@@ -157,6 +160,13 @@ def require_native_sharing(owner, recipient, rights):
 
 def retained_native_instance_files(instance, project_root, provider):
     """Verify the video-local copy of the exact pinned native package."""
+    _, manifest, sources = _retained_native_instance_package(
+        instance, project_root, provider
+    )
+    return [manifest, *sources]
+
+
+def _retained_native_instance_package(instance, project_root, provider):
     raw = _require_external_root(project_root)
     base = raw / "edit" / "derived" / "provider-components"
     target = base / instance["instanceId"]
@@ -173,25 +183,106 @@ def retained_native_instance_files(instance, project_root, provider):
         raise ArtCraftError("ArtCraft package differs from the pinned video instance")
     with fingerprint_stage(reuse_current=True, verify_on_exit=True):
         sources = _verify_retained_package(package, target)
-        if "sharedWith" in identity:
-            _verify_retained_sharing(package, sources, provider)
+        if "sharedWith" in identity or any(
+            entry["role"] == _IDENTITY_ARTWORK for entry in package["files"]
+        ):
+            _verify_retained_rights(package, sources, provider)
         manifest = file_fingerprint(target / "manifest.json")
     declared = [{"path": item["locator"], "sha256": item["sha256"]} for item in sources]
     if declared != instance["generatedFiles"]:
         raise ArtCraftError(
             "ArtCraft package file list differs from the pinned video instance"
         )
-    return [manifest, *sources]
+    return package, manifest, sources
 
 
-def _verify_retained_sharing(package, sources, recipient):
+def _verify_retained_rights(package, sources, recipient):
     roles = {
         entry["role"]: (entry, fingerprint)
         for entry, fingerprint in zip(package["files"], sources, strict=True)
     }
     reference = _selected_evidence(package, roles, "rightsRef", "rights")
-    rights = _check_rights(reference, roles["native-source"][0])
+    rights = _check_rights(reference, roles)
     require_native_sharing(package["provider"], recipient, rights)
+
+
+def native_instance_artwork_inputs(
+    workspace, request, selection, source, settings, *, read_roots
+):
+    """Select the exact marked kit copied into this video's canonical instance."""
+    _, dependencies, artwork = native_instance_source_inputs(
+        workspace, request, selection, source, settings, read_roots=read_roots
+    )
+    if artwork is None:
+        raise ArtCraftError(
+            "ArtCraft kit artwork differs from the selected kit instance"
+        )
+    return [artwork, *(item for item in dependencies if item != artwork)]
+
+
+def native_instance_source_inputs(
+    workspace, request, selection, source, settings, *, read_roots
+):
+    """Verify the exact reviewed native source and project-local instance closure."""
+    with fingerprint_stage(reuse_current=True, verify_on_exit=True):
+        record, instance = _read_native_instance(workspace, selection, read_roots)
+        if (instance["kitId"], instance["parameters"]) != (
+            request["componentId"],
+            settings["authoringParameters"],
+        ):
+            raise ArtCraftError(
+                "ArtCraft parameters or component differs from the selected kit instance"
+            )
+        package, manifest, files = _retained_native_instance_package(
+            instance, workspace.raw_dir, request["provider"]
+        )
+        roles = {
+            entry["role"]: fingerprint
+            for entry, fingerprint in zip(package["files"], files, strict=True)
+        }
+        if roles["native-source"] != source or package["output"] != settings["output"]:
+            raise ArtCraftError("ArtCraft kit native source or output differs")
+    return (
+        instance,
+        [record, manifest, *(item for item in files if item != source)],
+        roles.get(_IDENTITY_ARTWORK),
+    )
+
+
+def _read_native_instance(workspace, selection, read_roots):
+    from .component_instances import ComponentInstanceService
+
+    service = ComponentInstanceService(workspace)
+    path = service.path(selection["instanceId"])
+    target = (
+        workspace.raw_dir
+        / "edit"
+        / "derived"
+        / "provider-components"
+        / selection["instanceId"]
+    )
+    if not all(
+        any(item.is_relative_to(root) for root in read_roots) for item in (path, target)
+    ):
+        raise ArtCraftError(
+            "ArtCraft kit and instance record must stay in the selected read roots"
+        )
+    if (
+        path.resolve() != path
+        or not path.is_file()
+        or path.stat().st_nlink != 1
+        or path.stat().st_size > 256 * 1024
+    ):
+        raise ArtCraftError("ArtCraft requires an exact component instance record")
+    record = file_fingerprint(path)
+    instance = service.load(selection["instanceId"])
+    if (
+        instance["instanceId"],
+        instance["instanceHash"],
+        instance.get("nativePackage", {}).get("app"),
+    ) != (selection["instanceId"], selection["instanceHash"], "anicraft"):
+        raise ArtCraftError("ArtCraft reference differs from the selected kit instance")
+    return record, instance
 
 
 def shared_native_package_paths(edit_directory):
@@ -312,12 +403,7 @@ def _verify_files(package, root, file_limit, byte_limit):
         or sum(item["sizeBytes"] for item in entries) > byte_limit
     ):
         raise ArtCraftError("ArtCraft package exceeds its selected file or byte limit")
-    if len({item["path"].casefold() for item in entries}) != len(entries):
-        raise ArtCraftError("ArtCraft package has conflicting file aliases")
-    if {item.get("role") for item in entries} != _ROLES or len(entries) != len(_ROLES):
-        raise ArtCraftError(
-            "ArtCraft lower-third package requires the exact supported source roles"
-        )
+    _require_source_roles(entries)
     files, roles = {}, {}
     for item in entries:
         path = root / item["path"]
@@ -325,6 +411,19 @@ def _verify_files(package, root, file_limit, byte_limit):
         files[item["path"]] = path
         roles[item["role"]] = (item, observed)
     return files, roles
+
+
+def _require_source_roles(entries):
+    if len({item["path"].casefold() for item in entries}) != len(entries):
+        raise ArtCraftError("ArtCraft package has conflicting file aliases")
+    selected_roles = {item.get("role") for item in entries}
+    if (
+        len(entries) != len(selected_roles)
+        or selected_roles - {_IDENTITY_ARTWORK} != _ROLES
+    ):
+        raise ArtCraftError(
+            "ArtCraft lower-third package requires the exact supported source roles"
+        )
 
 
 def _verify_file(path, root, expected):
@@ -358,12 +457,20 @@ def _observe_package(package, roles, source_observer, byte_limit):
     source_ref = _selected_evidence(package, roles, "sourceReviewRef", "source-review")
     design_ref = _selected_evidence(package, roles, "designReviewRef", "design-review")
     rights_ref = _selected_evidence(package, roles, "rightsRef", "rights")
+    artwork_entry = roles.get(_IDENTITY_ARTWORK)
+    artwork = artwork_entry[1] if artwork_entry else None
+    if artwork and Path(artwork["locator"]).suffix.lower() != ".svg":
+        raise ArtCraftError("ArtCraft package identity artwork must be an SVG")
     fixture = _source_review(source_ref, native, recipe)
-    _design_review(design_ref, native)
-    rights = _check_rights(rights_ref, roles["native-source"][0])
+    _design_review(design_ref, native, artwork)
+    rights = _check_rights(rights_ref, roles)
     parameter_schema = _parameter_schema(parameters, fixture)
     observed = source_observer(
-        Path(native["locator"]), package["output"], fixture, max_bytes=byte_limit
+        Path(native["locator"]),
+        package["output"],
+        fixture,
+        max_bytes=byte_limit,
+        **({"artwork": artwork} if artwork else {}),
     )
     if observed.get("fingerprint") != native:
         raise ArtCraftError("ArtCraft source observation refers to other bytes")
@@ -377,6 +484,7 @@ def _observe_package(package, roles, source_observer, byte_limit):
         "provenance": provenance,
         "parameterSchema": parameter_schema,
         "fixtureParameters": fixture,
+        "occupiedBounds": observed.get("occupiedBounds"),
         "rights": rights,
     }
 
@@ -418,9 +526,11 @@ def _source_review(reference, native, recipe):
     return value["fixtureParameters"]
 
 
-def _design_review(reference, native):
+def _design_review(reference, native, artwork):
     value = _read_json(reference, dict)
     expected = {"version": 1, "decision": "approved", "nativeSha256": native["sha256"]}
+    if artwork:
+        expected["identityArtworkSha256"] = artwork["sha256"]
     if any(value.get(key) != fact for key, fact in expected.items()) or not all(
         isinstance(value.get(key), str) and value[key].strip()
         for key in ("actor", "reference")
@@ -430,7 +540,7 @@ def _design_review(reference, native):
         )
 
 
-def _check_rights(reference, native):
+def _check_rights(reference, roles):
     from .animation import AnimationError
     from .provider_animation import ProviderAnimationService
 
@@ -443,11 +553,14 @@ def _check_rights(reference, native):
         ProviderAnimationService.validate_rights(rights)
     except AnimationError as exc:
         raise ArtCraftError(str(exc)) from exc
-    if {(item["dependencyId"], item["sha256"]) for item in rights} != {
-        (native["path"], native["sha256"])
-    }:
+    expected = {
+        (entry["path"], entry["sha256"])
+        for role, (entry, _) in roles.items()
+        if role in {"native-source", _IDENTITY_ARTWORK}
+    }
+    if {(item["dependencyId"], item["sha256"]) for item in rights} != expected:
         raise ArtCraftError(
-            "ArtCraft rights must cover the package's exact native source"
+            "ArtCraft rights must cover the package's exact native source and any identity artwork"
         )
     return rights
 

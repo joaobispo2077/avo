@@ -2,6 +2,7 @@
 
 import json
 from pathlib import Path
+from time import monotonic
 from types import SimpleNamespace
 
 import pytest
@@ -175,6 +176,132 @@ def test_json_lines_requires_its_own_confined_stream(tmp_path, operator_profile)
     assert observed == []
 
 
+def test_cli_requires_a_confined_runner_before_observing_roots(
+    tmp_path, operator_profile
+):
+    _, observed, _ = operator_profile
+
+    def unexpected_observation(*_):
+        pytest.fail("Root observations alone cannot make a CLI job ready")
+
+    adapter = native.SelectedArtCraftAdapter(observe_confinement=unexpected_observation)
+    with pytest.raises(
+        artcraft.ArtCraftError, match="confined command runner"
+    ) as failure:
+        _prepare(artcraft, request(), job_spec(tmp_path, mode="cli"), adapter)
+    assert failure.value.code == "ARTCRAFT_NOT_READY"
+    assert observed == []
+    assert not list(tmp_path.rglob("job.json"))
+
+
+@pytest.mark.parametrize("mode", ["live", "script", "action"])
+def test_unqualified_transport_refuses_before_native_probe(
+    tmp_path, monkeypatch, operator_profile, mode
+):
+    def unexpected(*_args, **_kwargs):
+        pytest.fail("An unqualified transport attempted native discovery")
+
+    monkeypatch.setattr(native, "_installed_anicraft", unexpected)
+    with pytest.raises(artcraft.ArtCraftError, match="no qualified profile"):
+        _prepare(
+            artcraft,
+            request(),
+            job_spec(tmp_path, mode=mode),
+            native.SelectedArtCraftAdapter(),
+        )
+    assert not list(tmp_path.rglob("job.json"))
+
+
+@pytest.mark.parametrize("conflict", ["effective-roots", "owned-document"])
+def test_changed_authority_or_document_refuses_before_dispatch(
+    tmp_path, operator_profile, conflict
+):
+    expanded = False
+
+    def confinement(_installed, roots):
+        if expanded:
+            return {**roots, "read": [str(tmp_path)]}
+        return roots
+
+    def unexpected(*_args, **_kwargs):
+        pytest.fail("A changed authority or occupied document dispatched a command")
+
+    adapter = native.SelectedArtCraftAdapter(
+        observe_confinement=confinement, run_confined=unexpected
+    )
+    spec = job_spec(
+        tmp_path,
+        authoringParameters={"primaryText": "Speaker", "font": "Arial"},
+        output=picture_output(
+            width=640,
+            height=360,
+            frameCount=24,
+            frameRate={"numerator": 24, "denominator": 1},
+        ),
+    )
+    prepared = _prepare(artcraft, request(), spec, adapter)
+    if conflict == "effective-roots":
+        expanded = True
+        message = "exact qualified"
+    else:
+        document = tmp_path / prepared["job"]["document"]
+        document.parent.mkdir(parents=True, exist_ok=True)
+        document.write_bytes(b"owned by another writer")
+        message = "stale"
+
+    with pytest.raises(artcraft.ArtCraftError, match=message):
+        artcraft.run_authoring(
+            prepared["jobRef"], expected_head=prepared["head"], adapter=adapter
+        )
+    current = artcraft.inspect_authoring(
+        prepared["jobRef"], expected_head=prepared["head"]
+    )
+    assert current["state"] == "prepared"
+
+
+def test_occupied_saved_revision_refuses_before_tool_validation(
+    tmp_path, monkeypatch, operator_profile
+):
+    def unexpected(*_args, **_kwargs):
+        pytest.fail("An occupied saved revision must not reach native validation")
+
+    source = tmp_path / "source.anicraft"
+    source.write_bytes(b"selected editable source")
+    adapter = native.SelectedArtCraftAdapter(
+        observe_confinement=lambda _installation, roots: roots,
+        run_confined=unexpected,
+    )
+    spec = job_spec(
+        tmp_path,
+        document={"state": "saved", "source": str(source)},
+        readRoots=[str(tmp_path)],
+        authoringParameters={"primaryText": "Speaker", "font": "Arial"},
+        output=picture_output(),
+    )
+    prepared = _prepare(artcraft, request(), spec, adapter)
+    document = tmp_path / prepared["job"]["document"]
+    occupied = document.parent / "revision" / "component.anicraft"
+    occupied.parent.mkdir()
+    occupied.write_bytes(b"owned by another writer")
+    prior = file_fingerprint(occupied)
+    monkeypatch.setattr(adapter, "validate_run", unexpected)
+
+    current = artcraft.inspect_authoring(
+        prepared["jobRef"], expected_head=prepared["head"]
+    )
+    with pytest.raises(artcraft.ArtCraftError, match="stale"):
+        artcraft.run_authoring(
+            prepared["jobRef"], expected_head=prepared["head"], adapter=adapter
+        )
+
+    assert current["status"] == "stale"
+    assert current["checks"]["nativeDocument"] == "changed"
+    head = artcraft.ArtCraftJobStore(tmp_path).head(spec["jobId"])
+    assert head["state"] == "prepared" and head["eventHash"] == prepared["head"]
+    assert file_fingerprint(occupied) == prior
+    assert document.read_bytes() == source.read_bytes() == b"selected editable source"
+
+
 @pytest.mark.parametrize(
     "reply",
     [
@@ -182,11 +309,12 @@ def test_json_lines_requires_its_own_confined_stream(tmp_path, operator_profile)
         b'{"id":2,"ok":true,"result":{}}\n',
         b'{"id":1,"ok":true,"ok":false,"result":{}}\n',
         b'{"id":1,"ok":true}\n',
+        b'{"id":1,"ok":true,"result":null}\n',
+        b'{"id":1,"ok":true,"result":{"error":"failed command"}}\n',
     ],
 )
 def test_native_json_lines_stops_before_sending_next_command(tmp_path, reply):
     from contextlib import contextmanager
-    from time import monotonic
 
     from avo.adapters.artcraft_anicraft import _run_json_lines
 
@@ -201,7 +329,7 @@ def test_native_json_lines_stops_before_sending_next_command(tmp_path, reply):
         assert document == source
         assert 0 < timeout <= 5
         yield SimpleNamespace(
-            read_line=lambda **_: next(responses),
+            read_line=lambda **_: next(responses, b""),
             send_line=lambda message, **_: sent.append(json.loads(message)),
         )
 
@@ -220,3 +348,130 @@ def test_native_json_lines_stops_before_sending_next_command(tmp_path, reply):
         )
     assert sent == [{"id": 1, **steps[0]}]
     assert not target.exists()
+
+
+@pytest.mark.parametrize(
+    ("partial", "save_name"),
+    [
+        (None, "component.anicraft"),
+        ({"error": "failed command"}, "component.anicraft"),
+        ({"index": 0}, "different.anicraft"),
+    ],
+)
+def test_native_batch_rejects_invalid_partial_result_even_with_saved_file(
+    tmp_path, partial, save_name
+):
+    from avo.adapters.artcraft_anicraft import _apply_recipe
+
+    source = tmp_path / "empty.anicraft"
+    target = tmp_path / "component.anicraft"
+    recipe = tmp_path / "recipe.json"
+    steps = [
+        {"cmd": "layer.new", "params": {"name": "Label"}},
+        {"cmd": "file.save_as", "params": {"path": str(target)}},
+    ]
+
+    def call(command, document, script):
+        assert (command, document, script) == ("run", source, recipe)
+        target.write_bytes(b"partial native document")
+        return json.dumps([partial, {"saved": str(tmp_path / save_name)}]).encode(
+            "utf-8"
+        )
+
+    with pytest.raises(artcraft.ArtCraftError, match="AniCraft"):
+        _apply_recipe(call, source, target, recipe, steps, None, {}, monotonic() + 5)
+
+
+def test_native_json_lines_stops_before_export_when_save_reply_names_another_file(
+    tmp_path,
+):
+    from contextlib import contextmanager
+
+    from avo.adapters.artcraft_anicraft import _run_json_lines
+
+    source = tmp_path / "empty.anicraft"
+    source.write_bytes(b"native fixture")
+    target = tmp_path / "component.anicraft"
+    other = tmp_path / "different.anicraft"
+    reply = {"id": 1, "ok": True, "result": {"saved": str(other)}}
+    steps = [
+        {"cmd": "file.save_as", "params": {"path": str(target)}},
+        {
+            "cmd": "file.export_png_sequence",
+            "params": {"dir": str(tmp_path / "white"), "from": 0, "to": 23},
+        },
+    ]
+    sent = []
+
+    def send_line(message, **_):
+        sent.append(json.loads(message))
+        if len(sent) == 1:
+            target.write_bytes(b"partial native document")
+
+    @contextmanager
+    def open_stream(document, *, timeout):
+        assert document == source
+        assert 0 < timeout <= 5
+        replies = iter(
+            [
+                b'{"app":"AniCraft","ready":true,"version":"0.2.1"}\n',
+                json.dumps(reply).encode("utf-8") + b"\n",
+            ]
+        )
+        yield SimpleNamespace(
+            read_line=lambda **_: next(replies, b""), send_line=send_line
+        )
+
+    with pytest.raises(artcraft.ArtCraftError, match="AniCraft JSON-lines"):
+        _run_json_lines(
+            open_stream,
+            source,
+            target,
+            steps,
+            budget={"files": 12, "bytes": 4096},
+            deadline=monotonic() + 5,
+        )
+    assert sent == [{"id": 1, **steps[0]}]
+    assert target.is_file()
+
+
+@pytest.mark.parametrize(
+    "row",
+    [
+        {"command": "develop.set", "ok": True, "result": {"error": "failed"}},
+        {"command": "develop.set", "ok": True, "result": None, "error": "failed"},
+        {"command": "develop.set", "ok": True},
+        {"command": "develop.get", "ok": True, "result": None},
+    ],
+)
+def test_lightcraft_rejects_incomplete_or_failed_command_results(row):
+    from avo.adapters.artcraft_lightcraft import _receipts
+
+    with pytest.raises(artcraft.ArtCraftError, match="every selected command"):
+        _receipts(json.dumps(row).encode("utf-8"), (row["command"],))
+
+
+@pytest.mark.parametrize("result", [None, {"error": "failed"}])
+def test_soundcraft_rejects_failed_session_creation_receipts(result):
+    from avo.adapters.artcraft_soundcraft import _run_results
+
+    reply = f"session.new: {json.dumps(result)}\n".encode()
+    with pytest.raises(artcraft.ArtCraftError, match="invalid command result"):
+        _run_results(reply, ("session.new",))
+
+
+@pytest.mark.parametrize("result", [None, {"error": "failed"}])
+def test_vectorcraft_rejects_failed_intermediate_command_receipts(tmp_path, result):
+    from avo.adapters.artcraft_vectorcraft import _card_invocation
+
+    def invoke(directory, *arguments, timeout):
+        assert directory == tmp_path
+        assert arguments == ("--safe-mode", "run")
+        assert timeout > 0
+        return json.dumps(
+            {"step": "cmd", "command": "paint.setFill", "result": result}
+        ).encode("utf-8")
+
+    call = _card_invocation(tmp_path, {"bytes": 1024, "files": 2, "seconds": 5}, invoke)
+    with pytest.raises(artcraft.ArtCraftError, match="invalid command result"):
+        call("run")

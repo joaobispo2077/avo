@@ -17,6 +17,27 @@ from .contracts import (
 from .store import StoreError, timeline_writer, write_immutable_json
 
 
+def _native_protected_bounds(region, canvas):
+    fields = ("x", "y", "width", "height")
+    if (
+        not isinstance(region, dict)
+        or region.keys() != set(fields)
+        or any(type(region[key]) is not int for key in fields)
+    ):
+        raise ComponentInstanceError("Native safe areas require a pixel rectangle")
+    x, y, width, height = (region[key] for key in fields)
+    if min(width, height) <= 0:
+        raise ComponentInstanceError(
+            "Native safe areas require a nonempty pixel rectangle"
+        )
+    right, bottom = x + width, y + height
+    if min(x, y) < 0 or right > canvas["width"] or bottom > canvas["height"]:
+        raise ComponentInstanceError(
+            "A protected region is outside the reviewed kit canvas"
+        )
+    return x, y, right, bottom
+
+
 class ComponentInstanceError(RuntimeError):
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -206,8 +227,12 @@ class ComponentInstanceService:
             }
         )
         self._validate(document)
+        self._require_native_clearance(
+            safe_area_bindings, package["output"], evidence["occupiedBounds"]
+        )
         with timeline_writer(self.workspace.timeline_dir):
             self._check_native_upgrade(document)
+            self._require_native_sound(document, package["output"])
             retained = self._require_same_native_instance(
                 instance_path, document, evidence
             )
@@ -215,6 +240,33 @@ class ComponentInstanceService:
                 package, evidence, project_root=root, target=target
             )
             return self._write_instance(retained)
+
+    def _require_native_sound(self, document, output):
+        from .artcraft_audio import select_kit_sound
+
+        try:
+            select_kit_sound(self.workspace, document, output)
+        except (OSError, ValueError) as exc:
+            raise ComponentInstanceError(str(exc)) from exc
+
+    @staticmethod
+    def _require_native_clearance(protected, canvas, occupied):
+        if not any(protected.values()):
+            return
+        if occupied is None:
+            raise ComponentInstanceError(
+                "Native safe areas require inspected overlay bounds"
+            )
+        left, top, right, bottom = occupied
+        for category, regions in protected.items():
+            for region in regions:
+                x, y, stop_x, stop_y = _native_protected_bounds(region, canvas)
+                if max(left, x) < min(right, stop_x) and max(top, y) < min(
+                    bottom, stop_y
+                ):
+                    raise ComponentInstanceError(
+                        f"Native lower third overlaps a protected {category} region"
+                    )
 
     def _native_instance_parameters(self, parameters, evidence):
         if not isinstance(parameters, dict):
